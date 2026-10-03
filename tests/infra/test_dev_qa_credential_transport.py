@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,9 @@ broker = load("dev_qa_credential", "infra/application/scripts/dev-qa-credential.
 launcher = load("qa_admin_browser", "infra/application/development/qa-admin-browser.py")
 
 MERGE = "1daeb17431a83a1330e9ec5f2362c29d3bb39c30"
+ORG_MERGE = "61e6b240cd16c35ca87c19518aefcba1f3d3d555"
+ORGS = ("organisation-operator", "organisation-reader", "organisation-denied")
+README = ROOT / "infra/application/development/README.md"
 REVISION = "ee819d0f5b18779c05b5661b06e76f27cabb2ca1"
 SENTINEL = b"ac-qa-sentinel-0123456789abcdef0123456789abcdef"
 FICTIONAL = b"Fictional-QA-pass_word!1"
@@ -46,6 +50,62 @@ def test_identity_tables_agree_and_are_fictional_dev_references():
     assert broker.INFISICAL_ENVIRONMENT == "dev"
     assert launcher.IDENTITIES["billing-staff"].required_merges == (MERGE,)
     assert broker.LAUNCHER.endswith("/qa-admin-browser.py")
+
+
+def test_allowlist_is_exactly_billing_staff_and_the_three_organisation_identities():
+    assert set(broker.IDENTITIES) == set(launcher.IDENTITIES) == {"billing-staff", *ORGS}
+    assert {n: (i.email, i.secret) for n, i in broker.IDENTITIES.items() if n in ORGS} == {
+        "organisation-operator": (
+            "qa-org-operator-aut961@example.test",
+            "AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR",
+        ),
+        "organisation-reader": (
+            "qa-org-reader-aut961@example.test",
+            "AC_DEV_FIXTURE_PASSWORD_ORG_READER",
+        ),
+        "organisation-denied": (
+            "qa-org-denied-aut961@example.test",
+            "AC_DEV_FIXTURE_PASSWORD_ORG_DENIED",
+        ),
+    }
+    assert launcher.IDENTITIES["billing-staff"].access is None  # AUT-970 behaviour kept
+    for name in ORGS:
+        assert launcher.IDENTITIES[name].required_merges == (ORG_MERGE,)
+    matrix = {n: launcher.IDENTITIES[n].access for n in ORGS}
+    read, manage = "platform_tenants_read", "platform_organisations_manage"
+    assert matrix["organisation-operator"] == launcher.AccessCheck((read, manage), (), "read")
+    assert matrix["organisation-reader"] == launcher.AccessCheck((read,), (manage,), "read")
+    assert matrix["organisation-denied"] == launcher.AccessCheck((), (read, manage), "denied")
+
+
+def readme_block(marker: str) -> str:
+    blocks = re.findall(r"```sh\n(.*?)```", README.read_text(encoding="utf-8"), re.DOTALL)
+    return next(b for b in blocks if marker in b)
+
+
+def test_sudoers_rule_grants_exactly_the_allowlisted_broker_argv():
+    rule = readme_block("/etc/sudoers.d/ac-dev-qa-credential.new")
+    body = rule.split("<<'SUDO'\n", 1)[1].split("\nSUDO", 1)[0].replace("\\\n", " ")
+    defaults, grant = body.splitlines()
+    assert defaults == "Defaults!/usr/local/sbin/ac-dev-qa-credential !use_pty"
+    head, _, commands = grant.partition(" NOPASSWD: ")
+    assert head == "acdev ALL=(root)"
+    granted = [c.strip() for c in commands.split(",")]
+    expected = [
+        f"/usr/local/sbin/ac-dev-qa-credential {name}{flag}"
+        for name in broker.IDENTITIES
+        for flag in ("", " --sentinel")
+    ]
+    assert granted == expected
+    assert not any(c in grant for c in ("*", "ALL:", "!", "SETENV", "sh -c"))
+
+
+def test_readme_publishes_one_invocation_per_identity_and_the_receipt_pin():
+    invocations = readme_block("--identity organisation-operator").splitlines()
+    for name in ORGS:
+        assert f"/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity {name}" in invocations
+    pin = readme_block("--write-receipt")
+    assert f"--require-ancestor {ORG_MERGE}" in pin and f"--require-ancestor {MERGE}" in pin
 
 
 # Broker ----------------------------------------------------------------------
@@ -79,6 +139,23 @@ def test_inner_refuses_a_terminal_or_file(tmp_path):
             stdout=handle,
         )
     assert code == 2 and target.read_bytes() == b""
+
+
+@pytest.mark.parametrize("name", ORGS)
+def test_fetch_reads_only_the_organisation_secret_name_from_dev(name):
+    seen = {}
+
+    def runner(argv, **kwargs):
+        seen.update(argv=argv, env=kwargs["env"])
+        return subprocess.CompletedProcess(argv, 0, FICTIONAL, None)
+
+    broker.fetch(broker.IDENTITIES[name], runner)
+    assert seen["argv"][-2:] == ["--inner", broker.IDENTITIES[name].secret]
+    assert (seen["env"]["AC_INFISICAL_ENVIRONMENT"], seen["env"]["AC_INFISICAL_PATH"]) == (
+        "dev",
+        "/sales-xray/dev-fixture-accounts",
+    )
+    assert FICTIONAL.decode() not in " ".join(seen["argv"])
 
 
 def test_fetch_uses_existing_root_route_without_value_in_argv():
@@ -133,6 +210,10 @@ def broker_main(monkeypatch, argv, *, euid=0, sudo_uid="1002", pipe=True, launch
         ({"launcher_ok": False}, ["billing-staff"], "launcher_required"),
         ({}, ["owner"], "identity_not_allowed"),
         ({}, ["billing-staff", "member"], "identity_not_allowed"),
+        ({}, ["organisation-owner"], "identity_not_allowed"),
+        ({}, ["qa-org-operator-aut961@example.test"], "identity_not_allowed"),
+        ({}, ["organisation-operator", "organisation-reader"], "identity_not_allowed"),
+        ({"launcher_ok": False}, ["organisation-denied", "--sentinel"], "launcher_required"),
     ],
 )
 def test_broker_refuses_outside_scope(monkeypatch, capsys, kwargs, argv, error):
@@ -148,6 +229,16 @@ def test_broker_sentinel_and_credential_go_only_to_the_pipe(monkeypatch, capsys)
     assert (code, written) == (0, [FICTIONAL])
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == ""
+
+
+@pytest.mark.parametrize("name", ORGS)
+def test_broker_serves_organisation_sentinel_and_credential_only_to_the_pipe(
+    monkeypatch, capsys, name
+):
+    code, written = broker_main(monkeypatch, [name, "--sentinel"])
+    assert code == 0 and written[0].startswith(b"ac-qa-sentinel-") and FICTIONAL not in written[0]
+    assert broker_main(monkeypatch, [name]) == (0, [FICTIONAL])
+    assert capsys.readouterr() == ("", "")
 
 
 def test_called_by_launcher_walks_process_ancestry(tmp_path):
@@ -334,3 +425,137 @@ def test_browser_argv_maps_only_admin_dev_and_pins_the_bridge_key():
     assert "--ignore-certificate-errors-spki-list=SPKI=" in argv
     assert "--ignore-certificate-errors" not in argv
     assert "--remote-debugging-pipe" in argv and argv[-1] == "about:blank"
+
+
+# Organisation identities -----------------------------------------------------
+
+ORG_READY = {**READY, ("/v1/platform/organisations", 3017): (401, b"")}
+ORG_RECEIPT = {**RECEIPT, "contains": [MERGE, ORG_MERGE]}
+
+
+@pytest.mark.parametrize("name", ORGS)
+def test_organisation_preflight_needs_the_ui_merge_and_the_live_route(nonroot, name):
+    pin = launcher.preflight(name, launcher.ORIGIN, receipt=ORG_RECEIPT, edge=edge(ORG_READY))
+    assert pin["identity"] == name and pin["admin_revision"] == REVISION
+    with pytest.raises(launcher.Refused) as raised:
+        launcher.preflight(name, launcher.ORIGIN, receipt=RECEIPT, edge=edge(ORG_READY))
+    assert raised.value.code == "deployed_source_missing_merge"
+    absent = {**ORG_READY, ("/v1/platform/organisations", 3017): (404, b"")}
+    with pytest.raises(launcher.Refused) as raised:
+        launcher.preflight(name, launcher.ORIGIN, receipt=ORG_RECEIPT, edge=edge(absent))
+    assert raised.value.code == "organisations_route_absent"
+    for origin in (
+        "https://admin.authorityclosers.com",
+        "https://admin-staging.authorityclosers.com",
+        "https://admin-dev.authorityclosers.com.evil.test",
+        "http://127.0.0.1:3017",
+    ):
+        with pytest.raises(launcher.Refused) as raised:
+            launcher.preflight(name, origin, receipt=ORG_RECEIPT, edge=edge(ORG_READY))
+        assert raised.value.code == "origin_not_allowed"
+
+
+def test_billing_staff_preflight_does_not_need_the_organisations_route(nonroot):
+    launcher.preflight("billing-staff", launcher.ORIGIN, receipt=RECEIPT, edge=edge(READY))
+
+
+PERSON = "0f6c7a52-3c55-4b0e-9a55-6d7e0c1d2e3f"
+READ, MANAGE = "platform_tenants_read", "platform_organisations_manage"
+LISTED = {"status": 200, "code": None, "listed": True}
+DENIED = {"status": 403, "code": "authorization_denied", "listed": False}
+
+
+def granted(*permissions, status=200):
+    return {"status": status, "person_id": PERSON, "platform_permissions": list(permissions)}
+
+
+@pytest.mark.parametrize(
+    ("name", "permissions", "organisations"),
+    [
+        ("organisation-operator", (MANAGE, READ), LISTED),
+        ("organisation-operator", (READ, MANAGE, "platform_catalog_read"), LISTED),
+        ("organisation-reader", (READ,), LISTED),
+        ("organisation-denied", (), DENIED),
+        ("organisation-denied", ("platform_catalog_read",), DENIED),
+    ],
+)
+def test_access_matrix_passes_and_prints_only_person_and_permission_names(
+    name, permissions, organisations
+):
+    access = launcher.IDENTITIES[name].access
+    result = launcher.check_access(access, granted(*permissions), organisations)
+    assert result == {
+        "person_id": PERSON,
+        "platform_permissions": sorted(permissions),
+        "organisations": access.organisations,
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "access_result", "organisations", "error"),
+    [
+        ("organisation-operator", granted(READ), LISTED, "permission_matrix_mismatch"),
+        ("organisation-operator", granted(MANAGE), LISTED, "permission_matrix_mismatch"),
+        ("organisation-reader", granted(READ, MANAGE), LISTED, "permission_matrix_mismatch"),
+        ("organisation-reader", granted(), LISTED, "permission_matrix_mismatch"),
+        ("organisation-denied", granted(READ), DENIED, "permission_matrix_mismatch"),
+        ("organisation-denied", granted(MANAGE), DENIED, "permission_matrix_mismatch"),
+        ("organisation-operator", {"status": 404}, LISTED, "platform_access_route_absent"),
+        ("organisation-reader", {"status": 401}, LISTED, "platform_access_unavailable"),
+        ("organisation-reader", None, LISTED, "platform_access_unavailable"),
+        (
+            "organisation-reader",
+            {**granted(READ), "person_id": "admin@example.test"},
+            LISTED,
+            "person_invalid",
+        ),
+        (
+            "organisation-reader",
+            {**granted(READ), "platform_permissions": "platform_tenants_read"},
+            LISTED,
+            "permissions_invalid",
+        ),
+        (
+            "organisation-operator",
+            granted(READ, MANAGE),
+            {"status": 404},
+            "organisations_route_absent",
+        ),
+        ("organisation-denied", granted(), {"status": 404}, "organisations_route_absent"),
+        ("organisation-operator", granted(READ, MANAGE), DENIED, "organisations_read_refused"),
+        (
+            "organisation-reader",
+            granted(READ),
+            {"status": 200, "listed": False},
+            "organisations_read_refused",
+        ),
+        ("organisation-denied", granted(), LISTED, "organisations_not_capability_denied"),
+        (
+            "organisation-denied",
+            granted(),
+            {"status": 403, "code": "admin_surface_required"},
+            "organisations_not_capability_denied",
+        ),
+        (
+            "organisation-denied",
+            granted(),
+            {"status": 401, "code": "authentication_required"},
+            "organisations_not_capability_denied",
+        ),
+    ],
+)
+def test_access_matrix_refuses_any_difference(name, access_result, organisations, error):
+    with pytest.raises(launcher.Refused) as raised:
+        launcher.check_access(launcher.IDENTITIES[name].access, access_result, organisations)
+    assert raised.value.code == error
+
+
+def test_page_scripts_never_return_session_or_organisation_contents():
+    assert "session_id" not in launcher.ACCESS_JS
+    assert "person_id: j.person_id" in launcher.ACCESS_JS
+    assert "platform_permissions: j.platform_permissions" in launcher.ACCESS_JS
+    assert "j.organisations" not in launcher.ORGANISATIONS_JS.replace(
+        "Array.isArray(j.organisations)", ""
+    )
+    for script in (launcher.ACCESS_JS, launcher.ORGANISATIONS_JS):
+        assert "cookie" not in script.lower() and "token" not in script.lower()

@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence import (
     recovery_models,
     sensitive_segment_models,
     source_object_models,
+    speaker_map_models,
     submission_label_models,
 )
 from ac_platform.conversation_intelligence import models as conversation_models
@@ -57,6 +58,7 @@ MODEL_MODULES = (
     canary_models,
     guest_models,
     submission_label_models,
+    speaker_map_models,
     execution_control_models,
     recovery_models,
     source_object_models,

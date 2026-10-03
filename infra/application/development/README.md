@@ -246,15 +246,29 @@ sudo python3 "$S" status --require-ancestor "$M"          # expect contains[M]=t
 sudo python3 "$S" rollback                                # plan; add --apply to restore
 ```
 
-## Admin dev QA browser credential (AUT-970)
+## Admin dev QA browser credential (AUT-970, AUT-984)
 
 Browser QA signs a fictional identity into Admin dev without seeing its
-password. Declared reference (names only; the fixture task under AUT-959
-creates the account and the secret, not this code):
+password. Declared references (names only; a separately reviewed fixture task
+creates each account, platform grant and secret, not this code; until then the
+broker refuses with `broker_secret_unavailable`):
 
-| Identity | Account | Infisical `dev` folder | Secret name |
+| Identity | Account | Infisical `dev` folder | Secret name | Required Admin merge |
+| --- | --- | --- | --- | --- |
+| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` | `1daeb174…` (AUT-890) |
+| `organisation-operator` | `qa-org-operator-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR` | `61e6b240…` (AUT-447) |
+| `organisation-reader` | `qa-org-reader-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER` | `61e6b240…` (AUT-447) |
+| `organisation-denied` | `qa-org-denied-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED` | `61e6b240…` (AUT-447) |
+
+Organisation identities also need this capability matrix from the real API
+after sign-in (platform grants only; organisation membership roles never
+establish them):
+
+| Identity | `platform_tenants_read` | `platform_organisations_manage` | `GET /v1/platform/organisations` |
 | --- | --- | --- | --- |
-| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` |
+| `organisation-operator` | required | required | 200 list |
+| `organisation-reader` | required | must be absent | 200 list |
+| `organisation-denied` | must be absent | must be absent | 403 `authorization_denied` |
 
 - `scripts/dev-qa-credential.py`, installed root:root 0750 as
   `/usr/local/sbin/ac-dev-qa-credential`, is the only root step. It reuses
@@ -276,7 +290,13 @@ creates the account and the secret, not this code):
   and require `/v1/me` to return the named account. The browser reaches the
   https origin through an in-process TLS bridge to the edge, trusted by the
   ephemeral key's SPKI pin, so the real Host, Origin and `__Host-` cookies
-  apply. It uses Playwright's Chromium with `--no-sandbox`, as Playwright does on
+  apply. Organisation identities additionally need, before any credential,
+  `/v1/platform/organisations` signed out → 401 (404 means the API route is not
+  deployed: `organisations_route_absent`), and after sign-in the matrix above
+  from `/v1/me/platform-access` and the list route; any difference refuses with
+  `permission_matrix_mismatch`, `organisations_read_refused` or
+  `organisations_not_capability_denied`. The `access` line prints only the
+  person id, permission names and the route outcome, never the session id. It uses Playwright's Chromium with `--no-sandbox`, as Playwright does on
   this host (unprivileged user namespaces are off).
 - Limits: all agents share the `acdev` user, so the caller checks guard against
   mistakes, not a hostile same-user process; the DevTools port (loopback) gives
@@ -291,17 +311,36 @@ install -o root -g root -m 0755 "$R/development/qa-admin-browser.py" /usr/local/
 install -o root -g root -m 0750 "$R/scripts/dev-qa-credential.py" /usr/local/sbin/ac-dev-qa-credential
 cat > /etc/sudoers.d/ac-dev-qa-credential.new <<'SUDO'
 Defaults!/usr/local/sbin/ac-dev-qa-credential !use_pty
-acdev ALL=(root) NOPASSWD: /usr/local/sbin/ac-dev-qa-credential billing-staff, /usr/local/sbin/ac-dev-qa-credential billing-staff --sentinel
+acdev ALL=(root) NOPASSWD: /usr/local/sbin/ac-dev-qa-credential billing-staff, /usr/local/sbin/ac-dev-qa-credential billing-staff --sentinel, \
+  /usr/local/sbin/ac-dev-qa-credential organisation-operator, /usr/local/sbin/ac-dev-qa-credential organisation-operator --sentinel, \
+  /usr/local/sbin/ac-dev-qa-credential organisation-reader, /usr/local/sbin/ac-dev-qa-credential organisation-reader --sentinel, \
+  /usr/local/sbin/ac-dev-qa-credential organisation-denied, /usr/local/sbin/ac-dev-qa-credential organisation-denied --sentinel
 SUDO
 visudo -cf /etc/sudoers.d/ac-dev-qa-credential.new && chmod 0440 /etc/sudoers.d/ac-dev-qa-credential.new \
   && mv /etc/sudoers.d/ac-dev-qa-credential.new /etc/sudoers.d/ac-dev-qa-credential
 ```
 
-Rollback: remove those three files. QA invocation (non-root):
+Organisation identities also need the deployed receipt to pin the AUT-447
+Admin merge (root, after the install above, same release tree):
+
+```sh
+S="$R/scripts/deploy-dev-admin-web.py"
+sudo python3 "$S" status --require-ancestor 1daeb17431a83a1330e9ec5f2362c29d3bb39c30 \
+  --require-ancestor 61e6b240cd16c35ca87c19518aefcba1f3d3d555 --write-receipt
+```
+
+Done check: `deployed.json` is root:root 0644 with both SHAs in `contains`.
+Rollback: remove those three files (the receipt is rewritten by the next
+`deploy` or `status --write-receipt`). Upgrading from the AUT-970 install:
+keep a copy of the three files first; rollback restores them. QA invocation
+(non-root):
 
 ```sh
 /usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff --sentinel-only  # transport proof only
 /usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff                  # sign in and hand off
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity organisation-operator
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity organisation-reader
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity organisation-denied
 ```
 
 Output is JSON lines with no value. The `handoff` line gives `devtools`

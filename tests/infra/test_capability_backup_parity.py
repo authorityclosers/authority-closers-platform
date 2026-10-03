@@ -68,6 +68,7 @@ PLATFORM_BILLING_MANAGE = "20261002_0066"
 SENSITIVE_SEGMENT_MARKS = "20261002_0067"
 INACTIVE_PLAN_VALUES = "20261003_0068"
 BILLING_INVOICES = "20261003_0069"
+SPEAKER_MAPS = "20261003_0070"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -116,6 +117,7 @@ HEADS = (
     SENSITIVE_SEGMENT_MARKS,
     INACTIVE_PLAN_VALUES,
     BILLING_INVOICES,
+    SPEAKER_MAPS,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -238,6 +240,7 @@ NEW_TABLES = {
         "billing_invoices",
         "billing_credit_notes",
     ),
+    SPEAKER_MAPS: ("conversation_speaker_map_revisions",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -359,6 +362,10 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         assert module.VERSIONED_PARITY_CONTRACTS[BILLING_INVOICES] == (
             "ac-postgres-parity-v41",
             module.INACTIVE_PLAN_VALUES_PARITY_TABLES + NEW_TABLES[BILLING_INVOICES],
+        )
+        assert module.VERSIONED_PARITY_CONTRACTS[SPEAKER_MAPS] == (
+            "ac-postgres-parity-v42",
+            module.BILLING_INVOICES_PARITY_TABLES + NEW_TABLES[SPEAKER_MAPS],
         )
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
@@ -753,6 +760,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         121,
         121,
         125,
+        126,
     )
     expected_contracts = (
         None,
@@ -802,6 +810,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v40",
         "ac-postgres-parity-v40",
         "ac-postgres-parity-v41",
+        "ac-postgres-parity-v42",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

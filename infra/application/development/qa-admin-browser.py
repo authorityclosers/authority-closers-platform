@@ -21,7 +21,10 @@ Order:
 3. Credential: the broker sends the real password over a pipe into this
    process's memory; it is typed into the real form over the DevTools pipe and
    the buffer is zeroed. The run passes only when ``/v1/me`` returns the named
-   identity. No API, session or capability is mocked or bypassed.
+   identity. No API, session or capability is mocked or bypassed. Organisation
+   identities then need ``/v1/me/platform-access`` to grant exactly their
+   capability matrix and ``/v1/platform/organisations`` to read or deny to match;
+   only the person id and permission names are printed.
 4. Hand-off: prints the loopback DevTools URL for Browser QA (Playwright
    ``connectOverCDP``) and keeps the browser until Ctrl-C, SIGTERM or
    ``--hold-seconds``; then it stops the browser and deletes the profile.
@@ -61,11 +64,28 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class AccessCheck:
+    """Platform capabilities the signed-in identity must and must not hold."""
+
+    required: tuple[str, ...]
+    absent: tuple[str, ...]
+    organisations: str  # GET /v1/platform/organisations: "read" or "denied"
+
+
+@dataclass(frozen=True)
 class Identity:
     email: str
     folder: str
     secret: str
     required_merges: tuple[str, ...]
+    access: AccessCheck | None = None
+
+
+TENANTS_READ = "platform_tenants_read"
+ORGANISATIONS_MANAGE = "platform_organisations_manage"
+ORGANISATIONS_ROUTE = "/v1/platform/organisations"
+# AUT-447: Admin -> Organisations -> Members reads the operator organisation API.
+ORGANISATIONS_UI_MERGE = "61e6b240cd16c35ca87c19518aefcba1f3d3d555"
 
 
 # Keep names, emails and secret references equal to the broker's table.
@@ -76,6 +96,29 @@ IDENTITIES = {
         secret="AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF",  # noqa: S106 - a name, not a value
         # AUT-890: Admin Billing uses the staff refund route.
         required_merges=("1daeb17431a83a1330e9ec5f2362c29d3bb39c30",),
+    ),
+    # AUT-984: capabilities come only from platform grants; organisation
+    # membership roles cannot establish them (AUT-961).
+    "organisation-operator": Identity(
+        email="qa-org-operator-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR",  # noqa: S106 - a name, not a value
+        required_merges=(ORGANISATIONS_UI_MERGE,),
+        access=AccessCheck((TENANTS_READ, ORGANISATIONS_MANAGE), (), "read"),
+    ),
+    "organisation-reader": Identity(
+        email="qa-org-reader-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_READER",  # noqa: S106 - a name, not a value
+        required_merges=(ORGANISATIONS_UI_MERGE,),
+        access=AccessCheck((TENANTS_READ,), (ORGANISATIONS_MANAGE,), "read"),
+    ),
+    "organisation-denied": Identity(
+        email="qa-org-denied-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_DENIED",  # noqa: S106 - a name, not a value
+        required_merges=(ORGANISATIONS_UI_MERGE,),
+        access=AccessCheck((), (TENANTS_READ, ORGANISATIONS_MANAGE), "denied"),
     ),
 }
 HOST = "admin-dev.authorityclosers.com"
@@ -90,6 +133,8 @@ CHROME_CANDIDATES = (
 )
 SIGN_IN_ERROR = "Sign-in was not confirmed"
 SHA_RE = re.compile(r"[0-9a-f]{40}")
+UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+PERMISSION_RE = re.compile(r"platform_[a-z_]{1,60}")
 
 
 class Refused(RuntimeError):
@@ -170,6 +215,10 @@ def preflight(
     require(status == 200, "admin_dev_login_unavailable")
     status, _ = edge("/v1/me")
     require(status == 401, "admin_dev_api_route_unavailable")
+    if identity.access is not None:
+        # Signed out, a present route answers 401; an absent one 404.
+        status, _ = edge(ORGANISATIONS_ROUTE)
+        require(status == 401, "organisations_route_absent")
     status, body = edge("/health/ready", API_PORT)
     try:
         ready = json.loads(body or b"{}").get("status") == "ready"
@@ -538,6 +587,68 @@ def sign_in(browser: Browser, identity: Identity, secret: bytearray) -> str:
     raise Refused("sign_in_outcome_timeout")
 
 
+# Platform access ------------------------------------------------------------
+
+# Only the person id, permission names, statuses and the problem code leave the
+# page; the session id, cookies and organisation contents never do.
+ACCESS_JS = (
+    "fetch('/v1/me/platform-access', {credentials: 'same-origin', cache: 'no-store'})"
+    ".then(r => r.ok ? r.json().then(j => ({status: r.status, person_id: j.person_id,"
+    " platform_permissions: j.platform_permissions})) : {status: r.status})"
+    ".catch(() => ({status: 0}))"
+)
+ORGANISATIONS_JS = (
+    f"fetch({json.dumps(ORGANISATIONS_ROUTE)}, {{credentials: 'same-origin', cache: 'no-store'}})"
+    ".then(r => r.json().catch(() => ({})).then(j => ({status: r.status,"
+    " code: typeof j.code === 'string' ? j.code : null,"
+    " listed: Array.isArray(j.organisations)})))"
+    ".catch(() => ({status: 0}))"
+)
+
+
+def check_access(access: AccessCheck, granted: Any, organisations: Any) -> dict[str, Any]:
+    """Refuse unless the real API grants exactly the identity's capability matrix."""
+
+    granted = granted if isinstance(granted, dict) else {}
+    status = granted.get("status")
+    require(status != 404, "platform_access_route_absent")
+    require(status == 200, "platform_access_unavailable")
+    person_id = granted.get("person_id")
+    permissions = granted.get("platform_permissions")
+    require(
+        isinstance(person_id, str) and UUID_RE.fullmatch(person_id) is not None, "person_invalid"
+    )
+    require(
+        isinstance(permissions, list)
+        and all(isinstance(p, str) and PERMISSION_RE.fullmatch(p) for p in permissions),
+        "permissions_invalid",
+    )
+    held = set(permissions)
+    require(
+        set(access.required) <= held and not held & set(access.absent),
+        "permission_matrix_mismatch",
+    )
+    organisations = organisations if isinstance(organisations, dict) else {}
+    status = organisations.get("status")
+    require(status != 404, "organisations_route_absent")
+    if access.organisations == "read":
+        require(status == 200 and organisations.get("listed") is True, "organisations_read_refused")
+    else:
+        require(
+            status == 403 and organisations.get("code") == "authorization_denied",
+            "organisations_not_capability_denied",
+        )
+    return {
+        "person_id": person_id,
+        "platform_permissions": sorted(held),
+        "organisations": access.organisations,
+    }
+
+
+def verify_access(browser: Browser, access: AccessCheck) -> dict[str, Any]:
+    return check_access(access, browser.evaluate(ACCESS_JS), browser.evaluate(ORGANISATIONS_JS))
+
+
 # Leak checks -----------------------------------------------------------------
 
 
@@ -645,6 +756,8 @@ def main(argv: list[str] | None = None) -> int:
         secret = broker_secret(args.identity, sentinel=False)
         browser, outcome = run_phase(chrome, workdir, "qa", identity, secret, bridge, spki, output)
         require(outcome == "signed_in", "credential_sign_in_refused")
+        if identity.access is not None:
+            output.emit(phase="access", ok=True, **verify_access(browser, identity.access))
         output.emit(
             phase="handoff",
             ok=True,
