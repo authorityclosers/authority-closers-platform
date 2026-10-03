@@ -42,6 +42,25 @@ The root-owned parity suite remains a required CI gate. Local `sudo -n` was
 unavailable; this is not root-owned backup/restore evidence. The initial UUID
 reflection error was fixed and the final focused suite above passed.
 
+## CI head-check repair (CTO scope amendment, 2026-10-03)
+
+CI exposed five additional tests that treated 0067 as the current head. The
+CTO added those five files to scope; their head checks now read the migration
+registry. Every other assertion is unchanged, confirmed by an AST comparison
+of all 42 assertion nodes after normalising the head expressions.
+
+- `uv run pytest -q tests/database/test_billing_orders_postgresql.py tests/database/test_platform_billing_capability_postgresql.py tests/database/test_sensitive_segment_marks.py tests/integration/test_job_failure_detail_migration_postgresql.py tests/integration/test_organisations_migration_postgresql.py --basetemp "$PAPERCLIP_RUN_SCRATCH_DIR/head-check-tests"`: **74 passed**, no skips, 89.47 s.
+- `uv run ruff format --check packages/python tests`: **890 files already formatted**.
+- `uv run ruff check packages/python tests`: **passed**.
+- `uv run mypy packages/python`: **passed**, 376 source files.
+- `git grep -n '"20261002_0067"' tests`: reviewed all four remaining matches;
+  they identify the C3 prior revision, the sensitive-segment migration's own
+  revision, a previous supported backup head and a historical parity contract.
+  No current-head check is pinned to 0067.
+
+The migration, model and catalogue implementation are unchanged by this
+repair. The new commit needs fresh CTO review and CEO merge approval.
+
 ## Dev check after the approved merge
 
 Allow the normal release and dev refresh to apply 0068. Read anonymous
