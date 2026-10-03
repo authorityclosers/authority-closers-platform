@@ -94,7 +94,9 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
       "visual-test-",
     ),
   );
-  const server = createServer((_request, response) => {
+  const serverRequests = [];
+  const server = createServer((request, response) => {
+    serverRequests.push(request.url);
     response.writeHead(200, { "Content-Type": "text/html" });
     response.end(
       '<!doctype html><html lang="en"><head><title>Fictional test</title></head><body><main id="fixture"><div style="width:2000px">Fictional overflow</div><button></button></main><script>console.error("fixture-private-message");throw new Error("fixture-private-exception")</script></body></html>',
@@ -126,6 +128,29 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
     );
     const policyPage = await policyContext.newPage();
     await policyPage.goto(origin);
+    assert.deepEqual(
+      await policyPage.evaluate(async () => (await fetch("/health")).json()),
+      { analysis_read_only: true },
+    );
+    assert.ok(!serverRequests.includes("/health"));
+    assert.equal(
+      await policyPage.evaluate(() =>
+        fetch("/health", { method: "POST" }).then(
+          () => false,
+          () => true,
+        ),
+      ),
+      true,
+    );
+    assert.equal(
+      await policyPage.evaluate(() =>
+        fetch("/v1/me").then(
+          () => false,
+          () => true,
+        ),
+      ),
+      true,
+    );
     const blockedSocket = await policyPage.evaluate(
       () =>
         new Promise((done) => {

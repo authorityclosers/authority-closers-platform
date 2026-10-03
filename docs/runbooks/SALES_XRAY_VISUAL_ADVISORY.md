@@ -24,7 +24,9 @@ with a 1024 MiB JavaScript heap limit, no configured upstream API, and an explic
 environment allow-list. A fresh, nonpersistent Chromium context per capture has
 no cookies or sign-in state. Browser requests allow only GETs for the selected
 fictional routes (including fixed report-section navigation) and local static
-assets. APIs, review-observation APIs, external
+assets. The harness supplies a fixed `{analysis_read_only: true}` response for
+local GET `/health`, solely to activate the existing acquisition fixtures; the
+request never reaches a server. Other APIs, review-observation APIs, external
 hosts, writes, service workers and downloads are refused. The only permitted
 WebSocket is the temporary loopback server's `/_next/hmr` endpoint. A response
 content policy blocks other sockets, frames and workers. Turbopack
@@ -44,8 +46,10 @@ locked `4.13.0` transitive dependency of the Next accessibility lint package;
 Pillow is the existing Python pin `12.3.0`. There is no new dependency/lockfile.
 Date is fixed to `2026-10-03T12:00:00Z`, with UTC, en-GB, light theme, reduced
 motion, disabled CSS animation/transition/caret, local fonts and network-idle
-navigation. Each capture is bounded; the renderer has a four-minute deadline.
-The job has an eight-minute safety timeout, with a target below six minutes.
+navigation. Each capture is bounded; the renderer has a four-and-a-half-minute deadline.
+Actions renders at most two contexts concurrently; local use renders one to
+preserve VPS headroom. The job has an eight-minute safety timeout, with a target
+below six minutes.
 `elapsed_seconds` measures rendering separately from Actions setup/run times.
 Compare hosted Actions duration before claiming the target is met.
 

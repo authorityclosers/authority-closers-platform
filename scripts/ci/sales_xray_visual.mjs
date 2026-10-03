@@ -137,7 +137,23 @@ export function allowedRequest(request, origin, routes) {
 }
 
 export async function routeFixtureRequest(route, origin, routes) {
-  if (!allowedRequest(route.request(), origin, routes)) return route.abort();
+  const request = route.request();
+  const url = new URL(request.url());
+  // Existing acquisition fixtures require the read-only review capability.
+  // Supply only that fixed fictional flag; no health/API request reaches Next.
+  if (
+    url.origin === origin &&
+    url.pathname === "/health" &&
+    !url.search &&
+    request.method() === "GET"
+  ) {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: '{"analysis_read_only":true}',
+    });
+  }
+  if (!allowedRequest(request, origin, routes)) return route.abort();
   if (route.request().resourceType() !== "document") return route.continue();
   // Native HMR is required for Turbopack hydration. CSP blocks external sockets,
   // frames and workers without replacing the browser WebSocket constructor.
@@ -362,7 +378,7 @@ async function main() {
   await save();
   let server;
   let browser;
-  const deadline = setTimeout(() => process.emit("SIGTERM"), 240000);
+  const deadline = setTimeout(() => process.emit("SIGTERM"), 270000);
   const stop = async () => {
     if (server?.pid) {
       try {
@@ -489,28 +505,46 @@ async function main() {
     receipt.browser_version = browser.version();
     receipt.setup_stage = "capturing";
     const routes = new Set(selected.map((item) => item.route));
-    for (let index = 0; index < rows.length; index++) {
-      const item = selected[Math.floor(index / viewports.length)];
-      const viewport = viewports[index % viewports.length];
-      const context = await browser.newContext({
-        viewport,
-        deviceScaleFactor: 1,
-        locale: "en-GB",
-        timezoneId: "UTC",
-        colorScheme: "light",
-        reducedMotion: "reduce",
-        serviceWorkers: "block",
-        acceptDownloads: false,
-      });
-      await context.route("**/*", (route) =>
-        routeFixtureRequest(route, "http://127.0.0.1:18216", routes),
+    // Parallel captures stay on the hosted Actions runner. Local use remains
+    // one context at a time because this VPS also serves production.
+    const concurrency = process.env.GITHUB_ACTIONS === "true" ? 2 : 1;
+    receipt.capture_concurrency = concurrency;
+    for (
+      let startIndex = 0;
+      startIndex < rows.length;
+      startIndex += concurrency
+    ) {
+      await Promise.all(
+        Array.from(
+          { length: Math.min(concurrency, rows.length - startIndex) },
+          (_, offset) => startIndex + offset,
+        ).map(async (index) => {
+          const item = selected[Math.floor(index / viewports.length)];
+          const viewport = viewports[index % viewports.length];
+          const context = await browser.newContext({
+            viewport,
+            deviceScaleFactor: 1,
+            locale: "en-GB",
+            timezoneId: "UTC",
+            colorScheme: "light",
+            reducedMotion: "reduce",
+            serviceWorkers: "block",
+            acceptDownloads: false,
+          });
+          try {
+            await context.route("**/*", (route) =>
+              routeFixtureRequest(route, "http://127.0.0.1:18216", routes),
+            );
+            const page = await context.newPage();
+            page.setDefaultTimeout(8000);
+            rows[index] = await capture(page, item, viewport, output, axePath);
+          } finally {
+            await context.close();
+          }
+        }),
       );
-      const page = await context.newPage();
-      page.setDefaultTimeout(8000);
-      rows[index] = await capture(page, item, viewport, output, axePath);
       receipt.elapsed_seconds = Math.round((Date.now() - started) / 1000);
       await save();
-      await context.close();
     }
     receipt.renderer_status = rows.every(
       (row) => row.capture_status === "measured",
