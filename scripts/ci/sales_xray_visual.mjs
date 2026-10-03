@@ -1,7 +1,8 @@
 import { createRequire } from "node:module";
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, access } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
+import { get as httpGet } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
@@ -95,16 +96,60 @@ export function selectFrames(paths, all = false) {
 
 export function allowedRequest(request, origin, routes) {
   const url = new URL(request.url());
+  const params = new URLSearchParams(url.search);
+  params.delete("_rsc");
+  const query = params.toString();
+  const normalized = url.pathname + (query ? `?${query}` : "");
+  const shellNavigation =
+    routes.has(shell) &&
+    url.pathname === shell &&
+    [...params.keys()].every(
+      (key) =>
+        ["call", "view", "section"].includes(key) &&
+        params.getAll(key).length === 1,
+    ) &&
+    (!params.has("call") ||
+      params.get("call") === "00000000-0000-4000-8000-000000000002") &&
+    (!params.has("view") ||
+      ["reading", "tabs", "document"].includes(params.get("view"))) &&
+    (!params.has("section") ||
+      [
+        "overview",
+        "moments",
+        "prospect",
+        "next-call-plan",
+        "skills",
+        "signals",
+        "transcript",
+        "raw-data",
+      ].includes(params.get("section")));
   return (
     url.origin === origin &&
     request.method() === "GET" &&
     (url.pathname.startsWith("/_next/static/") ||
-      routes.has(url.pathname + url.search) ||
+      routes.has(normalized) ||
+      shellNavigation ||
       /^\/(brand|brands|fonts|lightbox|experience-kit|media)\//.test(
         url.pathname,
       ) ||
       url.pathname === "/favicon.ico")
   );
+}
+
+export async function routeFixtureRequest(route, origin, routes) {
+  if (!allowedRequest(route.request(), origin, routes)) return route.abort();
+  if (route.request().resourceType() !== "document") return route.continue();
+  // Native HMR is required for Turbopack hydration. CSP blocks external sockets,
+  // frames and workers without replacing the browser WebSocket constructor.
+  const local = new URL(origin);
+  const response = await route.fetch({ maxRedirects: 0, timeout: 35000 });
+  await route.fulfill({
+    response,
+    headers: {
+      ...response.headers(),
+      "content-security-policy": `connect-src ${origin} ws://${local.host}/_next/hmr; worker-src 'none'; frame-src 'none'`,
+    },
+  });
 }
 
 export function unavailable(item, viewport) {
@@ -123,6 +168,40 @@ export function unavailable(item, viewport) {
     axe_incomplete_count: null,
     failure_stage: "not_started",
   };
+}
+
+export async function waitForFixtureServer(url, alive = () => true) {
+  const parsed = new URL(url);
+  if (
+    parsed.protocol !== "http:" ||
+    parsed.hostname !== "127.0.0.1" ||
+    parsed.pathname !== "/review-fixture/shell"
+  )
+    throw new Error();
+  const readyDeadline = Date.now() + 15000;
+  while (true) {
+    try {
+      await new Promise((done, reject) => {
+        const request = httpGet(parsed, { timeout: 60000 }, (response) => {
+          response.on("error", () => {});
+          response.resume();
+          if (response.statusCode === 200) done();
+          else reject(new Error());
+        });
+        request.once("error", reject);
+        request.once("timeout", () => request.destroy(new Error()));
+      });
+      return;
+    } catch (error) {
+      if (
+        error?.code !== "ECONNREFUSED" ||
+        Date.now() >= readyDeadline ||
+        !alive()
+      )
+        throw error;
+      await new Promise((done) => setTimeout(done, 250));
+    }
+  }
 }
 
 export async function capture(
@@ -327,6 +406,20 @@ async function main() {
     const axePath = axeRequire.resolve("axe-core");
     receipt.axe_version = axeRequire("axe-core/package.json").version;
     receipt.playwright_version = "1.58.2";
+    receipt.setup_stage = "env_file_check";
+    for (const name of [
+      ".env",
+      ".env.local",
+      ".env.development",
+      ".env.development.local",
+    ]) {
+      try {
+        await access(resolve("apps/sales-xray-web", name));
+        throw new Error("env_file_present");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+    }
     receipt.setup_stage = "port_check";
     const occupied = await new Promise((done) => {
       const socket = createConnection({ host: "127.0.0.1", port: 18216 });
@@ -387,28 +480,10 @@ async function main() {
     // Compile the common shell once before timed browser captures. No API is
     // configured and this is the same fictional route used in every selection.
     receipt.setup_stage = "server_warmup";
-    let warm;
-    const readyDeadline = Date.now() + 15000;
-    while (!warm) {
-      try {
-        warm = await fetch("http://127.0.0.1:18216/review-fixture/shell", {
-          signal: AbortSignal.timeout(60000),
-        });
-      } catch (error) {
-        if (
-          error?.cause?.code !== "ECONNREFUSED" ||
-          Date.now() >= readyDeadline ||
-          server.exitCode !== null
-        )
-          throw error;
-        await new Promise((done) => setTimeout(done, 250));
-      }
-    }
-    if (!warm.ok()) {
-      receipt.setup_stage = `server_http_${warm.status()}`;
-      throw new Error();
-    }
-    await warm.body?.cancel().catch(() => {});
+    await waitForFixtureServer(
+      "http://127.0.0.1:18216/review-fixture/shell",
+      () => server.exitCode === null,
+    );
     receipt.setup_stage = "browser_launch";
     browser = await chromium.launch();
     receipt.browser_version = browser.version();
@@ -428,20 +503,8 @@ async function main() {
         acceptDownloads: false,
       });
       await context.route("**/*", (route) =>
-        allowedRequest(route.request(), "http://127.0.0.1:18216", routes)
-          ? route.continue()
-          : route.abort(),
+        routeFixtureRequest(route, "http://127.0.0.1:18216", routes),
       );
-      await context.routeWebSocket(/.*/, (socket) => {
-        const url = new URL(socket.url());
-        if (
-          url.protocol === "ws:" &&
-          url.host === "127.0.0.1:18216" &&
-          url.pathname === "/_next/webpack-hmr"
-        )
-          socket.connectToServer();
-        else socket.close();
-      });
       const page = await context.newPage();
       page.setDefaultTimeout(8000);
       rows[index] = await capture(page, item, viewport, output, axePath);

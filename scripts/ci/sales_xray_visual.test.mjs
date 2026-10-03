@@ -8,11 +8,13 @@ import { createRequire } from "node:module";
 import { chromium } from "playwright";
 import {
   allowedRequest,
+  routeFixtureRequest,
   capture,
   frames,
   selectFrames,
   unavailable,
   viewports,
+  waitForFixtureServer,
 } from "./sales_xray_visual.mjs";
 
 test("selects touched families and always includes shell", () => {
@@ -53,6 +55,15 @@ test("rejects providers, API writes/reads and off-origin requests", () => {
   const allowed = (path, method = "GET") =>
     allowedRequest({ url: () => path, method: () => method }, origin, routes);
   assert.ok(allowed(`${origin}/review-fixture/shell`));
+  assert.ok(
+    allowed(
+      `${origin}/review-fixture/shell?call=00000000-0000-4000-8000-000000000002&view=tabs&section=moments&_rsc=local`,
+    ),
+  );
+  assert.ok(
+    !allowed(`${origin}/review-fixture/shell?call=other-person&view=tabs`),
+  );
+  assert.ok(!allowed(`${origin}/review-fixture/shell?unexpected=private`));
   assert.ok(allowed(`${origin}/_next/static/test.js`));
   assert.ok(!allowed(`${origin}/v1/me/workspaces`));
   assert.ok(!allowed(`${origin}/__review/api/frames/a`));
@@ -96,6 +107,9 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
       server.listen(0, "127.0.0.1", ready);
     });
     browser = await chromium.launch();
+    await waitForFixtureServer(
+      `http://127.0.0.1:${server.address().port}/review-fixture/shell`,
+    );
     const require = createRequire(import.meta.url);
     const nextRequire = createRequire(
       require.resolve("eslint-config-next", {
@@ -105,6 +119,24 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
     const axePath = createRequire(
       nextRequire.resolve("eslint-plugin-jsx-a11y"),
     ).resolve("axe-core");
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const policyContext = await browser.newContext();
+    await policyContext.route("**/*", (route) =>
+      routeFixtureRequest(route, origin, new Set(["/"])),
+    );
+    const policyPage = await policyContext.newPage();
+    await policyPage.goto(origin);
+    const blockedSocket = await policyPage.evaluate(
+      () =>
+        new Promise((done) => {
+          const socket = new WebSocket("wss://external.invalid/socket");
+          socket.onerror = () => done(true);
+          socket.onopen = () => done(false);
+          setTimeout(() => done(false), 1000);
+        }),
+    );
+    assert.equal(blockedSocket, true);
+    await policyContext.close();
     const page = await browser.newPage({ viewport: viewports[1] });
     const row = await capture(
       page,
