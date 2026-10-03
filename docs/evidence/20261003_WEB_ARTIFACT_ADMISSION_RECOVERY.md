@@ -71,6 +71,23 @@ current upload and other artifact families, mismatched/missing/expired/empty
 upload proof, inventory failure, deletion failure and final-pool refusal.
 These arithmetic results are local fixtures, not a new live storage receipt.
 
+## Shared-file gate receipt
+
+The fix was committed and pushed, and PR #270 opened. `ac-gate pr-check 270`
+then refused the open PR because PR #262 ([AUT-993](/AUT/issues/AUT-993))
+already holds the exclusive shared-file allowance. Its inspected head was
+`7a5071ff66918445ce1c857c037ba0cdcc14b0f7`, with shared files
+`db/migrations/versions/20261003_0073_credits_ledger.py`,
+`packages/python/ac_platform/db/models.py` and
+`tests/database/test_model_registry.py`. There is no direct file overlap;
+the gate permits only one open PR changing shared files at a time.
+
+PR #270 was closed without deleting the claimed task branch. The pushed fix
+and tests remain intact. Reopen it after PR #262 merges or closes, rerun the
+shared-file gate, and route sensitive review. The required dependency output
+is release of that shared-file allowance, not a manager decision. The task
+remains blocked on the owning issue until that output is available.
+
 ## Dev and staging completion checks
 
 This workflow change triggers the normal main-push web image build after the
