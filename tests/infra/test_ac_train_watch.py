@@ -261,6 +261,36 @@ def test_web_candidate_skips_newer_unvalidated_build(tmp_path: Path) -> None:
     assert f"lag:staging:web:{newer_web_sha}" not in {item["key"] for item in alerts}
 
 
+def test_no_web_lag_when_staging_runs_a_newer_build_with_cancelled_validation(
+    tmp_path: Path,
+) -> None:
+    github = FakeGitHub()
+    newer_web_sha = "f" * 40
+    github.add_run(ENGINE.CORE_WORKFLOW, WEB_SHA, 9, NOW - dt.timedelta(minutes=240))
+    github.add_run(ENGINE.CORE_WORKFLOW, CORE_SHA, 10, NOW - dt.timedelta(minutes=5))
+    github.add_run(
+        ENGINE.CORE_WORKFLOW,
+        newer_web_sha,
+        12,
+        NOW - dt.timedelta(minutes=200),
+        conclusion="cancelled",
+    )
+    github.add_run(
+        ENGINE.WEB_WORKFLOW, newer_web_sha, 13, NOW - dt.timedelta(minutes=210), web=True
+    )
+    github.add_run(ENGINE.WEB_WORKFLOW, WEB_SHA, 11, NOW - dt.timedelta(minutes=245), web=True)
+    github.web_shas = [newer_web_sha, WEB_SHA]
+    github.head_sha = CORE_SHA
+    events, notify = collect_events()
+
+    alerts = WATCH.evaluate(
+        status(web=newer_web_sha), github, now=NOW, notify=notify, spool=tmp_path
+    )
+
+    assert alerts == []
+    assert events == []
+
+
 def test_read_status_uses_json_subprocess_without_shell() -> None:
     calls: list[tuple[list[str], dict[str, Any]]] = []
     payload = status()
