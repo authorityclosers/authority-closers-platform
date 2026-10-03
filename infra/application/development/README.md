@@ -44,7 +44,8 @@ All source files below live under root-owned, mode 0700
 `/etc/authority-closers/development/`. No agent can traverse it. Ordinary source
 files are root:root 0600, regular files with one link and no symlink ancestors.
 systemd reads them as root. `LoadCredential` delivers private, read-only files
-owned by uid 10001; mode 0400 meets `read_private_file`'s confidential checks.
+owned by root:root, mode 0440 with an ACL that grants read to uid 10001 only (the
+group bits are the ACL mask); the confidential readers verify that exact ACL.
 In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 
 | Source relative to development/ | Unit / delivery | In-process path |
