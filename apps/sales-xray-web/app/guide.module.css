@@ -213,6 +213,12 @@
 }
 
 @media (max-width: 620px) {
+  .card[data-waiting="true"] .visual {
+    display: none;
+  }
+  .card[data-waiting="true"] .content h2 {
+    margin-top: 0;
+  }
   .card {
     right: 16px;
     bottom: max(76px, calc(64px + env(safe-area-inset-bottom)));

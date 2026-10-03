@@ -103,6 +103,7 @@ export function GuideOverlay({
         tabIndex={-1}
         className={styles.card}
         data-guide-card
+        data-waiting={step.waitForPage || undefined}
         data-position={above ? "top" : "bottom"}
         aria-labelledby={heading}
       >
