@@ -34,9 +34,9 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       title: "Online service",
       paragraphs: [
         "Sales Xray is an online software service. Nothing is shipped.",
-        "Your plan and its analysis minutes are added to your account as soon as our server receives the payment confirmation from Razorpay, normally within a few minutes of paying.",
+        "Your plan and analysis minutes are added to your account after our server receives payment confirmation from Razorpay.",
         "You use the service in your browser at the Sales Xray website. Reports are delivered in your account, and you can download them where your plan allows.",
-        "If your minutes do not appear within 30 minutes of a successful payment, email us with your order number and we will fix it within one working day.",
+        "If your plan minutes do not appear after a successful payment, email us with your order number so we can investigate.",
       ],
     },
   ],
@@ -48,24 +48,28 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       ],
     },
     {
-      title: "After using minutes",
-      bullets: [
-        "After you use minutes, that period's payment is not refundable.",
-        "Unused minutes do not turn into money.",
+      title: "Subscription refunds",
+      paragraphs: [
+        "If you ask within 7 days of a new subscription payment and have not used any minutes from it, we refund the full amount.",
+        "After you use minutes, that period's payment is not refundable. Unused minutes do not turn into money.",
       ],
     },
     {
-      title: "Refunds",
-      bullets: [
-        "If you ask within 7 days of a new subscription payment and have not used any minutes from it, we refund the full amount.",
+      title: "Top-up refunds",
+      paragraphs: [
         "Top-up packs are refundable within 7 days only if none of the pack's minutes have been used.",
-        "Failed, duplicate or wrongly charged payments are refunded in full.",
+      ],
+    },
+    {
+      title: "Failed, duplicate, or incorrect charges",
+      paragraphs: [
+        "Failed, duplicate or wrongly charged payments are refunded in full. To report a problem, email marketing@estateautopilots.com from your account email and include the order number.",
       ],
     },
     {
       title: "How refunds are paid",
       paragraphs: [
-        "Refunds are paid to the original payment method through Razorpay. Allow 5–7 working days after we approve the refund; your bank may take longer to show it.",
+        "Refunds are paid to the original payment method through Razorpay. The provider and your bank control when the credit appears.",
       ],
     },
     {
@@ -115,10 +119,11 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "6. Plans and payment",
       bullets: [
-        "Plan prices are shown in Indian rupees in the catalogue.",
-        "Monthly and yearly plans renew automatically until cancelled. We remind you before each renewal.",
-        "Minutes are counted per analysed recording, and a plan's minutes do not carry over unless the plan says so.",
-        "Payments are processed by Razorpay; we never see your card details.",
+        "Plan prices, billing intervals, and included details are shown in the current catalogue and at checkout. Review the amount shown before you confirm payment.",
+        "Monthly and yearly subscriptions continue under the payment authorization and provider rules for the selected plan. A later charge may require approval from your bank or payment method. We do not promise a separate Sales Xray reminder before each renewal.",
+        "You can cancel at any time to stop the next renewal. Your current paid period remains active until it ends.",
+        "Usage is based on the duration processed for each analysed recording. Minutes expire or roll over as shown in the plan details.",
+        "Plan payments use Razorpay hosted checkout. Razorpay handles payment credentials entered there. Sales Xray receives payment status and transaction references needed to provide the service, not complete card credentials.",
       ],
     },
     {
@@ -128,7 +133,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "8. Your content",
       paragraphs: [
-        "You own your recordings and reports. You give us permission to store and process them to provide the service, for your plan's retention period or until you delete them.",
+        "You own your recordings and reports. We use them to provide the service for the retention period shown in the applicable plan and processing notice. You may request deletion from your account. A deletion request queues removal from active Sales Xray stores. Audit records remain, and this process does not delete backups or provider-held copies; separate retention periods for those copies are not stated here.",
       ],
     },
     {
@@ -172,21 +177,18 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "What we collect",
       bullets: [
-        "Account details: name, email address and mobile number.",
-        "Your recordings, transcripts and reports.",
-        "Usage and billing records, including plan, minutes and orders.",
-        "Payment card and UPI details are sent to Razorpay, not to us.",
-      ],
-      paragraphs: [
-        "If you choose Google sign-in, we receive the Google account identifier and basic profile information, including verified email and display name, needed to authenticate or link your identity. Authority Closers does not receive your Google password. Google handles its own sign-in interaction under its policies.",
-        "With Google sign-in we also keep your first and last name, language setting, your Google Workspace organization's email domain when there is one, and our own small copy of your Google profile photo; we refresh them each time you sign in with Google.",
+        "Account details: name, email address, and mobile number.",
+        "Your recordings, transcripts, and reports.",
+        "Usage and billing records, including plan, minutes, and orders.",
+        "If you use Google sign-in, the Google account identifier and basic profile information needed to authenticate or link your identity. We do not receive your Google password. We keep your first and last name, language setting, Google Workspace email domain when supplied, and a small copy of your Google profile photo.",
+        "Razorpay processes payment credentials entered in its hosted checkout. Sales Xray receives payment status and transaction references, not complete card credentials.",
       ],
     },
     {
       title: "Why we use it",
       bullets: [
         "To provide analysis and reports.",
-        "To run your account, plan and billing.",
+        "To run your account, plan, and billing.",
         "To keep the service secure.",
         "To meet legal and tax duties.",
       ],
@@ -194,21 +196,21 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Who we share with",
       bullets: [
-        "Hosting and analysis providers, only to run the service and under contract.",
-        "Razorpay, for payments.",
-        "We do not share your information for advertising.",
+        "Hosting and analysis service providers needed to operate Sales Xray. Before an analysis starts, the processing plan shows the analysis provider and purpose and asks you to accept that processing.",
+        "Razorpay for payments made through its hosted checkout.",
+        "Sales Xray does not use your recordings or reports to target advertising.",
       ],
     },
     {
       title: "How long we keep it",
       paragraphs: [
-        "Recordings and reports are kept for your plan's retention period or until you delete them. Billing records are kept as tax law requires.",
+        "The plan and accepted processing plan show the retention period for recordings and reports. You may request deletion from your account. A deletion request queues removal from active Sales Xray stores. Audit records remain. This deletion path does not delete backups or provider-held copies; their separate retention periods are not stated here. Transaction and audit records may remain after account closure.",
       ],
     },
     {
       title: "Your rights",
       paragraphs: [
-        "Under the Digital Personal Data Protection Act, 2023, you may request access, correction, deletion and grievance redressal. Write to marketing@estateautopilots.com. We reply within 30 days.",
+        "You may contact us about access, correction, or deletion of your personal data, or to raise a grievance. Email marketing@estateautopilots.com. We handle requests under applicable law.",
       ],
     },
     {
@@ -261,7 +263,7 @@ function ContactDetails() {
             <dd>
               Office 102, Manorath Apartment, Plot No. 26, Sr. No. 94, Lane No.
               10, Bhusari Colony (Right), Near Kothrud Depot, Kothrud, Pune
-              411038, Maharashtra, India
+              411038, Maharashtra, India.
             </dd>
           </div>
           <div>
@@ -280,14 +282,11 @@ function ContactDetails() {
               <a href="tel:+918668515406">+91 86685 15406</a>
             </dd>
           </div>
-          <div>
-            <dt>Hours</dt>
-            <dd>
-              Monday to Saturday, 10:00–19:00 IST. We reply to email within 2
-              working days.
-            </dd>
-          </div>
         </dl>
+        <p>
+          For account, payment, refund, or privacy requests, email us with your
+          account email and order number where relevant.
+        </p>
       </section>
     </div>
   );
@@ -311,12 +310,13 @@ export function PolicyPage({
         <p className={styles.eyebrow}>Sales Xray</p>
         <h1>{TITLES[slug]}</h1>
         <p className={styles.updated}>
-          Last updated <time dateTime="2026-10-02">2 October 2026</time>
+          Last updated <time dateTime="2026-10-03">3 October 2026</time>
         </p>
         {slug === "pricing" ? (
           <>
             <p className={styles.intro}>
               Plan details and prices below come from the current catalogue.
+              Prices are in Indian rupees.
             </p>
             <PricingCatalogue initialPlans={pricingPlans} />
           </>
