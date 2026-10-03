@@ -61,20 +61,51 @@ export function CheckoutDrawer({
   const dismiss = useEffectEvent(() => {
     if (!busy) onClose();
   });
+  const providerHasFocus = useEffectEvent(
+    (target: EventTarget | null) =>
+      busy && target instanceof Node && !panelRef.current?.contains(target),
+  );
 
   useEffect(() => {
     const panel = panelRef.current;
     if (!visible || !panel) return;
     const previousFocus = document.activeElement;
+    // Keep the ancestor path usable, including when checkout is inside Settings.
+    const background: Array<{ node: HTMLElement; inert: boolean }> = [];
+    let branch: HTMLElement = panel;
+    while (branch.parentElement) {
+      for (const sibling of branch.parentElement.children) {
+        if (
+          sibling instanceof HTMLElement &&
+          sibling !== branch &&
+          sibling !== panel.previousElementSibling
+        ) {
+          background.push({
+            node: sibling,
+            inert: sibling.hasAttribute("inert"),
+          });
+          sibling.setAttribute("inert", "");
+        }
+      }
+      branch = branch.parentElement;
+      if (branch === document.body) break;
+    }
     panel.focus();
     const onKeyDown = (event: KeyboardEvent) => {
+      // Hosted payment may mount its own controls outside this drawer.
+      if (providerHasFocus(event.target)) return;
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         dismiss();
       }
       if (event.key !== "Tab") return;
-      const controls = panel.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      const controls = [
+        ...panel.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter(
+        (node) => node.tabIndex >= 0 && !node.closest("[hidden], [inert]"),
       );
       const first = controls[0];
       const last = controls[controls.length - 1];
@@ -91,9 +122,21 @@ export function CheckoutDrawer({
         (event.shiftKey ? last : first).focus();
       }
     };
-    document.addEventListener("keydown", onKeyDown);
+    const onFocus = (event: FocusEvent) => {
+      if (
+        !panel.contains(event.target as Node) &&
+        !providerHasFocus(event.target)
+      )
+        panel.focus();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("focusin", onFocus);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("focusin", onFocus);
+      for (const { node, inert } of background) {
+        if (!inert) node.removeAttribute("inert");
+      }
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
         previousFocus.focus();
     };

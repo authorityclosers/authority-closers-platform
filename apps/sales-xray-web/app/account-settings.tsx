@@ -17,7 +17,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -44,13 +43,7 @@ import {
   type DisplayTopUpPack,
 } from "./plans/plans-catalogue-fixture";
 import { CheckoutDrawer } from "./plans/checkout-drawer";
-import { openHostedCheckout } from "./plans/hosted-checkout";
-import {
-  idempotencyKey,
-  liveBilling as billingClient,
-  returnPath,
-} from "./billing/billing-api";
-import type { Checkout, Order } from "./billing/contract";
+import { usePurchaseCheckout } from "./plans/use-purchase-checkout";
 import {
   AccountProfileRequestError,
   normalizeProfilePhoneInput,
@@ -156,25 +149,21 @@ export function AccountSettings({
   const [section, setSection] = useState<SectionId>("general");
   const liveBilling = useBillingAccount(!billing && section === "billing");
   const [stage, setStage] = useState<"list" | "pane">("list");
-  const router = useRouter();
   const [selectedTopUp, setSelectedTopUp] = useState<DisplayTopUpPack | null>(
     null,
   );
-  const [topUpBusy, setTopUpBusy] = useState(false);
-  const [topUpOrder, setTopUpOrder] = useState<Order | null>(null);
-  const topUpAttempt = useRef<{
-    fingerprint: string;
-    key: string;
-    checkout?: Checkout;
-  } | null>(null);
-  const topUpInFlight = useRef(false);
-  const topUpAlive = useRef(true);
+  const topUp = usePurchaseCheckout(undefined, "/account#billing");
   useEffect(() => {
-    topUpAlive.current = true;
-    return () => {
-      topUpAlive.current = false;
-    };
-  }, []);
+    if (!topUp.error) return;
+    const id = "topup-checkout-error";
+    notify({
+      id,
+      tone: "error",
+      title: "Checkout unavailable",
+      message: topUp.error,
+    });
+    return () => dismissNotice(id);
+  }, [topUp.error]);
   const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
@@ -461,8 +450,7 @@ export function AccountSettings({
                   }
             }
             onBuyTopUp={(pack) => {
-              topUpAttempt.current = null;
-              setTopUpOrder(null);
+              topUp.select();
               setSelectedTopUp(pack);
             }}
             variant={variant}
@@ -514,68 +502,24 @@ export function AccountSettings({
       <CheckoutDrawer
         open={Boolean(selectedTopUp)}
         onClose={() => {
-          topUpAttempt.current = null;
+          topUp.select();
           setSelectedTopUp(null);
-          setTopUpOrder(null);
         }}
         item={selectedTopUp ? { type: "top_up", pack: selectedTopUp } : null}
         gstRate={PLANS_GST_RATE}
-        busy={topUpBusy}
-        confirmedOrder={topUpOrder}
-        onPay={async () => {
-          if (!selectedTopUp || topUpInFlight.current) return;
-          topUpInFlight.current = true;
-          setTopUpBusy(true);
-          const fingerprint = JSON.stringify([
-            selectedTopUp.planKey,
-            selectedTopUp.key,
-          ]);
-          const expiresAt = topUpAttempt.current?.checkout?.hosted.expiresAt;
-          if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
-            topUpAttempt.current = null;
-            setTopUpOrder(null);
-          }
-          if (topUpAttempt.current?.fingerprint !== fingerprint)
-            topUpAttempt.current = { fingerprint, key: idempotencyKey() };
-          const attempt = topUpAttempt.current;
-          try {
-            if (!attempt.checkout) {
-              const checkout = await billingClient.checkout(
-                {
-                  kind: "top_up",
-                  account:
-                    selectedTopUp.planKey === "personal"
-                      ? "personal"
-                      : "organisation",
-                  planKey: selectedTopUp.planKey,
-                  packKey: selectedTopUp.key,
-                },
-                attempt.key,
-              );
-              if (!topUpAlive.current || topUpAttempt.current !== attempt)
-                return;
-              attempt.checkout = checkout;
-              setTopUpOrder(checkout.order);
-              return;
-            }
-            const result = await openHostedCheckout(
-              attempt.checkout.hosted,
-              attempt.checkout.order.orderId,
-            );
-            if (topUpAlive.current && result !== "left") {
-              router.push(returnPath(attempt.checkout.order.orderId));
-            }
-          } catch {
-            notify({
-              id: "topup-checkout-error",
-              tone: "error",
-              title: "Checkout unavailable",
-              message: "Checkout could not be opened. Please try again.",
+        busy={topUp.busy}
+        confirmedOrder={topUp.prepared?.order}
+        onPay={() => {
+          if (selectedTopUp)
+            void topUp.buy({
+              kind: "top_up",
+              account:
+                selectedTopUp.planKey === "personal"
+                  ? "personal"
+                  : "organisation",
+              planKey: selectedTopUp.planKey,
+              packKey: selectedTopUp.key,
             });
-          } finally {
-            topUpInFlight.current = false;
-            if (topUpAlive.current) setTopUpBusy(false);
-          }
         }}
       />
     </div>
@@ -963,7 +907,6 @@ function AllowanceSummary({
 }
 
 export type SettingsBillingProps = BillingViewProps & {
-  onResume?: (subscriptionId: string) => void;
   onBuyTopUp?: (pack: DisplayTopUpPack) => void;
   topUpPacks?: DisplayTopUpPack[];
 };
@@ -981,7 +924,6 @@ export function PlanAndBillingPane({
   busy = false,
   error,
   onCancel,
-  onResume,
   onBuyTopUp,
   topUpPacks = TOP_UP_PACKS,
 }: SettingsBillingProps & {
@@ -1104,49 +1046,41 @@ export function PlanAndBillingPane({
           >
             Change or upgrade plan
           </Link>
-          {isCancelled ? (
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || status !== "ready" || !onResume}
-              onClick={() => current && onResume?.(current.subscriptionId)}
-            >
-              Resume renewal
-            </button>
-          ) : cancelAsk && current ? (
-            <div className={styles.confirmCancelBox}>
-              <p className={styles.muted}>
-                Renewal stops; access continues to the end of the period.
-              </p>
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.danger}
-                  disabled={busy || !onCancel}
-                  onClick={() => onCancel?.(current.subscriptionId)}
-                >
-                  Yes, stop renewal
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  disabled={busy}
-                  onClick={() => setCancelAsk(false)}
-                >
-                  Keep renewal
-                </button>
+          {!isCancelled &&
+            (cancelAsk && current ? (
+              <div className={styles.confirmCancelBox}>
+                <p className={styles.muted}>
+                  Renewal stops; access continues to the end of the period.
+                </p>
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    disabled={busy || !onCancel}
+                    onClick={() => onCancel?.(current.subscriptionId)}
+                  >
+                    Yes, stop renewal
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    disabled={busy}
+                    onClick={() => setCancelAsk(false)}
+                  >
+                    Keep renewal
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || status !== "ready" || !canCancel || !onCancel}
-              onClick={() => setCancelAsk(true)}
-            >
-              Cancel renewal
-            </button>
-          )}
+            ) : (
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={busy || status !== "ready" || !canCancel || !onCancel}
+                onClick={() => setCancelAsk(true)}
+              >
+                Cancel renewal
+              </button>
+            ))}
         </div>
         {current?.renewalNeedsCustomerApproval ? (
           <p className={styles.muted}>

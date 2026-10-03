@@ -44,7 +44,6 @@ export type BillingViewProps = {
   error?: string | null;
   onRefresh?: () => void;
   onCancel?: (subscriptionId: string) => void;
-  onResume?: (subscriptionId: string) => void;
 };
 
 /** Account data and actions arrive as props; this screen never invents payments. */
@@ -58,7 +57,6 @@ export function BillingView({
   error,
   onRefresh,
   onCancel,
-  onResume,
 }: BillingViewProps = {}) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
@@ -169,18 +167,9 @@ export function BillingView({
               <Link className={styles.primary} href="/plans">
                 {current ? "Change plan" : "Upgrade plan"}
               </Link>
-              {isCancelled && current ? (
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  disabled={busy || !onResume}
-                  onClick={() => onResume?.(current.subscriptionId)}
-                >
-                  {busy ? "Resuming…" : "Resume renewal"}
-                </button>
-              ) : current &&
-                !isCancelled &&
-                ["active", "past_due", "halted"].includes(current.status) ? (
+              {current &&
+              !isCancelled &&
+              ["active", "past_due", "halted"].includes(current.status) ? (
                 cancelAsk ? (
                   <div className={styles.confirmBox}>
                     <p>
