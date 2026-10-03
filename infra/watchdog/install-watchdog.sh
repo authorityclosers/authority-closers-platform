@@ -52,6 +52,25 @@ done
 [[ ! -L "${BASH_SOURCE[0]}" ]] || refuse
 [[ "$script_dir/$(basename -- "${BASH_SOURCE[0]}")" == "$repo/$installer_path" ]] || refuse
 
+# Reject stale sources without importing the watchdog or touching runtime config.
+python3 - "$repo/$source_path" 2>/dev/null <<'PY' || refuse
+import ast
+import sys
+from pathlib import Path
+
+tree = ast.parse(Path(sys.argv[1]).read_text())
+lanes = next(
+    ast.literal_eval(node.value)
+    for node in tree.body
+    if isinstance(node, ast.Assign)
+    and any(isinstance(target, ast.Name) and target.id == "LANES" for target in node.targets)
+)
+if not {"api", "billing"}.issubset(lanes) or not any(
+    isinstance(node, ast.FunctionDef) and node.name == "single_review" for node in tree.body
+):
+    sys.exit(1)
+PY
+
 echo "Verified source revision: $revision"
 echo "Verified source SHA256: $source_digest"
 if [[ "$mode" == '--dry-run' ]]; then

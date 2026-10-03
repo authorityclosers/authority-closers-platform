@@ -41,14 +41,16 @@ LANE_TASK = "AUT-41"  # CTO's standing "Code lane coordinator" task
 LANE_CHECK_SECONDS = 60
 DEV_CHECKOUT = "/home/acdev/src/authority-closers-platform"
 GH = "/home/acdev/.local/bin/gh"
-LANES = ("sales-xray", "platform", "admin", "ui", "devenv")
+LANES = ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")
 # One checkout per lane; the Sales Xray lane keeps the dev checkout, so salesxray-dev shows its work live.
 LANE_CHECKOUTS = {"sales-xray": DEV_CHECKOUT, "exclusive": DEV_CHECKOUT,
                   "platform": "/home/acdev/src/lanes/platform/authority-closers-platform",
                   "admin": "/home/acdev/src/lanes/admin/authority-closers-platform",
                   "ui": "/home/acdev/src/lanes/ui/authority-closers-platform",
-                  "devenv": "/home/acdev/src/lanes/devenv/authority-closers-platform"}
-LANE_LINE = re.compile(r"(?i)\blane\b\W{0,6}(sales-xray|platform|admin|ui|devenv)\b")
+                  "devenv": "/home/acdev/src/lanes/devenv/authority-closers-platform",
+                  "api": "/home/acdev/src/lanes/api/authority-closers-platform",
+                  "billing": "/home/acdev/src/lanes/billing/authority-closers-platform"}
+LANE_LINE = re.compile(r"(?i)\blane\b\W{0,6}(sales-xray|platform|admin|ui|devenv|api|billing)\b")
 REPO = "authorityclosers/authority-closers-platform"
 LAPTOP_HEARTBEAT = "/home/acdev/.local/state/ac-laptop/heartbeat"
 LAPTOP_AGENTS = ("feeff44a-5bb6-49b3-a9e4-8a3fb36dda0e", "4e4ad6e2-5565-42fb-b115-d099e474179d",
@@ -278,6 +280,66 @@ def merge_held(conn: psycopg.Connection, number: int) -> bool:
     return held
 
 
+# Owner decision 2 Oct 2026 (AUT-544 direction): one reviewer merges ordinary changes.
+POD_LEAD_IDS = {
+    "044cc30f-0a4d-4bcb-82e9-1e4e95148664": "the Lead Engineer",
+    "2c625bb9-1917-43ed-b462-74e30e34f6cf": "the Platform Lead Engineer",
+    "f3bf11bf-694f-45a9-8318-d45a041a79d3": "the Admin Lead Engineer",
+    "67432044-fe02-4913-a627-9c07db234c75": "the Dev Environment Engineer (pod lead)",
+}
+POD_REVIEW_APPROVAL = re.compile(r"(?<!CTO )Review:\s*approved\s+PR\s*#(\d+)\s*@\s*`?([0-9a-f]{7,40})", re.IGNORECASE)
+SENSITIVE_PATH = re.compile(
+    r"^(packages/python/ac_platform/(billing|payments|identity|security|authz?|secrets?)/"
+    r"|db/migrations/|infra/|\.github/|scripts/ac_task\.py$|scripts/ci/|scripts/data-changes/"
+    r"|pnpm-lock\.yaml$|uv\.lock$|pyproject\.toml$|pnpm-workspace\.yaml$)"
+    r"|(^|/)AGENTS\.md$|(^|/)package\.json$|(^|/)(billing|payments?|identity|security|secrets?|auth)/"
+    r"|(^|/)(auth|identity|security|permissions?|secrets?|crypto|billing|payments?)[^/]*\.(py|ts|tsx)$")
+
+
+def changed_files(number: int) -> list[str] | None:
+    """GitHub's complete changed-file list for PR #number, or None when it cannot be read completely."""
+    try:
+        expected = int(gh_api(f"/pulls/{number}").get("changed_files") or 0)
+        files: list[str] = []
+        for page in range(1, 31):
+            batch = gh_api(f"/pulls/{number}/files?per_page=100&page={page}")
+            files += [f["filename"] for f in batch] + [f["previous_filename"] for f in batch if f.get("previous_filename")]
+            if len(batch) < 100:
+                break
+    except Exception:  # noqa: BLE001 - unknown scope is treated as sensitive
+        return None
+    return files if files and len(set(files)) >= expected else None
+
+
+def sensitive_scope(number: int) -> str:
+    """'' when no changed file is sensitive; else why the PR still needs the CEO. Fails closed."""
+    files = changed_files(number)
+    if files is None:
+        return "file list unreadable or incomplete"
+    hits = [f for f in files if SENSITIVE_PATH.search(f)]
+    return f"{len(hits)} sensitive file(s), e.g. {hits[0]}" if hits else ""
+
+
+def single_review(conn: psycopg.Connection, number: int, sha: str, issue_id: str | None,
+                  cto_issue: str | None) -> tuple[str | None, str]:
+    """(approver for a one-review merge, '') or (None, why not). CTO first, then a pod lead who is not the
+    assignee of the PR's task."""
+    reviewer: tuple[str, str] | None = ("the CTO", CTO_ID) if cto_issue else None
+    if reviewer is None:
+        for lead_id, lead_name in POD_LEAD_IDS.items():
+            if approval_issue(conn, lead_id, POD_REVIEW_APPROVAL, number, sha):
+                reviewer = (lead_name, lead_id)
+                break
+    if reviewer is None:
+        return None, "no review yet"
+    if reviewer[1] != CTO_ID and issue_id:
+        row = conn.execute("select assignee_agent_id::text from issues where id = %s", (issue_id,)).fetchone()
+        if row and row[0] == reviewer[1]:
+            return None, "a pod lead cannot approve its own task's change"
+    why = sensitive_scope(number)
+    return (None, why) if why else (reviewer[0], "")
+
+
 def ui_guard_scope(number: int) -> str:
     """'' when GitHub's complete changed-file list, read now, is UI-only under ADR 0041 and no review thread is
     open; else why not. Fails closed: a read error, a short list or an unknown thread count is ineligible."""
@@ -457,8 +519,17 @@ def pull_requests(conn: psycopg.Connection, state: dict, names: dict, lines: lis
                         f"Watchdog: the UI Guard approved PR #{number} at `{short}`, but it cannot merge on that "
                         f"approval ({why}). It takes the normal route: CTO review, then CEO approval (ADR 0041).")
                 guard_issue = None
-        if ceo_issue or guard_issue:
-            approver = "the CEO" if ceo_issue else "the UI Guard"
+        single = None
+        if not ceo_issue and not guard_issue:
+            # Owner decision 2 Oct: an ordinary change merges on one review; sensitive ones still go to the CEO.
+            single, why_not = single_review(conn, number, sha, issue_id, cto_issue)
+            if single is None and why_not != "no review yet":
+                key = f"single-review:{number}:{sha}"
+                if due(state, key, 10**6):
+                    state["sent"][key] = time.time()
+                    print(f"one-review merge not usable: PR #{number} @ {short}: {why_not}", file=sys.stderr)
+        if ceo_issue or guard_issue or single:
+            approver = "the CEO" if ceo_issue else ("the UI Guard" if guard_issue else single)
             if merge_held(conn, number):  # ADR 0041: a CEO/CTO `Merge hold: PR #n` stops any merge until released
                 hold = f"merge-hold:{number}:{sha}:held"
                 if due(state, hold, 10**6):
@@ -523,7 +594,8 @@ def pull_requests(conn: psycopg.Connection, state: dict, names: dict, lines: lis
             state["sent"][key] = time.time()
             if act("issue", "comment", issue_id, "--body",
                    f"{mention(CTO_ID, names)} PR #{number} is green at `{short}`. Review it; if it passes, post "
-                   f"`CTO review: approved PR #{number} @ {short}` and mention the CEO. Otherwise send it back."):
+                   f"`CTO review: approved PR #{number} @ {short}`. An ordinary change merges on that review; "
+                   "billing, payments, security, data and rule changes then go to the CEO. Otherwise send it back."):
                 lines.append(("auto", f"• 🔀 PR #{number} ({link(ident)}) sent to the CTO for review", issue_id, ident))
 
 
@@ -579,6 +651,34 @@ TRAIN_ALERT_REPEAT_HOURS = 6  # T5 rewrites a lasting condition every 10 min; co
 TRAIN_ALERT_MARK = "Train alert key: `{}`"
 
 
+def open_issue_titled(conn: psycopg.Connection, title: str) -> str | None:
+    row = conn.execute(
+        """select id from issues where company_id = %s and title = %s and status not in ('done', 'cancelled')
+             and hidden_at is null order by created_at desc limit 1""", (tg.COMPANY, title)).fetchone()
+    return str(row[0]) if row else None
+
+
+def ensure_issue(conn: psycopg.Connection, title: str, description: str, *, assignee: str | None,
+                 status: str) -> str | None:
+    """2 Oct: one small task per event stream instance (a PR, a day) instead of a forever thread."""
+    found = open_issue_titled(conn, title)
+    if found:
+        return found
+    args = ["issue", "create", "-C", tg.COMPANY, "--title", title, "--status", status,
+            "--priority", "medium", "--description", description]
+    if assignee:
+        args += ["--assignee-agent-id", assignee]
+    return open_issue_titled(conn, title) if act(*args) else None
+
+
+def review_task_title(number: str) -> str:
+    return f"UI Guard review: studio PR #{number}"
+
+
+def status_log_title(day: str) -> str:
+    return f"Release train status log {day}"
+
+
 def train_event(conn: psycopg.Connection, state: dict, names: dict, lines: list, event: dict) -> bool:
     """Post one event; True when it is handled (posted or deliberately dropped) and may move to done/."""
     kind, key, text = event.get("kind"), str(event.get("key") or "").strip(), str(event.get("text") or "").strip()
@@ -592,16 +692,27 @@ def train_event(conn: psycopg.Connection, state: dict, names: dict, lines: list,
         return str(row[0]) if row else None
 
     if kind == "status":
-        target = issue_id(TRAIN_STATUS_TASK)
+        # 2 Oct: a daily log task, unassigned and parked, so status lines never wake or bloat the CEO's thread.
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        target = ensure_issue(conn, status_log_title(day),
+                              "Release-train status lines for one UTC day, posted by the watchdog (AUT-303). "
+                              "A log only: unassigned, wakes nobody. The daily scoreboard summarises it.",
+                              assignee=None, status="backlog")
         return bool(target) and act("issue", "comment", target, "--body", text)
     if kind == "review":
-        target = issue_id(TRAIN_REVIEW_TASK)
         pr = str(event.get("pr") or fields.get("pr") or "").lstrip("#")
         number = pr if pr.isdigit() else "n"
-        return bool(target) and act(
-            "issue", "comment", target, "--body",
-            f"{mention(UI_GUARD_ID, names)} Studio PR #{number} is ready for your review: {text}\n\n"
-            f"If it passes your checklist, post `UI Guard approved: PR #{number} @ <sha7>`.")
+        ask = (f"Studio PR #{number} is ready for your review: {text}\n\n"
+               f"If it passes your checklist, post `UI Guard approved: PR #{number} @ <sha7>` on this task, "
+               f"then set it to done.")
+        # 2 Oct: one review task per PR (AUT-296 grew to 100 KB and every UI Guard launch failed with E2BIG).
+        title = review_task_title(number)
+        existing = open_issue_titled(conn, title)
+        if existing:
+            return act("issue", "comment", existing, "--body", f"{mention(UI_GUARD_ID, names)} {ask}")
+        created = ensure_issue(conn, title, f"Lane: ui\nTier: routine\n\n{ask}\n\n(Created by the watchdog; "
+                               f"earlier reviews lived on {TRAIN_REVIEW_TASK}.)", assignee=UI_GUARD_ID, status="todo")
+        return bool(created)
     # alert: one open critical issue per key, found by the key line in its description.
     mark = TRAIN_ALERT_MARK.format(key)
     row = conn.execute(
@@ -1036,18 +1147,8 @@ def scan(conn: psycopg.Connection, state: dict) -> tuple[list[tuple[str, str, st
                 lines.append(("problem", f"• 🚨 Release engine: <code>{tg.esc(clean(line.strip(), 150))}</code> "
                                          "(staging deploys stop until someone resumes it)", "", ""))
 
-    # Laptop Specialists work only while Suyash's laptop bridge checks in (pull-based; see ac-laptop-queue).
-    try:
-        laptop_online = time.time() - Path(LAPTOP_HEARTBEAT).stat().st_mtime < 120
-    except OSError:
-        laptop_online = False
-    for agent_id, status in conn.execute("select id, status from agents where id = any(%s)", (list(LAPTOP_AGENTS),)):
-        if laptop_online and status in ("paused", "error"):
-            if act("agent", "resume", str(agent_id)):
-                lines.append(("auto", f"• 💻 Laptop online: <b>{tg.esc(names.get(agent_id, '?'))}</b> is active", "", ""))
-        elif not laptop_online and status in ("idle", "error"):
-            if act("agent", "pause", str(agent_id)):
-                lines.append(("auto", f"• 💻 Laptop offline: paused <b>{tg.esc(names.get(agent_id, '?'))}</b>", "", ""))
+    # Owner order 2 Oct 2026: no laptop seats. Root Operator · Sol and Browser QA · Sol run on the server,
+    # so nothing here pauses or resumes agents when the laptop goes quiet.
 
     # UI studio auto-ship: the owner keeps designing in AUT-66; every few hours the studio's changes go to staging.
     ui_autoship(conn, state, names, lines)
@@ -1076,7 +1177,12 @@ def scan(conn: psycopg.Connection, state: dict) -> tuple[list[tuple[str, str, st
             if view.get("exclusive_free"):
                 free.add("exclusive")
             runnable = conn.execute(
-                """select i.id, i.identifier, i.status, i.description from issues i
+                """select i.id, i.identifier, i.status, i.description,
+                          exists (select 1 from issue_recovery_actions ra where ra.source_issue_id = i.id
+                                  and ra.cause in ('uncertain_provider_action', 'uncertain_external_action', 'uncertain_control_plane_action', 'completed_action_context_missing', 'continuation_evidence_incomplete', 'execution_finalization_deadline_exceeded', 'execution_recovery_budget_exhausted', 'provider_effect_inventory_unavailable', 'provider_failure_meaning_unverified', 'provider_ownership_unverified', 'native_provider_terminal_failed', 'native_event_replay_conflict', 'native_session_cleanup_quarantined', 'native_session_retry_exhausted', 'native_restart_recovery_blocked', 'native_continuation_requires_reconciliation', 'legacy_execution_requires_reconciliation')
+                                  and (ra.status in ('active', 'escalated')
+                                       or ra.evidence->'automaticRecovery'->>'replay' = 'blocked')) as held
+                   from issues i
                    join agents a on a.id = i.assignee_agent_id
                    where i.hidden_at is null and a.name ilike '%%engineer%%'
                      and (i.status = 'todo' or (i.status = 'blocked'
@@ -1086,13 +1192,19 @@ def scan(conn: psycopg.Connection, state: dict) -> tuple[list[tuple[str, str, st
                                             and x.status not in ('done', 'cancelled'))))
                    order by case i.priority when 'critical' then 0 when 'high' then 1 when 'medium' then 2 else 3 end,
                             i.created_at""").fetchall()
-            for issue_id, ident, status, description in runnable:
+            for issue_id, ident, status, description, held in runnable:
                 lane = task_lane(description)
+                if held:  # 2 Oct: every wake on a held task is parked until the board reconciles it
+                    if due(state, f"held:{ident}", REPEAT_HOURS):
+                        state["sent"][f"held:{ident}"] = time.time()
+                        lines.append(("problem", f"• 🟠 {link(ident)} is held by a Paperclip recovery action: "
+                                                  "Root Operator must reconcile it before it can run", str(issue_id), ident))
+                    continue
                 if lane == "exclusive" and view.get("lanes") and not view.get("exclusive_free")                         and due(state, f"no-lane:{ident}", 10**6):
                     state["sent"][f"no-lane:{ident}"] = time.time()
                     if act("issue", "comment", str(issue_id), "--body",
                            f"{mention(CHIEF_ID, names)} This task has no `Lane:` line, so it waits until every lane is "
-                           "free. Add `Lane: sales-xray|platform|admin|devenv` to its spec card unless it truly must run alone."):
+                           "free. Add `Lane: sales-xray|platform|admin|devenv|api|billing` to its spec card unless it truly must run alone."):
                         lines.append(("auto", f"• 🛣 {link(ident)} has no lane: asked the Chief of Staff to add one",
                                       str(issue_id), ident))
                 if lane not in free or time.time() - state.get(f"lane_started:{lane}", 0) < LANE_START_HOLD_SECONDS:
@@ -1101,11 +1213,19 @@ def scan(conn: psycopg.Connection, state: dict) -> tuple[list[tuple[str, str, st
                        else f"python3 scripts/ac_task.py start {lane} <issue>-<short-name>")
                 if not still(conn, str(issue_id), status):
                     continue  # AUT-366: moved meanwhile (for example parked in backlog): leave it alone
+                tries = [t for t in state.setdefault("nominated", {}).get(ident, []) if time.time() - t < 6 * 3600]
+                if len(tries) >= 2:  # 2 Oct: AUT-393 was started 88 times and never ran
+                    if due(state, f"never-started:{ident}", REPEAT_HOURS):
+                        state["sent"][f"never-started:{ident}"] = time.time()
+                        lines.append(("problem", f"• 🟠 {link(ident)} was started twice in the {lane} lane and never "
+                                                  "claimed it: skipped for 6 hours", str(issue_id), ident))
+                    continue
                 ok = (status == "todo" or act("issue", "update", str(issue_id), "--status", "todo")) and resume(
                     str(issue_id), f"Watchdog: the {lane} lane is FREE and this is its next task. "
                                    f"From your lane checkout, start now with `{how}`.")
                 if ok:
                     state[f"lane_started:{lane}"] = time.time()
+                    state["nominated"][ident] = tries + [time.time()]
                     # An exclusive task takes everything; a lane task rules out an exclusive start.
                     free = set() if lane == "exclusive" else free - {lane, "exclusive"}
                     lines.append(("auto", f"• 🟢 {lane} lane: started {link(ident)}", str(issue_id), ident))

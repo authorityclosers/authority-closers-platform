@@ -1,27 +1,34 @@
-"""C0: unchanged Root import, fictional studio locks and offline SHA installer."""
+"""Root source receipts, fictional watchdog regressions and offline SHA installer."""
 
 from __future__ import annotations
 
+import ast
 import builtins
 import fcntl
 import hashlib
 import importlib.util
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
+import psycopg
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = "infra/watchdog/ac_watchdog.py"
 INSTALLER_PATH = "infra/watchdog/install-watchdog.sh"
 FIXTURE = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/c0.json").read_text())
+SOURCE_RECEIPT = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/aut850.json").read_text())[
+    "source"
+]
 STUDIO = FIXTURE["studio"]
 GIT = shutil.which("git")
 BASH = shutil.which("bash")
@@ -36,6 +43,7 @@ def watchdog(monkeypatch):
         raise AssertionError("Live watchdog client called")
 
     telegram = ModuleType("ac_telegram")
+    telegram.COMPANY = "00000000-0000-0000-0000-000000000001"
     monkeypatch.setattr(
         telegram, "LINK", "https://fictional.example.invalid/issues/{}", raising=False
     )
@@ -56,11 +64,13 @@ def watchdog(monkeypatch):
     yield module
 
 
-def test_import_is_byte_identical_to_root_export():
+def test_source_matches_root_export_with_only_ceo_approved_scope_addition():
     source = (ROOT / SOURCE_PATH).read_bytes()
-    metadata = FIXTURE["source"]
-    assert hashlib.sha256(source).hexdigest() == metadata["sanitized_sha256"]
-    assert metadata["original_sha256"] == metadata["sanitized_sha256"]
+    metadata = SOURCE_RECEIPT
+    assert hashlib.sha256(source).hexdigest() == metadata["repository_sha256"]
+    assert source.count(b"|scripts/ci/|scripts/data-changes/") == 1
+    original = source.replace(b"|scripts/ci/|scripts/data-changes/", b"|scripts/data-changes/")
+    assert hashlib.sha256(original).hexdigest() == metadata["original_sha256"]
     assert len(source.splitlines()) == metadata["lines"]
     assert metadata["redactions"] == metadata["config_injection"] == []
     assert STUDIO["old_lock"].encode() not in source
@@ -295,7 +305,7 @@ def test_verified_installer_dry_run_writes_nothing_and_is_repeatable(installer_r
         )
         assert result.returncode == 0, result.stderr
         assert revision in result.stdout
-        assert FIXTURE["source"]["sanitized_sha256"] in result.stdout
+        assert SOURCE_RECEIPT["repository_sha256"] in result.stdout
         assert "no host files changed" in result.stdout
         assert snapshot(repo) == before
         assert not marker.exists()
@@ -372,3 +382,465 @@ def test_installer_refuses_duplicate_or_conflicting_options(installer_repo):
         ["--unknown", "--source-revision", revision],
     ):
         assert_refused(install(repo, *args))
+
+
+@pytest.mark.parametrize("missing", ["api", "billing", "single_review", "syntax"])
+def test_installer_refuses_verified_but_stale_source(installer_repo, missing):
+    repo, _ = installer_repo
+    path = repo / SOURCE_PATH
+    source = path.read_text()
+    if missing in {"api", "billing"}:
+        source = source.replace(f', "{missing}"', "", 1)
+    elif missing == "single_review":
+        source = source.replace("def single_review(", "def stale_review(", 1)
+    else:
+        source += "\ndef invalid(:\n"
+    # Comments containing all markers cannot make an old implementation eligible.
+    path.write_text(source + '\n# LANES = ("api", "billing"); def single_review(\n')
+    git(repo, "add", SOURCE_PATH)
+    git(repo, "-c", "core.hooksPath=/dev/null", "commit", "-m", "Fictional stale source")
+    revision = git(repo, "rev-parse", "HEAD")
+    git(repo, "update-ref", "refs/remotes/origin/main", revision)
+    before = snapshot(repo)
+    for mode in ("--dry-run", "--install"):
+        assert_refused(install(repo, mode, "--source-revision", revision))
+        assert snapshot(repo) == before
+
+
+def test_all_seven_lanes_have_checkouts_and_parse_spec_cards(watchdog):
+    assert watchdog.LANES == ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")
+    for lane in watchdog.LANES:
+        assert watchdog.task_lane(f"Lane: {lane}\nTier: routine") == lane
+        assert lane in watchdog.LANE_CHECKOUTS
+
+
+def test_scan_does_not_use_laptop_presence_to_pause_server_agents():
+    tree = ast.parse((ROOT / SOURCE_PATH).read_text())
+    scan = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "scan"
+    )
+    names = {node.id for node in ast.walk(scan) if isinstance(node, ast.Name)}
+    assert not names & {"LAPTOP_HEARTBEAT", "LAPTOP_AGENTS", "laptop_online"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/python/ac_platform/billing/ledger.py",
+        "packages/python/ac_platform/payments/razorpay.py",
+        "db/migrations/versions/fictional.py",
+        "infra/application/x.sh",
+        ".github/workflows/a.yml",
+        "scripts/ac_task.py",
+        "scripts/ci/merge_class.py",
+        "scripts/data-changes/add_member.py",
+        "AGENTS.md",
+        "apps/sales-xray-web/AGENTS.md",
+        "uv.lock",
+        "pnpm-lock.yaml",
+        "pyproject.toml",
+        "pnpm-workspace.yaml",
+        "apps/sales-xray-web/package.json",
+        "packages/python/ac_platform/http/auth.py",
+        "packages/python/ac_platform/http/billing.py",
+        "apps/sales-xray-web/app/billing/money.ts",
+    ],
+)
+def test_merge_rule_sensitive_paths(watchdog, path):
+    assert watchdog.SENSITIVE_PATH.search(path)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "apps/sales-xray-web/app/report-modes.tsx",
+        "docs/adr/0053-x.md",
+        "packages/python/ac_platform/conversation_intelligence/reports.py",
+        "tests/unit/test_reports.py",
+        "apps/admin-web/app/page.tsx",
+    ],
+)
+def test_merge_rule_ordinary_paths(watchdog, path):
+    assert not watchdog.SENSITIVE_PATH.search(path)
+
+
+def test_single_review_respects_cto_pod_lead_and_own_task(watchdog, monkeypatch):
+    lead = next(iter(watchdog.POD_LEAD_IDS))
+    conn = lambda assignee: SimpleNamespace(  # noqa: E731
+        execute=lambda *args: SimpleNamespace(fetchone=lambda: (assignee,))
+    )
+    monkeypatch.setattr(watchdog, "changed_files", lambda number: ["tests/unit/test_reports.py"])
+    assert watchdog.single_review(conn("builder"), 5, "a" * 40, "task", "cto-review") == (
+        "the CTO",
+        "",
+    )
+    monkeypatch.setattr(
+        watchdog,
+        "approval_issue",
+        lambda conn, author, *args: "review" if author == lead else None,
+    )
+    assert watchdog.single_review(conn("builder"), 5, "a" * 40, "task", None) == (
+        watchdog.POD_LEAD_IDS[lead],
+        "",
+    )
+    assert watchdog.single_review(conn(lead), 5, "a" * 40, "task", None)[0] is None
+    monkeypatch.setattr(watchdog, "approval_issue", lambda *args: None)
+    assert watchdog.single_review(conn("builder"), 5, "a" * 40, "task", None) == (
+        None,
+        "no review yet",
+    )
+    assert not watchdog.POD_REVIEW_APPROVAL.search("CTO review: approved PR #5 @ abc1234")
+    assert watchdog.POD_REVIEW_APPROVAL.search("Review: approved PR #5 @ abc1234")
+
+
+def test_merge_classifier_change_with_only_cto_review_requires_ceo(watchdog, monkeypatch):
+    def github(path):
+        if path == "/pulls/5":
+            return {"changed_files": 2}
+        assert path == "/pulls/5/files?per_page=100&page=1"
+        return [
+            {"filename": "scripts/ci/merge_class.py"},
+            {"filename": "tests/infra/test_merge_class.py"},
+        ]
+
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    approver, why = watchdog.single_review(None, 5, "a" * 40, "task", "cto-review")
+    assert approver is None and "scripts/ci/merge_class.py" in why
+
+
+@pytest.mark.parametrize("files", [None, [], [{"filename": "tests/unit/test_reports.py"}]])
+def test_single_review_fails_closed_on_unknown_scope(watchdog, monkeypatch, files):
+    monkeypatch.setattr(
+        watchdog, "gh_api", lambda path: {"changed_files": 3} if path == "/pulls/5" else files
+    )
+    assert watchdog.single_review(None, 5, "a" * 40, "task", "cto-review") == (
+        None,
+        "file list unreadable or incomplete",
+    )
+
+
+def test_threads_per_pr_reviews_and_daily_unassigned_log(watchdog, monkeypatch):
+    calls, issues = [], {}
+
+    def act(*args):
+        calls.append(args)
+        if args[:2] == ("issue", "create"):
+            issues[args[args.index("--title") + 1]] = f"id-{len(issues)}"
+        return True
+
+    monkeypatch.setattr(watchdog, "act", act)
+    monkeypatch.setattr(watchdog, "open_issue_titled", lambda conn, title: issues.get(title))
+    state = {"sent": {}}
+    names = {watchdog.UI_GUARD_ID: "UI Guard"}
+    for key, text in (("k1", "head abc1234"), ("k2", "head def5678")):
+        assert watchdog.train_event(
+            None, state, names, [], {"kind": "review", "key": key, "text": text, "pr": "180"}
+        )
+    create, comment = calls
+    assert "UI Guard review: studio PR #180" in create
+    assert create[create.index("--assignee-agent-id") + 1] == watchdog.UI_GUARD_ID
+    assert comment[:3] == ("issue", "comment", "id-0") and "PR #180" in comment[-1]
+    assert watchdog.train_event(
+        None, state, names, [], {"kind": "status", "key": "s", "text": "staging is current"}
+    )
+    log, comment = calls[-2:]
+    assert log[:2] == ("issue", "create") and "--assignee-agent-id" not in log
+    assert log[log.index("--status") + 1] == "backlog"
+    assert comment[:2] == ("issue", "comment") and comment[-1] == "staging is current"
+
+
+@pytest.fixture
+def shadow_db():
+    """Only fictional temporary tables on the launcher's test DB; always roll back."""
+    url = os.environ.get("AC_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("AC_TEST_DATABASE_URL is required for watchdog SQL regressions")
+    conn = psycopg.connect(url.replace("postgresql+psycopg://", "postgresql://"))
+    try:
+        conn.execute("set local search_path = pg_temp")
+        yield conn
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_aut366_picker_never_promotes_backlog_or_recovery_held_tasks(watchdog, shadow_db):
+    source = (ROOT / SOURCE_PATH).read_text()
+    runnable = re.search(r'runnable = conn\.execute\(\s*"""(.*?)"""', source, re.S).group(1)
+    blocked = re.search(
+        r'# Blocked work whose blockers are all finished\.\s*for .*?conn\.execute\(\s*"""(.*?)"""',
+        source,
+        re.S,
+    ).group(1)
+    conn = shadow_db
+    conn.execute("create temp table agents (id uuid primary key, name text)")
+    conn.execute(
+        "create temp table issues (id uuid primary key, identifier text, title text, status text, "
+        "description text, priority text, created_at timestamptz default now(), "
+        "hidden_at timestamptz, assignee_agent_id uuid)"
+    )
+    conn.execute(
+        "create temp table issue_relations (issue_id uuid, related_issue_id uuid, type text)"
+    )
+    conn.execute(
+        "create temp table issue_recovery_actions "
+        "(source_issue_id uuid, cause text, status text, evidence jsonb)"
+    )
+    engineer = uuid.uuid4()
+    conn.execute("insert into agents values (%s, 'Fictional Engineer')", (engineer,))
+    ids = {}
+    for ident, status in [
+        ("DONE", "done"),
+        ("PARKED", "backlog"),
+        ("PARKED-NONE", "backlog"),
+        ("BLOCKED", "blocked"),
+        ("TODO", "todo"),
+        ("CANCELLED", "cancelled"),
+        ("HELD", "todo"),
+        ("RESOLVED", "todo"),
+    ]:
+        ids[ident] = uuid.uuid4()
+        conn.execute(
+            "insert into issues (id, identifier, title, status, description, priority, "
+            "assignee_agent_id) values (%s, %s, %s, %s, 'Lane: platform', 'high', %s)",
+            (ids[ident], ident, ident, status, engineer),
+        )
+    for ident in ("PARKED", "BLOCKED"):
+        conn.execute(
+            "insert into issue_relations values (%s, %s, 'blocks')", (ids["DONE"], ids[ident])
+        )
+    for ident, evidence in (
+        ("HELD", '{"automaticRecovery":{"replay":"blocked"}}'),
+        ("RESOLVED", "{}"),
+    ):
+        conn.execute(
+            "insert into issue_recovery_actions values "
+            "(%s, 'legacy_execution_requires_reconciliation', 'resolved', %s)",
+            (ids[ident], evidence),
+        )
+    rows = conn.execute(runnable).fetchall()
+    assert {row[1] for row in rows if row[4]} == {"HELD"}
+    assert {row[1] for row in rows if not row[4]} == {"BLOCKED", "TODO", "RESOLVED"}
+    assert [row[1] for row in conn.execute(blocked).fetchall()] == ["BLOCKED"]
+    conn.execute("update issues set status = 'backlog' where identifier = 'BLOCKED'")
+    assert not watchdog.still(conn, str(ids["BLOCKED"]), "blocked")
+    assert watchdog.still(conn, str(ids["TODO"]), "todo")
+    assert not watchdog.still(conn, str(uuid.uuid4()), "todo")
+    assert source.count("not still(conn") == 2
+
+
+def test_aut303_merge_holds_only_cto_and_ceo_can_hold_or_release(watchdog, shadow_db):
+    conn = shadow_db
+    conn.execute(
+        "create temp table issue_comments (issue_id uuid, author_agent_id uuid, body text, "
+        "created_at timestamptz default clock_timestamp())"
+    )
+
+    def say(agent, body):
+        conn.execute(
+            "insert into issue_comments (author_agent_id, body) values (%s, %s)", (agent, body)
+        )
+
+    say(watchdog.UI_GUARD_ID, "Merge hold: PR #9")
+    assert not watchdog.merge_held(conn, 9)
+    say(watchdog.CEO_ID, "Merge hold: PR #9 until fictional copy is checked")
+    assert watchdog.merge_held(conn, 9) and not watchdog.merge_held(conn, 90)
+    say(watchdog.CTO_ID, "Merge hold released: PR #9")
+    assert not watchdog.merge_held(conn, 9)
+    say(watchdog.CTO_ID, "Merge hold: PR #9")
+    assert watchdog.merge_held(conn, 9)
+
+
+def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
+    assert watchdog.UI_GUARD_APPROVAL.findall("UI Guard approved: PR #141 @ `abc1234`") == [
+        ("141", "abc1234")
+    ]
+    assert not watchdog.UI_GUARD_APPROVAL.findall("ui guard approved: PR #141 @ abc1234")
+    assert [
+        (m.group(1), m.group(2))
+        for m in watchdog.MERGE_HOLD.finditer("Merge hold: PR #7 ... Merge hold released: PR #7")
+    ] == [(None, "7"), (" released", "7")]
+
+    def scope(files, changed=None, threads=0, fail=False):
+        def github(path):
+            if fail:
+                raise OSError("fictional outage")
+            if path.startswith("/pulls/1/files"):
+                page = int(path.rsplit("page=", 1)[1])
+                return [{"filename": f} for f in files[(page - 1) * 100 : page * 100]]
+            return {"changed_files": len(files) if changed is None else changed}
+
+        monkeypatch.setattr(watchdog, "gh_api", github)
+        monkeypatch.setattr(watchdog, "unresolved_threads", lambda number: threads)
+        return watchdog.ui_guard_scope(1)
+
+    ok = ["apps/sales-xray-web/app/dashboard/page.tsx", "apps/sales-xray-web/public/logo.svg"]
+    assert scope(ok) == ""
+    assert scope([f"apps/sales-xray-web/app/x{i}.tsx" for i in range(250)]) == ""
+    for path in [
+        "apps/sales-xray-web/package.json",
+        "infra/release/x.py",
+        "apps/sales-xray-web/app/tests/a.test.tsx",
+        "apps/sales-xray-web/app/AGENTS.md",
+        "apps/sales-xray-web/app/CLAUDE.md",
+        "apps/sales-xray-web/app/tsconfig.json",
+        "apps/sales-xray-web/app/next.config.ts",
+        "apps/sales-xray-web/app/vitest.config.ts",
+        "apps/sales-xray-web/app/eslint.config.mjs",
+        "apps/sales-xray-web/public/package.json",
+    ]:
+        assert "outside" in scope(ok + [path])
+    assert scope(ok, changed=5) == scope([]) == "file list incomplete"
+    assert scope(ok, fail=True) == "file list unreadable"
+    assert scope(ok, threads=1).startswith("unresolved")
+    assert scope(ok, threads=None).startswith("unresolved")
+
+
+@pytest.mark.parametrize(
+    ("approval", "file", "held", "main", "expected"),
+    [
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "green", True),
+        ("guard", "apps/sales-xray-web/package.json", False, "green", False),
+        ("guard", "apps/sales-xray-web/app/page.tsx", True, "green", False),
+        ("ceo", "infra/x.py", True, "green", False),
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "running", True),
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "red", False),
+        ("ceo", "infra/x.py", False, "green", True),
+        ("cto", "apps/sales-xray-web/app/page.tsx", False, "green", True),
+        ("cto", "db/migrations/versions/x.py", False, "green", False),
+        ("cto", "scripts/ci/merge_class.py", False, "green", False),
+    ],
+)
+def test_aut303_pr_merge_routes(watchdog, monkeypatch, approval, file, held, main, expected):
+    sha = "a" * 40
+    calls = []
+
+    def github(path):
+        if path.startswith("/pulls?"):
+            return [
+                {
+                    "number": 1,
+                    "head": {"sha": sha, "ref": "task/platform/fictional"},
+                    "updated_at": "2026-09-30T00:00:00Z",
+                }
+            ]
+        if "/check-runs" in path:
+            return {"check_runs": [{"status": "completed", "conclusion": "success"}]}
+        if path.startswith("/pulls/1/files"):
+            return [{"filename": file}]
+        return {"changed_files": 1}
+
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    monkeypatch.setattr(watchdog, "unresolved_threads", lambda number: 0)
+    monkeypatch.setattr(watchdog, "ACT", True)
+    monkeypatch.setattr(
+        watchdog,
+        "pr_approvals",
+        lambda *args: (
+            "task",
+            "review" if approval == "cto" else None,
+            "approval" if approval == "ceo" else None,
+            None,
+            "guard" if approval == "guard" else None,
+        ),
+    )
+    monkeypatch.setattr(watchdog, "merge_held", lambda *args: held)
+    monkeypatch.setattr(watchdog, "approval_issue", lambda *args: None)
+    monkeypatch.setattr(watchdog, "act", lambda *args: True)
+    monkeypatch.setattr(watchdog.tg, "paperclip", lambda *args: (True, ""))
+    monkeypatch.setattr(watchdog, "merge", lambda *args: (calls.append(args), (True, ""))[1])
+    conn = SimpleNamespace(execute=lambda *args: SimpleNamespace(fetchone=lambda: ("AUT-FAKE",)))
+    watchdog.pull_requests(conn, {"sent": {}}, {}, [], main)
+    assert calls == ([(1, sha, "task/platform/fictional")] if expected else [])
+
+
+def test_aut303_spools_deduplicate_retry_and_archive(watchdog, monkeypatch, shadow_db, tmp_path):
+    conn = shadow_db
+    conn.execute(
+        "create temp table issues (id uuid primary key, company_id uuid, identifier text, "
+        "status text, description text, hidden_at timestamptz, "
+        "created_at timestamptz default now(), title text)"
+    )
+    posted = []
+
+    def act(*args):
+        posted.append(args)
+        if args[:2] == ("issue", "create"):
+            fields = dict(zip(args[2::2], args[3::2], strict=True))
+            conn.execute(
+                "insert into issues (id, company_id, identifier, status, description, title) "
+                "values (%s, %s, 'AUT-FAKE', %s, %s, %s)",
+                (
+                    uuid.uuid4(),
+                    watchdog.tg.COMPANY,
+                    fields["--status"],
+                    fields["--description"],
+                    fields["--title"],
+                ),
+            )
+        return True
+
+    monkeypatch.setattr(watchdog, "act", act)
+    monkeypatch.setattr(watchdog, "ACT", True)
+    monkeypatch.setattr(watchdog.tg, "esc", lambda text: text, raising=False)
+    release, studio = tmp_path / "release", tmp_path / "studio"
+    release.mkdir()
+    studio.mkdir()
+    monkeypatch.setattr(watchdog, "TRAIN_SPOOLS", (release, studio, tmp_path / "missing"))
+    state = {"sent": {}}
+
+    def emit(spool, kind, key, text, name="event.json", **fields):
+        (spool / name).write_text(json.dumps({"kind": kind, "key": key, "text": text, **fields}))
+
+    emit(release, "alert", "r1_test", "R1 fictional alert", "alert.json")
+    emit(release, "status", "s", "fictional staging is current", "status.json")
+    emit(studio, "review", "pr-141", "fictional slice", "review.json", pr=141)
+    (studio / "broken.json").write_text("{broken")
+    watchdog.train_events(conn, state, {}, [])
+    creates = [args for args in posted if args[:2] == ("issue", "create")]
+    assert len(creates) == 3
+    assert any(
+        "Train alert: R1 fictional alert" in args
+        and "critical" in args
+        and watchdog.DEV_LEAD_ID in args
+        for args in creates
+    )
+    assert any(
+        "UI Guard review: studio PR #141" in args and watchdog.UI_GUARD_ID in args
+        for args in creates
+    )
+    logs = [args for args in creates if "backlog" in args]
+    assert len(logs) == 1 and "--assignee-agent-id" not in logs[0]
+    assert not list(release.glob("*.json")) and not list(studio.glob("*.json"))
+    assert len(list((release / "done").glob("*.json"))) == 2
+    assert len(list((studio / "done").glob("*.json"))) == 2
+    posted.clear()
+    emit(release, "alert", "r1_test", "R1 fictional alert")
+    watchdog.train_events(conn, state, {}, [])
+    assert posted == [] and not list(release.glob("*.json"))
+    state["sent"]["train-alert:r1_test"] = time.time() - 7 * 3600
+    emit(release, "alert", "r1_test", "R1 fictional alert")
+    watchdog.train_events(conn, state, {}, [])
+    assert [args[:2] for args in posted] == [("issue", "comment")]
+    posted.clear()
+    emit(release, "alert", "r1Xtest", "different fictional key")
+    watchdog.train_events(conn, state, {}, [])
+    assert [args[:2] for args in posted] == [("issue", "create")]
+    conn.execute("update issues set status = 'done'")
+    posted.clear()
+    emit(release, "alert", "r1_test", "R1 fictional alert")
+    watchdog.train_events(conn, state, {}, [])
+    assert [args[:2] for args in posted] == [("issue", "create")]
+    monkeypatch.setattr(watchdog, "act", lambda *args: False)
+    emit(release, "status", "s2", "retry fictional status")
+    watchdog.train_events(conn, state, {}, [])
+    assert (release / "event.json").exists()
+    old = next((release / "done").glob("*.json"))
+    os.utime(old, (time.time() - 8 * 86400,) * 2)
+    monkeypatch.setattr(watchdog, "act", act)
+    watchdog.train_events(conn, state, {}, [])
+    assert not old.exists() and not (release / "event.json").exists()
+    monkeypatch.setattr(watchdog, "ACT", False)
+    emit(release, "status", "s3", "fictional dry run")
+    watchdog.train_events(conn, state, {}, [])
+    assert (release / "event.json").exists()

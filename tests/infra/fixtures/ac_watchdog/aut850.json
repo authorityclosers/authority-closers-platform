@@ -1,0 +1,12 @@
+{
+  "source": {
+    "issue": "AUT-851",
+    "path": "/opt/ac-watchdog/ac_watchdog.py",
+    "original_sha256": "83d9e99f8e7deb02be0486718e55d36ea5888ebca218db3bbc2d2a111d8074ae",
+    "repository_sha256": "12424d1309b17326fdc4174f1144781c39f806fad3e0833d6bcfd7c9d6a152bd",
+    "lines": 1330,
+    "approved_difference": "CEO directive on AUT-850: add scripts/ci/ to SENSITIVE_PATH",
+    "redactions": [],
+    "config_injection": []
+  }
+}
