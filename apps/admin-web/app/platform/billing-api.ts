@@ -198,7 +198,7 @@ export type RefundOutcome =
   | { ok: true; state: z.infer<typeof refundStateSchema> }
   | { ok: false; reason: string };
 
-/** The existing customer refund command; its rule, not this page, decides. */
+/** The staff refund command; its rule, not this page, decides. */
 export async function requestRefund(
   paymentId: string,
   reason: string,
@@ -209,7 +209,7 @@ export async function requestRefund(
   let response: Response;
   try {
     response = await fetcher(
-      "/v1/payments/" + encodeURIComponent(paymentId) + "/refund",
+      BILLING_PATH + "/payments/" + encodeURIComponent(paymentId) + "/refund",
       {
         method: "POST",
         credentials: "same-origin",
@@ -231,6 +231,12 @@ export async function requestRefund(
         "The refund request was not confirmed. Refresh before trying again.",
     };
   }
+  if (response.status === 403)
+    return {
+      ok: false,
+      reason:
+        "Your billing assignment could not be confirmed. Reload to check your account.",
+    };
   const body = await readPlatformJson(response).catch(() => null);
   if (response.ok) {
     const result = refundResultSchema.safeParse(body);
