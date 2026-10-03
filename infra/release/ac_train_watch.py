@@ -75,8 +75,16 @@ def _newest_core_success(github: Any) -> tuple[str, dt.datetime] | None:
     return None
 
 
-def _newest_validated_web(github: Any) -> tuple[str, dt.datetime] | None:
+def _newest_validated_web(github: Any) -> tuple[str, dt.datetime, frozenset[str]] | None:
+    """The newest validated web build, its clock, and the newer web builds above it.
+
+    A newer build can already run on staging, for example when a later push
+    cancelled its validation run; staging is then ahead of the target, not behind.
+    """
+
+    newer: list[str] = []
     for sha in ac_release.recent_web_shas(github):
+        newer.append(sha)
         if not ac_release.validated(github, sha):
             continue
         build = ac_release.web_build_for(github, sha)
@@ -89,7 +97,7 @@ def _newest_validated_web(github: Any) -> tuple[str, dt.datetime] | None:
         application_run = ac_release.find_push_run(github, ac_release.CORE_WORKFLOW, sha)
         application_completed = _run_completion(application_run or {})
         if web_completed is not None and application_completed is not None:
-            return sha, max(web_completed, application_completed)
+            return sha, max(web_completed, application_completed), frozenset(newer[:-1])
     return None
 
 
@@ -160,16 +168,17 @@ def evaluate(
                     flag=f"{component}-failed",
                 )
 
-    for component, current_key, latest in (
-        ("core", "core", _newest_core_success(github)),
-        ("web", "web", _newest_validated_web(github)),
+    web = _newest_validated_web(github)
+    for component, current_key, latest, ahead in (
+        ("core", "core", _newest_core_success(github), frozenset[str]()),
+        ("web", "web", web[:2] if web else None, web[2] if web else frozenset[str]()),
     ):
         if latest is None:
             continue
         target_sha, completed = latest
         staging_sha = staging.get(current_key)
         lag = (current - completed).total_seconds()
-        if staging_sha != target_sha and lag > LAG_SECONDS:
+        if staging_sha != target_sha and staging_sha not in ahead and lag > LAG_SECONDS:
             alert(
                 f"lag:staging:{component}:{target_sha}",
                 f"staging {component} is behind green main {target_sha[:7]}",
