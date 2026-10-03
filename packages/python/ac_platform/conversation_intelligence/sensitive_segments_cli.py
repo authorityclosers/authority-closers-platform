@@ -343,7 +343,7 @@ async def census_lines(database: AsyncSession, recording_ids: list[UUID]) -> lis
             runs = citations.setdefault((report.recording_id, revision), {})
             runs.setdefault(str(report.run_id), Counter()).update(_citations(report.payload))
     marked = {
-        (m.transcript_revision, m.segment_id)
+        (m.recording_id, m.transcript_revision, m.segment_id)
         for m in await database.scalars(_effective_statement())
     }
     lines = []
@@ -370,7 +370,7 @@ async def census_lines(database: AsyncSession, recording_ids: list[UUID]) -> lis
                         "category": category,
                         "rule_id": rule_id,
                         "cited_in_report": counts[segment_id],
-                        "already_marked": (revision, segment_id) in marked,
+                        "already_marked": (recording_id, revision, segment_id) in marked,
                     }
                 )
     return lines

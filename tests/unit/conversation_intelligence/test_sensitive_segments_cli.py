@@ -25,7 +25,11 @@ from tests.unit.conversation_intelligence.test_sensitive_segments_loader import 
 from tests.unit.conversation_intelligence.test_sensitive_segments_loader import (
     state as state,
 )
-from tests.unit.http.test_platform_sensitive_segments import OTHER_REVISION, REVISION
+from tests.unit.http.test_platform_sensitive_segments import (
+    OTHER_REVISION,
+    REVISION,
+    seed_recording,
+)
 from tests.unit.http.test_platform_sensitive_segments import marks_state as marks_state
 from tests.unit.http.test_workspaces import HttpDatabase
 from tests.unit.http.test_workspaces import workspace_state as workspace_state
@@ -118,6 +122,24 @@ async def test_census_scopes_revisions_and_effective_marks_without_text(state):
         "AUT-524 census sensitive_terms_v1:cash_only"
     )
     assert "Fictional" not in json.dumps(lines + [request])
+
+
+@pytest.mark.asyncio
+async def test_census_marks_are_specific_to_each_recording(state):
+    duplicate = seed_recording(state, revision=REVISION)
+    for recording in (state.recording, duplicate):
+        add_c2(state, recording, OTHER_REVISION, {"s3": "Fictional cash only demo"})
+    insert_mark(state, state.recording, "s3", revision=OTHER_REVISION)
+    with Session(state.engine) as db:
+        lines = await cli.census_lines(cast(Any, HttpDatabase(db)), [state.recording, duplicate])
+    assert len(lines) == 2
+    assert {line["recording_id"]: line["already_marked"] for line in lines} == {
+        str(state.recording): True,
+        str(duplicate): False,
+    }
+    requests = cli.mark_requests(lines)
+    assert len(requests) == 1
+    assert requests[0]["path"] == (f"/v1/platform/sensitive-segments/recordings/{duplicate}/marks")
 
 
 @pytest.mark.asyncio

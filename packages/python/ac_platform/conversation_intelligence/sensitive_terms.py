@@ -1,17 +1,27 @@
 """ETH-03 legal-exposure candidates; never scores, marks or returns transcript text.
 
 The profile follows protocol-v1 ETH-03, narrowed by AUT-557/AUT-519 to exclude
-BIZ-03 figures. Patterns use the same NFKC/casefold tokens as the withheld guard,
-including its Devanagari token boundaries. Matching is pure after profile loading.
+BIZ-03 figures. Patterns use the guard's NFKC/casefold normalization, with a
+detector tokenizer that keeps Devanagari marks and strips nukta. Matching is pure
+after profile loading.
 """
 
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from collections.abc import Iterable
 from pathlib import Path
 
-from ac_platform.conversation_intelligence.sensitive_segments import tokens
+_TOKEN = re.compile(r"[\w\u0900-\u0903\u093a-\u094f\u0955-\u0957\u0962\u0963'-]+")
+
+
+def tokens(text: str) -> list[str]:
+    """Keep Devanagari vowel marks/virama in words; treat nukta variants alike."""
+    normalized = unicodedata.normalize("NFKC", text).casefold().replace("\u093c", "")
+    return _TOKEN.findall(normalized)
+
 
 PROFILE = json.loads(
     (Path(__file__).parent / "profiles" / "sensitive_terms_v1.json").read_text(encoding="utf-8")

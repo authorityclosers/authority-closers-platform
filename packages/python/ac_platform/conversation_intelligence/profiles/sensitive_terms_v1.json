@@ -4,22 +4,22 @@
     {
       "rule_id": "informal_books",
       "category": "SENSITIVE_FINANCIAL",
-      "patterns": ["informal books", "second books", "off the books", "kaccha hisaab", "kachcha hisaab", "kaccha books", "कच्चा हिसाब", "कच्ची बही", "दो बही"]
+      "patterns": ["informal books", "second books", "off the books", "kaccha hisaab", "kachcha hisaab", "kaccha books", "कच्चा हिसाब", "कच्ची बही", "दो बही", "kacha hisab", "kachha hisab", "kaccha hisab", "kachcha hisab", "kaccha bill", "kacha bill", "kachha bill", "कच्चा बिल", "bina bill", "बिना बिल", "without bill", "do number ka", "do number ke", "do number mein", "दो नंबर का", "दो नंबर के", "दो नंबर में"]
     },
     {
       "rule_id": "cash_only",
       "category": "SENSITIVE_FINANCIAL",
-      "patterns": ["cash only", "cash-only", "sirf cash", "सिर्फ कैश", "केवल नकद"]
+      "patterns": ["cash only", "cash-only", "sirf cash", "सिर्फ कैश", "केवल नकद", "only cash", "sirf nakad", "सिर्फ नकद", "केवल कैश", "ओनली कैश", "कैश ओनली"]
     },
     {
       "rule_id": "tax_treatment",
       "category": "SENSITIVE_LEGAL",
-      "patterns": ["tax treatment", "tax avoidance", "tax evasion", "tax bachana", "tax bachane", "tax saving", "टैक्स बचाना", "टैक्स बचाने", "टैक्स चोरी", "कर चोरी", "टैक्स का"]
+      "patterns": ["tax treatment", "tax avoidance", "tax evasion", "tax bachana", "tax bachane", "टैक्स बचाना", "टैक्स बचाने", "टैक्स चोरी", "कर चोरी", "tax chori", "tax ki chori", "टैक्स की चोरी", "gst chori", "जीएसटी चोरी", "gst bachana", "bina gst", "without gst", "बिना जीएसटी", "बिना gst"]
     },
     {
       "rule_id": "undeclared_income",
       "category": "SENSITIVE_FINANCIAL",
-      "patterns": ["undeclared income", "unreported income", "black money", "unaccounted income", "अघोषित आय", "काला धन", "बिना हिसाब", "income declare nahi"]
+      "patterns": ["undeclared income", "unreported income", "black money", "unaccounted income", "अघोषित आय", "काला धन", "बिना हिसाब", "income declare nahi", "black mein", "black me", "ब्लैक में", "ब्लैक मनी", "black ka paisa", "ब्लैक का पैसा"]
     }
   ]
 }

@@ -2,7 +2,11 @@
 
 import pytest
 
-from ac_platform.conversation_intelligence.sensitive_terms import PROFILE, detect_sensitive_terms
+from ac_platform.conversation_intelligence.sensitive_terms import (
+    PROFILE,
+    detect_sensitive_terms,
+    tokens,
+)
 
 
 @pytest.mark.parametrize("rule", PROFILE["rules"], ids=lambda rule: rule["rule_id"])
@@ -23,6 +27,12 @@ def test_each_rule_in_hinglish_and_devanagari(rule):
         "काल्पनिक क्रेडिट तीस दिन, भुगतान एक हजार, लक्ष्य दो लाख।",
         "123 १२३ lakh crore hazaar लाख करोड़ हजार cash flow tax invoice bookshelves",
         "Fictional kaccha aam; cash mein payment; कच्चा आम; कैश में भुगतान।",
+        "GST टैक्स का बिल भेज दो",
+        "टैक्स का रेट अठारह प्रतिशत",
+        "tax saving FD",
+        "mera do number hai",
+        "GST bill bhej do",
+        "कच्चा हिसाबी और सिर्फ कैशियर",
     ],
 )
 def test_ordinary_figures_and_word_magnitudes_never_fire(text):
@@ -35,3 +45,30 @@ def test_normalization_boundaries_and_one_hit_per_rule():
     )
     assert detect_sensitive_terms([("s1", "cash onlyish")]) == ()
     assert detect_sensitive_terms([]) == ()
+
+
+def test_devanagari_tokens_keep_marks_and_normalize_nukta():
+    assert tokens("कच्चा हिसाब") == ["कच्चा", "हिसाब"]
+    assert tokens("सिर्फ़ नकद") == tokens("सिर्फ नकद") == ["सिर्फ", "नकद"]
+    assert detect_sensitive_terms([("s1", "Fictional सिर्फ़ नकद demo")]) == (
+        ("s1", "SENSITIVE_FINANCIAL", "cash_only"),
+    )
+
+
+@pytest.mark.parametrize(
+    "text,rule_id",
+    [
+        ("bina bill", "informal_books"),
+        ("बिना बिल", "informal_books"),
+        ("kacha bill", "informal_books"),
+        ("do number ka paisa", "informal_books"),
+        ("दो नंबर का पैसा", "informal_books"),
+        ("only cash", "cash_only"),
+        ("black mein payment", "undeclared_income"),
+        ("टैक्स की चोरी", "tax_treatment"),
+    ],
+)
+def test_fictional_common_idioms(text, rule_id):
+    hits = detect_sensitive_terms([("fictional-idiom", f"Demo widget: {text}.")])
+    assert len(hits) == 1
+    assert hits[0][0] == "fictional-idiom" and hits[0][2] == rule_id
