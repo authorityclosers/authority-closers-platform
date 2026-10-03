@@ -82,6 +82,10 @@ export interface BillingClient {
     reason: string | null,
     idempotencyKey: string,
   ): Promise<Subscription>;
+  resumeSubscription?(
+    subscriptionId: string,
+    idempotencyKey: string,
+  ): Promise<Subscription>;
 }
 
 /** One key per attempt at one action; a retry of the same action reuses it. */
@@ -178,6 +182,16 @@ export const liveBilling: BillingClient = {
           method: "POST",
           idempotencyKey: key,
           body: JSON.stringify({ reason }),
+        },
+      ),
+    ),
+  resumeSubscription: async (subscriptionId, key) =>
+    parseSubscription(
+      await call(
+        `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/resume`,
+        {
+          method: "POST",
+          idempotencyKey: key,
         },
       ),
     ),

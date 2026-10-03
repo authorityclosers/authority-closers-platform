@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -42,6 +43,14 @@ import {
   PLANS_GST_RATE,
   type DisplayTopUpPack,
 } from "./plans/plans-catalogue-fixture";
+import { CheckoutDrawer } from "./plans/checkout-drawer";
+import { openHostedCheckout } from "./plans/hosted-checkout";
+import {
+  idempotencyKey,
+  liveBilling as billingClient,
+  returnPath,
+} from "./billing/billing-api";
+import type { Order } from "./billing/contract";
 import {
   AccountProfileRequestError,
   normalizeProfilePhoneInput,
@@ -147,6 +156,12 @@ export function AccountSettings({
   const [section, setSection] = useState<SectionId>("general");
   const liveBilling = useBillingAccount(!billing && section === "billing");
   const [stage, setStage] = useState<"list" | "pane">("list");
+  const router = useRouter();
+  const [selectedTopUp, setSelectedTopUp] = useState<DisplayTopUpPack | null>(
+    null,
+  );
+  const [topUpBusy, setTopUpBusy] = useState(false);
+  const [topUpOrder, setTopUpOrder] = useState<Order | null>(null);
   const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
@@ -379,6 +394,30 @@ export function AccountSettings({
 
         <Pane id="usage" title="Analysis time" active={section} onBack={back}>
           <AllowanceSummary allowance={allowance} onRetry={retry} />
+          <div className={styles.row}>
+            <div className={styles.rowText}>
+              <span className={styles.rowLabel}>
+                Need more minutes or credits?
+              </span>
+              <span className={styles.rowHint}>
+                Add analysis minutes anytime without changing your monthly
+                subscription.
+              </span>
+            </div>
+            <div className={styles.rowControl}>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setSection("billing");
+                  if (typeof window !== "undefined")
+                    window.location.hash = "billing";
+                }}
+              >
+                Top up minutes
+              </button>
+            </div>
+          </div>
         </Pane>
 
         <Pane
@@ -408,6 +447,7 @@ export function AccountSettings({
                     },
                   }
             }
+            onBuyTopUp={(pack) => setSelectedTopUp(pack)}
             variant={variant}
             onRetry={retry}
           />
@@ -454,6 +494,52 @@ export function AccountSettings({
           </Row>
         </Pane>
       </div>
+      <CheckoutDrawer
+        open={Boolean(selectedTopUp)}
+        onClose={() => {
+          setSelectedTopUp(null);
+          setTopUpOrder(null);
+        }}
+        item={selectedTopUp ? { type: "top_up", pack: selectedTopUp } : null}
+        gstRate={PLANS_GST_RATE}
+        busy={topUpBusy}
+        confirmedOrder={topUpOrder}
+        onPay={async () => {
+          if (!selectedTopUp) return;
+          setTopUpBusy(true);
+          try {
+            const checkout = await billingClient.checkout(
+              {
+                kind: "top_up",
+                account:
+                  selectedTopUp.planKey === "personal"
+                    ? "personal"
+                    : "organisation",
+                planKey: selectedTopUp.planKey,
+                packKey: selectedTopUp.key,
+              },
+              idempotencyKey(),
+            );
+            setTopUpOrder(checkout.order);
+            const result = await openHostedCheckout(
+              checkout.hosted,
+              checkout.order.orderId,
+            );
+            if (result !== "left") {
+              router.push(returnPath(checkout.order.orderId));
+            }
+          } catch {
+            notify({
+              id: "topup-checkout-error",
+              tone: "error",
+              title: "Checkout unavailable",
+              message: "Checkout could not be opened. Please try again.",
+            });
+          } finally {
+            setTopUpBusy(false);
+          }
+        }}
+      />
     </div>
   );
 }

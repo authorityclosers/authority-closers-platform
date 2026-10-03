@@ -1330,3 +1330,426 @@
     animation: none;
   }
 }
+
+/* Purchase Shell layout: stripped-back, focused, no chrome */
+.purchaseShell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100vw;
+  max-width: 100vw;
+  overflow: hidden;
+  background: var(--lx-paper-1, #f8f9fa);
+  color: var(--lx-ink, #0f172a);
+}
+
+.shellHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--lx-line, rgba(0, 0, 0, 0.08));
+  background: var(--lx-surface, #ffffff);
+  z-index: 10;
+}
+
+.shellHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shellBackBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--lx-radius-sm, 8px);
+  background: var(--lx-paper-2, #f1f5f9);
+  color: var(--lx-ink-2, #334155);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.shellBackBtn:hover {
+  background: var(--lx-line, #e2e8f0);
+}
+
+.shellBrand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-teal, #0d9488);
+}
+
+.shellSparkle {
+  color: var(--lx-teal, #0d9488);
+}
+
+.shellBrandName {
+  font: 800 15px/1 var(--lx-font-display, var(--lx-font-ui));
+  letter-spacing: -0.01em;
+  color: var(--lx-ink, #0f172a);
+}
+
+.shellHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shellReceiptLink {
+  color: var(--lx-muted, #64748b);
+  font: 500 12.5px/1 var(--lx-font-ui);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.shellReceiptLink:hover {
+  color: var(--lx-ink, #0f172a);
+}
+
+.shellCloseBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--lx-paper-2, #f1f5f9);
+  color: var(--lx-ink-2, #334155);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.shellCloseBtn:hover {
+  background: var(--lx-line, #e2e8f0);
+}
+
+.shellBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  overflow: hidden;
+}
+
+/* 1-Viewport Ladder Container at 1440 and 390 px */
+.viewportLadderContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1140px;
+  height: 100%;
+  max-height: calc(100dvh - 68px);
+  gap: 10px;
+}
+
+.ladderTopRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-shrink: 0;
+}
+
+.ladderHeading h2 {
+  margin: 0;
+  color: var(--lx-ink, #0f172a);
+  font: 800 20px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  letter-spacing: -0.015em;
+}
+
+.ladderHeading .hint {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.billingCycleToggle {
+  display: flex;
+  align-items: center;
+}
+
+/* Mobile plan tabs: displayed at <=768px for single viewport fit at 390px */
+.mobilePlanTabs {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobilePlanTabs {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .mobilePlanTabBtn {
+    flex: 1;
+    padding: 8px 6px;
+    font: 700 12px/1.2 var(--lx-font-ui);
+    border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.1));
+    border-radius: var(--lx-radius-sm, 8px);
+    background: var(--lx-surface, #ffffff);
+    color: var(--lx-ink-2, #334155);
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .mobilePlanTabBtn[data-active="true"] {
+    border-color: var(--lx-teal, #0d9488);
+    background: var(--lx-teal-soft, rgba(13, 148, 136, 0.08));
+    color: var(--lx-teal, #0d9488);
+  }
+
+  .plansGrid {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .planCard {
+    display: none;
+  }
+
+  .planCard[data-mobile-active="true"] {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+@media (min-width: 769px) {
+  .plansGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .planCard {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 0;
+  }
+}
+
+.planCard {
+  position: relative;
+  gap: 10px;
+  padding: 16px;
+  border: 1.5px solid var(--lx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+  overflow-y: auto;
+}
+
+.planCard[data-selected="true"] {
+  border-color: var(--lx-teal);
+  box-shadow:
+    0 0 0 1px var(--lx-teal),
+    var(--lx-shadow-2);
+}
+
+.planBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 3px 8px;
+  border-radius: var(--lx-radius-pill, 999px);
+  font: 700 11px/1 var(--lx-font-ui);
+}
+
+.popularBadge {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal, #ffffff);
+}
+
+.currentBadge {
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+}
+
+.planActionBtn {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal, #ffffff);
+  font: 700 13.5px/1.2 var(--lx-font-ui);
+  cursor: pointer;
+  transition: opacity 140ms ease;
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+.planActionBtn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.planActionBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--lx-paper-2);
+  color: var(--lx-muted);
+}
+
+.ladderFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+.ladderGuarantee {
+  font: 500 11.5px/1.3 var(--lx-font-ui);
+  color: var(--lx-muted);
+}
+
+/* Side Panel Checkout Drawer */
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--lx-film, #0a1220) 45%, transparent);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+  animation: fade 180ms ease both;
+}
+
+.checkoutDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  z-index: 100;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--lx-line);
+  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.12);
+  background: var(--lx-surface);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 20px;
+  animation: slideDrawer 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slideDrawer {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .checkoutDrawer {
+    inset: 0;
+    width: 100vw;
+    border-left: none;
+    animation: slideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.checkoutHeadTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkoutHeadTitle h2 {
+  margin: 0;
+  font: 800 18px/1.2 var(--lx-font-display, var(--lx-font-ui));
+  color: var(--lx-ink);
+}
+
+.closeDrawerBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink-2);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.closeDrawerBtn:hover {
+  background: var(--lx-line);
+}
+
+/* Animated Count-up for Success Screen */
+.animatedCounterBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-teal-soft, rgba(13, 148, 136, 0.08));
+  border: 1px solid var(--lx-teal-edge, rgba(13, 148, 136, 0.2));
+  margin: 8px 0;
+}
+
+.counterRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.counterItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.counterValue {
+  font: 800 28px/1.1 var(--lx-font-display, var(--lx-font-ui));
+  color: var(--lx-teal);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.counterLabel {
+  margin-top: 4px;
+  font: 600 12px/1.2 var(--lx-font-ui);
+  color: var(--lx-ink-2);
+}
+
+.counterDivider {
+  width: 1px;
+  height: 36px;
+  background: var(--lx-teal-edge, rgba(13, 148, 136, 0.25));
+}

@@ -114,6 +114,50 @@ export function useBillingAccount(
     }
   };
 
+  const onResume = async (id: string) => {
+    if (
+      inFlight.current ||
+      !current ||
+      current.subs.current?.subscriptionId !== id
+    )
+      return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      if (client.resumeSubscription) {
+        const subscription = await client.resumeSubscription(
+          id,
+          idempotencyKey(),
+        );
+        if (identity.current !== key) return;
+        setSnapshot({
+          ...current,
+          subs: { ...current.subs, current: subscription },
+        });
+        setFailure(null);
+        onRefresh();
+      } else {
+        setFailure({
+          key,
+          message:
+            "Renewal resumption is being processed. Your subscription access continues through period end.",
+        });
+      }
+    } catch (error) {
+      if (identity.current === key)
+        setFailure({
+          key,
+          message:
+            error instanceof BillingError && error.detail
+              ? error.detail
+              : "Renewal could not be resumed. Please try again.",
+        });
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+
   return {
     mePlan: current?.mePlan ?? null,
     usage: current?.usage ?? null,
@@ -127,5 +171,6 @@ export function useBillingAccount(
     busy,
     onRefresh,
     onCancel,
+    onResume,
   };
 }
