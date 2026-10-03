@@ -19,6 +19,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
+from ac_platform.kernel.credential_files import is_private_to_process
+
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _MAX_CONFIG_BYTES = 64 * 1024
 
@@ -39,12 +41,15 @@ def read_private_file(path: Path, *, limit: int, confidential: bool = False) -> 
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
         with os.fdopen(descriptor, "rb") as stream:
             info = os.fstat(stream.fileno())
-            forbidden_mode = 0o077 if confidential else 0o022
             if (
                 not stat.S_ISREG(info.st_mode)
                 or info.st_nlink != 1
                 or not 0 < info.st_size <= limit
-                or (os.name != "nt" and info.st_mode & forbidden_mode)
+                or (
+                    not is_private_to_process(path, stream.fileno(), info)
+                    if confidential
+                    else os.name != "nt" and info.st_mode & 0o022
+                )
             ):
                 raise ValueError
             result = stream.read(limit + 1)

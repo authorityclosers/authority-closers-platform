@@ -161,6 +161,7 @@ async def _seed_retained_case(
     *,
     source_quote: str = "Wrong quote",
     coaching_prompt_revision: C5PromptRevision = COACHING_PROMPT_LEGACY,
+    speaker_roles: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     prepared = await _prepare(postgres_harness, scratch_root)
     engine = create_async_engine(postgres_harness.url)
@@ -217,6 +218,7 @@ async def _seed_retained_case(
                 max_completion_tokens=1_800,
                 output_profile="standard",
                 coaching_prompt_revision=coaching_prompt_revision,
+                speaker_roles=speaker_roles,
             )
             c2 = build_checkpoint(
                 binding,
@@ -397,6 +399,8 @@ async def _seed_retained_case(
             }
             if coaching_prompt_revision != COACHING_PROMPT_LEGACY:
                 request["coaching_prompt_revision"] = coaching_prompt_revision
+            if speaker_roles is not None:
+                request["speaker_roles"] = speaker_roles
             intent = {
                 "schema": "ac.sales-xray.text-intent/1",
                 "request": request,
@@ -734,17 +738,40 @@ async def _seed_guest_retained_case(postgres_harness: Any, scratch_root: Path) -
 
 
 @pytest.mark.parametrize(
-    "coaching_prompt_revision",
-    [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3],
+    "coaching_prompt_revision,with_roles",
+    [
+        (COACHING_PROMPT_LEGACY, False),
+        (COACHING_PROMPT_REFINED, False),
+        (COACHING_PROMPT_V3, False),
+        (COACHING_PROMPT_V3, True),
+    ],
 )
 def test_retained_c5_recovery_real_postgres(
-    postgres_harness: Any, tmp_path: Path, coaching_prompt_revision: C5PromptRevision
+    postgres_harness: Any,
+    tmp_path: Path,
+    coaching_prompt_revision: C5PromptRevision,
+    with_roles: bool,
+    monkeypatch: Any,
 ) -> None:
+    roles = None
+    if with_roles:
+        monkeypatch.setattr(
+            "ac_platform.conversation_intelligence.reports.SPEAKER_ROLE_PROMPT_REVISIONS",
+            frozenset({COACHING_PROMPT_V3}),
+        )
+        roles = {
+            "origin": "user_confirmed_roles",
+            "transcript_revision": "synthetic-c2-recovery-r1",
+            "map_revision": "a" * 64,
+            "speakers": [{"speaker_id": "speaker-1", "role": "seller", "is_account_holder": True}],
+        }
+
     async def exercise() -> None:
         case = await _seed_retained_case(
             postgres_harness,
             tmp_path,
             coaching_prompt_revision=coaching_prompt_revision,
+            speaker_roles=roles,
         )
         engine = case["engine"]
         sessions: async_sessionmaker[AsyncSession] = case["sessions"]

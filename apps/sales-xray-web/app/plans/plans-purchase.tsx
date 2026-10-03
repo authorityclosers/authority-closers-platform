@@ -1,20 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import {
-  BillingError,
-  idempotencyKey,
-  liveBilling,
-  notOnSale,
-  returnPath,
-  type BillingClient,
-  type CheckoutRequest,
-} from "../billing/billing-api";
-import { onSale, type Checkout, type Plan } from "../billing/contract";
+import { useEffect, useState } from "react";
+import { liveBilling, type BillingClient } from "../billing/billing-api";
+import { onSale, type Plan } from "../billing/contract";
 import { useBillingAccount } from "../billing/use-billing-account";
 import { useWorkspaceAccess } from "../workspace-access";
-import { openHostedCheckout } from "./hosted-checkout";
+import { usePurchaseCheckout } from "./use-purchase-checkout";
 import {
   PLANS_CATALOGUE_FIXTURE,
   PLANS_GST_RATE,
@@ -42,23 +33,11 @@ export function PlansPurchase({
 }
 
 function Purchase({ client }: { client: BillingClient }) {
-  const router = useRouter();
-  const access = useWorkspaceAccess();
   const billing = useBillingAccount(true, client);
   const [catalogue, setCatalogue] = useState<Plan[] | null>(null);
-  const [prepared, setPrepared] = useState<Checkout | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const attempt = useRef<{
-    fingerprint: string;
-    key: string;
-    checkout?: Checkout;
-  } | null>(null);
-  const inFlight = useRef(false);
-  const alive = useRef(true);
+  const { prepared, busy, error, select, buy } = usePurchaseCheckout(client);
 
   useEffect(() => {
-    alive.current = true;
     const controller = new AbortController();
     client
       .readPlans(controller.signal)
@@ -68,63 +47,9 @@ function Purchase({ client }: { client: BillingClient }) {
       })
       .catch(() => {}); // Keep the owner-approved display catalogue until plans are on sale.
     return () => {
-      alive.current = false;
       controller.abort();
     };
   }, [client]);
-
-  const select = () => {
-    attempt.current = null;
-    setPrepared(null);
-    setError(null);
-  };
-  const buy = async (request: CheckoutRequest) => {
-    if (inFlight.current) return;
-    if (access?.authenticated !== true) {
-      if (access?.requestAccountSignIn) access.requestAccountSignIn();
-      else router.push("/login?returnTo=%2Fplans");
-      return;
-    }
-    inFlight.current = true;
-    setBusy(true);
-    setError(null);
-    const fingerprint = JSON.stringify(request);
-    const expiresAt = attempt.current?.checkout?.hosted.expiresAt;
-    if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
-      attempt.current = null;
-      setPrepared(null);
-    }
-    if (attempt.current?.fingerprint !== fingerprint)
-      attempt.current = { fingerprint, key: idempotencyKey() };
-    const current = attempt.current;
-    try {
-      if (!current.checkout) {
-        const checkout = await client.checkout(request, current.key);
-        if (!alive.current || attempt.current !== current) return;
-        current.checkout = checkout;
-        setPrepared(checkout); // Review the server's amount and tax before leaving for payment.
-        return;
-      }
-      const result = await openHostedCheckout(
-        current.checkout.hosted,
-        current.checkout.order.orderId,
-      );
-      if (alive.current && result !== "left")
-        router.push(returnPath(current.checkout.order.orderId));
-    } catch (error) {
-      if (alive.current)
-        setError(
-          notOnSale(error)
-            ? "Payments are currently unavailable. Please try again later."
-            : error instanceof BillingError && error.detail
-              ? error.detail
-              : "Checkout could not be opened. Please try again.",
-        );
-    } finally {
-      inFlight.current = false;
-      if (alive.current) setBusy(false);
-    }
-  };
 
   const buyPlan = (selection: PlanSelection) =>
     void buy({

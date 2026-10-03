@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence import inference_worker, reports
+from ac_platform.conversation_intelligence import inference_worker, reporting_pipeline, reports
 from ac_platform.conversation_intelligence.checkpoints import (
     build_checkpoint,
     canonical,
@@ -136,7 +136,7 @@ def test_prepared_roles_bind_to_declared_revision_and_exact_snapshot(monkeypatch
         assert normalized.transcript_revision == transcript["revision"]
 
 
-@pytest.mark.parametrize("invalid", [None, "stale", "name", "unknown"])
+@pytest.mark.parametrize("invalid", [None, "stale", "name", "unknown", "budget"])
 def test_pipeline_replay_preserves_c2_c4_and_invalid_roles_fall_back(monkeypatch, caplog, invalid):
     monkeypatch.setattr(reports, "SPEAKER_ROLE_PROMPT_REVISIONS", frozenset({"coaching-v3"}))
     monkeypatch.setattr(
@@ -154,6 +154,15 @@ def test_pipeline_replay_preserves_c2_c4_and_invalid_roles_fall_back(monkeypatch
         roles["speakers"][0]["display_name"] = "Fictional Private Name"
     elif invalid == "unknown":
         roles["speakers"][0]["speaker_id"] = "missing"
+    elif invalid == "budget":
+        original_prepare = reporting_pipeline.prepare_coaching_input
+
+        def bounded_prepare(*args, **kwargs):
+            if kwargs.get("speaker_roles") is not None:
+                raise InferenceTaskError("report_prompt_budget_exceeded")
+            return original_prepare(*args, **kwargs)
+
+        monkeypatch.setattr(reporting_pipeline, "prepare_coaching_input", bounded_prepare)
     recording = SimpleNamespace(
         id=uuid4(), tenant_id=uuid4(), source_sha256=transcript["source_sha256"], source_revision=1
     )
@@ -202,7 +211,11 @@ def test_pipeline_replay_preserves_c2_c4_and_invalid_roles_fall_back(monkeypatch
         assert replay.prepared == plan.prepared and replay.checkpoint == plan.checkpoint
         assert plan.request.speaker_roles == (roles if invalid is None else None)
         if invalid is not None:
-            assert caplog.messages == ["speaker_roles_snapshot_invalid"]
+            assert caplog.messages == [
+                "speaker_roles_prompt_budget_exceeded"
+                if invalid == "budget"
+                else "speaker_roles_snapshot_invalid"
+            ]
             baseline = await pipeline.plan(
                 recording, request.model_copy(update={"speaker_roles": None})
             )

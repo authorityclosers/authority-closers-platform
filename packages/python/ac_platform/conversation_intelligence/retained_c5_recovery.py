@@ -161,6 +161,7 @@ def _rebuild_prepared_c5_input(
         coaching_prompt_revision=revision,
         report_language=language,
         qualitative_pack_sha256=pack_sha256,
+        speaker_roles=request.get("speaker_roles"),
     )
     saved_repair = request.get("repair")
     if saved_repair is not None:
@@ -999,6 +1000,8 @@ class RetainedC5RecoveryService:
                 bound.prepared,
                 bound.transcript,
                 profile=bound.profile,
+                coaching_prompt_revision=_coaching_prompt_revision(bound.intent["request"]),
+                speaker_roles=bound.intent["request"].get("speaker_roles"),
             ).data()
             validation_state = "corrected" if correction is not None else "revalidated"
             failure_code = None

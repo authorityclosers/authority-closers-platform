@@ -1019,9 +1019,16 @@ def test_processing_plan_finishes_after_last_audio_minute_with_zero_cost_provide
     run(exercise())
 
 
+@pytest.mark.parametrize("with_roles", [False, True])
 def test_processing_plan_acceptance_drives_c2_to_c6_with_exact_bindings(
-    postgres_harness: Any, tmp_path: Any
+    postgres_harness: Any, tmp_path: Any, monkeypatch: Any, with_roles: bool
 ) -> None:
+    if with_roles:
+        monkeypatch.setattr(
+            "ac_platform.conversation_intelligence.reports.SPEAKER_ROLE_PROMPT_REVISIONS",
+            frozenset({"coaching-v3"}),
+        )
+
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         try:
@@ -1060,6 +1067,21 @@ def test_processing_plan_acceptance_drives_c2_to_c6_with_exact_bindings(
                 assert [task.stage for task in tasks] == ["C2", "C4", "C5"]
                 assert tasks[0].input_sha256 == manifest["source_sha256"]
                 assert tasks[2].intent["request"]["profile"] == manifest["profile"]
+                if with_roles:
+                    assert (
+                        plan.speaker_roles is not None
+                        and plan.progress["speaker_roles_frozen"] is True
+                    )
+                    # This legacy Groq fixture is near its existing prompt cap;
+                    # optional roles fall back before dispatch, without a retry.
+                    assert "speaker_roles" not in tasks[2].intent["request"]
+                    assert plan.speaker_roles["transcript_revision"]
+                    assert b"display_name" not in canonical(plan.speaker_roles)
+                else:
+                    assert (
+                        plan.speaker_roles is None
+                        and "speaker_roles" not in tasks[2].intent["request"]
+                    )
                 assert all(task.state == "completed" for task in tasks)
                 checkpoints = list(
                     (

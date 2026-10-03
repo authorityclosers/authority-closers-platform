@@ -70,6 +70,7 @@ INACTIVE_PLAN_VALUES = "20261003_0068"
 BILLING_INVOICES = "20261003_0069"
 SPEAKER_MAPS = "20261003_0070"
 CALL_METRICS = "20261003_0071"
+SPEAKER_ROLES_FREEZE = "20261003_0072"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -120,9 +121,11 @@ HEADS = (
     BILLING_INVOICES,
     SPEAKER_MAPS,
     CALL_METRICS,
+    SPEAKER_ROLES_FREEZE,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
+    SPEAKER_ROLES_FREEZE,
     REVISION,
     MEDIA_LIBRARY,
     COURSE_CREATION,
@@ -373,6 +376,10 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         assert module.VERSIONED_PARITY_CONTRACTS[CALL_METRICS] == (
             "ac-postgres-parity-v43",
             module.SPEAKER_MAPS_PARITY_TABLES + NEW_TABLES[CALL_METRICS],
+        )
+        assert module.VERSIONED_PARITY_CONTRACTS[SPEAKER_ROLES_FREEZE] == (
+            module.CALL_METRICS_PARITY_CONTRACT,
+            module.CALL_METRICS_PARITY_TABLES,
         )
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
@@ -769,6 +776,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         125,
         126,
         127,
+        127,
     )
     expected_contracts = (
         None,
@@ -819,6 +827,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v40",
         "ac-postgres-parity-v41",
         "ac-postgres-parity-v42",
+        "ac-postgres-parity-v43",
         "ac-postgres-parity-v43",
     )
     for module in (backup, proof, drill):

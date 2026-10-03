@@ -38,6 +38,7 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
+from ac_platform.kernel.credential_files import is_private_to_process
 from ac_platform.kernel.errors import DomainError
 
 
@@ -58,7 +59,7 @@ def _challenge_secret(path: Path) -> SecretStr:
                 not stat.S_ISREG(info.st_mode)
                 or info.st_nlink != 1
                 or not 1 <= info.st_size <= 258
-                or (os.name != "nt" and info.st_mode & 0o077)
+                or not is_private_to_process(path, stream.fileno(), info)
             ):
                 raise ValueError
             raw = stream.read(259).rstrip(b"\r\n")

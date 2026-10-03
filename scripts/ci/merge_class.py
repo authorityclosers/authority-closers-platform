@@ -34,6 +34,47 @@ _PROTECTED_PREFIXES = (
     "scripts/ops/",
     "scripts/data-changes/",
 )
+# Identity, authentication, sessions, permissions/roles and organisation membership (AUT-932).
+_IDENTITY_PREFIXES = tuple(
+    f"packages/python/ac_platform/{name}/"
+    for name in ("identity", "authorization", "tenancy", "organisations", "bootstrap")
+)
+_IDENTITY_TERMS = (
+    "identit",
+    "authenticat",
+    "authoriz",
+    "authoris",
+    "oauth",
+    "session",
+    "login",
+    "logout",
+    "sign-in",
+    "sign_in",
+    "signup",
+    "sign-up",
+    "sign_up",
+    "signout",
+    "sign-out",
+    "sign_out",
+    "password",
+    "credential",
+    "csrf",
+    "permission",
+    "capabilit",
+    "organisation",
+    "organization",
+    "membership",
+    "tenant",
+    "tenancy",
+    "invit",
+    "ownership",
+    "security",
+)
+# Short terms match whole words only, so "author" and "authority" (the brand) stay ordinary.
+_IDENTITY_WORDS = {
+    "auth", "authn", "authz", "signin", "sso", "jwt", "acl", "acls", "rbac", "role", "roles",
+    "grant", "grants", "access", "member", "members", "cookie", "cookies",
+}  # fmt: skip
 
 
 def _valid_path(path: object) -> bool:
@@ -45,6 +86,15 @@ def _valid_path(path: object) -> bool:
         and not any(ord(char) < 32 or ord(char) == 127 for char in path)
         and all(part not in {"", ".", ".."} for part in path.split("/"))
     )
+
+
+def _identity(path: str, lower: str) -> bool:
+    split = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "-", path).casefold()  # SignIn -> sign-in
+    if lower.startswith(_IDENTITY_PREFIXES):
+        return True
+    if any(term in lower or term in split for term in _IDENTITY_TERMS):
+        return True
+    return not _IDENTITY_WORDS.isdisjoint(re.split(r"[^a-z0-9]+", split))
 
 
 def _path_reasons(path: str) -> set[str]:
@@ -68,6 +118,8 @@ def _path_reasons(path: str) -> set[str]:
     if ".env" in lower or "secret" in lower or "infisical" in lower:
         reasons.add("protected:secrets")
     reasons.update(f"protected:name:{term}" for term in _TERMS if term in lower)
+    if _identity(path, lower):
+        reasons.add("protected:identity")
     if lower.startswith("db/migrations/"):
         reasons.add("protected:migration")
     if lower == "scripts/ci/merge_class.py":
