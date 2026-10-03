@@ -29,10 +29,16 @@ Verification (fictional, disposable loopback PostgreSQL only):
   skipped because the suite requires Root; these skips are not passing evidence.
 - Ruff format/check and mypy passed. PostgreSQL schema matches ORM metadata;
   SQLite registry builds in the model-registry tests.
+- CI fixture correction: all 7 profile unit tests pass after reproducing the
+  missing-table failure. Ruff format/check, mypy and Prettier also pass.
 
-Root must run the complete backup parity suite at the PR head. The dev migration
-preflight found head `20261003_0068`, so it applied no change: the merged billing
-migration `0069` must be installed before this task’s `0070`. Root owns that
-normal dev migration and metadata read-back. No staging/production state or
-customer call was used.
+CI runs the backup parity suite with the required privileges. The first CI run
+reported [1 failure, 2674 passes and 3 skips in shard 0](https://github.com/authorityclosers/authority-closers-platform/actions/runs/37114685438/job/111179082727).
+The profile-only SQLite fixture omitted the new speaker history table; it now
+creates and drops it alongside label history.
+The dev migration preflight found head `20261003_0068`, so it applied no change:
+the merged billing migration `0069` must precede this task’s `0070`. Root owns
+that normal dev migration and metadata read-back as a dev check, not a merge
+prerequisite (CTO direction of 3 Oct). No staging/production state or customer
+call was used.
 The API endpoints, model naming and report input remain later approved slices.
