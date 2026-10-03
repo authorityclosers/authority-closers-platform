@@ -38,3 +38,16 @@ but uses actual checkpoint hashes, preparation, intent replay and result binding
 The existing PostgreSQL suite covers normal durable dispatch. This dormant slice
 adds no visible call behavior. Dev web returns 302, readiness/OpenAPI return 200;
 running OpenAPI still omits speaker-map, so live S3 behavior remains unverified.
+
+CI fixture correction:
+
+- [Initial CI](https://github.com/authorityclosers/authority-closers-platform/actions/runs/37144291981)
+  at `fc799291` failed
+  `test_inference_worker_stages.py::test_c5_validation_passes_plan_transcript_and_profile`:
+  its `SimpleNamespace` plan omitted `request`. The failure reproduced locally.
+- The existing C5 validation fixture now carries a real `StageRequest`, matching
+  the worker's required prompt revision and frozen-role binding. No production
+  behavior or validator source pin changed for this correction.
+- Worker-stage and speaker-role dispatch suites: **25 passed**. These overlap
+  the earlier dispatch coverage and are not added to the original 333 checks.
+- Ruff format/check and mypy passed after the fixture correction.
