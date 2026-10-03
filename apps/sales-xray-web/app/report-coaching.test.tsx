@@ -106,7 +106,9 @@ it("reveals Keep doing, Change first, Next call and Next-call plan when Coach me
   // Coaching content is now visible
   expect(container.querySelector("[data-coaching-content]")).not.toBeNull();
   expect(container.querySelector('[data-coaching-card="keep"]')).not.toBeNull();
-  expect(container.querySelector('[data-coaching-card="change"]')).not.toBeNull();
+  expect(
+    container.querySelector('[data-coaching-card="change"]'),
+  ).not.toBeNull();
   expect(container.querySelector('[data-coaching-card="next"]')).not.toBeNull();
 
   expect(container.textContent).toContain("Strong opening question");

@@ -44,11 +44,11 @@ import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { ReportModes } from "./report-modes";
 import { CallContext } from "./call-context";
-import { CallSignals, clearPromisesDone } from "./call-signals";
-import { OverviewHook } from "./overview-hook";
+import { clearPromisesDone } from "./call-signals";
+import { DipakOverview, ReportAnalysis } from "./dipak-overview";
+import { ReportCoaching } from "./report-coaching";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
-import { NextCallPlan } from "./next-call-plan";
 import { ProspectSnapshot } from "./prospect-snapshot";
 import {
   ReportTranscript,
@@ -88,7 +88,6 @@ import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
 import { CallMap, CallMapMini } from "./call-map";
 import { KeyFacts } from "./key-facts";
-import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
@@ -3446,88 +3445,15 @@ export function AcquisitionStudio({
                       id: "overview",
                       label: "Overview",
                       content: (
-                        <>
-                          <OverviewHook
-                            report={report}
-                            transcript={result.transcript}
-                            callId={submission?.id ?? null}
-                            onSeek={playFrom}
-                            onUnlock={() => router.push("/login")}
-                          />
-                        </>
-                      ),
-                    },
-                    {
-                      id: "moments",
-                      label: "Moments",
-                      content: (
-                        <ReportMoments
+                        <DipakOverview
+                          showHeading={false}
                           report={report}
-                          callId={submission?.id ?? null}
                           transcript={result.transcript}
+                          callId={submission?.id ?? null}
+                          durationMs={result.transcript.duration_ms}
                           onSelectEvidence={seek}
                           onSelectContextualPlayback={seekWithContext}
                           onUnlock={() => router.push("/login")}
-                        />
-                      ),
-                    },
-                    {
-                      id: "prospect",
-                      label: "Prospect",
-                      content: (
-                        <>
-                          <KeyFacts
-                            callId={submission?.id ?? null}
-                            transcript={result.transcript}
-                            report={report}
-                            durationMs={result.transcript.duration_ms}
-                            onSeek={playFrom}
-                          />
-                          <ProspectSnapshot
-                            report={report}
-                            callId={submission?.id ?? null}
-                            transcript={result.transcript}
-                            onSelectEvidence={seek}
-                            onUnlock={() => router.push("/login")}
-                          />
-                        </>
-                      ),
-                    },
-                    {
-                      id: "next-call-plan",
-                      label: "Next-call plan",
-                      compactLabel: "Next-call",
-                      content: (
-                        <NextCallPlan
-                          report={report}
-                          callId={submission?.id ?? null}
-                          transcript={result.transcript}
-                          onSelectEvidence={seek}
-                          onUnlock={() => router.push("/login")}
-                        />
-                      ),
-                    },
-                    {
-                      id: "skills",
-                      label: "Sales skills",
-                      compactLabel: "Skills",
-                      content: (
-                        <SalesSkills
-                          dimensions={report.dimensions}
-                          callId={submission?.id ?? null}
-                          transcript={result.transcript}
-                          onSelectEvidence={seek}
-                        />
-                      ),
-                    },
-                    {
-                      id: "signals",
-                      label: "Call signals",
-                      content: (
-                        <CallSignals
-                          callId={submission?.id ?? null}
-                          transcript={result.transcript}
-                          onSeek={playFrom}
                         />
                       ),
                     },
@@ -3551,16 +3477,69 @@ export function AcquisitionStudio({
                       ),
                     },
                     {
-                      id: "raw-data",
-                      label: "Raw data",
+                      id: "moments",
+                      label: "Moments",
                       content: (
-                        <ReportRawData
+                        <ReportMoments
+                          report={report}
                           callId={submission?.id ?? null}
                           transcript={result.transcript}
+                          onSelectEvidence={seek}
+                          onSelectContextualPlayback={seekWithContext}
+                          onUnlock={() => router.push("/login")}
+                        />
+                      ),
+                    },
+                    {
+                      id: "analysis",
+                      label: "Analysis",
+                      content: (
+                        <>
+                          <ReportAnalysis
+                            showHeading={false}
+                            report={report}
+                            transcript={result.transcript}
+                            callId={submission?.id ?? null}
+                            durationMs={result.transcript.duration_ms}
+                            onSelectEvidence={seek}
+                            onSelectContextualPlayback={seekWithContext}
+                            onUnlock={() => router.push("/login")}
+                            onSeek={playFrom}
+                          />
+                          <SalesSkills
+                            dimensions={report.dimensions}
+                            callId={submission?.id ?? null}
+                            transcript={result.transcript}
+                            onSelectEvidence={seek}
+                          />
+                          <KeyFacts
+                            callId={submission?.id ?? null}
+                            transcript={result.transcript}
+                            report={report}
+                            durationMs={result.transcript.duration_ms}
+                            onSeek={playFrom}
+                          />
+                          <ProspectSnapshot
+                            report={report}
+                            callId={submission?.id ?? null}
+                            transcript={result.transcript}
+                            onSelectEvidence={seek}
+                            onUnlock={() => router.push("/login")}
+                          />
+                        </>
+                      ),
+                    },
+                    {
+                      id: "coaching",
+                      label: "Coaching",
+                      content: (
+                        <ReportCoaching
                           report={report}
+                          transcript={result.transcript}
+                          callId={submission?.id ?? null}
                           durationMs={result.transcript.duration_ms}
-                          runId={result.runId}
-                          onSeek={playFrom}
+                          onSelectEvidence={seek}
+                          onUnlock={() => router.push("/login")}
                         />
                       ),
                     },

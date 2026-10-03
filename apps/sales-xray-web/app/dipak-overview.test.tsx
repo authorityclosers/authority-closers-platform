@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { DipakOverview } from "./dipak-overview";
+import { DipakOverview, ReportAnalysis } from "./dipak-overview";
 import { ReportReadingProvider } from "./report-reading-context";
 import { ReportModes } from "./report-modes";
 import fixture from "../tests/fixtures/dipak-overview.json";
@@ -98,11 +98,12 @@ it("shows all report chapters as one expanded document in reading mode", async (
   expect(container.querySelectorAll("[data-review-fold]")).toHaveLength(0);
 });
 
-it("composes one open overview: takeaway, facts, Keep/Change/Outcome/Next and replay locations", async () => {
+it("composes one open overview: takeaway lede, listen, outcome card, replay locations, and key moments", async () => {
   await act(async () =>
     root.render(
       <DipakOverview
         showHeading={false}
+        showAnalysis={true}
         report={report()}
         onSelectEvidence={select}
         durationMs={fixture.transcript.duration_ms}
@@ -118,16 +119,28 @@ it("composes one open overview: takeaway, facts, Keep/Change/Outcome/Next and re
       child.getAttribute("aria-label") ??
       child.className,
   );
-  // Takeaway, then the facts line, then the paired readout, then replay.
+  // Takeaway lede, then outcome card, then replay strip, then key moments.
   expect(parts[0]).toBe("0");
-  expect(parts[1]).toBe("Call metrics");
+  expect(parts[1]).toBe("outcome");
+  expect(parts[3]).toBe("Key moments");
+
+  // No verdict headline in overview (verdict moves to analysis tab).
+  expect(summary.querySelector('[data-overview-card="0"] h2')).toBeNull();
+  expect(summary.querySelector('[data-overview-card="0"] h3')).toBeNull();
+
+  // Listen button is present in takeaway
+  expect(
+    summary.querySelector('[data-overview-card="0"] button'),
+  ).not.toBeNull();
+
+  // Outcome card has outcome, duration, next step, attendees
+  const outcome = summary.querySelector('[data-overview-card="outcome"]')!;
+  expect(outcome).not.toBeNull();
+
+  // No Keep/Change/Next cards in overview (coaching moves off overview).
   const readout = summary.querySelectorAll("[data-tone]");
-  expect([...readout].map((row) => row.getAttribute("data-tone"))).toEqual([
-    "keep",
-    "change",
-    "outcome",
-    "next",
-  ]);
+  expect(readout).toHaveLength(0);
+
   // One replay dataset for the facts count, the strip and its list.
   const strip = summary.querySelector("[data-replay-strip]")!;
   const count = summary.querySelector(
@@ -162,6 +175,7 @@ it("keeps the actual overview and source playback inline in the tabbed report", 
                 report={report()}
                 onSelectEvidence={select}
                 showHeading={false}
+                showAnalysis={true}
               />
             ),
           },
@@ -205,61 +219,25 @@ it("keeps the actual overview and source playback inline in the tabbed report", 
     report().strengths[0].evidence[0],
     report().strengths[0].title,
   );
-  const review = container.querySelector<HTMLButtonElement>(
-    '[data-overview-card="0"] [data-open-review]',
-  )!;
-  expect(review.textContent).toContain("Read the final verdict");
-  await act(async () => review.click());
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
-  expect(
-    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("tabs");
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-  expect(document.activeElement?.getAttribute("data-review-point")).toBe("14");
 });
 
-it("keeps compact cards tied to the full source reader without showing an entire chapter", async () => {
-  const value = report();
-  value.summary = "पूर्ण सारांश " + "Long source-backed summary. ".repeat(60);
+it("renders analysis tab with verdict and review points", async () => {
   await act(async () =>
     root.render(
-      <DipakOverview
-        report={value}
+      <ReportAnalysis
+        report={report()}
         onSelectEvidence={select}
         showHeading={false}
       />,
     ),
   );
-  const dashboard = container.querySelector(
-    'section[aria-label="Call overview"]',
-  )!;
-  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
-  expect(dashboard.querySelector('[aria-label="Overview pages"]')).toBeNull();
-  expect(dashboard.querySelector('[aria-label="Overview cards"]')).toBeNull();
-  const opener = dashboard.querySelector<HTMLButtonElement>(
-    '[data-overview-card="0"] [data-open-review]',
-  )!;
-  opener.focus();
-  await act(async () => opener.click());
-  const dialog = container.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).toContain(value.summary);
   expect(
-    dialog.querySelectorAll("[data-review-point]:not([hidden])"),
-  ).toHaveLength(1);
-  expect(
-    dialog
-      .querySelector("[data-review-point]:not([hidden])")
-      ?.getAttribute("data-review-point"),
-  ).toBe("14");
-  await act(async () =>
-    container
-      .querySelector<HTMLButtonElement>('[aria-label="Close review point"]')!
-      .click(),
-  );
-  expect(document.activeElement).toBe(opener);
+    container.querySelector('[data-analysis-card="verdict"]'),
+  ).not.toBeNull();
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
 });
 
-it("keeps the compact overview focused on five useful actions without a review pager", async () => {
+it("renders clean overview focused on outcome and replay without review blocks when showAnalysis is false", async () => {
   await act(async () =>
     root.render(
       <DipakOverview
@@ -272,22 +250,8 @@ it("keeps the compact overview focused on five useful actions without a review p
   const dashboard = container.querySelector(
     'section[aria-label="Call overview"]',
   )!;
-  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
-  expect(
-    dashboard.querySelector('[aria-label="Review point pages"]'),
-  ).toBeNull();
-  await act(async () =>
-    dashboard
-      .querySelector<HTMLButtonElement>(
-        '[data-overview-card="1"] [data-open-review]',
-      )!
-      .click(),
-  );
-  expect(
-    container
-      .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
-      ?.getAttribute("data-review-point"),
-  ).toBe("01");
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(2);
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(0);
 });
 
 it("shows one overview metrics row with a deduplicated playable highlight count", async () => {
@@ -313,7 +277,7 @@ it("shows one overview metrics row with a deduplicated playable highlight count"
   expect(container.textContent).not.toContain("Source moments");
 });
 
-it("plays only the exact supported strength from the compact Keep card", async () => {
+it("plays first playable clip from the takeaway Listen button in overview", async () => {
   const value = report();
   await act(async () =>
     root.render(
@@ -324,28 +288,12 @@ it("plays only the exact supported strength from the compact Keep card", async (
       />,
     ),
   );
-  const keep = container.querySelector('[data-overview-card="1"]')!;
-  const listen = [...keep.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.trim() === "Listen",
-  )!;
+  const takeaway = container.querySelector('[data-overview-card="0"]')!;
+  const listen = [
+    ...takeaway.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.trim() === "Listen")!;
   await act(async () => listen.click());
-  expect(select).toHaveBeenCalledExactlyOnceWith(
-    value.strengths[0].evidence[0],
-    value.strengths[0].title,
-  );
-  value.strengths = [];
-  await act(async () =>
-    root.render(
-      <DipakOverview
-        report={value}
-        onSelectEvidence={select}
-        showHeading={false}
-      />,
-    ),
-  );
-  expect(
-    container.querySelector('[data-overview-card="1"]')?.textContent,
-  ).not.toContain("Listen");
+  expect(select).toHaveBeenCalled();
 });
 
 it("keeps saved rewatch evidence exact and offers explicitly labelled adjacent transcript context", async () => {

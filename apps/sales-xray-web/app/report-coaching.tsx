@@ -108,6 +108,7 @@ export function ReportCoaching({
             <article
               className={styles.summaryRow}
               data-coaching-card="keep"
+              data-overview-card="1"
               data-tone="keep"
             >
               <p className={styles.rowLabel}>
@@ -133,6 +134,7 @@ export function ReportCoaching({
             <article
               className={styles.summaryRow}
               data-coaching-card="change"
+              data-overview-card="2"
               data-tone="change"
             >
               <p className={styles.rowLabel}>
@@ -149,8 +151,8 @@ export function ReportCoaching({
                       {primaryDetail.replacement_behavior}
                     </>
                   ) : (
-                    primary?.explanation ??
-                    "This report has no supported improvement to show yet."
+                    (primary?.explanation ??
+                    "This report has no supported improvement to show yet.")
                   )}
                 </p>
                 {primary && primary.evidence[0] && (
@@ -165,6 +167,7 @@ export function ReportCoaching({
             <article
               className={styles.summaryRow}
               data-coaching-card="next"
+              data-overview-card="4"
               data-tone="next"
             >
               <p className={styles.rowLabel}>
