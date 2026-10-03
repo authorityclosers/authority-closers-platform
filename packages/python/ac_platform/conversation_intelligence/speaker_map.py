@@ -366,7 +366,7 @@ def resolve_speaker_map(
 
 def project_speaker_roles(speaker_map: dict[str, Any]) -> dict[str, Any]:
     """Names-free snapshot; mixed/unresolved attribution never gains authority."""
-    rows = speaker_map["speakers"]
+    rows = [row for row in speaker_map["speakers"] if row["speaker_id"] != "unattributed"]
     sources = {row["role_source"] for row in rows}
     origin = "unverified_provider_labels"
     if rows and None not in sources:

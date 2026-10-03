@@ -91,3 +91,24 @@ JS
 Observed result: `PASS: 49 fictional cases match shipped web names, account matches,
 and transcript-only suggestions.` Full CI is evaluated on the PR. Server storage,
 endpoint/browser journeys and model/channel runtime validation are later slices.
+
+## CTO review round 1 correction — 3 October
+
+The CTO reproduced a provenance downgrade on `f35acbe` when an otherwise fully
+confirmed/channel-mapped transcript also contained an `unattributed` segment.
+`project_speaker_roles` now excludes that label when selecting provenance, while
+the displayed map retains its unresolved row and the names-free snapshot omits it.
+Real unresolved speaker labels still prevent authoritative provenance.
+
+The two new fictional regression cases failed before the fix (`predicted` instead
+of `confirmed`/`channel`) and pass after it. They cover user-confirmed and saved-channel
+origins, snapshot omission, unchanged inputs, and the real-unresolved-speaker guard.
+Latest verification supersedes the initial focused-suite count above:
+
+- `uv run pytest tests/unit/conversation_intelligence/test_speaker_map.py -q`: 60 passed.
+- `uv run ruff format --check packages/python tests`: 904 files formatted.
+- `uv run ruff check packages/python tests`: passed.
+- `uv run mypy packages/python`: 381 source files passed.
+- `ac-gate check`: this existing task branch may be worked on.
+
+Only the provenance filter, regression tests and this evidence addendum changed.

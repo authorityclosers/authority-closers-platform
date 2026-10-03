@@ -80,6 +80,55 @@ def test_evidence_retains_native_time_in_projected_c2() -> None:
     assert transcript == before
 
 
+@pytest.mark.parametrize(
+    ("source_key", "extra", "status", "origin"),
+    [
+        ("user_revision", {"revision": 1}, "confirmed", "user_confirmed_roles"),
+        ("saved_channel", {"saved_you_side": 0}, "channel", "channel_mapped_roles"),
+    ],
+)
+def test_unattributed_segment_preserves_confirmed_or_channel_origin(
+    source_key: str, extra: dict[str, int], status: str, origin: str
+) -> None:
+    transcript = deepcopy(CASES[0]["transcript"])
+    transcript["segments"].append(
+        {
+            "id": "seg-3",
+            "speaker_id": "unattributed",
+            "start_ms": 3000,
+            "end_ms": 3900,
+            "text": "Unattributed background words.",
+        }
+    )
+    source = {
+        "transcript_revision": transcript["revision"],
+        "speakers": [{"speaker_id": "s0", "role": "you"}, {"speaker_id": "s1", "role": "prospect"}],
+        **extra,
+    }
+    before = deepcopy((transcript, source))
+    result = resolve_speaker_map(
+        transcript, account_holder_name="Suyash Rao", **{source_key: source}
+    )
+    assert result["status"] == status
+    snapshot = project_speaker_roles(result)
+    assert snapshot["origin"] == origin
+    assert snapshot["speakers"] == [
+        {"speaker_id": "s0", "role": "seller", "is_account_holder": True},
+        {"speaker_id": "s1", "role": "prospect", "is_account_holder": False},
+    ]
+    assert result["speakers"][-1]["role"] is None
+    assert result["speakers"][-1]["role_source"] is None
+    assert (transcript, source) == before
+    # A real unresolved speaker still prevents authoritative attribution.
+    transcript["segments"].append(
+        {"id": "seg-4", "speaker_id": "s2", "start_ms": 4000, "end_ms": 4900, "text": "Hello."}
+    )
+    unresolved = resolve_speaker_map(
+        transcript, account_holder_name="Suyash Rao", **{source_key: source}
+    )
+    assert project_speaker_roles(unresolved)["origin"] == "unverified_provider_labels"
+
+
 @pytest.mark.parametrize("stale_source", ["user_revision", "model_revision"])
 def test_stale_sources_are_ignored(stale_source: str) -> None:
     transcript = CASES[0]["transcript"]
