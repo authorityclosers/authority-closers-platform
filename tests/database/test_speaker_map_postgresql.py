@@ -149,13 +149,27 @@ def test_claimed_owner_roles_freeze_across_sessions_and_new_plan_uses_latest(
                     == first
                 )
                 # An independent plan's unfrozen state observes the new choice.
-                fresh = ConversationProcessingPlan(speaker_roles=None, progress={})
+                fresh = ConversationProcessingPlan(
+                    speaker_roles=None,
+                    progress={},
+                    processing_lease_id=submission.processing_lease_id,
+                )
                 latest = await service._speaker_roles_for_c5(
                     fresh, recording, TRANSCRIPT, "coaching-v3"
                 )
                 assert latest["origin"] == "user_confirmed_roles"
                 assert latest["speakers"][1]["is_account_holder"] is True
                 assert row.speaker_roles == first
+                # A plan for a different submission lease cannot consume this
+                # submission's higher user revision, even on the same recording.
+                other = ConversationProcessingPlan(
+                    speaker_roles=None, progress={}, processing_lease_id=uuid4()
+                )
+                unrelated = await service._speaker_roles_for_c5(
+                    other, recording, TRANSCRIPT, "coaching-v3"
+                )
+                assert unrelated["origin"] == "text_predicted_roles"
+                assert unrelated["speakers"][0]["is_account_holder"] is True
                 fallback = ConversationProcessingPlan(
                     **{
                         column.name: getattr(row, column.name)
