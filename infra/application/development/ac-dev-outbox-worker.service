@@ -1,0 +1,37 @@
+[Unit]
+Description=Development outbox worker (sign-in and verification email)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=10001
+Group=10001
+WorkingDirectory=/srv/authority-closers/development/backend
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+TemporaryFileSystem=/tmp:size=64M,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev /var/tmp:ro
+TemporaryFileSystem=/srv/authority-closers:ro /run/ac-sales-xray:ro /etc/authority-closers:ro
+BindReadOnlyPaths=/srv/authority-closers/development/backend
+InaccessiblePaths=-/etc/ac-release -/var/lib/ac-release -/var/log/ac-release -/run/ac-release.lock
+InaccessiblePaths=-/run/docker.sock -/run/containerd -/var/lib/docker -/var/lib/containerd
+InaccessiblePaths=/proc
+SystemCallFilter=~@debug process_vm_readv process_vm_writev
+MemoryMax=384M
+CPUQuota=50%
+Nice=10
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=10s
+TasksMax=64
+EnvironmentFile=/etc/authority-closers/development/outbox.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ExecStart=/srv/authority-closers/development/backend/.venv/bin/python -m ac_platform.worker
+
+[Install]
+WantedBy=multi-user.target

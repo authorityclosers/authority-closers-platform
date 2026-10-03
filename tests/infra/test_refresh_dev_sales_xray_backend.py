@@ -40,6 +40,17 @@ def git(*args: str, cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
+UNIT_ORDER = (
+    "ac-dev-api.service",
+    "ac-dev-sales-xray-worker.service",
+    "ac-dev-outbox-worker.service",
+)
+
+
+def restarts(fake):
+    return [args[2] for args, _ in fake.calls if args[:2] == ["systemctl", "restart"]]
+
+
 class FakeCommands:
     def __init__(self, web_sha: str):
         self.web_sha = web_sha
@@ -231,6 +242,14 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
         if args[0] == "curl"
     )
     assert "secret" not in output and "postgresql://" not in output
+    # All three units restart only after the migration, in a fixed order.
+    assert restarts(fake) == list(UNIT_ORDER)
+    migrate_at = next(i for i, (args, _) in enumerate(fake.calls) if args[0] == "setpriv")
+    first_restart = next(
+        i for i, (args, _) in enumerate(fake.calls) if args[:2] == ["systemctl", "restart"]
+    )
+    assert migrate_at < first_restart
+    assert json.loads(output)["restarted"] == list(UNIT_ORDER)
     calls = len(fake.calls)
     noop = refresh.refresh(paths, fake, uid=0)
     assert noop["noop"]
@@ -359,6 +378,8 @@ def test_restart_failure_restores_checkout_marker_and_dropins(tree, capsys):
     assert "secret" not in captured.out + captured.err
     result = json.loads(captured.out.splitlines()[-1])
     assert result["error"] == "command_failed" and result["restarted"] == "rollback_attempted"
+    # The failed API restart stops the forward pass; rollback restarts all three units.
+    assert restarts(failed) == ["ac-dev-api.service", *UNIT_ORDER]
 
 
 def test_health_timeout_rolls_back_checkout_and_release_state(tree, capsys, monkeypatch):
