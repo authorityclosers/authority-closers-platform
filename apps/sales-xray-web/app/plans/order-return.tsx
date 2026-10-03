@@ -14,6 +14,7 @@ import {
 import type { Allowance, Order } from "../billing/contract";
 import { count, day, formatMoney, minutes } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
+import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
 
 const POLL_MS = 3_000;
@@ -219,6 +220,10 @@ function OrderReturnState({
             aria-hidden="true"
           />
           <h2>Payment confirmed</h2>
+          <AnimatedCountUp
+            targetMinutes={order.minutes}
+            targetCredits={Math.round(order.minutes / 10)}
+          />
           <dl className={styles.rows}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
