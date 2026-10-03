@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.sensitive_segment_models import (
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
+from tests.database.test_conversation_postgresql import _migration_head
 
 NOW = datetime(2026, 10, 2, 12, tzinfo=UTC)
 MIGRATION = (
@@ -276,7 +277,9 @@ def test_postgresql_rejects_reason_refs_outside_the_pattern(
 
 def test_postgresql_head_knows_the_content_safety_capability(postgres: Engine) -> None:
     with postgres.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_0067"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
+        )
         definition = connection.scalar(
             text(
                 "SELECT pg_get_constraintdef(oid) FROM pg_constraint "

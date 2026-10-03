@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_v
 from ac_platform.application.settings import Settings
 from ac_platform.billing.commands import BillingCommands, Caller, CheckoutCommand
 from ac_platform.billing.errors import BillingIdempotencyKeyRequired, BillingValidationFailed
+from ac_platform.billing.tax import TaxMode
 from ac_platform.billing.views import (
     AccountName,
     CancelState,
@@ -84,6 +85,16 @@ class MoneyResponse(BaseModel):
     gst_inclusive: bool
 
 
+class TaxResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    mode: TaxMode
+    rate_basis_points: int
+    taxable_minor: int
+    gst_minor: int
+    total_minor: int
+
+
 class RefundResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
@@ -102,6 +113,7 @@ class OrderResponse(BaseModel):
     status: OrderStatus
     mode: Mode
     amount: MoneyResponse
+    tax: TaxResponse
     plan_key: str
     plan_name: str
     interval: Interval | None

@@ -6,14 +6,15 @@ from datetime import datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
@@ -48,10 +49,54 @@ class MembersResponse(BaseModel):
     members: list[MemberResponse]
 
 
+class MemberActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    person_id: UUID
+    calls: int
+    minutes: float
+    reports_ready: int
+    last_call_at: datetime | None
+
+
+class ActivityCallResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: UUID
+    owner_person_id: UUID
+    owner_name: str
+    label: str | None
+    created_at: datetime
+    duration_seconds: int
+    state: str
+    has_report: bool
+
+
+class ActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    members: list[MemberActivityResponse]
+    calls: list[ActivityCallResponse]
+
+
 class AddMemberRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     email: str
     role: Literal["admin", "member"]
+
+
+class ChangeRoleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Literal["admin", "member"]
+
+
+class TransferOwnerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    # A JSON body carries the identifier as a string.
+    person_id: UUID = Field(strict=False)
+
+
+class OwnerTransferResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    owner: MemberResponse
+    former_owner: MemberResponse
 
 
 def install_organisation_http(
@@ -141,6 +186,19 @@ def install_organisation_http(
         }
         return MembersResponse.model_validate_json(json.dumps(rows))
 
+    @router.get("/activity", response_model=ActivityResponse)
+    async def activity(
+        days: Annotated[int, Query(ge=1, le=90)] = 30,
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> ActivityResponse:
+        rows = await organisation_activity(
+            auth.database,
+            auth.resolved.actor,
+            days=days,
+            every_member=auth.resolved.membership_role != "member",
+        )
+        return ActivityResponse.model_validate_json(json.dumps(rows))
+
     def service(auth: AuthenticatedTransaction) -> OrganisationService:
         if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
             raise DomainError("Organisation tenant boundaries are not configured.")
@@ -179,5 +237,51 @@ def install_organisation_http(
             key,
             actor_person_id=auth.resolved.actor.person_id,
         )
+
+    @router.patch("/members/{person_id}", response_model=MemberResponse)
+    async def change_role(
+        person_id: UUID,
+        body: ChangeRoleRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> MemberResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).change_member_role(
+            auth.resolved.actor.tenant_id,
+            person_id,
+            body.role,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return MemberResponse.model_validate_json(json.dumps(result))
+
+    @router.delete("/members/{person_id}", status_code=204)
+    async def remove(
+        person_id: UUID,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> None:
+        assert auth.resolved.actor.tenant_id is not None
+        await service(auth).remove_member(
+            auth.resolved.actor.tenant_id,
+            person_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+
+    @router.post("/owner", response_model=OwnerTransferResponse)
+    async def transfer_owner(
+        body: TransferOwnerRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> OwnerTransferResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).transfer_ownership(
+            auth.resolved.actor.tenant_id,
+            body.person_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return OwnerTransferResponse.model_validate_json(json.dumps(result))
 
     application.include_router(router)

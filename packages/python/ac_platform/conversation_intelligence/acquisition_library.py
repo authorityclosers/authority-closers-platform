@@ -108,9 +108,13 @@ async def earlier_report_submission_id(
 
 
 def _account_library_query(
-    actor: ActorContext, now: datetime | None = None
+    actor: ActorContext, now: datetime | None = None, *, every_owner: bool = False
 ) -> Select[tuple[ConversationAcquisitionUsage]]:
-    """Share the library scope; omit availability only for immutable cursor lookup."""
+    """Share the library scope; omit availability only for immutable cursor lookup.
+
+    ``every_owner`` widens the person filter to every account-owned call in the
+    actor's tenant; the caller must already hold organisation-wide authority.
+    """
     usage, claim = ConversationAcquisitionUsage, ConversationVisitorClaim
     link, recording = ConversationGuestSubmission, ConversationRecording
     permission = ConversationPermission
@@ -148,7 +152,9 @@ def _account_library_query(
         )
         .where(
             usage.tenant_id == actor.tenant_id,
-            _submission_owner_filter(usage, claim, person_id=actor.person_id, visitor_id=None),
+            func.coalesce(usage.person_id, claim.person_id).is_not(None)
+            if every_owner
+            else _submission_owner_filter(usage, claim, person_id=actor.person_id, visitor_id=None),
             ~recording_is_canary(),
         )
     )
@@ -235,12 +241,8 @@ async def account_library(
     }
 
 
-async def account_library_summary(
-    ownership: GuestOwnership, actor: ActorContext, *, shared_identity_locks: bool = False
-) -> dict[str, int]:
-    """Count all visible submissions in one statement, skipping per-row report re-validation."""
-    now = await ownership.sessions._admit()
-    await ownership.sessions._owner(None, actor, now, shared_identity_locks=shared_identity_locks)
+def _report_columns() -> tuple[Any, Any]:
+    """Per-row report presence and latest plan state for the library scope."""
     recording, link = ConversationRecording, ConversationGuestSubmission
     draft, retained, plan = (
         ConversationReportDraft,
@@ -282,6 +284,16 @@ async def account_library_summary(
         .correlate(recording, link)
         .scalar_subquery()
     )
+    return has_report, latest_plan
+
+
+async def account_library_summary(
+    ownership: GuestOwnership, actor: ActorContext, *, shared_identity_locks: bool = False
+) -> dict[str, int]:
+    """Count all visible submissions in one statement, skipping per-row report re-validation."""
+    now = await ownership.sessions._admit()
+    await ownership.sessions._owner(None, actor, now, shared_identity_locks=shared_identity_locks)
+    has_report, latest_plan = _report_columns()
     rows = (
         _account_library_query(actor, now)
         .with_only_columns(

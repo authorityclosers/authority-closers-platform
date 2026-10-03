@@ -31,6 +31,8 @@ from pathlib import Path
 
 PREFIXES = ("apps/sales-xray-web/app/", "apps/sales-xray-web/public/")
 FIXTURES = "apps/sales-xray-web/tests/fixtures/"
+# next dev rewrites this on every start; it is neither committed nor alerted on.
+GENERATED = {"apps/sales-xray-web/next-env.d.ts"}
 LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 STUDIO = "task/ui/296-studio-"
 CHECKPOINT = "refs/tags/studio-checkpoint/"
@@ -145,7 +147,7 @@ class Sync:
         changed = self.git("diff", "--name-only", "--no-renames", "-z", "HEAD")
         staged = self.git("diff", "--cached", "--name-only", "--no-renames", "-z")
         untracked = self.git("ls-files", "--others", "--exclude-standard", "-z")
-        paths = sorted(set((changed + staged + untracked).split("\0")) - {""})
+        paths = sorted(set((changed + staged + untracked).split("\0")) - {""} - GENERATED)
         if any(not self.allowed(p) for p in paths):
             self.event("alert", "outside-allowlist", "Non-screen edits remain uncommitted.")
         return [p for p in paths if self.allowed(p)]

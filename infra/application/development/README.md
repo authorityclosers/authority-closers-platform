@@ -129,3 +129,50 @@ merge failure raises an alert but leaves the refreshed backend in place. If the
 target contains `scripts/ops/ac_smoke.py`, the script runs the development smoke
 against that core and the merged UI checkout; otherwise it reports `skipped`.
 Smoke failures are reported without rolling back the backend.
+
+## Fixture accounts
+
+`python -m ac_platform.development.sales_xray_fixture_accounts` creates three
+fictional password accounts on the dev DB for signing in to salesxray-dev:
+`sx-owner@example.test`, `sx-admin@example.test` and `sx-member@example.test`.
+The addresses are fixed. Each account goes through the app's password
+registration and one-use verification with no email sent, and gets only the
+Personal learner membership and the current consent version. It gets no
+platform role and no organisation; Root adds the organisation with the AUT-438
+CLI. A rerun authenticates each existing account and changes nothing; a wrong
+password or a changed account refuses without writing. No other person is
+read or changed.
+
+It refuses unless `--acknowledge-development-fixtures` is given,
+`AC_ENVIRONMENT=development`, and `AC_DATABASE_URL` is exactly
+`postgresql+psycopg` on host `172.27.0.2`, port `5432`, database `ac_platform`
+(the dev Postgres container's bridge address, AUT-119), with no query string
+and no `PG*` variables set. If that container is recreated with another
+address, change `DEVELOPMENT_DATABASE` in the module and this section together.
+
+Passwords come only from `AC_DEV_FIXTURE_PASSWORD_OWNER`, `_ADMIN` and
+`_MEMBER` (12 to 256 characters), stored in Infisical `dev` at
+`/sales-xray/dev-fixture-accounts`. They never appear in arguments or output;
+the output is JSON of emails and person ids. Root runs it as uid 10001 with
+`api.env`; `--setenv=NAME` without a value copies that variable from
+`infisical run` into the unit:
+
+```sh
+sudo AC_INFISICAL_ENVIRONMENT=dev AC_INFISICAL_PATH=/sales-xray/dev-fixture-accounts \
+  /usr/local/sbin/ac-infisical-run -- \
+  systemd-run --pipe --wait --collect --quiet --uid=10001 --gid=10001 \
+    --working-directory=/srv/authority-closers/development/backend \
+    --property=EnvironmentFile=/etc/authority-closers/development/api.env \
+    --property=MemoryMax=256M --property=CPUQuota=50% --property=Nice=10 \
+    --property=TasksMax=32 \
+    --setenv=AC_DEV_FIXTURE_PASSWORD_OWNER \
+    --setenv=AC_DEV_FIXTURE_PASSWORD_ADMIN \
+    --setenv=AC_DEV_FIXTURE_PASSWORD_MEMBER \
+    --setenv=PYTHONDONTWRITEBYTECODE=1 \
+    /srv/authority-closers/development/backend/.venv/bin/python \
+    -m ac_platform.development.sales_xray_fixture_accounts \
+    --acknowledge-development-fixtures
+```
+
+Done check: exit 0 and three `accounts` entries; a second run prints the same
+person ids. Then sign in on salesxray-dev with each password.

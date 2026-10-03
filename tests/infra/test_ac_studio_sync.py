@@ -456,6 +456,16 @@ def test_main_stray_preserves_screen_checkpoint_and_staged_stray(repo):
     assert repo.git("ls-remote", "--tags", "origin")
 
 
+def test_next_dev_rewrite_of_next_env_is_neither_committed_nor_alerted(repo):
+    repo.write("apps/sales-xray-web/next-env.d.ts", 'import "./.next/dev/types/routes.d.ts";')
+    repo.write(APP + "page.tsx", "screen")
+    repo.branch()
+    repo.tick(True)
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "screen"
+    assert "next-env.d.ts" not in repo.git("ls-tree", "-r", "--name-only", "HEAD")
+    assert not repo.events("alert")
+
+
 def test_interrupted_replay_refuses_without_losing_archived_edits(repo):
     repo.write(APP + "page.tsx", "archived")
     original = repo.runner
