@@ -37,3 +37,14 @@ capacity, actor ids, reasons and references; it holds no name, email, card or
 bank detail, and `source_ref` carries only our own order, period or audit
 identifiers. Use is not stored here; it stays in the Sales Xray acquisition
 reservation and settlement tables.
+
+## Tax invoices and credit notes (ADR 0053, migration 0069)
+
+| Field | Storage | Source | Purpose | Where shown | Retention | Erasure path |
+| --- | --- | --- | --- | --- | --- | --- |
+| Buyer name, optional GSTIN and state code | `billing_buyer_tax_details`, and frozen party snapshots in `billing_invoices.details` / `billing_credit_notes.details` | Optional checkout buyer input; omitted names use the existing person display name or organisation tenant name | Identify the buyer and allocate CGST/SGST versus IGST | Invoice reads/downloads in the separately scoped PR C, restricted to the personal holder or organisation owner/admin | Append-only financial/audit history; no new retention duration is inferred | Supersede with a new row; UPDATE/DELETE are refused. No purge is introduced |
+
+All four document tables are included in migration-bound backup/restore parity
+v41. Buyer names, GSTINs and state codes must not appear in audit payloads,
+logs, task comments or provider payloads. No new external processing or
+activation is authorised by storing these snapshots.

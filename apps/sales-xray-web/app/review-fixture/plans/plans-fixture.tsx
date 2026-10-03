@@ -2,9 +2,11 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { BillingView } from "../../billing/billing-view";
+import { useBillingAccount } from "../../billing/use-billing-account";
 
 import { OrderReturn } from "../../plans/order-return";
-import { PlansView } from "../../plans/plans-view";
+import { PlansPurchase } from "../../plans/plans-purchase";
 import plansStyles from "../../plans/plans.module.css";
 import { WorkspaceAccessProvider } from "../../workspace-access";
 import {
@@ -44,18 +46,36 @@ function Banner() {
       >
         Start again
       </button>
+      {" · "}
+      <button
+        type="button"
+        className={plansStyles.copy}
+        onClick={() => router.push("/review-fixture/plans?view=billing")}
+      >
+        Manage billing
+      </button>
     </p>
   );
 }
 
 /** The plans screens on the fictional billing server. */
 export function PlansFixture() {
+  const params = useSearchParams();
   return (
     <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
       <Banner />
-      <PlansView client={fixtureBilling} />
+      {params.get("view") === "billing" ? (
+        <FixtureBilling />
+      ) : (
+        <PlansPurchase client={fixtureBilling} />
+      )}
     </WorkspaceAccessProvider>
   );
+}
+
+function FixtureBilling() {
+  const billing = useBillingAccount(true, fixtureBilling);
+  return <BillingView {...billing} />;
 }
 
 /** A stand-in for the payment partner's page: it only reports an outcome. */

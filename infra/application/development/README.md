@@ -13,6 +13,16 @@ The Root specialist installs the reviewed units from
 Keep the admin-web alias `api.development.ac.internal.invalid:8000` working at
 cutover (AUT-285); these units do not change networking or Caddy.
 
+Host identity: systemd cannot start `User=10001` without an NSS entry (status
+217/USER). `scripts/install-dev-runtime-identity.py` (dry-run by default,
+`--apply`, `--rollback --apply`) adds the locked, home-less system account
+`ac-sales-xray-runtime` (uid 10001) whose only group is the existing
+`ac-sales-xray-native` (gid 10001) primary group. It adds no supplementary group
+(never `acops`), leaves the native group's member list empty, and its rollback
+removes only that account, never the group or any file. The refresh refuses with
+`runtime_identity_missing`/`runtime_identity_invalid` before any change unless
+exactly this identity exists.
+
 Expected host paths:
 
 - `/srv/authority-closers/development/backend`: root-owned checkout and `.venv`
@@ -114,14 +124,32 @@ descriptor. It requires `AC_ENVIRONMENT=development` and
 `AC_DATABASE_MIGRATOR_URL` in the root-only
 `/etc/authority-closers/development/migrator.env`. It refuses if the API
 environment file contains either the migrator URL or `AC_RELEASE_ID`.
-It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
-renders `service.json` from the root-owned development template, writes the
-release marker and API/worker drop-ins, restarts the API, Sales Xray worker and
-outbox worker units in that order, then
-polls `/health/ready` for up to 60 seconds. The refresh passes only when the API
-reports the target release and its database is ready. Failures during this
-refresh restore the previous checkout, marker, manifest and drop-ins before
-restarting all three units.
+The migrator file may hold only those two keys.
+It syncs the frozen production dependencies, then runs Alembic as uid/gid 10001
+in the transient unit `ac-dev-sales-xray-migrate.service` (`systemd-run --wait`)
+with the API unit's sandbox: `/srv/authority-closers` stays root:acops 2750 and
+is masked by a read-only tmpfs, with only the backend bound back read-only, so
+the step needs no traversal right or group. systemd reads `migrator.env` itself
+(`EnvironmentFile=`); the URL never enters argv, this process or the checkout.
+The smoke step uses the same sandbox (`ac-dev-sales-xray-smoke.service`).
+The refresh then renders `service.json` from the root-owned development
+template, writes the release marker and API/worker drop-ins, restarts the API, Sales Xray
+worker and outbox worker units in that order, then polls `/health/ready` for up to 60 seconds. The refresh
+passes only when the API reports the target release and its database is ready.
+
+On failure it prints one JSON line with stable fields only: `phase` (`clone`,
+`fetch`, `checkout`, `dependencies`, `migration`, `activation`, `restart`,
+`health`), `error` (for example `migration_failed`, `api_restart_failed`),
+`exit_status`, `previous`, `migrated`, `units_before` and `rollback`
+(`ok`, `failed` steps, final unit states). Command output and URLs are never
+printed. With a previous checkout, rollback restores the checkout, marker,
+manifest and drop-ins and restarts only the units that were running before.
+On a first install (`previous: null`) it stops all three units first, then removes
+the new checkout and any files and directories it created, restores
+`service.json` to its saved bytes, and leaves all three units stopped with their
+failed state cleared, so nothing restart-loops. If a unit cannot be stopped, the
+checkout is kept and the result is `rollback_failed`. Rollback never touches the
+database, storage or credential files; a completed migration stays applied.
 
 After backend health passes, the service runs the acdev-owned studio sync and
 merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio
@@ -176,3 +204,107 @@ sudo AC_INFISICAL_ENVIRONMENT=dev AC_INFISICAL_PATH=/sales-xray/dev-fixture-acco
 
 Done check: exit 0 and three `accounts` entries; a second run prints the same
 person ids. Then sign in on salesxray-dev with each password.
+
+## Admin dev image (AUT-970)
+
+Admin dev (`admin-dev.authorityclosers.com`, loopback edge `127.0.0.1:3017`)
+runs the `admin-web` service of the root-owned dev compose project `acdev-xray`
+(`/srv/authority-closers/development/compose.yaml`, AUT-285).
+`scripts/deploy-dev-admin-web.py` points that one service at the admin-web image
+of a core release the release engine already stored and loaded for staging. It
+never builds, pulls, retags or edits a container, and leaves `compose.yaml`,
+every other service, staging and production alone.
+
+Preflight (all before any change): the release is on `main` in
+`/var/lib/ac-release/mirror.git`; each `--require-ancestor` merge is in it; its
+stored `releases/<sha>` passes `RELEASE-FILES.sha256` and names it in
+`AC_RELEASE_ID`; the local tag `…/authority-closers-admin-web:<sha>` exists,
+carries `org.opencontainers.image.revision=<sha>` and is the same image as the
+release's `AC_ADMIN_IMAGE`; Compose accepts the candidate override. The default
+release is the `current-staging` core.
+
+Apply writes `compose.admin-web-release.yaml` (`image:` the tag,
+`pull_policy: never`) and runs `docker compose -p acdev-xray -f compose.yaml -f
+compose.admin-web-release.yaml up --detach --no-deps --no-build --pull never
+--force-recreate admin-web`. It passes only when the container is healthy on
+that image and revision and the edge returns `/` → 307 `/login` and `/login` →
+200; otherwise it restores the previous override and image. It records
+`/var/lib/ac-dev-admin-web/history.jsonl` and the root-owned 0644 receipt
+`deployed.json` (host, image, revision, verified merges) that the QA launcher
+pins. Every later Compose command for `acdev-xray` must pass both files, or
+Compose reverts admin-web; `status` reports that drift as `receipt_matches:
+false`.
+
+Root, from the released tree (`R=/srv/authority-closers/application/current-staging`):
+
+```sh
+S="$R/scripts/deploy-dev-admin-web.py"; M=1daeb17431a83a1330e9ec5f2362c29d3bb39c30
+sudo python3 "$S" status --require-ancestor "$M"          # read-only revision proof
+sudo python3 "$S" deploy --require-ancestor "$M"          # dry-run: preflight and plan
+sudo python3 "$S" deploy --require-ancestor "$M" --apply  # serve the staging release
+sudo python3 "$S" status --require-ancestor "$M"          # expect contains[M]=true, receipt_matches
+sudo python3 "$S" rollback                                # plan; add --apply to restore
+```
+
+## Admin dev QA browser credential (AUT-970)
+
+Browser QA signs a fictional identity into Admin dev without seeing its
+password. Declared reference (names only; the fixture task under AUT-959
+creates the account and the secret, not this code):
+
+| Identity | Account | Infisical `dev` folder | Secret name |
+| --- | --- | --- | --- |
+| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` |
+
+- `scripts/dev-qa-credential.py`, installed root:root 0750 as
+  `/usr/local/sbin/ac-dev-qa-credential`, is the only root step. It reuses
+  `/usr/local/sbin/ac-infisical-run` with `dev` and the identity's folder; a root
+  inner process writes only the one named value to a pipe. It refuses unless
+  called through sudo by a non-root user, from the installed launcher, with
+  stdout a pipe and an allowlisted identity. The bootstrap, `INFISICAL_TOKEN`,
+  the folder's other secrets and every API/DB credential stay in root.
+- `development/qa-admin-browser.py`, installed root:root 0755 as
+  `/usr/local/libexec/ac-dev-qa/qa-admin-browser.py`, runs as QA. Preflight:
+  non-root, allowlisted `@example.test` identity, origin exactly
+  `https://admin-dev.authorityclosers.com`, a root-owned receipt containing the
+  identity's required merge (AUT-890 for `billing-staff`), edge `/login` 200,
+  `/v1/me` 401 through the edge and the dev API ready. It then runs a fresh
+  sentinel through the same pipe into the real `/login` form, requires the API
+  to refuse it, and checks that the sentinel is absent from browser
+  argv/environments, profile files and its own output. Only then does it fetch
+  the password into a buffer, type it over the DevTools pipe, zero the buffer
+  and require `/v1/me` to return the named account. The browser reaches the
+  https origin through an in-process TLS bridge to the edge, trusted by the
+  ephemeral key's SPKI pin, so the real Host, Origin and `__Host-` cookies
+  apply. It uses Playwright's Chromium with `--no-sandbox`, as Playwright does on
+  this host (unprivileged user namespaces are off).
+- Limits: all agents share the `acdev` user, so the caller checks guard against
+  mistakes, not a hostile same-user process; the DevTools port (loopback) gives
+  any `acdev` process the signed-in session, never the password, until the hold
+  ends and the profile is deleted.
+
+Root install, once per reviewed release:
+
+```sh
+install -d -o root -g root -m 0755 /usr/local/libexec/ac-dev-qa
+install -o root -g root -m 0755 "$R/development/qa-admin-browser.py" /usr/local/libexec/ac-dev-qa/qa-admin-browser.py
+install -o root -g root -m 0750 "$R/scripts/dev-qa-credential.py" /usr/local/sbin/ac-dev-qa-credential
+cat > /etc/sudoers.d/ac-dev-qa-credential.new <<'SUDO'
+Defaults!/usr/local/sbin/ac-dev-qa-credential !use_pty
+acdev ALL=(root) NOPASSWD: /usr/local/sbin/ac-dev-qa-credential billing-staff, /usr/local/sbin/ac-dev-qa-credential billing-staff --sentinel
+SUDO
+visudo -cf /etc/sudoers.d/ac-dev-qa-credential.new && chmod 0440 /etc/sudoers.d/ac-dev-qa-credential.new \
+  && mv /etc/sudoers.d/ac-dev-qa-credential.new /etc/sudoers.d/ac-dev-qa-credential
+```
+
+Rollback: remove those three files. QA invocation (non-root):
+
+```sh
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff --sentinel-only  # transport proof only
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff                  # sign in and hand off
+```
+
+Output is JSON lines with no value. The `handoff` line gives `devtools`
+(`http://127.0.0.1:<port>`) for Playwright `chromium.connectOverCDP`; the browser
+stays up for `--hold-seconds` (default 3600) or until Ctrl-C/SIGTERM, then the
+profile is deleted. A `refused` line names the failed check.

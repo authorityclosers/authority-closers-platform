@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import fcntl
+import grp
 import hashlib
 import importlib.util
 import json
@@ -37,6 +39,8 @@ WORKER_DROPIN = Path("/etc/systemd/system/ac-dev-sales-xray-worker.service.d/man
 API_UNIT = "ac-dev-api.service"
 WORKER_UNIT = "ac-dev-sales-xray-worker.service"
 OUTBOX_UNIT = "ac-dev-outbox-worker.service"
+# Every dev unit that runs code from the backend checkout, in start order.
+DEV_UNITS = (API_UNIT, WORKER_UNIT, OUTBOX_UNIT)
 STUDIO = Path("/home/acdev/src/lanes/ui/authority-closers-platform")
 STUDIO_LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 SAFE_PATH = "/usr/local/bin:/usr/bin:/bin"
@@ -51,11 +55,53 @@ TRAIN_NOTIFIER = Path("/opt/ac-release/current/ac_train_notify.py")
 HEALTH_WAIT_SECONDS = 60
 HEALTH_POLL_SECONDS = 2
 HEALTH_REQUEST_TIMEOUT = 3
+# Settings.internal_api_host: the default and AC_INTERNAL_API_HOST are both allowed hosts.
+DEFAULT_INTERNAL_API_HOST = "localhost"
+PROBE_HOST = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
+RUNTIME_UID = 10001
+RUNTIME_GID = 10001
+RUNTIME_USER = "ac-sales-xray-runtime"
+RUNTIME_GROUP = "ac-sales-xray-native"
+MIGRATE_UNIT = "ac-dev-sales-xray-migrate.service"
+SMOKE_UNIT = "ac-dev-sales-xray-smoke.service"
+RUNNING_STATES = ("active", "activating", "reloading", "deactivating")
+UNIT_STATES = (*RUNNING_STATES, "inactive", "failed")
+# The development API/worker filesystem view. The shared /srv/authority-closers
+# ancestor stays root:acops 2750; uid 10001 sees only the read-only backend bind,
+# so it needs no traversal right, group grant or root execution.
+SANDBOX_PROPERTIES = (
+    f"User={RUNTIME_UID}",
+    f"Group={RUNTIME_GID}",
+    "ProtectSystem=strict",
+    "ProtectHome=yes",
+    "PrivateDevices=yes",
+    "NoNewPrivileges=yes",
+    "CapabilityBoundingSet=",
+    "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+    "UMask=0077",
+    "TemporaryFileSystem=/tmp:size=64M,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev"
+    " /var/tmp:ro",
+    "TemporaryFileSystem=/srv/authority-closers:ro /run/ac-sales-xray:ro /etc/authority-closers:ro",
+    "InaccessiblePaths=-/etc/ac-release -/var/lib/ac-release -/var/log/ac-release"
+    " -/run/ac-release.lock",
+    "InaccessiblePaths=-/run/docker.sock -/run/containerd -/var/lib/docker -/var/lib/containerd",
+    "InaccessiblePaths=/proc",
+    "SystemCallFilter=~@debug process_vm_readv process_vm_writev",
+    "MemoryMax=768M",
+    "CPUQuota=100%",
+    "TasksMax=64",
+    "Nice=10",
+    "IOSchedulingClass=idle",
+    "StandardInput=null",
+    "StandardOutput=null",
+    "StandardError=journal",
+)
 
 
 class RefreshError(Exception):
-    def __init__(self, code: str):
+    def __init__(self, code: str, exit_status: int | None = None):
         self.code = code
+        self.exit_status = exit_status
         super().__init__(code)
 
 
@@ -98,11 +144,80 @@ def command(
         raise RefreshError("command_failed") from None
 
 
-def call(runner, argv: list[str], **kwargs) -> subprocess.CompletedProcess[bytes]:
-    result = runner(argv, **kwargs)
+def call(
+    runner, argv: list[str], *, code: str = "command_failed", **kwargs
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        result = runner(argv, **kwargs)
+    except RefreshError:
+        raise RefreshError(code) from None
     if result.returncode:
-        raise RefreshError("command_failed")
+        raise RefreshError(code, result.returncode)
     return result
+
+
+def runtime_identity() -> None:
+    """Admit only the reviewed passwd/group pair for uid/gid 10001.
+
+    systemd cannot start ``User=10001`` without an NSS entry (status 217/USER).
+    """
+    try:
+        user = pwd.getpwuid(RUNTIME_UID)
+        group = grp.getgrgid(RUNTIME_GID)
+    except KeyError:
+        raise RefreshError("runtime_identity_missing") from None
+    if (
+        user.pw_name != RUNTIME_USER
+        or user.pw_gid != RUNTIME_GID
+        or group.gr_name != RUNTIME_GROUP
+        or group.gr_mem
+        or os.getgrouplist(user.pw_name, RUNTIME_GID) != [RUNTIME_GID]
+    ):
+        raise RefreshError("runtime_identity_invalid")
+
+
+def sandboxed(
+    paths: Paths,
+    unit: str,
+    argv: list[str],
+    *,
+    environment: tuple[str, ...],
+    environment_file: Path | None = None,
+    runtime: int,
+) -> list[str]:
+    """Wrap one uid-10001 step in a transient unit with the dev unit sandbox.
+
+    systemd (root) reads ``environment_file`` itself, so no secret reaches argv,
+    the checkout or this process; the step's output never reaches this process.
+    """
+    properties = [
+        *SANDBOX_PROPERTIES,
+        f"WorkingDirectory={paths.backend}",
+        f"BindReadOnlyPaths={paths.backend}",
+        f"RuntimeMaxSec={runtime}",
+        "Environment=" + " ".join(environment),
+    ]
+    if environment_file is not None:
+        properties.append(f"EnvironmentFile={environment_file}")
+    wrapped = ["systemd-run", "--wait", "--collect", "--quiet", "--service-type=exec"]
+    wrapped.append(f"--unit={unit}")
+    for item in properties:
+        wrapped.extend(["--property", item])
+    return [*wrapped, "--", *argv]
+
+
+def unit_states(runner) -> dict[str, str]:
+    states = {}
+    for unit in DEV_UNITS:
+        try:
+            result = runner(["systemctl", "is-active", unit], timeout=30)
+            value = result.stdout.decode().strip()
+        except (RefreshError, OSError, subprocess.SubprocessError, UnicodeDecodeError):
+            value = ""
+        if value not in UNIT_STATES:
+            raise RefreshError("unit_state_unavailable")
+        states[unit] = value
+    return states
 
 
 def git(
@@ -310,7 +425,7 @@ def env_values(path: Path) -> dict[str, str]:
     return values
 
 
-def migration_environment(paths: Paths) -> dict[str, str]:
+def migration_environment(paths: Paths) -> None:
     api_values = env_values(paths.development / "api.env")
     if "AC_DATABASE_MIGRATOR_URL" in api_values:
         raise RefreshError("migrator_url_in_api_env")
@@ -330,16 +445,21 @@ def migration_environment(paths: Paths) -> dict[str, str]:
     values = env_values(paths.migrator_env)
     if values.get("AC_ENVIRONMENT") != "development":
         raise RefreshError("development_environment_required")
-    url = values.get("AC_DATABASE_MIGRATOR_URL", "")
-    if not url:
+    if not values.get("AC_DATABASE_MIGRATOR_URL", ""):
         raise RefreshError("migrator_url_missing")
-    return {
-        "AC_ENVIRONMENT": "development",
-        "AC_DATABASE_MIGRATOR_URL": url,
-        "PATH": SAFE_PATH,
-        "HOME": "/",
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
+    # systemd loads this file into the migration step; nothing else may ride along.
+    if set(values) != {"AC_ENVIRONMENT", "AC_DATABASE_MIGRATOR_URL"}:
+        raise RefreshError("migrator_env_keys_invalid")
+
+
+def probe_host(paths: Paths) -> str:
+    """Return the Host the API's TrustedHostMiddleware accepts for the loopback probe."""
+    host = env_values(paths.development / "api.env").get(
+        "AC_INTERNAL_API_HOST", DEFAULT_INTERNAL_API_HOST
+    )
+    if not PROBE_HOST.fullmatch(host) or ".." in host:
+        raise RefreshError("probe_host_invalid")
+    return host
 
 
 def render_manifest(paths: Paths, target: str) -> tuple[bytes, str]:
@@ -370,14 +490,17 @@ def atomic_write(path: Path, raw: bytes, mode: int) -> None:
     os.replace(temporary, path)
 
 
-def restore_file(path: Path, value: tuple[bytes, int] | None) -> None:
+def restore_file(path: Path, value: tuple[bytes, int] | None, parent_existed: bool = True) -> None:
     if value is None:
         path.unlink(missing_ok=True)
+        if not parent_existed:
+            with contextlib.suppress(OSError):
+                path.parent.rmdir()
     else:
         atomic_write(path, value[0], value[1])
 
 
-def health(runner, target: str) -> dict[str, Any]:
+def health(runner, target: str, host: str) -> dict[str, Any]:
     deadline = time.monotonic() + HEALTH_WAIT_SECONDS
     max_attempts = max(1, HEALTH_WAIT_SECONDS // HEALTH_POLL_SECONDS + 1)
     release = None
@@ -389,6 +512,8 @@ def health(runner, target: str) -> dict[str, Any]:
                     "--silent",
                     "--show-error",
                     "--fail",
+                    "--header",
+                    f"Host: {host}",
                     "http://127.0.0.1:8100/health/ready",
                 ],
                 timeout=HEALTH_REQUEST_TIMEOUT,
@@ -408,55 +533,106 @@ def health(runner, target: str) -> dict[str, Any]:
 
 
 def restart(runner) -> None:
-    call(runner, ["systemctl", "daemon-reload"], timeout=30)
-    call(runner, ["systemctl", "restart", API_UNIT], timeout=120)
-    call(runner, ["systemctl", "restart", WORKER_UNIT], timeout=120)
-    call(runner, ["systemctl", "restart", OUTBOX_UNIT], timeout=120)
+    call(runner, ["systemctl", "daemon-reload"], code="daemon_reload_failed", timeout=30)
+    call(runner, ["systemctl", "restart", API_UNIT], code="api_restart_failed", timeout=120)
+    call(runner, ["systemctl", "restart", WORKER_UNIT], code="worker_restart_failed", timeout=120)
+    call(runner, ["systemctl", "restart", OUTBOX_UNIT], code="outbox_restart_failed", timeout=120)
 
 
-def rollback(paths: Paths, runner, previous, marker, api, worker, service) -> bool:
-    actions = []
-    if previous:
-        actions.extend(
-            [
-                lambda: call(
-                    runner,
-                    ["git", "-C", str(paths.backend), "checkout", "--detach", previous],
-                    timeout=60,
-                ),
-                lambda: call(
-                    runner,
-                    ["uv", "sync", "--frozen", "--no-dev", "--no-build"],
-                    cwd=paths.backend,
-                    env=UV_ENV,
-                    timeout=900,
-                ),
-                lambda: restore_file(paths.backend / ".ac-release-id", marker),
-            ]
-        )
-    else:
+def stop_unit(runner, unit: str) -> None:
+    # The worker drains for up to 16 minutes (TimeoutStopSec).
+    call(runner, ["systemctl", "stop", unit], code="stop_failed", timeout=1020)
+    # Clear a failed state so nothing reports or retries a stale start.
+    runner(["systemctl", "reset-failed", unit], timeout=30)
 
-        def remove_new_checkout():
-            shutil.rmtree(paths.backend, ignore_errors=True)
-            if paths.backend.exists():
-                raise RefreshError("rollback_failed")
 
-        actions.append(remove_new_checkout)
-    actions.extend(
-        [
-            lambda: restore_file(paths.api_dropin, api),
-            lambda: restore_file(paths.worker_dropin, worker),
-            lambda: restore_file(paths.development / "service.json", service),
-            lambda: restart(runner),
-        ]
-    )
-    success = True
-    for action in actions:
+@dataclass(frozen=True)
+class Saved:
+    """State captured before the first change, restored exactly on failure."""
+
+    previous: str | None
+    marker: tuple[bytes, int] | None
+    files: tuple[tuple[str, Path, tuple[bytes, int] | None, bool], ...]
+    backend_parent_existed: bool
+    units: dict[str, str]
+
+
+def rollback(paths: Paths, runner, saved: Saved) -> dict[str, Any]:
+    """Return the host to ``saved``; never touch the database, storage or profiles.
+
+    A first install (no previous checkout) cannot run the units, so they are
+    stopped before the new checkout is removed and are left stopped. Otherwise a
+    unit is restarted on the restored checkout only if it was running before.
+    """
+    failed: list[str] = []
+    units: dict[str, str] = {}
+
+    def attempt(step: str, action) -> bool:
         try:
             action()
         except Exception:
-            success = False
-    return success
+            failed.append(step)
+            return False
+        return True
+
+    previous = saved.previous
+    if previous is None:
+        for unit in reversed(DEV_UNITS):
+            if attempt("stop:" + unit, lambda unit=unit: stop_unit(runner, unit)):
+                units[unit] = "stopped"
+        if len(units) == len(DEV_UNITS):
+
+            def remove_new_checkout():
+                shutil.rmtree(paths.backend, ignore_errors=True)
+                if paths.backend.exists():
+                    raise RefreshError("rollback_failed")
+                if not saved.backend_parent_existed:
+                    paths.backend.parent.rmdir()
+
+            attempt("remove_checkout", remove_new_checkout)
+        else:
+            # Never delete code that a unit we could not stop may still run.
+            failed.append("remove_checkout")
+    else:
+        restored = attempt(
+            "checkout",
+            lambda: call(
+                runner,
+                ["git", "-C", str(paths.backend), "checkout", "--detach", previous],
+                timeout=60,
+            ),
+        ) and attempt(
+            "dependencies",
+            lambda: call(
+                runner,
+                ["uv", "sync", "--frozen", "--no-dev", "--no-build"],
+                cwd=paths.backend,
+                env=UV_ENV,
+                timeout=900,
+            ),
+        )
+        if not restored:
+            failed.append("restore_checkout")
+        attempt("marker", lambda: restore_file(paths.backend / ".ac-release-id", saved.marker))
+    for name, path, value, parent_existed in saved.files:
+        attempt(
+            name, lambda path=path, value=value, ok=parent_existed: restore_file(path, value, ok)
+        )
+    attempt(
+        "daemon_reload",
+        lambda: call(runner, ["systemctl", "daemon-reload"], timeout=30),
+    )
+    if previous is not None:
+        for unit in DEV_UNITS:
+            if saved.units[unit] in RUNNING_STATES and "restore_checkout" not in failed:
+                if attempt(
+                    "restart:" + unit,
+                    lambda unit=unit: call(runner, ["systemctl", "restart", unit], timeout=120),
+                ):
+                    units[unit] = "restarted"
+            elif attempt("stop:" + unit, lambda unit=unit: stop_unit(runner, unit)):
+                units[unit] = "stopped"
+    return {"ok": not failed, "failed": failed, "units": units}
 
 
 def alert(paths: Paths, code: str, target: str) -> None:
@@ -592,29 +768,45 @@ def smoke(paths: Paths, runner, target: str, web: str) -> str:
     if not script.is_file():
         return "skipped"
     result = runner(
-        [
-            "setpriv",
-            "--reuid=10001",
-            "--regid=10001",
-            "--clear-groups",
-            str(paths.backend / ".venv/bin/python"),
-            str(script),
-            "development",
-            "--core",
-            target,
-            "--web",
-            web,
-        ],
-        cwd=paths.backend,
-        env={
-            "AC_ENVIRONMENT": "development",
-            "PATH": SAFE_PATH,
-            "HOME": "/",
-            "PYTHONDONTWRITEBYTECODE": "1",
-        },
+        sandboxed(
+            paths,
+            SMOKE_UNIT,
+            [
+                str(paths.backend / ".venv/bin/python"),
+                str(script),
+                "development",
+                "--core",
+                target,
+                "--web",
+                web,
+            ],
+            environment=(
+                "AC_ENVIRONMENT=development",
+                f"PATH={SAFE_PATH}",
+                "HOME=/",
+                "PYTHONDONTWRITEBYTECODE=1",
+            ),
+            runtime=1500,
+        ),
         timeout=1560,
     )
     return "pass" if result.returncode == 0 else "fail"
+
+
+def failure_report(
+    target: str, saved: Saved | None, phase: str, error: RefreshError, migrated: bool, **extra
+) -> dict[str, Any]:
+    """Stable codes only: no subprocess output, environment or URL."""
+    return {
+        "target": target,
+        "previous": saved.previous if saved else None,
+        "phase": phase,
+        "error": error.code,
+        "exit_status": error.exit_status,
+        "migrated": "yes" if migrated else "no",
+        "units_before": saved.units if saved else None,
+        **extra,
+    }
 
 
 def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str, Any]:
@@ -665,105 +857,124 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
                 raise RefreshError("backend_dirty")
         else:
             raise RefreshError("backend_invalid")
+    # Every admission check runs before the first host change.
+    runtime_identity()
     check_native(paths, runner, target)
     if shutil.which("uv", path=SAFE_PATH) is None:
         raise RefreshError("uv_missing")
-    migrate_env = migration_environment(paths)
+    if shutil.which("systemd-run", path=SAFE_PATH) is None:
+        raise RefreshError("systemd_run_missing")
+    migration_environment(paths)
+    host = probe_host(paths)
     manifest, digest = render_manifest(paths, target)
-    marker = snapshot(paths.backend / ".ac-release-id") if paths.backend.exists() else None
-    api = snapshot(paths.api_dropin)
-    worker = snapshot(paths.worker_dropin)
-    service = snapshot(paths.development / "service.json")
     existed = paths.backend.exists()
-    moved = False
+    service_json = paths.development / "service.json"
+    saved = Saved(
+        previous=previous,
+        marker=snapshot(paths.backend / ".ac-release-id") if existed else None,
+        files=tuple(
+            (name, path, snapshot(path), path.parent.exists())
+            for name, path in (
+                ("api_dropin", paths.api_dropin),
+                ("worker_dropin", paths.worker_dropin),
+                ("service_json", service_json),
+            )
+        ),
+        backend_parent_existed=paths.backend.parent.exists(),
+        units=unit_states(runner),
+    )
+    changed = not existed
     migrated = False
+    phase = "clone"
+    checked: dict[str, Any] = {"ok": False, "release_id": None}
     try:
         if not existed:
             paths.backend.parent.mkdir(parents=True, exist_ok=True)
             call(
                 runner,
                 ["git", "clone", "--quiet", "--no-checkout", str(paths.mirror), str(paths.backend)],
+                code="clone_failed",
                 timeout=120,
             )
-            call(
-                runner,
-                ["git", "-C", str(paths.backend), "fetch", "--quiet", str(paths.mirror), target],
-                timeout=120,
-            )
-        else:
-            call(
-                runner,
-                ["git", "-C", str(paths.backend), "fetch", "--quiet", str(paths.mirror), target],
-                timeout=120,
-            )
-        moved = True
+        phase = "fetch"
+        call(
+            runner,
+            ["git", "-C", str(paths.backend), "fetch", "--quiet", str(paths.mirror), target],
+            code="fetch_failed",
+            timeout=120,
+        )
+        changed = True
+        phase = "checkout"
         call(
             runner,
             ["git", "-C", str(paths.backend), "checkout", "--detach", target],
+            code="checkout_failed",
             timeout=60,
         )
+        phase = "dependencies"
         call(
             runner,
             ["uv", "sync", "--frozen", "--no-dev", "--no-build"],
+            code="dependency_sync_failed",
             cwd=paths.backend,
             env=UV_ENV,
             timeout=900,
         )
+        phase = "migration"
         call(
             runner,
-            [
-                "setpriv",
-                "--reuid=10001",
-                "--regid=10001",
-                "--clear-groups",
-                str(paths.backend / ".venv/bin/alembic"),
-                "upgrade",
-                "head",
-            ],
-            cwd=paths.backend,
-            env=migrate_env,
-            timeout=1800,
+            sandboxed(
+                paths,
+                MIGRATE_UNIT,
+                [str(paths.backend / ".venv/bin/alembic"), "upgrade", "head"],
+                environment=(f"PATH={SAFE_PATH}", "HOME=/", "PYTHONDONTWRITEBYTECODE=1"),
+                environment_file=paths.migrator_env,
+                runtime=1800,
+            ),
+            code="migration_failed",
+            env={"PATH": SAFE_PATH},
+            timeout=1860,
         )
         migrated = True
-        atomic_write(paths.backend / ".ac-release-id", (target + "\n").encode(), 0o644)
-        atomic_write(
-            paths.api_dropin, f"[Service]\nEnvironment=AC_RELEASE_ID={target}\n".encode(), 0o644
-        )
-        atomic_write(
-            paths.worker_dropin,
-            ("[Service]\nEnvironment=AC_DEV_WORKER_MANIFEST_SHA256=" + digest + "\n").encode(),
-            0o644,
-        )
-        # The rendered manifest is installed beside the service config for systemd credentials.
-        atomic_write(paths.development / "service.json", manifest, 0o600)
+        phase = "activation"
+        try:
+            atomic_write(paths.backend / ".ac-release-id", (target + "\n").encode(), 0o644)
+            atomic_write(
+                paths.api_dropin,
+                f"[Service]\nEnvironment=AC_RELEASE_ID={target}\n".encode(),
+                0o644,
+            )
+            atomic_write(
+                paths.worker_dropin,
+                ("[Service]\nEnvironment=AC_DEV_WORKER_MANIFEST_SHA256=" + digest + "\n").encode(),
+                0o644,
+            )
+            # The rendered manifest is installed beside the service config for systemd credentials.
+            atomic_write(service_json, manifest, 0o600)
+        except OSError:
+            raise RefreshError("activation_write_failed") from None
+        phase = "restart"
         restart(runner)
-        checked = health(runner, target)
+        phase = "health"
+        checked = health(runner, target, host)
         if not checked["ok"]:
             raise RefreshError("health_release_mismatch")
     except Exception as error:
-        rollback_ok = True
-        if moved:
-            rollback_ok = rollback(paths, runner, previous, marker, api, worker, service)
-        elif not existed:
-            shutil.rmtree(paths.backend, ignore_errors=True)
-            rollback_ok = not paths.backend.exists()
-        code = error.code if isinstance(error, RefreshError) else "refresh_failed"
-        if not rollback_ok:
-            code = "rollback_failed"
-        print(
-            json.dumps(
-                {
-                    "target": target,
-                    "previous": previous,
-                    "migrated": "yes" if migrated else "no",
-                    "restarted": "rollback_attempted",
-                    "health": {"ok": False, "release_id": None},
-                    "error": code,
-                },
-                sort_keys=True,
-            )
+        failure = error if isinstance(error, RefreshError) else RefreshError("refresh_failed")
+        restored = rollback(paths, runner, saved) if changed else {"ok": True, "failed": []}
+        report = failure_report(
+            target,
+            saved,
+            phase,
+            failure,
+            migrated,
+            restarted="rollback_attempted" if changed else [],
+            health=checked,
+            rollback=restored,
         )
-        raise RefreshError(code) from None
+        print(json.dumps(report, sort_keys=True))
+        code = failure.code if restored["ok"] else "rollback_failed"
+        raise RefreshError(code, failure.exit_status) from None
     ui_head = ""
     try:
         ui_head = studio_step(paths, runner, target)
@@ -772,7 +983,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
             "target": target,
             "previous": previous,
             "migrated": "yes" if migrated else "no",
-            "restarted": [API_UNIT, WORKER_UNIT, OUTBOX_UNIT],
+            "restarted": list(DEV_UNITS),
             "health": checked,
             "studio": error.code,
             "smoke": "skipped",
@@ -784,7 +995,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         "target": target,
         "previous": previous,
         "migrated": "yes",
-        "restarted": [API_UNIT, WORKER_UNIT, OUTBOX_UNIT],
+        "restarted": list(DEV_UNITS),
         "health": checked,
         "studio": "merged",
         "smoke": smoke_result,

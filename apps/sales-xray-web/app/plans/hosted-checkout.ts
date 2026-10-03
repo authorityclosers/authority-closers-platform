@@ -61,13 +61,20 @@ export async function openHostedCheckout(
     return "left";
   }
   if (hosted.kind === "client_sdk" && hosted.provider === "razorpay") {
+    if (
+      !hosted.params.key_id ||
+      (!hosted.params.order_ref && !hosted.params.subscription_ref)
+    )
+      throw new Error("provider_reference_missing");
     await loadScript(RAZORPAY_SDK);
     const Razorpay = (window as RazorpayWindow).Razorpay;
     if (!Razorpay) throw new Error("provider_script_failed");
     return new Promise<HostedResult>((resolve) => {
       const checkout = new Razorpay({
         key: hosted.params.key_id,
-        order_id: hosted.params.order_ref,
+        ...(hosted.params.subscription_ref
+          ? { subscription_id: hosted.params.subscription_ref }
+          : { order_id: hosted.params.order_ref }),
         name: hosted.params.name ?? "Authority Closers",
         description: hosted.params.description ?? "Sales Xray",
         notes: { order_id: orderId },

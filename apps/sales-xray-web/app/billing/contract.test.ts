@@ -56,6 +56,96 @@ const SUBSCRIPTION = {
 };
 
 describe("plans catalogue (GET /v1/plans)", () => {
+  it("parses the public coming-soon and active response from PR #206", () => {
+    // Exact public shapes from test_public_catalogue.py at b7168f2 (PR #206).
+    const response = {
+      plans: [
+        {
+          key: "personal",
+          name: "Personal",
+          audience: "For one salesperson",
+          status: "coming_soon",
+          prices: null,
+          included_minutes: 300,
+          seat_min: 1,
+          seat_max: 1,
+          per_seat: true,
+          longest_call_minutes: 90,
+          retention_days: 365,
+          rollover_months: 1,
+          feature_keys: ["sales_xray_reports"],
+          top_up_packs: [
+            {
+              key: "pack_small",
+              minutes: 60,
+              validity_rule: "billing_year_end",
+            },
+          ],
+          sort_order: 10,
+          revision: 3,
+        },
+        {
+          key: "organisation",
+          name: "Personal",
+          audience: "For one salesperson",
+          status: "active",
+          prices: {
+            monthly_paise: 99900,
+            yearly_paise: 999900,
+            monthly_cents: 1299,
+            yearly_cents: 12999,
+          },
+          included_minutes: 300,
+          seat_min: 1,
+          seat_max: 1,
+          per_seat: true,
+          longest_call_minutes: 90,
+          retention_days: 365,
+          rollover_months: 1,
+          feature_keys: ["sales_xray_reports"],
+          top_up_packs: [
+            {
+              key: "pack_small",
+              minutes: 60,
+              validity_rule: "billing_year_end",
+              price_paise: 49900,
+              price_cents: 599,
+            },
+          ],
+          sort_order: 20,
+          revision: 3,
+        },
+      ],
+    };
+    const [soon, active] = parsePlans(response);
+    expect(soon.perSeat).toBe(true);
+    expect(soon.prices).toBeNull();
+    expect(soon.topUpPacks[0]).toEqual({
+      key: "pack_small",
+      minutes: 60,
+      validityRule: "billing_year_end",
+      pricePaise: null,
+      priceCents: null,
+    });
+    expect(onSale(soon)).toBe(false);
+    expect(active.perSeat).toBe(true);
+    expect(active.prices).toEqual({
+      monthlyPaise: 99900,
+      yearlyPaise: 999900,
+      monthlyCents: 1299,
+      yearlyCents: 12999,
+    });
+    expect(active.topUpPacks[0].pricePaise).toBe(49900);
+    expect(active.topUpPacks[0].priceCents).toBe(599);
+    expect(onSale(active)).toBe(true);
+  });
+
+  it("defaults per-seat to false for a response without per_seat", () => {
+    const legacyPlan: Record<string, unknown> = { ...FIXTURE_PLANS.plans[0] };
+    delete legacyPlan.per_seat;
+    expect(parsePlans({ plans: [legacyPlan] })[0].perSeat).toBe(false);
+  });
+
   it("parses the approved catalogue shape, sorted, and knows what is on sale", () => {
     const plans = parsePlans(FIXTURE_PLANS);
     expect(plans.map((plan) => plan.key)).toEqual([
@@ -72,7 +162,12 @@ describe("plans catalogue (GET /v1/plans)", () => {
       priceCents: null,
     });
     expect(onSale(plans[0])).toBe(true);
-    expect(onSale(plans[2])).toBe(false);
+    expect(onSale(plans[2])).toBe(true);
+    expect(plans[0].perSeat).toBe(false);
+    expect(plans[1].perSeat).toBe(true);
+    expect(() =>
+      parsePlans({ plans: [{ ...FIXTURE_PLANS.plans[0], per_seat: "yes" }] }),
+    ).toThrow(ContractError);
   });
 
   it("treats a coming-soon plan with no prices as not on sale, and refuses unknown fields", () => {
@@ -212,6 +307,61 @@ describe("contract C1", () => {
       ContractError,
     );
     expect(() => parseOrder({ ...ORDER, price: 1 })).toThrow(ContractError);
+  });
+
+  it("accepts optional C1 tax, rejects invalid tax and accepts hosted steps without expiry", () => {
+    const tax = {
+      mode: "inclusive",
+      rate_basis_points: 1800,
+      taxable_minor: 211780,
+      gst_minor: 38120,
+      total_minor: 249900,
+    };
+    expect(parseOrder(ORDER).tax).toBeNull();
+    expect(parseOrder({ ...ORDER, tax }).tax).toEqual({
+      mode: "inclusive",
+      rateBasisPoints: 1800,
+      taxableMinor: 211780,
+      gstMinor: 38120,
+      totalMinor: 249900,
+    });
+    const exclusive = {
+      mode: "exclusive",
+      rate_basis_points: 1800,
+      taxable_minor: 2000000,
+      gst_minor: 360000,
+      total_minor: 2360000,
+    };
+    expect(
+      parseOrder({
+        ...ORDER,
+        amount: { ...ORDER.amount, minor: 2360000 },
+        tax: exclusive,
+      }).tax?.mode,
+    ).toBe("exclusive");
+    for (const invalid of [
+      { ...tax, mode: "unknown" },
+      { ...tax, extra: true },
+      { ...tax, gst_minor: -1 },
+      { ...tax, taxable_minor: 1.5 },
+      { ...tax, total_minor: 1 },
+      { ...tax, taxable_minor: 211781, total_minor: 249901 },
+    ])
+      expect(() => parseOrder({ ...ORDER, tax: invalid })).toThrow(
+        ContractError,
+      );
+    expect(
+      parseCheckout({
+        order: ORDER,
+        hosted: {
+          provider: "fake",
+          kind: "redirect",
+          url: "/return",
+          params: {},
+          expires_at: null,
+        },
+      }).hosted.expiresAt,
+    ).toBeNull();
   });
 
   it("parses subscriptions and the cancel-at-period-end state", () => {

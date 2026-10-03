@@ -150,6 +150,10 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "billing_subscription_events",
         "billing_periods",
         "billing_refund_events",
+        "billing_invoice_counters",
+        "billing_buyer_tax_details",
+        "billing_invoices",
+        "billing_credit_notes",
         "plans",
     }
 

@@ -35,6 +35,7 @@ import {
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
 import {
   TOP_UP_PACKS,
@@ -144,6 +145,7 @@ export function AccountSettings({
   const [editing, setEditing] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [section, setSection] = useState<SectionId>("general");
+  const liveBilling = useBillingAccount(!billing && section === "billing");
   const [stage, setStage] = useState<"list" | "pane">("list");
   const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
@@ -386,9 +388,26 @@ export function AccountSettings({
           onBack={back}
         >
           <PlanAndBillingPane
-            {...billing}
+            {...(billing ?? liveBilling)}
             active={section === "billing"}
-            allowance={allowance}
+            allowance={
+              billing || !liveBilling.usage
+                ? allowance
+                : {
+                    state: "ready",
+                    value: {
+                      allowance_seconds:
+                        liveBilling.usage.allowance.allowanceSeconds,
+                      committed_seconds:
+                        liveBilling.usage.allowance.committedSeconds,
+                      available_seconds:
+                        liveBilling.usage.allowance.availableSeconds,
+                      ...(liveBilling.usage.allowance.unlimited
+                        ? { unlimited: true as const }
+                        : {}),
+                    },
+                  }
+            }
             variant={variant}
             onRetry={retry}
           />
@@ -833,7 +852,7 @@ export function PlanAndBillingPane({
   onRetry,
   mePlan = null,
   subs = null,
-  documents = [],
+  documents,
   status = "error",
   busy = false,
   error,
@@ -1005,6 +1024,11 @@ export function PlanAndBillingPane({
             </button>
           )}
         </div>
+        {current?.renewalNeedsCustomerApproval ? (
+          <p className={styles.muted}>
+            Your bank will ask you to approve each renewal above ₹15,000.
+          </p>
+        ) : null}
       </div>
 
       <div className={styles.billingCard}>
@@ -1068,64 +1092,72 @@ export function PlanAndBillingPane({
         </div>
       </div>
 
-      <div className={styles.billingCard}>
-        <div className={styles.billingCardHead}>
-          <h3>Invoices &amp; Receipts</h3>
-        </div>
-        {loading ? (
-          <p className={styles.muted} role="status">
-            Loading invoices…
-          </p>
-        ) : status !== "ready" ? (
-          <p className={styles.muted}>
-            Invoices and receipts are currently unavailable.
-          </p>
-        ) : documents.length === 0 ? (
-          <p className={styles.muted}>No invoices or receipts yet.</p>
-        ) : (
-          <div className={styles.invoiceTableWrap}>
-            <table className={styles.invoiceTable}>
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Amount</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Documents</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((document) => (
-                  <tr key={document.id}>
-                    <td>{day(document.createdAt)}</td>
-                    <td>{document.description}</td>
-                    <td>{formatMoney(document.amount)}</td>
-                    <td>{document.status}</td>
-                    <td>
-                      {document.invoiceHref ? (
-                        <a href={document.invoiceHref} className={styles.muted}>
-                          Invoice
-                        </a>
-                      ) : null}
-                      {document.invoiceHref && document.receiptHref
-                        ? " · "
-                        : null}
-                      {document.receiptHref ? (
-                        <a href={document.receiptHref} className={styles.muted}>
-                          Receipt
-                        </a>
-                      ) : null}
-                      {!document.invoiceHref && !document.receiptHref
-                        ? "Unavailable"
-                        : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {documents ? (
+        <div className={styles.billingCard}>
+          <div className={styles.billingCardHead}>
+            <h3>Invoices &amp; Receipts</h3>
           </div>
-        )}
-      </div>
+          {loading ? (
+            <p className={styles.muted} role="status">
+              Loading invoices…
+            </p>
+          ) : status !== "ready" ? (
+            <p className={styles.muted}>
+              Invoices and receipts are currently unavailable.
+            </p>
+          ) : documents.length === 0 ? (
+            <p className={styles.muted}>No invoices or receipts yet.</p>
+          ) : (
+            <div className={styles.invoiceTableWrap}>
+              <table className={styles.invoiceTable}>
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Amount</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Documents</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((document) => (
+                    <tr key={document.id}>
+                      <td>{day(document.createdAt)}</td>
+                      <td>{document.description}</td>
+                      <td>{formatMoney(document.amount)}</td>
+                      <td>{document.status}</td>
+                      <td>
+                        {document.invoiceHref ? (
+                          <a
+                            href={document.invoiceHref}
+                            className={styles.muted}
+                          >
+                            Invoice
+                          </a>
+                        ) : null}
+                        {document.invoiceHref && document.receiptHref
+                          ? " · "
+                          : null}
+                        {document.receiptHref ? (
+                          <a
+                            href={document.receiptHref}
+                            className={styles.muted}
+                          >
+                            Receipt
+                          </a>
+                        ) : null}
+                        {!document.invoiceHref && !document.receiptHref
+                          ? "Unavailable"
+                          : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <p className={styles.muted}>
         <b>Satisfaction guarantee:</b> Full refund within 7 days if none of this

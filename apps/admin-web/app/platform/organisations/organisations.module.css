@@ -1,0 +1,66 @@
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.scroll {
+  overflow-x: auto;
+}
+.scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+.scroll th,
+.scroll td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.scroll th {
+  font-size: 12px;
+  color: var(--muted);
+}
+.members {
+  margin-top: 24px;
+}
+.actions {
+  min-width: 180px;
+}
+.actions button {
+  margin: 0 4px 8px 0;
+}
+.confirmation {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.confirmation fieldset {
+  padding: 0;
+  border: 0;
+}
+.confirmation label {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+  margin: 16px 0;
+}
+.confirmation input,
+.confirmation select,
+.confirmation textarea {
+  min-height: 44px;
+  padding: 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.confirmation textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.confirmation button {
+  margin-right: 8px;
+}
