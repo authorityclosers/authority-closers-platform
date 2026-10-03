@@ -1,7 +1,6 @@
 """Issue tax documents inside the verified settlement transaction (ADR 0053)."""
 
 from copy import deepcopy
-from dataclasses import asdict
 from datetime import datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -56,7 +55,8 @@ async def _number(
         await database.scalar(select(func.max(model.sequence)).where(model.financial_year == year))
         or 0
     )
-    return year, sequence, f"{prefix}/{year}/{sequence:05d}"
+    short_year = year[2:4] + year[-2:]
+    return year, sequence, f"{prefix}/{short_year}/{sequence:05d}"
 
 
 async def issue_invoice(
@@ -111,6 +111,13 @@ async def issue_invoice(
         financial_year=year,
         sequence=sequence,
         number=number,
+        currency=payment.currency,
+        taxable_minor=tax.taxable_minor,
+        cgst_minor=cgst,
+        sgst_minor=sgst,
+        igst_minor=igst,
+        total_minor=tax.total_minor,
+        place_of_supply=buyer_details["state_code"],
         supersedes_id=None,
         created_at=now,
         details={
@@ -122,8 +129,6 @@ async def issue_invoice(
                 "sac": settings.billing_seller_sac or "SAC pending",
             },
             "buyer": buyer_details,
-            "tax": asdict(tax) | {"cgst_minor": cgst, "sgst_minor": sgst, "igst_minor": igst},
-            "currency": payment.currency,
             "plan_name": copy.plan_name,
             "seats": copy.seats,
             "period_start": None
@@ -178,6 +183,13 @@ async def issue_credit_note(
         financial_year=year,
         sequence=sequence,
         number=number,
+        currency=invoice.currency,
+        taxable_minor=invoice.taxable_minor,
+        cgst_minor=invoice.cgst_minor,
+        sgst_minor=invoice.sgst_minor,
+        igst_minor=invoice.igst_minor,
+        total_minor=invoice.total_minor,
+        place_of_supply=invoice.place_of_supply,
         supersedes_id=None,
         created_at=now,
         details=deepcopy(invoice.details) | {"invoice_number": invoice.number},

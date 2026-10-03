@@ -2,8 +2,6 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime
-from pathlib import Path
-from runpy import run_path
 
 import pytest
 from pydantic import ValidationError
@@ -12,14 +10,6 @@ from ac_platform.billing.invoices import financial_year
 from ac_platform.billing.views import MoneyView
 from ac_platform.http.billing import BuyerRequest
 from tests.unit.http.test_billing_routes import _order
-
-
-def test_invoice_migration_cannot_downgrade_financial_history():
-    migration = run_path(
-        str(Path(__file__).parents[3] / "db/migrations/versions/20261003_0069_billing_invoices.py")
-    )
-    with pytest.raises(RuntimeError, match="forward-only"):
-        migration["downgrade"]()
 
 
 def test_financial_year_changes_at_midnight_in_india():

@@ -1,7 +1,7 @@
 """Fictional signed payments, row-lock numbering and immutable tax documents."""
 
 import asyncio
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import timedelta
 from uuid import UUID, uuid4
 
@@ -44,7 +44,7 @@ async def buy(lab: Lab, account: str, *, buyer: BuyerTaxDetails | None = None):
         _env_file=None,
         billing_seller_legal_name="Fictional Seller LLP",
         billing_seller_state_code="27",
-        billing_invoice_prefix="TEST",
+        billing_invoice_prefix="T1",
     )
     lab.app.service.catalogue = StaticCatalogue(
         (PERSONAL, replace(ORGANISATION, seat_min=2, monthly_price_paise=1000000))
@@ -120,20 +120,15 @@ def test_verified_payment_issues_one_snapshot_and_replays_without_another_invoic
             invoice = await database.scalar(
                 select(BillingInvoice).where(BillingInvoice.order_id == UUID(view.order.order_id))
             )
-            tax = invoice.details["tax"]
-            assert tax["total_minor"] == total
-            assert (
-                tuple(tax[key] for key in ("cgst_minor", "sgst_minor", "igst_minor")) == components
-            )
-            assert invoice.details["buyer"] == {
-                "name": buyer.name,
-                "gstin": buyer.gstin,
-                "state_code": state,
-            }
+            assert invoice.total_minor == total and invoice.currency == "INR"
+            assert (invoice.cgst_minor, invoice.sgst_minor, invoice.igst_minor) == components
+            assert invoice.taxable_minor + sum(components) == total
+            assert invoice.place_of_supply == state and "tax" not in invoice.details
+            assert invoice.details["buyer"] == asdict(buyer)
             assert invoice.details["seller"]["gstin"] == "GSTIN pending"
             assert invoice.details["seller"]["sac"] == "SAC pending"
             assert invoice.details["seats"] == (1 if account == "personal" else 2)
-            assert invoice.number == f"TEST/2026-27/{invoice.sequence:05d}"
+            assert invoice.number == f"T1/2627/{invoice.sequence:05d}"
             payment = await database.get(BillingPaymentEvent, invoice.payment_event_id)
             order = await database.get(BillingOrder, invoice.order_id)
             saved_details = invoice.details.copy()
@@ -152,8 +147,8 @@ def test_two_tenants_wait_on_the_financial_year_row_and_get_consecutive_numbers(
     postgres_harness, world
 ):
     async def exercise(lab: Lab):
-        _, first, _ = await buy(lab, "organisation")
-        _, second, _ = await buy(lab, "organisation")
+        first_order, first, _ = await buy(lab, "organisation")
+        second_order, second, _ = await buy(lab, "organisation")
         async with lab.sessions() as database, database.begin():
             from sqlalchemy.dialects.postgresql import insert
 
@@ -191,15 +186,8 @@ def test_two_tenants_wait_on_the_financial_year_row_and_get_consecutive_numbers(
                 await database.scalars(
                     select(BillingInvoice)
                     .where(
-                        BillingInvoice.payment_event_id.in_(
-                            select(BillingPaymentEvent.id).where(
-                                BillingPaymentEvent.provider_event_id.in_(
-                                    [
-                                        first[0]["X-Fake-Payment-Event-Id"],
-                                        second[0]["X-Fake-Payment-Event-Id"],
-                                    ]
-                                )
-                            )
+                        BillingInvoice.order_id.in_(
+                            [UUID(first_order.order.order_id), UUID(second_order.order.order_id)]
                         )
                     )
                     .order_by(BillingInvoice.sequence)
@@ -213,6 +201,7 @@ def test_two_tenants_wait_on_the_financial_year_row_and_get_consecutive_numbers(
 def test_refund_writes_one_credit_note_and_all_four_tables_refuse_mutation(postgres_harness, world):
     async def exercise(lab: Lab):
         learner = await lab.learner()
+        lab.app.service.invoice_settings = Settings(_env_file=None)
         paid = await lab.subscribe_and_pay(learner)
         await lab.refund(learner, paid.payment_ref, key="invoice-refund")
         await lab.refund(learner, paid.payment_ref, key="invoice-refund")
@@ -227,9 +216,18 @@ def test_refund_writes_one_credit_note_and_all_four_tables_refuse_mutation(postg
             )
             assert len(notes) == 1
             note = notes[0]
-            assert note.details["tax"] == invoice.details["tax"]
+            for key in (
+                "currency",
+                "taxable_minor",
+                "cgst_minor",
+                "sgst_minor",
+                "igst_minor",
+                "total_minor",
+                "place_of_supply",
+            ):
+                assert getattr(note, key) == getattr(invoice, key)
             assert note.details["invoice_number"] == invoice.number
-            assert "-CN/2026-27/" in note.number
+            assert note.number == f"EA-CN/2627/{note.sequence:05d}"
         for model, column in (
             (BillingInvoiceCounter, "financial_year"),
             (BillingBuyerTaxDetails, "name"),
