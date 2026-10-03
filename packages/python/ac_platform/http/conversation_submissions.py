@@ -71,6 +71,10 @@ from ac_platform.conversation_intelligence.sales_xray_tenants import (
     sales_xray_served_tenant_ids,
 )
 from ac_platform.conversation_intelligence.source_objects import resolve_source_key
+from ac_platform.conversation_intelligence.speaker_map_service import (
+    confirm_speaker_map,
+    read_speaker_map,
+)
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     StorageError,
@@ -133,6 +137,15 @@ class SubmissionLabelUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     display_name: str | None
+
+
+class SpeakerMapUpdate(BaseModel):
+    """Only owner choices; the store validates each speaker against current C2."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    transcript_revision: str
+    speakers: list[dict[str, Any]]
 
 
 def _is_postgres_deadlock(error: DBAPIError) -> bool:
@@ -779,6 +792,95 @@ def install_submission_http(
             raise fail(error.status, str(error)) from None
         response.headers["ETag"] = format_revision_etag(label.revision)
         return {"display_name": label.display_name, "display_name_revision": label.revision}
+
+    def speaker_map_failure(error: ConversationError) -> HTTPException:
+        if error.status in (403, 404):
+            return fail(404, "This saved call is unavailable.")
+        message = str(error).replace("A call name", "A speaker name")
+        message = message.replace("The call-name revision", "The speaker revision")
+        return fail(error.status, message.replace("120 characters", "80 characters"))
+
+    async def speaker_map_owner(request: Request) -> AsyncIterator[_Owner]:
+        resolve_owner = read_only_owner if request.method in {"GET", "HEAD"} else current_owner
+        try:
+            async with asynccontextmanager(resolve_owner)(request) as owner:
+                yield owner
+        except HTTPException as error:
+            # The shared owner dependency rejects an unserved workspace before
+            # entering the route. Keep that denial private for this resource too.
+            if error.status_code == 403 and error.detail == WORKSPACE_UNAVAILABLE_MESSAGE:
+                raise fail(404, "This saved call is unavailable.") from None
+            raise
+
+    speaker_dependency = Depends(speaker_map_owner, scope="function")
+
+    @router.get("/submissions/{submission_id}/speaker-map")
+    async def speaker_map(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        owner: _Owner = speaker_dependency,
+    ) -> dict[str, Any]:
+        guard(request, response)
+        try:
+            result = await read_speaker_map(
+                owner.ownership,
+                submission_id,
+                actor=owner.actor,
+                shared_identity_locks=owner.shared_identity_locks,
+            )
+        except ConversationError as error:
+            raise speaker_map_failure(error) from None
+        response.headers["ETag"] = format_revision_etag(result["user_revision"])
+        return result
+
+    @router.put("/submissions/{submission_id}/speaker-map")
+    async def save_speaker_map(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        if_match: str | None = Header(default=None, alias="If-Match"),
+        owner: _Owner = speaker_dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        try:
+            expected_revision = parse_revision_etag(if_match)
+        except ConversationError as error:
+            raise speaker_map_failure(error) from None
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise fail(415, "Choose speakers using JSON.")
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 8192:
+                        raise fail(413, "The speaker choices are too large.")
+                    raw.extend(block)
+            payload = SpeakerMapUpdate.model_validate_json(bytes(raw))
+        except (ValidationError, ValueError):
+            raise fail(422, "Choose valid speaker roles and names.") from None
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The speaker update was interrupted. Try again.") from None
+        try:
+            request_id = getattr(request.state, "request_id", None)
+            result = await confirm_speaker_map(
+                owner.ownership,
+                submission_id,
+                actor=owner.actor,
+                expected_revision=expected_revision,
+                transcript_revision=payload.transcript_revision,
+                speakers=payload.speakers,
+                request_id=request_id if isinstance(request_id, str) else None,
+                shared_identity_locks=owner.shared_identity_locks,
+            )
+        except ConversationError as error:
+            raise speaker_map_failure(error) from None
+        response.headers["ETag"] = format_revision_etag(result["user_revision"])
+        return result
 
     @router.get("/submissions/{submission_id}/report.docx")
     async def download_report(

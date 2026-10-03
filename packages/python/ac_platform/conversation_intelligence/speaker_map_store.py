@@ -59,6 +59,8 @@ def normalize_speaker_decisions(
         name = normalize_display_name(row.get("display_name"))
         if name is not None and len(name) > 80:
             raise ConversationError("A speaker name must be at most 80 characters.")
+        if speaker_id == "unattributed" and (role != "other" or name is not None):
+            raise ConversationError("Unattributed speech must use role other with no name.")
         decisions[speaker_id] = {
             "speaker_id": speaker_id,
             "role": cast(Role, role),
