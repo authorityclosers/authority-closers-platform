@@ -517,6 +517,7 @@ def test_arm_runners_never_open_truth(pk: dict, truth: dict, base_of: dict, tmp_
         arms.run_arm("B", pk, req, 0, model="m", run=fake_run),
     ]
     assert not [p for p in OPENED if "/truth/" in p or p.endswith("truth")]
+    assert "--bare" not in arms.CLI["A"]  # bare mode skips the subscription login (part 2)
     assert [r["arm"] for r in recs] == ["D", "J", "A", "B"]
     assert all(set(r["answers"]) == {q["id"] for q in req["questions"]} for r in recs)
     assert recs[0] == arms.run_arm("D", pk, req, 0) | {"latency_ms": recs[0]["latency_ms"]}

@@ -21,10 +21,9 @@ from . import pack
 KEY_RE = re.compile(r"(vck_[A-Za-z0-9_-]+|Bearer\s+\S+)")
 VERSION_RE = re.compile(r"jev-\d+\.\d+\.\d+")
 CLI = {
-    "A": [
+    "A": [  # no --bare: bare mode skips the subscription login and answers "Not logged in"
         "claude",
         "-p",
-        "--bare",
         "--output-format",
         "json",
         "--tools",
