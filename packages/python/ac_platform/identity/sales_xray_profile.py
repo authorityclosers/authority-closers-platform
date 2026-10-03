@@ -178,9 +178,14 @@ async def erase_sales_xray_profile(
     )
 
     removed_labels = await erase_submission_labels_for_person(session, person_id=person_id)
+    from ac_platform.conversation_intelligence.speaker_map_store import (
+        erase_speaker_maps_for_person,
+    )
+
+    removed_speaker_maps = await erase_speaker_maps_for_person(session, person_id=person_id)
     removed_google_profile = await erase_google_profile(session, person_id)
     if profile is None:
-        return removed_labels > 0 or removed_google_profile
+        return removed_labels > 0 or removed_speaker_maps > 0 or removed_google_profile
     await session.delete(profile)
     await session.flush()
     return True

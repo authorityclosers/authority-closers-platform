@@ -448,6 +448,7 @@ class ConversationProcessingPlan(Base):
     generation: Mapped[int] = mapped_column(Integer)
     plan_sha256: Mapped[str] = mapped_column(String(64))
     manifest: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    speaker_roles: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     acceptance_command_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("conversation_commands.id")
     )
