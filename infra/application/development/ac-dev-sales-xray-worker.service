@@ -39,7 +39,7 @@ BindReadOnlyPaths=/srv/authority-closers/development/backend/.ac-release-id:/app
 BindReadOnlyPaths=/etc/authority-closers/development/identities/elevenlabs:/run/ac-sales-xray/identities/elevenlabs
 BindReadOnlyPaths=/etc/authority-closers/development/identities/gemini:/run/ac-sales-xray/identities/gemini
 BindReadOnlyPaths=/usr/local/bin/infisical:/opt/infisical
-ExecStart=/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 /srv/authority-closers/development/backend/.venv/bin/python -m ac_platform.conversation_intelligence.service --config %d/service.json --sha256 ${AC_DEV_WORKER_MANIFEST_SHA256}
+ExecStart=/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 /srv/authority-closers/development/backend/.venv/bin/python -m ac_platform.conversation_intelligence.service --config %d/service.json --sha256 ${AC_DEV_WORKER_MANIFEST_SHA256}
 
 [Install]
 WantedBy=multi-user.target

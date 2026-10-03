@@ -62,6 +62,8 @@ class FakeCommands:
         self.smoke_failure = False
         self.health_failures = 0
         self.health_calls = 0
+        # The dev API's TrustedHostMiddleware: 127.0.0.1 and a missing Host get HTTP 400.
+        self.api_hosts = {"localhost"}
         self.units = dict.fromkeys(UNIT_ORDER, "inactive")
         self.fail = set()
         self.restart_status = 1
@@ -123,6 +125,9 @@ class FakeCommands:
                 self.units[args[2]] = "active"
         elif args[0] == "curl":
             self.health_calls += 1
+            sent = [args[i + 1] for i, item in enumerate(args[:-1]) if item == "--header"]
+            if sent not in ([f"Host: {host}"] for host in self.api_hosts):
+                return subprocess.CompletedProcess(args, 22, b"", b"400 Invalid host header")
             if self.health_failures:
                 self.health_failures -= 1
                 return subprocess.CompletedProcess(args, 22, b"", b"not ready")
@@ -290,7 +295,7 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     assert json.loads(output)["health"]["ok"]
     assert fake.health_calls == 4
     assert all(
-        args[-1] == "http://127.0.0.1:8100/health/ready"
+        args[-3:] == ["--header", "Host: localhost", "http://127.0.0.1:8100/health/ready"]
         for args, _ in fake.calls
         if args[0] == "curl"
     )
@@ -389,6 +394,75 @@ def test_migrator_url_in_api_env_refuses_before_backend_changes(tree):
     with pytest.raises(refresh.RefreshError, match="migrator_url_in_api_env"):
         refresh.refresh(paths, FakeCommands(sha), uid=0)
     assert not paths.backend.exists()
+
+
+def test_health_probe_sends_configured_internal_api_host(tree, capsys):
+    paths, sha, _, _ = tree
+    with (paths.development / "api.env").open("a") as handle:
+        handle.write("AC_INTERNAL_API_HOST=api.development.ac.internal.invalid\n")
+    fake = FakeCommands(sha)
+    fake.api_hosts = {"api.development.ac.internal.invalid"}
+    value = refresh.refresh(paths, fake, uid=0)
+    assert value["health"] == {"ok": True, "release_id": sha}
+    assert fake.health_calls == 1
+    curl = next(args for args, _ in fake.calls if args[0] == "curl")
+    assert curl[-3:] == [
+        "--header",
+        "Host: api.development.ac.internal.invalid",
+        "http://127.0.0.1:8100/health/ready",
+    ]
+    assert "Host:" not in capsys.readouterr().out
+
+
+def test_hostless_probe_is_rejected_and_rolls_back(tree, capsys, monkeypatch):
+    # Regression for AUT-965: the API rejects a probe whose Host it does not allow.
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.api_hosts = {"salesxray-dev.authorityclosers.com"}
+    monkeypatch.setattr(refresh.time, "sleep", lambda _: None)
+    with pytest.raises(refresh.RefreshError, match="health_release_mismatch"):
+        refresh.refresh(paths, fake, uid=0)
+    assert not paths.backend.exists()
+    assert json.loads(capsys.readouterr().out)["rollback"]["ok"]
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "api.dev X-Injected:1",
+        "api.dev\tx",
+        "api.dev:8100",
+        "user@api.dev",
+        "API.DEV",
+        "-api.dev",
+        "api..dev",
+        "",
+    ],
+)
+def test_invalid_probe_host_refuses_before_backend_changes(tree, host):
+    paths, sha, _, _ = tree
+    with (paths.development / "api.env").open("a") as handle:
+        handle.write(f"AC_INTERNAL_API_HOST={host}\n")
+    fake = FakeCommands(sha)
+    with pytest.raises(refresh.RefreshError, match="probe_host_invalid"):
+        refresh.refresh(paths, fake, uid=0)
+    assert not paths.backend.exists()
+    assert not any(args[0] in ("uv", "systemd-run", "curl") for args, _ in fake.calls)
+
+
+@pytest.mark.parametrize("configured", [None, "api.development.ac.internal.invalid"])
+def test_probe_host_is_a_development_settings_allowed_host(tree, configured):
+    from ac_platform.application.settings import Settings
+
+    paths, _, _, _ = tree
+    overrides = {}
+    if configured is not None:
+        overrides["internal_api_host"] = configured
+        with (paths.development / "api.env").open("a") as handle:
+            handle.write(f"AC_INTERNAL_API_HOST={configured}\n")
+    settings = Settings(_env_file=None, environment="development", **overrides)
+    assert "127.0.0.1" not in settings.allowed_hosts
+    assert refresh.probe_host(paths) in settings.allowed_hosts
 
 
 def test_non_root_refuses(tree):
