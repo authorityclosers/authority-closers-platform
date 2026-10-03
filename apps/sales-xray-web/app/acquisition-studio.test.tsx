@@ -1187,7 +1187,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   ).toBe("reading");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(8);
+  ).toHaveLength(7);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -3103,7 +3103,6 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     "Next-call plan",
     "Sales skills",
     "Call signals",
-    "Transcript",
     "Raw data",
   ];
   expect(

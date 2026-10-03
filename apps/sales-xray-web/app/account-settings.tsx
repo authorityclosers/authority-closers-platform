@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  CreditCard,
   LifeBuoy,
   LogOut,
   Mail,
@@ -68,7 +69,13 @@ const COUNTRIES: ReadonlyArray<{ value: Country; label: string }> = [
   { value: "OTHER", label: "Another country or region" },
 ];
 
-type SectionId = "general" | "profile" | "usage" | "security" | "help";
+type SectionId =
+  | "general"
+  | "profile"
+  | "usage"
+  | "billing"
+  | "security"
+  | "help";
 const SECTIONS: ReadonlyArray<{
   id: SectionId;
   label: string;
@@ -77,6 +84,7 @@ const SECTIONS: ReadonlyArray<{
   { id: "general", label: "General", icon: Settings2 },
   { id: "profile", label: "Profile", icon: CircleUserRound },
   { id: "usage", label: "Analysis time", icon: Clock3 },
+  { id: "billing", label: "Billing & plans", icon: CreditCard },
   { id: "security", label: "Security", icon: ShieldCheck },
   { id: "help", label: "Help & support", icon: LifeBuoy },
 ];
@@ -354,6 +362,38 @@ export function AccountSettings({
 
         <Pane id="usage" title="Analysis time" active={section} onBack={back}>
           <AllowanceSummary allowance={allowance} onRetry={retry} />
+        </Pane>
+
+        <Pane
+          id="billing"
+          title="Billing & plans"
+          active={section}
+          onBack={back}
+        >
+          <Row
+            label="Plans and upgrades"
+            hint="Personal, Organisation and Enterprise subscriptions with monthly analysis minutes."
+          >
+            <Link
+              className={styles.secondary}
+              href="/plans"
+              replace={variant === "dialog"}
+            >
+              Choose plan
+            </Link>
+          </Row>
+          <Row
+            label="Billing and invoices"
+            hint="Manage your subscription, payment method, receipts and renewal."
+          >
+            <Link
+              className={styles.secondary}
+              href="/billing"
+              replace={variant === "dialog"}
+            >
+              Open Billing
+            </Link>
+          </Row>
         </Pane>
 
         <Pane id="security" title="Security" active={section} onBack={back}>

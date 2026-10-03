@@ -50,6 +50,9 @@ from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.platform import install_platform_http
+from ac_platform.http.platform_sensitive_segments import (
+    install_platform_sensitive_segments_http,
+)
 from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
@@ -232,6 +235,9 @@ def create_app(
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_platform_sensitive_segments_http(
+        application, settings=settings, require_actor=require_actor
+    )
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(

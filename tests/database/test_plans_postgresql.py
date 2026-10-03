@@ -1,6 +1,6 @@
 """Real PostgreSQL proof for the plans catalogue (migration 0065, Plans C1).
 
-0065 applies after 0064 and is the head; the ``plans`` model has no drift; the
+0065 applies after 0064 under the current head; the ``plans`` model has no drift; the
 three seeds are ``coming_soon`` with every price and limit NULL; the database
 checks and the PostgreSQL key regex refuse bad rows; the migration is forward-only.
 """
@@ -26,6 +26,7 @@ from tests.database.test_conversation_postgresql import postgres_harness as _pos
 
 ROOT = Path(__file__).parents[2]
 REVISION = "20261002_0065"
+HEAD = "20261002_0067"
 SEEDS = {
     "personal": ("Personal", "For one salesperson", 10),
     "organisation": ("Organisation", "For sales teams", 20),
@@ -54,14 +55,14 @@ def _row(**overrides: object) -> dict[str, object]:
     return row
 
 
-def test_0065_applies_after_0064_and_is_the_head(postgres_harness: Engine) -> None:
+def test_0065_applies_after_0064_under_the_head(postgres_harness: Engine) -> None:
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(ROOT / "db/migrations"))
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_revision(REVISION).down_revision == "20261001_0064"
-    assert scripts.get_current_head() == REVISION
+    assert scripts.get_current_head() == HEAD
     with postgres_harness.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVISION
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == HEAD
         assert "plans" in inspect(connection).get_table_names()
 
 

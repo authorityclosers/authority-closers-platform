@@ -191,6 +191,32 @@ async def test_canonical_revocation_is_seen_on_next_request(platform_state):
     assert (await read(state, "/v1/platform/tenants")).status_code == 403
 
 
+async def test_billing_capability_is_explicit_and_revocation_removes_it(platform_state):
+    state = platform_state
+    owner = await read(state, token=OTHER_TOKEN)
+    assert "platform_billing_manage" not in owner.json()["platform_permissions"]
+    grant_id = await grant(state, "platform_billing_manage")
+    granted = await read(state)
+    assert granted.status_code == 200
+    assert granted.json()["platform_permissions"] == ["platform_billing_manage"]
+    assert granted.headers["cache-control"] == "private, no-store"
+    assert (await read(state, "/v1/platform/tenants")).status_code == 403
+    with Session(state.engine) as db, db.begin():
+        database = cast(Any, HttpDatabase(db))
+        actor = (
+            await AsyncIdentityApplication(
+                database, token_pepper=state.settings.session_token_pepper.get_secret_value()
+            ).resolve_actor(OTHER_TOKEN)
+        ).actor
+        await CapabilityApplication(database, operations_tenant_id=state.tenants["Other"]).revoke(
+            actor, command_id=uuid4(), grant_id=grant_id, reason="Synthetic billing removal"
+        )
+    revoked = await read(state)
+    assert revoked.status_code == 200
+    assert revoked.json()["platform_permissions"] == []
+    assert revoked.headers["cache-control"] == "private, no-store"
+
+
 async def test_inventory_is_bounded_cursor_sorted_and_has_no_people_details(platform_state):
     state = platform_state
     await grant(state)

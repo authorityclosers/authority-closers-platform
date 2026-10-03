@@ -23,6 +23,8 @@ PlatformPermission = Literal[
     "platform_catalog_publish",
     "platform_organisations_manage",
     "platform_release_manage",
+    "platform_billing_manage",
+    "platform_content_safety_manage",
 ]
 
 
