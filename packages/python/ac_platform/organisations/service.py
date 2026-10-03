@@ -68,6 +68,13 @@ class OrganisationCommandConflict(OrganisationCommandError):
     status = 409
 
 
+class OrganisationLimit(OrganisationCommandError):
+    """The person already owns the most organisations one person may own."""
+
+    code = "organisation_limit"
+    status = 409
+
+
 class OrganisationAdditionLimit(OrganisationCommandError):
     """The organisation's daily addition budget is exhausted."""
 
@@ -130,10 +137,9 @@ class OrganisationService:
         operator_reference: str,
         *,
         reason: str | None = None,
+        owned_limit: int | None = None,
     ) -> OrganisationResult:
-        name = name.strip()
-        if not 2 <= len(name) <= 80:
-            raise OrganisationCommandError("organisation name must contain 2 to 80 characters")
+        name = _organisation_name(name)
         operator_reference = _required_text(operator_reference, "operator reference", 160)
         prior = await self.session.scalar(
             select(Organisation).where(Organisation.creation_command_id == command_id)
@@ -167,9 +173,31 @@ class OrganisationService:
 
         await self._ensure_command_id_available(command_id, "organisation.created")
 
-        owner_person = await self.session.get(Person, owner_person_id)
+        # The limit counts under the person's row lock, which write authentication
+        # already holds, so one person's concurrent creates cannot pass it together.
+        owner_person = (
+            await self.session.get(Person, owner_person_id)
+            if owned_limit is None
+            else await self.session.scalar(
+                select(Person).where(Person.id == owner_person_id).with_for_update()
+            )
+        )
         if owner_person is None or owner_person.status != PersonStatus.ACTIVE.value:
             raise OrganisationCommandError("owner must be an active person")
+        if owned_limit is not None:
+            owned = await self.session.scalar(
+                select(func.count())
+                .select_from(Membership)
+                .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
+                .where(
+                    Membership.person_id == owner_person_id,
+                    Membership.role == MembershipRole.OWNER.value,
+                    Membership.status == MembershipStatus.ACTIVE.value,
+                    Membership.ended_at.is_(None),
+                )
+            )
+            if (owned or 0) >= owned_limit:
+                raise OrganisationLimit(f"You can own at most {owned_limit} organisations.")
         tenant_id = uuid4()
         slug = _tenant_slug(name)
         tenant = Tenant(id=tenant_id, slug=slug, name=name, status=TenantStatus.ACTIVE.value)
@@ -371,6 +399,36 @@ class OrganisationService:
             actor_person_id=actor_person_id,
         )
         return MemberResult(tenant_id, person_id, person.email, role, "active")
+
+    async def rename(
+        self, tenant_id: UUID, name: str, command_id: UUID, *, actor_person_id: UUID
+    ) -> dict[str, object]:
+        actor = await self._actor(tenant_id, actor_person_id)
+        name = _organisation_name(name)
+        intent = {"action": "rename", "name": name, "actor_person_id": str(actor_person_id)}
+        prior = await self._replay(tenant_id, command_id, intent)
+        if prior is not None:
+            return cast(dict[str, object], prior.payload["result"])
+        if actor.role != "owner":
+            raise AuthorizationDenied("Only the owner can rename the organisation.")
+        tenant = await self.session.get(Tenant, tenant_id)
+        assert tenant is not None
+        before = {"name": tenant.name}
+        tenant.name = name
+        tenant.revision += 1
+        await self.session.flush()
+        result: dict[str, object] = {"tenant_id": str(tenant_id), "name": name, "role": "owner"}
+        await self._audit(
+            tenant_id,
+            command_id,
+            "organisation.renamed",
+            "organisation",
+            tenant_id,
+            {"http_intent": intent, "result": result, "before": before, "after": {"name": name}},
+            None,
+            actor_person_id=actor_person_id,
+        )
+        return result
 
     async def _actor(self, tenant_id: UUID, actor_person_id: UUID) -> Membership:
         await self._organisation(tenant_id, lock=True)
@@ -933,6 +991,13 @@ def _domain_result(
         dict(row.proof),
         replayed,
     )
+
+
+def _organisation_name(value: str) -> str:
+    name = value.strip()
+    if not 2 <= len(name) <= 80 or any(ord(char) < 32 for char in name):
+        raise OrganisationCommandError("organisation name must contain 2 to 80 characters")
+    return name
 
 
 def _required_text(value: str, field: str, maximum: int) -> str:

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import digest
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import FastAPI
@@ -22,7 +22,8 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.problem import register_problem_handlers
-from ac_platform.identity.models import Person
+from ac_platform.identity.email_login import EmailLoginCodeService, decrypt_email_login_code
+from ac_platform.identity.models import EmailLoginCode, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import Membership
@@ -146,6 +147,139 @@ def test_directory_reads_on_postgresql(postgres_harness):  # noqa: F811
                     == 2
                 )
                 assert verify_audit_chain_sync(db, org.tenant_id).valid
+        finally:
+            await engine.dispose()
+
+    asyncio.run(exercise())
+
+
+def test_concurrent_creates_stop_at_three_and_owner_signs_in_by_code(postgres_harness):  # noqa: F811
+    async def exercise():
+        engine = create_async_engine(postgres_harness.schema_url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        settings = Settings(
+            _env_file=None,
+            environment="test",
+            public_app_url="https://learner.authorityclosers.test",
+            public_learner_tenant_id=uuid4(),
+            operations_tenant_id=uuid4(),
+        )
+        owner, now = uuid4(), datetime.now(UTC)
+        tokens = [character * 43 for character in "cdefg"]
+        email = f"creator-{owner}@example.test"
+        origin = "https://learner.authorityclosers.test"
+        try:
+            async with sessions() as db, db.begin():
+                db.add(Person(id=owner, email=email, email_verified_at=now))
+                await db.flush()
+                # One session per device: requests on one session already queue at sign-in.
+                db.add_all(
+                    IdentitySession(
+                        id=uuid4(),
+                        person_id=owner,
+                        token_hash=digest(
+                            settings.session_token_pepper.get_secret_value().encode(),
+                            device.encode(),
+                            sha256,
+                        ),
+                        created_at=now,
+                        expires_at=now + timedelta(days=1),
+                    )
+                    for device in tokens
+                )
+            app = FastAPI()
+            register_problem_handlers(app)
+            actor = install_identity_http(app, settings=settings, sessions=cast(Any, sessions))
+            install_organisation_http(app, settings=settings, require_actor=actor)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url=origin,
+                headers={"cookie": f"ac_session={tokens[0]}", "origin": origin},
+            ) as client:
+                # Five different creates race; the person may own exactly three.
+                created = await asyncio.gather(
+                    *(
+                        client.post(
+                            "/v1/organisations",
+                            json={"name": f"Fictional Race {index}"},
+                            headers={
+                                "Idempotency-Key": str(uuid4()),
+                                "cookie": f"ac_session={device}",
+                            },
+                        )
+                        for index, device in enumerate(tokens)
+                    )
+                )
+                assert sorted(r.status_code for r in created) == [201, 201, 201, 409, 409]
+                assert {r.json()["code"] for r in created if r.status_code == 409} == {
+                    "organisation_limit"
+                }
+                first = next(r.json() for r in created if r.status_code == 201)
+                assert set(first) == {"tenant_id", "name", "role"} and first["role"] == "owner"
+                chosen = await client.post("/v1/context", json={"tenant_id": first["tenant_id"]})
+                assert chosen.status_code == 200, chosen.text
+                key = str(uuid4())
+                renames = [
+                    await client.patch(
+                        "/v1/organisation",
+                        json={"name": "Fictional Renamed"},
+                        headers={"Idempotency-Key": key},
+                    )
+                    for _ in range(2)
+                ]
+                assert [r.status_code for r in renames] == [200, 200]
+                assert (
+                    renames[0].json() == renames[1].json() == dict(first, name="Fictional Renamed")
+                )
+                usage = await client.get("/v1/organisation/usage?days=90")
+                assert usage.status_code == 200, usage.text
+                assert usage.json()["members"] == [
+                    {
+                        "person_id": str(owner),
+                        "name": email,
+                        "seconds": 0,
+                        "calls": 0,
+                        "last_call_at": None,
+                    }
+                ]
+            # Owning organisations must not block email-code sign-in (A3a).
+            secret = b"fictional-email-login-secret-of-32-bytes!"
+            async with sessions() as db, db.begin():
+                login = EmailLoginCodeService(db, challenge_secret=secret)
+                issued = await login.begin(
+                    email=email,
+                    consent_accepted=False,
+                    submitted_consent_version=None,
+                    required_consent_version=None,
+                    now=now,
+                )
+                assert issued is not None
+                row = await db.get(EmailLoginCode, issued.challenge_id)
+                code = decrypt_email_login_code(secret, row, generation_id=issued.generation_id)
+                verified = await login.verify(
+                    email=email,
+                    code=code,
+                    required_consent_version=None,
+                    now=now + timedelta(seconds=1),
+                )
+                assert verified.person is not None and verified.person.id == owner
+            with Session(postgres_harness.engine) as db:
+                owned = list(
+                    db.scalars(
+                        select(Membership).where(
+                            Membership.person_id == owner, Membership.role == "owner"
+                        )
+                    )
+                )
+                assert len(owned) == 3
+                for membership in owned:
+                    assert verify_audit_chain_sync(db, membership.tenant_id).valid
+                actions = db.scalars(
+                    select(AuditEvent.action)
+                    .where(AuditEvent.tenant_id == UUID(first["tenant_id"]))
+                    .order_by(AuditEvent.sequence_no)
+                ).all()
+                assert actions == ["organisation.created", "organisation.renamed"]
         finally:
             await engine.dispose()
 

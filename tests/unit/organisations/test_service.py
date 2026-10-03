@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from ac_platform.audit.models import AuditEvent
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person, PersonStatus
+from ac_platform.kernel.errors import AuthorizationDenied
 from ac_platform.organisations.service import (
     OrganisationCommandConflict,
     OrganisationCommandError,
+    OrganisationLimit,
     OrganisationService,
 )
 from ac_platform.tenancy.models import (
@@ -334,3 +336,66 @@ async def test_domains_cannot_be_claimed_by_another_organisation_and_protected_t
             await state.service.list_members(protected_id)
         with pytest.raises(OrganisationCommandError, match="protected"):
             await state.service.set_domains_attested(protected_id, [], False, "AUT-438", uuid4())
+
+
+@pytest.mark.asyncio
+async def test_self_service_create_stops_at_the_owned_limit(state: SimpleNamespace) -> None:
+    keys = [uuid4() for _ in range(3)]
+    for index, key in enumerate(keys):
+        await state.service.create(
+            f"Team {index}", state.owner_id, key, "self-service", owned_limit=3
+        )
+    with pytest.raises(OrganisationLimit) as refused:
+        await state.service.create("Team 3", state.owner_id, uuid4(), "self-service", owned_limit=3)
+    assert (refused.value.status, refused.value.code) == (409, "organisation_limit")
+    # A replay of an earlier create still answers; an operator create has no limit.
+    replay = await state.service.create(
+        "Team 0", state.owner_id, keys[0], "self-service", owned_limit=3
+    )
+    assert replay.replayed is True
+    await state.service.create("Operator Made", state.owner_id, uuid4(), "AUT-438")
+    owned = state.session.scalar(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.person_id == state.owner_id, Membership.role == "owner")
+    )
+    assert owned == 4
+
+
+@pytest.mark.asyncio
+async def test_rename_is_owner_only_audited_and_refuses_protected_tenants(
+    state: SimpleNamespace,
+) -> None:
+    org = await create_org(state)
+    await state.service.add_member(org.tenant_id, state.worker_id, "admin", uuid4())
+    with pytest.raises(AuthorizationDenied):
+        await state.service.rename(
+            org.tenant_id, "Not Allowed", uuid4(), actor_person_id=state.worker_id
+        )
+    key = uuid4()
+    result = await state.service.rename(
+        org.tenant_id, " Renamed Group ", key, actor_person_id=state.owner_id
+    )
+    assert result == {"tenant_id": str(org.tenant_id), "name": "Renamed Group", "role": "owner"}
+    assert (
+        await state.service.rename(
+            org.tenant_id, "Renamed Group", key, actor_person_id=state.owner_id
+        )
+        == result
+    )
+    with pytest.raises(OrganisationCommandConflict):
+        await state.service.rename(org.tenant_id, "Changed", key, actor_person_id=state.owner_id)
+    for tenant_id, name in (
+        (state.operations_id, "Operations Two"),
+        (state.public_id, "Public Two"),
+        (org.tenant_id, "x"),
+    ):
+        with pytest.raises(OrganisationCommandError):
+            await state.service.rename(tenant_id, name, uuid4(), actor_person_id=state.owner_id)
+    tenant = state.session.get(Tenant, org.tenant_id)
+    assert (tenant.name, tenant.slug, tenant.revision) == ("Renamed Group", org.slug, 1)
+    audit = state.session.scalars(
+        select(AuditEvent).where(AuditEvent.action == "organisation.renamed")
+    ).one()
+    assert audit.payload["before"] == {"name": "Example Group"}
+    assert state.session.get(Tenant, state.operations_id).name == "Operations"

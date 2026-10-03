@@ -11,12 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
-from ac_platform.organisations.service import OrganisationService
-from ac_platform.organisations.usage import member_rows
+from ac_platform.organisations.service import OrganisationCommandConflict, OrganisationService
+from ac_platform.organisations.usage import member_rows, organisation_usage
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
 
 
@@ -97,6 +97,62 @@ class OwnerTransferResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     owner: MemberResponse
     former_owner: MemberResponse
+
+
+class NameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    name: str = Field(min_length=2, max_length=80)
+
+
+class OrganisationNameResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    tenant_id: UUID
+    name: str
+    role: Literal["owner"]
+
+
+class MemberUsageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    person_id: UUID
+    name: str
+    seconds: int
+    calls: int
+    last_call_at: datetime | None
+
+
+class UsageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    since: datetime
+    total_seconds: int
+    total_calls: int
+    members: list[MemberUsageResponse]
+    pool: None
+
+
+class OrganisationValidationFailed(DomainError):
+    code = "validation_failed"
+    title = "The request is invalid"
+
+
+class OrganisationIdempotencyConflict(DomainError):
+    code = "idempotency_conflict"
+    title = "The Idempotency-Key was used for a different request"
+    status = 409
+
+
+OWNED_ORGANISATION_LIMIT = 3
+
+
+async def _name(request: Request) -> str:
+    """Parse the strict name body here so every refusal is a problem response."""
+
+    try:
+        name = NameRequest.model_validate_json(await request.body()).name.strip()
+        if len(name) < 2:
+            raise ValueError("name is too short")
+    except ValueError as error:
+        raise OrganisationValidationFailed("Send only a name of 2 to 80 characters.") from error
+    return name
 
 
 def install_organisation_http(
@@ -284,4 +340,69 @@ def install_organisation_http(
         )
         return OwnerTransferResponse.model_validate_json(json.dumps(result))
 
+    @router.patch("", response_model=OrganisationNameResponse)
+    async def rename(
+        request: Request,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> OrganisationNameResponse:
+        require_safe_origin(request, settings)
+        assert auth.resolved.actor.tenant_id is not None
+        try:
+            result = await service(auth).rename(
+                auth.resolved.actor.tenant_id,
+                await _name(request),
+                key,
+                actor_person_id=auth.resolved.actor.person_id,
+            )
+        except OrganisationCommandConflict as error:
+            raise OrganisationIdempotencyConflict(error.detail) from error
+        return OrganisationNameResponse.model_validate_json(json.dumps(result))
+
+    @router.get("/usage", response_model=UsageResponse)
+    async def usage(
+        request: Request, auth: AuthenticatedTransaction = selected_dependency
+    ) -> UsageResponse:
+        query = dict(request.query_params)
+        if set(query) - {"days"} or query.get("days", "30") not in {"30", "90"}:
+            raise OrganisationValidationFailed("Usage accepts only days=30 or days=90.")
+        actor = auth.resolved.actor
+        assert actor.tenant_id is not None
+        rows = await organisation_usage(
+            auth.database,
+            actor.tenant_id,
+            int(query.get("days", "30")),
+            actor.person_id if auth.resolved.membership_role == "member" else None,
+        )
+        return UsageResponse.model_validate_json(json.dumps(rows))
+
     application.include_router(router)
+
+    @application.post(
+        "/v1/organisations",
+        response_model=OrganisationNameResponse,
+        status_code=201,
+        tags=["organisation"],
+    )
+    async def create(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = Depends(require_actor, scope="function"),  # noqa: B008
+        key: UUID = command_dependency,
+    ) -> OrganisationNameResponse:
+        require_safe_origin(request, settings)
+        try:
+            result = await service(auth).create(
+                await _name(request),
+                auth.resolved.actor.person_id,
+                key,
+                "self-service",
+                owned_limit=OWNED_ORGANISATION_LIMIT,
+            )
+        except OrganisationCommandConflict as error:
+            raise OrganisationIdempotencyConflict(error.detail) from error
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["vary"] = "Cookie"
+        if result.replayed:
+            response.status_code = 200
+        return OrganisationNameResponse(tenant_id=result.tenant_id, name=result.name, role="owner")

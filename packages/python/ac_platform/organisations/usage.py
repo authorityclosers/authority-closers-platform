@@ -124,6 +124,46 @@ async def member_rows(
     return rows
 
 
+async def organisation_usage(
+    database: AsyncSession, tenant_id: UUID, days: int, person_id: UUID | None = None
+) -> dict[str, Any]:
+    """Usage of the organisation's active members; ``person_id`` narrows to one member."""
+
+    since = datetime.now(UTC) - timedelta(days=days)
+    usage = await member_usage(database, tenant_id, since)
+    statement = (
+        select(Person)
+        .join(Membership, Membership.person_id == Person.id)
+        .where(
+            Membership.tenant_id == tenant_id,
+            Membership.status == "active",
+            Membership.ended_at.is_(None),
+        )
+        .order_by(Person.email, Person.id)
+    )
+    if person_id is not None:
+        statement = statement.where(Person.id == person_id)
+    members = []
+    for person in await database.scalars(statement):
+        seconds, calls, last_call = usage.get(person.id, (0, 0, None))
+        members.append(
+            dict(
+                person_id=str(person.id),
+                name=person.display_name or person.email or "",
+                seconds=seconds,
+                calls=calls,
+                last_call_at=last_call and last_call.replace(tzinfo=UTC).isoformat(),
+            )
+        )
+    return dict(
+        since=since.isoformat(),
+        total_seconds=sum(row["seconds"] for row in members),
+        total_calls=sum(row["calls"] for row in members),
+        members=members,
+        pool=None,
+    )
+
+
 def invite_row(invite: OrganisationInvite) -> dict[str, Any]:
     return dict(
         person_id=None,
