@@ -42,6 +42,8 @@ from ac_platform.conversation_intelligence.reports import (
     parse_report_draft,
 )
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     RecordingObjectStorage,
@@ -338,12 +340,17 @@ class ConversationReports:
     async def transcript(self, actor: ActorContext, recording_id: UUID) -> dict[str, Any]:
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
+        return await self.render_transcript(recording)
+
+    async def render_transcript(self, recording: ConversationRecording) -> dict[str, Any]:
+        """The post-authorization transcript projection, withheld per the recording's marks."""
+
         draft = await self.database.scalar(
             select(ConversationReportDraft)
             .where(
-                ConversationReportDraft.recording_id == recording_id,
-                ConversationReportDraft.tenant_id == actor.tenant_id,
-                ConversationReportDraft.person_id == actor.person_id,
+                ConversationReportDraft.recording_id == recording.id,
+                ConversationReportDraft.tenant_id == recording.tenant_id,
+                ConversationReportDraft.person_id == recording.person_id,
                 ConversationReportDraft.erased_at.is_(None),
             )
             .order_by(ConversationReportDraft.created_at.desc(), ConversationReportDraft.id.desc())
@@ -422,28 +429,60 @@ class ConversationReports:
         else:
             _, transcript = self._validated(draft, recording)
             await self._canonical_draft(draft, recording)
-        return {
-            name: transcript[name]
-            for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
-        }
+        return await self._withheld(
+            recording,
+            transcript["revision"],
+            {
+                name: transcript[name]
+                for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
+            },
+        )
+
+    async def _withheld(
+        self, recording: ConversationRecording, transcript_revision: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        plan = await withheld_plan_for(
+            self.database, recording_id=recording.id, served_revisions=(transcript_revision,)
+        )
+        return withhold(payload, plan)
 
     async def _response(
         self, actor: ActorContext, run: dict[str, Any], draft: ConversationReportDraft
     ) -> dict[str, Any]:
         recording = await self.application._recording(actor, UUID(run["recording_id"]))
+        return await self._render(run, draft, recording)
+
+    async def _render(
+        self, run: dict[str, Any], draft: ConversationReportDraft, recording: ConversationRecording
+    ) -> dict[str, Any]:
         if draft.run_id != UUID(run["id"]):
             raise ConversationConflict("The report belongs to another analysis.")
         report, _ = self._validated(draft, recording)
         await self._canonical_draft(draft, recording)
-        return {
-            **run,
-            "report": report.model_dump(mode="json"),
-            "message": "Your private AI draft is ready. Dipak has not reviewed it yet.",
-        }
+        return await self._withheld(
+            recording,
+            report.transcript_revision,
+            {
+                **run,
+                "report": report.model_dump(mode="json"),
+                "message": "Your private AI draft is ready. Dipak has not reviewed it yet.",
+            },
+        )
 
     async def get(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
         run = await self.application.get_run(actor, run_id)
-        recovered = await RetainedC5RecoveryService(self.application).owner_report(actor, run_id)
+        recording = await self.application._recording(actor, UUID(run["recording_id"]))
+        return await self.render_report(run, recording)
+
+    async def render_report(
+        self, run: dict[str, Any], recording: ConversationRecording
+    ) -> dict[str, Any]:
+        """The post-authorization run report, withheld per the recording's marks."""
+
+        run_id = UUID(run["id"])
+        recovered = await RetainedC5RecoveryService(self.application).owner_version(
+            run_id, recording
+        )
         if recovered is not None:
             return {
                 **run,
@@ -464,9 +503,9 @@ class ConversationReports:
             select(ConversationReportDraft)
             .where(
                 ConversationReportDraft.run_id == run_id,
-                ConversationReportDraft.tenant_id == actor.tenant_id,
-                ConversationReportDraft.person_id == actor.person_id,
-                ConversationReportDraft.recording_id == UUID(run["recording_id"]),
+                ConversationReportDraft.tenant_id == recording.tenant_id,
+                ConversationReportDraft.person_id == recording.person_id,
+                ConversationReportDraft.recording_id == recording.id,
                 ConversationReportDraft.erased_at.is_(None),
             )
             .order_by(ConversationReportDraft.created_at.desc(), ConversationReportDraft.id.desc())
@@ -482,7 +521,7 @@ class ConversationReports:
                 if run["state"] in {"queued", "running"}
                 else "Analysis needs attention. Your recording remains private.",
             }
-        return await self._response(actor, run, draft)
+        return await self._render(run, draft, recording)
 
     async def import_internal_draft(
         self,

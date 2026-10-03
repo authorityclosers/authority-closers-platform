@@ -58,6 +58,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
+from ac_platform.conversation_intelligence.sensitive_segments_store import marks_in_force
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership
 
@@ -138,6 +139,8 @@ async def validate_benchmark_scope(
 
     if not isinstance(actor, ProcessingActor):
         raise ConversationDenied("The acquisition benchmark requires its processing lease.")
+    if await marks_in_force(app.database, recording_id=recording.id):  # AUT-519 D7
+        raise ConversationConflict("This call cannot be processed again at the moment.")
     if not benchmark.issued_at_epoch <= int(now.timestamp()) < benchmark.expires_at_epoch:
         raise ConversationDenied("This acquisition benchmark authorization has expired.")
     if (

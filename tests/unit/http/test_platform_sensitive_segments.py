@@ -321,7 +321,7 @@ async def test_same_key_replays_without_a_second_write(marks_state):
                 .where(AuditEvent.tenant_id == state.tenants["Alpha"])
                 .order_by(AuditEvent.sequence_no.desc())
             )
-            == 2
+            == 3  # one request receipt plus one event per mark; the replay adds none
         )
     other = await call(
         state, "POST", path, json=mark_body(("s1", "SENSITIVE_FINANCIAL")), key="same"
@@ -408,3 +408,30 @@ async def test_duplicate_upload_with_the_same_revision_sees_the_marks(marks_stat
     listing = await call(state, "GET", f"/recordings/{duplicate}")
     assert listing.json()["marks"] == []
     assert listing.json()["transcript_revisions"] == [{"revision": REVISION, "segment_count": 4}]
+
+
+async def test_same_key_with_a_different_body_is_refused(marks_state):
+    """AUT-521: the Idempotency-Key binds the whole request, not each segment."""
+
+    state = marks_state
+    await grant(state, "platform_content_safety_manage")
+    path = f"/recordings/{state.recording}/marks"
+    first = await call(state, "POST", path, json=mark_body(("s1", "SENSITIVE_LEGAL")), key="k")
+    assert first.status_code == 200
+    superset = await call(
+        state,
+        "POST",
+        path,
+        json=mark_body(("s1", "SENSITIVE_LEGAL"), ("s3", "SENSITIVE_FINANCIAL")),
+        key="k",
+    )
+    disjoint = await call(state, "POST", path, json=mark_body(("s4", "SENSITIVE_LEGAL")), key="k")
+    reason = await call(
+        state, "POST", path, json=mark_body(("s1", "SENSITIVE_LEGAL"), reason="AUT-999"), key="k"
+    )
+    assert superset.status_code == disjoint.status_code == reason.status_code == 409
+    identical = await call(state, "POST", path, json=mark_body(("s1", "SENSITIVE_LEGAL")), key="k")
+    assert identical.status_code == 200 and identical.json() == first.json()
+    assert [row.segment_id for row in rows(state, state.recording)] == ["s1"]
+    for response in (first, superset, disjoint, reason, identical):
+        assert SENTINEL not in response.text
