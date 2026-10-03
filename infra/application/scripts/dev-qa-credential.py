@@ -42,6 +42,22 @@ IDENTITIES = {
         folder="/sales-xray/dev-fixture-accounts",
         secret="AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF",  # noqa: S106 - a name, not a value
     ),
+    # AUT-984: Admin Organisations operator, read-only and denied (AUT-961).
+    "organisation-operator": Identity(
+        email="qa-org-operator-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR",  # noqa: S106 - a name, not a value
+    ),
+    "organisation-reader": Identity(
+        email="qa-org-reader-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_READER",  # noqa: S106 - a name, not a value
+    ),
+    "organisation-denied": Identity(
+        email="qa-org-denied-aut961@example.test",
+        folder="/sales-xray/dev-fixture-accounts",
+        secret="AC_DEV_FIXTURE_PASSWORD_ORG_DENIED",  # noqa: S106 - a name, not a value
+    ),
 }
 INFISICAL_ENVIRONMENT = "dev"
 INFISICAL_RUN = "/usr/local/sbin/ac-infisical-run"
