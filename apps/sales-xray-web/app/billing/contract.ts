@@ -102,7 +102,7 @@ export type Plan = {
   includedMinutes: number | null;
   seatMin: number | null;
   seatMax: number | null;
-  perSeat?: boolean;
+  perSeat: boolean;
   longestCallMinutes: number | null;
   retentionDays: number | null;
   rolloverMonths: number | null;
@@ -162,8 +162,7 @@ export function parsePlan(value: unknown, path = "plan"): Plan {
     includedMinutes: integerOrNull(raw, "included_minutes", path),
     seatMin: integerOrNull(raw, "seat_min", path),
     seatMax: integerOrNull(raw, "seat_max", path),
-    perSeat:
-      raw.per_seat === undefined ? undefined : bool(raw, "per_seat", path),
+    perSeat: raw.per_seat === undefined ? false : bool(raw, "per_seat", path),
     longestCallMinutes: integerOrNull(raw, "longest_call_minutes", path),
     retentionDays: integerOrNull(raw, "retention_days", path),
     rolloverMonths: integerOrNull(raw, "rollover_months", path),
