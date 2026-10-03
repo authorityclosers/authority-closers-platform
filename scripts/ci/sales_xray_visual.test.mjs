@@ -93,7 +93,7 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
   try {
     await new Promise((ready, reject) => {
       server.once("error", reject);
-      server.listen(18216, "127.0.0.1", ready);
+      server.listen(0, "127.0.0.1", ready);
     });
     browser = await chromium.launch();
     const require = createRequire(import.meta.url);
@@ -112,6 +112,7 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
       viewports[1],
       directory,
       axePath,
+      `http://127.0.0.1:${server.address().port}`,
     );
     assert.equal(row.capture_status, "measured");
     assert.ok(row.overflow_px > 0);
@@ -127,6 +128,7 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
       viewports[1],
       directory,
       axePath,
+      `http://127.0.0.1:${server.address().port}`,
     );
     assert.equal(missing.console_error_count, null);
     assert.equal(missing.axe_critical_count, null);

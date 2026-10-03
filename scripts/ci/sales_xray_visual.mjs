@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
@@ -97,7 +98,7 @@ export function allowedRequest(request, origin, routes) {
   return (
     url.origin === origin &&
     request.method() === "GET" &&
-    (url.pathname.startsWith("/_next/") ||
+    (url.pathname.startsWith("/_next/static/") ||
       routes.has(url.pathname + url.search) ||
       /^\/(brand|brands|fonts|lightbox|experience-kit|media)\//.test(
         url.pathname,
@@ -124,7 +125,14 @@ export function unavailable(item, viewport) {
   };
 }
 
-export async function capture(page, item, viewport, output, axePath) {
+export async function capture(
+  page,
+  item,
+  viewport,
+  output,
+  axePath,
+  origin = "http://127.0.0.1:18216",
+) {
   const row = unavailable(item, viewport);
   let consoleErrors = 0;
   let uncaught = 0;
@@ -137,7 +145,8 @@ export async function capture(page, item, viewport, output, axePath) {
   try {
     row.failure_stage = "navigation";
     await page.clock.setFixedTime(new Date("2026-10-03T12:00:00Z"));
-    const response = await page.goto(`http://127.0.0.1:18216${item.route}`, {
+    if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) return row;
+    const response = await page.goto(`${origin}${item.route}`, {
       waitUntil: "networkidle",
       timeout: 35000,
     });
@@ -157,10 +166,15 @@ export async function capture(page, item, viewport, output, axePath) {
         .click({ timeout: 5000 });
     row.failure_stage = "fonts_and_images";
     await page.evaluate(async () => {
-      await document.fonts.ready;
-      await Promise.all(
-        [...document.images].map((image) => image.decode().catch(() => {})),
-      );
+      await Promise.race([
+        Promise.all([
+          document.fonts.ready,
+          ...[...document.images].map((image) =>
+            image.decode().catch(() => {}),
+          ),
+        ]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error()), 8000)),
+      ]);
     });
     const overflow = await page.evaluate(() => {
       const width = document.documentElement.clientWidth;
@@ -190,9 +204,14 @@ export async function capture(page, item, viewport, output, axePath) {
     try {
       await page.addScriptTag({ path: axePath });
       const result = await page.evaluate(async () => {
-        const results = await window.axe.run(document, {
-          resultTypes: ["violations", "incomplete"],
-        });
+        const results = await Promise.race([
+          window.axe.run(document, {
+            resultTypes: ["violations", "incomplete"],
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error()), 8000),
+          ),
+        ]);
         return {
           critical: results.violations.filter((v) => v.impact === "critical")
             .length,
@@ -238,6 +257,7 @@ async function main() {
     rows,
     elapsed_seconds: null,
     renderer_status: "unavailable",
+    started_at: new Date().toISOString(),
   };
   const started = Date.now();
   // Persist unavailable rows before launching: dependency/server/deadline failures
@@ -251,15 +271,29 @@ async function main() {
   let server;
   let browser;
   const deadline = setTimeout(() => process.emit("SIGTERM"), 240000);
-  const stop = () => {
+  const stop = async () => {
     if (server?.pid) {
       try {
         process.kill(-server.pid, "SIGTERM");
       } catch {}
+      if (server.exitCode === null)
+        await new Promise((done) => {
+          const timer = setTimeout(() => {
+            try {
+              process.kill(-server.pid, "SIGKILL");
+            } catch {}
+            done();
+          }, 3000);
+          server.once("exit", () => {
+            clearTimeout(timer);
+            done();
+          });
+        });
     }
   };
-  process.once("SIGTERM", () => {
-    stop();
+  process.once("SIGTERM", async () => {
+    await browser?.close();
+    await stop();
     process.exit(0);
   });
   try {
@@ -277,6 +311,22 @@ async function main() {
     const axePath = axeRequire.resolve("axe-core");
     receipt.axe_version = axeRequire("axe-core/package.json").version;
     receipt.playwright_version = "1.58.2";
+    const occupied = await new Promise((done) => {
+      const socket = createConnection({ host: "127.0.0.1", port: 18216 });
+      socket.once("connect", () => {
+        socket.destroy();
+        done(true);
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        done(false);
+      });
+      socket.setTimeout(1000, () => {
+        socket.destroy();
+        done(true);
+      });
+    });
+    if (occupied) throw new Error();
     // No credentials inherited by the app process, and no configured API origin.
     const env = Object.fromEntries(
       ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]
@@ -288,7 +338,7 @@ async function main() {
       [
         resolve("apps/sales-xray-web/node_modules/next/dist/bin/next"),
         "dev",
-        "--webpack",
+        "--turbopack",
         "--hostname",
         "127.0.0.1",
         "--port",
@@ -308,7 +358,9 @@ async function main() {
       },
     );
     // Avoid accepting an unrelated listener on the test port.
-    server.on("error", stop);
+    server.on("error", () => {
+      void stop();
+    });
     await new Promise((resolveReady) => setTimeout(resolveReady, 1500));
     if (server.exitCode !== null) throw new Error();
     browser = await chromium.launch();
@@ -350,7 +402,7 @@ async function main() {
   } finally {
     clearTimeout(deadline);
     await browser?.close();
-    stop();
+    await stop();
     await save();
   }
 }

@@ -19,13 +19,20 @@ staging journey proof. Screens without a fictional state need a catalogue
 extension; the complete catalogue is conservative component coverage, not proof
 of every authenticated route or feature state.
 
-The renderer launches a temporary Next development process on `127.0.0.1:18216`,
+The renderer launches a temporary Next Turbopack development process on `127.0.0.1:18216`,
 with a 1024 MiB JavaScript heap limit, no configured upstream API, and an explicit
 environment allow-list. A fresh, nonpersistent Chromium context per capture has
 no cookies or sign-in state. Browser requests allow only GETs for the selected
 fictional routes and local static assets. APIs, review-observation APIs, external
 hosts, writes, WebSockets, service workers and downloads are refused. No env
 files, database, provider SDK, real audio or host service is needed.
+
+The existing opt-in development review alias in `next.config.ts` also supports
+Turbopack. This small config change is necessary because the existing shell CSS
+contains global-only module selectors that the webpack development path rejects.
+The same `NODE_ENV=development` plus `AC_SALES_XRAY_REVIEW=1` condition controls
+both bundlers, and focused config tests exclude the alias from production and
+ordinary development. The renderer never changes application source files.
 
 Playwright is exactly `1.58.2` from the frozen Node lockfile. Axe is the already
 locked `4.13.0` transitive dependency of the Next accessibility lint package;
