@@ -1,0 +1,56 @@
+{
+  "version": "call-types/1",
+  "status": "proposed",
+  "about": "Call types derived by code from structured call-map inputs, never by a model (AUT-341 decision brief, decision 1; AUT-629). The CTO proposes the list, the rule readings and the thresholds; the owner confirms them at the AC-SVAL Gate 2 review together with the signal list. Until then every threshold below is a proposed test setting, not approved business semantics. Report Lab v8 reuses this list. It changes only through a new file version. The twins are call_type.py and apps/sales-xray-web/app/call-type.ts.",
+  "order": [
+    "not_sales",
+    "objection_negotiation",
+    "prospect_story",
+    "screening",
+    "first_meeting",
+    "pitch_demo",
+    "follow_up_closing",
+    "full_sales"
+  ],
+  "fallback": "unclear",
+  "types": {
+    "not_sales": {
+      "label": "Not a sales call",
+      "rule": "call_purpose is support, onboarding, internal or personal. Never inferred from phases; a missing or unclear purpose gives unclear."
+    },
+    "objection_negotiation": {
+      "label": "Objection or negotiation",
+      "rule": "Objection time (objection phases joined with objection spans, overlaps counted once) is more than the time of every other stage."
+    },
+    "prospect_story": {
+      "label": "Prospect story (mostly listening)",
+      "rule": "Prospect talk share is more than prospect_share_over; exactly that value does not match."
+    },
+    "screening": {
+      "label": "Screening call",
+      "rule": "Call is at most short_call_ms, at least one qualification item is confirmed, there is no pitch, and the outcome advances or stops (follow_up, disqualified or lost)."
+    },
+    "first_meeting": {
+      "label": "First meeting (questions only)",
+      "rule": "Discovery is present, with no pitch and no close."
+    },
+    "pitch_demo": {
+      "label": "Pitch or demo",
+      "rule": "Pitch time is more than pitch_share_over of the call (exactly half does not match) and discovery is at most little_questions_ms."
+    },
+    "follow_up_closing": {
+      "label": "Follow-up or closing call",
+      "rule": "Discovery is at most little_questions_ms and a close phase or a measured price moment is present."
+    },
+    "full_sales": {
+      "label": "Full sales call",
+      "rule": "Discovery, pitch and close are all present."
+    }
+  },
+  "thresholds": {
+    "prospect_share_over": 0.6,
+    "pitch_share_over": 0.5,
+    "short_call_ms": 600000,
+    "little_questions_ms": 120000
+  }
+}
