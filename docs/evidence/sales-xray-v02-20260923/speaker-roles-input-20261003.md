@@ -29,6 +29,22 @@ denial, with a missing-actor regression case.
   `uv run ruff check packages/python tests`, `uv run mypy packages/python`: pass.
 - All fixtures are fictional. No provider call, usage, database or runtime change.
 
+### CI source-pin correction
+
+The first CI run at `0ad29a88` failed only
+`test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics`:
+the optional context changed `reports.py`, while the revision-7 source pin still
+described main. The failure was reproduced locally. Context validation now admits
+the optional names-free snapshot, so the source-owned validator identity advances
+to `ac.sales-xray.report-validator/8` and the test pins the resulting module hash
+`8ea811449988044c4745965b82b1349f2f67881eebb4ebae70f74f890b93c896`.
+Retained recovery uses this new identity; existing audit/history rows stay intact.
+
+After correction, 227 tests passed across reports, speaker-role input, alignment,
+source context, prompt revisions, retained C5 recovery and failure details. Ruff
+format/check and mypy pass. The earlier 198-case result remains the original slice
+proof; these overlapping follow-up cases are not added to it as distinct tests.
+
 The canonical JSON prompt bodies were compared directly with the reports module
 from pinned main (using the fictional `source_and_facts` fixture, Gemini 3.8 Flash,
 the unchanged profile and each revision's pack). All six were byte-identical:

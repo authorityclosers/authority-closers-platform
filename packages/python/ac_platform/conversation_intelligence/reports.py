@@ -1691,7 +1691,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/7"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/8"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
