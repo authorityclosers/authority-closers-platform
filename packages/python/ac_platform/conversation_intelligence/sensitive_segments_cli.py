@@ -1,10 +1,12 @@
-"""Reference-only receipts for withheld sensitive segments (AUT-519 §4, AUT-521).
+"""Reference-only receipts and legal-exposure census (AUT-519 §4, AUT-915).
 
 ``receipt`` renders every reader surface of one recording through the same
 post-authorization functions the routes use, as the owner projection, inside a
 transaction that is always rolled back. ``overlap`` checks a body fetched over
 HTTP (JSON or ``.docx``). Both print JSON lines with counts and hashes only;
-no segment text, quote or report prose is ever printed.
+no segment text, quote or report prose is ever printed. ``census`` detects word
+patterns in retained C2 transcripts; its optional request file contains API
+paths and mark bodies for review only. No command applies a mark.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import json
 import os
 import sys
 import zipfile
+from collections import Counter
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,7 +41,9 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
     ConversationRecording,
+    ConversationReportDraft,
     ConversationReviewAssignment,
     ConversationRun,
 )
@@ -59,7 +64,12 @@ from ac_platform.conversation_intelligence.sensitive_segments import (
     markers,
     shared_grams,
 )
-from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
+from ac_platform.conversation_intelligence.sensitive_segments_store import (
+    _effective_statement,
+    marks_in_force,
+    withheld_plan_for,
+)
+from ac_platform.conversation_intelligence.sensitive_terms import VERSION, detect_sensitive_terms
 from ac_platform.kernel.authz import ActorContext
 
 _WORD_TEXT = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
@@ -85,6 +95,11 @@ def parser() -> argparse.ArgumentParser:
     overlap = commands.add_parser("overlap", help="count shared 4-grams in a fetched body")
     overlap.add_argument("--recording-id", type=UUID, required=True)
     overlap.add_argument("--file", required=True)
+    census = commands.add_parser(
+        "census", help="read-only candidate IDs and report citation counts"
+    )
+    census.add_argument("--recording-id", type=UUID, action="append", default=[])
+    census.add_argument("--requests-out", type=Path)
     return root
 
 
@@ -124,6 +139,8 @@ async def render_surfaces(
     )
     if recording is None:
         raise CommandError("Recording not found.")
+    if not await marks_in_force(database, recording_id=recording.id):
+        raise CommandError("Recording has no in-force marks.")
     marked = await _marked_grams(database, recording.id)
     app = ConversationApplication(database)
     owner = ActorContext(recording.person_id, uuid4(), recording.tenant_id)
@@ -286,11 +303,126 @@ async def overlap(args: argparse.Namespace, body: bytes) -> list[dict[str, Any]]
     return [overlap_line(body, marked)]
 
 
+def _citations(value: Any) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    if isinstance(value, dict):
+        if isinstance(value.get("segment_id"), str):
+            counts[value["segment_id"]] += 1
+        for child in value.values():
+            counts.update(_citations(child))
+    elif isinstance(value, list):
+        for child in value:
+            counts.update(_citations(child))
+    return counts
+
+
+async def census_lines(database: AsyncSession, recording_ids: list[UUID]) -> list[dict[str, Any]]:
+    """Three SELECTs; raw C2/report payloads stay in-process, never in output."""
+    c2 = (
+        select(ConversationCheckpoint)
+        .where(ConversationCheckpoint.stage == "C2", ConversationCheckpoint.erased_at.is_(None))
+        .order_by(ConversationCheckpoint.created_at, ConversationCheckpoint.id)
+    )
+    reports = (
+        select(ConversationReportDraft)
+        .where(ConversationReportDraft.erased_at.is_(None))
+        .order_by(ConversationReportDraft.created_at, ConversationReportDraft.id)
+    )
+    if recording_ids:
+        c2 = c2.where(ConversationCheckpoint.recording_id.in_(recording_ids))
+        reports = reports.where(ConversationReportDraft.recording_id.in_(recording_ids))
+    revisions = {}
+    for checkpoint in await database.scalars(c2):
+        payload = checkpoint.payload or {}
+        if isinstance(payload.get("revision"), str) and isinstance(payload.get("segments"), list):
+            revisions[checkpoint.recording_id, payload["revision"]] = payload["segments"]
+    citations: dict[tuple[UUID, str], dict[str, Counter[str]]] = {}
+    for report in await database.scalars(reports):
+        revision = (report.transcript or {}).get("revision")
+        if isinstance(revision, str) and report.payload is not None:
+            runs = citations.setdefault((report.recording_id, revision), {})
+            runs.setdefault(str(report.run_id), Counter()).update(_citations(report.payload))
+    marked = {
+        (m.transcript_revision, m.segment_id)
+        for m in await database.scalars(_effective_statement())
+    }
+    lines = []
+    for (recording_id, revision), segments in revisions.items():
+        hits = detect_sensitive_terms(
+            (s["id"], s["text"])
+            for s in segments
+            if isinstance(s, dict)
+            and isinstance(s.get("id"), str)
+            and isinstance(s.get("text"), str)
+        )
+        runs = citations.get((recording_id, revision), {})
+        bound_runs: list[tuple[str | None, Counter[str]]] = list(runs.items()) or [
+            (None, Counter())
+        ]
+        for segment_id, category, rule_id in hits:
+            for run_id, counts in bound_runs:
+                lines.append(
+                    {
+                        "recording_id": str(recording_id),
+                        "transcript_revision": revision,
+                        "run_id": run_id,
+                        "segment_id": segment_id,
+                        "category": category,
+                        "rule_id": rule_id,
+                        "cited_in_report": counts[segment_id],
+                        "already_marked": (revision, segment_id) in marked,
+                    }
+                )
+    return lines
+
+
+async def census(args: argparse.Namespace) -> list[dict[str, Any]]:
+    engine = create_async_engine(_database_url(), pool_pre_ping=True)
+    try:
+        sessions = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sessions() as database, database.begin() as transaction:
+            try:
+                return await census_lines(database, args.recording_id)
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+def mark_requests(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    requests = {}
+    for line in lines:
+        if line["already_marked"]:
+            continue
+        key = (
+            line["recording_id"],
+            line["transcript_revision"],
+            line["segment_id"],
+            line["rule_id"],
+        )
+        requests[key] = {
+            "path": f"/v1/platform/sensitive-segments/recordings/{line['recording_id']}/marks",
+            "body": {
+                "transcript_revision": line["transcript_revision"],
+                "segments": [{"segment_id": line["segment_id"], "category": line["category"]}],
+                "reason_ref": f"AUT-524 census {VERSION}:{line['rule_id']}",
+            },
+        }
+    return list(requests.values())
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parser().parse_args(argv)
         if args.command == "receipt":
             lines = run_async(receipt(args))
+        elif args.command == "census":
+            lines = run_async(census(args))
+            if args.requests_out:
+                args.requests_out.write_text(
+                    "".join(json.dumps(r, sort_keys=True) + "\n" for r in mark_requests(lines)),
+                    encoding="utf-8",
+                )
         else:
             lines = run_async(overlap(args, Path(args.file).read_bytes()))
     except CommandError as exc:
@@ -302,6 +434,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for line in lines:
         print(json.dumps(line, sort_keys=True))
+    if args.command == "receipt" and any(
+        "path" in line and not line["quote_is_marker"] for line in lines
+    ):
+        return 2
     return 0
 
 

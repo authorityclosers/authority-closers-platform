@@ -1,0 +1,25 @@
+{
+  "version": "sensitive_terms_v1",
+  "rules": [
+    {
+      "rule_id": "informal_books",
+      "category": "SENSITIVE_FINANCIAL",
+      "patterns": ["informal books", "second books", "off the books", "kaccha hisaab", "kachcha hisaab", "kaccha books", "कच्चा हिसाब", "कच्ची बही", "दो बही"]
+    },
+    {
+      "rule_id": "cash_only",
+      "category": "SENSITIVE_FINANCIAL",
+      "patterns": ["cash only", "cash-only", "sirf cash", "सिर्फ कैश", "केवल नकद"]
+    },
+    {
+      "rule_id": "tax_treatment",
+      "category": "SENSITIVE_LEGAL",
+      "patterns": ["tax treatment", "tax avoidance", "tax evasion", "tax bachana", "tax bachane", "tax saving", "टैक्स बचाना", "टैक्स बचाने", "टैक्स चोरी", "कर चोरी", "टैक्स का"]
+    },
+    {
+      "rule_id": "undeclared_income",
+      "category": "SENSITIVE_FINANCIAL",
+      "patterns": ["undeclared income", "unreported income", "black money", "unaccounted income", "अघोषित आय", "काला धन", "बिना हिसाब", "income declare nahi"]
+    }
+  ]
+}
