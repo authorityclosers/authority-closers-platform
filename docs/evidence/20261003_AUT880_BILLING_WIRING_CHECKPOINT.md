@@ -59,10 +59,14 @@ evidence for this change.
 
 `node --test scripts/sales-xray-billing-browser.test.mjs` runs the fictional
 purchase → verification → balance → billing → cancellation journey at both
-widths. With no supplied origin it owns a temporary Next dev child on loopback
-3027, disables the API origin in that child, and terminates it in `finally`.
-No Paperclip runtime service is configured for this issue. Results from this
-owned test server will be recorded in the next checkpoint.
+widths. With no supplied origin it owns a temporary Next dev child on
+a free loopback port, disables the API origin in that child, and terminates it
+in `finally`. No Paperclip runtime service is configured for this issue.
+The fictional browser journey passed at **390px and 1440px**, with balance and
+cancellation preserved on reload, no page errors, no external requests and no
+horizontal overflow on checkout, return and Billing. The test awaits payment-page hydration before
+clicking the fictional provider outcome; the initial cold-navigation attempt
+clicked the server-rendered button before its handler was attached and failed.
 
 The fake browser client uses fictional sessionStorage records, not a real
 database or the backend payment provider. Actual dev billing activation,

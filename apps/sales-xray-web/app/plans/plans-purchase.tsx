@@ -150,21 +150,19 @@ function Purchase({ client }: { client: BillingClient }) {
       checkoutOrder={prepared?.order}
       topUpPacks={
         catalogue
-          ? catalogue
-              .filter(onSale)
-              .flatMap((plan) =>
-                plan.topUpPacks
-                  .filter((pack) => pack.pricePaise !== null)
-                  .map((pack) => ({
-                    key: pack.key,
-                    planKey: plan.key,
-                    title: `${plan.name} Top-up`,
-                    audience: plan.audience,
-                    minutes: pack.minutes,
-                    pricePaise: pack.pricePaise!,
-                    gstInclusive: plan.key === "personal",
-                  })),
-              )
+          ? catalogue.filter(onSale).flatMap((plan) =>
+              plan.topUpPacks
+                .filter((pack) => pack.pricePaise !== null)
+                .map((pack) => ({
+                  key: pack.key,
+                  planKey: plan.key,
+                  title: `${plan.name} Top-up`,
+                  audience: plan.audience,
+                  minutes: pack.minutes,
+                  pricePaise: pack.pricePaise!,
+                  gstInclusive: plan.key === "personal",
+                })),
+            )
           : TOP_UP_PACKS
       }
       busy={busy}
