@@ -26,9 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = "infra/watchdog/ac_watchdog.py"
 INSTALLER_PATH = "infra/watchdog/install-watchdog.sh"
 FIXTURE = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/c0.json").read_text())
-SOURCE_RECEIPT = json.loads(
-    (ROOT / "tests/infra/fixtures/ac_watchdog/aut850-reconcile.json").read_text()
-)["source"]
+SOURCE_RECEIPT = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/aut932.json").read_text())[
+    "source"
+]
 STUDIO = FIXTURE["studio"]
 GIT = shutil.which("git")
 BASH = shutil.which("bash")
@@ -68,8 +68,17 @@ def test_source_matches_root_export_with_only_ceo_approved_scope_addition():
     source = (ROOT / SOURCE_PATH).read_bytes()
     metadata = SOURCE_RECEIPT
     assert hashlib.sha256(source).hexdigest() == metadata["repository_sha256"]
-    assert source.count(b"|scripts/ci/|scripts/data-changes/") == 1
-    original = source.replace(b"|scripts/ci/|scripts/data-changes/", b"|scripts/data-changes/")
+    begin, end = b"# AUT-932 identity rule: begin", b"# AUT-932 identity rule: end\n"
+    assert source.count(begin) == source.count(end) == 1
+    aut850 = source[: source.index(begin)] + source[source.index(end) + len(end) :]
+    guard = b"UI_GUARD_EXCLUDED.search(f)\n               or identity_path(f)]"
+    assert aut850.count(guard) == 1
+    aut850 = aut850.replace(guard, b"UI_GUARD_EXCLUDED.search(f)]")
+    assert aut850.count(b" or identity_path(f)]") == 1
+    aut850 = aut850.replace(b" or identity_path(f)]", b"]")
+    assert hashlib.sha256(aut850).hexdigest() == metadata["aut850_sha256"]
+    assert aut850.count(b"|scripts/ci/|scripts/data-changes/") == 1
+    original = aut850.replace(b"|scripts/ci/|scripts/data-changes/", b"|scripts/data-changes/")
     assert hashlib.sha256(original).hexdigest() == metadata["original_sha256"]
     assert len(source.splitlines()) == metadata["lines"]
     assert metadata["redactions"] == metadata["config_injection"] == []
@@ -508,6 +517,71 @@ def test_merge_classifier_change_with_only_cto_review_requires_ceo(watchdog, mon
     assert approver is None and "scripts/ci/merge_class.py" in why
 
 
+# PR #221 (AUT-786: organisation roles and ownership transfer) merged on one review (AUT-932).
+PR_221 = [
+    "packages/python/ac_platform/http/organisation.py",
+    "packages/python/ac_platform/organisations/service.py",
+    "tests/integration/test_organisation_owner_transfer_postgresql.py",
+    "tests/unit/http/test_organisation_member_writes.py",
+]
+
+
+@pytest.mark.parametrize("files", [PR_221, *[[path] for path in PR_221]])
+def test_identity_change_with_only_cto_review_requires_ceo(watchdog, monkeypatch, files):
+    def github(path):
+        if path == "/pulls/221":
+            return {"changed_files": len(files)}
+        assert path == "/pulls/221/files?per_page=100&page=1"
+        return [{"filename": name} for name in files]
+
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    approver, why = watchdog.single_review(None, 221, "a" * 40, "task", "cto-review")
+    assert approver is None and files[0] in why
+
+
+IDENTITY_PARITY = [
+    *PR_221,
+    "packages/python/ac_platform/identity/models.py",
+    "packages/python/ac_platform/tenancy/services.py",
+    "packages/python/ac_platform/bootstrap/cli.py",
+    "packages/python/ac_platform/media/delivery_authorizer.py",
+    "apps/sales-xray-web/app/login/page.tsx",
+    "apps/sales-xray-web/app/sign-up.tsx",
+    "apps/sales-xray-web/app/sign_out.tsx",
+    "apps/sales-xray-web/app/signIn.tsx",
+    "apps/sales-xray-web/app/SignOutButton.tsx",
+    "apps/admin-web/app/adminRoles.ts",
+    "apps/admin-web/app/OAuthCallback.tsx",
+    "apps/admin-web/app/people/grants/page.tsx",
+    "apps/admin-web/app/workspace-access.tsx",
+    "apps/admin-web/app/members/list.tsx",
+    "packages/x/jwt.py",
+    "packages/x/review_invitations.py",
+    "packages/x/session-expired.ts",
+    "packages/python/ac_platform/conversation_intelligence/author_notes.py",
+    "apps/sales-xray-web/app/authority-closers-logo.svg",
+    "docs/authoring-guide.md",
+    "packages/python/ac_platform/media/signing.py",
+    "apps/sales-xray-web/app/maintenance.tsx",
+    "apps/sales-xray-web/app/accessibility.css",
+    "apps/sales-xray-web/app/roleplay/page.tsx",
+    "apps/sales-xray-web/app/remember-choice.ts",
+    "apps/sales-xray-web/app/report-modes.tsx",
+]
+
+
+@pytest.mark.parametrize("case", [str, str.upper])
+@pytest.mark.parametrize("path", IDENTITY_PARITY)
+def test_identity_rule_matches_merge_classifier(watchdog, path, case):
+    sys.path.insert(0, str(ROOT))
+    from scripts.ci.merge_class import classify_changed_files
+
+    path = case(path)
+    records = [{"filename": path, "status": "modified"}]
+    result = classify_changed_files(records, {path: "fictional head"}, changed_files=1)
+    assert watchdog.identity_path(path) == ("protected:identity" in result["reasons"])
+
+
 @pytest.mark.parametrize("files", [None, [], [{"filename": "tests/unit/test_reports.py"}]])
 def test_single_review_fails_closed_on_unknown_scope(watchdog, monkeypatch, files):
     monkeypatch.setattr(
@@ -827,6 +901,9 @@ def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
         "apps/sales-xray-web/app/vitest.config.ts",
         "apps/sales-xray-web/app/eslint.config.mjs",
         "apps/sales-xray-web/public/package.json",
+        "apps/sales-xray-web/app/members/page.tsx",
+        "apps/sales-xray-web/app/sign-in/page.tsx",
+        "apps/sales-xray-web/app/SignOutButton.tsx",
     ]:
         assert "outside" in scope(ok + [path])
     assert scope(ok, changed=5) == scope([]) == "file list incomplete"
@@ -848,6 +925,10 @@ def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
         ("cto", "apps/sales-xray-web/app/page.tsx", False, "green", False, True),
         ("cto", "db/migrations/versions/x.py", False, "green", False, False),
         ("cto", "scripts/ci/merge_class.py", False, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/members/page.tsx", False, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/sign-in/page.tsx", False, "green", False, False),
+        ("cto", "apps/sales-xray-web/app/members/page.tsx", False, "green", False, False),
+        ("ceo", "apps/sales-xray-web/app/sign-in/page.tsx", False, "green", False, True),
         ("ceo", "infra/x.py", False, "red", True, True),
         ("ceo", "infra/x.py", False, "red", False, False),
         ("ceo", "infra/x.py", True, "red", True, False),
@@ -901,6 +982,35 @@ def test_aut303_pr_merge_routes(
     conn = SimpleNamespace(execute=lambda *args: SimpleNamespace(fetchone=lambda: ("AUT-FAKE",)))
     watchdog.pull_requests(conn, {"sent": {}}, {}, [], main)
     assert calls == ([(1, sha, "task/platform/fictional")] if expected else [])
+
+
+@pytest.mark.parametrize(
+    ("previous", "eligible"),
+    [
+        ("apps/sales-xray-web/app/old-page.tsx", True),
+        ("apps/sales-xray-web/app/members/page.tsx", False),
+        ("apps/sales-xray-web/app/signIn.tsx", False),
+    ],
+)
+def test_ui_guard_scope_checks_rename_sources_for_identity(
+    watchdog, monkeypatch, previous, eligible
+):
+    # AUT-932: a rename out of an identity path is still an identity change.
+    def github(path):
+        if path.startswith("/pulls/1/files"):
+            return [
+                {
+                    "filename": "apps/sales-xray-web/app/dashboard/page.tsx",
+                    "previous_filename": previous,
+                }
+            ]
+        return {"changed_files": 1}
+
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    monkeypatch.setattr(watchdog, "unresolved_threads", lambda number: 0)
+    why = watchdog.ui_guard_scope(1)
+    assert (why == "") is eligible
+    assert eligible or previous in why
 
 
 def test_aut303_spools_deduplicate_retry_and_archive(watchdog, monkeypatch, shadow_db, tmp_path):

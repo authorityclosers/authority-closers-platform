@@ -335,6 +335,22 @@ SENSITIVE_PATH = re.compile(
     r"|pnpm-lock\.yaml$|uv\.lock$|pyproject\.toml$|pnpm-workspace\.yaml$)"
     r"|(^|/)AGENTS\.md$|(^|/)package\.json$|(^|/)(billing|payments?|identity|security|secrets?|auth)/"
     r"|(^|/)(auth|identity|security|permissions?|secrets?|crypto|billing|payments?)[^/]*\.(py|ts|tsx)$")
+# AUT-932 identity rule: begin (mirrors protected:identity in scripts/ci/merge_class.py)
+IDENTITY_TERMS = re.compile(
+    r"^packages/python/ac_platform/(identity|authorization|tenancy|organisations|bootstrap)/"
+    r"|identit|authenticat|authori[sz]|oauth|session|login|logout|sign[-_]in|sign[-_]?(up|out)|password"
+    r"|credential|csrf|permission|capabilit|organi[sz]ation|membership|tenant|tenancy|invit|ownership|security")
+IDENTITY_WORDS = {"auth", "authn", "authz", "signin", "sso", "jwt", "acl", "acls", "rbac", "role", "roles",
+                  "grant", "grants", "access", "member", "members", "cookie", "cookies"}
+
+
+def identity_path(path: str) -> bool:
+    """Identity, auth, sessions, permissions/roles or organisation membership; 'author'/'authority' stay ordinary."""
+    split = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "-", path).casefold()  # SignIn -> sign-in
+    if IDENTITY_TERMS.search(path.casefold()) or IDENTITY_TERMS.search(split):
+        return True
+    return not IDENTITY_WORDS.isdisjoint(re.split(r"[^a-z0-9]+", split))
+# AUT-932 identity rule: end
 
 
 def changed_files(number: int) -> list[str] | None:
@@ -357,7 +373,7 @@ def sensitive_scope(number: int) -> str:
     files = changed_files(number)
     if files is None:
         return "file list unreadable or incomplete"
-    hits = [f for f in files if SENSITIVE_PATH.search(f)]
+    hits = [f for f in files if SENSITIVE_PATH.search(f) or identity_path(f)]
     return f"{len(hits)} sensitive file(s), e.g. {hits[0]}" if hits else ""
 
 
@@ -396,7 +412,8 @@ def ui_guard_scope(number: int) -> str:
         return "file list unreadable"
     if not files or len(set(files)) < expected:
         return "file list incomplete"
-    outside = [f for f in files if not f.startswith(UI_GUARD_PREFIXES) or UI_GUARD_EXCLUDED.search(f)]
+    outside = [f for f in files if not f.startswith(UI_GUARD_PREFIXES) or UI_GUARD_EXCLUDED.search(f)
+               or identity_path(f)]
     if outside:
         return f"{len(outside)} file(s) outside the UI-only scope, e.g. {outside[0]}"
     threads = unresolved_threads(number)
