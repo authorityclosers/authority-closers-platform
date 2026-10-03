@@ -67,6 +67,7 @@ PLAN_CATALOGUE = "20261002_0065"
 PLATFORM_BILLING_MANAGE = "20261002_0066"
 SENSITIVE_SEGMENT_MARKS = "20261002_0067"
 INACTIVE_PLAN_VALUES = "20261003_0068"
+BILLING_INVOICES = "20261003_0069"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -114,6 +115,7 @@ HEADS = (
     PLATFORM_BILLING_MANAGE,
     SENSITIVE_SEGMENT_MARKS,
     INACTIVE_PLAN_VALUES,
+    BILLING_INVOICES,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -130,6 +132,12 @@ TABLELESS_VERSIONED_HEADS = (
     INACTIVE_PLAN_VALUES,
 )
 NEW_TABLES = {
+    BILLING_INVOICES: (
+        "billing_invoice_counters",
+        "billing_buyer_tax_details",
+        "billing_invoices",
+        "billing_credit_notes",
+    ),
     PRACTICE: (
         "practice_set_versions",
         "practice_attempts",
@@ -347,6 +355,10 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         assert module.VERSIONED_PARITY_CONTRACTS[SENSITIVE_SEGMENT_MARKS] == (
             "ac-postgres-parity-v40",
             module.PLAN_CATALOGUE_PARITY_TABLES + ("conversation_sensitive_segment_marks",),
+        )
+        assert module.VERSIONED_PARITY_CONTRACTS[BILLING_INVOICES] == (
+            "ac-postgres-parity-v41",
+            module.INACTIVE_PLAN_VALUES_PARITY_TABLES + NEW_TABLES[BILLING_INVOICES],
         )
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (

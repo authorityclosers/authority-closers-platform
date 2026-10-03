@@ -6,6 +6,23 @@ from pydantic import AnyHttpUrl, ValidationError
 from ac_platform.application.settings import Settings
 
 
+def test_invoice_seller_settings_are_empty_except_the_approved_legal_name(monkeypatch):
+    monkeypatch.setenv("AC_BILLING_INVOICE_PREFIX", "FICTIONAL")
+    settings = Settings(_env_file=None)
+    assert (
+        settings.billing_seller_legal_name == "Vikriya Solutions LLP (trading as Estate Autopilots)"
+    )
+    assert settings.billing_invoice_prefix == "FICTIONAL"
+    assert not any(
+        (
+            settings.billing_seller_gstin,
+            settings.billing_seller_registered_address,
+            settings.billing_seller_state_code,
+            settings.billing_seller_sac,
+        )
+    )
+
+
 def test_blank_optional_public_learner_tenant_is_unconfigured() -> None:
     settings = Settings(public_learner_tenant_id="", operations_tenant_id="")
 
