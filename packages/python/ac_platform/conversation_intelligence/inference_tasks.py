@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, NoReturn, cast
 
+from ac_platform.conversation_intelligence import reports
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import (
@@ -787,6 +788,8 @@ def _validated_text_input(
     *,
     task: Literal["facts", "coaching"],
     transcript: Mapping[str, Any],
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if task_input.task != task or task_input.checkpoint != ("C4" if task == "facts" else "C5"):
         _fail("task_input_invalid")
@@ -849,8 +852,21 @@ def _validated_text_input(
         ):
             _fail("task_prompt_chunk_mismatch")
     elif "source_context" in user_payload:
-        if user_payload["source_context"] != coaching_source_context(transcript):
+        context = user_payload["source_context"]
+        if (
+            isinstance(context, Mapping)
+            and "speaker_roles" in context
+            and coaching_prompt_revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS
+        ):
+            _fail("task_prompt_speaker_roles_undeclared")
+        try:
+            expected = coaching_source_context(transcript, speaker_roles=speaker_roles)
+        except ReportError:
             _fail("task_prompt_source_context_mismatch")
+        if context != expected:
+            _fail("task_prompt_source_context_mismatch")
+    elif speaker_roles is not None:
+        _fail("task_prompt_source_context_mismatch")
     return validated
 
 
@@ -999,6 +1015,7 @@ def prepare_coaching_input(
     report_language: ReportLanguage = "en",
     qualitative_pack_sha256: str | None = None,
     reasoning_effort: str = "low",
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -1021,6 +1038,7 @@ def prepare_coaching_input(
             coaching_prompt_revision=coaching_prompt_revision,
             report_language=report_language,
             qualitative_pack_sha256=qualitative_pack_sha256,
+            speaker_roles=speaker_roles,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
@@ -1061,10 +1079,18 @@ def validate_coaching_result(
     transcript: Mapping[str, Any],
     *,
     profile: Mapping[str, Any] | None = None,
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> NormalizedTaskOutput:
     """Validate C5 coaching JSON and retain only the normalized qualitative draft."""
 
-    _validated_text_input(task_input, task="coaching", transcript=transcript)
+    _validated_text_input(
+        task_input,
+        task="coaching",
+        transcript=transcript,
+        coaching_prompt_revision=coaching_prompt_revision,
+        speaker_roles=speaker_roles,
+    )
     if task_input.profile_revision is None:
         _fail("profile_revision_missing")
     if profile is not None and not isinstance(profile, Mapping):
