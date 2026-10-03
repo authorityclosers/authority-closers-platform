@@ -1019,6 +1019,7 @@ class ConversationApplication:
             )
         ).all():
             plan.manifest, plan.erased_at, plan.state = None, now, "cancelled"
+            plan.speaker_roles = None
             plan.progress = {}
         for task in (
             await self.database.scalars(
@@ -1101,6 +1102,13 @@ class ConversationApplication:
         )
 
         await erase_submission_labels_for_recording(
+            self.database, tenant_id=recording.tenant_id, recording_id=recording.id
+        )
+        from ac_platform.conversation_intelligence.speaker_map_store import (
+            erase_speaker_maps_for_recording,
+        )
+
+        await erase_speaker_maps_for_recording(
             self.database, tenant_id=recording.tenant_id, recording_id=recording.id
         )
         recording.state, recording.deleted_at = "deleted", now
