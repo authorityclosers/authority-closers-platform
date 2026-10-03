@@ -408,7 +408,7 @@ async function main() {
       receipt.setup_stage = `server_http_${warm.status()}`;
       throw new Error();
     }
-    await warm.body?.cancel();
+    await warm.body?.cancel().catch(() => {});
     receipt.setup_stage = "browser_launch";
     browser = await chromium.launch();
     receipt.browser_version = browser.version();
@@ -454,7 +454,23 @@ async function main() {
     )
       ? "measured"
       : "partial";
-  } catch {
+  } catch (error) {
+    receipt.setup_failure_class = [
+      "Error",
+      "TypeError",
+      "TimeoutError",
+      "AbortError",
+    ].includes(error?.name)
+      ? error.name
+      : "unavailable";
+    receipt.setup_failure_code = [
+      "ECONNREFUSED",
+      "ECONNRESET",
+      "UND_ERR_SOCKET",
+      "ETIMEDOUT",
+    ].includes(error?.cause?.code)
+      ? error.cause.code
+      : null;
     receipt.renderer_status = "unavailable";
   } finally {
     receipt.elapsed_seconds = Math.round((Date.now() - started) / 1000);
