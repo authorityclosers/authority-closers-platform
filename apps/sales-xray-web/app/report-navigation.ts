@@ -7,10 +7,20 @@ export const REPORT_SECTIONS = [
   "analysis",
   "coaching",
 ] as const;
-export type ReportSection = (typeof REPORT_SECTIONS)[number];
+// Other report readers still use these sections; retain their bookmarks.
+const LEGACY_REPORT_SECTIONS = [
+  "prospect",
+  "skills",
+  "next-call-plan",
+] as const;
+export type ReportSection =
+  | (typeof REPORT_SECTIONS)[number]
+  | (typeof LEGACY_REPORT_SECTIONS)[number];
 
 function isSection(value: string): value is ReportSection {
-  return (REPORT_SECTIONS as readonly string[]).includes(value);
+  return (
+    [...REPORT_SECTIONS, ...LEGACY_REPORT_SECTIONS] as readonly string[]
+  ).includes(value);
 }
 
 /** A URL selects a panel of an already-authorized report, never job state. */

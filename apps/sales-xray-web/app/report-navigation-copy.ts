@@ -7,9 +7,9 @@ type NavigationCopy = {
   moments: string;
   analysis: string;
   coaching: string;
-  factors?: string;
-  sound?: string;
-  next?: string;
+  factors: string;
+  sound: string;
+  next: string;
 };
 
 export const REPORT_NAVIGATION_COPY: Record<

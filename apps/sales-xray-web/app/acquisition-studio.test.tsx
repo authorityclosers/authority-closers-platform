@@ -1149,7 +1149,9 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(container.textContent).toContain("The coach’s verdict");
+  expect(
+    container.querySelector('[data-analysis-card="verdict"]')?.textContent,
+  ).toContain(envelope.report.content.verdict);
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
@@ -3096,15 +3098,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
-  const reportSections = [
-    "Overview",
-    "Moments",
-    "Prospect",
-    "Next-call plan",
-    "Sales skills",
-    "Call signals",
-    "Raw data",
-  ];
+  const reportSections = ["Overview", "Moments", "Analysis", "Coaching"];
   expect(
     [
       ...container.querySelectorAll<HTMLAnchorElement>(
@@ -3115,10 +3109,10 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
-  await clickReportSection("Prospect");
+  await clickReportSection("Analysis");
   expect(
     container
-      .querySelector('[data-report-mode-section="prospect"]')
+      .querySelector('[data-report-mode-section="analysis"]')
       ?.hasAttribute("hidden"),
   ).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
@@ -3141,7 +3135,8 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
-  await clickReportSection("Next-call plan");
+  await clickReportSection("Coaching");
+  await click("Coach me on this call");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).toBe(savedAudio);

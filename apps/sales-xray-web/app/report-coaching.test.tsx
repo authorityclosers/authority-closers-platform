@@ -3,6 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportCoaching } from "./report-coaching";
 import type { SalesReport } from "./report-contract";
+import { parseJobResponse } from "./report-contract";
+import fixture from "../tests/fixtures/dipak-overview.json";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -10,6 +12,8 @@ import type { SalesReport } from "./report-contract";
 
 let root: Root;
 let container: HTMLDivElement;
+
+const select = vi.fn();
 
 const sampleReport: SalesReport = {
   summary: "Sample call summary.",
@@ -55,6 +59,7 @@ const sampleReport: SalesReport = {
 
 beforeEach(() => {
   sessionStorage.clear();
+  select.mockClear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -64,12 +69,17 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   sessionStorage.clear();
+  vi.restoreAllMocks();
 });
 
 it("shows only the prompt card and 'Coach me on this call' button initially", async () => {
   await act(async () => {
     root.render(
-      <ReportCoaching report={sampleReport} callId="test-call-123" />,
+      <ReportCoaching
+        report={sampleReport}
+        callId="test-call-123"
+        onSelectEvidence={select}
+      />,
     );
   });
 
@@ -87,7 +97,11 @@ it("shows only the prompt card and 'Coach me on this call' button initially", as
 it("reveals Keep doing, Change first, Next call and Next-call plan when Coach me is clicked", async () => {
   await act(async () => {
     root.render(
-      <ReportCoaching report={sampleReport} callId="test-call-123" />,
+      <ReportCoaching
+        report={sampleReport}
+        callId="test-call-123"
+        onSelectEvidence={select}
+      />,
     );
   });
 
@@ -123,7 +137,11 @@ it("remembers coaching choice across re-renders in the same session", async () =
 
   await act(async () => {
     root.render(
-      <ReportCoaching report={sampleReport} callId="persisted-call-456" />,
+      <ReportCoaching
+        report={sampleReport}
+        callId="persisted-call-456"
+        onSelectEvidence={select}
+      />,
     );
   });
 
@@ -131,4 +149,102 @@ it("remembers coaching choice across re-renders in the same session", async () =
   expect(container.querySelector("[data-coaching-gate]")).toBeNull();
   expect(container.querySelector("[data-coaching-content]")).not.toBeNull();
   expect(container.querySelector('[data-coaching-card="keep"]')).not.toBeNull();
+});
+
+it("keeps the request scoped to each call when switching reports without remounting", async () => {
+  const render = async (callId: string) => {
+    await act(async () =>
+      root.render(
+        <ReportCoaching
+          report={sampleReport}
+          callId={callId}
+          onSelectEvidence={select}
+        />,
+      ),
+    );
+  };
+  await render("call-a");
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>("[data-coach-trigger]")!.click(),
+  );
+  await render("call-b");
+  expect(container.querySelector("[data-coaching-content]")).toBeNull();
+  expect(container.querySelector("[data-coaching-gate]")).not.toBeNull();
+  await render("call-a");
+  expect(container.querySelector("[data-coaching-content]")).not.toBeNull();
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render("call-a");
+  expect(container.querySelector("[data-coaching-content]")).not.toBeNull();
+});
+
+it("still opens coaching when session storage is denied", async () => {
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("Storage denied");
+  });
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("Storage denied");
+  });
+  await act(async () =>
+    root.render(
+      <ReportCoaching
+        report={sampleReport}
+        callId="storage-denied"
+        onSelectEvidence={select}
+      />,
+    ),
+  );
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>("[data-coach-trigger]")!.click(),
+  );
+  expect(container.querySelector("[data-coaching-content]")).not.toBeNull();
+});
+
+it("uses the saved overview coaching fields and preserves the strength's exact playback evidence", async () => {
+  const report = parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: fixture.report,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+  await act(async () =>
+    root.render(
+      <ReportCoaching
+        report={report}
+        callId="detailed-call"
+        onSelectEvidence={select}
+      />,
+    ),
+  );
+  expect(container.textContent).not.toContain(
+    report.overview!.practice!.instructions,
+  );
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>("[data-coach-trigger]")!.click(),
+  );
+  expect(container.textContent).toContain(
+    report.overview!.improvement_details[0].replacement_behavior,
+  );
+  expect(container.textContent).toContain(
+    report.overview!.next_call_focus!.behavior,
+  );
+  expect(container.textContent).toContain(
+    report.overview!.practice!.instructions,
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[data-coaching-card="keep"] button')!
+      .click(),
+  );
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    report.strengths[0].evidence[0],
+    report.strengths[0].title,
+  );
 });

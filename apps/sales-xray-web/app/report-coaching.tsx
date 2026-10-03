@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Lightbulb } from "lucide-react";
 import { Glyph } from "./lightbox/glyph";
 import { ClipListenButton } from "./source-waveform";
 import { NextCallPlan } from "./next-call-plan";
 import type {
-  Finding,
   ReportEvidence,
   SalesReport,
   Transcript,
@@ -18,41 +17,41 @@ export type ReportCoachingProps = {
   transcript?: Transcript;
   callId?: string | null;
   durationMs?: number;
-  onSelectEvidence?: (evidence: ReportEvidence, title: string) => void;
+  onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
 };
 
 const SESSION_KEY_PREFIX = "ac:coaching:";
 
+function subscribeSession(listener: () => void) {
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+
 export function ReportCoaching({
   report,
   transcript,
   callId,
-  durationMs,
   onSelectEvidence,
   onUnlock,
 }: ReportCoachingProps) {
-  const sessionKey = `${SESSION_KEY_PREFIX}${callId ?? "default"}`;
-
-  const [unlocked, setUnlocked] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return sessionStorage.getItem(sessionKey) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem(sessionKey) === "true") {
-        setUnlocked(true);
+  const sessionKey = `${SESSION_KEY_PREFIX}${callId ?? report.source_sha256}`;
+  const [requestedKey, setRequestedKey] = useState<string | null>(null);
+  const saved = useSyncExternalStore(
+    subscribeSession,
+    () => {
+      try {
+        return sessionStorage.getItem(sessionKey) === "true";
+      } catch {
+        return false;
       }
-    } catch {}
-  }, [sessionKey]);
+    },
+    () => false,
+  );
+  const unlocked = saved || requestedKey === sessionKey;
 
   const handleUnlock = () => {
-    setUnlocked(true);
+    setRequestedKey(sessionKey);
     try {
       sessionStorage.setItem(sessionKey, "true");
     } catch {}
@@ -60,8 +59,10 @@ export function ReportCoaching({
 
   const strength = report.strengths?.[0];
   const primary = report.improvements?.[0];
-  const detail = (report as { detail?: Record<string, any> })?.detail ?? null;
-  const primaryDetail = detail?.primary_improvement ?? null;
+  const detail = report.overview;
+  const primaryDetail = detail?.improvement_details.find(
+    (item) => item.finding_index === 0,
+  );
 
   const listen = (evidence: ReportEvidence, title: string) =>
     onSelectEvidence ? (

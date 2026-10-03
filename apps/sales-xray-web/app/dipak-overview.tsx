@@ -10,14 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Flag,
-  Gem,
-  LockKeyhole,
-  Play,
-} from "lucide-react";
+import { ArrowUpRight, Gem, LockKeyhole, Play } from "lucide-react";
 import type {
   Finding,
   PreviewSection,
@@ -272,7 +265,6 @@ export function DipakOverview({
   report,
   onSelectEvidence,
   transcript,
-  callId,
   onSelectContextualPlayback,
   onUnlock,
   durationMs,
@@ -280,7 +272,6 @@ export function DipakOverview({
   callRecord,
   showAnalysis = false,
   analysisOnly = false,
-  onSeek,
 }: Props) {
   const reading = useReportInline();
   const navigateToReport = useReportNavigation();
@@ -342,7 +333,7 @@ export function DipakOverview({
   }, [report]);
   const firstPlayableTitle = useMemo(() => {
     const clips = reportReplayClips(report);
-    return clips[0]?.finding.title ?? "Key moment";
+    return clips[0]?.titles[0] ?? "Key moment";
   }, [report]);
   const priorities = report.improvements.slice(0, 3);
   const supportedDimensions = report.dimensions.filter(
@@ -445,7 +436,7 @@ export function DipakOverview({
     setActiveReviewNumber(number);
     setActiveChapter(chapter);
     if (!showHeading && navigateToReport) {
-      navigateToReport("overview", number);
+      navigateToReport("analysis", number);
       return;
     }
     window.setTimeout(() => {
@@ -465,16 +456,6 @@ export function DipakOverview({
     }, 0);
   }
 
-  function openReview(number: string) {
-    const item = insightRailItems.find((point) => point.number === number);
-    if (!item) return;
-    lastInsightButton.current =
-      document.activeElement instanceof HTMLButtonElement
-        ? document.activeElement
-        : null;
-    focusInsight(item.number, item.chapter);
-  }
-
   function closeReader() {
     setActiveReviewNumber(null);
     setActiveChapter(null);
@@ -484,20 +465,6 @@ export function DipakOverview({
       );
       (lastInsightButton.current ?? fallback)?.focus();
     }, 0);
-  }
-
-  /** A summary action with a named destination inside this report. */
-  function reviewLink(number: string, text: string) {
-    return (
-      <button
-        className={styles.textAction}
-        type="button"
-        data-open-review={number}
-        onClick={() => openReview(number)}
-      >
-        {text} <ArrowRight size={15} aria-hidden="true" />
-      </button>
-    );
   }
 
   /** Plays only this saved span in the shared call player. */
@@ -666,7 +633,7 @@ export function DipakOverview({
               {detail?.outcome?.text ??
                 (detail?.outcome
                   ? outcomeLabels[detail.outcome.kind]
-                  : "Observed outcome")}
+                  : "Not supplied")}
             </RowTitle>
             <dl className={styles.outcomeMeta}>
               <div>
@@ -675,18 +642,14 @@ export function DipakOverview({
               </div>
               <div>
                 <dt>Next step</dt>
-                <dd>
-                  {detail?.next_call_focus?.behavior ??
-                    primary?.title ??
-                    "Review call"}
-                </dd>
+                <dd>Not supplied</dd>
               </div>
               <div>
                 <dt>Attendees</dt>
                 <dd>
                   {attendeeLabels.length
                     ? attendeeLabels.join(", ")
-                    : "Recorded attendees"}
+                    : "Not supplied"}
                 </dd>
               </div>
             </dl>
@@ -715,10 +678,6 @@ export function DipakOverview({
               <div>
                 <dt>Replay clips</dt>
                 <dd>{countReportMoments(report)}</dd>
-              </div>
-              <div>
-                <dt>Suggested changes</dt>
-                <dd>{report.improvements.length}</dd>
               </div>
             </dl>
           </section>

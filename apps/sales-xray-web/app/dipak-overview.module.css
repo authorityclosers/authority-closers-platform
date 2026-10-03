@@ -1532,10 +1532,10 @@ span.evidenceWaveform {
 
 .outcomeCard {
   padding: var(--lx-space-4);
-  background: var(--lx-surface-card, #ffffff);
+  background: var(--lx-surface);
   border-radius: var(--lx-radius-md, 8px);
-  border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.08));
-  border-top: 3px solid var(--lx-closing, #0284c7);
+  border: 1px solid var(--lx-line);
+  border-top: 3px solid var(--lx-closing);
 }
 
 .outcomeMeta {
@@ -1544,7 +1544,7 @@ span.evidenceWaveform {
   gap: var(--lx-space-4);
   margin: var(--lx-space-3) 0 0;
   padding: var(--lx-space-3) 0 0;
-  border-top: 1px solid var(--lx-line, rgba(0, 0, 0, 0.06));
+  border-top: 1px solid var(--lx-line);
 }
 
 @container (max-width: 640px) {
@@ -1573,10 +1573,10 @@ span.evidenceWaveform {
   gap: var(--lx-space-2);
   margin-bottom: var(--lx-space-8);
   padding: var(--lx-space-6);
-  background: var(--lx-surface-card, #ffffff);
-  border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.08));
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md, 8px);
-  border-left: 4px solid var(--lx-focus, #e28700);
+  border-left: 4px solid var(--lx-focus);
 }
 
 .keyMoments {
