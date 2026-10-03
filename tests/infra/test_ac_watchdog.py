@@ -33,6 +33,13 @@ STUDIO = FIXTURE["studio"]
 GIT = shutil.which("git")
 BASH = shutil.which("bash")
 assert GIT is not None and BASH is not None
+FEATURE_REVIEWERS = {
+    "sx-report": "044cc30f-0a4d-4bcb-82e9-1e4e95148664",
+    "sx-org": "134f6861-0d81-4c0e-8a81-d361703c31d5",
+    "sx-billing": "10c721cf-7a41-4298-8e6f-342a1eda2a3b",
+    "sx-shell": "f3bf11bf-694f-45a9-8318-d45a041a79d3",
+    "sx-prospects": "3cd3a2e1-bd97-480f-92b5-bd9507913c67",
+}
 
 
 @pytest.fixture
@@ -64,8 +71,32 @@ def watchdog(monkeypatch):
     yield module
 
 
-def test_source_matches_root_export_with_only_ceo_approved_scope_addition():
+def test_source_preserves_root_export_except_approved_scope_and_feature_lanes():
     source = (ROOT / SOURCE_PATH).read_bytes()
+    # Keep AUT-850's historical receipt: undo only AUT-1050's constant additions.
+    lanes = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign) and node.targets[0].id == "LANES"
+    )
+    source = source.replace(
+        ast.get_source_segment(source.decode(), lanes).encode(),
+        b'LANES = ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")',
+    )
+    source = source.replace(b"|sx-report|sx-org|sx-billing|sx-shell|sx-prospects", b"")
+    for lane, reviewer in FEATURE_REVIEWERS.items():
+        source = source.replace(
+            (
+                f'                  "{lane}": '
+                f'"/home/acdev/src/lanes/{lane}/authority-closers-platform",\n'
+            ).encode(),
+            b"",
+        ).replace(f'    "{lane}": "{reviewer}",\n'.encode(), b"")
+    for reviewer, name in (
+        (FEATURE_REVIEWERS["sx-org"], "the Organisation Engineer"),
+        (FEATURE_REVIEWERS["sx-billing"], "the Billing Engineer"),
+    ):
+        source = source.replace(f'    "{reviewer}": "{name}",\n'.encode(), b"")
     metadata = SOURCE_RECEIPT
     assert hashlib.sha256(source).hexdigest() == metadata["repository_sha256"]
     assert source.count(b"|scripts/ci/|scripts/data-changes/") == 1
@@ -305,7 +336,7 @@ def test_verified_installer_dry_run_writes_nothing_and_is_repeatable(installer_r
         )
         assert result.returncode == 0, result.stderr
         assert revision in result.stdout
-        assert SOURCE_RECEIPT["repository_sha256"] in result.stdout
+        assert hashlib.sha256((repo / SOURCE_PATH).read_bytes()).hexdigest() in result.stdout
         assert "no host files changed" in result.stdout
         assert snapshot(repo) == before
         assert not marker.exists()
@@ -407,11 +438,27 @@ def test_installer_refuses_verified_but_stale_source(installer_repo, missing):
         assert snapshot(repo) == before
 
 
-def test_all_seven_lanes_have_checkouts_and_parse_spec_cards(watchdog):
-    assert watchdog.LANES == ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")
+def test_all_twelve_lanes_match_gate_have_checkouts_and_parse_spec_cards(watchdog):
+    expected = ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing") + tuple(
+        FEATURE_REVIEWERS
+    )
+    assert expected == watchdog.LANES
+    tree = ast.parse((ROOT / "scripts/ac_task.py").read_text())
+    assert (
+        next(
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign) and node.targets[0].id == "LANES"
+        )
+        == expected
+    )
     for lane in watchdog.LANES:
         assert watchdog.task_lane(f"Lane: {lane}\nTier: routine") == lane
         assert lane in watchdog.LANE_CHECKOUTS
+    for lane in FEATURE_REVIEWERS:
+        assert watchdog.LANE_CHECKOUTS[lane] == (
+            f"/home/acdev/src/lanes/{lane}/authority-closers-platform"
+        )
 
 
 def test_scan_does_not_use_laptop_presence_to_pause_server_agents():
@@ -464,8 +511,9 @@ def test_merge_rule_ordinary_paths(watchdog, path):
     assert not watchdog.SENSITIVE_PATH.search(path)
 
 
-def test_single_review_respects_cto_pod_lead_and_own_task(watchdog, monkeypatch):
-    lead = next(iter(watchdog.POD_LEAD_IDS))
+@pytest.mark.parametrize("lane", ["sales-xray", *FEATURE_REVIEWERS])
+def test_single_review_respects_cto_pod_lead_and_own_task(watchdog, monkeypatch, lane):
+    lead = watchdog.LANE_REVIEWER[lane]
     conn = lambda assignee: SimpleNamespace(  # noqa: E731
         execute=lambda *args: SimpleNamespace(fetchone=lambda: (assignee,))
     )
@@ -612,9 +660,13 @@ def test_red_main_fix_only_accepts_live_ceo_cto_or_board_comments(
     assert watchdog.red_main_fix(shadow_db, 196, "37d394e" + "a" * 33) is expected
 
 
-@pytest.mark.parametrize("lane", ["sales-xray", "platform", "admin", "devenv", "api"])
+@pytest.mark.parametrize(
+    "lane", ["sales-xray", "platform", "admin", "devenv", "api", *FEATURE_REVIEWERS]
+)
 def test_review_route_ordinary_lane_and_own_task(watchdog, lane):
     lead = watchdog.LANE_REVIEWER[lane]
+    if lane in FEATURE_REVIEWERS:
+        assert lead == FEATURE_REVIEWERS[lane]
     assert lead in watchdog.POD_LEAD_IDS
     assert watchdog.review_route(f"task/{lane}/520-fictional", "", "builder") == lead
     assert watchdog.review_route(f"task/{lane}/520-fictional", "", lead) == watchdog.CTO_ID
@@ -649,6 +701,10 @@ def test_review_route_without_lane_lead_uses_cto(watchdog, branch):
             "api",
         ),
         ("task/devenv/520-fictional", ["tests/unit/test_reports.py"], False, "success", "devenv"),
+        *[
+            (f"task/{lane}/1050-fictional", ["tests/unit/test_reports.py"], False, "success", lane)
+            for lane in FEATURE_REVIEWERS
+        ],
         ("task/platform/850-fictional", ["scripts/ci/merge_class.py"], False, "success", None),
         ("task/platform/850-fictional", None, False, "success", None),
         ("task/platform/850-fictional", ["tests/unit/test_reports.py"], True, "success", None),

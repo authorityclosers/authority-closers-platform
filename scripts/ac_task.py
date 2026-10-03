@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Work gate: one task at a time per lane, up to seven lanes in parallel.
+"""Work gate: one task at a time per lane, up to twelve lanes in parallel.
 
 GitHub is the shared lock. A task is active while its branch exists on GitHub;
 merging its pull request deletes the branch and frees the lock.
 
 - A lane task lives on `task/<lane>/<issue>-<name>`. Each lane (sales-xray,
-  platform, admin, ui, devenv, api, billing) holds one task at a time; different lanes
-  run in parallel.
+  platform, admin, ui, devenv, api, billing, sx-report, sx-org, sx-billing, sx-shell,
+  sx-prospects) holds one task at a time; different lanes run in parallel.
 - A plain `task/<issue>-<name>` branch is exclusive: it runs alone, as before.
 - A red or unknown `main` blocks new work; the task that fixes a red `main` may
   start with `--fixes-red-main`. A running `main` build does not block a start;
@@ -38,7 +38,20 @@ from pathlib import Path
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
 TASK_NAME_RE = re.compile(r"[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*")
-LANES = ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")
+LANES = (
+    "sales-xray",
+    "platform",
+    "admin",
+    "ui",
+    "devenv",
+    "api",
+    "billing",
+    "sx-report",
+    "sx-org",
+    "sx-billing",
+    "sx-shell",
+    "sx-prospects",
+)
 EXCLUSIVE = "exclusive"
 SHARED_PREFIXES = ("db/migrations/", ".github/")
 SHARED_FILES = frozenset(

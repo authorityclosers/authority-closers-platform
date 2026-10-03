@@ -18,6 +18,7 @@ sys.modules["ac_task"] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 MAIN = "a" * 40
+FEATURE_LANES = ("sx-report", "sx-org", "sx-billing", "sx-shell", "sx-prospects")
 
 
 class FakeRepo:
@@ -427,7 +428,12 @@ def test_status_json_reports_each_lane(capsys) -> None:
         '"platform": {"holder": "task/platform/23-notes", "free": false}, '
         '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}, '
         '"devenv": {"holder": null, "free": true}, "api": {"holder": null, "free": true}, '
-        '"billing": {"holder": null, "free": true}}, '
+        '"billing": {"holder": null, "free": true}, '
+        '"sx-report": {"holder": null, "free": true}, '
+        '"sx-org": {"holder": null, "free": true}, '
+        '"sx-billing": {"holder": null, "free": true}, '
+        '"sx-shell": {"holder": null, "free": true}, '
+        '"sx-prospects": {"holder": null, "free": true}}, '
         '"exclusive_free": false}\n'
     )
     status = json.loads(output)
@@ -569,3 +575,55 @@ def test_the_ui_lane_runs_beside_the_sales_xray_lane() -> None:
     repo = FakeRepo()
     repo.branches.append("task/sales-xray/59-overview-tolerance")
     assert gate(repo).start("101-report-overview-look", "ui") == "task/ui/101-report-overview-look"
+
+
+@pytest.mark.parametrize("lane", FEATURE_LANES)
+def test_feature_lane_starts_beside_every_other_lane_and_holds_one_task(lane, capsys) -> None:
+    repo = FakeRepo()
+    repo.branches += [f"task/{other}/80-existing" for other in MODULE.LANES if other != lane]
+    assert MODULE.main(["start", lane, "1050-feature"], gate(repo)) == 0
+    branch = f"task/{lane}/1050-feature"
+    assert MODULE.lane_of(branch) == lane
+    assert branch in repo.branches
+    assert gate(repo).check().free
+    assert MODULE.main(["start", lane, "1051-second"], gate(repo)) == MODULE.EXIT_BUSY
+    assert f"{lane} lane" in capsys.readouterr().err
+    assert MODULE.main(["status", "--json"], gate(repo)) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["lanes"][lane] == {"holder": branch, "free": False}
+
+
+@pytest.mark.parametrize("lane", FEATURE_LANES)
+@pytest.mark.parametrize("holder", ["task/80-exclusive", "task/{lane}/80-existing"])
+def test_feature_lane_refuses_exclusive_or_same_lane_pr_without_branch(lane, holder) -> None:
+    repo = FakeRepo()
+    repo.prs = [pr(1, holder.format(lane=lane), "docs/fictional.md")]
+    with pytest.raises(MODULE.BusyError):
+        gate(repo).start("1050-feature", lane)
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+@pytest.mark.parametrize("lane", FEATURE_LANES)
+def test_feature_lane_pr_keeps_overlap_shared_and_exclusive_guards(lane) -> None:
+    repo = FakeRepo()
+    ui = f"apps/sales-xray-web/app/{lane}/page.tsx"
+    api = f"packages/python/ac_platform/http/{lane.replace('-', '_')}.py"
+    repo.prs = [pr(1, f"task/{lane}/1050-feature", ui, api)]
+    repo.prs += [
+        pr(number, f"task/{other}/80-existing", f"docs/{other}.md")
+        for number, other in enumerate(MODULE.LANES, 2)
+        if other != lane
+    ]
+    assert gate(repo).pr_check(1) == []
+    for path in (ui, api):
+        repo.prs[-1] = pr(20, "task/platform/80-existing", path)
+        assert any("same files" in problem for problem in gate(repo).pr_check(1))
+    repo.prs = [
+        pr(1, f"task/{lane}/1050-feature", "AGENTS.md"),
+        pr(2, "task/platform/80-existing", "scripts/ac_task.py"),
+    ]
+    assert any("shared files" in problem for problem in gate(repo).pr_check(1))
+    repo.prs[-1] = pr(2, f"task/{lane}/1051-second", "docs/other.md")
+    assert any(f"already holds the {lane} lane" in problem for problem in gate(repo).pr_check(1))
+    repo.prs[-1] = pr(2, "task/80-exclusive", "docs/other.md")
+    assert any("exclusive task" in problem for problem in gate(repo).pr_check(1))
