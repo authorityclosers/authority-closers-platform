@@ -679,10 +679,12 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md, 14px);
   background: var(--lx-paper-2);
+  min-width: 0;
 }
 
 .billingCardHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -696,7 +698,7 @@
 
 .topUpsMiniGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 10px;
 }
 
@@ -712,6 +714,7 @@
 
 .topUpMiniHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -759,7 +762,20 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid var(--lx-danger-edge, var(--lx-line-strong));
+  border: 1px solid var(--lx-objection-edge, var(--lx-line-strong));
   border-radius: var(--lx-radius-sm, 10px);
   background: var(--lx-surface);
+}
+
+.billingSkeleton {
+  display: grid;
+  gap: 12px;
+  min-height: 150px;
+  color: var(--lx-muted);
+}
+
+.billingSkeleton i {
+  height: 16px;
+  border-radius: 8px;
+  background: var(--lx-sunken);
 }

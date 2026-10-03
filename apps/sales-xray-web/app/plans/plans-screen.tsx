@@ -4,6 +4,9 @@ import {
   Building2,
   Check,
   CircleUserRound,
+  CreditCard,
+  Landmark,
+  Smartphone,
   ExternalLink,
   Minus,
   Plus,
@@ -13,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AcquisitionShell } from "../acquisition-shell";
 import {
   onSale,
@@ -25,6 +28,8 @@ import {
 } from "../billing/contract";
 import { count, day, minutes, money, planPrice } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
+import { notify, dismissNotice } from "../notice-center";
+import { TOP_UP_PACKS, type DisplayTopUpPack } from "./plans-catalogue-fixture";
 import styles from "./plans.module.css";
 
 export type PlanSelection = {
@@ -41,45 +46,7 @@ export type PurchaseQuote = {
   renewsAt: string;
 };
 
-export type TopUpPack = {
-  key: string;
-  planKey: string;
-  title: string;
-  audience: string;
-  minutes: number;
-  pricePaise: number;
-  gstInclusive: boolean;
-  priceFormatted: string;
-  totalFormatted: string;
-  gstNote: string;
-};
-
-export const TOP_UP_PACKS: TopUpPack[] = [
-  {
-    key: "personal_100",
-    planKey: "personal",
-    title: "Personal Top-up",
-    audience: "For individual closers",
-    minutes: 100,
-    pricePaise: 29900,
-    gstInclusive: true,
-    priceFormatted: "₹299",
-    totalFormatted: "₹299",
-    gstNote: "GST included",
-  },
-  {
-    key: "organisation_500",
-    planKey: "organisation",
-    title: "Organisation Top-up",
-    audience: "Shared pool for your sales team",
-    minutes: 500,
-    pricePaise: 129900,
-    gstInclusive: false,
-    priceFormatted: "₹1,299",
-    totalFormatted: "₹1,533",
-    gstNote: "+ 18% GST (₹234)",
-  },
-];
+export type TopUpPack = DisplayTopUpPack;
 
 export type PlansScreenProps = {
   plans: Plan[];
@@ -93,6 +60,7 @@ export type PlansScreenProps = {
   error?: string | null;
   paidOrder?: Order | null;
   allowance?: Allowance | null;
+  topUpPacks?: TopUpPack[];
 };
 
 /**
@@ -117,6 +85,7 @@ export function PlansScreen({
   error,
   paidOrder,
   allowance,
+  topUpPacks = TOP_UP_PACKS,
 }: PlansScreenProps) {
   const access = useWorkspaceAccess();
   const [audienceScope, setAudienceScope] = useState<"personal" | "team">(
@@ -127,6 +96,17 @@ export function PlansScreen({
   const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null);
   const [selectedTopUp, setSelectedTopUp] = useState<TopUpPack | null>(null);
   const summaryRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!error) return;
+    const id = "plans-purchase-error";
+    notify({
+      id,
+      tone: "error",
+      title: "Purchase unavailable",
+      message: error,
+    });
+    return () => dismissNotice(id);
+  }, [error]);
 
   const plan = plans.find((item) => item.key === selectedPlanKey);
   const seats = plan
@@ -158,6 +138,11 @@ export function PlansScreen({
     quoted?.totalPaise ?? (subtotal === null ? null : subtotal + gst);
   const period = interval === "month" ? "month" : "year";
   const paid = paidOrder?.status === "paid" ? paidOrder : null;
+  const topUpGst =
+    selectedTopUp && !selectedTopUp.gstInclusive
+      ? Math.round(selectedTopUp.pricePaise * gstRate)
+      : 0;
+  const topUpTotal = selectedTopUp ? selectedTopUp.pricePaise + topUpGst : null;
 
   const choosePlan = (key: string) => {
     setSelectedTopUp(null);
@@ -247,8 +232,8 @@ export function PlansScreen({
               {allowance
                 ? allowance.unlimited
                   ? "Unlimited analysis minutes available on your account."
-                  : `${count(minutes(allowance.availableSeconds))} analysis minutes added to your account.`
-                : "Your analysis minutes have been credited to your workspace."}
+                  : `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
+                : "Your updated analysis minutes are being confirmed."}
             </p>
             <div className={styles.actions}>
               <Link className={styles.primary} href="/analysis/new">
@@ -526,24 +511,6 @@ export function PlansScreen({
                           />
                           <span>1 user seat</span>
                         </li>
-                        <li>
-                          <Check
-                            size={15}
-                            className={styles.iconGood}
-                            aria-hidden="true"
-                          />
-                          <span>
-                            Instant call scoring &amp; transcript insights
-                          </span>
-                        </li>
-                        <li>
-                          <Check
-                            size={15}
-                            className={styles.iconGood}
-                            aria-hidden="true"
-                          />
-                          <span>Unused minutes roll over for 1 month</span>
-                        </li>
                       </>
                     )}
 
@@ -556,24 +523,6 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>Team dashboard &amp; shared call library</span>
-                        </li>
-                        <li>
-                          <Check
-                            size={15}
-                            className={styles.iconGood}
-                            aria-hidden="true"
-                          />
-                          <span>
-                            Centralized team billing &amp; seat management
-                          </span>
-                        </li>
-                        <li>
-                          <Check
-                            size={15}
-                            className={styles.iconGood}
-                            aria-hidden="true"
-                          />
-                          <span>Dedicated workspace for your team</span>
                         </li>
                       </>
                     )}
@@ -595,16 +544,6 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>Onboarding session for the team</span>
-                        </li>
-                        <li>
-                          <Check
-                            size={15}
-                            className={styles.iconGood}
-                            aria-hidden="true"
-                          />
-                          <span>
-                            Single sign-on (SSO) &amp; custom governance
-                          </span>
                         </li>
                       </>
                     )}
@@ -641,12 +580,16 @@ export function PlansScreen({
               </div>
               <p className={styles.hint}>
                 Top up anytime without changing your monthly subscription.
-                Minutes appear immediately.
+                Minutes are added after payment is confirmed.
               </p>
             </div>
 
             <div className={styles.topUpsGrid}>
-              {TOP_UP_PACKS.map((pack) => {
+              {topUpPacks.map((pack) => {
+                const packGst = pack.gstInclusive
+                  ? 0
+                  : Math.round(pack.pricePaise * gstRate);
+                const packTotal = pack.pricePaise + packGst;
                 const isSelected = selectedTopUp?.key === pack.key;
                 return (
                   <div
@@ -660,8 +603,12 @@ export function PlansScreen({
                         <p className={styles.topUpTagline}>{pack.audience}</p>
                       </div>
                       <span className={styles.topUpPriceBadge}>
-                        {pack.priceFormatted}
-                        <small>{pack.gstNote}</small>
+                        {money(pack.pricePaise)}
+                        <small>
+                          {pack.gstInclusive
+                            ? "GST included"
+                            : `+ ${gstRate * 100}% GST`}
+                        </small>
                       </span>
                     </div>
 
@@ -672,10 +619,10 @@ export function PlansScreen({
                       <button
                         type="button"
                         className={styles.ghost}
-                        disabled={busy}
+                        disabled={busy || !onBuyTopUp}
                         onClick={() => chooseTopUp(pack)}
                       >
-                        Top up {pack.totalFormatted}
+                        Top up {money(packTotal)}
                       </button>
                     </div>
                   </div>
@@ -684,6 +631,12 @@ export function PlansScreen({
             </div>
           </div>
         </section>
+
+        {!onBuy || !onBuyTopUp ? (
+          <p className={styles.note}>
+            Plan payments and top-ups are currently unavailable.
+          </p>
+        ) : null}
 
         {/* Detailed Checkout Sheet */}
         {(selection && plan) || selectedTopUp ? (
@@ -697,7 +650,7 @@ export function PlansScreen({
               <h2 id="purchase-summary">Checkout summary</h2>
               <span className={styles.secureTag}>
                 <ShieldCheck size={15} aria-hidden="true" />
-                256-bit SSL encrypted
+                Secure checkout
               </span>
             </div>
 
@@ -713,12 +666,14 @@ export function PlansScreen({
                 </div>
                 <div>
                   <dt>Subtotal</dt>
-                  <dd>{selectedTopUp.priceFormatted}</dd>
+                  <dd>{money(selectedTopUp.pricePaise)}</dd>
                 </div>
                 <div>
                   <dt>GST</dt>
                   <dd>
-                    {selectedTopUp.gstInclusive ? "Included" : "18% GST (₹234)"}
+                    {selectedTopUp.gstInclusive
+                      ? "Included"
+                      : `${gstRate * 100}% GST (${money(topUpGst)})`}
                   </dd>
                 </div>
                 <div>
@@ -727,7 +682,7 @@ export function PlansScreen({
                 </div>
                 <div className={styles.total}>
                   <dt>Total today</dt>
-                  <dd>{selectedTopUp.totalFormatted}</dd>
+                  <dd>{money(topUpTotal ?? 0)}</dd>
                 </div>
               </dl>
             ) : plan ? (
@@ -738,12 +693,14 @@ export function PlansScreen({
                     {plan.name} · {interval === "month" ? "Monthly" : "Yearly"}
                   </dd>
                 </div>
+                <div>
+                  <dt>Seats</dt>
+                  <dd>
+                    {seats} {seats === 1 ? "seat" : "seats"}
+                  </dd>
+                </div>
                 {plan.key !== "personal" ? (
                   <>
-                    <div>
-                      <dt>Seats</dt>
-                      <dd>{seats}</dd>
-                    </div>
                     <div>
                       <dt>Price per seat</dt>
                       <dd>
@@ -760,10 +717,16 @@ export function PlansScreen({
                     </div>
                   </>
                 ) : (
-                  <div>
-                    <dt>GST</dt>
-                    <dd>Included</dd>
-                  </div>
+                  <>
+                    <div>
+                      <dt>Subtotal</dt>
+                      <dd>{subtotal === null ? "—" : money(subtotal)}</dd>
+                    </div>
+                    <div>
+                      <dt>GST</dt>
+                      <dd>Included</dd>
+                    </div>
+                  </>
                 )}
                 <div>
                   <dt>Analysis minutes</dt>
@@ -778,7 +741,7 @@ export function PlansScreen({
                   <dd>
                     {quoted
                       ? `${day(quoted.renewsAt)} · ${money(total ?? 0)}`
-                      : `In 1 ${period} on the same date`}
+                      : "Date and amount confirmed at checkout"}
                   </dd>
                 </div>
                 <div className={styles.total}>
@@ -794,15 +757,18 @@ export function PlansScreen({
                 Accepted payment methods:
               </span>
               <div className={styles.paymentBadges}>
-                <span className={styles.methodBadge}>UPI / QR</span>
-                <span className={styles.methodBadge}>Visa</span>
-                <span className={styles.methodBadge}>Mastercard</span>
-                <span className={styles.methodBadge}>RuPay</span>
-                <span className={styles.methodBadge}>Netbanking</span>
+                <span className={styles.methodBadge}>
+                  <Smartphone size={14} aria-hidden="true" /> UPI
+                </span>
+                <span className={styles.methodBadge}>
+                  <CreditCard size={14} aria-hidden="true" /> Cards
+                </span>
+                <span className={styles.methodBadge}>
+                  <Landmark size={14} aria-hidden="true" /> Netbanking
+                </span>
               </div>
               <p className={styles.razorpayTag}>
-                Paid securely through Razorpay. We never store card or UPI
-                credentials.
+                Paid securely through Razorpay.
               </p>
             </div>
 
@@ -833,21 +799,17 @@ export function PlansScreen({
               </div>
             </div>
 
-            {error ? (
-              <p role="alert" className={styles.note}>
-                {error}
-              </p>
-            ) : null}
-
             <div className={styles.actions}>
               <button
                 type="button"
                 className={styles.pay}
-                disabled={busy}
+                disabled={
+                  busy || (selectedTopUp ? !onBuyTopUp : !quoted || !onBuy)
+                }
                 onClick={() => {
                   if (selectedTopUp) {
                     onBuyTopUp?.(selectedTopUp);
-                  } else if (selection) {
+                  } else if (selection && quoted) {
                     onBuy?.(selection);
                   }
                 }}
@@ -855,7 +817,7 @@ export function PlansScreen({
                 {busy
                   ? "Opening checkout…"
                   : selectedTopUp
-                    ? `Pay ${selectedTopUp.totalFormatted} with Razorpay`
+                    ? `Pay ${money(topUpTotal ?? 0)} with Razorpay`
                     : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
               </button>
               <button

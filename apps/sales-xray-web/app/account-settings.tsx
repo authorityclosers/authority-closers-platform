@@ -34,6 +34,13 @@ import {
   type Allowance,
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
+import type { BillingViewProps } from "./billing/billing-view";
+import { count, day, formatMoney, money } from "./billing/money";
+import {
+  TOP_UP_PACKS,
+  PLANS_GST_RATE,
+  type DisplayTopUpPack,
+} from "./plans/plans-catalogue-fixture";
 import {
   AccountProfileRequestError,
   normalizeProfilePhoneInput,
@@ -44,6 +51,7 @@ import {
 } from "./account-profile-client";
 import { useTheme } from "./lightbox/theme-provider";
 import { parseThemePreference } from "./lightbox/theme";
+import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import styles from "./account-view.module.css";
 
@@ -120,7 +128,9 @@ export function AccountSettings({
   hashPrefix = "",
   variant = "page",
   onClose,
+  billing,
 }: {
+  billing?: SettingsBillingProps;
   hashPrefix?: string;
   variant?: "page" | "dialog";
   onClose?: () => void;
@@ -376,6 +386,8 @@ export function AccountSettings({
           onBack={back}
         >
           <PlanAndBillingPane
+            {...billing}
+            active={section === "billing"}
             allowance={allowance}
             variant={variant}
             onRetry={retry}
@@ -807,21 +819,49 @@ function AllowanceSummary({
   );
 }
 
-function PlanAndBillingPane({
+export type SettingsBillingProps = BillingViewProps & {
+  onResume?: (subscriptionId: string) => void;
+  onBuyTopUp?: (pack: DisplayTopUpPack) => void;
+  topUpPacks?: DisplayTopUpPack[];
+};
+
+/** Verified billing data and actions arrive as props; AUT-880 supplies the client. */
+export function PlanAndBillingPane({
+  active = true,
   allowance,
   variant,
   onRetry,
-}: {
+  mePlan = null,
+  subs = null,
+  documents = [],
+  status = "error",
+  busy = false,
+  error,
+  onCancel,
+  onResume,
+  onBuyTopUp,
+  topUpPacks = TOP_UP_PACKS,
+}: SettingsBillingProps & {
+  active?: boolean;
   allowance: Loaded<Allowance>;
   variant?: "page" | "dialog";
   onRetry: () => void;
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
-  const [isCancelled, setIsCancelled] = useState(false);
+  const current = subs?.current;
+  const isCancelled = current?.cancelAtPeriodEnd === true;
+  const canCancel =
+    current && ["active", "past_due", "halted"].includes(current.status);
+  const loading = status === "loading";
+  useEffect(() => {
+    if (!active || !error) return;
+    const id = "settings-billing-error";
+    notify({ id, tone: "error", title: "Billing unavailable", message: error });
+    return () => dismissNotice(id);
+  }, [active, error]);
 
   return (
     <div className={styles.billingBlock}>
-      {/* 1. Current Plan Card */}
       <div className={styles.billingCard}>
         <div className={styles.billingCardHead}>
           <div>
@@ -830,38 +870,88 @@ function PlanAndBillingPane({
           </div>
           <span
             className={styles.badge}
-            data-tone={isCancelled ? "pending" : "ok"}
+            data-tone={
+              current?.status === "active" && !isCancelled ? "ok" : "pending"
+            }
           >
-            {isCancelled ? "Cancels at period end" : "Active"}
+            {loading
+              ? "Loading…"
+              : status !== "ready"
+                ? "Unavailable"
+                : isCancelled
+                  ? "Cancels at period end"
+                  : current?.status === "active"
+                    ? "Active"
+                    : current?.status === "pending_authorisation"
+                      ? "Awaiting payment"
+                      : current?.status === "past_due"
+                        ? "Payment due"
+                        : current?.status === "halted"
+                          ? "Paused"
+                          : current
+                            ? "Ended"
+                            : "No subscription"}
           </span>
         </div>
 
-        <dl className={styles.facts}>
-          <div className={styles.row}>
-            <dt className={styles.rowLabel}>Plan</dt>
-            <dd>Personal</dd>
+        {loading ? (
+          <div
+            className={styles.billingSkeleton}
+            role="status"
+            aria-busy="true"
+          >
+            <span>Loading billing details…</span>
+            <i />
+            <i />
+            <i />
           </div>
-          <div className={styles.row}>
-            <dt className={styles.rowLabel}>Price</dt>
-            <dd>₹2,499 / month · GST included</dd>
-          </div>
-          <div className={styles.row}>
-            <dt className={styles.rowLabel}>Allowance</dt>
-            <dd>800 analysis minutes every month</dd>
-          </div>
-          <div className={styles.row}>
-            <dt className={styles.rowLabel}>Call length</dt>
-            <dd>Calls up to 90 minutes long</dd>
-          </div>
-          <div className={styles.row}>
-            <dt className={styles.rowLabel}>Next renewal</dt>
-            <dd>
-              {isCancelled
-                ? "Access continues until 3 Nov 2026"
-                : "3 Nov 2026 · ₹2,499"}
-            </dd>
-          </div>
-        </dl>
+        ) : (
+          <dl className={styles.facts}>
+            <div className={styles.row}>
+              <dt className={styles.rowLabel}>Plan</dt>
+              <dd>{mePlan?.plan.name ?? current?.planName ?? "Unavailable"}</dd>
+            </div>
+            <div className={styles.row}>
+              <dt className={styles.rowLabel}>Price</dt>
+              <dd>
+                {current
+                  ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+            {current?.seats ? (
+              <div className={styles.row}>
+                <dt className={styles.rowLabel}>Seats</dt>
+                <dd>
+                  {current.seats} {current.seats === 1 ? "seat" : "seats"}
+                </dd>
+              </div>
+            ) : null}
+            {mePlan ? (
+              <div className={styles.row}>
+                <dt className={styles.rowLabel}>Call length</dt>
+                <dd>
+                  Calls up to {count(mePlan.longestCallSeconds / 60)} minutes
+                  long
+                </dd>
+              </div>
+            ) : null}
+            <div className={styles.row}>
+              <dt className={styles.rowLabel}>
+                {isCancelled ? "Access through" : "Next renewal"}
+              </dt>
+              <dd>
+                {isCancelled
+                  ? day(current?.currentPeriod?.end ?? null) || "Unavailable"
+                  : current?.renewsAt
+                    ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
+                    : status === "ready" && !current
+                      ? "No renewal scheduled"
+                      : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+        )}
 
         <div className={styles.actions}>
           <Link
@@ -871,54 +961,52 @@ function PlanAndBillingPane({
           >
             Change or upgrade plan
           </Link>
-          {!isCancelled ? (
-            cancelAsk ? (
-              <div className={styles.confirmCancelBox}>
-                <p className={styles.muted}>
-                  Renewal stops; access continues to the end of the period.
-                </p>
-                <div className={styles.actions}>
-                  <button
-                    type="button"
-                    className={styles.danger}
-                    onClick={() => {
-                      setIsCancelled(true);
-                      setCancelAsk(false);
-                    }}
-                  >
-                    Yes, stop renewal
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.secondary}
-                    onClick={() => setCancelAsk(false)}
-                  >
-                    Keep renewal
-                  </button>
-                </div>
+          {isCancelled ? (
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={busy || status !== "ready" || !onResume}
+              onClick={() => current && onResume?.(current.subscriptionId)}
+            >
+              Resume renewal
+            </button>
+          ) : cancelAsk && current ? (
+            <div className={styles.confirmCancelBox}>
+              <p className={styles.muted}>
+                Renewal stops; access continues to the end of the period.
+              </p>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.danger}
+                  disabled={busy || !onCancel}
+                  onClick={() => onCancel?.(current.subscriptionId)}
+                >
+                  Yes, stop renewal
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  disabled={busy}
+                  onClick={() => setCancelAsk(false)}
+                >
+                  Keep renewal
+                </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => setCancelAsk(true)}
-              >
-                Cancel renewal
-              </button>
-            )
+            </div>
           ) : (
             <button
               type="button"
               className={styles.secondary}
-              onClick={() => setIsCancelled(false)}
+              disabled={busy || status !== "ready" || !canCancel || !onCancel}
+              onClick={() => setCancelAsk(true)}
             >
-              Resume renewal
+              Cancel renewal
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. Usage Meter */}
       <div className={styles.billingCard}>
         <div className={styles.billingCardHead}>
           <h3>Analysis time</h3>
@@ -933,90 +1021,112 @@ function PlanAndBillingPane({
         <AllowanceSummary allowance={allowance} onRetry={onRetry} />
       </div>
 
-      {/* 3. Top-ups */}
       <div className={styles.billingCard}>
         <div className={styles.billingCardHead}>
           <div>
             <h3>Need more minutes?</h3>
             <p className={styles.muted}>
-              Add analysis minutes without changing your monthly subscription.
+              Add analysis minutes without changing your subscription.
             </p>
           </div>
         </div>
-
         <div className={styles.topUpsMiniGrid}>
-          <div className={styles.topUpMiniCard}>
-            <div className={styles.topUpMiniHead}>
-              <span>Personal 100 min</span>
-              <span className={styles.topUpMiniPrice}>₹299</span>
-            </div>
-            <p className={styles.muted}>
-              GST included · for individual closers
-            </p>
-            <Link
-              className={styles.secondary}
-              href="/plans#topups"
-              replace={variant === "dialog"}
-            >
-              Top up 100 min
-            </Link>
-          </div>
-
-          <div className={styles.topUpMiniCard}>
-            <div className={styles.topUpMiniHead}>
-              <span>Organisation 500 min</span>
-              <span className={styles.topUpMiniPrice}>₹1,299 + GST</span>
-            </div>
-            <p className={styles.muted}>₹1,533 total · shared team pool</p>
-            <Link
-              className={styles.secondary}
-              href="/plans#topups"
-              replace={variant === "dialog"}
-            >
-              Top up 500 min
-            </Link>
-          </div>
+          {topUpPacks.map((pack) => {
+            const total =
+              pack.pricePaise +
+              (pack.gstInclusive
+                ? 0
+                : Math.round(pack.pricePaise * PLANS_GST_RATE));
+            return (
+              <div className={styles.topUpMiniCard} key={pack.key}>
+                <div className={styles.topUpMiniHead}>
+                  <span>
+                    {pack.title} · {pack.minutes} min
+                  </span>
+                  <span className={styles.topUpMiniPrice}>
+                    {money(pack.pricePaise)}
+                    {pack.gstInclusive ? "" : " + GST"}
+                  </span>
+                </div>
+                <p className={styles.muted}>
+                  {pack.gstInclusive
+                    ? "GST included"
+                    : `${money(total)} total incl. GST`}{" "}
+                  · {pack.audience}
+                </p>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  disabled={busy || !onBuyTopUp}
+                  onClick={() => onBuyTopUp?.(pack)}
+                >
+                  Top up {pack.minutes} min
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* 4. Invoices & Receipts */}
       <div className={styles.billingCard}>
         <div className={styles.billingCardHead}>
           <h3>Invoices &amp; Receipts</h3>
         </div>
-        <div className={styles.invoiceTableWrap}>
-          <table className={styles.invoiceTable}>
-            <thead>
-              <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Description</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Status</th>
-                <th scope="col">Receipt</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>3 Oct 2026</td>
-                <td>Personal Subscription (Monthly)</td>
-                <td>₹2,499</td>
-                <td>
-                  <span className={styles.badge} data-tone="ok">
-                    Paid
-                  </span>
-                </td>
-                <td>
-                  <a href="#receipt" className={styles.muted}>
-                    Download
-                  </a>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <p className={styles.muted} role="status">
+            Loading invoices…
+          </p>
+        ) : status !== "ready" ? (
+          <p className={styles.muted}>
+            Invoices and receipts are currently unavailable.
+          </p>
+        ) : documents.length === 0 ? (
+          <p className={styles.muted}>No invoices or receipts yet.</p>
+        ) : (
+          <div className={styles.invoiceTableWrap}>
+            <table className={styles.invoiceTable}>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Amount</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Documents</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.map((document) => (
+                  <tr key={document.id}>
+                    <td>{day(document.createdAt)}</td>
+                    <td>{document.description}</td>
+                    <td>{formatMoney(document.amount)}</td>
+                    <td>{document.status}</td>
+                    <td>
+                      {document.invoiceHref ? (
+                        <a href={document.invoiceHref} className={styles.muted}>
+                          Invoice
+                        </a>
+                      ) : null}
+                      {document.invoiceHref && document.receiptHref
+                        ? " · "
+                        : null}
+                      {document.receiptHref ? (
+                        <a href={document.receiptHref} className={styles.muted}>
+                          Receipt
+                        </a>
+                      ) : null}
+                      {!document.invoiceHref && !document.receiptHref
+                        ? "Unavailable"
+                        : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* 5. Satisfaction Guarantee */}
       <p className={styles.muted}>
         <b>Satisfaction guarantee:</b> Full refund within 7 days if none of this
         payment&apos;s minutes were used.

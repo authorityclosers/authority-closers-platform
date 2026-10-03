@@ -1134,7 +1134,7 @@
 
 .topUpsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 14px;
 }
 
@@ -1164,6 +1164,7 @@
 
 .topUpHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
@@ -1196,6 +1197,7 @@
 
 .topUpBody {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -1216,6 +1218,7 @@
 
 .checkoutHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -1255,6 +1258,7 @@
 .methodBadge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 3px 8px;
   border: 1px solid var(--lx-line-strong);
   border-radius: 6px;
@@ -1319,4 +1323,10 @@
 .successAllowance {
   color: var(--lx-muted);
   font: 500 13px/1.4 var(--lx-font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkoutSheet {
+    animation: none;
+  }
 }
