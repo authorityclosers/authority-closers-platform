@@ -1,43 +1,45 @@
-"""Fictional model/writer persistence checks; upstream provider admission is stubbed.
-
-Until the shared migration can land, this suite creates only the metrics table
-from its model in the existing disposable-loopback PostgreSQL harness. It does
-not claim migration, erasure or deployed-journey coverage.
-"""
+"""Fictional migrated store/erasure checks; upstream provider admission is stubbed."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
 )
-from ac_platform.conversation_intelligence.application import ConversationApplication
+from ac_platform.conversation_intelligence.application import DELETE_JOB, ConversationApplication
 from ac_platform.conversation_intelligence.call_metrics import stored_summary
 from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
 from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
 from ac_platform.conversation_intelligence.inference import ConversationInference, binding_for
 from ac_platform.conversation_intelligence.models import (
+    ConversationPermission,
     ConversationRecording,
     ConversationReportDraft,
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
+from ac_platform.conversation_intelligence.retention import ConversationRetentionScheduler
 from ac_platform.outbox.models import Job
+from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 from tests.database.test_conversation_postgresql import (
     postgres_harness as _postgres_harness,
 )
 from tests.database.test_conversation_postgresql import run, seed
+from tests.database.test_conversation_worker_postgresql import _reconcile
 
 SEGMENTS = [
     {"id": "s1", "speaker_id": "speaker_0", "start_ms": 0, "end_ms": 500, "text": "Price?"},
@@ -83,16 +85,31 @@ def test_model_builds_on_sqlite_and_erased_summary_is_sql_null() -> None:
 
 @pytest.fixture(scope="module")
 def postgres_harness():
-    for engine in _postgres_harness.__wrapped__():
-        ConversationCallMetrics.__table__.create(engine)
-        yield engine
+    yield from _postgres_harness.__wrapped__()
 
 
-async def _source(engine):
+@pytest.fixture
+def retention_harness():
+    # A separate migrated schema keeps each deadline test independent of older calls.
+    yield from _postgres_harness.__wrapped__()
+
+
+def test_metrics_migration_is_forward_only() -> None:
+    config = Config(str(Path(__file__).parents[3] / "alembic.ini"))
+    migration = ScriptDirectory.from_config(config).get_revision("20261003_0071")
+    assert migration is not None
+    with pytest.raises(RuntimeError, match="forward-only"):
+        migration.module.downgrade()
+
+
+async def _source(engine, *, retention_days=None):
     state = await seed(engine)
     usage_id = uuid4()
     async with AsyncSession(engine) as database, database.begin():
         application = ConversationApplication(database, clock=lambda: state.now)
+        if retention_days is not None:
+            permission = await database.get(ConversationPermission, state.permission_id)
+            permission.retention_until = state.now + timedelta(days=retention_days)
         view = await application.register(state.actor, state.recording_intent, key="metrics-source")
         recording = await database.get(ConversationRecording, UUID(view["id"]))
         assert recording is not None
@@ -296,6 +313,101 @@ def test_first_report_is_atomic_and_metrics_failure_does_not_fail_it(
     messages = [record.getMessage() for record in caplog.records]
     expected = {"compute": "ValueError", "insert": "IntegrityError"}
     assert messages == ([] if failure is None else [f"call_metrics_skipped {expected[failure]}"])
+
+
+@pytest.mark.parametrize("retention_days", [7, 730])
+@pytest.mark.parametrize("reason", ["expiry", "explicit"])
+def test_metrics_inherit_recording_retention_and_clear_on_erasure(
+    retention_harness,
+    monkeypatch,
+    retention_days,
+    reason,
+) -> None:
+    async def exercise():
+        engine = create_async_engine(retention_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            source = await _source(engine, retention_days=retention_days)
+            state, recording_id, usage_id, _, _ = source
+            await _reconcile(sessions, state)
+            async with sessions() as database, database.begin():
+                await _finish(database, source, monkeypatch)
+            deadline = state.now + timedelta(days=retention_days)
+            erase_time = deadline if reason == "expiry" else state.now + timedelta(hours=1)
+            scheduler = ConversationRetentionScheduler(
+                sessions, clock=lambda: erase_time - timedelta(seconds=1)
+            )
+            assert not await scheduler.step()
+            async with sessions() as database:
+                metrics = await database.get(ConversationCallMetrics, usage_id)
+                assert metrics.summary == stored_summary(SEGMENTS, 1000)
+                assert metrics.outcome_kind == "follow_up" and metrics.erased_at is None
+                provenance = (
+                    metrics.summary_sha256,
+                    metrics.rules,
+                    metrics.tenant_id,
+                    metrics.submission_id,
+                    metrics.report_draft_id,
+                    metrics.created_at,
+                )
+            if reason == "expiry":
+                scheduler = ConversationRetentionScheduler(sessions, clock=lambda: erase_time)
+                assert await scheduler.step()
+                assert not await scheduler.step()
+            else:
+                async with sessions() as database, database.begin():
+                    await ConversationApplication(
+                        database, clock=lambda: erase_time
+                    ).request_deletion(state.actor, recording_id, key="fictional-explicit-erasure")
+            async with sessions() as database:
+                metrics = await database.get(ConversationCallMetrics, usage_id)
+                assert metrics.summary is not None and metrics.erased_at is None
+                recording = await database.get(ConversationRecording, recording_id)
+                assert recording.state == "deleting"
+            # No source objects were registered in this fictional fixture. Confirm
+            # that empty adapter erasure and use the real lease and finish hook.
+            async with sessions() as database, database.begin():
+                recovery = await RecoveryStateRepository(database).require_ready(
+                    lock=True, shared_lock=True
+                )
+                jobs = await JobRepository(database).claim(kinds={DELETE_JOB}, now=erase_time)
+                assert len(jobs) == 1 and jobs[0].payload["recording_id"] == str(recording_id)
+                job_id, token, generation = (
+                    jobs[0].id,
+                    jobs[0].lease_token,
+                    recovery.generation,
+                )
+            async with sessions() as database, database.begin():
+                await ConversationApplication(database, clock=lambda: erase_time).finish_erasure(
+                    job_id=job_id, lease_token=token, recovery_generation=generation
+                )
+            async with sessions() as database:
+                metrics = await database.get(ConversationCallMetrics, usage_id)
+                assert metrics.summary is None and metrics.outcome_kind is None
+                assert metrics.erased_at == erase_time
+                assert (
+                    metrics.summary_sha256,
+                    metrics.rules,
+                    metrics.tenant_id,
+                    metrics.submission_id,
+                    metrics.report_draft_id,
+                    metrics.created_at,
+                ) == provenance
+                assert await database.scalar(
+                    select(ConversationCallMetrics.summary.is_(None)).where(
+                        ConversationCallMetrics.usage_id == usage_id
+                    )
+                )
+                recording = await database.get(ConversationRecording, recording_id)
+                assert recording.state == "deleted" and recording.deleted_at == erase_time
+                draft = await database.get(ConversationReportDraft, metrics.report_draft_id)
+                assert draft.payload is None and draft.erased_at == erase_time
+                settlement = await database.get(ConversationAcquisitionSettlement, usage_id)
+                assert settlement.kind == "completed"
+        finally:
+            await engine.dispose()
+
+    run(exercise())
 
 
 def test_outer_transaction_rollback_removes_report_settlement_and_metrics(

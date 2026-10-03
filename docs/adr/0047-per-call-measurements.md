@@ -33,5 +33,13 @@ retention. The retention-v2 alignment supersedes the earlier option A proposal.
 Tests use fictional seven-day legacy and 730-day future-policy recordings; these
 fixtures do not issue a new policy, change consent, or change existing promises.
 
-The eventual migration is forward-only. Model registration, migration-bound
-backup/restore catalogues and release-head checks must accompany deployment.
+Migration `20261003_0071` follows speaker-map revision `20261003_0070` and is
+forward-only. It replaces the original card's 0055 number, which was no longer
+the next available ID. Model registration, the `ac-postgres-parity-v43`
+backup/restore catalogues and release-head checks accompany it.
+
+The fictional retention checks use the real scheduler for expiry and the owned
+deletion command for explicit erasure, then the recovery-fenced internal lease
+and `finish_erasure`. They keep metrics until adapter confirmation and verify
+SQL NULL content afterwards while preserving settlement and provenance. The
+730-day fixture represents a future approved policy without activating one.
