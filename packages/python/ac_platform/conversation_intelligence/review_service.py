@@ -78,6 +78,8 @@ from .review_invitations import (
     encrypt_invitation_token,
     hash_invitation_token,
 )
+from .sensitive_segments import withhold
+from .sensitive_segments_store import withheld_plan_for
 
 
 @dataclass(frozen=True)
@@ -960,19 +962,30 @@ class ConversationReviewService:
 
     async def get(self, actor: ActorContext, assignment_id: UUID) -> dict[str, Any]:
         _, assignment, evidence, _ = await self._admit(actor, assignment_id)
+        return await self.render(assignment, evidence)
+
+    async def render(self, assignment: ReviewAssignment, evidence: _Evidence) -> dict[str, Any]:
+        """The post-authorization assignment payload, withheld per the recording's marks."""
+
+        plan = await withheld_plan_for(
+            self.database,
+            recording_id=evidence.recording.id,
+            served_revisions=(str(evidence.transcript["revision"]),),
+        )
+        transcript = withhold(evidence.transcript, plan)
         return {
             "assignment": assignment.model_dump(mode="json", by_alias=True),
-            "report": evidence.draft.payload,
-            "transcript": evidence.transcript,
+            "report": withhold(evidence.draft.payload, plan),
+            "transcript": transcript,
             "evidence_spans": [
                 {
                     "checkpoint_id": str(assignment.checkpoint.id),
                     "span_id": segment["id"],
                     **segment,
                 }
-                for segment in evidence.transcript["segments"]
+                for segment in transcript["segments"]
             ],
-            "audio_source_url": f"/v1/reviewer/review-assignments/{assignment_id}/source",
+            "audio_source_url": f"/v1/reviewer/review-assignments/{assignment.id}/source",
         }
 
     @staticmethod

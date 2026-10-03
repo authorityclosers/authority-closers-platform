@@ -269,6 +269,9 @@ async def test_quote_gates_stored_v6_replay_and_active_plan_without_blocking_fro
         async def scalar(self, _statement):
             return row if existing == "active" else None
 
+        async def scalars(self, _statement):
+            return []  # no C2 checkpoints and no sensitive-segment marks
+
     replay = SimpleNamespace(result_id=row.id) if existing == "replay" else None
     app = SimpleNamespace(
         admit=AsyncMock(return_value=datetime.fromtimestamp(1_700_000_000, UTC)),
@@ -406,6 +409,9 @@ async def test_v6_quote_is_blocked_before_allowance_reads_or_plan_creation(monke
 
         async def scalar(self, _statement):
             return None
+
+        async def scalars(self, _statement):
+            return []  # no C2 checkpoints and no sensitive-segment marks
 
         async def get(self, model, key):
             self.get_calls.append((model, key))

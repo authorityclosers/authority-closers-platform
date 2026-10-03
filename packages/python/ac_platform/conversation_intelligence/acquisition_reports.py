@@ -47,6 +47,8 @@ from ac_platform.conversation_intelligence.report_access import (
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
@@ -220,6 +222,17 @@ class AcquisitionReports:
             actor=actor,
             shared_identity_locks=shared_identity_locks,
         )
+        return await self.render_report(
+            recording,
+            submission_id=submission_id,
+            access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+        )
+
+    async def render_report(
+        self, recording: ConversationRecording, *, submission_id: UUID, access: ReportAccess
+    ) -> dict[str, Any]:
+        """The post-authorization report projection, withheld per the recording's marks."""
+
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -237,22 +250,26 @@ class AcquisitionReports:
                 raise ConversationConflict("The recovered report's run is unavailable.")
             envelope = project_bound_report(
                 report,
-                access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+                access=access,
                 source=ReportSourceBinding(
                     recording.id, run.id, recording.source_sha256, report.transcript_revision
                 ),
             )
-            return {
-                "submission_id": str(submission_id),
-                **envelope,
-                "recovery": {
-                    "version": recovered.version,
-                    "validation_state": recovered.validation_state,
-                    "provider_calls": 0,
-                    "human_approved": False,
-                    "official_score": False,
+            return await self._withheld(
+                recording,
+                report.transcript_revision,
+                {
+                    "submission_id": str(submission_id),
+                    **envelope,
+                    "recovery": {
+                        "version": recovered.version,
+                        "validation_state": recovered.validation_state,
+                        "provider_calls": 0,
+                        "human_approved": False,
+                        "official_score": False,
+                    },
                 },
-            }
+            )
         draft = await self._draft(recording)
         if draft is None:
             raise ConversationNotFound("Your sales report is not ready yet.")
@@ -272,12 +289,22 @@ class AcquisitionReports:
         await self.reports._canonical_draft(draft, recording)
         envelope = project_bound_report(
             report,
-            access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+            access=access,
             source=ReportSourceBinding(
                 recording.id, run.id, recording.source_sha256, report.transcript_revision
             ),
         )
-        return {"submission_id": str(submission_id), **envelope}
+        return await self._withheld(
+            recording, report.transcript_revision, {"submission_id": str(submission_id), **envelope}
+        )
+
+    async def _withheld(
+        self, recording: ConversationRecording, transcript_revision: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        plan = await withheld_plan_for(
+            self.database, recording_id=recording.id, served_revisions=(transcript_revision,)
+        )
+        return withhold(payload, plan)
 
     async def transcript(
         self,
@@ -293,6 +320,11 @@ class AcquisitionReports:
             actor=actor,
             shared_identity_locks=shared_identity_locks,
         )
+        return await self.render_transcript(recording)
+
+    async def render_transcript(self, recording: ConversationRecording) -> dict[str, Any]:
+        """The post-authorization transcript projection, withheld per the recording's marks."""
+
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -333,19 +365,20 @@ class AcquisitionReports:
                 raise ConversationConflict(
                     "The recovered transcript's playback bounds are unavailable."
                 ) from None
-            return {
+        else:
+            draft = await self._draft(recording)
+            if draft is None:
+                raise ConversationNotFound("The transcript will appear with your sales report.")
+            _, transcript = self.reports._validated(draft, recording)
+            await self.reports._canonical_draft(draft, recording)
+        return await self._withheld(
+            recording,
+            transcript["revision"],
+            {
                 name: transcript[name]
                 for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
-            }
-        draft = await self._draft(recording)
-        if draft is None:
-            raise ConversationNotFound("The transcript will appear with your sales report.")
-        _, transcript = self.reports._validated(draft, recording)
-        await self.reports._canonical_draft(draft, recording)
-        return {
-            name: transcript[name]
-            for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
-        }
+            },
+        )
 
     async def waveform(
         self,

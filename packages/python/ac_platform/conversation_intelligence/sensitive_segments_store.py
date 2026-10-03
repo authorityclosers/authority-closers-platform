@@ -8,7 +8,7 @@ checked against the segment IDs of a non-erased C2 checkpoint only.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -17,7 +17,9 @@ from uuid import UUID, uuid4, uuid5
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
@@ -26,6 +28,13 @@ from ac_platform.conversation_intelligence.sensitive_segment_models import (
     REASON_REF_PATTERN,
     SENSITIVE_CATEGORIES,
     ConversationSensitiveSegmentMark,
+)
+from ac_platform.conversation_intelligence.sensitive_segments import (
+    EMPTY_PLAN,
+    Gram,
+    WithheldPlan,
+    grams,
+    withheld_plan,
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
@@ -131,6 +140,85 @@ async def effective_marks(
     return tuple(_effective(row) for row in rows)
 
 
+async def _c2_segment_texts(
+    database: AsyncSession, recording_id: UUID, *, tenant_id: UUID | None = None
+) -> dict[str, dict[str, str]]:
+    """Segment text per transcript revision, from the recording's non-erased C2 checkpoints."""
+
+    conditions = [
+        ConversationCheckpoint.recording_id == recording_id,
+        ConversationCheckpoint.stage == "C2",
+        ConversationCheckpoint.erased_at.is_(None),
+    ]
+    if tenant_id is not None:
+        conditions.append(ConversationCheckpoint.tenant_id == tenant_id)
+    checkpoints = await database.scalars(
+        select(ConversationCheckpoint)
+        .where(*conditions)
+        .order_by(ConversationCheckpoint.created_at, ConversationCheckpoint.id)
+    )
+    revisions: dict[str, dict[str, str]] = {}
+    for checkpoint in checkpoints:
+        payload = checkpoint.payload
+        if not isinstance(payload, dict):
+            continue
+        revision = payload.get("revision")
+        segments = payload.get("segments")
+        if not isinstance(revision, str) or not revision or not isinstance(segments, list):
+            continue
+        texts: dict[str, str] = {}
+        for segment in segments:
+            if isinstance(segment, dict) and isinstance(segment.get("id"), str):
+                text = segment.get("text")
+                texts[segment["id"]] = text if isinstance(text, str) else ""
+        revisions[revision] = texts
+    return revisions
+
+
+async def _marks_for_read(
+    database: AsyncSession, recording_id: UUID, served: frozenset[str]
+) -> tuple[EffectiveMark, ...]:
+    condition = ConversationSensitiveSegmentMark.recording_id == recording_id
+    if served:
+        condition = or_(condition, ConversationSensitiveSegmentMark.transcript_revision.in_(served))
+    rows = await database.scalars(_effective_statement(condition))
+    return tuple(_effective(row) for row in rows)
+
+
+async def withheld_plan_for(
+    database: AsyncSession, *, recording_id: UUID, served_revisions: Iterable[str] | None = None
+) -> WithheldPlan:
+    """W* for one read (AUT-519 D4), in two queries; ``EMPTY_PLAN`` when nothing is marked.
+
+    Marks on a served revision contribute segment IDs and grams; marks on any
+    other revision of this recording contribute grams only. ``None`` serves
+    every C2 revision of the recording (the raw checkpoints surface).
+    """
+
+    texts = await _c2_segment_texts(database, recording_id)
+    served = frozenset(texts) if served_revisions is None else frozenset(served_revisions)
+    marks = await _marks_for_read(database, recording_id, served)
+    if not marks:
+        return EMPTY_PLAN
+    marked_ids = {mark.segment_id for mark in marks if mark.transcript_revision in served}
+    marked_grams: set[Gram] = set()
+    for mark in marks:
+        marked_grams |= grams(texts.get(mark.transcript_revision, {}).get(mark.segment_id, ""))
+    served_segments = [
+        (segment_id, text)
+        for revision in served
+        for segment_id, text in texts.get(revision, {}).items()
+    ]
+    return withheld_plan(served_segments, marked_ids, marked_grams)
+
+
+async def marks_in_force(database: AsyncSession, *, recording_id: UUID) -> bool:
+    """True while any mark is effective for this recording or a revision it serves (D7)."""
+
+    texts = await _c2_segment_texts(database, recording_id)
+    return bool(await _marks_for_read(database, recording_id, frozenset(texts)))
+
+
 class SensitiveSegmentsStore:
     """Platform-operator reads and writes; the caller has already checked the capability."""
 
@@ -196,6 +284,22 @@ class SensitiveSegmentsStore:
             raise SensitiveSegmentInvalid(
                 f"Segment {unknown[0]} is not in transcript revision {transcript_revision}."
             )
+        now = datetime.now(UTC)
+        await self._request_receipt(
+            actor,
+            recording,
+            key=key,
+            fingerprint=content_hash(
+                {
+                    "recording_id": str(recording.id),
+                    "transcript_revision": transcript_revision,
+                    "segments": sorted(requested.items()),
+                    "reason_ref": reason_ref,
+                }
+            ),
+            reason_ref=reason_ref,
+            now=now,
+        )
         current = {
             row.segment_id: row
             for row in await self.database.scalars(
@@ -216,7 +320,6 @@ class SensitiveSegmentsStore:
             )
         }
         result: list[ConversationSensitiveSegmentMark] = []
-        now = datetime.now(UTC)
         for segment_id, category in requested.items():
             command_id = _command_id(actor, key, segment_id)
             existing = replayed.get(command_id)
@@ -303,31 +406,45 @@ class SensitiveSegmentsStore:
     async def _revisions(self, recording: ConversationRecording) -> dict[str, frozenset[str]]:
         """Segment IDs per transcript revision, from the recording's non-erased C2 checkpoints."""
 
-        checkpoints = await self.database.scalars(
-            select(ConversationCheckpoint)
-            .where(
-                ConversationCheckpoint.recording_id == recording.id,
-                ConversationCheckpoint.tenant_id == recording.tenant_id,
-                ConversationCheckpoint.stage == "C2",
-                ConversationCheckpoint.erased_at.is_(None),
+        texts = await _c2_segment_texts(self.database, recording.id, tenant_id=recording.tenant_id)
+        return {revision: frozenset(segments) for revision, segments in texts.items()}
+
+    async def _request_receipt(
+        self,
+        actor: ActorContext,
+        recording: ConversationRecording,
+        *,
+        key: str,
+        fingerprint: str,
+        reason_ref: str,
+        now: datetime,
+    ) -> None:
+        """One audit event per actor and Idempotency-Key binds the key to the whole request body."""
+
+        request_id = str(_command_id(actor, key, "request"))
+        prior = await self.database.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "conversation.sensitive_segment.mark_request",
+                AuditEvent.resource_id == request_id,
             )
-            .order_by(ConversationCheckpoint.created_at, ConversationCheckpoint.id)
         )
-        revisions: dict[str, frozenset[str]] = {}
-        for checkpoint in checkpoints:
-            payload = checkpoint.payload
-            if not isinstance(payload, dict):
-                continue
-            revision = payload.get("revision")
-            segments = payload.get("segments")
-            if not isinstance(revision, str) or not revision or not isinstance(segments, list):
-                continue
-            revisions[revision] = frozenset(
-                segment["id"]
-                for segment in segments
-                if isinstance(segment, dict) and isinstance(segment.get("id"), str)
-            )
-        return revisions
+        if prior is not None:
+            if prior.payload.get("fingerprint_sha256") != fingerprint:
+                raise SensitiveSegmentConflict(
+                    "The Idempotency-Key has already been used for another change."
+                )
+            return
+        await AuditRepository(self.database).append(
+            tenant_id=recording.tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action="conversation.sensitive_segment.mark_request",
+            resource_type="conversation_sensitive_segment_mark",
+            resource_id=request_id,
+            payload={"recording_id": str(recording.id), "fingerprint_sha256": fingerprint},
+            reason=reason_ref,
+            now=now,
+        )
 
     async def _append(
         self,
@@ -414,4 +531,6 @@ __all__ = [
     "SensitiveSegmentsStore",
     "TranscriptRevisionSummary",
     "effective_marks",
+    "marks_in_force",
+    "withheld_plan_for",
 ]
