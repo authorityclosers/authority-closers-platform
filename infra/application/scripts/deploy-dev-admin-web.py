@@ -60,10 +60,11 @@ class DeployError(RuntimeError):
         super().__init__(code)
 
 
-def command(argv: list[str]) -> subprocess.CompletedProcess[str]:
+def command(argv: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(  # noqa: S603 - argv is built by this module.
             argv,
+            cwd=cwd,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -126,8 +127,10 @@ class Deployer:
     def release_admin_image(self, sha: str) -> str:
         release = self.path(APPLICATION / "releases" / sha)
         require(release.is_dir(), "release_not_stored")
+        # RELEASE-FILES.sha256 lists paths relative to the release directory,
+        # as ac_release check_core and the installer verify it.
         checked = self.run(
-            ["sha256sum", "--check", "--quiet", str(release / "RELEASE-FILES.sha256")]
+            ["sha256sum", "--check", "--strict", "--quiet", "RELEASE-FILES.sha256"], cwd=release
         )
         require(checked.returncode == 0, "release_checksum_failed")
         values: dict[str, str] = {}
@@ -186,6 +189,7 @@ class Deployer:
         return root == ("307", f"https://{HOST}/login") and login[0] == "200"
 
     def status(self, ancestors: list[str]) -> dict[str, Any]:
+        require(all(SHA_RE.fullmatch(a) for a in ancestors), "ancestor_sha_invalid")
         live = self.container()
         require(live is not None, "container_missing")
         assert live is not None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -40,6 +41,9 @@ class FakeHost:
         (release / "release-images.env").write_text(
             f"AC_RELEASE_ID={NEW}\nAC_ADMIN_IMAGE={NEW_ID}\nAC_API_IMAGE=sha256:{'a' * 64}\n"
         )
+        digest = hashlib.sha256((release / "release-images.env").read_bytes()).hexdigest()
+        # Relative names, as the installer writes them.
+        (release / "RELEASE-FILES.sha256").write_text(f"{digest}  ./release-images.env\n")
         (app / "current-staging").symlink_to(release)
         dev = root / "srv/authority-closers/development"
         dev.mkdir(parents=True)
@@ -48,13 +52,15 @@ class FakeHost:
     def at(self, path: Path) -> Path:
         return path if str(path).startswith(str(self.root)) else self.root / path.relative_to("/")
 
-    def __call__(self, argv):
+    def __call__(self, argv, cwd=None):
         self.calls.append(argv)
         done = lambda code=0, out="": subprocess.CompletedProcess(argv, code, out, "")  # noqa: E731
         if argv[:2] == ["git", "--git-dir"]:
             return done(0 if (argv[5], argv[6]) in self.ancestry else 1)
         if argv[0] == "sha256sum":
-            return done()
+            # The real tool: the manifest only verifies from inside the release dir.
+            assert argv[-1] == "RELEASE-FILES.sha256" and cwd is not None
+            return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603
         if argv[:3] == ["docker", "image", "inspect"]:
             found = self.images.get(argv[-1])
             return done(0, f"{found[0]}|{found[1]}\n") if found else done(1)
@@ -180,3 +186,19 @@ def test_status_is_read_only_and_proves_revision(host):
     run(host, "deploy", "--require-ancestor", MERGE, "--apply")
     code, out = run(host, "status", "--require-ancestor", MERGE)
     assert out["contains"] == {MERGE: True} and out["receipt_matches"] is True
+
+
+def test_tampered_release_files_refuse(host):
+    release = host.root / "srv/authority-closers/application/releases" / NEW
+    env = release / "release-images.env"
+    env.write_text(env.read_text().replace(NEW_ID, OLD_ID))
+    code, out = run(host, "deploy", "--apply")
+    assert (code, out["error"]) == (1, "release_checksum_failed")
+    assert not mutations(host)
+
+
+def test_status_refuses_malformed_ancestor(host):
+    code, out = run(host, "status", "--require-ancestor", "HEAD", "--write-receipt")
+    assert (code, out["error"]) == (1, "ancestor_sha_invalid")
+    assert not any(c[0] == "git" for c in host.calls)
+    assert not (host.root / deploy.RECEIPT.relative_to("/")).exists()
