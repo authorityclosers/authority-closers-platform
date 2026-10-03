@@ -21,15 +21,7 @@ const frame = (id, route, ready, group, tab) => ({
 });
 export const frames = [
   frame("shell", shell, "[data-full-shell-fixture]", "shell"),
-  ...[
-    "Moments",
-    "Prospect",
-    "Next-call plan",
-    "Sales skills",
-    "Call signals",
-    "Transcript",
-    "Raw data",
-  ].map((tab) =>
+  ...["Moments", "Transcript", "Analysis", "Coaching"].map((tab) =>
     frame(
       `report-${tab.toLowerCase().replaceAll(" ", "-")}`,
       shell,
@@ -113,16 +105,9 @@ export function allowedRequest(request, origin, routes) {
     (!params.has("view") ||
       ["reading", "tabs", "document"].includes(params.get("view"))) &&
     (!params.has("section") ||
-      [
-        "overview",
-        "moments",
-        "prospect",
-        "next-call-plan",
-        "skills",
-        "signals",
-        "transcript",
-        "raw-data",
-      ].includes(params.get("section")));
+      ["overview", "moments", "transcript", "analysis", "coaching"].includes(
+        params.get("section"),
+      ));
   return (
     url.origin === origin &&
     request.method() === "GET" &&

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -60,6 +60,13 @@ test("rejects providers, API writes/reads and off-origin requests", () => {
       `${origin}/review-fixture/shell?call=00000000-0000-4000-8000-000000000002&view=tabs&section=moments&_rsc=local`,
     ),
   );
+  for (const section of ["analysis", "coaching"])
+    assert.ok(
+      allowed(
+        `${origin}/review-fixture/shell?call=00000000-0000-4000-8000-000000000002&view=tabs&section=${section}`,
+      ),
+    );
+  assert.ok(!allowed(`${origin}/review-fixture/shell?section=raw-data`));
   assert.ok(
     !allowed(`${origin}/review-fixture/shell?call=other-person&view=tabs`),
   );
@@ -71,6 +78,20 @@ test("rejects providers, API writes/reads and off-origin requests", () => {
   assert.ok(
     !allowed("https://salesxray-dev.authorityclosers.com/review-fixture/shell"),
   );
+});
+
+test("capture tabs cover the current fictional shell panels", async () => {
+  const fixture = await readFile(
+    "apps/sales-xray-web/app/review-fixture/shell/full-shell-preview.tsx",
+    "utf8",
+  );
+  const panelLabels = [...fixture.matchAll(/id: "[\w-]+",\s+label: "([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((label) => label !== "Overview");
+  const captureLabels = frames
+    .filter((item) => item.tab)
+    .map((item) => item.tab);
+  assert.deepEqual(new Set(captureLabels), new Set(panelLabels));
 });
 
 test("unavailable measurements never become zero", () => {

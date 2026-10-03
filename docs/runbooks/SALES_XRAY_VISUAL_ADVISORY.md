@@ -12,6 +12,10 @@ dispatch. PRs select changed Sales Xray component families plus the shell; main
 and dispatch render the complete fictional catalogue to supply baselines. Broad
 or unfamiliar Sales Xray/UI component changes select the complete catalogue.
 Backend-only PRs render the shell. Tests alone do not expand the selection.
+The current catalogue has 30 viewport captures. The shell includes Overview;
+separate tab captures cover Moments, Transcript, Analysis and Coaching. A focused
+regression compares these targets with the fictional shell's actual panel labels
+so a report reorganization cannot silently leave obsolete capture targets.
 The catalogue reuses the repository's development-only shell/report/document,
 plans/billing and acquisition fixtures. Those are display evidence, with no
 canonical account, payment, call or provider operation. This is not D2 B's real

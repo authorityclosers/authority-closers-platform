@@ -62,3 +62,13 @@ Both report-helper outputs produced contact sheets and a count-only receipt. Las
 Local screenshots and diffs are temporary and are not checked into Git or retained on the board. Hosted evidence will be `sales-xray-visual-<sha>-<attempt>` with three-day retention. Its receipt links each screenshot, route, viewport, baseline run/SHA and diff availability. See [the runbook](../runbooks/SALES_XRAY_VISUAL_ADVISORY.md) for the contract and post-merge seven-day false-positive collection.
 
 Delivery gate at handoff: main is green and the devenv branch may continue, but shared-file PR #251 (AUT-428 migration) occupies the shared slot. Opening this workflow PR concurrently would fail `single-track`. No lane/dependency blocker is invented for that sequencing constraint. Review the pushed branch now; open the PR when the gate permits, then verify hosted full-catalogue coverage and runtime before CEO approval.
+
+## Post-main catalogue reconciliation
+
+Main `c387b2d12be65c03342c19dce2390b112bee8b8f` reorganized the shell report into Overview, Transcript, Moments, Analysis and Coaching. It was merged into the task at `604b0599f54f6f3808807c698e99c65e604e8687`. The historical batches above predate that reorganization; they do not verify the updated report.
+
+The renderer now targets the current tabs and restricts section navigation to those five current IDs. A regression checks the capture labels against the actual fictional shell panels. The complete catalogue now contains 30 viewport captures, including the shell's Overview. This changes the previously reviewed implementation and requires a fresh CTO review.
+
+Two serial local startup attempts at `604b059` produced unavailable receipts during `server_warmup`: 67 seconds starting `2026-10-03T17:23:55.824Z`, and 18 seconds starting `2026-10-03T17:27:16.826Z`. Neither took a screenshot or produced browser counts; all missing measurements stay null. A separate bounded diagnostic also timed out on the shell request. Owned temporary processes were stopped. These are local startup failures, not hosted runtime evidence or a product visual verdict. Hosted artifacts, total job duration and `renderer_status` remain required before CEO approval.
+
+The CTO's nonblocking artifact-URL, failed-render baseline and download-timeout observations are recorded for D in [AUT-1025](/AUT/issues/AUT-1025), in the Intake Ledger. A retains its advisory behavior.
