@@ -41,16 +41,24 @@ LANE_TASK = "AUT-41"  # CTO's standing "Code lane coordinator" task
 LANE_CHECK_SECONDS = 60
 DEV_CHECKOUT = "/home/acdev/src/authority-closers-platform"
 GH = "/home/acdev/.local/bin/gh"
-LANES = ("sales-xray", "platform", "admin", "ui", "devenv", "api", "billing")
+LANES = (
+    "sales-xray", "platform", "admin", "ui", "devenv", "api", "billing",
+    "sx-report", "sx-org", "sx-billing", "sx-shell", "sx-prospects",
+)
 # One checkout per lane; the Sales Xray lane keeps the dev checkout, so salesxray-dev shows its work live.
 LANE_CHECKOUTS = {"sales-xray": DEV_CHECKOUT, "exclusive": DEV_CHECKOUT,
+                  "sx-report": "/home/acdev/src/lanes/sx-report/authority-closers-platform",
+                  "sx-org": "/home/acdev/src/lanes/sx-org/authority-closers-platform",
+                  "sx-billing": "/home/acdev/src/lanes/sx-billing/authority-closers-platform",
+                  "sx-shell": "/home/acdev/src/lanes/sx-shell/authority-closers-platform",
+                  "sx-prospects": "/home/acdev/src/lanes/sx-prospects/authority-closers-platform",
                   "platform": "/home/acdev/src/lanes/platform/authority-closers-platform",
                   "admin": "/home/acdev/src/lanes/admin/authority-closers-platform",
                   "ui": "/home/acdev/src/lanes/ui/authority-closers-platform",
                   "devenv": "/home/acdev/src/lanes/devenv/authority-closers-platform",
                   "api": "/home/acdev/src/lanes/api/authority-closers-platform",
                   "billing": "/home/acdev/src/lanes/billing/authority-closers-platform"}
-LANE_LINE = re.compile(r"(?i)\blane\b\W{0,6}(sales-xray|platform|admin|ui|devenv|api|billing)\b")
+LANE_LINE = re.compile(r"(?i)\blane\b\W{0,6}(sales-xray|platform|admin|ui|devenv|api|billing|sx-report|sx-org|sx-billing|sx-shell|sx-prospects)\b")
 REPO = "authorityclosers/authority-closers-platform"
 LAPTOP_HEARTBEAT = "/home/acdev/.local/state/ac-laptop/heartbeat"
 LAPTOP_AGENTS = ("feeff44a-5bb6-49b3-a9e4-8a3fb36dda0e", "4e4ad6e2-5565-42fb-b115-d099e474179d",
@@ -303,6 +311,8 @@ def merge_held(conn: psycopg.Connection, number: int) -> bool:
 
 # Owner decision 2 Oct 2026 (AUT-544 direction): one reviewer merges ordinary changes.
 POD_LEAD_IDS = {
+    "134f6861-0d81-4c0e-8a81-d361703c31d5": "the Organisation Engineer",
+    "10c721cf-7a41-4298-8e6f-342a1eda2a3b": "the Billing Engineer",
     "044cc30f-0a4d-4bcb-82e9-1e4e95148664": "the Lead Engineer",
     "2c625bb9-1917-43ed-b462-74e30e34f6cf": "the Platform Lead Engineer",
     "f3bf11bf-694f-45a9-8318-d45a041a79d3": "the Admin Lead Engineer",
@@ -313,6 +323,11 @@ POD_LEAD_IDS = {
 
 # 3 Oct (owner: Opus only for decisions): which Sol pod lead reviews an ordinary PR in each lane.
 LANE_REVIEWER = {
+    "sx-report": "044cc30f-0a4d-4bcb-82e9-1e4e95148664",
+    "sx-org": "134f6861-0d81-4c0e-8a81-d361703c31d5",
+    "sx-billing": "10c721cf-7a41-4298-8e6f-342a1eda2a3b",
+    "sx-shell": "f3bf11bf-694f-45a9-8318-d45a041a79d3",
+    "sx-prospects": "3cd3a2e1-bd97-480f-92b5-bd9507913c67",
     "sales-xray": "044cc30f-0a4d-4bcb-82e9-1e4e95148664",
     "platform": "2c625bb9-1917-43ed-b462-74e30e34f6cf",
     "admin": "f3bf11bf-694f-45a9-8318-d45a041a79d3",

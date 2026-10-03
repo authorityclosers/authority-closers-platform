@@ -22,11 +22,14 @@
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
 1. One task at a time per lane, for every agent, person and device. There are
-   seven lanes: `sales-xray`, `platform`, `admin`, `ui`, `devenv`, `api`
+   twelve lanes: `sales-xray`, `platform`, `admin`, `ui`, `devenv`, `api`
    (back-end and API work for the apps: `packages/python/**`, `db/migrations/**`,
-   `tests/**`; never files under `apps/*-web/`) and `billing` (the same scope,
-   for the payments and billing back end only). Lanes run in parallel; each
-   holds one task. A task is one small, reviewable change tied to one tracked
+   `tests/**`; never files under `apps/*-web/`), `billing` (the same scope,
+   for the payments and billing back end only), `sx-report`, `sx-org`,
+   `sx-billing`, `sx-shell` and `sx-prospects`. Each feature lane carries its
+   feature's UI and API; the billing back end stays in `billing`.
+   Lanes run in parallel; each holds one task. A task is one small, reviewable
+   change tied to one tracked
    issue. No new task starts in a lane while that lane holds a task branch or pull
    request, or while the latest `main` build is red (only the task that fixes it
    may start, with `--fixes-red-main`). A running `main` build does not block a
