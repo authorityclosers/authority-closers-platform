@@ -16,6 +16,7 @@ from typing import Any, NoReturn
 
 from .checkpoints import content_hash, require_sha256
 from .signals import MAX_SECONDS, NATIVE_SOURCE_SHA256
+from .speaker_roles import SPEAKER_ROLE_ORIGINS
 
 ALIGNMENT_SCHEMA = "ac.sales-xray.alignment-checkpoint/1"
 _SIGNAL_SCHEMA = "ac.sales-xray.signal-checkpoint/1"
@@ -340,10 +341,8 @@ def _validate_transcript(transcript: dict[str, Any], signal: _SignalInfo) -> _Tr
             _fail("alignment_transcript_clock_ambiguous")
     if transcript.get("alignment_to_audioatlas", "unverified") != "unverified":
         _fail("alignment_claimed_audioatlas_certification")
-    if (
-        transcript.get("speaker_identity", "unverified_provider_labels")
-        != "unverified_provider_labels"
-    ):
+    identity = transcript.get("speaker_identity", "unverified_provider_labels")
+    if not isinstance(identity, str) or identity not in SPEAKER_ROLE_ORIGINS:
         _fail("alignment_claimed_speaker_identity")
 
     duration_value = transcript.get("duration_ms")
@@ -571,7 +570,7 @@ def build_alignment(signal_payload: dict[str, Any], transcript: dict[str, Any]) 
             "mapping_reason": mapping_reason,
         },
         "alignment_to_audioatlas": "unverified",
-        "speaker_identity": "unverified_provider_labels",
+        "speaker_identity": transcript.get("speaker_identity", "unverified_provider_labels"),
         "segments": normalized_segments,
         "limitations": [
             "No physical speaker-to-channel mapping was supplied or inferred.",

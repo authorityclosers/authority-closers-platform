@@ -471,11 +471,11 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/7"
-    # AUT-360 changes evidence admission; retained recovery must use a new identity.
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/8"
+    # AUT-311 admits optional role context; retained recovery needs a new source identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "84130a28753301b9794cb98dc2f6701976eacb6ed2be269bf24722008c586dda"
+        "8ea811449988044c4745965b82b1349f2f67881eebb4ebae70f74f890b93c896"
     )
 
 
