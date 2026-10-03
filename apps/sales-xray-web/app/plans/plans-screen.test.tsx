@@ -15,6 +15,7 @@ import {
 import { parsePlans } from "../billing/contract";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
+import { AnimatedCountUp } from "./animated-count-up";
 import { OrderReturn } from "./order-return";
 import { PlansPurchase } from "./plans-purchase";
 
@@ -217,11 +218,41 @@ it("return verification shows minutes and the canonical new balance, with no dup
   );
   await until(() => text().includes("862 analysis minutes"));
   expect(text()).toContain("Order minutes800");
+  expect(text()).not.toMatch(/credits/i);
+  expect(host.querySelector('span[aria-live="polite"]')?.textContent).toBe(
+    "+800 analysis minutes",
+  );
   expect(verifyOrder).toHaveBeenCalled();
   fixtureProviderReports(checkout.order.orderId, "paid");
   expect((await fixtureBilling.readUsage()).allowance.availableSeconds).toBe(
     862 * 60,
   );
+});
+
+it("keeps the final announcement stable while the visible minutes animate", async () => {
+  let frame!: FrameRequestCallback;
+  const animation = vi
+    .spyOn(globalThis, "requestAnimationFrame")
+    .mockImplementation((callback) => {
+      frame = callback;
+      return 1;
+    });
+  const cancel = vi.spyOn(globalThis, "cancelAnimationFrame");
+  try {
+    await render(<AnimatedCountUp targetMinutes={800} />);
+    const announcement = host.querySelector('[aria-live="polite"]')!;
+    const animated = host.querySelector('[aria-hidden="true"]')!;
+    expect(announcement.textContent).toBe("+800 analysis minutes");
+    await act(async () => frame(100));
+    expect(animated.textContent).toContain("+0");
+    await act(async () => frame(700));
+    expect(animated.textContent).toContain("+700");
+    expect(announcement.textContent).toBe("+800 analysis minutes");
+  } finally {
+    await act(async () => root.render(null));
+    animation.mockRestore();
+    cancel.mockRestore();
+  }
 });
 
 function AccountBilling({ client }: { client: BillingClient }) {

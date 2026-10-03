@@ -42,6 +42,8 @@ import {
   PLANS_GST_RATE,
   type DisplayTopUpPack,
 } from "./plans/plans-catalogue-fixture";
+import { CheckoutDrawer } from "./plans/checkout-drawer";
+import { usePurchaseCheckout } from "./plans/use-purchase-checkout";
 import {
   AccountProfileRequestError,
   normalizeProfilePhoneInput,
@@ -147,6 +149,21 @@ export function AccountSettings({
   const [section, setSection] = useState<SectionId>("general");
   const liveBilling = useBillingAccount(!billing && section === "billing");
   const [stage, setStage] = useState<"list" | "pane">("list");
+  const [selectedTopUp, setSelectedTopUp] = useState<DisplayTopUpPack | null>(
+    null,
+  );
+  const topUp = usePurchaseCheckout(undefined, "/account#billing");
+  useEffect(() => {
+    if (!topUp.error) return;
+    const id = "topup-checkout-error";
+    notify({
+      id,
+      tone: "error",
+      title: "Checkout unavailable",
+      message: topUp.error,
+    });
+    return () => dismissNotice(id);
+  }, [topUp.error]);
   const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
@@ -379,6 +396,28 @@ export function AccountSettings({
 
         <Pane id="usage" title="Analysis time" active={section} onBack={back}>
           <AllowanceSummary allowance={allowance} onRetry={retry} />
+          <div className={styles.row}>
+            <div className={styles.rowText}>
+              <span className={styles.rowLabel}>Need more minutes?</span>
+              <span className={styles.rowHint}>
+                Add analysis minutes anytime without changing your monthly
+                subscription.
+              </span>
+            </div>
+            <div className={styles.rowControl}>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setSection("billing");
+                  if (typeof window !== "undefined")
+                    window.location.hash = "billing";
+                }}
+              >
+                Top up minutes
+              </button>
+            </div>
+          </div>
         </Pane>
 
         <Pane
@@ -408,6 +447,10 @@ export function AccountSettings({
                     },
                   }
             }
+            onBuyTopUp={(pack) => {
+              topUp.select();
+              setSelectedTopUp(pack);
+            }}
             variant={variant}
             onRetry={retry}
           />
@@ -454,6 +497,29 @@ export function AccountSettings({
           </Row>
         </Pane>
       </div>
+      <CheckoutDrawer
+        open={Boolean(selectedTopUp)}
+        onClose={() => {
+          topUp.select();
+          setSelectedTopUp(null);
+        }}
+        item={selectedTopUp ? { type: "top_up", pack: selectedTopUp } : null}
+        gstRate={PLANS_GST_RATE}
+        busy={topUp.busy}
+        confirmedOrder={topUp.prepared?.order}
+        onPay={() => {
+          if (selectedTopUp)
+            void topUp.buy({
+              kind: "top_up",
+              account:
+                selectedTopUp.planKey === "personal"
+                  ? "personal"
+                  : "organisation",
+              planKey: selectedTopUp.planKey,
+              packKey: selectedTopUp.key,
+            });
+        }}
+      />
     </div>
   );
 }
@@ -839,7 +905,6 @@ function AllowanceSummary({
 }
 
 export type SettingsBillingProps = BillingViewProps & {
-  onResume?: (subscriptionId: string) => void;
   onBuyTopUp?: (pack: DisplayTopUpPack) => void;
   topUpPacks?: DisplayTopUpPack[];
 };
@@ -857,7 +922,6 @@ export function PlanAndBillingPane({
   busy = false,
   error,
   onCancel,
-  onResume,
   onBuyTopUp,
   topUpPacks = TOP_UP_PACKS,
 }: SettingsBillingProps & {
@@ -980,49 +1044,41 @@ export function PlanAndBillingPane({
           >
             Change or upgrade plan
           </Link>
-          {isCancelled ? (
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || status !== "ready" || !onResume}
-              onClick={() => current && onResume?.(current.subscriptionId)}
-            >
-              Resume renewal
-            </button>
-          ) : cancelAsk && current ? (
-            <div className={styles.confirmCancelBox}>
-              <p className={styles.muted}>
-                Renewal stops; access continues to the end of the period.
-              </p>
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.danger}
-                  disabled={busy || !onCancel}
-                  onClick={() => onCancel?.(current.subscriptionId)}
-                >
-                  Yes, stop renewal
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  disabled={busy}
-                  onClick={() => setCancelAsk(false)}
-                >
-                  Keep renewal
-                </button>
+          {!isCancelled &&
+            (cancelAsk && current ? (
+              <div className={styles.confirmCancelBox}>
+                <p className={styles.muted}>
+                  Renewal stops; access continues to the end of the period.
+                </p>
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    disabled={busy || !onCancel}
+                    onClick={() => onCancel?.(current.subscriptionId)}
+                  >
+                    Yes, stop renewal
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    disabled={busy}
+                    onClick={() => setCancelAsk(false)}
+                  >
+                    Keep renewal
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || status !== "ready" || !canCancel || !onCancel}
-              onClick={() => setCancelAsk(true)}
-            >
-              Cancel renewal
-            </button>
-          )}
+            ) : (
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={busy || status !== "ready" || !canCancel || !onCancel}
+                onClick={() => setCancelAsk(true)}
+              >
+                Cancel renewal
+              </button>
+            ))}
         </div>
         {current?.renewalNeedsCustomerApproval ? (
           <p className={styles.muted}>
