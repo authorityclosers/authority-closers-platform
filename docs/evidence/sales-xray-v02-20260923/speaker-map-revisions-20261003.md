@@ -79,7 +79,7 @@ tests/unit/conversation_intelligence/test_speaker_map.py
   The storage proof supplies a fictional authorized C2 projection at the existing
   renderer boundary; it does not exercise a provider or the future HTTP routes.
 - `uv run ruff format --check packages/python tests`, `uv run ruff check
-  packages/python tests`, `uv run mypy packages/python` and Prettier check pass.
+packages/python tests`, `uv run mypy packages/python` and Prettier check pass.
 - Root's completed AUT-977 receipt verifies dev head 0070, the append-only table
   and nullable plan column. This heartbeat independently read API readiness (200).
   The new service is dormant until S3; no new screen behavior is claimed.
