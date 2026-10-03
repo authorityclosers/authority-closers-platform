@@ -30,6 +30,9 @@ Verification (fictional, disposable loopback PostgreSQL only):
 - Ruff format/check and mypy passed. PostgreSQL schema matches ORM metadata;
   SQLite registry builds in the model-registry tests.
 
-Root must run the complete backup parity suite at the PR head. Dev migration
-and read-back are pending; no staging/production state or customer call was used.
+Root must run the complete backup parity suite at the PR head. The dev migration
+preflight found head `20261003_0068`, so it applied no change: the merged billing
+migration `0069` must be installed before this task’s `0070`. Root owns that
+normal dev migration and metadata read-back. No staging/production state or
+customer call was used.
 The API endpoints, model naming and report input remain later approved slices.
