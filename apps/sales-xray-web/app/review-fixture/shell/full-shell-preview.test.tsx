@@ -78,7 +78,8 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   ).not.toBeNull();
   expect(report?.textContent).toContain("59:58");
   // Real report sections and the one call dock.
-  // The same eight sections as the live report, in the same order.
+  // The same seven Reading sections as the live report, in the same order;
+  // the transcript lives in the transcript reader (AUT-785).
   expect(
     [...container.querySelectorAll("[data-report-mode-section]")].map((s) =>
       s.getAttribute("data-report-mode-section"),
@@ -90,7 +91,6 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
     "next-call-plan",
     "skills",
     "signals",
-    "transcript",
     "raw-data",
   ]);
   // The header's glance strip and call map are mounted too.

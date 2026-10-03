@@ -164,3 +164,40 @@ it.each(["unavailable", "denied"])(
     expect(menu.open).toBe(false);
   },
 );
+
+it("renders clearly visible Transcript button beside More menu and entry inside More menu", async () => {
+  const onOpenTranscript = vi.fn();
+  await act(async () =>
+    root.render(
+      <ReportHeader
+        durationMs={67_000}
+        sourceLabel="Fictional test source"
+        claimed
+        busy={false}
+        canDownload
+        canRequestDeletion
+        deletionDisabled={false}
+        onAnalyseAnother={onAnalyseAnother}
+        onDownload={onDownload}
+        onRequestDeletion={() => {}}
+        onOpenTranscript={onOpenTranscript}
+      />,
+    ),
+  );
+
+  const transcriptButton = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Open transcript reader"]',
+  );
+  expect(transcriptButton).not.toBeNull();
+  expect(transcriptButton?.textContent).toContain("Transcript");
+  await act(async () => transcriptButton?.click());
+  expect(onOpenTranscript).toHaveBeenCalledOnce();
+
+  const { menu } = openMenu();
+  const transcriptMenuButton = Array.from(menu.querySelectorAll("button")).find(
+    (b) => b.textContent?.includes("Transcript"),
+  );
+  expect(transcriptMenuButton).not.toBeUndefined();
+  await act(async () => transcriptMenuButton?.click());
+  expect(onOpenTranscript).toHaveBeenCalledTimes(2);
+});

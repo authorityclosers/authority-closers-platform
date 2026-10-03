@@ -1,0 +1,33 @@
+{
+  "version": "call-signals/1",
+  "status": "proposed",
+  "about": "Signal kinds for call-map/1 (AUT-341 plan section 3.3, D9) and objection kinds (AUT-416 plan section 3). The CTO proposes the list; the owner confirms it at the AC-SVAL Gate 2 review. It changes only through a new file version. The web twin is the signal-kinds:v1 block in apps/sales-xray-web/app/call-map-contract.ts.",
+  "forward": [
+    "pain_confirmed",
+    "budget_confirmed",
+    "decision_maker_engaged",
+    "timeline_stated",
+    "next_step_agreed",
+    "buying_question"
+  ],
+  "risk": [
+    "price_concern",
+    "affordability_gap",
+    "time_constraint",
+    "stall",
+    "competitor_or_status_quo",
+    "decision_maker_absent",
+    "trust_concern",
+    "unanswered_question"
+  ],
+  "objection_kinds": [
+    "price_concern",
+    "affordability_gap",
+    "time_constraint",
+    "stall",
+    "competitor_or_status_quo",
+    "decision_maker_absent",
+    "trust_concern",
+    "other"
+  ]
+}
