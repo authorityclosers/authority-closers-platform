@@ -66,6 +66,7 @@ BILLING_SUBSCRIPTIONS = "20261001_0064"
 PLAN_CATALOGUE = "20261002_0065"
 PLATFORM_BILLING_MANAGE = "20261002_0066"
 SENSITIVE_SEGMENT_MARKS = "20261002_0067"
+INACTIVE_PLAN_VALUES = "20261003_0068"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -112,6 +113,7 @@ HEADS = (
     PLAN_CATALOGUE,
     PLATFORM_BILLING_MANAGE,
     SENSITIVE_SEGMENT_MARKS,
+    INACTIVE_PLAN_VALUES,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -125,6 +127,7 @@ TABLELESS_VERSIONED_HEADS = (
     PLATFORM_RELEASE_MANAGE,
     JOB_FAILURE_DETAIL,
     PLATFORM_BILLING_MANAGE,
+    INACTIVE_PLAN_VALUES,
 )
 NEW_TABLES = {
     PRACTICE: (
@@ -344,6 +347,11 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         assert module.VERSIONED_PARITY_CONTRACTS[SENSITIVE_SEGMENT_MARKS] == (
             "ac-postgres-parity-v40",
             module.PLAN_CATALOGUE_PARITY_TABLES + ("conversation_sensitive_segment_marks",),
+        )
+        assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
+        assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
+            module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
+            module.SENSITIVE_SEGMENT_MARKS_PARITY_TABLES,
         )
 
 
@@ -731,6 +739,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         120,
         120,
         121,
+        121,
     )
     expected_contracts = (
         None,
@@ -777,6 +786,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v38",
         "ac-postgres-parity-v39",
         "ac-postgres-parity-v39",
+        "ac-postgres-parity-v40",
         "ac-postgres-parity-v40",
     )
     for module in (backup, proof, drill):

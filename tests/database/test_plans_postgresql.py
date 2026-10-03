@@ -16,17 +16,18 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, insert, inspect, select, text
+from sqlalchemy import Engine, MetaData, Table, insert, inspect, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from ac_platform.db.models import model_metadata
 from ac_platform.plans import Plan
+from tests.database.test_conversation_postgresql import _migration_head
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
+from tests.database.test_plans_confirmed_values_postgresql import catalogue_schema
 
 ROOT = Path(__file__).parents[2]
 REVISION = "20261002_0065"
-HEAD = "20261002_0067"
+HEAD = _migration_head()
 SEEDS = {
     "personal": ("Personal", "For one salesperson", 10),
     "organisation": ("Organisation", "For sales teams", 20),
@@ -37,6 +38,12 @@ SEEDS = {
 @pytest.fixture(scope="module")
 def postgres_harness():
     yield from _postgres_harness.__wrapped__()
+
+
+@pytest.fixture
+def seed_harness():
+    with catalogue_schema(REVISION) as proof:
+        yield proof.engine
 
 
 def _row(**overrides: object) -> dict[str, object]:
@@ -72,9 +79,10 @@ def test_plans_table_has_no_model_drift(postgres_harness: Engine) -> None:
     assert [entry for entry in drift if "plans" in repr(entry)] == []
 
 
-def test_seeds_are_three_coming_soon_rows_with_nothing_set(postgres_harness: Engine) -> None:
-    with Session(postgres_harness) as session:
-        plans = session.scalars(select(Plan).order_by(Plan.sort_order)).all()
+def test_seeds_are_three_coming_soon_rows_with_nothing_set(seed_harness: Engine) -> None:
+    table = Table("plans", MetaData(), autoload_with=seed_harness)
+    with seed_harness.connect() as connection:
+        plans = connection.execute(select(table).order_by(table.c.sort_order)).all()
     assert [plan.key for plan in plans] == ["personal", "organisation", "enterprise"]
     for plan in plans:
         name, audience, sort_order = SEEDS[plan.key]
