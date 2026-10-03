@@ -152,10 +152,6 @@ export function CheckoutDrawer({
               <dd>+{topUp.minutes} minutes</dd>
             </div>
             <div>
-              <dt>Credits included</dt>
-              <dd>+{Math.round(topUp.minutes / 10)} credits</dd>
-            </div>
-            <div>
               <dt>{confirmedOrder?.tax ? "Taxable value" : "Subtotal"}</dt>
               <dd>{money(subtotal ?? topUp.pricePaise)}</dd>
             </div>
@@ -236,14 +232,6 @@ export function CheckoutDrawer({
               <dd>
                 {plan.includedMinutes !== null
                   ? `${count(plan.includedMinutes * (plan.key === "personal" ? 1 : seats))} minutes / month`
-                  : "Standard"}
-              </dd>
-            </div>
-            <div>
-              <dt>Credits included</dt>
-              <dd>
-                {plan.includedMinutes !== null
-                  ? `${count(Math.round((plan.includedMinutes * (plan.key === "personal" ? 1 : seats)) / 10))} credits / month`
                   : "Standard"}
               </dd>
             </div>

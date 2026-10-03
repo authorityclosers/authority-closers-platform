@@ -20,7 +20,7 @@ import {
 } from "../billing/contract";
 import { count, minutes, money, planPrice } from "../billing/money";
 import { dismissNotice, notify } from "../notice-center";
-import { TOP_UP_PACKS, type DisplayTopUpPack } from "./plans-catalogue-fixture";
+import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
 import { PurchaseShell } from "./purchase-shell";
 import { CheckoutDrawer } from "./checkout-drawer";
 import { AnimatedCountUp } from "./animated-count-up";
@@ -179,7 +179,7 @@ export function PlansScreen({
   };
 
   return (
-    <PurchaseShell onClose={closeCheckout} backHref="/">
+    <PurchaseShell backHref="/">
       <div className={styles.page} data-plans-screen>
         {paid ? (
           <section className={`${styles.panel} ${styles.result}`} role="status">
@@ -191,16 +191,9 @@ export function PlansScreen({
               <b>{paid.planName}</b> ·{" "}
               {money(paid.amount.minor, paid.amount.currency)} paid
             </p>
-            <AnimatedCountUp
-              targetMinutes={
-                paid.minutes ||
-                (allowance ? minutes(allowance.availableSeconds) : 800)
-              }
-              targetCredits={Math.round(
-                (paid.minutes ||
-                  (allowance ? minutes(allowance.availableSeconds) : 800)) / 10,
-              )}
-            />
+            {paid.minutes !== null ? (
+              <AnimatedCountUp targetMinutes={paid.minutes} />
+            ) : null}
             <p className={styles.successAllowance}>
               {allowance
                 ? allowance.unlimited
@@ -455,11 +448,7 @@ export function PlansScreen({
                           />
                           <span>
                             {count(item.includedMinutes * (team ? number : 1))}{" "}
-                            {team ? "pooled " : ""}analysis minutes (
-                            {Math.round(
-                              (item.includedMinutes * (team ? number : 1)) / 10,
-                            )}{" "}
-                            credits) / mo
+                            {team ? "pooled " : ""}analysis minutes / mo
                           </span>
                         </li>
                       ) : null}

@@ -10,19 +10,13 @@ export function AnimatedCountUp({
   durationMs = 1200,
 }: {
   targetMinutes: number;
-  targetCredits: number;
+  targetCredits?: number;
   durationMs?: number;
 }) {
   const [currentMinutes, setCurrentMinutes] = useState(0);
   const [currentCredits, setCurrentCredits] = useState(0);
 
   useEffect(() => {
-    if (targetMinutes <= 0 && targetCredits <= 0) {
-      setCurrentMinutes(0);
-      setCurrentCredits(0);
-      return;
-    }
-
     let startTimestamp: number | null = null;
     let animId: number;
 
@@ -34,7 +28,7 @@ export function AnimatedCountUp({
       const ease = 1 - Math.pow(1 - progress, 3);
 
       setCurrentMinutes(Math.round(ease * targetMinutes));
-      setCurrentCredits(Math.round(ease * targetCredits));
+      setCurrentCredits(Math.round(ease * (targetCredits ?? 0)));
 
       if (progress < 1) {
         animId = requestAnimationFrame(step);
@@ -52,11 +46,17 @@ export function AnimatedCountUp({
           <span className={styles.counterValue}>+{count(currentMinutes)}</span>
           <span className={styles.counterLabel}>Analysis minutes</span>
         </div>
-        <div className={styles.counterDivider} aria-hidden="true" />
-        <div className={styles.counterItem}>
-          <span className={styles.counterValue}>+{count(currentCredits)}</span>
-          <span className={styles.counterLabel}>Credits</span>
-        </div>
+        {targetCredits !== undefined ? (
+          <>
+            <div className={styles.counterDivider} aria-hidden="true" />
+            <div className={styles.counterItem}>
+              <span className={styles.counterValue}>
+                +{count(currentCredits)}
+              </span>
+              <span className={styles.counterLabel}>Credits</span>
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );

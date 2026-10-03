@@ -171,6 +171,6 @@ export function useBillingAccount(
     busy,
     onRefresh,
     onCancel,
-    onResume,
+    onResume: client.resumeSubscription ? onResume : undefined,
   };
 }

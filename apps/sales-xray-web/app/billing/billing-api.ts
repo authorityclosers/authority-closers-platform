@@ -185,16 +185,6 @@ export const liveBilling: BillingClient = {
         },
       ),
     ),
-  resumeSubscription: async (subscriptionId, key) =>
-    parseSubscription(
-      await call(
-        `/v1/subscriptions/${encodeURIComponent(subscriptionId)}/resume`,
-        {
-          method: "POST",
-          idempotencyKey: key,
-        },
-      ),
-    ),
 };
 
 /** Where the server sends the buyer back; fixed by the contract, never chosen by the client. */
