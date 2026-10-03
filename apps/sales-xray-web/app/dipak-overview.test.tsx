@@ -162,6 +162,50 @@ it("composes one open overview: takeaway lede, listen, outcome card, replay loca
   expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
 });
 
+it.each([
+  {
+    speakerIds: [null, "spk_1", null, "spk_2", "spk_1"],
+    expected: "Unlabelled speaker, Speaker 1, Speaker 2",
+  },
+  {
+    speakerIds: ["spk_2", null, "spk_1", "spk_2", null],
+    expected: "Speaker 1, Unlabelled speaker, Speaker 2",
+  },
+])(
+  "preserves mixed attendee order: $expected",
+  async ({ speakerIds, expected }) => {
+    const value = report();
+    const transcript: Transcript = {
+      source_sha256: value.source_sha256,
+      revision: value.transcript_revision,
+      timebase_id: "decoded-audio-ms-v1",
+      duration_ms: 10_000,
+      segments: speakerIds.map((speaker_id, index) => ({
+        id: `attendee-${index}`,
+        speaker_id,
+        start_ms: index * 1000,
+        end_ms: (index + 1) * 1000,
+        text: "Synthetic attendee turn.",
+      })),
+    };
+    await act(async () =>
+      root.render(
+        <DipakOverview
+          report={value}
+          transcript={transcript}
+          onSelectEvidence={select}
+          showAnalysis={false}
+        />,
+      ),
+    );
+
+    const attendeeTerm = [
+      ...container.querySelectorAll('[data-overview-card="outcome"] dt'),
+    ].find((term) => term.textContent === "Attendees")!;
+    expect(attendeeTerm.nextElementSibling?.textContent).toBe(expected);
+  },
+);
+
 it("keeps the actual overview and source playback inline in the tabbed report", async () => {
   await act(async () =>
     root.render(

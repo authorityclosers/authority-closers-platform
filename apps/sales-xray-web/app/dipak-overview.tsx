@@ -42,7 +42,6 @@ import {
   formatContextSpeakerLabel,
   type ContextualSourcePlayback,
 } from "./source-playback-context";
-import { voicesOf } from "./call-data";
 import { CallRecordView } from "./call-record";
 import type { CallRecord } from "./call-record-contract";
 import styles from "./dipak-overview.module.css";
@@ -324,8 +323,12 @@ export function DipakOverview({
   const detail = report.overview;
   const attendeeLabels = useMemo(() => {
     if (!transcript || !transcript.segments?.length) return [];
-    const voices = voicesOf(transcript);
-    return voices.map((v) => formatContextSpeakerLabel(transcript, v));
+    const speakerIds = new Set(
+      transcript.segments.map((segment) => segment.speaker_id),
+    );
+    return [...speakerIds].map((id) =>
+      formatContextSpeakerLabel(transcript, id),
+    );
   }, [transcript]);
   const firstPlayableClip = useMemo(() => {
     const clips = reportReplayClips(report);

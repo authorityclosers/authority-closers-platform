@@ -793,6 +793,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # in Tabbed view on a desktop-width (>=1100px) viewport.
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     await expect(reading_view).to_have_attribute("aria-pressed", "false")
+                    await expect(page.get_by_role("tab")).to_have_text(
+                        ["Overview", "Transcript", "Moments", "Analysis", "Coaching"]
+                    )
                     # The reader can explicitly choose Reading view: one
                     # horizontal row of section links, all sections shown.
                     # The transcript lives in its own reader, not in Reading.
@@ -801,15 +804,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     reading_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(reading_nav.get_by_role("link")).to_have_count(7)
+                    await expect(reading_nav.get_by_role("link")).to_have_text(
+                        ["Overview", "Moments", "Analysis", "Coaching"]
+                    )
                     await expect(
                         reading_nav.get_by_role("link", name="Transcript", exact=True)
                     ).to_have_count(0)
-                    await expect(
-                        page.get_by_role(
-                            "navigation", name="Explore your sales report", exact=True
-                        ).get_by_role("link", name="Raw data", exact=True)
-                    ).to_be_visible()
                     assert "view=reading" in page.url
                     await tabbed_view.click()
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
