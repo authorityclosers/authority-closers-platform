@@ -804,9 +804,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     reading_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(reading_nav.get_by_role("link")).to_have_text(
-                        ["Overview", "Moments", "Analysis", "Coaching"]
-                    )
+                    reading_links = reading_nav.get_by_role("link")
+                    reading_sections = ["Overview", "Moments", "Analysis", "Coaching"]
+                    await expect(reading_links).to_have_count(len(reading_sections))
+                    for index, section in enumerate(reading_sections):
+                        await expect(reading_links.nth(index)).to_have_accessible_name(section)
                     await expect(
                         reading_nav.get_by_role("link", name="Transcript", exact=True)
                     ).to_have_count(0)
