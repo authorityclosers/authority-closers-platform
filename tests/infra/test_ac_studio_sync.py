@@ -4,6 +4,7 @@ import configparser
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -139,6 +140,104 @@ def test_allowlist_untracked_deletion_and_staged_stray(repo):
     assert repo.events("alert")
     assert not any(c[0] == "gh" for c in repo.calls)
     assert repo.remote_head() == repo.base
+
+
+@pytest.fixture
+def prettier(repo):
+    repo.write(".git/info/exclude", "node_modules/\n")
+    return repo.write("node_modules/.bin/prettier", "")
+
+
+@pytest.mark.parametrize("hold", [None, BRANCH])
+def test_prettier_formats_changed_allowed_files_before_index(repo, prettier, hold):
+    repo.branch()
+    screen = APP + "[call id]/report.module.css"
+    fixture = SYNC.FIXTURES + "report.json"
+    repo.write(screen, ".report{color:red}")
+    repo.write(fixture, '{"report":true}')
+    repo.write("README.md", "keep staged\n")
+    repo.git("add", "README.md")
+    (repo.repo / (PUBLIC + "old.svg")).unlink()
+    repo.write(APP + "secret.key", "refused")
+    repo.write(APP + "refused.css", FAKE_TOKENS[0])
+    (repo.repo / (APP + "link.css")).symlink_to(repo.repo / "README.md")
+    original = repo.runner
+    formatted = {screen: ".report {\n  color: red;\n}\n", fixture: '{ "report": true }\n'}
+
+    def formatting(argv, **kwargs):
+        if argv[0] == str(prettier):
+            repo.calls.append(argv)
+            assert argv[1:] == ["--write", "--ignore-unknown", "--", screen, fixture]
+            for path, content in formatted.items():
+                repo.write(path, content)
+            return ""
+        return original(argv, **kwargs)
+
+    repo.runner = formatting
+    sync = SYNC.Sync(repo.repo, repo.state, repo.spool, runner=repo.runner, now=repo.now)
+    result = sync.commit(sync.paths(), hold=hold)
+    ref = result if hold else "HEAD"
+    for path, content in formatted.items():
+        assert repo.git("show", ref + ":" + path) == content.strip()
+    assert repo.git("diff", "--cached", "--name-only") == "README.md"
+    assert repo.git("show", ref + ":" + APP + "page.tsx") == "original"
+    assert PUBLIC + "old.svg" not in repo.git("ls-tree", "-r", "--name-only", ref)
+    format_call = next(i for i, call in enumerate(repo.calls) if call[0] == str(prettier))
+    index_call = next(i for i, call in enumerate(repo.calls) if "read-tree" in call)
+    assert format_call < index_call
+
+
+def test_missing_prettier_logs_skip_and_preserves_commit(repo, capsys):
+    repo.branch()
+    repo.write(APP + "page.tsx", "preserved")
+    repo.tick(True)
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "preserved"
+    assert "Pinned Prettier unavailable; skipping screen formatting." in capsys.readouterr().err
+    assert not any("--write" in call for call in repo.calls)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        SYNC.SyncError("formatter output must stay private"),
+        FileNotFoundError("formatter output must stay private"),
+        subprocess.TimeoutExpired("formatter output must stay private", 45),
+    ],
+)
+def test_prettier_failure_does_not_block_preservation(repo, prettier, capsys, error):
+    repo.branch()
+    repo.write(APP + "page.tsx", "preserved")
+    original = repo.runner
+
+    def failing(argv, **kwargs):
+        if argv[0] == str(prettier):
+            raise error
+        return original(argv, **kwargs)
+
+    repo.runner = failing
+    repo.tick(True)
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "preserved"
+    logged = capsys.readouterr().err
+    assert "Pinned Prettier failed; skipping screen formatting." in logged
+    assert "formatter output must stay private" not in logged
+
+
+def test_formatted_bytes_are_scanned_again_before_commit(repo, prettier):
+    repo.branch()
+    repo.write(APP + "report.module.css", ".report{color:red}")
+    repo.write(APP + "page.tsx", "safe")
+    original = repo.runner
+
+    def formatting(argv, **kwargs):
+        if argv[0] == str(prettier):
+            repo.write(APP + "report.module.css", FAKE_TOKENS[0])
+            return ""
+        return original(argv, **kwargs)
+
+    repo.runner = formatting
+    repo.tick(True)
+    assert repo.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD") == APP + "page.tsx"
+    assert repo.events("alert")
 
 
 @pytest.mark.parametrize(
