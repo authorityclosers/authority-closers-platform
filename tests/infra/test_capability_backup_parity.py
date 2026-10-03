@@ -768,6 +768,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         121,
         125,
         126,
+        127,
     )
     expected_contracts = (
         None,
@@ -818,6 +819,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v40",
         "ac-postgres-parity-v41",
         "ac-postgres-parity-v42",
+        "ac-postgres-parity-v43",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

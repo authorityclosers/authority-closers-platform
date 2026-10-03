@@ -71,6 +71,37 @@ unavailable and the unprivileged suite skips all 3381 cases. The repository's
 root control-plane CI gate must run them before approval, along with the Python
 test shards. CI results remain pending until the PR completes.
 
+## CTO review correction (2026-10-03)
+
+Reproduced the review's strict-zip failure in
+`test_versioned_contracts_match_all_new_migration_tables_exactly`: migration 0071
+was present in `HEADS`, but both expected tuples ended at 0070. Added the explicit
+127-table count and `ac-postgres-parity-v43` contract for 0071.
+
+Direct invocation of the three read-only catalogue tests passed:
+checked-in revision identity, separately packaged helper agreement, and exact
+migration-table/count/contract matching. This executes their assertions without
+the module-wide root skip; no root-owned metadata validation is claimed.
+
+```sh
+uv run python - <<'PY'
+from tests.infra import test_capability_backup_parity as parity
+
+parity.test_compatibility_head_catalogue_contains_only_actual_checked_in_revisions()
+parity.test_three_separately_packaged_helpers_have_identical_versioned_contracts()
+parity.test_versioned_contracts_match_all_new_migration_tables_exactly()
+PY
+uv run pytest -xq --tb=short \
+  tests/infra/test_ac_release.py tests/database/test_model_registry.py
+uv run ruff format --check packages/python tests
+uv run ruff check packages/python tests
+uv run mypy packages/python
+```
+
+Exit 0: all three catalogue tests passed, **96 pytest tests passed in 9.79
+seconds**, and format/lint/types passed. The root control-plane validation and
+Python shards must pass on the corrected PR head before SHA approval.
+
 ## Review and deployment follow-through
 
 This is sensitive (model, migration, erasure and backup parity): CTO review then
