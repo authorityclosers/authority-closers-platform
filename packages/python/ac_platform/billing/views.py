@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
+from ac_platform.billing.catalogue import tax_mode
+from ac_platform.billing.tax import TaxBreakdown, tax_from_total
+
 AccountName = Literal["personal", "organisation"]
 OrderKind = Literal["subscription", "top_up"]
 OrderStatus = Literal["awaiting_payment", "confirming", "paid", "failed", "expired", "needs_review"]
@@ -57,6 +60,10 @@ class OrderView:
     created_at: datetime
     paid_at: datetime | None
     refund: RefundView | None
+
+    @property
+    def tax(self) -> TaxBreakdown:
+        return tax_from_total(self.amount.minor, tax_mode(self.plan_key))
 
 
 @dataclass(frozen=True, slots=True)

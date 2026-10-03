@@ -7,7 +7,7 @@ from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
@@ -80,6 +80,23 @@ class AddMemberRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     email: str
     role: Literal["admin", "member"]
+
+
+class ChangeRoleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Literal["admin", "member"]
+
+
+class TransferOwnerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    # A JSON body carries the identifier as a string.
+    person_id: UUID = Field(strict=False)
+
+
+class OwnerTransferResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    owner: MemberResponse
+    former_owner: MemberResponse
 
 
 def install_organisation_http(
@@ -220,5 +237,51 @@ def install_organisation_http(
             key,
             actor_person_id=auth.resolved.actor.person_id,
         )
+
+    @router.patch("/members/{person_id}", response_model=MemberResponse)
+    async def change_role(
+        person_id: UUID,
+        body: ChangeRoleRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> MemberResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).change_member_role(
+            auth.resolved.actor.tenant_id,
+            person_id,
+            body.role,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return MemberResponse.model_validate_json(json.dumps(result))
+
+    @router.delete("/members/{person_id}", status_code=204)
+    async def remove(
+        person_id: UUID,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> None:
+        assert auth.resolved.actor.tenant_id is not None
+        await service(auth).remove_member(
+            auth.resolved.actor.tenant_id,
+            person_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+
+    @router.post("/owner", response_model=OwnerTransferResponse)
+    async def transfer_owner(
+        body: TransferOwnerRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> OwnerTransferResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).transfer_ownership(
+            auth.resolved.actor.tenant_id,
+            body.person_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return OwnerTransferResponse.model_validate_json(json.dumps(result))
 
     application.include_router(router)
