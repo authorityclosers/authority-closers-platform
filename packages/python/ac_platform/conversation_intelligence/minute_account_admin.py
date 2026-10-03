@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     grant_minutes,
 )
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
+from ac_platform.conversation_intelligence.sales_xray_tenants import LEARNER_ROLES
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -48,8 +49,14 @@ async def require_eligible_learner(
     person_id: UUID,
     operations_tenant_id: UUID,
     lock_person: bool = False,
+    roles: frozenset[str] = LEARNER_ROLES,
 ) -> None:
-    """Check the exact active learner pair; platform authority does not bypass it."""
+    """Check the exact active account pair; platform authority does not bypass it.
+
+    ``roles`` is the learner role by default. A caller widens it to the human
+    roles of an organisation (owner, admin, member) only for a tenant Sales
+    Xray serves.
+    """
 
     if tenant_id == operations_tenant_id:
         raise EligibleLearnerUnavailable
@@ -72,7 +79,7 @@ async def require_eligible_learner(
     membership_statement = select(Membership).where(
         Membership.tenant_id == tenant_id,
         Membership.person_id == person_id,
-        Membership.role == "learner",
+        Membership.role.in_(roles),
         Membership.status == "active",
         Membership.ended_at.is_(None),
     )
@@ -252,6 +259,7 @@ async def append_minute_grant(
     person_id: UUID,
     operations_tenant_id: UUID,
     grant: MinuteGrant,
+    roles: frozenset[str] = LEARNER_ROLES,
 ) -> MinuteAccountState:
     """Append one immutable finite grant and keep the learner ledger revision."""
 
@@ -261,6 +269,7 @@ async def append_minute_grant(
         person_id=person_id,
         operations_tenant_id=operations_tenant_id,
         lock_person=True,
+        roles=roles,
     )
     row = await database.scalar(
         select(ConversationMinuteAccount)

@@ -148,11 +148,6 @@ def create_app(
         provider=configured_identity_provider,
     )
     install_organisation_http(application, settings=settings, require_actor=require_actor)
-    install_sales_xray_profile_http(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-    )
     install_course_http(
         application,
         settings=settings,
@@ -174,6 +169,12 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    install_sales_xray_profile_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+    )
     install_sales_xray_workspaces_http(
         application,
         settings=settings,
@@ -345,6 +346,7 @@ def create_app(
         sessions=session_factory,
         require_actor=require_actor,
         tester_policy=tester_policy,
+        intake=resolved_conversation,
     )
     # Billing (ADR 0052): composed only when switched on; otherwise the C1
     # routes are absent and the screens show "Not on sale yet".

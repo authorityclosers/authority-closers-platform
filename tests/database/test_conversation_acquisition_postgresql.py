@@ -554,7 +554,7 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                 settings=settings,
                 sessions=sessions,
                 require_actor=require_actor,
-                factory=lambda db: service(db, state),
+                factory=lambda db, _tenant_id: service(db, state),
                 challenge=verifier,
             )
             origin = "https://salesxray.example.test"
@@ -746,7 +746,7 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                 settings=settings,
                 sessions=sessions,
                 require_actor=require_actor,
-                factory=lambda db: service(db, state),
+                factory=lambda db, _tenant_id: service(db, state),
                 challenge=UploadChallenge(
                     secret=SecretStr(secrets.token_urlsafe(32)), hostname="salesxray.example.test"
                 ),

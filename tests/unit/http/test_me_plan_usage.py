@@ -54,7 +54,7 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
         settings=_settings(),
         sessions=None,
         require_actor=require_actor,
-        factory=lambda _: service,
+        factory=lambda _database, _tenant_id: service,
         challenge=_runtime(tmp_path).challenge,
     )
     async with httpx.AsyncClient(

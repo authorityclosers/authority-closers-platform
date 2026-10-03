@@ -55,10 +55,10 @@ async def _account_app(postgres_harness, tmp_path):
     setup = await _setup(postgres_harness, tmp_path)
     operations = await seed(setup.engine, role="owner")
 
-    def factory(database):
+    def factory(database, tenant_id=setup.state.tenant_id):
         return AcquisitionSessions(
             database,
-            tenant_id=setup.state.tenant_id,
+            tenant_id=tenant_id,
             policy_revision="guest-processing-v1",
             operations_tenant_id=operations.tenant_id,
             clock=lambda: setup.clock[0],
