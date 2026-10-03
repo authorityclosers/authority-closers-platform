@@ -42,6 +42,22 @@ it("does not expose canonical rewrites to the local read-only review build", asy
   vi.resetModules();
   const { default: config } = await import("./next.config");
   expect(await config.rewrites?.()).toEqual([]);
+  expect(config.turbopack?.resolveAlias?.["./processing-review-port"]).toMatch(
+    /processing-review-port\.dev\.ts$/,
+  );
+});
+
+it("keeps the Turbopack review alias out of production and ordinary development", async () => {
+  for (const [environment, review] of [
+    ["production", "1"],
+    ["development", "0"],
+  ]) {
+    vi.stubEnv("NODE_ENV", environment);
+    vi.stubEnv("AC_SALES_XRAY_REVIEW", review);
+    vi.resetModules();
+    const { default: config } = await import("./next.config");
+    expect(config.turbopack?.resolveAlias).toBeUndefined();
+  }
 });
 
 it("allows extra dev origins only when explicitly configured", async () => {
