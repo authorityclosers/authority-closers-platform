@@ -14,8 +14,9 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.order_models import (
@@ -180,14 +181,34 @@ async def billing_overview(database: AsyncSession, *, now: datetime) -> BillingO
             .limit(PAGE_LIMIT)
         )
     )
+    # Verification reads and webhooks remain separate history rows for one payment.
+    # Prefer success, then its first observation, before ordering and paging payments.
+    payment_events = (
+        select(
+            BillingPaymentEvent,
+            func.row_number()
+            .over(
+                partition_by=(BillingPaymentEvent.provider, BillingPaymentEvent.payment_ref),
+                order_by=(
+                    case((BillingPaymentEvent.kind == "payment.failed", 1), else_=0),
+                    BillingPaymentEvent.verified_at.asc(),
+                    BillingPaymentEvent.id.asc(),
+                ),
+            )
+            .label("payment_rank"),
+        )
+        .where(
+            BillingPaymentEvent.kind.in_(PAYMENT_KINDS),
+            BillingPaymentEvent.payment_ref.is_not(None),
+        )
+        .subquery()
+    )
+    payment_event = aliased(BillingPaymentEvent, payment_events)
     payments = list(
         await database.scalars(
-            select(BillingPaymentEvent)
-            .where(
-                BillingPaymentEvent.kind.in_(PAYMENT_KINDS),
-                BillingPaymentEvent.payment_ref.is_not(None),
-            )
-            .order_by(BillingPaymentEvent.verified_at.desc(), BillingPaymentEvent.id.desc())
+            select(payment_event)
+            .where(payment_events.c.payment_rank == 1)
+            .order_by(payment_event.verified_at.desc(), payment_event.id.desc())
             .limit(PAGE_LIMIT)
         )
     )
