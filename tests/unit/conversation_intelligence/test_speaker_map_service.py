@@ -66,7 +66,9 @@ async def test_read_default_profile_revision_and_error_boundaries(monkeypatch, s
             ConversationNotFound if state == "unavailable" else ConversationConflict
         )("No C2")
     reports = SimpleNamespace(
-        recording=AsyncMock(return_value=(None, object())), render_transcript=render
+        recording=AsyncMock(return_value=(None, object())),
+        render_transcript=render,
+        render_report=AsyncMock(side_effect=ConversationNotFound("No report")),
     )
     monkeypatch.setattr(
         "ac_platform.conversation_intelligence.speaker_map_service.AcquisitionReports",
