@@ -102,6 +102,7 @@ export type Plan = {
   includedMinutes: number | null;
   seatMin: number | null;
   seatMax: number | null;
+  perSeat?: boolean;
   longestCallMinutes: number | null;
   retentionDays: number | null;
   rolloverMonths: number | null;
@@ -121,6 +122,7 @@ const PLAN_KEYS = [
   "included_minutes",
   "seat_min",
   "seat_max",
+  "per_seat",
   "longest_call_minutes",
   "retention_days",
   "rollover_months",
@@ -160,6 +162,8 @@ export function parsePlan(value: unknown, path = "plan"): Plan {
     includedMinutes: integerOrNull(raw, "included_minutes", path),
     seatMin: integerOrNull(raw, "seat_min", path),
     seatMax: integerOrNull(raw, "seat_max", path),
+    perSeat:
+      raw.per_seat === undefined ? undefined : bool(raw, "per_seat", path),
     longestCallMinutes: integerOrNull(raw, "longest_call_minutes", path),
     retentionDays: integerOrNull(raw, "retention_days", path),
     rolloverMonths: integerOrNull(raw, "rollover_months", path),
@@ -337,6 +341,7 @@ export type Order = {
   status: OrderStatus;
   mode: Mode;
   amount: Money;
+  tax?: Tax | null;
   planKey: string;
   planName: string;
   interval: Interval | null;
@@ -348,6 +353,13 @@ export type Order = {
   paidAt: string | null;
   refund: Refund | null;
 };
+export type Tax = {
+  mode: "inclusive" | "exclusive";
+  rateBasisPoints: number;
+  taxableMinor: number;
+  gstMinor: number;
+  totalMinor: number;
+};
 export type HostedKind = "client_sdk" | "redirect" | "form_post";
 export type Hosted = {
   provider: string;
@@ -355,7 +367,7 @@ export type Hosted = {
   url: string | null;
   /** Public values only, never a secret. */
   params: Record<string, string>;
-  expiresAt: string;
+  expiresAt: string | null;
 };
 export type Checkout = { order: Order; hosted: Hosted };
 export type SubscriptionStatus =
@@ -457,6 +469,7 @@ export function parseOrder(value: unknown, path = "order"): Order {
     "status",
     "mode",
     "amount",
+    "tax",
     "plan_key",
     "plan_name",
     "interval",
@@ -476,6 +489,13 @@ export function parseOrder(value: unknown, path = "order"): Order {
     interval !== "year"
   )
     throw new ContractError(`${path}.interval`, "expected month, year or null");
+  const amount = parseMoney(raw.amount, `${path}.amount`);
+  const tax = raw.tax == null ? null : parseTax(raw.tax, `${path}.tax`);
+  if (tax && tax.totalMinor !== amount.minor)
+    throw new ContractError(
+      `${path}.tax.total_minor`,
+      "must equal the charged amount",
+    );
   return {
     orderId: text(raw, "order_id", path),
     kind: oneOf(raw, "kind", path, ["subscription", "top_up"]),
@@ -489,7 +509,8 @@ export function parseOrder(value: unknown, path = "order"): Order {
       "needs_review",
     ]),
     mode: oneOf(raw, "mode", path, ["test", "live"]),
-    amount: parseMoney(raw.amount, `${path}.amount`),
+    amount,
+    tax,
     planKey: text(raw, "plan_key", path),
     planName: text(raw, "plan_name", path),
     interval: (interval ?? null) as Interval | null,
@@ -501,6 +522,35 @@ export function parseOrder(value: unknown, path = "order"): Order {
     paidAt: textOrNull(raw, "paid_at", path),
     refund: parseRefund(raw.refund, `${path}.refund`),
   };
+}
+
+function parseTax(value: unknown, path: string): Tax {
+  const raw = object(value, path, [
+    "mode",
+    "rate_basis_points",
+    "taxable_minor",
+    "gst_minor",
+    "total_minor",
+  ]);
+  const read = (key: string) => {
+    const value = integer(raw, key, path);
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new ContractError(
+        `${path}.${key}`,
+        "expected nonnegative safe integer",
+      );
+    return value;
+  };
+  const tax = {
+    mode: oneOf(raw, "mode", path, ["inclusive", "exclusive"]),
+    rateBasisPoints: read("rate_basis_points"),
+    taxableMinor: read("taxable_minor"),
+    gstMinor: read("gst_minor"),
+    totalMinor: read("total_minor"),
+  };
+  if (tax.taxableMinor + tax.gstMinor !== tax.totalMinor)
+    throw new ContractError(path, "taxable value plus GST must equal total");
+  return tax;
 }
 
 export function parseCheckout(value: unknown): Checkout {
@@ -534,7 +584,7 @@ export function parseCheckout(value: unknown): Checkout {
       ]),
       url: textOrNull(hosted, "url", "checkout.hosted"),
       params: flat,
-      expiresAt: text(hosted, "expires_at", "checkout.hosted"),
+      expiresAt: textOrNull(hosted, "expires_at", "checkout.hosted"),
     },
   };
 }

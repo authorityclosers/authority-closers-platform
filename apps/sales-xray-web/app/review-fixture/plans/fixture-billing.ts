@@ -25,94 +25,48 @@ const STORE = "ac.xray.fixture-billing";
 export const FIXTURE_PAY_PATH = "/review-fixture/plans/pay";
 export const FIXTURE_RETURN_PATH = "/review-fixture/plans/return";
 
-/** The approved catalogue, as GET /v1/plans would return it once switched on. */
+import {
+  PLANS_CATALOGUE_FIXTURE,
+  TOP_UP_PACKS,
+} from "../../plans/plans-catalogue-fixture";
+
+/** Fictional wire shapes for the current owner-approved display catalogue. */
 export const FIXTURE_PLANS = {
-  plans: [
-    {
-      key: "personal",
-      name: "Personal",
-      audience: "For one salesperson",
-      status: "active",
-      prices: {
-        monthly_paise: 249_900,
-        yearly_paise: 2_499_000,
-        monthly_cents: null,
-        yearly_cents: null,
-      },
-      included_minutes: 800,
-      seat_min: 1,
-      seat_max: 1,
-      longest_call_minutes: 90,
-      retention_days: 365,
-      rollover_months: 0,
-      feature_keys: ["report", "brief", "trends", "library"],
-      top_up_packs: [
-        {
-          key: "personal_100",
-          minutes: 100,
-          validity_rule: "billing_year_end",
-          price_paise: 29_900,
-          price_cents: null,
-        },
-      ],
-      sort_order: 10,
-      revision: 3,
-    },
-    {
-      key: "organisation",
-      name: "Organisation",
-      audience: "For sales teams",
-      status: "active",
-      prices: {
-        monthly_paise: 199_900,
-        yearly_paise: 1_999_000,
-        monthly_cents: null,
-        yearly_cents: null,
-      },
-      included_minutes: 1000,
-      seat_min: 3,
-      seat_max: 50,
-      longest_call_minutes: 120,
-      retention_days: 730,
-      rollover_months: 1,
-      feature_keys: [
-        "report",
-        "brief",
-        "trends",
-        "library",
-        "team_library",
-        "team_dashboard",
-      ],
-      top_up_packs: [
-        {
-          key: "organisation_500",
-          minutes: 500,
-          validity_rule: "billing_year_end",
-          price_paise: 129_900,
-          price_cents: null,
-        },
-      ],
-      sort_order: 20,
-      revision: 3,
-    },
-    {
-      key: "enterprise",
-      name: "Enterprise",
-      audience: "For large sales companies",
-      status: "coming_soon",
-      prices: null,
-      included_minutes: null,
-      seat_min: 50,
-      seat_max: null,
-      longest_call_minutes: 180,
-      retention_days: null,
-      rollover_months: null,
-      feature_keys: [],
-      top_up_packs: [],
-      sort_order: 30,
-      revision: 1,
-    },
-  ],
+  plans: PLANS_CATALOGUE_FIXTURE.map((plan) => ({
+    key: plan.key,
+    name: plan.name,
+    audience: plan.audience,
+    status: plan.status,
+    prices: plan.prices
+      ? {
+          monthly_paise: plan.prices.monthlyPaise!,
+          yearly_paise: plan.prices.yearlyPaise!,
+          monthly_cents: null,
+          yearly_cents: null,
+        }
+      : null,
+    included_minutes: plan.includedMinutes,
+    seat_min: plan.seatMin,
+    seat_max: plan.seatMax,
+    per_seat: plan.key !== "personal",
+    longest_call_minutes: plan.longestCallMinutes,
+    retention_days: plan.retentionDays,
+    rollover_months: plan.rolloverMonths,
+    feature_keys: plan.featureKeys,
+    top_up_packs: TOP_UP_PACKS.filter(
+      (pack) =>
+        pack.planKey === plan.key ||
+        (plan.key === "enterprise" && pack.planKey === "organisation"),
+    ).map((pack) => ({
+      key: pack.key,
+      minutes: pack.minutes,
+      validity_rule: "billing_year_end",
+      price_paise: pack.pricePaise,
+      price_cents: null,
+    })),
+    sort_order: plan.sortOrder,
+    revision: plan.revision,
+  })),
 };
 
 type Store = {
@@ -164,13 +118,15 @@ export function fixtureProviderReports(
 ) {
   const store = read();
   const order = store.orders[orderId];
-  if (!order) return;
+  if (!order || order.status === "paid") return;
   order.status = outcome;
   order.paid_at = outcome === "paid" ? now() : null;
   if (outcome === "paid") {
     order.refund = {
       payment_id: `pay_${orderId}`,
-      refundable_until: later(0.25),
+      refundable_until: new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
       state: "available",
       reason_code: null,
     };
@@ -388,6 +344,23 @@ export const fixtureBilling: BillingClient = {
         refund: null,
       };
     }
+    const inclusive = request.planKey === "personal";
+    const subtotal = (order.amount as { minor: number }).minor;
+    const taxable = inclusive
+      ? Math.floor((subtotal * 100 + 59) / 118)
+      : subtotal;
+    const gst = inclusive
+      ? subtotal - taxable
+      : Math.floor((taxable * 18 + 50) / 100);
+    const total = taxable + gst;
+    order.amount = { minor: total, currency: "INR", gst_inclusive: true };
+    order.tax = {
+      mode: inclusive ? "inclusive" : "exclusive",
+      rate_basis_points: 1800,
+      taxable_minor: taxable,
+      gst_minor: gst,
+      total_minor: total,
+    };
     store.orders[orderId] = order;
     write(store);
     return parseCheckout({
@@ -397,7 +370,7 @@ export const fixtureBilling: BillingClient = {
         kind: "redirect",
         url: `${FIXTURE_PAY_PATH}?order=${orderId}`,
         params: {},
-        expires_at: later(0.01),
+        expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       },
     });
   },
