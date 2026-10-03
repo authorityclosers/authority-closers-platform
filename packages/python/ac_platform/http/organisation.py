@@ -13,10 +13,10 @@ from sqlalchemy import func, select
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.identity.services import TenantScopeDeniedError
-from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.service import OrganisationService
-from ac_platform.organisations.usage import member_rows
+from ac_platform.organisations.usage import member_rows, organisation_pool, organisation_seats
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
 
 
@@ -47,6 +47,20 @@ class MemberResponse(BaseModel):
 class MembersResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     members: list[MemberResponse]
+
+
+class OrganisationUsageResponse(MembersResponse):
+    available_seconds: int
+    balance_seconds: int
+    used_seconds: int
+
+
+class OrganisationBillingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    paid_seats: int
+    active_members: int
+    pending_invites: int
+    seats_available: int
 
 
 class MemberActivityResponse(BaseModel):
@@ -198,6 +212,33 @@ def install_organisation_http(
             every_member=auth.resolved.membership_role != "member",
         )
         return ActivityResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/usage", response_model=OrganisationUsageResponse)
+    async def usage(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationUsageResponse:
+        actor = auth.resolved.actor
+        assert actor.tenant_id is not None
+        rows = dict(
+            await organisation_pool(auth.database, actor.tenant_id),
+            members=await member_rows(
+                auth.database,
+                actor.tenant_id,
+                actor.person_id if auth.resolved.membership_role == "member" else None,
+            ),
+        )
+        return OrganisationUsageResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/billing", response_model=OrganisationBillingResponse)
+    async def billing(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationBillingResponse:
+        if auth.resolved.membership_role != "owner":
+            raise AuthorizationDenied("Only the organisation owner can view paid seats.")
+        assert auth.resolved.actor.tenant_id is not None
+        return OrganisationBillingResponse(
+            **await organisation_seats(auth.database, auth.resolved.actor.tenant_id)
+        )
 
     def service(auth: AuthenticatedTransaction) -> OrganisationService:
         if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:

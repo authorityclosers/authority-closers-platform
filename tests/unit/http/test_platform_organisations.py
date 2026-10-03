@@ -1,5 +1,6 @@
 """Fictional HTTP evidence for platform-operator organisation member management."""
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -31,6 +32,7 @@ from tests.unit.http.test_workspaces import (  # noqa: F401
     HttpDatabase,
     workspace_state,
 )
+from tests.unit.organisations.test_service import seed_paid_seats
 
 ORIGIN = "https://admin.authorityclosers.test"
 REASON = "AUT-446 fictional support request"
@@ -82,6 +84,8 @@ def state(workspace_state):  # noqa: F811
                 ("member", state.member),
             )
         )
+        db.flush()
+        asyncio.run(seed_paid_seats(HttpDatabase(db), state.tenant, state.owner))
 
     @asynccontextmanager
     async def sessions():
