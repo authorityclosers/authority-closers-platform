@@ -78,7 +78,6 @@ it("does not request cross-tenant data for an access-manager-only identity", asy
 it.each([
   ["platform_organisations_manage", "Manage organisations"],
   ["platform_release_manage", "Manage releases"],
-  ["platform_billing_manage", "Manage billing"],
 ] as const)(
   "labels %s without requesting the directory",
   async (permission, label) => {
@@ -104,7 +103,22 @@ it("requests the directory when billing and tenant-read grants are both explicit
   await mount();
   expect(container.textContent).toContain("Manage billing");
   expect(container.textContent).toContain("Example Academy");
-  expect(fetch).toHaveBeenCalledOnce();
+  expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toHaveLength(2);
+  expect(fetch).toHaveBeenCalledWith("/v1/platform/billing", expect.anything());
+});
+it("opens Billing for platform_billing_manage without requesting the directory", async () => {
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+    ...identity,
+    permissions: ["platform_billing_manage"],
+  });
+  await mount();
+  expect(container.textContent).toContain("Manage billing");
+  expect(container.querySelector("#billing-heading")?.textContent).toBe(
+    "Billing",
+  );
+  expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual([
+    "/v1/platform/billing",
+  ]);
 });
 it("rejects response from another session", async () => {
   vi.mocked(fetch).mockResolvedValue(

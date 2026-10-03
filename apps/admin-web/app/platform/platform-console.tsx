@@ -15,6 +15,7 @@ import {
   type PlatformIdentity,
 } from "@ac/operations-web/platform-identity";
 import { z } from "zod";
+import { BillingPanel } from "./billing-panel";
 import styles from "./platform-console.module.css";
 
 const tenantsSchema = z
@@ -311,6 +312,9 @@ export function PlatformConsole() {
               </p>
             </aside>
           </div>
+        )}
+        {identity?.permissions.includes("platform_billing_manage") && (
+          <BillingPanel key={retry} />
         )}
       </main>
     </div>

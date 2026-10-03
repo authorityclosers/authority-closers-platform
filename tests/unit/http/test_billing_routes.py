@@ -236,6 +236,21 @@ class _Commands:
         )
         return WebhookReceipt(provider=provider, event_id="evt-1", outcome="paid", replayed=False)
 
+    async def staff_refund_payment(
+        self,
+        database: object,
+        caller: Caller,
+        payment_id: str,
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> RefundView:
+        view = await self.refund_payment(
+            database, caller, payment_id, reason=reason, idempotency_key=idempotency_key
+        )
+        self.calls[-1] = ("staff_refund_payment", self.calls[-1][1])
+        return view
+
 
 def _settings() -> Settings:
     return Settings(
@@ -380,6 +395,13 @@ def test_checkout_returns_the_c1_shape_and_replays_with_200() -> None:
             "status": "awaiting_payment",
             "mode": "test",
             "amount": {"minor": 249900, "currency": "INR", "gst_inclusive": True},
+            "tax": {
+                "mode": "inclusive",
+                "rate_basis_points": 1800,
+                "taxable_minor": 211780,
+                "gst_minor": 38120,
+                "total_minor": 249900,
+            },
             "plan_key": "personal",
             "plan_name": "Personal",
             "interval": "month",

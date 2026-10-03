@@ -49,6 +49,7 @@ from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
+from ac_platform.http.plans import install_plans_http
 from ac_platform.http.platform import install_platform_http
 from ac_platform.http.platform_sensitive_segments import (
     install_platform_sensitive_segments_http,
@@ -61,6 +62,7 @@ from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 from ac_platform.http.reviewer_auth import install_reviewer_identity_http
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
+from ac_platform.http.staff_billing import install_staff_billing_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -235,6 +237,7 @@ def create_app(
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_staff_billing_http(application, settings=settings, require_actor=require_actor)
     install_platform_sensitive_segments_http(
         application, settings=settings, require_actor=require_actor
     )
@@ -356,6 +359,7 @@ def create_app(
         application, settings=settings, require_actor=require_actor, commands=billing
     )
     install_billing_webhook_http(application, sessions=session_factory, commands=billing)
+    install_plans_http(application, sessions=session_factory)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"

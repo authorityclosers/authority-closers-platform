@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.billing.catalogue import Catalogue, PlanCopy
+from ac_platform.billing.catalogue import Catalogue, PlanCopy, tax_mode
 from ac_platform.billing.commands import Caller, CheckoutCommand
 from ac_platform.billing.errors import (
     BillingForbidden,
@@ -51,6 +51,7 @@ from ac_platform.billing.order_models import (
 )
 from ac_platform.billing.periods import has_valid_period_grant
 from ac_platform.billing.projection import REFUND_WINDOW
+from ac_platform.billing.tax import calculate_tax
 from ac_platform.billing.trial import TrialPolicy
 from ac_platform.billing.views import (
     AccountName,
@@ -286,7 +287,8 @@ class CheckoutService:
     ) -> str:
         """The provider's plan object for (plan, interval), created once and kept in settings."""
 
-        key = f"{plan.key}:{interval}:{plan.revision}"
+        # A pre-tax cached provider plan must never be reused for a taxed charge.
+        key = f"{plan.key}:{interval}:{plan.revision}:gst18:{money.amount_minor}"
         refs = dict(choice.settings.plan_refs or {})
         existing = refs.get(key)
         if isinstance(existing, str) and existing:
@@ -297,7 +299,7 @@ class CheckoutService:
         try:
             ref = await provider.create_plan(
                 RecurringPlan(
-                    reference=f"{plan.key}_{interval}_r{plan.revision}",
+                    reference=f"gst_{hashlib.sha256(key.encode()).hexdigest()[:24]}",
                     name=f"{plan.name} ({interval})",
                     money=money,
                     interval=_INTERVALS[interval],
@@ -422,11 +424,14 @@ class CheckoutService:
         open_subscription = await self._open_subscription(database, resolved.account.id)
         if open_subscription is not None:
             raise SubscriptionExists("This account already has a subscription.")
-        amount = unit_price * seats if plan.per_seat else unit_price
-        # The provider plan is the price per unit; the seats travel as the
-        # subscription quantity (section E: Razorpay charges plan x quantity).
+        taxable_price = unit_price * seats if plan.per_seat else unit_price
+        amount = calculate_tax(taxable_price, tax_mode(plan.key)).total_minor
+        # Round once on the total. The provider must reproduce it exactly as
+        # plan x seat quantity; refuse a price that needs fractional paise per seat.
+        if amount % seats:
+            raise NotOnSale("The taxed total cannot be charged exactly per seat.")
         plan_ref = await self.provider_plan_ref(
-            database, choice, plan, interval, Money(unit_price, "INR")
+            database, choice, plan, interval, Money(amount // seats, "INR")
         )
         provider = recurring_provider(choice.provider)
         assert provider is not None  # provider_plan_ref checked it
@@ -548,7 +553,7 @@ class CheckoutService:
         )
         if not has_valid_period_grant(lots, now):
             raise TopUpNeedsPeriod("Top-ups need an active subscription period.")
-        money = Money(pack.price_paise, "INR")
+        money = Money(calculate_tax(pack.price_paise, tax_mode(plan.key)).total_minor, "INR")
         order_id = uuid4()
         try:
             hosted = await choice.provider.create_checkout(
@@ -578,7 +583,7 @@ class CheckoutService:
             seats=1,
             pack_key=pack.key,
             minutes=pack.minutes,
-            amount_minor=pack.price_paise,
+            amount_minor=money.amount_minor,
             currency="INR",
             gst_inclusive=True,
             created_by_person_id=resolved.actor_person_id,
