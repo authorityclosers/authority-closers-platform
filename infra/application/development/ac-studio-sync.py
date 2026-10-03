@@ -184,6 +184,28 @@ class Sync:
         finally:
             os.close(parent)
 
+    def format_screens(self, paths):
+        """Best-effort formatting with the checkout's pinned, installed Prettier."""
+        prettier = self.repo / "node_modules/.bin/prettier"
+        if not prettier.is_file():
+            print("Pinned Prettier unavailable; skipping screen formatting.", file=sys.stderr)
+            return
+        eligible = []
+        for path in paths:
+            if not self.allowed(path):
+                continue
+            try:
+                _, data = self.snapshot(path)
+            except (SyncError, OSError):
+                continue
+            if data is not None:
+                eligible.append(path)
+        if eligible:
+            try:
+                self.run(str(prettier), "--write", "--ignore-unknown", "--", *eligible)
+            except (SyncError, OSError, subprocess.TimeoutExpired):
+                print("Pinned Prettier failed; skipping screen formatting.", file=sys.stderr)
+
     def commit(self, paths, hold=None):
         """Build a path-scoped index from scanned bytes, without filters or hooks.
 
@@ -191,6 +213,7 @@ class Sync:
         """
         if not paths:
             return False
+        self.format_screens(paths)
         for key, value in (("user.name", "UI Studio"), ("user.email", "studio@paperclip.ing")):
             try:
                 self.git("config", "--get", key)
