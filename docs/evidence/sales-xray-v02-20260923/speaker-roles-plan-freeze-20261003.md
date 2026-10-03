@@ -41,8 +41,25 @@ Follow the normal configured migration path; no manual SQL or runtime edits.
 ## Verification
 
 All fixtures and provider responses are fictional and local. No customer call was
-read or sent to a provider. Focused unit, PostgreSQL and static results are recorded
-on the PR and task; skipped root-only checks are not counted as passes.
+read or sent to a provider.
+
+- Speaker freeze/dispatch, processing-plan, retained recovery/repair, role-context
+  and prompt-revision unit suites: **125 passed**.
+- Application release contracts: **89 passed**. These are distinct from the 125.
+- PostgreSQL flow (legacy and patched declaration), claimed-owner freeze across
+  sessions, immutable history/erasure, and four retained-recovery cases:
+  **8 passed**, no skips. Role-bearing retained correction/revalidation succeeds.
+- Read-only catalogue equivalence, checked-in heads and table-parity assertions:
+  **3 passed**. The full root-owned metadata suite belongs to CI; it was not run
+  locally and is not counted as passed.
+- Ruff format/check and mypy across Python/tests: passed. Markdown Prettier:
+  passed. All six legacy prompt/request parity cases remain covered.
+- Normal migration command with `~/.config/acdev/database.env`: applied dev
+  `0070 -> 0071 -> 0072`; read-back confirms `20261003_0072`. The configured
+  environment is named `local`, and the target matches the configured dev API
+  database. An initial `dev`-only label check failed; that shell did not stop and
+  continued the authorized migration. Subsequent read-only validation used
+  `set -e` and accepted the correct local label. No migration was repeated.
 
 Dev: <https://salesxray-dev.authorityclosers.com>. This dormant mechanism is checked
 with the patched-declaring-revision suites. The running API's readiness and OpenAPI
