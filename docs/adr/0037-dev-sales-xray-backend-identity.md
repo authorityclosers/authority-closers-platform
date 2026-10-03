@@ -98,3 +98,14 @@ before systemd kills its process group. Tests check the unit contracts and every
 inventory path, and verify the exact unit bytes with systemd-analyze in an inert
 fixture root. No service starts during tests. Runtime isolation and the fictional
 upload journey remain Root specialist checks after AUT-159 and host installation.
+
+Amendment (AUT-513, 2 October 2026): a third unit, `ac-dev-outbox-worker.service`,
+runs `python -m ac_platform.worker` so dev sends its own sign-in and verification
+email. It uses the API unit's identity and sandbox lines (tmpfs masks,
+`InaccessiblePaths`, `SystemCallFilter`), caps memory at 384M and CPU at 50%, reads
+`/etc/authority-closers/development/outbox.env`, and binds back only the backend
+read-only: no Sales Xray storage, native socket, approval, challenge, QA
+credential or provider identity. Its only external egress is Resend with a
+dev-only key and sender; only this unit releases the external side-effects hold.
+The refresh restarts it after the API and Sales Xray worker and restores it with
+them on rollback.
