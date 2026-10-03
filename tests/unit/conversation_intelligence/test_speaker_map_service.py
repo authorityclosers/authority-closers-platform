@@ -38,7 +38,7 @@ TRANSCRIPT = {
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "state", ["predicted", "confirmed", "stale", "unavailable", "denied", "conflict"]
+    "state", ["predicted", "confirmed", "stale", "unavailable", "denied", "conflict", "no_actor"]
 )
 async def test_read_default_profile_revision_and_error_boundaries(monkeypatch, state):
     revision = (
@@ -79,11 +79,15 @@ async def test_read_default_profile_revision_and_error_boundaries(monkeypatch, s
     )
     ownership = SimpleNamespace(database=database)
     arguments = dict(actor=SimpleNamespace(person_id=uuid4()), shared_identity_locks=True)
-    if state in ("denied", "conflict"):
+    if state == "no_actor":
+        arguments["actor"] = None
+    if state in ("denied", "conflict", "no_actor"):
         with pytest.raises(ConversationError):
             await read_speaker_map(ownership, uuid4(), **arguments)
         if state == "denied":
             reports.recording.assert_not_awaited()
+        if state == "no_actor":
+            database.scalar.assert_not_awaited()
         return
     result = await read_speaker_map(ownership, uuid4(), **arguments)
     assert set(result) == {

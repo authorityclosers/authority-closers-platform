@@ -42,6 +42,9 @@ from ac_platform.conversation_intelligence.report_overview import (
     normalize_overview,
     normalize_overview_evidence,
 )
+from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
+
+SPEAKER_ROLE_PROMPT_REVISIONS: frozenset[str] = frozenset()
 
 REPORT_PROFILE_PATH = Path(__file__).with_name("profiles") / "dipak_report_v1.json"
 GROQ_MODEL = "openai/gpt-oss-120b"
@@ -591,10 +594,12 @@ def extract_style_independent_facts(transcript: Mapping[str, Any]) -> dict[str, 
 build_fact_packet = extract_style_independent_facts
 
 
-def coaching_source_context(transcript: Mapping[str, Any]) -> dict[str, Any]:
+def coaching_source_context(
+    transcript: Mapping[str, Any], *, speaker_roles: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """Losslessly pack every normalized C2 turn; never select or truncate turns."""
     validated = _validated_transcript(transcript)
-    return {
+    context = {
         "schema": "ac.sales-xray.coaching-source-context/1",
         "coverage": "complete",
         "columns": list(_CONTEXT_COLUMNS),
@@ -605,6 +610,14 @@ def coaching_source_context(transcript: Mapping[str, Any]) -> dict[str, Any]:
         "speaker_identity": "unverified_provider_labels",
         "acoustic_measurements_supplied": False,
     }
+    if speaker_roles is not None:
+        try:
+            snapshot = validate_speaker_roles(speaker_roles, validated)
+        except ValueError:
+            raise ReportError("speaker_roles_snapshot_invalid") from None
+        context["speaker_roles"] = snapshot
+        context["speaker_identity"] = snapshot["origin"]
+    return context
 
 
 def validate_coaching_context(payload: Mapping[str, Any]) -> None:
@@ -625,7 +638,7 @@ def validate_coaching_context(payload: Mapping[str, Any]) -> None:
             "duration_ms": context["duration_ms"],
             "segments": [dict(zip(_CONTEXT_COLUMNS, row, strict=True)) for row in rows],
         }
-        expected = coaching_source_context(transcript)
+        expected = coaching_source_context(transcript, speaker_roles=context.get("speaker_roles"))
         # The original C2 also contains provider provenance not repeated in the
         # lossless normalized table. Compare this digest to C2 on result binding.
         expected["c2_payload_sha256"] = context["c2_payload_sha256"]
@@ -2279,6 +2292,7 @@ def build_report_groq_prompt(
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
     report_language: ReportLanguage = "en",
     qualitative_pack_sha256: str | None = None,
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -2476,7 +2490,14 @@ def build_report_groq_prompt(
             "overview": merged.overview,
             "observations": observations,
             "uncertainties": list(merged.uncertainties),
-            "source_context": coaching_source_context(transcript),
+            "source_context": coaching_source_context(
+                transcript,
+                speaker_roles=(
+                    speaker_roles
+                    if coaching_prompt_revision in SPEAKER_ROLE_PROMPT_REVISIONS
+                    else None
+                ),
+            ),
         },
         ensure_ascii=False,
         sort_keys=True,
