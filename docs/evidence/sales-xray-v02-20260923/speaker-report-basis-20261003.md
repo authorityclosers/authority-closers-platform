@@ -38,6 +38,15 @@ Contract: ADR 0042, plan rev 3 D7/D10/D12, CTO's three S4c notes.
   release or protected policy change. The declaring set remains empty; production
   v1–v6 inputs are unchanged.
 
+CI follow-up: shard 2 reproduced a missing `with_roles` argument in the synthetic
+60-minute report test's direct call to the shared reporting fixture. The caller
+now explicitly selects `with_roles=False`, preserving its legacy-report scope.
+`uv run pytest tests/database/test_conversation_massive_report_postgresql.py
+tests/unit/conversation_intelligence/test_speaker_report_basis.py -q` passed all
+36 cases, including the complete fictional 60-minute C1–C5 PostgreSQL path, with
+no skips. This coverage overlaps the earlier results and is not summed. Ruff
+format/check and mypy passed again; the correction changes no production code.
+
 ## Dev check and limits
 
 At <https://salesxray-dev.authorityclosers.com>, with a fictional claimed call,
