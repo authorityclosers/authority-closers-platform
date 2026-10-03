@@ -123,7 +123,7 @@ describe("loadStaffBilling", () => {
 });
 
 describe("requestRefund", () => {
-  it("posts the reason with an idempotency key to the existing route", async () => {
+  it("posts the reason with an idempotency key to the staff route", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       Response.json(
         {
@@ -147,7 +147,7 @@ describe("requestRefund", () => {
       ),
     ).resolves.toEqual({ ok: true, state: "pending" });
     const [path, init] = fetcher.mock.calls[0];
-    expect(path).toBe("/v1/payments/pay_example_pack/refund");
+    expect(path).toBe("/v1/platform/billing/payments/pay_example_pack/refund");
     expect(init).toMatchObject({
       method: "POST",
       credentials: "same-origin",

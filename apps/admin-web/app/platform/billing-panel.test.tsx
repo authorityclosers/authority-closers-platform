@@ -111,15 +111,22 @@ it("rejects a malformed answer instead of showing it", async () => {
   expect(container.textContent).not.toContain("Example Sales Team");
 });
 
-it("shows the server's refund refusal reason as returned", async () => {
-  const detail =
-    "Minutes from this payment were already used, so it cannot be refunded.";
+it.each([
+  [
+    409,
+    "Minutes from this payment were already used, so it cannot be refunded.",
+    "Minutes from this payment were already used, so it cannot be refunded.",
+  ],
+  [
+    403,
+    "A current platform billing assignment is required.",
+    "Your billing assignment could not be confirmed. Reload to check your account.",
+  ],
+])("shows the refund error on HTTP %i", async (status, detail, message) => {
   const fetcher = vi
     .fn()
     .mockResolvedValueOnce(Response.json(billingFixture))
-    .mockResolvedValueOnce(
-      Response.json({ code: "payment_used", detail }, { status: 409 }),
-    );
+    .mockResolvedValueOnce(Response.json({ detail }, { status }));
   await mount(fetcher);
   await act(async () => button("Refund").click());
   const textarea = container.querySelector("textarea")!;
@@ -133,8 +140,11 @@ it("shows the server's refund refusal reason as returned", async () => {
   });
   await act(async () => button("Request refund").click());
   expect(fetcher).toHaveBeenLastCalledWith(
-    "/v1/payments/pay_example_pack/refund",
-    expect.objectContaining({ method: "POST" }),
+    "/v1/platform/billing/payments/pay_example_pack/refund",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ reason: "Customer asked" }),
+    }),
   );
-  expect(container.querySelector('[role="alert"]')?.textContent).toBe(detail);
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(message);
 });
