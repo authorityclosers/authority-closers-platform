@@ -220,10 +220,7 @@ function OrderReturnState({
             aria-hidden="true"
           />
           <h2>Payment confirmed</h2>
-          <AnimatedCountUp
-            targetMinutes={order.minutes}
-            targetCredits={Math.round(order.minutes / 10)}
-          />
+          <AnimatedCountUp targetMinutes={order.minutes} />
           <dl className={styles.rows}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>

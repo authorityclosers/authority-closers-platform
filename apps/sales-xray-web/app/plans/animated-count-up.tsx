@@ -40,8 +40,18 @@ export function AnimatedCountUp({
   }, [targetMinutes, targetCredits, durationMs]);
 
   return (
-    <div className={styles.animatedCounterBox} aria-live="polite">
-      <div className={styles.counterRow}>
+    <div className={styles.animatedCounterBox}>
+      <span
+        className={styles.counterAnnouncement}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        +{count(targetMinutes)} analysis minutes
+        {targetCredits !== undefined
+          ? `, +${count(targetCredits)} credits`
+          : ""}
+      </span>
+      <div className={styles.counterRow} aria-hidden="true">
         <div className={styles.counterItem}>
           <span className={styles.counterValue}>+{count(currentMinutes)}</span>
           <span className={styles.counterLabel}>Analysis minutes</span>

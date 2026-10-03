@@ -67,8 +67,8 @@ export type PlansScreenProps = {
  * - Seat stepper: Organisation 2–49, Enterprise 50+.
  * - Everything fits in one viewport at 1440 and 390 px.
  * - Checkout opens as a side panel (drawer), never at the page bottom.
- * - Top-ups removed from /plans (live in Settings → Plan & billing and Credits).
- * - Success: animated minute & credit count-up, receipt link, and "Start an analysis".
+ * - Top-ups removed from /plans (live in Settings → Plan & billing).
+ * - Success: animated minute count-up, receipt link, and "Start an analysis".
  */
 export function PlansScreen({
   plans,

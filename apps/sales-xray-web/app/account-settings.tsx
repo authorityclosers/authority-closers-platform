@@ -398,9 +398,7 @@ export function AccountSettings({
           <AllowanceSummary allowance={allowance} onRetry={retry} />
           <div className={styles.row}>
             <div className={styles.rowText}>
-              <span className={styles.rowLabel}>
-                Need more minutes or credits?
-              </span>
+              <span className={styles.rowLabel}>Need more minutes?</span>
               <span className={styles.rowHint}>
                 Add analysis minutes anytime without changing your monthly
                 subscription.
