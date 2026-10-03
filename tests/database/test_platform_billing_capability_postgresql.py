@@ -33,11 +33,12 @@ from ac_platform.authorization.models import (
 )
 from ac_platform.db.models import model_metadata
 from tests.database.test_capability_grants import Scope, audit, grant, seed_scope
+from tests.database.test_conversation_postgresql import _migration_head
 
 ROOT = Path(__file__).parents[2]
 MIGRATION = ROOT / "db/migrations/versions/20261002_0066_platform_billing_manage.py"
 PRIOR, REVISION, BILLING = "20261002_0065", "20261002_0066", "platform_billing_manage"
-HEAD = "20261002_0067"  # the sensitive-segment marks migration follows 0066
+HEAD = _migration_head()
 # PostgreSQL reports whichever permission check it evaluates first.
 PERMISSION_CHECK = "ck_capability_grants_permission_(supported|scope)"
 

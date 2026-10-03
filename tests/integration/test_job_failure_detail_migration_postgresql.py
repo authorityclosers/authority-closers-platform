@@ -4,14 +4,15 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from tests.database.test_conversation_postgresql import _migration_head
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
 
 
 def test_0061_migration_adds_nullable_failure_detail_on_postgresql(postgres_harness: Any) -> None:  # noqa: F811
     with postgres_harness.engine.connect() as connection:
-        # 0061 is applied under the current head (0062-0067 follow it).
+        # 0061 is applied under the current registered head.
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20261002_0067"
+            _migration_head()
         )
         column = next(
             item

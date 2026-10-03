@@ -48,3 +48,26 @@ Backup parity contract `ac-postgres-parity-v39` at head `20261002_0065` adds
 - Owner: CTO. Supersedes the combined AUT-418 scope (0061 reservation, credit
   units, offline contracts). Revisit when a second currency or a non-annual
   top-up validity is sold.
+
+## C3 amendment (AUT-739, owner decisions relayed by CEO, 2026-10-03)
+
+Migration `20261003_0068` advances only the exact untouched 0065 seeds to
+revision 2, keeping `coming_soon`. It locks and checks all fixed seed fields;
+an edited or missing seed raises `inactive catalogue seed changed; review required`
+and rolls back. Applied migrations and order/subscription copies remain intact.
+
+| Plan | Monthly / yearly paise | Minutes | Seats | Call minutes | GST included |
+|---|---|---|---|---|---|
+| Personal | 249900 / 2699000 | 800 | 1–1 | 90 | yes |
+| Organisation | 1000000 / 10800000 per seat | 1000 per seat, pooled | 2–49 | 90 | no |
+| Enterprise | 1000000 / 10800000 per seat | 1000 per seat, pooled | 50–NULL | 120 | no |
+
+Personal stores `topup_100` (100 minutes, 29900 paise); the other plans store
+`topup_500` (500 minutes, 129900 paise), all with `billing_year_end` validity.
+Packs follow the plan's new `prices_include_gst` flag. All cents, retention and
+rollover fields remain NULL. Only Enterprise has feature keys:
+`long_calls_120`, `priority_support`, `onboarding_session`.
+The public catalogue still hides inactive plan and pack prices. Tax calculation,
+checkout totals and invoices belong to AUT-878; activation belongs to AUT-882.
+Backup/restore parity adds the exact 0068 head with the same v40 inventory
+(121 tables). Evidence: `docs/evidence/20261003_INACTIVE_PLAN_VALUES.md`.

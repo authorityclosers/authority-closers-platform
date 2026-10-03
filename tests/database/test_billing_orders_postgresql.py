@@ -36,6 +36,7 @@ from ac_platform.billing.order_models import (
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.tenancy.models import Tenant
+from tests.database.test_conversation_postgresql import _migration_head
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 
 ROOT = Path(__file__).parents[2]
@@ -294,9 +295,11 @@ def test_0063_and_0064_apply_after_0062_and_are_the_head(postgres_harness: Engin
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_revision("20261001_0063").down_revision == "20261001_0062"
     assert scripts.get_revision("20261001_0064").down_revision == "20261001_0063"
-    assert scripts.get_current_head() == "20261002_0067"
+    assert scripts.get_current_head() == _migration_head()
     with postgres_harness.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_0067"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
+        )
         present = set(inspect(connection).get_table_names())
     assert set(NEW_TABLES) <= present
 
