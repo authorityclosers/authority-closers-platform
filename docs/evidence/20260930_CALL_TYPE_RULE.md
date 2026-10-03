@@ -54,12 +54,12 @@ starts.
 `CALL_TYPE_THRESHOLDS` in both twins, equal to the profile and the vectors (a
 test pins all three):
 
-| key | value | owner's words |
-|---|---|---|
-| `prospect_share_over` | 0.6 | prospect talks more than 60% |
-| `pitch_share_over` | 0.5 | pitch is more than half |
-| `short_call_ms` | 600000 (10 min) | short (screening) |
-| `little_questions_ms` | 120000 (2 min) | little or short questioning |
+| key                   | value           | owner's words                |
+| --------------------- | --------------- | ---------------------------- |
+| `prospect_share_over` | 0.6             | prospect talks more than 60% |
+| `pitch_share_over`    | 0.5             | pitch is more than half      |
+| `short_call_ms`       | 600000 (10 min) | short (screening)            |
+| `little_questions_ms` | 120000 (2 min)  | little or short questioning  |
 
 The owner fixes these, the rule readings for `screening` (no pitch; which
 outcomes count as advance or stop) and `follow_up_closing`, and the list itself
