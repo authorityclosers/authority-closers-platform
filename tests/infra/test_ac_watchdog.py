@@ -71,6 +71,9 @@ def test_source_matches_root_export_with_only_ceo_approved_scope_addition():
     begin, end = b"# AUT-932 identity rule: begin", b"# AUT-932 identity rule: end\n"
     assert source.count(begin) == source.count(end) == 1
     aut850 = source[: source.index(begin)] + source[source.index(end) + len(end) :]
+    guard = b"UI_GUARD_EXCLUDED.search(f)\n               or identity_path(f)]"
+    assert aut850.count(guard) == 1
+    aut850 = aut850.replace(guard, b"UI_GUARD_EXCLUDED.search(f)]")
     assert aut850.count(b" or identity_path(f)]") == 1
     aut850 = aut850.replace(b" or identity_path(f)]", b"]")
     assert hashlib.sha256(aut850).hexdigest() == metadata["aut850_sha256"]
@@ -898,6 +901,9 @@ def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
         "apps/sales-xray-web/app/vitest.config.ts",
         "apps/sales-xray-web/app/eslint.config.mjs",
         "apps/sales-xray-web/public/package.json",
+        "apps/sales-xray-web/app/members/page.tsx",
+        "apps/sales-xray-web/app/sign-in/page.tsx",
+        "apps/sales-xray-web/app/SignOutButton.tsx",
     ]:
         assert "outside" in scope(ok + [path])
     assert scope(ok, changed=5) == scope([]) == "file list incomplete"
@@ -919,6 +925,10 @@ def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
         ("cto", "apps/sales-xray-web/app/page.tsx", False, "green", False, True),
         ("cto", "db/migrations/versions/x.py", False, "green", False, False),
         ("cto", "scripts/ci/merge_class.py", False, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/members/page.tsx", False, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/sign-in/page.tsx", False, "green", False, False),
+        ("cto", "apps/sales-xray-web/app/members/page.tsx", False, "green", False, False),
+        ("ceo", "apps/sales-xray-web/app/sign-in/page.tsx", False, "green", False, True),
         ("ceo", "infra/x.py", False, "red", True, True),
         ("ceo", "infra/x.py", False, "red", False, False),
         ("ceo", "infra/x.py", True, "red", True, False),
@@ -972,6 +982,35 @@ def test_aut303_pr_merge_routes(
     conn = SimpleNamespace(execute=lambda *args: SimpleNamespace(fetchone=lambda: ("AUT-FAKE",)))
     watchdog.pull_requests(conn, {"sent": {}}, {}, [], main)
     assert calls == ([(1, sha, "task/platform/fictional")] if expected else [])
+
+
+@pytest.mark.parametrize(
+    ("previous", "eligible"),
+    [
+        ("apps/sales-xray-web/app/old-page.tsx", True),
+        ("apps/sales-xray-web/app/members/page.tsx", False),
+        ("apps/sales-xray-web/app/signIn.tsx", False),
+    ],
+)
+def test_ui_guard_scope_checks_rename_sources_for_identity(
+    watchdog, monkeypatch, previous, eligible
+):
+    # AUT-932: a rename out of an identity path is still an identity change.
+    def github(path):
+        if path.startswith("/pulls/1/files"):
+            return [
+                {
+                    "filename": "apps/sales-xray-web/app/dashboard/page.tsx",
+                    "previous_filename": previous,
+                }
+            ]
+        return {"changed_files": 1}
+
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    monkeypatch.setattr(watchdog, "unresolved_threads", lambda number: 0)
+    why = watchdog.ui_guard_scope(1)
+    assert (why == "") is eligible
+    assert eligible or previous in why
 
 
 def test_aut303_spools_deduplicate_retry_and_archive(watchdog, monkeypatch, shadow_db, tmp_path):

@@ -5,9 +5,9 @@
         "exported_at_utc": "2026-10-03T14:38:17.455260+00:00",
         "original_sha256": "2ea06ca27a39247aa3c085bb28a995fd72aa5d4abb753961a104f8818ff8e6f0",
         "aut850_sha256": "9f893ef28a42714f5cbb01f3e0b2387d6b139f54ba3edcfc919a3b4ccc403747",
-        "repository_sha256": "be900d776aeeb725ed29bbbf6aea5e49238e8801b273411f6ce88833540be3cb",
-        "lines": 1399,
-        "approved_difference": "CEO directive on AUT-850: add scripts/ci/ to SENSITIVE_PATH; CEO decision on AUT-932: identity, auth, sessions, permissions/roles and organisation membership paths are sensitive (identity_path)",
+        "repository_sha256": "e03d389db5d5323a05252d71b32f0f61fb98dab6186fea851633492726b75bf4",
+        "lines": 1400,
+        "approved_difference": "CEO directive on AUT-850: add scripts/ci/ to SENSITIVE_PATH; CEO decision on AUT-932: identity, auth, sessions, permissions/roles and organisation membership paths are sensitive (identity_path, in sensitive_scope and ui_guard_scope)",
         "supersedes": "tests/infra/fixtures/ac_watchdog/aut850-reconcile.json",
         "redactions": [],
         "config_injection": []

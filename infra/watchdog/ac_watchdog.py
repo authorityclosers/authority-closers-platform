@@ -412,7 +412,8 @@ def ui_guard_scope(number: int) -> str:
         return "file list unreadable"
     if not files or len(set(files)) < expected:
         return "file list incomplete"
-    outside = [f for f in files if not f.startswith(UI_GUARD_PREFIXES) or UI_GUARD_EXCLUDED.search(f)]
+    outside = [f for f in files if not f.startswith(UI_GUARD_PREFIXES) or UI_GUARD_EXCLUDED.search(f)
+               or identity_path(f)]
     if outside:
         return f"{len(outside)} file(s) outside the UI-only scope, e.g. {outside[0]}"
     threads = unresolved_threads(number)
