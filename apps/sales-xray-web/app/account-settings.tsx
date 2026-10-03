@@ -50,7 +50,7 @@ import {
   liveBilling as billingClient,
   returnPath,
 } from "./billing/billing-api";
-import type { Order } from "./billing/contract";
+import type { Checkout, Order } from "./billing/contract";
 import {
   AccountProfileRequestError,
   normalizeProfilePhoneInput,
@@ -162,6 +162,19 @@ export function AccountSettings({
   );
   const [topUpBusy, setTopUpBusy] = useState(false);
   const [topUpOrder, setTopUpOrder] = useState<Order | null>(null);
+  const topUpAttempt = useRef<{
+    fingerprint: string;
+    key: string;
+    checkout?: Checkout;
+  } | null>(null);
+  const topUpInFlight = useRef(false);
+  const topUpAlive = useRef(true);
+  useEffect(() => {
+    topUpAlive.current = true;
+    return () => {
+      topUpAlive.current = false;
+    };
+  }, []);
   const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
@@ -447,7 +460,11 @@ export function AccountSettings({
                     },
                   }
             }
-            onBuyTopUp={(pack) => setSelectedTopUp(pack)}
+            onBuyTopUp={(pack) => {
+              topUpAttempt.current = null;
+              setTopUpOrder(null);
+              setSelectedTopUp(pack);
+            }}
             variant={variant}
             onRetry={retry}
           />
@@ -497,6 +514,7 @@ export function AccountSettings({
       <CheckoutDrawer
         open={Boolean(selectedTopUp)}
         onClose={() => {
+          topUpAttempt.current = null;
           setSelectedTopUp(null);
           setTopUpOrder(null);
         }}
@@ -505,28 +523,47 @@ export function AccountSettings({
         busy={topUpBusy}
         confirmedOrder={topUpOrder}
         onPay={async () => {
-          if (!selectedTopUp) return;
+          if (!selectedTopUp || topUpInFlight.current) return;
+          topUpInFlight.current = true;
           setTopUpBusy(true);
+          const fingerprint = JSON.stringify([
+            selectedTopUp.planKey,
+            selectedTopUp.key,
+          ]);
+          const expiresAt = topUpAttempt.current?.checkout?.hosted.expiresAt;
+          if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
+            topUpAttempt.current = null;
+            setTopUpOrder(null);
+          }
+          if (topUpAttempt.current?.fingerprint !== fingerprint)
+            topUpAttempt.current = { fingerprint, key: idempotencyKey() };
+          const attempt = topUpAttempt.current;
           try {
-            const checkout = await billingClient.checkout(
-              {
-                kind: "top_up",
-                account:
-                  selectedTopUp.planKey === "personal"
-                    ? "personal"
-                    : "organisation",
-                planKey: selectedTopUp.planKey,
-                packKey: selectedTopUp.key,
-              },
-              idempotencyKey(),
-            );
-            setTopUpOrder(checkout.order);
+            if (!attempt.checkout) {
+              const checkout = await billingClient.checkout(
+                {
+                  kind: "top_up",
+                  account:
+                    selectedTopUp.planKey === "personal"
+                      ? "personal"
+                      : "organisation",
+                  planKey: selectedTopUp.planKey,
+                  packKey: selectedTopUp.key,
+                },
+                attempt.key,
+              );
+              if (!topUpAlive.current || topUpAttempt.current !== attempt)
+                return;
+              attempt.checkout = checkout;
+              setTopUpOrder(checkout.order);
+              return;
+            }
             const result = await openHostedCheckout(
-              checkout.hosted,
-              checkout.order.orderId,
+              attempt.checkout.hosted,
+              attempt.checkout.order.orderId,
             );
-            if (result !== "left") {
-              router.push(returnPath(checkout.order.orderId));
+            if (topUpAlive.current && result !== "left") {
+              router.push(returnPath(attempt.checkout.order.orderId));
             }
           } catch {
             notify({
@@ -536,7 +573,8 @@ export function AccountSettings({
               message: "Checkout could not be opened. Please try again.",
             });
           } finally {
-            setTopUpBusy(false);
+            topUpInFlight.current = false;
+            if (topUpAlive.current) setTopUpBusy(false);
           }
         }}
       />

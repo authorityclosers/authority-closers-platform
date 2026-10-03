@@ -8,6 +8,7 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import type { Interval, Order, Plan } from "../billing/contract";
 import { count, day, money } from "../billing/money";
 import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
@@ -54,6 +55,50 @@ export function CheckoutDrawer({
   onPay,
   summaryRef,
 }: CheckoutDrawerProps) {
+  const localSummaryRef = useRef<HTMLElement>(null);
+  const panelRef = summaryRef ?? localSummaryRef;
+  const visible = open && item !== null;
+  const dismiss = useEffectEvent(() => {
+    if (!busy) onClose();
+  });
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!visible || !panel) return;
+    const previousFocus = document.activeElement;
+    panel.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismiss();
+      }
+      if (event.key !== "Tab") return;
+      const controls = panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        panel.focus();
+      } else if (
+        !panel.contains(document.activeElement) ||
+        document.activeElement === panel ||
+        (event.shiftKey && document.activeElement === first) ||
+        (!event.shiftKey && document.activeElement === last)
+      ) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus();
+    };
+  }, [visible, panelRef]);
+
   if (!open || !item) return null;
 
   const isPlan = item.type === "plan";
@@ -112,11 +157,11 @@ export function CheckoutDrawer({
     <>
       <div
         className={styles.drawerBackdrop}
-        onClick={onClose}
+        onClick={busy ? undefined : onClose}
         aria-hidden="true"
       />
       <section
-        ref={summaryRef as React.RefObject<HTMLElement>}
+        ref={panelRef}
         tabIndex={-1}
         className={`${styles.panel} ${styles.checkoutSheet} ${styles.checkoutDrawer}`}
         role="dialog"
@@ -134,6 +179,7 @@ export function CheckoutDrawer({
           <button
             type="button"
             className={styles.closeDrawerBtn}
+            disabled={busy}
             onClick={onClose}
             aria-label="Close checkout"
           >
