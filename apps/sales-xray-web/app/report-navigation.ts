@@ -2,10 +2,10 @@ import { UUID } from "./acquisition-client";
 
 export const REPORT_SECTIONS = [
   "overview",
-  "prospect",
+  "transcript",
   "moments",
-  "skills",
-  "next-call-plan",
+  "analysis",
+  "coaching",
 ] as const;
 export type ReportSection = (typeof REPORT_SECTIONS)[number];
 

@@ -1,0 +1,205 @@
+.coaching {
+  container-type: inline-size;
+  container-name: report-coaching;
+  min-width: 0;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.coachingGate {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--lx-space-12) var(--lx-space-4);
+  min-height: 320px;
+}
+
+.gateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 520px;
+  width: 100%;
+  padding: var(--lx-space-8);
+  background: var(--lx-surface-card, var(--lx-card-bg, #ffffff));
+  border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.08));
+  border-radius: var(--lx-radius-lg, 16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.gateIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--lx-focus-soft, rgba(234, 150, 0, 0.12));
+  color: var(--lx-focus, #e28700);
+  margin-bottom: var(--lx-space-4);
+}
+
+.gateCard h2 {
+  margin: 0 0 var(--lx-space-2);
+  color: var(--lx-ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.gateCard p {
+  margin: 0 0 var(--lx-space-6);
+  color: var(--lx-muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.coachButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lx-space-2);
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--lx-btn-primary, var(--lx-ink, #0f172a));
+  border: none;
+  border-radius: var(--lx-radius-md, 8px);
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.coachButton:hover {
+  opacity: 0.92;
+}
+
+.coachButton:active {
+  transform: scale(0.98);
+}
+
+.coachButton:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+/* Unlocked coaching content */
+.coachingContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lx-space-8);
+}
+
+.summaryRows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--lx-space-6);
+  min-width: 0;
+}
+
+@container (max-width: 860px) {
+  .summaryRows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.summaryRow {
+  --row-ink: var(--lx-ink-3);
+  --row-accent: var(--lx-line-strong);
+
+  display: grid;
+  align-content: start;
+  gap: var(--lx-space-2);
+  min-width: 0;
+  padding: var(--lx-space-4) var(--lx-space-4) var(--lx-space-4);
+  border-radius: var(--lx-radius-md, 8px);
+  border-top: 3px solid var(--row-accent);
+  background: var(--lx-surface-card, #ffffff);
+  border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.08));
+  border-top: 3px solid var(--row-accent);
+}
+
+.summaryRow[data-tone="keep"] {
+  --row-ink: var(--lx-strength-ink, #047857);
+  --row-accent: var(--lx-strength, #10b981);
+}
+
+.summaryRow[data-tone="change"] {
+  --row-ink: var(--lx-focus-ink, #b45309);
+  --row-accent: var(--lx-focus, #f59e0b);
+  background: var(--lx-focus-soft, rgba(245, 158, 11, 0.05));
+}
+
+.summaryRow[data-tone="next"] {
+  --row-ink: var(--lx-ink, #0f172a);
+  --row-accent: var(--lx-ink, #0f172a);
+}
+
+.rowLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+  margin: 0;
+  color: var(--row-ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.rowBody {
+  display: grid;
+  justify-items: start;
+  gap: var(--lx-space-2);
+  min-width: 0;
+}
+
+.rowTitle {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.rowBody p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--lx-space-3);
+  margin-top: var(--lx-space-2);
+}
+
+.listen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-1);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lx-ink);
+  background: var(--lx-surface-button, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--lx-line, rgba(0, 0, 0, 0.1));
+  border-radius: var(--lx-radius-sm, 6px);
+  cursor: pointer;
+}
+
+.listen:hover {
+  background: var(--lx-surface-button-hover, rgba(0, 0, 0, 0.08));
+}
+
+.nextCallPlanSection {
+  margin-top: var(--lx-space-4);
+}

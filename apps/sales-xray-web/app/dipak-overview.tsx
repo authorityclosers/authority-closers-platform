@@ -5,6 +5,7 @@ import {
   useContext,
   useId,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -48,15 +49,17 @@ import {
   formatContextSpeakerLabel,
   type ContextualSourcePlayback,
 } from "./source-playback-context";
+import { voicesOf } from "./call-data";
 import { CallRecordView } from "./call-record";
 import type { CallRecord } from "./call-record-contract";
 import styles from "./dipak-overview.module.css";
 import { RichText } from "./report-entities";
 
-type Props = {
+export type Props = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   transcript?: Transcript;
+  callId?: string | null;
   onSelectContextualPlayback?: (
     selection: ContextualSourcePlayback,
     title: string,
@@ -65,6 +68,8 @@ type Props = {
   durationMs?: number;
   showHeading?: boolean;
   callRecord?: CallRecord | null;
+  showAnalysis?: boolean;
+  analysisOnly?: boolean;
 };
 
 type ChapterId = "start" | "read" | "practice" | "close";
@@ -266,11 +271,14 @@ export function DipakOverview({
   report,
   onSelectEvidence,
   transcript,
+  callId,
   onSelectContextualPlayback,
   onUnlock,
   durationMs,
   showHeading = true,
   callRecord,
+  showAnalysis = false,
+  analysisOnly = false,
 }: Props) {
   const reading = useReportInline();
   const navigateToReport = useReportNavigation();
@@ -322,6 +330,19 @@ export function DipakOverview({
   const primary = report.improvements[0];
   const strength = report.strengths[0];
   const detail = report.overview;
+  const attendeeLabels = useMemo(() => {
+    if (!transcript || !transcript.segments?.length) return [];
+    const voices = voicesOf(transcript);
+    return voices.map((v) => formatContextSpeakerLabel(transcript, v));
+  }, [transcript]);
+  const firstPlayableClip = useMemo(() => {
+    const clips = reportReplayClips(report);
+    return clips[0]?.evidence ?? null;
+  }, [report]);
+  const firstPlayableTitle = useMemo(() => {
+    const clips = reportReplayClips(report);
+    return clips[0]?.finding.title ?? "Key moment";
+  }, [report]);
   const priorities = report.improvements.slice(0, 3);
   const supportedDimensions = report.dimensions.filter(
     (dimension) =>
