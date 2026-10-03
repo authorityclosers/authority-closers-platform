@@ -1,5 +1,37 @@
 import type { Plan } from "../billing/contract";
 
+export type DisplayTopUpPack = {
+  key: string;
+  planKey: string;
+  title: string;
+  audience: string;
+  minutes: number;
+  pricePaise: number;
+  gstInclusive: boolean;
+};
+
+/** Owner-approved top-up display prices; purchase wiring belongs to AUT-880. */
+export const TOP_UP_PACKS: DisplayTopUpPack[] = [
+  {
+    key: "personal_100",
+    planKey: "personal",
+    title: "Personal Top-up",
+    audience: "For individual closers",
+    minutes: 100,
+    pricePaise: 29900,
+    gstInclusive: true,
+  },
+  {
+    key: "organisation_500",
+    planKey: "organisation",
+    title: "Organisation Top-up",
+    audience: "Shared pool for your sales team",
+    minutes: 500,
+    pricePaise: 129900,
+    gstInclusive: false,
+  },
+];
+
 /** Owner-approved display catalogue for AUT-894. Replaced by catalogue props in AUT-880. */
 export const PLANS_CATALOGUE_FIXTURE: Plan[] = [
   {

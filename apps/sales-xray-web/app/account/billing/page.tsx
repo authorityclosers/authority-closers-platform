@@ -1,6 +1,6 @@
-import { BillingView } from "../../billing/billing-view";
+import { redirect } from "next/navigation";
 
-/** Dedicated Billing & Subscription page: /account/billing */
+/** /account/billing redirects to Settings → Plan & billing (/account#billing). */
 export default function AccountBillingPage() {
-  return <BillingView />;
+  redirect("/account#billing");
 }

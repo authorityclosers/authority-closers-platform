@@ -979,3 +979,354 @@
     transition: none;
   }
 }
+
+/* New Plan Ladder, Top-ups & Checkout Styles (AUT-894 redesign) */
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  padding-bottom: 4px;
+}
+
+.segGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.segLabel {
+  font: 600 11.5px/1 var(--lx-font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--lx-muted);
+}
+
+.panelHeaderRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cardIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--lx-radius-md, 12px);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  flex-shrink: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 800 20px/1.2 var(--lx-font-display, var(--lx-font-ui));
+}
+
+.tagline {
+  margin: 4px 0 0;
+  color: var(--lx-muted);
+  font: 500 12.5px/1.4 var(--lx-font-ui);
+}
+
+.priceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.priceSub {
+  color: var(--lx-muted);
+  font: 500 12px/1 var(--lx-font-ui);
+}
+
+.seatsArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-paper-2);
+}
+
+.seatsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.seatsLabel {
+  font: 600 13px/1.2 var(--lx-font-ui);
+  color: var(--lx-ink-2);
+}
+
+.liveTotalLine {
+  font: 600 12.5px/1.3 var(--lx-font-ui);
+  color: var(--lx-teal);
+}
+
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.featureList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--lx-ink-2);
+  font: 500 13px/1.4 var(--lx-font-ui);
+}
+
+.featureList li svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.topUpsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 20px;
+  border-top: 1px solid var(--lx-line);
+}
+
+.topUpsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topUpsTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--lx-teal);
+}
+
+.topUpsTitle h3 {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 700 17px/1.2 var(--lx-font-ui);
+}
+
+.topUpIcon {
+  color: var(--lx-teal);
+}
+
+.topUpsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+}
+
+.topUpCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-paper-2);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.topUpCard:hover {
+  border-color: var(--lx-line-strong);
+}
+
+.topUpCard[data-selected="true"] {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-tint, var(--lx-paper-2));
+  box-shadow: 0 0 0 1px var(--lx-teal);
+}
+
+.topUpHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.topUpHead h4 {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 700 15px/1.2 var(--lx-font-ui);
+}
+
+.topUpTagline {
+  margin: 2px 0 0;
+  color: var(--lx-muted);
+  font: 500 12px/1.3 var(--lx-font-ui);
+}
+
+.topUpPriceBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font: 800 16px/1.1 var(--lx-font-ui);
+  color: var(--lx-ink);
+}
+
+.topUpPriceBadge small {
+  font: 500 11px/1 var(--lx-font-ui);
+  color: var(--lx-muted);
+}
+
+.topUpBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--lx-line);
+}
+
+.topUpMinutes {
+  font: 700 13px/1.2 var(--lx-font-ui);
+  color: var(--lx-teal);
+}
+
+.checkoutSheet {
+  border: 1.5px solid var(--lx-teal);
+  box-shadow: var(--lx-shadow-2);
+  animation: page-in 220ms ease both;
+}
+
+.checkoutHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.secureTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--lx-radius-pill, 999px);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font: 600 11.5px/1 var(--lx-font-ui);
+}
+
+.paymentMethodsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-paper-2);
+}
+
+.paymentMethodsLabel {
+  font: 600 12px/1 var(--lx-font-ui);
+  color: var(--lx-ink-2);
+}
+
+.paymentBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.methodBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: 6px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: 700 11.5px/1.2 var(--lx-font-ui);
+}
+
+.razorpayTag {
+  margin: 0;
+  color: var(--lx-muted);
+  font: 500 12px/1.4 var(--lx-font-ui);
+}
+
+.guaranteeBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--lx-teal-edge, var(--lx-line));
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-teal-tint, var(--lx-paper-2));
+}
+
+.guaranteeText {
+  margin: 0;
+  color: var(--lx-ink-2);
+  font: 500 12.5px/1.4 var(--lx-font-ui);
+}
+
+.legalLinks {
+  margin: 4px 0 0;
+  color: var(--lx-muted);
+  font: 500 11.5px/1.4 var(--lx-font-ui);
+}
+
+.legalLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--lx-teal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.successIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.successSummary {
+  font: 600 15px/1.3 var(--lx-font-ui);
+  color: var(--lx-ink);
+}
+
+.successAllowance {
+  color: var(--lx-muted);
+  font: 500 13px/1.4 var(--lx-font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkoutSheet {
+    animation: none;
+  }
+}
