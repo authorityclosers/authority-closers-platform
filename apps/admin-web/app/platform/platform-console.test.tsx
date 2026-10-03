@@ -55,6 +55,9 @@ it("renders a real bounded directory and does not invent privilege controls", as
   expect(container.textContent).toContain("View academies");
   expect(container.textContent).not.toContain("Manage platform access");
   expect(container.querySelector("#admin-content")).not.toBeNull();
+  expect(
+    container.querySelector('a[href="/platform/organisations"]')?.textContent,
+  ).toBe("Organisations");
   expect(fetch).toHaveBeenCalledWith(
     "/v1/platform/tenants",
     expect.objectContaining({
@@ -88,6 +91,9 @@ it.each([
     await mount();
     expect(container.textContent).toContain(label);
     expect(fetch).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('a[href="/platform/organisations"]'),
+    ).toBeNull();
     expect(
       [...container.querySelectorAll("a, button")].some((control) =>
         /billing/i.test(control.textContent ?? ""),
