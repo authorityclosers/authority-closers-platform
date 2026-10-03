@@ -14,42 +14,51 @@ GITHUB_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/github.json"
 SESSION_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/session_usage.json"
 
 
-def report(source=None):
-    monday, start, end = scorecard.week_window("2026-09-21")
-    return scorecard.build_report(source or json.loads(FIXTURE.read_text()), monday, start, end)
-
-
-def session_source(adapter):
-    source = json.loads(SESSION_FIXTURE.read_text())
-    source["agents"][0]["adapterType"] = adapter
-    if adapter == "claude_local":
-        source["runs"][0]["usageJson"]["inputTokens"] = 60
-        source["runs"][2]["usageJson"]["inputTokens"] = 40
+def fixture_source(path):
+    source = json.loads(path.read_text())
+    for agent in source["agents"]:
+        agent.setdefault("adapterType", "codex_local")
     return source
 
 
-@pytest.mark.parametrize("adapter", ["codex_local", "claude_local"])
-def test_reused_sessions_and_cross_task_history(adapter):
+def report(source=None):
+    monday, start, end = scorecard.week_window("2026-09-21")
+    return scorecard.build_report(source or fixture_source(FIXTURE), monday, start, end)
+
+
+def session_source(adapter):
+    source = fixture_source(SESSION_FIXTURE)
+    source["agents"][0]["adapterType"] = adapter
+    return source
+
+
+@pytest.mark.parametrize(
+    "adapter,first,second", [("codex_local", 110, 175), ("claude_local", 170, 275)]
+)
+def test_reused_sessions_and_cross_task_history(adapter, first, second):
     source = session_source(adapter)
     source["runs"][2]["usageJson"] = json.dumps(source["runs"][2]["usageJson"])
+    original = json.dumps(source, sort_keys=True)
     normalized = scorecard.normalize_runs(source["runs"], source["agents"])
-    assert [r["_tokens"] for r in normalized][::2] == [65, 110]
+    assert json.dumps(source, sort_keys=True) == original
+    assert [r["_tokens"] for r in normalized][::2] == [second, first]
+    assert {r["_token_status"] for r in normalized} == {"reported_per_run"}
     rows = dict(report(source)["rows"])
     assert rows["Fictional Builder"] == rows["Company"]
-    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (175, 2)
-    assert "175.00" in scorecard.render_report(report(source))
+    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (first + second, 2)
+    assert f"{first + second:.2f}" in scorecard.render_report(report(source))
     source["runs"][2]["contextSnapshot"]["issueId"] = "unfinished"
     rows = dict(report(source)["rows"])
     assert rows["Fictional Builder"] == rows["Company"]
-    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (65, 1)
-    assert "65.00" in scorecard.render_report(report(source))
+    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (second, 1)
+    assert f"{second:.2f}" in scorecard.render_report(report(source))
 
 
 @pytest.mark.parametrize(
     "adapter,rotation,reset,cache_reset",
     [
         ("codex_local", 22, 4, 175),
-        ("claude_local", 27, 6, 77),
+        ("claude_local", 27, 6, 177),
     ],
 )
 def test_session_rotation_and_counter_resets(adapter, rotation, reset, cache_reset):
@@ -64,17 +73,21 @@ def test_session_rotation_and_counter_resets(adapter, rotation, reset, cache_res
         usage.update(zip(keys, counters, strict=True))
         usage["persistedSessionId"] = session
         assert scorecard.normalize_runs(source["runs"], source["agents"])[0]["_tokens"] == expected
+        usage.pop("usageSource")
+        raw = scorecard.normalize_runs(source["runs"], source["agents"])[0]
+        assert (raw["_tokens"], raw["_token_status"]) == (None, "unverified_basis")
+        usage["usageSource"] = "per_run"
 
 
 @pytest.mark.parametrize(
     "adapter,delta,session,expected",
     [
         ("codex_local", True, "fictional-shared", 285),
-        ("claude_local", True, "fictional-shared", 285),
-        ("gemini_local", True, "fictional-shared", 63),
+        ("claude_local", True, "fictional-shared", 445),
+        ("gemini_local", True, "fictional-shared", None),
         ("codex_local", False, None, 285),
-        ("claude_local", False, None, 285),
-        ("unknown", False, "fictional-shared", 285),
+        ("claude_local", False, None, 445),
+        ("unknown", False, "fictional-shared", None),
     ],
 )
 def test_raw_usage_and_run_adapter_precedence(adapter, delta, session, expected):
@@ -91,8 +104,11 @@ def test_raw_usage_and_run_adapter_precedence(adapter, delta, session, expected)
     assert dict(report(source)["rows"])["Company"]["tokens"] == expected
 
 
-@pytest.mark.parametrize("bad", [None, "{", [], {}, {"inputTokens": "bad", "outputTokens": 1}])
-def test_invalid_snapshot_keeps_baseline_and_missing_cache_defaults_to_zero(bad):
+@pytest.mark.parametrize(
+    "bad,status",
+    [(None, "missing_usage"), ("{", "invalid_usage"), ([], "invalid_usage"), ({}, "missing_usage")],
+)
+def test_unknown_receipt_does_not_affect_independent_counts(bad, status):
     source = session_source("codex_local")
     for run in source["runs"]:
         run["usageJson"].pop("cachedInputTokens")
@@ -106,7 +122,106 @@ def test_invalid_snapshot_keeps_baseline_and_missing_cache_defaults_to_zero(bad)
         },
     )
     row = dict(report(source)["rows"])["Company"]
-    assert (row["tokens"], row["unreported_runs"]) == (175, 1)
+    assert scorecard.token_usage({"usageJson": bad}, "codex_local") == (None, status)
+    assert (row["tokens"], row["known_tokens"], row["unreported_runs"]) == (None, 285, 1)
+    assert "n/a (incomplete usage) (1 runs unreported)" in scorecard.render_report(report(source))
+
+
+@pytest.mark.parametrize("adapter", ["codex_local", "claude_local"])
+@pytest.mark.parametrize("basis", ["per_run", "session_delta", None, "cumulative"])
+def test_three_runs_interleaved_agents_tasks_and_week_boundary(adapter, basis):
+    source = session_source(adapter)
+    first, second = source["runs"][2], source["runs"][0]
+    third = {
+        **second,
+        "id": "third",
+        "startedAt": "2026-09-28T00:00:00Z",
+        "usageJson": {**second["usageJson"]},
+    }
+    source["runs"].insert(0, third)
+    counters = [(100, 10, 60), (160, 15, 100), (180, 20, 110)]
+    if basis == "session_delta":
+        counters = [(100, 10, 60), (60, 5, 40), (20, 5, 10)]
+    for run, values in zip((first, second, third), counters, strict=True):
+        usage = run["usageJson"]
+        usage.update(zip(("inputTokens", "outputTokens", "cachedInputTokens"), values, strict=True))
+        usage.pop("usageSource") if basis is None else usage.update(usageSource=basis)
+    source["runs"].append(
+        {
+            **second,
+            "id": "interleaved",
+            "agentId": "other-agent",
+            "adapterType": "claude_local",
+            "contextSnapshot": {"issueId": "unfinished"},
+        }
+    )
+    known = basis in ("per_run", "session_delta")
+    expected = [i + o + (c if adapter == "claude_local" else 0) for i, o, c in counters]
+    normalized = scorecard.normalize_runs(source["runs"], source["agents"])
+    by_id = {r["id"]: (r["_tokens"], r["_token_status"]) for r in normalized}
+    assert [by_id[r["id"]][0] for r in (first, second, third)] == (
+        expected if known else [None] * 3
+    )
+    assert by_id["third"][1] == (f"reported_{basis}" if known else "unverified_basis")
+    reversed_runs = scorecard.normalize_runs(source["runs"][::-1], source["agents"])
+    assert by_id == {r["id"]: (r["_tokens"], r["_token_status"]) for r in reversed_runs}
+    row = dict(report(source)["rows"])["Company"]
+    assert row["tokens"] == (sum(expected) if known else None)
+    assert row["unreported_runs"] == (0 if known else 3)
+    assert scorecard.normalize_runs([third], source["agents"])[0]["_tokens"] == (
+        expected[2] if known else None
+    )
+    second["adapterType"] = "claude_local" if adapter == "codex_local" else "codex_local"
+    assert scorecard.run_tokens(second) == (
+        sum(counters[1])
+        if known and adapter == "codex_local"
+        else sum(counters[1][:2])
+        if known
+        else None
+    )
+
+
+@pytest.mark.parametrize("adapter", ["codex_local", "claude_local"])
+@pytest.mark.parametrize("field", ["inputTokens", "outputTokens", "cachedInputTokens"])
+@pytest.mark.parametrize("bad", [-1, True, False, "1", None, float("nan"), float("inf")])
+def test_invalid_counters(adapter, field, bad):
+    run = session_source(adapter)["runs"][0]
+    run["usageJson"][field] = bad
+    assert scorecard.token_usage(run, adapter) == (None, "invalid_usage")
+
+
+@pytest.mark.parametrize("adapter", ["codex_local", "claude_local"])
+@pytest.mark.parametrize(
+    "field", ["inputTokens", "outputTokens", "cachedInputTokens", "usageSource"]
+)
+def test_missing_fields_and_explicit_zero_cache(adapter, field):
+    run = session_source(adapter)["runs"][0]
+    run["usageJson"].update(cachedInputTokens=0, cacheCreationInputTokens=1000)
+    assert scorecard.token_usage(run, adapter) == (175, "reported_per_run")
+    run["usageJson"].pop(field)
+    status = "unverified_basis" if field == "usageSource" else "missing_usage"
+    expected = (
+        (175, "reported_per_run")
+        if field == "cachedInputTokens" and adapter == "codex_local"
+        else (None, status)
+    )
+    assert scorecard.token_usage(run, adapter) == expected
+
+
+@pytest.mark.parametrize(
+    "patch,status",
+    [
+        ({"usageBasis": "session_delta"}, "unverified_basis"),
+        ({"cachedReadTokens": 100}, "invalid_usage"),
+        ({"cachedWriteTokens": 100}, "invalid_usage"),
+    ],
+)
+@pytest.mark.parametrize("adapter", ["codex_local", "claude_local", "acpx", None])
+def test_conflicting_basis_and_unsupported_shapes(adapter, patch, status):
+    run = session_source("codex_local")["runs"][0]
+    run["usageJson"].update(patch)
+    expected = status if adapter in ("codex_local", "claude_local") else "unsupported_adapter"
+    assert scorecard.token_usage(run, adapter) == (None, expected)
 
 
 def test_real_activity_shapes_metrics_alerts_and_week_end():
@@ -114,19 +229,23 @@ def test_real_activity_shapes_metrics_alerts_and_week_end():
     agent = dict(result["rows"])["Fictional Agent"]
     assert (agent["done"], agent["bounces"], agent["failed_pct"]) == (2, 3, 50)
     assert agent["median"] == pytest.approx(5.5, abs=1e-4) and agent["p90"] > 3
-    assert (agent["tokens"], agent["unreported_runs"], agent["runs_per_task"]) == (209, 2, 2.5)
+    assert (agent["tokens"], agent["known_tokens"], agent["unreported_runs"]) == (None, 418, 2)
+    assert agent["runs_per_task"] == 2.5
     assert dict(result["rows"])["Company"] == agent
     assert any("failed runs" in alert for alert in result["alerts"])
     assert any("cycle-time p90" in alert for alert in result["alerts"])
     rendered = scorecard.render_report(result)
     assert result["failures"][0] == ("Fictional Agent", "DEMO-2", "cancelled")
     assert result["failures"][1] == ("Fictional Agent", "DEMO-2", "failed")
-    assert "209.00 (2 runs unreported)" in rendered and "n/a (GitHub unavailable)" in rendered
+    assert (
+        "n/a (incomplete usage) (2 runs unreported)" in rendered
+        and "n/a (GitHub unavailable)" in rendered
+    )
 
 
 def test_done_metrics_follow_builder_across_handoff_and_direct_completion():
     monday, start, end = scorecard.week_window("2026-09-21")
-    source = json.loads(BUILDER_FIXTURE.read_text())
+    source = fixture_source(BUILDER_FIXTURE)
     rows = dict(scorecard.build_report(source, monday, start, end)["rows"])
 
     builder = rows["Fictional Builder A"]
@@ -143,7 +262,7 @@ def test_done_metrics_follow_builder_across_handoff_and_direct_completion():
 
 def test_reopen_after_first_done_does_not_change_builder():
     monday, start, end = scorecard.week_window("2026-09-21")
-    source = json.loads(BUILDER_FIXTURE.read_text())
+    source = fixture_source(BUILDER_FIXTURE)
     rows = dict(scorecard.build_report(source, monday, start, end)["rows"])
 
     assert rows["Fictional Builder E"]["done"] == 1
@@ -154,16 +273,16 @@ def test_reopen_after_first_done_does_not_change_builder():
 def test_monday_boundary_non_monday_and_no_usage():
     with pytest.raises(ValueError, match="Monday"):
         scorecard.week_window("2026-09-22")
-    source = json.loads(FIXTURE.read_text())
+    source = fixture_source(FIXTURE)
     source["activity"]["task-b"][-1]["createdAt"] = "2026-09-28T00:00:00Z"
     assert dict(report(source)["rows"])["Company"]["done"] == 1
     source["runs"] = [{**run, "usageJson": None} for run in source["runs"]]
     assert dict(report(source)["rows"])["Company"]["tokens"] is None
-    assert "n/a (no usage)" in scorecard.render_report(report(source))
+    assert "n/a (incomplete usage)" in scorecard.render_report(report(source))
 
 
 def test_cycle_metrics_use_recorded_cycles_when_some_starts_are_missing():
-    source = json.loads(FIXTURE.read_text())
+    source = fixture_source(FIXTURE)
     source["issues"][0].pop("startedAt")
     source["activity"]["task-a"] = [
         event for event in source["activity"]["task-a"] if event["type"] != "issue.checked_out"
@@ -213,8 +332,28 @@ def test_get_only_and_missing_env_names_only(monkeypatch, capsys):
     ] == ["--method", "GET"]
 
 
+def test_cli_success_validation_and_read_failures(monkeypatch, capsys):
+    for key in ("PAPERCLIP_API_URL", "PAPERCLIP_API_KEY", "PAPERCLIP_COMPANY_ID"):
+        monkeypatch.setenv(key, "FICTIONAL")
+    monkeypatch.setattr(scorecard, "fetch_report_data", lambda *_: fixture_source(FIXTURE))
+    monkeypatch.setattr(scorecard, "github_repository", lambda: "example/project")
+    monkeypatch.setattr(
+        scorecard, "github_data", lambda *_: {"pull_requests": [], "bugs": [], "reverts": []}
+    )
+    assert scorecard.main(["--week", "2026-09-21"]) == 0
+    assert "n/a (incomplete usage)" in capsys.readouterr().out
+    assert scorecard.main(["--week", "2026-09-22"]) == 2
+
+    def failed_read(*_):
+        raise RuntimeError("Paperclip read failed")
+
+    monkeypatch.setattr(scorecard, "fetch_report_data", failed_read)
+    assert scorecard.main(["--week", "2026-09-21"]) == 2
+    assert "FICTIONAL" not in capsys.readouterr().err
+
+
 def github_report(monkeypatch, owner=True):
-    source = json.loads(FIXTURE.read_text())
+    source = fixture_source(FIXTURE)
     responses = json.loads(GITHUB_FIXTURE.read_text())
 
     def fake_gh_api(path, paginate=False):
