@@ -37,6 +37,7 @@ from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person
 from ac_platform.identity.password_auth import (
     PasswordIdentityService,
+    PasswordRegistration,
     decrypt_challenge_token,
     validate_password,
 )
@@ -100,6 +101,30 @@ class LocalSeedResult:
     studio_program_id: UUID
 
 
+async def verify_registration_without_mail(
+    database: AsyncSession,
+    identity: PasswordIdentityService,
+    registration: PasswordRegistration,
+    *,
+    secret: str,
+) -> Person:
+    """Consume a new fixture registration's one-use verification challenge."""
+    if registration.challenge is None:
+        raise ValueError("Fixture registration changed concurrently; retry setup.")
+    challenge = await database.get(EmailChallenge, registration.challenge.challenge_id)
+    if challenge is None:
+        raise ValueError("Local verification challenge unavailable.")
+    # Exercise the same one-use verification command, without sending
+    # mail or claiming that a real person's mailbox has been verified.
+    token = decrypt_challenge_token(
+        secret,
+        challenge.encrypted_token,
+        kind=EmailChallengeKind.VERIFICATION,
+        person_id=challenge.person_id,
+    )
+    return await identity.consume_verification(token)
+
+
 async def seed_accounts(database: AsyncSession, *, password: str, secret: str) -> dict[str, UUID]:
     """Disposable fixture setup only; never repair or replace an existing account."""
     validate_password(password)
@@ -128,20 +153,9 @@ async def seed_accounts(database: AsyncSession, *, password: str, secret: str) -
                 password=password,
                 consent_version=CONSENT_VERSION,
             )
-            if registration.challenge is None:
-                raise ValueError("Fixture registration changed concurrently; retry setup.")
-            challenge = await database.get(EmailChallenge, registration.challenge.challenge_id)
-            if challenge is None:
-                raise ValueError("Local verification challenge unavailable.")
-            # Exercise the same one-use verification command, without sending
-            # mail or claiming that a real person's mailbox has been verified.
-            token = decrypt_challenge_token(
-                secret,
-                challenge.encrypted_token,
-                kind=EmailChallengeKind.VERIFICATION,
-                person_id=challenge.person_id,
+            person = await verify_registration_without_mail(
+                database, identity, registration, secret=secret
             )
-            person = await identity.consume_verification(token)
         else:
             person = await identity.authenticate(email=email, password=password)
             if person.consent_version != CONSENT_VERSION:
