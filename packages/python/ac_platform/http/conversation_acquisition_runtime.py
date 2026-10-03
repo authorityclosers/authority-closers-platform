@@ -33,6 +33,7 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.errors import DomainError
 
 
@@ -246,4 +247,15 @@ def install_acquisition_runtime(
         factory=factory,
         runtime=runtime.intake,
         preflight=runtime.preflight,
+    )
+
+
+@route_installer(order=600)
+def _install_routes(context: RouteContext) -> None:
+    install_acquisition_runtime(
+        context.application,
+        settings=context.settings,
+        sessions=context.sessions,
+        require_actor=context.require_actor,
+        runtime=context.acquisition,
     )

@@ -25,6 +25,7 @@ from ac_platform.catalog.models import Activity as CatalogActivity
 from ac_platform.catalog.models import ProgramVersion
 from ac_platform.enrollment.models import Enrollment
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.learning.models import ActivityState
@@ -954,3 +955,15 @@ __all__ = [
     "UpNextView",
     "install_planning_http",
 ]
+
+
+@route_installer(order=1500)
+def _install_routes(context: RouteContext) -> None:
+    # Static planning paths are registered before the dynamic
+    # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
+    install_planning_http(
+        context.application,
+        settings=context.settings,
+        require_actor=context.require_actor,
+        legacy_analytics_enabled=False,
+    )

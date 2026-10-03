@@ -36,6 +36,7 @@ from ac_platform.http.auth import (
     RequireActor,
     require_safe_origin,
 )
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.learner_provisioning import (
     AsyncLearnerProvisioningApplication,
@@ -373,3 +374,13 @@ __all__ = [
     "TenantContextRequired",
     "install_course_http",
 ]
+
+
+@route_installer(order=300)
+def _install_routes(context: RouteContext) -> None:
+    install_course_http(
+        context.application,
+        settings=context.settings,
+        sessions=context.sessions,
+        require_actor=context.require_actor,
+    )

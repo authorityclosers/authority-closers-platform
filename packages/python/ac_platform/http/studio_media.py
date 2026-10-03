@@ -19,6 +19,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.http.problem import problem_response
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.studio_video_preview import install_studio_video_preview_http
 from ac_platform.kernel.errors import DomainError
@@ -364,4 +365,19 @@ def install_studio_media_http(
             if studio_video_runtime is not None and settings.environment in {"local", "test"}
             else None
         ),
+    )
+
+
+@route_installer(order=2200)
+def _install_routes(context: RouteContext) -> None:
+    studio = context.studio
+    install_studio_media_http(
+        context.application,
+        settings=context.settings,
+        require_actor=context.require_actor,
+        service=studio.service,
+        byte_transport=studio.byte_transport,
+        video_completion=studio.video_completion,
+        video_upload_max_source_bytes=studio.video_upload_max_source_bytes,
+        studio_video_runtime=studio.runtime,
     )

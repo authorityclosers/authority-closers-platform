@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.media.delivery import MediaDeliveryResult, PrivateMediaDeliveryHandler
 from ac_platform.media.errors import MediaBadRequest, MediaDeliveryError, MediaForbidden
@@ -158,3 +159,18 @@ def install_media_delivery_http(
 
 
 __all__ = ["install_media_delivery_http"]
+
+
+@route_installer(order=2300)
+def _install_routes(context: RouteContext) -> None:
+    delivery_factory = context.media.authenticated_delivery_handler_factory
+    if delivery_factory is None:
+        return
+    if context.media.media_cors_policy is None:
+        raise RuntimeError("authenticated media delivery requires its exact-origin policy")
+    install_media_delivery_http(
+        context.application,
+        cors_policy=context.media.media_cors_policy,
+        require_actor=context.require_actor,
+        authenticated_handler_factory=delivery_factory,
+    )

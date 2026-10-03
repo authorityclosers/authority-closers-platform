@@ -69,6 +69,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import (
@@ -1816,3 +1817,10 @@ __all__ = [
     "PublishRequest",
     "install_admin_learning_http",
 ]
+
+
+@route_installer(order=1900)
+def _install_routes(context: RouteContext) -> None:
+    install_admin_learning_http(
+        context.application, settings=context.settings, require_actor=context.require_actor
+    )

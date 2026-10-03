@@ -20,6 +20,7 @@ from ac_platform.certificates.services import (
     SqlAlchemyCertificateRepository,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 
@@ -196,3 +197,8 @@ __all__ = [
     "install_certificate_http",
     "install_certificates_http",
 ]
+
+
+@route_installer(order=1800)
+def _install_routes(context: RouteContext) -> None:
+    install_certificate_http(context.application, require_actor=context.require_actor)

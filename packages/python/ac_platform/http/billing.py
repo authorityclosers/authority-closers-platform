@@ -33,6 +33,7 @@ from ac_platform.billing.views import (
     SubscriptionStatus,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.registry import RouteContext, route_installer
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_REASON_LENGTH = 500
@@ -414,3 +415,18 @@ __all__ = [
     "install_billing_http",
     "install_billing_webhook_http",
 ]
+
+
+@route_installer(order=2500)
+def _install_routes(context: RouteContext) -> None:
+    # Billing (ADR 0052): composed only when switched on; otherwise the C1
+    # routes are absent and the screens show "Not on sale yet".
+    install_billing_http(
+        context.application,
+        settings=context.settings,
+        require_actor=context.require_actor,
+        commands=context.billing,
+    )
+    install_billing_webhook_http(
+        context.application, sessions=context.sessions, commands=context.billing
+    )

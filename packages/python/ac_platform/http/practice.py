@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.practice.application import PracticeApplication, PracticeError
 from ac_platform.practice.arcade import (
     ExerciseUnavailable,
@@ -295,3 +296,10 @@ def install_practice_http(app: FastAPI, *, settings: Settings, require_actor: Re
     if settings.practice_arcade_preview_enabled:
         router.add_api_route("/sets/{set_id}/check", check, methods=["POST"])
     app.include_router(router)
+
+
+@route_installer(order=400)
+def _install_routes(context: RouteContext) -> None:
+    install_practice_http(
+        context.application, settings=context.settings, require_actor=context.require_actor
+    )

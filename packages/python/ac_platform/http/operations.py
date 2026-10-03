@@ -56,6 +56,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.outbox.errors import (
@@ -1285,3 +1286,14 @@ __all__ = [
     "RecoveryReconcileResponse",
     "install_operations_http",
 ]
+
+
+@route_installer(order=2400)
+def _install_routes(context: RouteContext) -> None:
+    install_operations_http(
+        context.application,
+        settings=context.settings,
+        sessions=context.sessions,
+        require_actor=context.require_actor,
+        tester_policy=context.tester_policy,
+    )

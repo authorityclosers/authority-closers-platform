@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.organisations.service import OrganisationService
@@ -181,3 +182,10 @@ def install_organisation_http(
         )
 
     application.include_router(router)
+
+
+@route_installer(order=100)
+def _install_routes(context: RouteContext) -> None:
+    install_organisation_http(
+        context.application, settings=context.settings, require_actor=context.require_actor
+    )

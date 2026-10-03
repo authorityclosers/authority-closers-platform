@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.identity.google_profile import read_google_profile_photo
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileError,
@@ -245,3 +246,10 @@ def install_sales_xray_profile_http(
         )
 
     application.include_router(router)
+
+
+@route_installer(order=200)
+def _install_routes(context: RouteContext) -> None:
+    install_sales_xray_profile_http(
+        context.application, settings=context.settings, require_actor=context.require_actor
+    )

@@ -17,6 +17,7 @@ from ac_platform.http.auth import (
     RequireActor,
     require_safe_origin,
 )
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.media.api_contracts import (
     ActivityMediaBindingRequest,
     ActivityMediaBindingResponse,
@@ -602,3 +603,14 @@ def install_media_http(
 
 
 __all__ = ["install_media_http"]
+
+
+@route_installer(order=2100)
+def _install_routes(context: RouteContext) -> None:
+    install_media_http(
+        context.application,
+        settings=context.settings,
+        sessions=context.sessions,
+        require_actor=context.require_actor,
+        runtime=context.media,
+    )

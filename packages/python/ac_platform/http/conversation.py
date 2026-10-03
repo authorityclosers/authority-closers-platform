@@ -31,6 +31,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.conversation_analysis import install_analysis_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime, install_intake_routes
 from ac_platform.http.conversation_measurements import install_measurement_routes
+from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.identity.services import IdentityResolutionError, SessionNotFoundError
 
@@ -310,3 +311,13 @@ def install_conversation_http(
             )
 
     app.include_router(router)
+
+
+@route_installer(order=700)
+def _install_routes(context: RouteContext) -> None:
+    install_conversation_http(
+        context.application,
+        settings=context.settings,
+        require_actor=context.require_actor,
+        intake_runtime=context.conversation,
+    )

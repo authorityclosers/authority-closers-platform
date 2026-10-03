@@ -28,6 +28,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.registry import RouteContext, route_installer
 
 
 class ExecutionControlIntent(BaseModel):
@@ -192,3 +193,13 @@ def install_execution_control_http(
             raise HTTPException(error.status, str(error)) from None
 
     app.include_router(router)
+
+
+@route_installer(order=900)
+def _install_routes(context: RouteContext) -> None:
+    install_execution_control_http(
+        context.application,
+        settings=context.settings,
+        sessions=context.sessions,
+        require_actor=context.require_actor,
+    )
