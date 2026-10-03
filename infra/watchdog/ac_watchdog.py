@@ -58,7 +58,7 @@ LAPTOP_AGENTS = ("feeff44a-5bb6-49b3-a9e4-8a3fb36dda0e", "4e4ad6e2-5565-42fb-b11
 CEO_ID = "5c491a14-d699-477e-a7a6-4535afa5cd64"
 ROOT_SPECIALIST_ID = "feeff44a-5bb6-49b3-a9e4-8a3fb36dda0e"  # Laptop Specialist · Claude (Root & Infra)
 CTO_ID = "c31da688-a2d6-4600-bc35-e8852579f8f7"
-CHIEF_ID = "cc27186a-9914-44b6-baf1-8fc651cbc007"  # Chief of Staff (Sol): the routine loop, owner order 30 Sep
+CHIEF_ID = "cc27186a-9914-44b6-baf1-8fc651cbc007"  # the routine loop on Sol (owner, 3 Oct: Opus only for CEO/CTO decisions)
 LANE_START_HOLD_SECONDS = 600  # after starting a task, give it time to claim the lane
 ESCALATE_MINUTES = 30  # an agent's question reaches the owner only if the CTO/CEO leaves it this long
 HEADING = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?\s*`?(owner decision needed|board action needed)",
@@ -268,6 +268,27 @@ def pr_approvals(conn: psycopg.Connection, number: int, sha: str, before: dateti
     return cto or ceo or guard or work_product_issue(conn, number), cto, ceo, parent, guard
 
 
+RED_MAIN_FIX = re.compile(r"Red main fix:\s*PR\s*#(\d+)\s*@\s*`?([0-9a-f]{7,40})")
+
+
+def red_main_fix(conn: psycopg.Connection, number: int, sha: str) -> bool:
+    """3 Oct 2026 stall audit: the gate lets the task that fixes a red main start, but merges waited for a green
+    main, so the fix could never land. The CEO, the CTO or the board marks it `Red main fix: PR #n @ sha`; that
+    PR then merges on its normal approval while main is red. The mark binds to the exact head commit."""
+    try:
+        rows = conn.execute(
+            """select body from issue_comments where deleted_at is null and body like %s
+               and (author_agent_id = any(%s::uuid[]) or (author_agent_id is null and author_user_id is not null))""",
+            (f"%Red main fix%#{number}%", [CEO_ID, CTO_ID])).fetchall()
+    except AttributeError:  # a test double without rows
+        return False
+    for (body,) in rows:
+        for match in RED_MAIN_FIX.finditer(body or ""):
+            if int(match.group(1)) == number and sha.startswith(match.group(2)):
+                return True
+    return False
+
+
 def merge_held(conn: psycopg.Connection, number: int) -> bool:
     """ADR 0041: the latest `Merge hold: PR #n` or `Merge hold released: PR #n` from the CEO or CTO decides."""
     held = False
@@ -286,7 +307,27 @@ POD_LEAD_IDS = {
     "2c625bb9-1917-43ed-b462-74e30e34f6cf": "the Platform Lead Engineer",
     "f3bf11bf-694f-45a9-8318-d45a041a79d3": "the Admin Lead Engineer",
     "67432044-fe02-4913-a627-9c07db234c75": "the Dev Environment Engineer (pod lead)",
+    "d2071c40-8b1c-4170-9101-d418b2865395": "the Dev Environment Lead",
+    "3cd3a2e1-bd97-480f-92b5-bd9507913c67": "the Backend Engineer (api pod lead)",
 }
+
+# 3 Oct (owner: Opus only for decisions): which Sol pod lead reviews an ordinary PR in each lane.
+LANE_REVIEWER = {
+    "sales-xray": "044cc30f-0a4d-4bcb-82e9-1e4e95148664",
+    "platform": "2c625bb9-1917-43ed-b462-74e30e34f6cf",
+    "admin": "f3bf11bf-694f-45a9-8318-d45a041a79d3",
+    "devenv": "d2071c40-8b1c-4170-9101-d418b2865395",
+    "api": "3cd3a2e1-bd97-480f-92b5-bd9507913c67",
+}
+
+
+def review_route(head_ref: str, sensitive: str, assignee: str | None) -> str:
+    """Who reviews a green PR first: the lane's Sol pod lead for an ordinary change, else the CTO."""
+    lane = head_ref.split("/")[1] if head_ref.count("/") == 2 else "exclusive"
+    lead = LANE_REVIEWER.get(lane)
+    if sensitive or lead is None or lead == assignee:
+        return CTO_ID
+    return lead
 POD_REVIEW_APPROVAL = re.compile(r"(?<!CTO )Review:\s*approved\s+PR\s*#(\d+)\s*@\s*`?([0-9a-f]{7,40})", re.IGNORECASE)
 SENSITIVE_PATH = re.compile(
     r"^(packages/python/ac_platform/(billing|payments|identity|security|authz?|secrets?)/"
@@ -536,7 +577,8 @@ def pull_requests(conn: psycopg.Connection, state: dict, names: dict, lines: lis
                     state["sent"][hold] = time.time()
                     print(f"merge held: PR #{number} @ {short}: Merge hold from the CEO or CTO", file=sys.stderr)
                 continue
-            if main not in ("green", "running"):  # owner order 30 Sep: only a red or unknown main holds merges
+            if main not in ("green", "running") and not (main == "red" and red_main_fix(conn, number, sha)):
+                # owner order 30 Sep: only a red or unknown main holds merges; 3 Oct: except the marked fix
                 hold = f"merge-hold:{number}:{sha}:{main}"
                 if due(state, hold, 10**6):
                     state["sent"][hold] = time.time()
@@ -592,6 +634,17 @@ def pull_requests(conn: psycopg.Connection, state: dict, names: dict, lines: lis
         key = f"pr-cto:{number}:{sha}"
         if datetime.now(UTC) - finished >= timedelta(minutes=REVIEW_GRACE_MINUTES) and due(state, key, 10**6):
             state["sent"][key] = time.time()
+            assignee = conn.execute("select assignee_agent_id from issues where id = %s", (issue_id,)).fetchone()
+            reviewer = review_route(pr["head"]["ref"], sensitive_scope(number), str(assignee[0]) if assignee and assignee[0] else None)
+            if reviewer != CTO_ID:
+                if act("issue", "comment", issue_id, "--body",
+                       f"{mention(reviewer, names)} PR #{number} is green at `{short}` and is an ordinary change in your "
+                       f"lane. Review it: if it passes, post `Review: approved PR #{number} @ {short}` and it merges "
+                       "(one-review rule). Otherwise send it back with the exact fixes. Ask the CTO only for a real "
+                       "design or safety question."):
+                    lines.append(("auto", f"• 🔀 PR #{number} ({link(ident)}) sent to {POD_LEAD_IDS.get(reviewer, 'the pod lead')} "
+                                          "for review", issue_id, ident))
+                continue
             if act("issue", "comment", issue_id, "--body",
                    f"{mention(CTO_ID, names)} PR #{number} is green at `{short}`. Review it; if it passes, post "
                    f"`CTO review: approved PR #{number} @ {short}`. An ordinary change merges on that review; "

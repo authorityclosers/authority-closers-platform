@@ -26,9 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = "infra/watchdog/ac_watchdog.py"
 INSTALLER_PATH = "infra/watchdog/install-watchdog.sh"
 FIXTURE = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/c0.json").read_text())
-SOURCE_RECEIPT = json.loads((ROOT / "tests/infra/fixtures/ac_watchdog/aut850.json").read_text())[
-    "source"
-]
+SOURCE_RECEIPT = json.loads(
+    (ROOT / "tests/infra/fixtures/ac_watchdog/aut850-reconcile.json").read_text()
+)["source"]
 STUDIO = FIXTURE["studio"]
 GIT = shutil.which("git")
 BASH = shutil.which("bash")
@@ -564,6 +564,145 @@ def shadow_db():
         conn.close()
 
 
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("Red main fix: PR #196 @ 37d394e", True),
+        ("ok. Red main fix: PR #196 @ `37d394ea8c82`", True),
+        ("Red main fix: PR #196 @ 1234567", False),
+        ("Red main fix: PR #19 @ 37d394e", False),
+        ("Merge approved: PR #196 @ 37d394e", False),
+    ],
+)
+def test_red_main_fix_marker_binds_pr_and_head(watchdog, monkeypatch, body, expected):
+    # Port of Root's test_red_main_fix; parsing runs independently of author filtering.
+    conn = SimpleNamespace(execute=lambda *args: SimpleNamespace(fetchall=lambda: [(body,)]))
+    assert watchdog.red_main_fix(conn, 196, "37d394ea8c82f58ae577ac0a10fb715ce95a3a06") is expected
+    assert not watchdog.red_main_fix(SimpleNamespace(), 196, "a" * 40)
+
+
+@pytest.mark.parametrize(
+    ("author", "user", "deleted", "expected"),
+    [
+        ("CEO_ID", False, False, True),
+        ("CTO_ID", False, False, True),
+        (None, True, False, True),
+        ("CHIEF_ID", False, False, False),
+        ("CHIEF_ID", True, False, False),
+        (None, False, False, False),
+        ("CEO_ID", False, True, False),
+    ],
+)
+def test_red_main_fix_only_accepts_live_ceo_cto_or_board_comments(
+    watchdog, shadow_db, author, user, deleted, expected
+):
+    shadow_db.execute(
+        "create temp table issue_comments (body text, author_agent_id uuid, "
+        "author_user_id uuid, deleted_at timestamptz)"
+    )
+    shadow_db.execute(
+        "insert into issue_comments values (%s, %s, %s, %s)",
+        (
+            "Red main fix: PR #196 @ 37d394e",
+            getattr(watchdog, author) if author else None,
+            uuid.UUID(int=2) if user else None,
+            "2026-10-03T00:00:00Z" if deleted else None,
+        ),
+    )
+    assert watchdog.red_main_fix(shadow_db, 196, "37d394e" + "a" * 33) is expected
+
+
+@pytest.mark.parametrize("lane", ["sales-xray", "platform", "admin", "devenv", "api"])
+def test_review_route_ordinary_lane_and_own_task(watchdog, lane):
+    lead = watchdog.LANE_REVIEWER[lane]
+    assert lead in watchdog.POD_LEAD_IDS
+    assert watchdog.review_route(f"task/{lane}/520-fictional", "", "builder") == lead
+    assert watchdog.review_route(f"task/{lane}/520-fictional", "", lead) == watchdog.CTO_ID
+    assert (
+        watchdog.review_route(f"task/{lane}/520-fictional", "sensitive files", "builder")
+        == watchdog.CTO_ID
+    )
+
+
+@pytest.mark.parametrize(
+    "branch", ["task/ui/296-fictional", "task/billing/878-fictional", "task/9-exclusive"]
+)
+def test_review_route_without_lane_lead_uses_cto(watchdog, branch):
+    assert watchdog.review_route(branch, "", "builder") == watchdog.CTO_ID
+
+
+@pytest.mark.parametrize(
+    ("branch", "files", "own_task", "checks", "expected_lane"),
+    [
+        (
+            "task/platform/850-fictional",
+            ["tests/unit/test_reports.py"],
+            False,
+            "success",
+            "platform",
+        ),
+        (
+            "task/api/436-fictional",
+            ["packages/python/ac_platform/reports/a.py"],
+            False,
+            "success",
+            "api",
+        ),
+        ("task/devenv/520-fictional", ["tests/unit/test_reports.py"], False, "success", "devenv"),
+        ("task/platform/850-fictional", ["scripts/ci/merge_class.py"], False, "success", None),
+        ("task/platform/850-fictional", None, False, "success", None),
+        ("task/platform/850-fictional", ["tests/unit/test_reports.py"], True, "success", None),
+        ("task/850-exclusive", ["tests/unit/test_reports.py"], False, "success", None),
+        ("task/platform/850-fictional", ["tests/unit/test_reports.py"], False, "failure", None),
+    ],
+)
+def test_green_pr_review_reaches_lane_lead_or_cto_once(
+    watchdog, monkeypatch, branch, files, own_task, checks, expected_lane
+):
+    sha, issue = "a" * 40, "fictional-task"
+    calls = []
+
+    def github(path):
+        if path.startswith("/pulls?"):
+            return [{"number": 1, "head": {"sha": sha, "ref": branch}}]
+        assert path == f"/commits/{sha}/check-runs?per_page=100"
+        return {
+            "check_runs": [
+                {
+                    "status": "completed",
+                    "conclusion": checks,
+                    "completed_at": "2026-09-30T00:00:00Z",
+                }
+            ]
+        }
+
+    def query(sql, args):
+        assert args == (issue,)
+        if "assignee_agent_id" in sql:
+            assignee = watchdog.LANE_REVIEWER["platform"] if own_task else "builder"
+            return SimpleNamespace(fetchone=lambda: (assignee,))
+        return SimpleNamespace(fetchone=lambda: ("AUT-FAKE",))
+
+    monkeypatch.setattr(watchdog, "ACT", True)
+    monkeypatch.setattr(watchdog, "gh_api", github)
+    monkeypatch.setattr(watchdog, "pr_approvals", lambda *args: (issue, None, None, None, None))
+    monkeypatch.setattr(watchdog, "approval_issue", lambda *args: None)
+    monkeypatch.setattr(watchdog, "changed_files", lambda number: files)
+    monkeypatch.setattr(watchdog, "act", lambda *args: (calls.append(args), True)[1])
+    state = {"sent": {}}
+    conn = SimpleNamespace(execute=query)
+    for _ in range(2):
+        watchdog.pull_requests(conn, state, {}, [], "green")
+    if checks == "failure":
+        assert calls == []
+    else:
+        reviewer = watchdog.LANE_REVIEWER[expected_lane] if expected_lane else watchdog.CTO_ID
+        assert len(calls) == 1
+        assert calls[0][:3] == ("issue", "comment", issue)
+        assert f"agent://{reviewer}" in calls[0][-1]
+        assert "PR #1" in calls[0][-1] and sha[:7] in calls[0][-1]
+
+
 def test_aut366_picker_never_promotes_backlog_or_recovery_held_tasks(watchdog, shadow_db):
     source = (ROOT / SOURCE_PATH).read_text()
     runnable = re.search(r'runnable = conn\.execute\(\s*"""(.*?)"""', source, re.S).group(1)
@@ -697,21 +836,30 @@ def test_aut303_approval_lines_and_ui_scope_fail_closed(watchdog, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("approval", "file", "held", "main", "expected"),
+    ("approval", "file", "held", "main", "marked_fix", "expected"),
     [
-        ("guard", "apps/sales-xray-web/app/page.tsx", False, "green", True),
-        ("guard", "apps/sales-xray-web/package.json", False, "green", False),
-        ("guard", "apps/sales-xray-web/app/page.tsx", True, "green", False),
-        ("ceo", "infra/x.py", True, "green", False),
-        ("guard", "apps/sales-xray-web/app/page.tsx", False, "running", True),
-        ("guard", "apps/sales-xray-web/app/page.tsx", False, "red", False),
-        ("ceo", "infra/x.py", False, "green", True),
-        ("cto", "apps/sales-xray-web/app/page.tsx", False, "green", True),
-        ("cto", "db/migrations/versions/x.py", False, "green", False),
-        ("cto", "scripts/ci/merge_class.py", False, "green", False),
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "green", False, True),
+        ("guard", "apps/sales-xray-web/package.json", False, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/page.tsx", True, "green", False, False),
+        ("ceo", "infra/x.py", True, "green", False, False),
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "running", False, True),
+        ("guard", "apps/sales-xray-web/app/page.tsx", False, "red", False, False),
+        ("ceo", "infra/x.py", False, "green", False, True),
+        ("cto", "apps/sales-xray-web/app/page.tsx", False, "green", False, True),
+        ("cto", "db/migrations/versions/x.py", False, "green", False, False),
+        ("cto", "scripts/ci/merge_class.py", False, "green", False, False),
+        ("ceo", "infra/x.py", False, "red", True, True),
+        ("ceo", "infra/x.py", False, "red", False, False),
+        ("ceo", "infra/x.py", True, "red", True, False),
+        ("ceo", "infra/x.py", False, None, True, False),
+        ("cto", "tests/unit/test_reports.py", False, "red", True, True),
+        ("cto", "scripts/ci/merge_class.py", False, "red", True, False),
+        (None, "tests/unit/test_reports.py", False, "red", True, False),
     ],
 )
-def test_aut303_pr_merge_routes(watchdog, monkeypatch, approval, file, held, main, expected):
+def test_aut303_pr_merge_routes(
+    watchdog, monkeypatch, approval, file, held, main, marked_fix, expected
+):
     sha = "a" * 40
     calls = []
 
@@ -745,6 +893,7 @@ def test_aut303_pr_merge_routes(watchdog, monkeypatch, approval, file, held, mai
         ),
     )
     monkeypatch.setattr(watchdog, "merge_held", lambda *args: held)
+    monkeypatch.setattr(watchdog, "red_main_fix", lambda *args: marked_fix)
     monkeypatch.setattr(watchdog, "approval_issue", lambda *args: None)
     monkeypatch.setattr(watchdog, "act", lambda *args: True)
     monkeypatch.setattr(watchdog.tg, "paperclip", lambda *args: (True, ""))
