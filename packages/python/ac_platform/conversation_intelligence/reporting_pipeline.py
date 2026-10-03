@@ -7,6 +7,7 @@ its own immutable input, accepted quote, reservation and durable provider task.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
@@ -15,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.application import ConversationConflict, utc
+from ac_platform.conversation_intelligence.call_metrics import stored_summary
+from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
 from ac_platform.conversation_intelligence.checkpoints import (
     Checkpoint,
     assert_same_artifact,
@@ -65,6 +68,7 @@ if TYPE_CHECKING:
 ALIGNMENT_RECIPE = "source-clock-support-v1"
 FACT_RECIPE = "source-fact-chunk-v1"
 COACHING_RECIPE = "qualitative-coaching-v1"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _raw_response_binding(
@@ -730,6 +734,27 @@ class ReportingPipeline:
                     charged_seconds=usage.reserved_seconds,
                     receipt_sha256=c6.manifest_sha256,
                 )
+                try:
+                    async with self.database.begin_nested():
+                        summary = stored_summary(plan.transcript["segments"], plan.duration_ms)
+                        outcome = (normalized.get("overview") or {}).get("outcome")
+                        self.database.add(
+                            ConversationCallMetrics(
+                                usage_id=usage.id,
+                                tenant_id=recording.tenant_id,
+                                submission_id=usage.submission_id,
+                                recording_id=recording.id,
+                                report_draft_id=draft.id,
+                                rules=summary["rules"],
+                                summary=summary,
+                                summary_sha256=content_hash(summary),
+                                outcome_kind=outcome["kind"] if outcome is not None else None,
+                                created_at=now,
+                            )
+                        )
+                        await self.database.flush()
+                except Exception as error:
+                    _LOGGER.warning("call_metrics_skipped %s", type(error).__name__)
             elif previous.kind != "completed" or previous.charged_seconds != usage.reserved_seconds:
                 raise ConversationConflict("The source usage receipt differs.")
             # A later authorized model/profile report retains the original

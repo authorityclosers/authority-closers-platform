@@ -1111,6 +1111,20 @@ class ConversationApplication:
         await erase_speaker_maps_for_recording(
             self.database, tenant_id=recording.tenant_id, recording_id=recording.id
         )
+        from ac_platform.conversation_intelligence.call_metrics_models import (
+            ConversationCallMetrics,
+        )
+
+        for metrics in (
+            await self.database.scalars(
+                select(ConversationCallMetrics).where(
+                    ConversationCallMetrics.tenant_id == recording.tenant_id,
+                    ConversationCallMetrics.recording_id == recording.id,
+                    ConversationCallMetrics.erased_at.is_(None),
+                )
+            )
+        ).all():
+            metrics.summary, metrics.outcome_kind, metrics.erased_at = None, None, now
         recording.state, recording.deleted_at = "deleted", now
         # Flush all retention clears before acknowledging the deletion job so
         # the durable erasure is visible before the worker lease is completed.
