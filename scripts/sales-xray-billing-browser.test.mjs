@@ -15,6 +15,7 @@ if (origin)
 
 test("fictional plan purchase → server verification → balance → billing → cancel", async () => {
   let server;
+  let serverOutput = "";
   let browser;
   let lastPage;
   try {
@@ -55,10 +56,15 @@ test("fictional plan purchase → server verification → balance → billing �
             new URL("../apps/sales-xray-web", import.meta.url),
           ),
           env,
-          stdio: "ignore",
+          stdio: ["ignore", "pipe", "pipe"],
         },
       );
-      const deadline = Date.now() + 60_000;
+      const captureOutput = (chunk) => {
+        serverOutput = (serverOutput + chunk.toString()).slice(-8000);
+      };
+      server.stdout.on("data", captureOutput);
+      server.stderr.on("data", captureOutput);
+      const deadline = Date.now() + 120_000;
       let ready = false;
       while (!ready && Date.now() < deadline) {
         assert.equal(
@@ -69,7 +75,10 @@ test("fictional plan purchase → server verification → balance → billing �
         try {
           ready = (
             await fetch(`${origin}/review-fixture/plans`, {
-              signal: AbortSignal.timeout(5000),
+              // Keep a cold route compilation alive on the shared host.
+              signal: AbortSignal.timeout(
+                Math.min(60_000, deadline - Date.now()),
+              ),
             })
           ).ok;
         } catch {
@@ -177,6 +186,7 @@ test("fictional plan purchase → server verification → balance → billing �
       await context.close();
     }
   } catch (error) {
+    if (serverOutput) console.error(serverOutput);
     if (lastPage && !lastPage.isClosed())
       console.log(
         "Fictional fixture failure:",

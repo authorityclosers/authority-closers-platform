@@ -1,5 +1,36 @@
 # AUT-880 billing wiring checkpoint — 3 October 2026
 
+## Current delivery scope — CTO decision at 06:35 UTC
+
+The CTO directed PR #230 to ship without waiting for AUT-878. Organisation
+name/GSTIN and invoice parsing, listing and download are now tracked in
+AUT-950, which retains the AUT-878 dependency. Invoice sections stay hidden
+in this change. This decision supersedes the historical checkpoint's blocker
+and resume instructions below.
+
+The task branch incorporates main at `1daeb174` (including AUT-739 and
+the staff billing/refund changes in PRs #231 and #232) through merge commit
+`affc688761181fae72be16d1c634c9f059b04d43`. The merge had no conflicts and
+did not change this PR's checkout contract. Post-update parser/client/screen/
+hosted-checkout/fixture tests: **16 passed**; app typecheck: **passed**.
+App lint and changed-file Prettier: **passed**; `git diff --check`: **passed**.
+The fictional browser journey passed again at **390px and 1440px**, including
+balance/cancellation reload checks, no page errors, no external requests and
+no horizontal overflow. Runtime was 209 seconds on the shared host.
+
+Two initial attempts stopped at server readiness before exercising the journey.
+The captured Next output reported slow filesystem access. The runner now retains
+bounded startup diagnostics and allows the cold route request to finish instead
+of aborting it every five seconds; startup remains bounded to two minutes.
+All journey assertions remain unchanged. The successful rerun used the owned
+Turbopack server, which was stopped afterwards.
+
+PR #230 is ready for the CI gate, CTO review and CEO approval. AUT-950 owns the
+deferred buyer/invoice work. Actual activated backend billing and the deployed
+journey remain unverified; this task closes only after merge and a dev check.
+
+## Historical checkpoint — 05:29 UTC
+
 Source pin: `b5541b3012fbc3f40a404845017f9e3285f17de6`.
 Branch: `task/sales-xray/880-plan-billing-wiring`.
 
