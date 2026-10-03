@@ -86,7 +86,7 @@ test("browser measures actual overflow, console, uncaught and critical axe viola
   const server = createServer((_request, response) => {
     response.writeHead(200, { "Content-Type": "text/html" });
     response.end(
-      '<!doctype html><html lang="en"><head><title>Fictional test</title></head><body><main id="fixture"><div style="width:2000px">Fictional overflow</div><button></button></main><script>console.error("fixture-private-message");setTimeout(()=>{throw new Error("fixture-private-exception")},50)</script></body></html>',
+      '<!doctype html><html lang="en"><head><title>Fictional test</title></head><body><main id="fixture"><div style="width:2000px">Fictional overflow</div><button></button></main><script>console.error("fixture-private-message");throw new Error("fixture-private-exception")</script></body></html>',
     );
   });
   let browser;

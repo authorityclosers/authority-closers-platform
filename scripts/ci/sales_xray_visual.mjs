@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { resolve } from "node:path";
@@ -160,10 +160,15 @@ export async function capture(
       content:
         "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}",
     });
-    if (item.tab)
+    if (item.tab) {
+      row.failure_stage = "section_selection";
+      await page
+        .getByRole("button", { name: "Tabbed view", exact: true })
+        .click({ timeout: 5000 });
       await page
         .getByRole("tab", { name: item.tab, exact: true })
         .click({ timeout: 5000 });
+    }
     row.failure_stage = "fonts_and_images";
     await page.evaluate(async () => {
       await Promise.race([
@@ -257,16 +262,24 @@ async function main() {
     rows,
     elapsed_seconds: null,
     renderer_status: "unavailable",
+    setup_stage: "dependencies",
     started_at: new Date().toISOString(),
   };
   const started = Date.now();
   // Persist unavailable rows before launching: dependency/server/deadline failures
   // still yield a truthful advisory receipt.
-  const save = () =>
-    writeFile(
-      resolve(output, "receipt.json"),
-      JSON.stringify(receipt, null, 2),
-    );
+  let saving = Promise.resolve();
+  const save = () => {
+    const data = JSON.stringify(receipt, null, 2);
+    saving = saving.then(async () => {
+      await writeFile(resolve(output, "receipt.pending"), data);
+      await rename(
+        resolve(output, "receipt.pending"),
+        resolve(output, "receipt.json"),
+      );
+    });
+    return saving;
+  };
   await save();
   let server;
   let browser;
@@ -292,6 +305,9 @@ async function main() {
     }
   };
   process.once("SIGTERM", async () => {
+    receipt.renderer_status = "partial";
+    receipt.elapsed_seconds = Math.round((Date.now() - started) / 1000);
+    await save();
     await browser?.close();
     await stop();
     process.exit(0);
@@ -311,6 +327,7 @@ async function main() {
     const axePath = axeRequire.resolve("axe-core");
     receipt.axe_version = axeRequire("axe-core/package.json").version;
     receipt.playwright_version = "1.58.2";
+    receipt.setup_stage = "port_check";
     const occupied = await new Promise((done) => {
       const socket = createConnection({ host: "127.0.0.1", port: 18216 });
       socket.once("connect", () => {
@@ -326,13 +343,17 @@ async function main() {
         done(true);
       });
     });
-    if (occupied) throw new Error();
+    if (occupied) {
+      receipt.setup_stage = "port_occupied";
+      throw new Error();
+    }
     // No credentials inherited by the app process, and no configured API origin.
     const env = Object.fromEntries(
       ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]
         .filter((key) => process.env[key])
         .map((key) => [key, process.env[key]]),
     );
+    receipt.setup_stage = "server_start";
     server = spawn(
       process.execPath,
       [
@@ -363,8 +384,35 @@ async function main() {
     });
     await new Promise((resolveReady) => setTimeout(resolveReady, 1500));
     if (server.exitCode !== null) throw new Error();
+    // Compile the common shell once before timed browser captures. No API is
+    // configured and this is the same fictional route used in every selection.
+    receipt.setup_stage = "server_warmup";
+    let warm;
+    const readyDeadline = Date.now() + 15000;
+    while (!warm) {
+      try {
+        warm = await fetch("http://127.0.0.1:18216/review-fixture/shell", {
+          signal: AbortSignal.timeout(60000),
+        });
+      } catch (error) {
+        if (
+          error?.cause?.code !== "ECONNREFUSED" ||
+          Date.now() >= readyDeadline ||
+          server.exitCode !== null
+        )
+          throw error;
+        await new Promise((done) => setTimeout(done, 250));
+      }
+    }
+    if (!warm.ok()) {
+      receipt.setup_stage = `server_http_${warm.status()}`;
+      throw new Error();
+    }
+    await warm.body?.cancel();
+    receipt.setup_stage = "browser_launch";
     browser = await chromium.launch();
     receipt.browser_version = browser.version();
+    receipt.setup_stage = "capturing";
     const routes = new Set(selected.map((item) => item.route));
     for (let index = 0; index < rows.length; index++) {
       const item = selected[Math.floor(index / viewports.length)];
@@ -384,7 +432,16 @@ async function main() {
           ? route.continue()
           : route.abort(),
       );
-      await context.routeWebSocket(/.*/, (socket) => socket.close());
+      await context.routeWebSocket(/.*/, (socket) => {
+        const url = new URL(socket.url());
+        if (
+          url.protocol === "ws:" &&
+          url.host === "127.0.0.1:18216" &&
+          url.pathname === "/_next/webpack-hmr"
+        )
+          socket.connectToServer();
+        else socket.close();
+      });
       const page = await context.newPage();
       page.setDefaultTimeout(8000);
       rows[index] = await capture(page, item, viewport, output, axePath);
@@ -400,6 +457,7 @@ async function main() {
   } catch {
     receipt.renderer_status = "unavailable";
   } finally {
+    receipt.elapsed_seconds = Math.round((Date.now() - started) / 1000);
     clearTimeout(deadline);
     await browser?.close();
     await stop();
@@ -407,4 +465,5 @@ async function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  await main();

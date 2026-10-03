@@ -24,7 +24,9 @@ with a 1024 MiB JavaScript heap limit, no configured upstream API, and an explic
 environment allow-list. A fresh, nonpersistent Chromium context per capture has
 no cookies or sign-in state. Browser requests allow only GETs for the selected
 fictional routes and local static assets. APIs, review-observation APIs, external
-hosts, writes, WebSockets, service workers and downloads are refused. No env
+hosts, writes, service workers and downloads are refused. The only permitted
+WebSocket is the temporary loopback server's Next HMR endpoint, which Turbopack
+needs to initialize interactive fixtures. Every other WebSocket is refused. No env
 files, database, provider SDK, real audio or host service is needed.
 
 The existing opt-in development review alias in `next.config.ts` also supports
