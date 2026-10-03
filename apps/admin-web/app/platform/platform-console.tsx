@@ -216,6 +216,11 @@ export function PlatformConsole() {
             Cohorva<small>Platform Admin</small>
           </span>
         </a>
+        {identity?.permissions.includes("platform_tenants_read") && (
+          <nav aria-label="Platform">
+            <a href="/platform/organisations">Organisations</a>
+          </nav>
+        )}
         {identity ? (
           <button disabled={pending} onClick={() => void signOut()}>
             <LogOut size={17} aria-hidden="true" />
