@@ -86,6 +86,44 @@ it("shows one frame at a time, preserves page focus and lets Escape skip and res
   expect(step()).toBe("welcome");
 });
 
+it("returns focus to the launcher when Escape dismisses a focused guide", async () => {
+  await show();
+  const skip = button("Skip guide");
+  skip.focus();
+  expect(document.activeElement).toBe(skip);
+  await act(async () =>
+    skip.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  expect(step()).toBeUndefined();
+  expect(document.activeElement).toBe(
+    document.querySelector("[data-guide-launcher]"),
+  );
+  expect(
+    new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
+      .status,
+  ).toBe("skipped");
+});
+
+it("preserves outside focus when Escape dismisses the guide", async () => {
+  page.innerHTML = '<button id="page-action">Page action</button>';
+  await show();
+  const action = page.querySelector<HTMLButtonElement>("button")!;
+  action.focus();
+  await act(async () =>
+    action.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  expect(step()).toBeUndefined();
+  expect(document.activeElement).toBe(action);
+  expect(
+    new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
+      .status,
+  ).toBe("skipped");
+});
+
 it("follows upload → processing → report, even when processing finishes between visits", async () => {
   const store = new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE);
   store.update({ stepId: "upload", status: "active" });

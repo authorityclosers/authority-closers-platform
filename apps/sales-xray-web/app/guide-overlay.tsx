@@ -10,7 +10,13 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
 
 import type { GuideStep } from "./guide-registry";
@@ -47,6 +53,16 @@ export function GuideOverlay({
   const heading = useId();
   const card = useRef<HTMLElement>(null);
   const skipRef = useRef(onSkip);
+  // Auto-open never moves focus. Explicit dismissal returns focus only when
+  // the removed card owns it, without disturbing someone using the page.
+  const leave = useCallback((action: () => void) => {
+    if (card.current?.contains(document.activeElement)) {
+      document
+        .querySelector<HTMLButtonElement>("[data-guide-launcher]")
+        ?.focus({ preventScroll: true });
+    }
+    action();
+  }, []);
   useEffect(() => {
     skipRef.current = onSkip;
   }, [onSkip]);
@@ -59,21 +75,11 @@ export function GuideOverlay({
         document.querySelector("dialog[open], [role='menu']")
       )
         return;
-      skipRef.current();
+      leave(() => skipRef.current());
     };
     window.addEventListener("keydown", dismiss);
     return () => window.removeEventListener("keydown", dismiss);
-  }, []);
-  // Auto-open never moves focus. When leaving the card by an explicit action,
-  // return it to the page instead of a removed button (there is no focus trap).
-  function leave(action: () => void) {
-    if (card.current?.contains(document.activeElement)) {
-      document
-        .querySelector<HTMLButtonElement>("[data-guide-launcher]")
-        ?.focus({ preventScroll: true });
-    }
-    action();
-  }
+  }, [leave]);
   const Icon =
     step.visual === "evidence"
       ? Quote
