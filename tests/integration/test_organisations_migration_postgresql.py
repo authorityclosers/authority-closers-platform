@@ -8,7 +8,7 @@ from tests.integration.test_media_delivery_renewal_postgresql import postgres_ha
 def test_0054_migration_applies_on_postgresql(postgres_harness) -> None:  # noqa: F811
     with postgres_harness.engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20261002_0066"
+            "20261002_0067"
         )
         tables = set(inspect(connection).get_table_names())
         assert {

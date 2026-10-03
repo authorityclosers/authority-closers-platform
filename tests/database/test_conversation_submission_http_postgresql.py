@@ -212,10 +212,10 @@ async def _setup(
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     clock = [state.now]
 
-    def factory(db: AsyncSession) -> AcquisitionSessions:
+    def factory(db: AsyncSession, tenant_id: UUID = state.tenant_id) -> AcquisitionSessions:
         return AcquisitionSessions(
             db,
-            tenant_id=state.tenant_id,
+            tenant_id=tenant_id,
             policy_revision="guest-processing-v1",
             clock=lambda: clock[0],
         )

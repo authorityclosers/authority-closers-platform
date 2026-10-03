@@ -153,7 +153,7 @@ def test_real_postgres_asgi_tester_identity_allowance_rate_limit_and_revoke(
                 settings=settings,
                 sessions=sessions,
                 require_actor=require_actor,
-                factory=lambda database: AcquisitionSessions(
+                factory=lambda database, _tenant_id: AcquisitionSessions(
                     database,
                     tenant_id=state.tenant_id,
                     policy_revision="tester-integration-v1",

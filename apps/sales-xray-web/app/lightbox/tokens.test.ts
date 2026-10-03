@@ -292,6 +292,7 @@ describe("Lightbox token derivative", () => {
       "sales-skills.module.css",
       "next-call-plan.module.css",
       "report-transcript.module.css",
+      "transcript-reader.module.css",
       "report-factors.module.css",
       "report-explorer.module.css",
     ])

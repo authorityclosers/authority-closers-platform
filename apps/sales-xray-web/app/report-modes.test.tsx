@@ -75,20 +75,41 @@ const sections = () => [
 ];
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 
-it("shows all six report sections in one continuous reading layout", async () => {
+it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
   // The tab strip, section list and sections share one light report surface,
   // whatever the app theme (tokens.css [data-lx-surface="light"]).
   expect(mode().getAttribute("data-lx-surface")).toBe("light");
-  expect(sections()).toHaveLength(6);
+  expect(sections()).toHaveLength(5);
   expect(sections().every((section) => !section.hidden)).toBe(true);
   expect(
+    container.querySelector("[data-report-mode-section='transcript']"),
+  ).toBeNull();
+  expect(
     container.querySelectorAll("nav[aria-label='Report sections'] a"),
-  ).toHaveLength(6);
+  ).toHaveLength(5);
   expect(
     container.querySelector('[aria-pressed="true"]')?.textContent,
   ).toContain("Reading");
+});
+
+it("keeps transcript as the last appendix in document view", async () => {
+  await render(call);
+  const viewButtons = container.querySelectorAll<HTMLButtonElement>(
+    '[role="group"] button',
+  );
+  await act(async () => viewButtons[2].click());
+  expect(mode().dataset.view).toBe("document");
+  expect(
+    container.querySelector("[data-report-mode-section='transcript']"),
+  ).not.toBeNull();
+  const allSections = sections();
+  expect(
+    allSections[allSections.length - 1].getAttribute(
+      "data-report-mode-section",
+    ),
+  ).toBe("transcript");
 });
 
 it("bookmarks a selected section without hiding other report content", async () => {
@@ -359,7 +380,7 @@ it("opens desktop reports in Tabbed view unless the URL or reader chose", async 
     expect(window.location.search).toContain("view=reading");
     expect(
       container.querySelectorAll("nav[aria-label='Report sections'] a"),
-    ).toHaveLength(6);
+    ).toHaveLength(5);
   } finally {
     restore();
   }
@@ -760,10 +781,10 @@ it("opens a direct section bookmark at its section", async () => {
     value: scroll,
   });
   try {
-    window.history.replaceState(null, "", `/?call=${call}&section=transcript`);
+    window.history.replaceState(null, "", `/?call=${call}&section=skills`);
     await render(call);
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(mode().dataset.reportSection).toBe("transcript");
+    expect(mode().dataset.reportSection).toBe("skills");
     expect(scroll).toHaveBeenCalledOnce();
   } finally {
     if (previous)
@@ -1073,22 +1094,22 @@ it("opens every top-level section as a chapter in Reading mode", async () => {
   expect(mode().dataset.view).toBe("reading");
 
   const openers = container.querySelectorAll("[class*='chapterOpener']");
-  expect(openers).toHaveLength(6);
+  expect(openers).toHaveLength(5);
 
   const numbers = container.querySelectorAll("[class*='chapterNumber']");
   expect(numbers[0].textContent).toBe("1.");
   expect(numbers[1].textContent).toBe("2.");
-  expect(numbers[5].textContent).toBe("6.");
+  expect(numbers[4].textContent).toBe("5.");
 
   const titles = container.querySelectorAll("[class*='chapterTitle']");
   expect(titles[0].textContent).toBe("Overview");
   expect(titles[1].textContent).toBe("Prospect");
 
   const rules = container.querySelectorAll("[class*='chapterRule']");
-  expect(rules).toHaveLength(6);
+  expect(rules).toHaveLength(5);
 
   const summaries = container.querySelectorAll("[class*='chapterSummary']");
-  expect(summaries).toHaveLength(6);
+  expect(summaries).toHaveLength(5);
   expect(summaries[0].textContent).not.toBe("");
   expect(summaries[1].textContent).toBe("Prospect report section.");
   expect(container.textContent).not.toMatch(
@@ -1143,7 +1164,8 @@ it("preserves the current Reading section when moving through Document and Secti
   expect(mode().dataset.reportSection).toBe("moments");
 });
 
-it.each(["reading", "document"])(
+// Reading has no transcript section (AUT-785); Document keeps it as the last appendix.
+it.each(["document"])(
   "positions the selected Transcript heading after rendering %s from Sections",
   async (nextView) => {
     window.history.replaceState(

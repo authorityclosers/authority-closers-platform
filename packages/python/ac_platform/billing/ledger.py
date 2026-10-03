@@ -114,12 +114,18 @@ class BillingLedger:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         trial_policy: TrialPolicy | None = None,
         operations_tenant_id: UUID | None = None,
+        trial_enabled: bool = True,
     ) -> None:
-        if operations_tenant_id is not None and type(operations_tenant_id) is not UUID:
+        if (operations_tenant_id is not None and type(operations_tenant_id) is not UUID) or type(
+            trial_enabled
+        ) is not bool:
             raise ValueError("Invalid billing composition.")
         self.database, self.clock = database, clock
         self.trial_policy = trial_policy or TrialPolicy()
         self.operations_tenant_id = operations_tenant_id
+        # Organisations get no derived trial lot: their minutes come only from
+        # tester exemptions and Admin grants until shared credits (ADR 0052, C2).
+        self.trial_enabled = trial_enabled
 
     # ---- accounts -------------------------------------------------------
 
@@ -359,8 +365,13 @@ class BillingLedger:
                 )
                 for seconds, event, _ in missing
             )
-        trial = self.trial_policy.lot(first_use_at=_first_use(uses), now=now)
-        return self._finish(account, [trial, *lots], uses, trial, now)
+        trial = self._trial(uses, now)
+        return self._finish(account, [*lots] if trial is None else [trial, *lots], uses, trial, now)
+
+    def _trial(self, uses: list[Use], now: datetime) -> Lot | None:
+        if not self.trial_enabled:
+            return None
+        return self.trial_policy.lot(first_use_at=_first_use(uses), now=now)
 
     async def project_visitor(
         self, *, tenant_id: UUID, visitor_id: UUID, now: datetime
@@ -377,7 +388,7 @@ class BillingLedger:
         account: BillingAccount | None,
         lots: list[Lot],
         uses: list[Use],
-        trial: Lot,
+        trial: Lot | None,
         now: datetime,
     ) -> AccountProjection:
         projection = project(lots, uses, now)

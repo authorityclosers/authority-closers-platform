@@ -315,6 +315,9 @@ def test_ledger_composition_is_validated(state: SimpleNamespace) -> None:
     with pytest.raises(ValueError, match="Invalid billing composition"):
         BillingLedger(state.async_db, operations_tenant_id="not-a-uuid")
     assert BillingLedger(state.async_db).trial_policy == TrialPolicy()
+    assert BillingLedger(state.async_db).trial_enabled is True
+    with pytest.raises(ValueError):
+        BillingLedger(state.async_db, trial_enabled="no")  # type: ignore[arg-type]
 
 
 # ---- write_lot --------------------------------------------------------------
@@ -686,6 +689,47 @@ async def test_project_person_without_account_or_legacy_grants_gives_the_trial_l
     assert mirrored.account.person_id == state.person
     assert [item.lot.lot_id for item in mirrored.projection.positions] == [TRIAL_LOT_ID]
     assert count_entries(state) == 0
+
+
+async def test_project_person_without_trial_has_no_trial_lot_and_keeps_grants(
+    state: SimpleNamespace,
+) -> None:
+    """An organisation workspace: 0 s until an Admin grant lands (AUT-436)."""
+
+    ledger = BillingLedger(
+        state.async_db,
+        clock=lambda: state.now,
+        operations_tenant_id=state.operations,
+        trial_enabled=False,
+    )
+    projected = await ledger.project_person(tenant_id=state.tenant, person_id=state.person, now=T0)
+    assert projected.trial is None
+    assert list(projected.projection.positions) == []
+    assert (projected.granted_seconds, projected.available_seconds) == (0, 0)
+    assert projected.plan_key is None
+    assert projected.per_call_seconds == PER_CALL_DEFAULT_SECONDS
+
+    mirrored = await ledger.project_person(
+        tenant_id=state.tenant, person_id=state.person, now=T0, mirror=True
+    )
+    assert mirrored.account is not None and mirrored.trial is None
+    state.rows.append(
+        await ledger.write_lot(
+            account=mirrored.account,
+            kind="grant",
+            seconds=600,
+            valid_from=T0,
+            source_ref="test:organisation-admin-grant",
+            actor_type="person",
+            actor_person_id=state.person,
+            reason="Synthetic Admin grant",
+        )
+    )
+    granted = await ledger.project_person(tenant_id=state.tenant, person_id=state.person, now=T0)
+    assert granted.trial is None
+    assert [item.lot.kind for item in granted.projection.positions] == [LotKind.GRANT]
+    assert (granted.granted_seconds, granted.available_seconds) == (600, 600)
+    assert granted.per_call_seconds == PER_CALL_DEFAULT_SECONDS
 
 
 async def test_project_person_counts_claimed_guest_uses_once(state: SimpleNamespace) -> None:

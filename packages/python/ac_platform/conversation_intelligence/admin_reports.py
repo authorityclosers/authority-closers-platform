@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,8 @@ from .application import (
 from .models import ConversationRun
 from .report_store import ConversationReports
 from .review_service import ConversationReviewService
+from .sensitive_segments import withhold
+from .sensitive_segments_store import withheld_plan_for
 
 
 class AdminConversationReports:
@@ -57,8 +60,18 @@ class AdminConversationReports:
         )
         if run is None:
             raise ConversationNotFound("Report not found.")
+        return await self.render(review, actor, run_id, utc(now))
 
-        evidence = await review._evidence(run_id, utc(now))
+    async def render(
+        self,
+        review: ConversationReviewService,
+        actor: ActorContext,
+        run_id: UUID,
+        now: datetime,
+    ) -> dict[str, Any]:
+        """The post-authorization Admin report, withheld per the recording's marks."""
+
+        evidence = await review._evidence(run_id, now)
         report, _transcript = ConversationReports(review.application)._validated(
             evidence.draft, evidence.recording
         )
@@ -73,18 +86,26 @@ class AdminConversationReports:
                 "recording_id": str(evidence.recording.id),
                 "report_id": str(evidence.draft.id),
             },
-            now=utc(now),
+            now=now,
         )
-        return {
-            "id": str(evidence.draft.id),
-            "run_id": str(evidence.run.id),
-            "recording_id": str(evidence.recording.id),
-            "tenant_id": str(evidence.recording.tenant_id),
-            "source": {
-                "sha256": evidence.recording.source_sha256,
-                "revision": evidence.recording.source_revision,
-                "retention_until": evidence.retention_until.isoformat(),
+        plan = await withheld_plan_for(
+            self.database,
+            recording_id=evidence.recording.id,
+            served_revisions=(report.transcript_revision,),
+        )
+        return withhold(
+            {
+                "id": str(evidence.draft.id),
+                "run_id": str(evidence.run.id),
+                "recording_id": str(evidence.recording.id),
+                "tenant_id": str(evidence.recording.tenant_id),
+                "source": {
+                    "sha256": evidence.recording.source_sha256,
+                    "revision": evidence.recording.source_revision,
+                    "retention_until": evidence.retention_until.isoformat(),
+                },
+                "report": report.model_dump(mode="json"),
+                "message": "Private report loaded for authorized Admin review.",
             },
-            "report": report.model_dump(mode="json"),
-            "message": "Private report loaded for authorized Admin review.",
-        }
+            plan,
+        )

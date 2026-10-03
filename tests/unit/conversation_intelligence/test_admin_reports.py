@@ -20,6 +20,9 @@ class _Database:
         self.run = run
         self.allowed_tenants = allowed_tenants
 
+    async def scalars(self, _statement: object) -> list[object]:
+        return []  # no C2 checkpoints and no sensitive-segment marks
+
     async def scalar(self, _statement: object) -> object | None:
         if (
             self.run is not None
@@ -74,6 +77,8 @@ async def test_admin_report_read_scopes_tenant_and_audits_verified_report(
         audit.append(values)
 
     class _Report:
+        transcript_revision = "rev-fictional"
+
         def model_dump(self, *, mode: str) -> dict[str, str]:
             assert mode == "json"
             return {"summary": "Bound report"}

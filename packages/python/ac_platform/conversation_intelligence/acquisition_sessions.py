@@ -97,6 +97,7 @@ class AcquisitionSessions:
         tester_policy: InternalTesterPolicy | None = None,
         operations_tenant_id: UUID | None = None,
         trial_policy: TrialPolicy | None = None,
+        trial_enabled: bool = True,
     ) -> None:
         if (
             type(tenant_id) is not UUID
@@ -104,17 +105,21 @@ class AcquisitionSessions:
             or not timedelta(minutes=5) <= lifetime <= timedelta(days=7)
             or (operations_tenant_id is not None and type(operations_tenant_id) is not UUID)
             or (trial_policy is not None and type(trial_policy) is not TrialPolicy)
+            or type(trial_enabled) is not bool
         ):
             raise ValueError("Invalid acquisition policy.")
         self.database, self.tenant_id = database, tenant_id
         self.policy_revision, self.lifetime, self.clock = policy_revision, lifetime, clock
         self.tester_policy, self.operations_tenant_id = tester_policy, operations_tenant_id
         self.trial_policy = trial_policy or TrialPolicy()
+        # Personal keeps the derived trial; an organisation workspace starts at 0 s.
+        self.trial_enabled = trial_enabled
         self.ledger = BillingLedger(
             database,
             clock=clock,
             trial_policy=self.trial_policy,
             operations_tenant_id=operations_tenant_id,
+            trial_enabled=trial_enabled,
         )
 
     async def _admit(self, *, mutation: bool = False) -> datetime:

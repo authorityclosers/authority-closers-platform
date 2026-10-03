@@ -125,8 +125,55 @@ it("does not show the superseded Company tier on pricing", () => {
     <PolicyPage slug="terms" pricingPlans={samplePlans} />,
   );
   expect(markup).not.toContain("Must not be shown");
-  expect(markup).not.toContain("GST");
   expect(terms).not.toContain("GST");
+});
+
+it("shows each plan's GST treatment next to its catalogue prices", () => {
+  const markup = renderToStaticMarkup(
+    <PolicyPage slug="pricing" pricingPlans={samplePlans} />,
+  );
+  expect(markup).toContain("₹1,234 / month (GST included)");
+  expect(markup).toContain("₹90 (GST included)");
+  expect(markup).toContain("₹2,345 per seat / month + GST");
+  // Enterprise is not on sale in the sample, so it shows no price or GST note.
+  expect(markup.split("+ GST")).toHaveLength(2);
+});
+
+it("lists the Enterprise inclusions and an open seat range", () => {
+  const markup = renderToStaticMarkup(
+    <PolicyPage slug="pricing" pricingPlans={samplePlans} />,
+  );
+  expect(markup).toContain(
+    "Everything in Organisation, plus priority support and an onboarding session for your team.",
+  );
+  expect(markup).toContain("Seats: 6 or more");
+  expect(markup).toContain("Seats: 2–5");
+  expect(markup).toContain("Seats: 1<");
+});
+
+it("makes none of the promises the owner removed on 3 October", () => {
+  const pages = policyRoutes
+    .map((slug) =>
+      renderToStaticMarkup(
+        <PolicyPage slug={slug} pricingPlans={samplePlans} />,
+      ),
+    )
+    .join("\n");
+  for (const removed of [
+    "working day",
+    "within 30",
+    "5–7",
+    "remind you",
+    "under contract",
+    "10:00–19:00",
+    "UPI",
+  ]) {
+    expect(pages).not.toContain(removed);
+  }
+  expect(pages).toContain("Vikriya Solutions LLP");
+  expect(pages).toContain(
+    "Failed, duplicate or wrongly charged payments are refunded in full.",
+  );
 });
 
 it("hides unavailable plan prices and top-up amounts", () => {

@@ -1,4 +1,4 @@
-"""Exact, public-learner-only target resolution for minute administration."""
+"""Exact target resolution for minute administration: Personal or an approved organisation."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.community.application import normalize_username
 from ac_platform.community.models import CohorvaPublicProfile
+from ac_platform.conversation_intelligence.sales_xray_tenants import LEARNER_ROLES
 from ac_platform.identity.models import Person
 from ac_platform.identity.password_auth import normalize_email
 from ac_platform.kernel.errors import DomainError
@@ -76,10 +77,14 @@ async def resolve_public_learner_target(
     *,
     tenant_id: UUID,
     query: str,
+    roles: frozenset[str] = LEARNER_ROLES,
 ) -> tuple[MinuteAccountTarget | None, str]:
-    """Resolve one exact verified learner inside the configured public tenant.
+    """Resolve one exact verified account inside one Sales Xray tenant.
 
-    The caller must authorize access before invoking this function. It never
+    ``tenant_id`` is the configured public tenant (``roles`` defaults to the
+    learner role) or an approved organisation, for which the caller widens
+    ``roles`` to owner, admin and member. The caller checks the tenant and
+    must authorize access before invoking this function. It never
     scans another tenant and returns no candidate list. Duplicate matches fail
     closed as no target even though canonical email and username constraints
     should make them impossible.
@@ -106,7 +111,7 @@ async def resolve_public_learner_target(
             .outerjoin(CohorvaPublicProfile, CohorvaPublicProfile.person_id == Person.id)
             .where(
                 Membership.tenant_id == tenant_id,
-                Membership.role == "learner",
+                Membership.role.in_(roles),
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
                 Tenant.status == "active",
