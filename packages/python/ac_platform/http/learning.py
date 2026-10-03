@@ -30,7 +30,6 @@ from ac_platform.catalog.models import ActivityKind, ProgramVersion
 from ac_platform.catalog.models import Program as CatalogProgram
 from ac_platform.enrollment.models import Enrollment, Entitlement
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.learning.catalog_activity import resolve_catalog_activity
@@ -1503,22 +1502,3 @@ __all__ = [
     "ReviewResponse",
     "install_learning_http",
 ]
-
-
-@route_installer(order=1700)
-def _install_routes(context: RouteContext) -> None:
-    media = context.media
-    install_learning_http(
-        context.application,
-        settings=context.settings,
-        require_actor=context.require_actor,
-        activity_media_resolver=cast(ActivityMediaResolver | None, media.activity_media_resolver),
-        media_descriptor_resolver=cast(
-            MediaDescriptorResolver | None, media.media_descriptor_resolver
-        ),
-        policy_resolver=(
-            cast(PolicyResolver, media.playback_policy_resolver)
-            if media.learning_playback_composed
-            else None
-        ),
-    )

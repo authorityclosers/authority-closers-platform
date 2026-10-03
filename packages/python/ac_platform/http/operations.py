@@ -50,13 +50,18 @@ from ac_platform.conversation_intelligence.minute_account_targets import (
     MinuteAccountLookupInvalid,
     resolve_public_learner_target,
 )
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    LEARNER_ROLES,
+    SALES_XRAY_MEMBER_ROLES,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
     require_admin_surface,
     require_safe_origin,
 )
-from ac_platform.http.registry import RouteContext, route_installer
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.outbox.errors import (
@@ -648,6 +653,7 @@ def install_operations_http(
     require_actor: RequireActor,
     tester_policy: InternalTesterPolicy | None = None,
     webhook_adapters: Mapping[str, TrustedWebhookAdapter] | None = None,
+    intake: ConversationIntakeRuntime | None = None,
 ) -> None:
     """Install narrow operations routes around existing durable abstractions.
 
@@ -666,6 +672,12 @@ def install_operations_http(
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = Depends(require_actor)
+    # Personal plus the approved organisations; owner, admin and member count there.
+    served_tenant_ids = sales_xray_served_tenant_ids(settings, intake)
+
+    def eligible_roles(tenant_id: UUID) -> frozenset[str]:
+        """Owner, admin and member count in a served tenant; elsewhere learners only, as before."""
+        return SALES_XRAY_MEMBER_ROLES if tenant_id in served_tenant_ids else LEARNER_ROLES
 
     @router.post(
         "/admin/conversation-minute-accounts/resolve-target",
@@ -764,6 +776,7 @@ def install_operations_http(
                 tenant_id=tenant_id,
                 person_id=person_id,
                 operations_tenant_id=operations_tenant_id,
+                roles=eligible_roles(tenant_id),
             )
             state = await load_minute_account(
                 auth.database,
@@ -824,6 +837,7 @@ def install_operations_http(
         if "platform_access_manage" not in capabilities:
             raise CapabilityDenied("A current platform access-management assignment is required.")
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
+        roles = eligible_roles(tenant_id)
         key = _normalize_idempotency_key(idempotency_key)
         reason = _normalize_reason(body.reason)
         # Serialize actor/key lookup before touching a target account. The
@@ -866,6 +880,7 @@ def install_operations_http(
                     tenant_id=tenant_id,
                     person_id=person_id,
                     operations_tenant_id=operations_tenant_id,
+                    roles=roles,
                 )
                 state = await load_minute_account(
                     auth.database,
@@ -900,6 +915,7 @@ def install_operations_http(
                     person_id=person_id,
                     operations_tenant_id=operations_tenant_id,
                     grant=grant,
+                    roles=roles,
                 )
             except EligibleLearnerUnavailable as error:
                 raise MinuteAccountTargetUnavailable(
@@ -1286,14 +1302,3 @@ __all__ = [
     "RecoveryReconcileResponse",
     "install_operations_http",
 ]
-
-
-@route_installer(order=2400)
-def _install_routes(context: RouteContext) -> None:
-    install_operations_http(
-        context.application,
-        settings=context.settings,
-        sessions=context.sessions,
-        require_actor=context.require_actor,
-        tester_policy=context.tester_policy,
-    )

@@ -1,0 +1,529 @@
+{
+  "about": "Fictional call-types/1 vectors (AUT-629, AUT-341 decision 1). No customer text or IDs. Each input overrides base; phase rows are [name, start_ms] and objection_spans rows are [start_ms, end_ms]; expected is the one key the rule must return. thresholds must equal the exported constant in both twins and the proposed values in profiles/call_types_v1.json.",
+  "thresholds": {
+    "prospect_share_over": 0.6,
+    "pitch_share_over": 0.5,
+    "short_call_ms": 600000,
+    "little_questions_ms": 120000
+  },
+  "base": {
+    "call_purpose": "sales",
+    "duration_ms": 1800000,
+    "phases": [
+      ["opening", 0],
+      ["discovery", 60000],
+      ["pitch", 700000],
+      ["close", 1500000]
+    ],
+    "objection_spans": [],
+    "prospect_talk_share": 0.4,
+    "qualification_confirmed": [],
+    "outcome_kind": "follow_up",
+    "price_moments": null
+  },
+  "vectors": [
+    {
+      "name": "full sales: discovery, pitch and close",
+      "expected": "full_sales",
+      "input": {}
+    },
+    {
+      "name": "first meeting: discovery only",
+      "expected": "first_meeting",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ]
+      }
+    },
+    {
+      "name": "pitch or demo: pitch most of the call, little discovery",
+      "expected": "pitch_demo",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 120000],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "follow-up: short discovery and a close",
+      "expected": "follow_up_closing",
+      "input": {
+        "duration_ms": 900000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 120000],
+          ["close", 400000]
+        ]
+      }
+    },
+    {
+      "name": "follow-up: price moment without a close; opening repeats",
+      "expected": "follow_up_closing",
+      "input": {
+        "duration_ms": 900000,
+        "price_moments": 2,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 300000],
+          ["pitch", 400000],
+          ["opening", 600000]
+        ]
+      }
+    },
+    {
+      "name": "missing price data is not price talk: no close gives unclear",
+      "expected": "unclear",
+      "input": {
+        "duration_ms": 900000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 300000],
+          ["pitch", 400000],
+          ["opening", 600000]
+        ]
+      }
+    },
+    {
+      "name": "zero price moments is not price talk",
+      "expected": "unclear",
+      "input": {
+        "duration_ms": 900000,
+        "price_moments": 0,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 300000],
+          ["pitch", 400000],
+          ["opening", 600000]
+        ]
+      }
+    },
+    {
+      "name": "prospect story: share just over 0.60",
+      "expected": "prospect_story",
+      "input": {
+        "prospect_talk_share": 0.61
+      }
+    },
+    {
+      "name": "prospect share exactly 0.60 does not match",
+      "expected": "full_sales",
+      "input": {
+        "prospect_talk_share": 0.6
+      }
+    },
+    {
+      "name": "objection or negotiation: objections take the most time",
+      "expected": "objection_negotiation",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 600000],
+          ["close", 1500000]
+        ]
+      }
+    },
+    {
+      "name": "objection beats prospect story in rule order",
+      "expected": "objection_negotiation",
+      "input": {
+        "prospect_talk_share": 0.9,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 600000],
+          ["close", 1500000]
+        ]
+      }
+    },
+    {
+      "name": "objection tied with pitch and close is not the most time",
+      "expected": "full_sales",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 800000],
+          ["close", 1300000]
+        ]
+      }
+    },
+    {
+      "name": "objection span inside the objection phase counts once",
+      "expected": "full_sales",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 800000],
+          ["close", 1300000]
+        ],
+        "objection_spans": [[900000, 1000000]]
+      }
+    },
+    {
+      "name": "objection span past the objection phase adds the uncovered part",
+      "expected": "objection_negotiation",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 800000],
+          ["close", 1300000]
+        ],
+        "objection_spans": [[1200000, 1350000]]
+      }
+    },
+    {
+      "name": "objection span ending before it starts gives unclear",
+      "expected": "unclear",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 300000],
+          ["objection", 800000],
+          ["close", 1300000]
+        ],
+        "objection_spans": [[1000000, 900000]]
+      }
+    },
+    {
+      "name": "screening: short call boundary 599999 ms",
+      "expected": "screening",
+      "input": {
+        "duration_ms": 599999,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "qualification_confirmed": ["budget"],
+        "outcome_kind": "disqualified"
+      }
+    },
+    {
+      "name": "screening: short call boundary 600000 ms",
+      "expected": "screening",
+      "input": {
+        "duration_ms": 600000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "qualification_confirmed": ["budget"],
+        "outcome_kind": "disqualified"
+      }
+    },
+    {
+      "name": "screening: short call boundary 600001 ms",
+      "expected": "first_meeting",
+      "input": {
+        "duration_ms": 600001,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "qualification_confirmed": ["budget"],
+        "outcome_kind": "disqualified"
+      }
+    },
+    {
+      "name": "screening beats first meeting in rule order (advance)",
+      "expected": "screening",
+      "input": {
+        "duration_ms": 480000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "qualification_confirmed": ["need", "timeline"],
+        "outcome_kind": "follow_up"
+      }
+    },
+    {
+      "name": "short qualifying call with no outcome is not screening",
+      "expected": "first_meeting",
+      "input": {
+        "duration_ms": 480000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "qualification_confirmed": ["budget"],
+        "outcome_kind": "none"
+      }
+    },
+    {
+      "name": "short call with no confirmed qualification is not screening",
+      "expected": "first_meeting",
+      "input": {
+        "duration_ms": 480000,
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "outcome_kind": "lost"
+      }
+    },
+    {
+      "name": "short qualifying call with a pitch is not screening",
+      "expected": "follow_up_closing",
+      "input": {
+        "duration_ms": 480000,
+        "qualification_confirmed": ["budget"],
+        "outcome_kind": "lost",
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 120000],
+          ["close", 240000]
+        ]
+      }
+    },
+    {
+      "name": "little questioning boundary: discovery 119999 ms",
+      "expected": "pitch_demo",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 179999],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "little questioning boundary: discovery 120000 ms",
+      "expected": "pitch_demo",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 180000],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "little questioning boundary: discovery 120001 ms",
+      "expected": "full_sales",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 180001],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "pitch exactly half of the call does not match",
+      "expected": "follow_up_closing",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 700000],
+          ["pitch", 800000],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "pitch just over half matches",
+      "expected": "pitch_demo",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 699999],
+          ["pitch", 799999],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "repeated discovery adds up past little questioning",
+      "expected": "full_sales",
+      "input": {
+        "phases": [
+          ["discovery", 0],
+          ["pitch", 60000],
+          ["discovery", 1000000],
+          ["pitch", 1061000],
+          ["close", 1700000]
+        ]
+      }
+    },
+    {
+      "name": "phases out of order are sorted by start",
+      "expected": "full_sales",
+      "input": {
+        "phases": [
+          ["close", 1500000],
+          ["discovery", 60000],
+          ["opening", 0],
+          ["pitch", 700000]
+        ]
+      }
+    },
+    {
+      "name": "phases sharing a start: the earlier listed gets no time",
+      "expected": "pitch_demo",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["pitch", 60000],
+          ["close", 1500000]
+        ]
+      }
+    },
+    {
+      "name": "phase starting after the call end gets no time",
+      "expected": "first_meeting",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000],
+          ["close", 1900000]
+        ]
+      }
+    },
+    {
+      "name": "not a sales call: support purpose wins over sales phases",
+      "expected": "not_sales",
+      "input": {
+        "call_purpose": "support"
+      }
+    },
+    {
+      "name": "not a sales call needs only the purpose",
+      "expected": "not_sales",
+      "input": {
+        "call_purpose": "personal",
+        "duration_ms": null,
+        "phases": []
+      }
+    },
+    {
+      "name": "not a sales call: onboarding",
+      "expected": "not_sales",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "call_purpose": "onboarding"
+      }
+    },
+    {
+      "name": "not a sales call: internal",
+      "expected": "not_sales",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["discovery", 60000]
+        ],
+        "call_purpose": "internal"
+      }
+    },
+    {
+      "name": "missing purpose gives unclear, never not_sales",
+      "expected": "unclear",
+      "input": {
+        "call_purpose": null
+      }
+    },
+    {
+      "name": "unclear purpose gives unclear",
+      "expected": "unclear",
+      "input": {
+        "call_purpose": "unclear"
+      }
+    },
+    {
+      "name": "unknown purpose gives unclear",
+      "expected": "unclear",
+      "input": {
+        "call_purpose": "demo"
+      }
+    },
+    {
+      "name": "zero duration gives unclear",
+      "expected": "unclear",
+      "input": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "missing duration gives unclear",
+      "expected": "unclear",
+      "input": {
+        "duration_ms": null
+      }
+    },
+    {
+      "name": "missing prospect share gives unclear",
+      "expected": "unclear",
+      "input": {
+        "prospect_talk_share": null
+      }
+    },
+    {
+      "name": "prospect share above 1 gives unclear",
+      "expected": "unclear",
+      "input": {
+        "prospect_talk_share": 1.2
+      }
+    },
+    {
+      "name": "no phases gives unclear",
+      "expected": "unclear",
+      "input": {
+        "phases": []
+      }
+    },
+    {
+      "name": "unknown phase name gives unclear",
+      "expected": "unclear",
+      "input": {
+        "phases": [
+          ["opening", 0],
+          ["demo", 60000]
+        ]
+      }
+    },
+    {
+      "name": "missing outcome gives unclear",
+      "expected": "unclear",
+      "input": {
+        "outcome_kind": null
+      }
+    },
+    {
+      "name": "missing qualification list gives unclear",
+      "expected": "unclear",
+      "input": {
+        "qualification_confirmed": null
+      }
+    },
+    {
+      "name": "opening only matches no rule",
+      "expected": "unclear",
+      "input": {
+        "phases": [["opening", 0]],
+        "outcome_kind": "none"
+      }
+    }
+  ]
+}

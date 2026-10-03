@@ -4,6 +4,8 @@
 Approval transport: GitHub PR conversation comments (the PR's issue), or
 state.json approvals["<PR number>"] = "<approved SHA>" supplied by the watchdog.
 An approval freezes the published head even while further local commits accrue.
+Edits on another task's task/ui branch with an open PR (or any such branch under
+--commit-only) never move it: they go to a local studio-checkpoint tag, with one alert.
 All invocations acquire the same flock. A refresh holding it across the helper
 and its subsequent merge must pass the inherited descriptor with --lock-fd.
 Watchdog state writers must hold this same lock.
@@ -31,6 +33,8 @@ PREFIXES = ("apps/sales-xray-web/app/", "apps/sales-xray-web/public/")
 FIXTURES = "apps/sales-xray-web/tests/fixtures/"
 LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 STUDIO = "task/ui/296-studio-"
+CHECKPOINT = "refs/tags/studio-checkpoint/"
+MESSAGE = "Save UI Studio edits\n\nCo-Authored-By: Paperclip <noreply@paperclip.ing>"
 TOKENS = re.compile(
     rb"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|"
     rb"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|"
@@ -178,8 +182,11 @@ class Sync:
         finally:
             os.close(parent)
 
-    def commit(self, paths):
-        """Build a path-scoped index from scanned bytes, without filters or hooks."""
+    def commit(self, paths, hold=None):
+        """Build a path-scoped index from scanned bytes, without filters or hooks.
+
+        With hold=<branch>, the commit goes to a local checkpoint tag; HEAD stays put.
+        """
         if not paths:
             return False
         for key, value in (("user.name", "UI Studio"), ("user.email", "studio@paperclip.ing")):
@@ -208,6 +215,13 @@ class Sync:
             included = self.git("diff", "--cached", "--name-only", "--no-renames", "-z", env=env)
             if not included:
                 return False
+            if hold:
+                tree = self.git("write-tree", env=env).strip()
+                tag = f"{CHECKPOINT}{hold.removeprefix('task/ui/')}-{tree[:12]}"
+                if not self.git("for-each-ref", tag).strip():
+                    oid = self.git("commit-tree", tree, "-p", "HEAD", "-m", MESSAGE, env=env)
+                    self.git("update-ref", tag, oid.strip(), "")
+                return tag
             self.git(
                 "-c",
                 "core.hooksPath=/dev/null",
@@ -215,7 +229,7 @@ class Sync:
                 "commit.gpgSign=false",
                 "commit",
                 "-m",
-                "Save UI Studio edits\n\nCo-Authored-By: Paperclip <noreply@paperclip.ing>",
+                MESSAGE,
                 env=env,
             )
             self.git("reset", "-q", "HEAD", "--", *included.rstrip("\0").split("\0"))
@@ -527,12 +541,32 @@ class Sync:
         ):
             raise SyncError("Interrupted slice transition needs local recovery; archive preserved")
         # --commit-only has no gh calls, pushes, or branch transitions.
+        lane = branch != "main" and not branch.startswith(STUDIO) and not pending
+        pr = self.pr(branch) if lane and not commit_only else None
+        if lane and (commit_only or (pr and pr["state"] == "OPEN")):
+            # Another task's PR branch (AUT-864): its approvals bind its head; never move it.
+            # --commit-only cannot ask GitHub, so it always holds.
+            held = self.commit(paths, hold=branch)
+            if held and not commit_only and self.state.get("held") != branch:
+                self.event(
+                    "alert",
+                    "lane-pr-branch",
+                    "studio edits waiting: the ui checkout is on a lane PR branch",
+                    pr["number"],
+                )
+                self.state["held"] = branch
+                self.save()
+            return
+        if "held" in self.state and not commit_only:
+            del self.state["held"]
+            self.save()
         if branch == "main" and not pending and paths:
             self.checkpoint(self.git("rev-parse", "origin/main").strip(), branch)
         self.commit(paths)
         if commit_only:
             return
-        pr = None if branch == "main" or pending else self.pr(branch)
+        if not lane:
+            pr = None if branch == "main" or pending else self.pr(branch)
         if pr and pr["state"] == "MERGED":
             self.git("fetch", "origin", f"refs/pull/{pr['number']}/head")
             self.checkpoint(pr["headRefOid"], branch)

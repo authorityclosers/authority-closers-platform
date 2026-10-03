@@ -18,7 +18,6 @@ from ac_platform.http.admin_learning import (
     _require_named_admin,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.learning.admin_diagnosis import (
     MAX_LOOKUP_QUERY_LENGTH,
     DiagnosisLookupInvalid,
@@ -445,10 +444,3 @@ __all__ = [
     "LearnerLookupResponse",
     "install_admin_diagnosis_http",
 ]
-
-
-@route_installer(order=2000)
-def _install_routes(context: RouteContext) -> None:
-    install_admin_diagnosis_http(
-        context.application, settings=context.settings, require_actor=context.require_actor
-    )

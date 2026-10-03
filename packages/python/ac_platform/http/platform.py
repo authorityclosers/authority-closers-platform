@@ -13,7 +13,6 @@ from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied, CapabilityInvalid
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.tenancy.models import Tenant
 
 PlatformPermission = Literal[
@@ -153,10 +152,3 @@ def install_platform_http(
     application.include_router(projection)
     application.include_router(inventory)
     application.add_middleware(PlatformPrivateResponses)
-
-
-@route_installer(order=1300)
-def _install_routes(context: RouteContext) -> None:
-    install_platform_http(
-        context.application, settings=context.settings, require_actor=context.require_actor
-    )

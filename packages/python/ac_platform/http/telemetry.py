@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.learning.planning_models import AnalyticsEvent
@@ -509,15 +508,3 @@ __all__ = [
     "TelemetryTenantContextRequired",
     "install_telemetry_http",
 ]
-
-
-@route_installer(order=1600)
-def _install_routes(context: RouteContext) -> None:
-    # Learner telemetry is present as a fail-closed API boundary only.  A
-    # verified server consent resolver and explicit retention policy must be
-    # composed by a later controlled promotion before any row is stored.
-    install_telemetry_http(
-        context.application,
-        settings=context.settings,
-        require_actor=context.require_actor,
-    )

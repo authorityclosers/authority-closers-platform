@@ -42,13 +42,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
-from ac_platform.http.registry import RouteContext, route_installer
-from ac_platform.http.reviewer_auth import (
-    RequireReviewer,
-    ReviewerTransaction,
-    install_reviewer_identity_http,
-    reviewer_scope,
-)
+from ac_platform.http.reviewer_auth import RequireReviewer, ReviewerTransaction, reviewer_scope
 from ac_platform.telemetry.redaction import sanitize_error
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
@@ -380,18 +374,3 @@ def install_conversation_review_http(
 
 
 __all__ = ["install_conversation_review_http"]
-
-
-@route_installer(order=1000)
-def _install_routes(context: RouteContext) -> None:
-    install_conversation_review_http(
-        context.application,
-        settings=context.settings,
-        require_actor=context.require_actor,
-        require_reviewer=install_reviewer_identity_http(
-            context.application,
-            settings=context.settings,
-            sessions=context.sessions,
-        ),
-        storage=context.conversation.storage if context.conversation else None,
-    )

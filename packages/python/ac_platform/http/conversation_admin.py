@@ -44,7 +44,6 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
-from ac_platform.http.registry import RouteContext, route_installer
 
 
 class ProviderConfigurationIntent(BaseModel):
@@ -436,16 +435,3 @@ def install_conversation_admin_http(
                 raise HTTPException(error.status, str(error)) from None
 
     app.include_router(router)
-
-
-@route_installer(order=800)
-def _install_routes(context: RouteContext) -> None:
-    install_conversation_admin_http(
-        context.application,
-        settings=context.settings,
-        require_actor=context.require_actor,
-        # Recovery reads use the resolved hosted composition.  The old private
-        # draft importer remains an explicit test-only seam and is not enabled
-        # by passing the raw caller-supplied runtime here.
-        recovery_storage=context.conversation.storage if context.conversation else None,
-    )

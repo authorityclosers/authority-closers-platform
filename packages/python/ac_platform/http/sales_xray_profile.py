@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.identity.google_profile import read_google_profile_photo
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileError,
@@ -22,6 +25,9 @@ from ac_platform.identity.sales_xray_profile import (
     update_sales_xray_profile,
 )
 from ac_platform.kernel.authz import ActorContext
+
+if TYPE_CHECKING:
+    from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 
 class SalesXrayProfileResponse(BaseModel):
@@ -75,8 +81,11 @@ def install_sales_xray_profile_http(
     *,
     settings: Settings,
     require_actor: RequireActor,
+    intake: ConversationIntakeRuntime | None = None,
 ) -> None:
     router = APIRouter(prefix="/v1/me/sales-xray-profile", tags=["sales-xray-profile"])
+    # Personal or an approved organisation; the operations tenant never qualifies.
+    served = sales_xray_served_tenant_ids(settings, intake)
     actor_dependency = Depends(require_actor, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
     read_actor_dependency = Depends(read_require_actor, scope="function")
@@ -87,11 +96,8 @@ def install_sales_xray_profile_http(
             allowed_hosts.add(settings.sales_xray_app_url.host)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile route not found.")
-        if (
-            settings.public_learner_tenant_id is None
-            or actor.tenant_id != settings.public_learner_tenant_id
-        ):
-            raise HTTPException(403, "Use your public Academy account for this profile.")
+        if actor.tenant_id not in served:
+            raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
 
     def require_eligibility_surface(request: Request, actor: ActorContext) -> None:
         allowed_hosts = {
@@ -104,11 +110,8 @@ def install_sales_xray_profile_http(
             allowed_hosts.add(settings.sales_xray_app_url.host)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile eligibility route not found.")
-        if (
-            settings.public_learner_tenant_id is None
-            or actor.tenant_id != settings.public_learner_tenant_id
-        ):
-            raise HTTPException(403, "Use your public Academy account to continue.")
+        if actor.tenant_id not in served:
+            raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
 
     def headers(response: Response) -> None:
         response.headers["Cache-Control"] = "private, no-store"
@@ -246,10 +249,3 @@ def install_sales_xray_profile_http(
         )
 
     application.include_router(router)
-
-
-@route_installer(order=200)
-def _install_routes(context: RouteContext) -> None:
-    install_sales_xray_profile_http(
-        context.application, settings=context.settings, require_actor=context.require_actor
-    )

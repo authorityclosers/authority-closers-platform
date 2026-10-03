@@ -15,7 +15,6 @@ from ac_platform.app_updates.application import AppUpdatesApplication
 from ac_platform.app_updates.catalogue import RELEASE_ID_PATTERN, validate_target_href
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.errors import DomainError
 
 
@@ -143,10 +142,3 @@ __all__ = [
     "AppUpdatesResponse",
     "install_app_updates_http",
 ]
-
-
-@route_installer(order=1200)
-def _install_routes(context: RouteContext) -> None:
-    install_app_updates_http(
-        context.application, settings=context.settings, require_actor=context.require_actor
-    )

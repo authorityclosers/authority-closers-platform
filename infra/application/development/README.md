@@ -3,7 +3,10 @@
 `ac-dev-api.service` listens on `127.0.0.1:8100` as uid/gid 10001.
 `ac-dev-sales-xray-worker.service` runs the dedicated worker with a sterile
 allowlisted environment, a pinned manifest and a 16-minute graceful stop.
-Both require systemd system services; this directory installs nothing.
+`ac-dev-outbox-worker.service` runs `python -m ac_platform.worker`, the same
+module as the staging compose `worker` service, so dev sends its own sign-in and
+verification email codes. All three require systemd system services; this
+directory installs nothing.
 
 The Root specialist installs the reviewed units from
 `/srv/authority-closers/application/current-staging/development/` after AUT-159.
@@ -37,6 +40,7 @@ In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 | Source relative to development/ | Unit / delivery | In-process path |
 | --- | --- | --- |
 | `api.env` | API / EnvironmentFile | process environment only |
+| `outbox.env` | outbox worker / EnvironmentFile | process environment only |
 | `migrator.env` | refresh only (root) | none |
 | `challenge-secret` | API / LoadCredential | `C/challenge-secret` |
 | `qa-password` | API / LoadCredential | `C/qa-password` |
@@ -61,6 +65,25 @@ It must omit `AC_SALES_XRAY_APPROVAL_PATH`,
 release id. Environment-file values would override those settings. The
 root-only `migrator.env` contains `AC_ENVIRONMENT=development` and
 `AC_DATABASE_MIGRATOR_URL`; it is mode 0600 and is loaded by no service unit.
+
+`outbox.env` (root:root 0600) holds only the settings `ac_platform.worker`
+reads:
+
+- `AC_ENVIRONMENT=development`
+- `AC_DATABASE_URL`: the same dev runtime DB URL as `api.env`
+- `AC_EMAIL_CHALLENGE_SECRET`: equal to the API's value; the worker decrypts the
+  codes the API encrypted
+- `AC_PUBLIC_APP_URL` and `AC_ADMIN_APP_URL`: the dev app URLs used in email links
+- `AC_EMAIL_PROVIDER=resend`, `AC_RESEND_API_KEY`, `AC_RESEND_FROM`: dev-only
+  values from Infisical dev, never staging's
+- `AC_EXTERNAL_SIDE_EFFECTS_HOLD=false`: this unit only; `api.env` keeps `true`
+
+It must omit `AC_DATABASE_MIGRATOR_URL` and every `AC_SALES_XRAY_*` setting. The
+outbox unit gets no Sales Xray storage bind, native socket, approval, challenge,
+QA credential or provider identity. The worker's `prepare()` sends nothing until
+the dev database recovery gate is `ready`; an operations admin sets it with the
+existing `POST /v1/admin/recovery/reconcile` (empty release set, a reason and an
+`Idempotency-Key`) on the dev API.
 The worker manifest
 uses literal `C` expansions for its own unit, `/opt/infisical`, the provider
 paths above and the canonical dev storage/socket paths. It must use a dev-only
@@ -93,11 +116,12 @@ descriptor. It requires `AC_ENVIRONMENT=development` and
 environment file contains either the migrator URL or `AC_RELEASE_ID`.
 It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
 renders `service.json` from the root-owned development template, writes the
-release marker and API/worker drop-ins, restarts both development units, then
+release marker and API/worker drop-ins, restarts the API, Sales Xray worker and
+outbox worker units in that order, then
 polls `/health/ready` for up to 60 seconds. The refresh passes only when the API
 reports the target release and its database is ready. Failures during this
 refresh restore the previous checkout, marker, manifest and drop-ins before
-restart.
+restarting all three units.
 
 After backend health passes, the service runs the acdev-owned studio sync and
 merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio

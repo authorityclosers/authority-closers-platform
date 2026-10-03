@@ -17,7 +17,12 @@ BACKEND = "/srv/authority-closers/development/backend"
 DATA = "/srv/authority-closers/sales-xray/development"
 SOCKET = "/run/ac-sales-xray/development"
 SECRETS = "/etc/authority-closers/development"
-UNITS = ("ac-dev-api.service", "ac-dev-sales-xray-worker.service")
+UNITS = (
+    "ac-dev-api.service",
+    "ac-dev-sales-xray-worker.service",
+    "ac-dev-outbox-worker.service",
+)
+OUTBOX = UNITS[2]
 ADR = ROOT / "docs/adr/0037-dev-sales-xray-backend-identity.md"
 # Explicit inventory from the installer, release engine and HOSTED_ACTIVATION.
 HIDDEN = (
@@ -76,6 +81,7 @@ def words(unit, key):
 def test_identity_sandbox_and_resource_contract(name):
     unit = parse_unit(name)
     worker = name == UNITS[1]
+    outbox = name == OUTBOX
     required = {
         "User": "10001",
         "Group": "10001",
@@ -87,12 +93,13 @@ def test_identity_sandbox_and_resource_contract(name):
         "CapabilityBoundingSet": "",
         "RestrictAddressFamilies": "AF_UNIX AF_INET AF_INET6",
         "UMask": "0077",
-        "MemoryMax": "768M",
-        "CPUQuota": "100%",
-        "TasksMax": "64" if worker else "128",
+        "MemoryMax": "384M" if outbox else "768M",
+        "CPUQuota": "50%" if outbox else "100%",
+        "TasksMax": "128" if name == UNITS[0] else "64",
         "Nice": "10",
         "IOSchedulingClass": "idle",
         "SystemCallFilter": "~@debug process_vm_readv process_vm_writev",
+        "Restart": "on-failure",
     }
     for key, value in required.items():
         assert unit["Service", key] == [value]
@@ -107,8 +114,8 @@ def test_identity_sandbox_and_resource_contract(name):
         "/run/ac-sales-xray:ro",
         "/etc/authority-closers:ro",
     }
-    assert words(unit, "BindPaths") == [DATA]
-    expected = {BACKEND, SOCKET}
+    assert words(unit, "BindPaths") == ([] if outbox else [DATA])
+    expected = {BACKEND} if outbox else {BACKEND, SOCKET}
     if worker:
         expected |= {
             f"{BACKEND}/.ac-release-id:/app/.ac-release-id",
@@ -173,7 +180,7 @@ def test_worker_argv_environment_release_and_drain():
 
 
 def test_api_argv_and_separate_credential_delivery():
-    api, worker = (parse_unit(name) for name in UNITS)
+    api, worker = (parse_unit(name) for name in UNITS[:2])
     assert shlex.split(api["Service", "ExecStart"][0]) == [
         BACKEND + "/.venv/bin/python",
         "-m",
@@ -198,6 +205,56 @@ def test_api_argv_and_separate_credential_delivery():
     readme = (DIRECTORY / "README.md").read_text()
     assert "/etc/systemd/system/ac-dev-sales-xray-worker.service.d/manifest.conf" in readme
     assert "Environment=AC_DEV_WORKER_MANIFEST_SHA256=<64 hex digest>" in readme
+
+
+def test_outbox_worker_argv_environment_and_absent_sales_xray_access():
+    unit = parse_unit(OUTBOX)
+    assert shlex.split(unit["Service", "ExecStart"][0]) == [
+        BACKEND + "/.venv/bin/python",
+        "-m",
+        "ac_platform.worker",
+    ]
+    assert unit["Service", "EnvironmentFile"] == [SECRETS + "/outbox.env"]
+    assert dict(word.split("=", 1) for word in words(unit, "Environment")) == {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1",
+    }
+    # Email only: no recordings, native socket, approval, challenge, QA or provider identity.
+    for key in ("BindPaths", "LoadCredential", "SetCredential", "ReadWritePaths"):
+        assert not unit["Service", key]
+    assert words(unit, "BindReadOnlyPaths") == [BACKEND]
+    text = (DIRECTORY / OUTBOX).read_text()
+    for absent in (
+        DATA,
+        SOCKET,
+        "identities",
+        "infisical",
+        "approval",
+        "challenge-secret",
+        "qa-password",
+        "database-url",
+        "service.json",
+        "api.env",
+        "AC_SALES_XRAY",
+    ):
+        assert absent not in text
+    readme = (DIRECTORY / "README.md").read_text()
+    row = next(line for line in readme.splitlines() if line.startswith("| `outbox.env`"))
+    assert "outbox worker / EnvironmentFile" in row
+    for setting in (
+        "AC_ENVIRONMENT",
+        "AC_DATABASE_URL",
+        "AC_EMAIL_CHALLENGE_SECRET",
+        "AC_PUBLIC_APP_URL",
+        "AC_ADMIN_APP_URL",
+        "AC_EMAIL_PROVIDER",
+        "AC_RESEND_API_KEY",
+        "AC_RESEND_FROM",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
+        "POST /v1/admin/recovery/reconcile",
+    ):
+        assert f"`{setting}" in readme
+    assert "ac-dev-outbox-worker.service" in ADR.read_text()
 
 
 def test_systemd_verify_exact_units_without_installing_or_starting(tmp_path):

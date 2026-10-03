@@ -12,7 +12,6 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_tenant_ids
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
-from ac_platform.http.registry import RouteContext, route_installer
 from ac_platform.kernel.errors import DomainError
 
 
@@ -87,13 +86,3 @@ def install_sales_xray_workspaces_http(
         )
 
     application.include_router(router)
-
-
-@route_installer(order=500)
-def _install_routes(context: RouteContext) -> None:
-    install_sales_xray_workspaces_http(
-        context.application,
-        settings=context.settings,
-        require_actor=context.require_actor,
-        intake=context.conversation,
-    )

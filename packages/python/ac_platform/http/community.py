@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from ac_platform.application.settings import Settings
 from ac_platform.community.application import CommunityApplication
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.registry import RouteContext, route_installer
 
 
 class UsernameClaimRequest(BaseModel):
@@ -365,10 +364,3 @@ def install_community_http(
 
 
 __all__ = ["install_community_http"]
-
-
-@route_installer(order=1100)
-def _install_routes(context: RouteContext) -> None:
-    install_community_http(
-        context.application, settings=context.settings, require_actor=context.require_actor
-    )

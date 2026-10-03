@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
 import structlog
 from fastapi import FastAPI, Request, Response, status
@@ -19,17 +20,52 @@ from ac_platform.conversation_intelligence.internal_tester import (
     tester_rate_limit_resolver,
 )
 from ac_platform.db.session import engine, session_factory
+from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
+from ac_platform.http.admin_learning import install_admin_learning_http
+from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
-from ac_platform.http.conversation_acquisition_runtime import compose_acquisition
+from ac_platform.http.billing import install_billing_http, install_billing_webhook_http
+from ac_platform.http.certificates import install_certificate_http
+from ac_platform.http.community import install_community_http
+from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_acquisition_runtime import (
+    compose_acquisition,
+    install_acquisition_runtime,
+)
+from ac_platform.http.conversation_admin import install_conversation_admin_http
+from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_reviews import install_conversation_review_http
+from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
+from ac_platform.http.learning import (
+    ActivityMediaResolver,
+    MediaDescriptorResolver,
+    PolicyResolver,
+    install_learning_http,
+)
+from ac_platform.http.media import install_media_http
+from ac_platform.http.media_delivery import install_media_delivery_http
+from ac_platform.http.operations import install_operations_http
+from ac_platform.http.organisation import install_organisation_http
+from ac_platform.http.planning import install_planning_http
+from ac_platform.http.plans import install_plans_http
+from ac_platform.http.platform import install_platform_http
+from ac_platform.http.platform_sensitive_segments import (
+    install_platform_sensitive_segments_http,
+)
+from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
-from ac_platform.http.registry import RouteContext, StudioRouteParts, install_registered_routes
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.reviewer_auth import install_reviewer_identity_http
+from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
+from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
+from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
+from ac_platform.http.telemetry import install_telemetry_http
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 from ac_platform.media.studio_video_completion import StudioVideoCompletion
 
@@ -112,6 +148,14 @@ def create_app(
         sessions=session_factory,
         provider=configured_identity_provider,
     )
+    install_organisation_http(application, settings=settings, require_actor=require_actor)
+    install_course_http(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+    )
+    install_practice_http(application, settings=settings, require_actor=require_actor)
     if conversation_intake_runtime is not None and settings.environment not in {"local", "test"}:
         raise RuntimeError(
             "Hosted conversation intake requires its reviewed deployment composition."
@@ -126,6 +170,18 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    install_sales_xray_profile_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+    )
+    install_sales_xray_workspaces_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+    )
     tester_policy = (
         None
         if resolved_conversation is None or resolved_conversation.authority is None
@@ -141,7 +197,102 @@ def create_app(
         resolved_acquisition = None
         logger.warning("sales_xray_acquisition_unavailable")
     application.state.sales_xray_acquisition_configured = resolved_acquisition is not None
+    install_acquisition_runtime(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        runtime=resolved_acquisition,
+    )
+    install_conversation_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake_runtime=resolved_conversation,
+    )
+    install_conversation_admin_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        # Recovery reads use the resolved hosted composition.  The old private
+        # draft importer remains an explicit test-only seam and is not enabled
+        # by passing the raw caller-supplied runtime here.
+        recovery_storage=resolved_conversation.storage if resolved_conversation else None,
+    )
+    install_execution_control_http(
+        application, settings=settings, sessions=session_factory, require_actor=require_actor
+    )
+    install_conversation_review_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        require_reviewer=install_reviewer_identity_http(
+            application,
+            settings=settings,
+            sessions=session_factory,
+        ),
+        storage=resolved_conversation.storage if resolved_conversation else None,
+    )
+    install_community_http(application, settings=settings, require_actor=require_actor)
+    install_app_updates_http(application, settings=settings, require_actor=require_actor)
+    install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_platform_sensitive_segments_http(
+        application, settings=settings, require_actor=require_actor
+    )
+    # Static planning paths are registered before the dynamic
+    # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
+    install_planning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        legacy_analytics_enabled=False,
+    )
+    # Learner telemetry is present as a fail-closed API boundary only.  A
+    # verified server consent resolver and explicit retention policy must be
+    # composed by a later controlled promotion before any row is stored.
+    install_telemetry_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+    )
     resolved_media_runtime = media_runtime or create_default_media_runtime(settings)
+    install_learning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        activity_media_resolver=cast(
+            ActivityMediaResolver | None, resolved_media_runtime.activity_media_resolver
+        ),
+        media_descriptor_resolver=cast(
+            MediaDescriptorResolver | None, resolved_media_runtime.media_descriptor_resolver
+        ),
+        policy_resolver=(
+            cast(PolicyResolver, resolved_media_runtime.playback_policy_resolver)
+            if resolved_media_runtime.learning_playback_composed
+            else None
+        ),
+    )
+    install_certificate_http(
+        application,
+        require_actor=require_actor,
+    )
+    install_admin_learning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+    )
+    install_admin_diagnosis_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+    )
+    install_media_http(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        runtime=resolved_media_runtime,
+    )
     studio_video_runtime = resolved_media_runtime.studio_video_runtime
     studio_video_transport: StudioVideoByteTransport | None = None
     studio_video_max_source_bytes: int | None = None
@@ -170,30 +321,43 @@ def create_app(
     application.state.studio_video_worker = (
         None if studio_video_runtime is None else studio_video_runtime.worker
     )
+    install_studio_media_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        service=studio_service,
+        byte_transport=studio_video_transport,
+        video_completion=studio_completion,
+        video_upload_max_source_bytes=studio_video_max_source_bytes,
+        studio_video_runtime=studio_video_runtime,
+    )
+    delivery_factory = resolved_media_runtime.authenticated_delivery_handler_factory
+    if delivery_factory is not None:
+        if resolved_media_runtime.media_cors_policy is None:
+            raise RuntimeError("authenticated media delivery requires its exact-origin policy")
+        install_media_delivery_http(
+            application,
+            cors_policy=resolved_media_runtime.media_cors_policy,
+            require_actor=require_actor,
+            authenticated_handler_factory=delivery_factory,
+        )
+    install_operations_http(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        tester_policy=tester_policy,
+        intake=resolved_conversation,
+    )
+    # Billing (ADR 0052): composed only when switched on; otherwise the C1
+    # routes are absent and the screens show "Not on sale yet".
     billing = compose_billing(settings)
     application.state.billing_configured = billing is not None
-    # Route modules register themselves (http/registry.py); a new API adds its
-    # own module with @route_installer and does not edit this file.
-    install_registered_routes(
-        RouteContext(
-            application=application,
-            settings=settings,
-            sessions=session_factory,
-            require_actor=require_actor,
-            conversation=resolved_conversation,
-            acquisition=resolved_acquisition,
-            tester_policy=tester_policy,
-            media=resolved_media_runtime,
-            studio=StudioRouteParts(
-                service=studio_service,
-                byte_transport=studio_video_transport,
-                video_completion=studio_completion,
-                video_upload_max_source_bytes=studio_video_max_source_bytes,
-                runtime=studio_video_runtime,
-            ),
-            billing=billing,
-        )
+    install_billing_http(
+        application, settings=settings, require_actor=require_actor, commands=billing
     )
+    install_billing_webhook_http(application, sessions=session_factory, commands=billing)
+    install_plans_http(application, sessions=session_factory)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
