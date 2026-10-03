@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  CreditCard,
   Gem,
   Globe,
   LifeBuoy,
@@ -28,7 +29,7 @@ import { openSettings } from "../settings-open";
 import { CHANGELOG } from "./changelog";
 import styles from "./settings-menu.module.css";
 
-type View = "main" | "language" | "plans" | "news";
+type View = "main" | "language" | "news";
 
 const SEEN_KEY = "ac.xray.news-seen";
 const SEEN_EVENT = "sales-xray:news-seen";
@@ -309,12 +310,24 @@ export function SettingsMenu({
                 }
                 onClick={() => settings("usage")}
               />
+              <Link href="/plans" className={styles.row} onClick={onClose}>
+                <span className={styles.rowIcon} aria-hidden="true">
+                  <Gem size={16} />
+                </span>
+                <span className={styles.rowLabel}>Plans</span>
+                <span className={styles.rowValue}>
+                  {allowance?.unlimited ? "Unlimited" : "Trial"}
+                </span>
+                <ChevronRight
+                  size={15}
+                  className={styles.chev}
+                  aria-hidden="true"
+                />
+              </Link>
               <Row
-                icon={<Gem size={16} />}
-                label="Plans"
-                value={allowance?.unlimited ? "Unlimited" : "Trial"}
-                next
-                onClick={() => setView("plans")}
+                icon={<CreditCard size={16} />}
+                label="Plan & billing"
+                onClick={() => settings("billing")}
               />
               <Row
                 icon={<Sparkles size={16} />}
@@ -356,46 +369,6 @@ export function SettingsMenu({
             <p className={styles.note}>
               Reports: pick English, Hindi + English or Marathi + English when
               you start an analysis.
-            </p>
-          </>
-        )}
-
-        {view === "plans" && (
-          <>
-            <Back label="Plans" onBack={() => setView("main")} />
-            <div className={styles.current}>
-              <span>Your plan</span>
-              <b>{allowance?.unlimited ? "Unlimited" : "Trial"}</b>
-              {minutes ? <small>{minutes.text}</small> : null}
-            </div>
-            <div className={styles.plans}>
-              {[
-                { name: "Personal", who: "For one salesperson" },
-                { name: "Organisation", who: "For sales teams" },
-                { name: "Enterprise", who: "For large sales companies" },
-              ].map((plan, index) => (
-                <div
-                  key={plan.name}
-                  className={styles.plan}
-                  style={{ animationDelay: `${index * 60}ms` }}
-                >
-                  <b>{plan.name}</b>
-                  <small>{plan.who}</small>
-                  <span className={styles.soon}>Coming soon</span>
-                </div>
-              ))}
-            </div>
-            <Link
-              className={styles.go}
-              href="/plans"
-              onClick={onClose}
-              data-see-plans
-            >
-              See plans and prices
-              <ChevronRight size={15} aria-hidden="true" />
-            </Link>
-            <p className={styles.note}>
-              Prices and limits are being set. You will see them here first.
             </p>
           </>
         )}

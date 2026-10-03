@@ -26,6 +26,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     InternalTesterApproval,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
+from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
@@ -84,7 +85,11 @@ class InternalTesterPolicy:
         person_id: UUID,
         bundle: HostedApprovalBundle | None = None,
     ) -> InternalTesterApproval | None:
-        """Resolve the current account-minute scope for an exact learner."""
+        """Resolve the current account-minute scope for one exact account.
+
+        The account is a Personal learner or a human member (owner, admin or
+        member) of an approved organisation; the caller selects the tenant.
+        """
 
         if type(tenant_id) is not UUID or type(person_id) is not UUID:
             return None
@@ -105,7 +110,7 @@ class InternalTesterPolicy:
             or person.email_verified_at is None
             or membership is None
             or membership.status != MembershipStatus.ACTIVE.value
-            or membership.role != "learner"
+            or membership.role not in SALES_XRAY_MEMBER_ROLES
             or membership.ended_at is not None
         ):
             return None

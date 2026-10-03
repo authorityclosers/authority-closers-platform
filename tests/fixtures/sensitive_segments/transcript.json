@@ -1,0 +1,71 @@
+{
+  "duration_ms": 9000,
+  "revision": "scribe-fictional-r1",
+  "segments": [
+    {
+      "end_ms": 900,
+      "id": "s1",
+      "speaker_id": "speaker_1",
+      "start_ms": 0,
+      "text": "Thanks for joining the fictional demo today."
+    },
+    {
+      "end_ms": 1900,
+      "id": "s2",
+      "speaker_id": "unattributed",
+      "start_ms": 1000,
+      "text": "Let us talk about the fictional widget pricing."
+    },
+    {
+      "end_ms": 2900,
+      "id": "s3",
+      "speaker_id": "speaker_1",
+      "start_ms": 2000,
+      "text": "[Withheld for privacy]"
+    },
+    {
+      "end_ms": 3900,
+      "id": "s4",
+      "speaker_id": "unattributed",
+      "start_ms": 3000,
+      "text": "[Withheld for privacy]"
+    },
+    {
+      "end_ms": 4900,
+      "id": "s5",
+      "speaker_id": "speaker_1",
+      "start_ms": 4000,
+      "text": "Sounds good, send the fictional proposal over."
+    },
+    {
+      "end_ms": 5900,
+      "id": "s6",
+      "speaker_id": "unattributed",
+      "start_ms": 5000,
+      "text": "We can start the fictional rollout next quarter."
+    },
+    {
+      "end_ms": 6900,
+      "id": "s7",
+      "speaker_id": "speaker_1",
+      "start_ms": 6000,
+      "text": "Which team would own the fictional rollout?"
+    },
+    {
+      "end_ms": 7900,
+      "id": "s8",
+      "speaker_id": "unattributed",
+      "start_ms": 7000,
+      "text": "Probably the fictional operations group."
+    },
+    {
+      "end_ms": 8900,
+      "id": "s9",
+      "speaker_id": "speaker_1",
+      "start_ms": 8000,
+      "text": "Our kettle whistles whenever the moon rises over the shed"
+    }
+  ],
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "timebase_id": "elevenlabs-scribe-native-seconds"
+}

@@ -49,6 +49,8 @@ from ac_platform.conversation_intelligence.processing_actor import (
     ConversationActor,
     ProcessingActor,
 )
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
 from ac_platform.conversation_intelligence.source_objects import (
     lock_source_object,
@@ -466,21 +468,33 @@ class ConversationApplication:
         self, actor: ConversationActor, recording_id: UUID
     ) -> list[dict[str, Any]]:
         await self.get(actor, recording_id)
+        assert actor.tenant_id is not None
+        return await self.render_checkpoints(
+            recording_id, tenant_id=actor.tenant_id, person_id=actor.person_id
+        )
+
+    async def render_checkpoints(
+        self, recording_id: UUID, *, tenant_id: UUID, person_id: UUID
+    ) -> list[dict[str, Any]]:
+        """The post-authorization checkpoint list; every stage payload is withheld per marks."""
+
         rows = (
             await self.database.scalars(
                 select(ConversationCheckpoint)
                 .where(
                     ConversationCheckpoint.recording_id == recording_id,
-                    ConversationCheckpoint.tenant_id == actor.tenant_id,
-                    ConversationCheckpoint.person_id == actor.person_id,
+                    ConversationCheckpoint.tenant_id == tenant_id,
+                    ConversationCheckpoint.person_id == person_id,
                     ConversationCheckpoint.erased_at.is_(None),
                 )
                 .order_by(ConversationCheckpoint.created_at, ConversationCheckpoint.id)
                 .limit(100)
             )
         ).all()
+        plan = await withheld_plan_for(self.database, recording_id=recording_id)
         return [
-            {"id": str(row.id), "manifest": row.manifest, "payload": row.payload} for row in rows
+            withhold({"id": str(row.id), "manifest": row.manifest, "payload": row.payload}, plan)
+            for row in rows
         ]
 
     async def request_deletion(

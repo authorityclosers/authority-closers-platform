@@ -86,6 +86,7 @@ from ac_platform.conversation_intelligence.reports import (
     FACT_PROMPT_LEGACY,
     load_report_profile,
 )
+from ac_platform.conversation_intelligence.sensitive_segments_store import marks_in_force
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.conversation_intelligence.worker_account_gate import (
     is_account_profile_hold,
@@ -583,6 +584,13 @@ async def require_stage_authorization(
     require_derived_input(value, stage)
 
 
+async def refuse_marked_rerun(database: AsyncSession, recording_id: UUID) -> None:
+    """AUT-519 D7: no new provider call while a sensitive-segment mark is in force."""
+
+    if await marks_in_force(database, recording_id=recording_id):
+        raise ConversationConflict("This call cannot be processed again at the moment.")
+
+
 class ConversationProcessingPlans:
     def __init__(
         self,
@@ -734,6 +742,7 @@ class ConversationProcessingPlans:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
         recording = await self.app._recording(actor, recording_id)
+        await refuse_marked_rerun(self.db, recording.id)
         continuation_expires_at: datetime | None = None
         if continuation_grant_id is not None:
             from ac_platform.conversation_intelligence.guest_models import (
@@ -992,6 +1001,7 @@ class ConversationProcessingPlans:
         if block := coaching_revision_runtime_block(value.coaching_prompt_revision):
             raise ConversationDenied(block)
         recording = await self.app._recording(actor, recording_id)
+        await refuse_marked_rerun(self.db, recording.id)
         await validate_continuation_grant(self.app, actor, recording, value, now)
         bundle = await self.authority.admit(self.app, actor)
         if (

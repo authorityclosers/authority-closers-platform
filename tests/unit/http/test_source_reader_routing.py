@@ -111,7 +111,7 @@ async def test_http_source_reference_routing(tmp_path, monkeypatch, route, histo
         settings=settings,
         sessions=None,
         require_actor=require_actor,
-        factory=lambda database: SimpleNamespace(
+        factory=lambda database, _tenant_id: SimpleNamespace(
             database=database,
             tenant_id=PUBLIC_TENANT,
             clock=lambda: now,

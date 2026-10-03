@@ -72,6 +72,17 @@ it("skips all dashboard reads for guests and uses the existing sign-in action", 
   expect(fetchMock).not.toHaveBeenCalled();
   expect(host.textContent).toContain("Sign in to see your dashboard");
   expect(host.textContent).not.toContain("Couldn't load");
+  const policyLinks = host.querySelectorAll<HTMLAnchorElement>(
+    'nav[aria-label="Sales Xray policy pages"] a',
+  );
+  expect([...policyLinks].map((link) => link.getAttribute("href"))).toEqual([
+    "/pricing",
+    "/terms",
+    "/privacy",
+    "/refunds",
+    "/delivery",
+    "/contact",
+  ]);
   const link = host.querySelector<HTMLAnchorElement>('a[href="/login"]')!;
   expect(link.textContent).toBe("Sign in");
   await act(async () => link.click());

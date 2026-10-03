@@ -13,6 +13,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -28,6 +29,11 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    CLAIM_PERSONAL_ONLY_MESSAGE,
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
@@ -36,9 +42,13 @@ from ac_platform.http.auth import (
     _single_raw_cookie,
     require_safe_origin,
 )
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 
-Factory = Callable[[AsyncSession], AcquisitionSessions]
+# One service per request, bound to the caller's selected workspace: Personal
+# (the public tenant, where guests also live) or an approved organisation.
+Factory = Callable[[AsyncSession, UUID], AcquisitionSessions]
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _PRIVATE = {"cache-control": "private, no-store", "vary": "Cookie"}
 
@@ -51,6 +61,7 @@ def install_acquisition_http(
     require_actor: RequireActor,
     factory: Factory,
     challenge: UploadChallenge,
+    intake: ConversationIntakeRuntime | None = None,
 ) -> None:
     if (
         settings.sales_xray_app_url is None
@@ -61,15 +72,24 @@ def install_acquisition_http(
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-acquisition"])
     me_router = APIRouter(prefix="/v1/me", tags=["conversation-acquisition"])
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
+    public = settings.public_learner_tenant_id
+    served = sales_xray_served_tenant_ids(settings, intake)
 
-    def service(database: AsyncSession) -> AcquisitionSessions:
-        app = factory(database)
-        if app.tenant_id != settings.public_learner_tenant_id:
-            raise RuntimeError("Acquisition must use the configured public Academy.")
+    def service(database: AsyncSession, tenant_id: UUID = public) -> AcquisitionSessions:
+        """Guest paths stay on Personal; account paths use the selected workspace."""
+        app = factory(database, tenant_id)
+        if app.tenant_id != tenant_id:
+            raise RuntimeError("Acquisition must use the selected Sales Xray workspace.")
         return app
 
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
+
+    def workspace(actor: ActorContext) -> UUID:
+        """The selected tenant, when Sales Xray serves it; operations never qualifies."""
+        if actor.tenant_id is None or actor.tenant_id not in served:
+            raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
+        return actor.tenant_id
 
     def surface(request: Request) -> str | None:
         if request.url.hostname == challenge.hostname:
@@ -100,11 +120,7 @@ def install_acquisition_http(
     async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
-                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
-                    raise fail(
-                        403,
-                        "The public Academy account is required for this upload workspace.",
-                    )
+                workspace(auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -118,11 +134,7 @@ def install_acquisition_http(
     async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(read_require_actor)(request) as auth:
-                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
-                    raise fail(
-                        403,
-                        "The public Academy account is required for this upload workspace.",
-                    )
+                workspace(auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -196,9 +208,10 @@ def install_acquisition_http(
         host = admit(request, response)
         if host == "learner":
             async with learner_read_account(request) as auth:
+                actor = auth.resolved.actor
                 allowance = await result(
-                    service(auth.database).allowance(
-                        actor=auth.resolved.actor,
+                    service(auth.database, workspace(actor)).allowance(
+                        actor=actor,
                         shared_identity_locks=True,
                     )
                 )
@@ -210,15 +223,26 @@ def install_acquisition_http(
         current = token(request, required=False)
         if account_token is not None:
             async with asynccontextmanager(read_require_actor)(request) as auth:
-                app = service(auth.database)
+                actor = auth.resolved.actor
+                app = service(auth.database, workspace(actor))
                 if current is None:
-                    allowance = await result(
-                        app.allowance(
-                            actor=auth.resolved.actor,
-                            shared_identity_locks=True,
-                        )
-                    )
+                    allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
                     return {"state": "account", "allowance": allowance}
+                if app.tenant_id != public:
+                    # Guest uploads live in Personal. An organisation session
+                    # reports an unclaimed visitor so the person can switch to
+                    # Personal and claim it; a claimed, expired or unknown guest
+                    # cookie never blocks the organisation account.
+                    try:
+                        allowance = await service(auth.database).allowance(
+                            token=current, shared_identity_locks=True
+                        )
+                    except ConversationError:
+                        allowance = await result(
+                            app.allowance(actor=actor, shared_identity_locks=True)
+                        )
+                        return {"state": "account", "allowance": allowance}
+                    return {"state": "claim_required", "allowance": allowance}
                 try:
                     allowance = await app.allowance(
                         token=current,
@@ -253,12 +277,16 @@ def install_acquisition_http(
         if admit(request, response, mutation=True) != "sales":
             raise fail(404, "Upload entry not found.")
         async with asynccontextmanager(require_actor)(request) as auth:
+            actor = auth.resolved.actor
+            tenant_id = workspace(actor)
             current = token(request)
             if current is None:
                 raise fail(401, "This upload session is unavailable.")
+            if tenant_id != public:
+                raise fail(409, CLAIM_PERSONAL_ONLY_MESSAGE)
             app = service(auth.database)
-            identifier = await result(app.claim(current, auth.resolved.actor))
-            allowance = await result(app.allowance(actor=auth.resolved.actor))
+            identifier = await result(app.claim(current, actor))
+            allowance = await result(app.allowance(actor=actor))
         response.delete_cookie(
             cookie_name, httponly=True, secure=settings.secure_cookies, samesite="lax", path="/"
         )
@@ -268,9 +296,10 @@ def install_acquisition_http(
     async def read_plan(request: Request, response: Response) -> Any:
         admit(request, response)
         async with learner_read_account(request) as auth:
+            actor = auth.resolved.actor
             allowance = await result(
-                service(auth.database).allowance(
-                    actor=auth.resolved.actor, shared_identity_locks=True
+                service(auth.database, workspace(actor)).allowance(
+                    actor=actor, shared_identity_locks=True
                 )
             )
         return {
@@ -284,7 +313,7 @@ def install_acquisition_http(
         admit(request, response)
         async with learner_read_account(request) as auth:
             actor = auth.resolved.actor
-            app = service(auth.database)
+            app = service(auth.database, workspace(actor))
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
             usage = await account_usage(
                 auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()

@@ -1,4 +1,4 @@
-"""Disposable PostgreSQL 0065→0066 proof for the explicit platform billing capability.
+"""Disposable PostgreSQL 0065→0066→head proof for the explicit platform billing capability.
 
 Existing grants and revocations survive the widening; only a platform-scope
 ``platform_billing_manage`` grant becomes valid; other scopes and unknown names stay
@@ -37,6 +37,7 @@ from tests.database.test_capability_grants import Scope, audit, grant, seed_scop
 ROOT = Path(__file__).parents[2]
 MIGRATION = ROOT / "db/migrations/versions/20261002_0066_platform_billing_manage.py"
 PRIOR, REVISION, BILLING = "20261002_0065", "20261002_0066", "platform_billing_manage"
+HEAD = "20261002_0067"  # the sensitive-segment marks migration follows 0066
 # PostgreSQL reports whichever permission check it evaluates first.
 PERMISSION_CHECK = "ck_capability_grants_permission_(supported|scope)"
 
@@ -113,10 +114,10 @@ def upgraded() -> Iterator[tuple[Engine, Scope, dict, UUID]]:
         engine.dispose()
 
 
-def test_0066_is_head_and_preserves_existing_grants_and_revocations(upgraded) -> None:
+def test_0066_applies_under_the_head_and_preserves_grants_and_revocations(upgraded) -> None:
     engine, scope, snapshot, revocation_id = upgraded
     with Session(engine) as database:
-        assert database.scalar(text("SELECT version_num FROM alembic_version")) == REVISION
+        assert database.scalar(text("SELECT version_num FROM alembic_version")) == HEAD
         rows = database.scalars(
             select(CapabilityGrant).where(CapabilityGrant.subject_person_id == scope.subject)
         ).all()

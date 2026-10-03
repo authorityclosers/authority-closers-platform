@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { loadAdminReport } from "./admin-report-api";
@@ -103,5 +106,33 @@ describe("admin report API", () => {
     await expect(
       loadAdminReport({ runId, fetcher: invalidFetcher }),
     ).rejects.toThrow();
+  });
+  it("accepts a guarded report whose marked evidence carries the withheld marker", async () => {
+    const guarded = JSON.parse(
+      readFileSync(
+        resolve(
+          process.cwd(),
+          "../../tests/fixtures/sensitive_segments/admin-report.json",
+        ),
+        "utf8",
+      ),
+    ) as { run_id: string };
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(Response.json(guarded)),
+    );
+
+    const result = await loadAdminReport({ runId: guarded.run_id, fetcher });
+
+    const evidence = result.report.dimensions[1].evidence as Array<{
+      segment_id: string;
+      quote: string;
+    }>;
+    expect(evidence.map((item) => item.segment_id)).toEqual(["s9", "s3", "s4"]);
+    expect(evidence[1].quote).toBe("[Withheld for privacy]");
+    expect(evidence[2].quote).toBe("[Withheld for privacy]");
+    expect(result.report.dimensions[1].observation).toBe(
+      "[Withheld for privacy]",
+    );
+    expect(JSON.stringify(result)).not.toContain("purple otter");
   });
 });

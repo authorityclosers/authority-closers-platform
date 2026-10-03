@@ -49,7 +49,11 @@ from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
+from ac_platform.http.plans import install_plans_http
 from ac_platform.http.platform import install_platform_http
+from ac_platform.http.platform_sensitive_segments import (
+    install_platform_sensitive_segments_http,
+)
 from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
@@ -146,11 +150,6 @@ def create_app(
         provider=configured_identity_provider,
     )
     install_organisation_http(application, settings=settings, require_actor=require_actor)
-    install_sales_xray_profile_http(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-    )
     install_course_http(
         application,
         settings=settings,
@@ -172,6 +171,12 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    install_sales_xray_profile_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+    )
     install_sales_xray_workspaces_http(
         application,
         settings=settings,
@@ -233,6 +238,9 @@ def create_app(
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
     install_staff_billing_http(application, settings=settings, require_actor=require_actor)
+    install_platform_sensitive_segments_http(
+        application, settings=settings, require_actor=require_actor
+    )
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(
@@ -341,6 +349,7 @@ def create_app(
         sessions=session_factory,
         require_actor=require_actor,
         tester_policy=tester_policy,
+        intake=resolved_conversation,
     )
     # Billing (ADR 0052): composed only when switched on; otherwise the C1
     # routes are absent and the screens show "Not on sale yet".
@@ -350,6 +359,7 @@ def create_app(
         application, settings=settings, require_actor=require_actor, commands=billing
     )
     install_billing_webhook_http(application, sessions=session_factory, commands=billing)
+    install_plans_http(application, sessions=session_factory)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"

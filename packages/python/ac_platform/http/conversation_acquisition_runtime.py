@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import SecretStr
@@ -29,6 +30,10 @@ from ac_platform.conversation_intelligence.analysis_settings import (
 )
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
@@ -131,6 +136,8 @@ def install_acquisition_runtime(
     trial_policy = TrialPolicy(
         settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
     )
+    public = settings.public_learner_tenant_id
+    served = sales_xray_served_tenant_ids(settings, None if runtime is None else runtime.intake)
 
     def surface(request: Request) -> str | None:
         if request.url.hostname == sales_host:
@@ -148,11 +155,8 @@ def install_acquisition_runtime(
         try:
             dependency = read_require_actor if read_only else require_actor
             async with asynccontextmanager(dependency)(request) as auth:
-                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
-                    raise HTTPException(
-                        403,
-                        "The public Academy account is required for this upload workspace.",
-                    )
+                if auth.resolved.actor.tenant_id not in served:
+                    raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
                 yield auth
         except DomainError:
             raise HTTPException(
@@ -211,10 +215,9 @@ def install_acquisition_runtime(
     if runtime is None:
         return
 
-    def factory(database: AsyncSession) -> AcquisitionSessions:
-        tenant = settings.public_learner_tenant_id
-        if tenant is None:
-            raise RuntimeError("The configured public Academy is required.")
+    def factory(database: AsyncSession, tenant_id: UUID) -> AcquisitionSessions:
+        if public is None or tenant_id not in served:
+            raise RuntimeError("Acquisition serves Personal and approved organisations only.")
         authority = runtime.intake.authority
         operations_tenant_id = (
             authority.operations_tenant_id
@@ -223,11 +226,13 @@ def install_acquisition_runtime(
         )
         return AcquisitionSessions(
             database,
-            tenant_id=tenant,
+            tenant_id=tenant_id,
             policy_revision=runtime.policy_revision,
             tester_policy=runtime.tester_policy,
             operations_tenant_id=operations_tenant_id,
             trial_policy=trial_policy,
+            # Organisations get no automatic trial minutes (AUT-436).
+            trial_enabled=tenant_id == public,
         )
 
     install_acquisition_http(
@@ -237,6 +242,7 @@ def install_acquisition_runtime(
         require_actor=require_actor,
         factory=factory,
         challenge=runtime.challenge,
+        intake=runtime.intake,
     )
     install_submission_http(
         application,

@@ -7,9 +7,13 @@ from uuid import uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence import acquisition_c5_benchmark
 from ac_platform.conversation_intelligence.acquisition_c5_benchmark import validate_benchmark_scope
 from ac_platform.conversation_intelligence.analysis_settings import DEFAULT_ANALYSIS_SETTINGS
-from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+)
 from ac_platform.conversation_intelligence.budget_admin import ConversationBudgetAdmin
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount
@@ -104,7 +108,11 @@ async def test_budget_cap_save_accepts_environment_and_preserves_reservations(en
 
 
 @pytest.mark.parametrize("environment", ["development", "staging", "test", "production", "local"])
-async def test_c5_benchmark_recheck_preserves_environment_and_source_boundary(environment):
+async def test_c5_benchmark_recheck_preserves_environment_and_source_boundary(
+    environment, monkeypatch: pytest.MonkeyPatch
+):
+    marks_in_force = AsyncMock(return_value=False)
+    monkeypatch.setattr(acquisition_c5_benchmark, "marks_in_force", marks_in_force)
     actor = ProcessingActor(uuid4(), uuid4(), uuid4())
     now = datetime(2026, 9, 28, tzinfo=UTC)
     settings = DEFAULT_ANALYSIS_SETTINGS
@@ -177,6 +185,13 @@ async def test_c5_benchmark_recheck_preserves_environment_and_source_boundary(en
         scalar=AsyncMock(return_value=SimpleNamespace(**settings.effective_values())),
     )
     app = SimpleNamespace(database=database)
+    # AUT-519 D7 runs first and fails closed: a marked recording is refused before any
+    # environment, lease or allowance read, in every environment.
+    marks_in_force.return_value = True
+    with pytest.raises(ConversationConflict, match="cannot be processed again"):
+        await validate_benchmark_scope(app, actor, recording, bundle, benchmark, now)
+    database.get.assert_not_awaited()
+    marks_in_force.return_value = False
     if environment in {"production", "local"}:
         with pytest.raises(ConversationDenied, match="no longer matches its benchmark approval"):
             await validate_benchmark_scope(app, actor, recording, bundle, benchmark, now)
