@@ -252,11 +252,48 @@ def test_approved_published_head_freezes_push_across_local_commits(repo, transpo
     assert not repo.events("review")
 
 
-@pytest.mark.parametrize("existing_pr", [False, True])
-def test_hand_started_slice_never_requests_review(repo, existing_pr):
+def test_lane_pr_branch_holds_edits_in_local_checkpoint_and_alerts_once(repo):
+    # AUT-864: #185's approvals lived on Paperclip, so the freeze above did not see them.
+    lane = "task/ui/441-sales-xray-workspaces"
+    repo.branch(lane)
+    pr = repo.make_pr(age=8000)
+    for text in ("one", "two"):
+        repo.write(APP + "page.tsx", text)
+        repo.tick()
+        repo.now += 1800
+    assert repo.git("rev-parse", "HEAD") == repo.base == pr["headRefOid"]
+    assert repo.remote_head(lane) == repo.base
+    assert repo.git("status", "--porcelain") == "M " + APP + "page.tsx"
+    tags = repo.git("for-each-ref", "--format=%(refname)", "refs/tags/studio-checkpoint/")
+    assert len(tags.splitlines()) == 2
+    for tag in tags.splitlines():
+        assert tag.startswith("refs/tags/studio-checkpoint/441-sales-xray-workspaces-")
+        assert repo.git("rev-parse", tag + "^") == repo.base
+    assert {repo.git("show", f"{t}:{APP}page.tsx") for t in tags.splitlines()} == {"one", "two"}
+    assert not repo.git("ls-remote", "origin", "refs/tags/*")
+    assert [(e["text"], e["pr"]) for e in repo.events("alert")] == [
+        ("studio edits waiting: the ui checkout is on a lane PR branch", 17)
+    ]
+    assert not repo.events("review")
+    assert not any("push" in c or c[:2] == ["gh", "api"] for c in repo.calls)
+
+
+def test_lane_branch_commit_only_holds_without_github(repo):
+    lane = "task/ui/441-sales-xray-workspaces"
+    repo.branch(lane)
+    repo.write(APP + "page.tsx", "edit")
+    for _ in range(2):
+        repo.tick(commit_only=True)
+    assert repo.git("rev-parse", "HEAD") == repo.base
+    tags = repo.git("for-each-ref", "--format=%(refname)", "refs/tags/studio-checkpoint/")
+    assert len(tags.splitlines()) == 1
+    assert repo.git("show", f"{tags}:{APP}page.tsx") == "edit"
+    assert not any(c[0] == "gh" or "push" in c for c in repo.calls)
+    assert not repo.events()
+
+
+def test_hand_started_slice_never_requests_review(repo):
     repo.branch("task/ui/123-hand-started")
-    if existing_pr:
-        repo.make_pr(age=8000)
     repo.write(APP + "page.tsx", "edit")
     repo.tick()
     assert not repo.events("review")
