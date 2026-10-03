@@ -21,10 +21,9 @@ from . import pack
 KEY_RE = re.compile(r"(vck_[A-Za-z0-9_-]+|Bearer\s+\S+)")
 VERSION_RE = re.compile(r"jev-\d+\.\d+\.\d+")
 CLI = {
-    "A": [
+    "A": [  # no --bare: bare mode skips the subscription login and answers "Not logged in"
         "claude",
         "-p",
-        "--bare",
         "--output-format",
         "json",
         "--tools",
@@ -261,10 +260,18 @@ def cli_prompt(pk: dict, call: dict, questions: list) -> str:
 
 
 def run_cli(arm: str, prompt: str, model: str | None, run) -> dict:
+    """Run the CLI in an empty directory outside any git repository, so neither CLI loads a
+    checkout's CLAUDE.md or AGENTS.md: the arms see the same text as J, and the records do
+    not depend on the checkout the job happens to run in."""
     with tempfile.TemporaryDirectory() as tmp:
-        last = Path(tmp) / "last.txt"
+        cwd = Path(tmp)
+        if any((p / ".git").exists() for p in (cwd, *cwd.parents)):
+            raise RuntimeError(f"{cwd} is inside a git repository; set TMPDIR outside any checkout")
+        last = cwd / "last.txt"
         cmd = [a.format(last=last) for a in CLI[arm]] + ([MODEL_FLAG[arm], model] if model else [])
-        done = run(cmd, input=prompt, capture_output=True, text=True, check=True, timeout=1800)
+        done = run(
+            cmd, input=prompt, capture_output=True, text=True, check=True, timeout=1800, cwd=cwd
+        )
         text = json.loads(done.stdout)["result"] if arm == "A" else last.read_text()
     match = re.search(r"\{.*\}", text, re.S)
     if not match:

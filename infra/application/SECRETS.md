@@ -90,3 +90,27 @@ in the Git archive or workflow artifact, not Infisical.
 Do not copy production database or identity secrets into staging. Rotation is
 create-new, update Infisical, prove a candidate deployment, then revoke-old;
 never overwrite a working recovery path before the replacement is verified.
+
+## Billing R0 names reservation (AUT-579)
+
+This reserves names only; it does not create or read secrets or enable billing.
+Each row is a separate `/application` mapping in Infisical `dev`, `staging`, and
+`prod`; production credentials must never supply either other environment.
+
+| Plan name | Runtime name read by `Settings` | Reservation |
+| --- | --- | --- |
+| `RAZORPAY_KEY_ID` | `AC_RAZORPAY_KEY_ID` | dev/staging TEST; prod awaits S7 |
+| `RAZORPAY_KEY_SECRET` | `AC_RAZORPAY_KEY_SECRET` | same environment's matching key pair |
+| `RAZORPAY_WEBHOOK_SECRET` | `AC_RAZORPAY_WEBHOOK_SECRET` | separate webhook credential per environment |
+| `CASHFREE_CLIENT_ID` | not implemented; reserve `AC_CASHFREE_CLIENT_ID` | S3 only, not injected |
+| `CASHFREE_CLIENT_SECRET` | not implemented; reserve `AC_CASHFREE_CLIENT_SECRET` | S3 only, not injected |
+
+The canonical Razorpay store names are the runtime names above: settings uses
+`env_prefix="AC_"`, with no unprefixed aliases. Existing application Compose does
+not forward these fields; R1 must consume reviewed deployment wiring, not assume
+Infisical presence reaches a container. Check names and availability only.
+`AC_TRIAL_POLICY=v2` in the plan maps to release configuration
+`AC_SALES_XRAY_TRIAL_POLICY=v2`, paired with
+`AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT`; the shorthand is not a settings alias.
+See [the ingress and rollout packet](BILLING_INGRESS.md) for the fixed proposed
+UTC instant, production hold, release checks and rollback boundary.
