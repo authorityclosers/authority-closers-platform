@@ -1,6 +1,6 @@
-import { BillingView } from "./billing-view";
+import { redirect } from "next/navigation";
 
-/** Dedicated Billing & Subscription page: plan, usage, renewal, invoices, and cancel. */
+/** /billing redirects to Settings → Plan & billing (owner order 3 Oct). */
 export default function BillingPage() {
-  return <BillingView />;
+  redirect("/account#billing");
 }

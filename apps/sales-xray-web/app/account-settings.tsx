@@ -84,7 +84,7 @@ const SECTIONS: ReadonlyArray<{
   { id: "general", label: "General", icon: Settings2 },
   { id: "profile", label: "Profile", icon: CircleUserRound },
   { id: "usage", label: "Analysis time", icon: Clock3 },
-  { id: "billing", label: "Billing & plans", icon: CreditCard },
+  { id: "billing", label: "Plan & billing", icon: CreditCard },
   { id: "security", label: "Security", icon: ShieldCheck },
   { id: "help", label: "Help & support", icon: LifeBuoy },
 ];
@@ -141,7 +141,12 @@ export function AccountSettings({
   // The URL hash keeps the open section across reloads and shared links.
   useEffect(() => {
     const sync = () => {
-      const id = sectionFromHash(window.location.hash, hashPrefix);
+      const hashId = sectionFromHash(window.location.hash, hashPrefix);
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryId = searchParams.get("section") as SectionId | null;
+      const validQuery =
+        queryId && SECTIONS.some((s) => s.id === queryId) ? queryId : null;
+      const id = hashId || validQuery;
       if (!id) return;
       setSection(id);
       setStage("pane");
@@ -366,34 +371,15 @@ export function AccountSettings({
 
         <Pane
           id="billing"
-          title="Billing & plans"
+          title="Plan & billing"
           active={section}
           onBack={back}
         >
-          <Row
-            label="Plans and upgrades"
-            hint="Personal, Organisation and Enterprise subscriptions with monthly analysis minutes."
-          >
-            <Link
-              className={styles.secondary}
-              href="/plans"
-              replace={variant === "dialog"}
-            >
-              Choose plan
-            </Link>
-          </Row>
-          <Row
-            label="Billing and invoices"
-            hint="Manage your subscription, payment method, receipts and renewal."
-          >
-            <Link
-              className={styles.secondary}
-              href="/billing"
-              replace={variant === "dialog"}
-            >
-              Open Billing
-            </Link>
-          </Row>
+          <PlanAndBillingPane
+            allowance={allowance}
+            variant={variant}
+            onRetry={retry}
+          />
         </Pane>
 
         <Pane id="security" title="Security" active={section} onBack={back}>
@@ -816,6 +802,224 @@ function AllowanceSummary({
       </span>
       <p className={styles.muted}>
         {minutes(committed_seconds)} min used or reserved by analyses.
+      </p>
+    </div>
+  );
+}
+
+function PlanAndBillingPane({
+  allowance,
+  variant,
+  onRetry,
+}: {
+  allowance: Loaded<Allowance>;
+  variant?: "page" | "dialog";
+  onRetry: () => void;
+}) {
+  const [cancelAsk, setCancelAsk] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
+
+  return (
+    <div className={styles.billingBlock}>
+      {/* 1. Current Plan Card */}
+      <div className={styles.billingCard}>
+        <div className={styles.billingCardHead}>
+          <div>
+            <h3>Current subscription</h3>
+            <p className={styles.muted}>Your plan and billing schedule.</p>
+          </div>
+          <span
+            className={styles.badge}
+            data-tone={isCancelled ? "pending" : "ok"}
+          >
+            {isCancelled ? "Cancels at period end" : "Active"}
+          </span>
+        </div>
+
+        <dl className={styles.facts}>
+          <div className={styles.row}>
+            <dt className={styles.rowLabel}>Plan</dt>
+            <dd>Personal</dd>
+          </div>
+          <div className={styles.row}>
+            <dt className={styles.rowLabel}>Price</dt>
+            <dd>₹2,499 / month · GST included</dd>
+          </div>
+          <div className={styles.row}>
+            <dt className={styles.rowLabel}>Allowance</dt>
+            <dd>800 analysis minutes every month</dd>
+          </div>
+          <div className={styles.row}>
+            <dt className={styles.rowLabel}>Call length</dt>
+            <dd>Calls up to 90 minutes long</dd>
+          </div>
+          <div className={styles.row}>
+            <dt className={styles.rowLabel}>Next renewal</dt>
+            <dd>
+              {isCancelled
+                ? "Access continues until 3 Nov 2026"
+                : "3 Nov 2026 · ₹2,499"}
+            </dd>
+          </div>
+        </dl>
+
+        <div className={styles.actions}>
+          <Link
+            className={styles.primary}
+            href="/plans"
+            replace={variant === "dialog"}
+          >
+            Change or upgrade plan
+          </Link>
+          {!isCancelled ? (
+            cancelAsk ? (
+              <div className={styles.confirmCancelBox}>
+                <p className={styles.muted}>
+                  Renewal stops; access continues to the end of the period.
+                </p>
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.danger}
+                    onClick={() => {
+                      setIsCancelled(true);
+                      setCancelAsk(false);
+                    }}
+                  >
+                    Yes, stop renewal
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() => setCancelAsk(false)}
+                  >
+                    Keep renewal
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => setCancelAsk(true)}
+              >
+                Cancel renewal
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => setIsCancelled(false)}
+            >
+              Resume renewal
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Usage Meter */}
+      <div className={styles.billingCard}>
+        <div className={styles.billingCardHead}>
+          <h3>Analysis time</h3>
+          <Link
+            className={styles.secondary}
+            href="/analysis/new"
+            replace={variant === "dialog"}
+          >
+            Analyse a call
+          </Link>
+        </div>
+        <AllowanceSummary allowance={allowance} onRetry={onRetry} />
+      </div>
+
+      {/* 3. Top-ups */}
+      <div className={styles.billingCard}>
+        <div className={styles.billingCardHead}>
+          <div>
+            <h3>Need more minutes?</h3>
+            <p className={styles.muted}>
+              Add analysis minutes without changing your monthly subscription.
+            </p>
+          </div>
+        </div>
+
+        <div className={styles.topUpsMiniGrid}>
+          <div className={styles.topUpMiniCard}>
+            <div className={styles.topUpMiniHead}>
+              <span>Personal 100 min</span>
+              <span className={styles.topUpMiniPrice}>₹299</span>
+            </div>
+            <p className={styles.muted}>
+              GST included · for individual closers
+            </p>
+            <Link
+              className={styles.secondary}
+              href="/plans#topups"
+              replace={variant === "dialog"}
+            >
+              Top up 100 min
+            </Link>
+          </div>
+
+          <div className={styles.topUpMiniCard}>
+            <div className={styles.topUpMiniHead}>
+              <span>Organisation 500 min</span>
+              <span className={styles.topUpMiniPrice}>₹1,299 + GST</span>
+            </div>
+            <p className={styles.muted}>₹1,533 total · shared team pool</p>
+            <Link
+              className={styles.secondary}
+              href="/plans#topups"
+              replace={variant === "dialog"}
+            >
+              Top up 500 min
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Invoices & Receipts */}
+      <div className={styles.billingCard}>
+        <div className={styles.billingCardHead}>
+          <h3>Invoices &amp; Receipts</h3>
+        </div>
+        <div className={styles.invoiceTableWrap}>
+          <table className={styles.invoiceTable}>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Description</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Status</th>
+                <th scope="col">Receipt</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>3 Oct 2026</td>
+                <td>Personal Subscription (Monthly)</td>
+                <td>₹2,499</td>
+                <td>
+                  <span className={styles.badge} data-tone="ok">
+                    Paid
+                  </span>
+                </td>
+                <td>
+                  <a href="#receipt" className={styles.muted}>
+                    Download
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 5. Satisfaction Guarantee */}
+      <p className={styles.muted}>
+        <b>Satisfaction guarantee:</b> Full refund within 7 days if none of this
+        payment&apos;s minutes were used.
       </p>
     </div>
   );
