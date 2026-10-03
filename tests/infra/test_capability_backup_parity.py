@@ -132,12 +132,6 @@ TABLELESS_VERSIONED_HEADS = (
     INACTIVE_PLAN_VALUES,
 )
 NEW_TABLES = {
-    BILLING_INVOICES: (
-        "billing_invoice_counters",
-        "billing_buyer_tax_details",
-        "billing_invoices",
-        "billing_credit_notes",
-    ),
     PRACTICE: (
         "practice_set_versions",
         "practice_attempts",
@@ -238,6 +232,12 @@ NEW_TABLES = {
     ),
     PLAN_CATALOGUE: ("plans",),
     SENSITIVE_SEGMENT_MARKS: ("conversation_sensitive_segment_marks",),
+    BILLING_INVOICES: (
+        "billing_invoice_counters",
+        "billing_buyer_tax_details",
+        "billing_invoices",
+        "billing_credit_notes",
+    ),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -752,6 +752,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         120,
         121,
         121,
+        125,
     )
     expected_contracts = (
         None,
@@ -800,6 +801,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v39",
         "ac-postgres-parity-v40",
         "ac-postgres-parity-v40",
+        "ac-postgres-parity-v41",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

@@ -197,10 +197,17 @@ class Settings(BaseSettings):
     billing_seller_registered_address: str = ""
     billing_seller_state_code: str = ""
     billing_seller_sac: str = ""
-    billing_invoice_prefix: str = ""
+    billing_invoice_prefix: str = "EA"
     razorpay_key_id: str | None = None
     razorpay_key_secret: SecretStr | None = None
     razorpay_webhook_secret: SecretStr | None = None
+
+    @field_validator("billing_invoice_prefix")
+    @classmethod
+    def bounded_invoice_prefix(cls, value: str) -> str:
+        if re.fullmatch(r"[A-Z0-9]{1,2}", value) is None:
+            raise ValueError("billing_invoice_prefix must be 1–2 uppercase letters or digits")
+        return value
 
     @field_validator(
         "public_learner_tenant_id",

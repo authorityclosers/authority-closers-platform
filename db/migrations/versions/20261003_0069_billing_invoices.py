@@ -16,9 +16,11 @@ TABLES = (
 
 
 def upgrade() -> None:
-    op.create_table(TABLES[0], sa.Column("financial_year", sa.String(7), primary_key=True))
     op.create_table(
-        TABLES[1],
+        "billing_invoice_counters", sa.Column("financial_year", sa.String(7), primary_key=True)
+    )
+    op.create_table(
+        "billing_buyer_tax_details",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("order_id", sa.Uuid(), sa.ForeignKey("billing_orders.id"), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
@@ -31,63 +33,119 @@ def upgrade() -> None:
     )
     op.create_index(
         "uq_billing_buyer_order",
-        TABLES[1],
+        "billing_buyer_tax_details",
         ["order_id"],
         unique=True,
         postgresql_where=sa.text("supersedes_id IS NULL"),
     )
-    for table in TABLES[2:]:
-        invoice = table == "billing_invoices"
-        extra = (
-            [
-                sa.Column("order_id", sa.Uuid(), sa.ForeignKey("billing_orders.id")),
-                sa.Column("provider", sa.String(32), nullable=False),
-                sa.Column("payment_ref", sa.String(64), nullable=False),
-            ]
-            if invoice
-            else [
-                sa.Column(
-                    "invoice_id", sa.Uuid(), sa.ForeignKey("billing_invoices.id"), nullable=False
-                ),
-                sa.Column("refund_ref", sa.String(64), nullable=False),
-            ]
-        )
-        op.create_table(
-            table,
-            sa.Column("id", sa.Uuid(), primary_key=True),
-            sa.Column(
-                "account_id", sa.Uuid(), sa.ForeignKey("billing_accounts.id"), nullable=False
-            ),
-            sa.Column(
-                "financial_year",
-                sa.String(7),
-                sa.ForeignKey("billing_invoice_counters.financial_year"),
-                nullable=False,
-            ),
-            sa.Column("sequence", sa.Integer(), nullable=False),
-            sa.Column("number", sa.String(100), nullable=False, unique=True),
-            sa.Column("details", sa.JSON(), nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-            sa.Column(
-                "payment_event_id" if invoice else "refund_event_id",
-                sa.Uuid(),
-                sa.ForeignKey(
-                    "billing_payment_events.id" if invoice else "billing_refund_events.id"
-                ),
-                nullable=False,
-            ),
-            sa.Column("supersedes_id", sa.Uuid(), sa.ForeignKey(f"{table}.id"), unique=True),
-            *extra,
-            sa.CheckConstraint("sequence > 0", name="sequence_positive"),
-            sa.UniqueConstraint("financial_year", "sequence"),
-        )
-        op.create_index(
-            "uq_billing_invoice_payment" if invoice else "uq_billing_credit_refund",
-            table,
-            ["provider", "payment_ref"] if invoice else ["invoice_id", "refund_ref"],
-            unique=True,
-            postgresql_where=sa.text("supersedes_id IS NULL"),
-        )
+    op.create_table(
+        "billing_invoices",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("account_id", sa.Uuid(), sa.ForeignKey("billing_accounts.id"), nullable=False),
+        sa.Column(
+            "financial_year",
+            sa.String(7),
+            sa.ForeignKey("billing_invoice_counters.financial_year"),
+            nullable=False,
+        ),
+        sa.Column("sequence", sa.Integer(), nullable=False),
+        sa.Column("number", sa.String(16), nullable=False, unique=True),
+        sa.Column("currency", sa.String(3), nullable=False),
+        sa.Column("taxable_minor", sa.BigInteger(), nullable=False),
+        sa.Column("cgst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("sgst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("igst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("total_minor", sa.BigInteger(), nullable=False),
+        sa.Column("place_of_supply", sa.String(2)),
+        sa.Column("details", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("supersedes_id", sa.Uuid(), sa.ForeignKey("billing_invoices.id"), unique=True),
+        sa.Column("order_id", sa.Uuid(), sa.ForeignKey("billing_orders.id")),
+        sa.Column("provider", sa.String(32), nullable=False),
+        sa.Column("payment_ref", sa.String(64), nullable=False),
+        sa.Column(
+            "payment_event_id",
+            sa.Uuid(),
+            sa.ForeignKey("billing_payment_events.id"),
+            nullable=False,
+        ),
+        sa.CheckConstraint("sequence > 0", name="sequence_positive"),
+        sa.CheckConstraint("number ~ '^[A-Za-z0-9/-]{1,16}$'", name="number_shape"),
+        sa.CheckConstraint("currency = 'INR'", name="currency_inr"),
+        sa.CheckConstraint(
+            "taxable_minor >= 0 AND cgst_minor >= 0 AND sgst_minor >= 0 "
+            "AND igst_minor >= 0 AND total_minor >= 0",
+            name="money_nonnegative",
+        ),
+        sa.CheckConstraint(
+            "total_minor = taxable_minor + cgst_minor + sgst_minor + igst_minor",
+            name="amount_balanced",
+        ),
+        sa.CheckConstraint(
+            "igst_minor = 0 OR (cgst_minor = 0 AND sgst_minor = 0)", name="tax_components"
+        ),
+        sa.UniqueConstraint("financial_year", "sequence"),
+    )
+    op.create_index(
+        "uq_billing_invoice_payment",
+        "billing_invoices",
+        ["provider", "payment_ref"],
+        unique=True,
+        postgresql_where=sa.text("supersedes_id IS NULL"),
+    )
+    op.create_table(
+        "billing_credit_notes",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("account_id", sa.Uuid(), sa.ForeignKey("billing_accounts.id"), nullable=False),
+        sa.Column(
+            "financial_year",
+            sa.String(7),
+            sa.ForeignKey("billing_invoice_counters.financial_year"),
+            nullable=False,
+        ),
+        sa.Column("sequence", sa.Integer(), nullable=False),
+        sa.Column("number", sa.String(16), nullable=False, unique=True),
+        sa.Column("currency", sa.String(3), nullable=False),
+        sa.Column("taxable_minor", sa.BigInteger(), nullable=False),
+        sa.Column("cgst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("sgst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("igst_minor", sa.BigInteger(), nullable=False),
+        sa.Column("total_minor", sa.BigInteger(), nullable=False),
+        sa.Column("place_of_supply", sa.String(2)),
+        sa.Column("details", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "supersedes_id", sa.Uuid(), sa.ForeignKey("billing_credit_notes.id"), unique=True
+        ),
+        sa.Column("invoice_id", sa.Uuid(), sa.ForeignKey("billing_invoices.id"), nullable=False),
+        sa.Column("refund_ref", sa.String(64), nullable=False),
+        sa.Column(
+            "refund_event_id", sa.Uuid(), sa.ForeignKey("billing_refund_events.id"), nullable=False
+        ),
+        sa.CheckConstraint("sequence > 0", name="sequence_positive"),
+        sa.CheckConstraint("number ~ '^[A-Za-z0-9/-]{1,16}$'", name="number_shape"),
+        sa.CheckConstraint("currency = 'INR'", name="currency_inr"),
+        sa.CheckConstraint(
+            "taxable_minor >= 0 AND cgst_minor >= 0 AND sgst_minor >= 0 "
+            "AND igst_minor >= 0 AND total_minor >= 0",
+            name="money_nonnegative",
+        ),
+        sa.CheckConstraint(
+            "total_minor = taxable_minor + cgst_minor + sgst_minor + igst_minor",
+            name="amount_balanced",
+        ),
+        sa.CheckConstraint(
+            "igst_minor = 0 OR (cgst_minor = 0 AND sgst_minor = 0)", name="tax_components"
+        ),
+        sa.UniqueConstraint("financial_year", "sequence"),
+    )
+    op.create_index(
+        "uq_billing_credit_refund",
+        "billing_credit_notes",
+        ["invoice_id", "refund_ref"],
+        unique=True,
+        postgresql_where=sa.text("supersedes_id IS NULL"),
+    )
     for table in TABLES:
         op.execute(
             sa.text(

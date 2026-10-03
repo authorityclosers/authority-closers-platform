@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -19,6 +20,25 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ac_platform.db.base import Base
+
+
+def _tax_checks() -> tuple[CheckConstraint, ...]:
+    return (
+        CheckConstraint("number ~ '^[A-Za-z0-9/-]{1,16}$'", name="number_shape"),
+        CheckConstraint("currency = 'INR'", name="currency_inr"),
+        CheckConstraint(
+            "taxable_minor >= 0 AND cgst_minor >= 0 AND sgst_minor >= 0 "
+            "AND igst_minor >= 0 AND total_minor >= 0",
+            name="money_nonnegative",
+        ),
+        CheckConstraint(
+            "total_minor = taxable_minor + cgst_minor + sgst_minor + igst_minor",
+            name="amount_balanced",
+        ),
+        CheckConstraint(
+            "igst_minor = 0 OR (cgst_minor = 0 AND sgst_minor = 0)", name="tax_components"
+        ),
+    )
 
 
 class BillingInvoiceCounter(Base):
@@ -58,7 +78,14 @@ class TaxDocument(Base):
         ForeignKey("billing_invoice_counters.financial_year")
     )
     sequence: Mapped[int] = mapped_column(Integer)
-    number: Mapped[str] = mapped_column(String(100), unique=True)
+    number: Mapped[str] = mapped_column(String(16), unique=True)
+    currency: Mapped[str] = mapped_column(String(3))
+    taxable_minor: Mapped[int] = mapped_column(BigInteger)
+    cgst_minor: Mapped[int] = mapped_column(BigInteger)
+    sgst_minor: Mapped[int] = mapped_column(BigInteger)
+    igst_minor: Mapped[int] = mapped_column(BigInteger)
+    total_minor: Mapped[int] = mapped_column(BigInteger)
+    place_of_supply: Mapped[str | None] = mapped_column(String(2))
     details: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -66,6 +93,7 @@ class TaxDocument(Base):
 class BillingInvoice(TaxDocument):
     __tablename__ = "billing_invoices"
     __table_args__ = (
+        *_tax_checks(),
         CheckConstraint("sequence > 0", name="sequence_positive"),
         UniqueConstraint("financial_year", "sequence"),
         Index(
@@ -89,6 +117,7 @@ class BillingInvoice(TaxDocument):
 class BillingCreditNote(TaxDocument):
     __tablename__ = "billing_credit_notes"
     __table_args__ = (
+        *_tax_checks(),
         CheckConstraint("sequence > 0", name="sequence_positive"),
         UniqueConstraint("financial_year", "sequence"),
         Index(

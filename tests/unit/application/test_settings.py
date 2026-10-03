@@ -6,13 +6,15 @@ from pydantic import AnyHttpUrl, ValidationError
 from ac_platform.application.settings import Settings
 
 
-def test_invoice_seller_settings_are_empty_except_the_approved_legal_name(monkeypatch):
-    monkeypatch.setenv("AC_BILLING_INVOICE_PREFIX", "FICTIONAL")
+def test_invoice_seller_settings_defaults_and_environment_prefix(monkeypatch):
+    monkeypatch.delenv("AC_BILLING_INVOICE_PREFIX", raising=False)
+    assert Settings(_env_file=None).billing_invoice_prefix == "EA"
+    monkeypatch.setenv("AC_BILLING_INVOICE_PREFIX", "T1")
     settings = Settings(_env_file=None)
     assert (
         settings.billing_seller_legal_name == "Vikriya Solutions LLP (trading as Estate Autopilots)"
     )
-    assert settings.billing_invoice_prefix == "FICTIONAL"
+    assert settings.billing_invoice_prefix == "T1"
     assert not any(
         (
             settings.billing_seller_gstin,
@@ -21,6 +23,12 @@ def test_invoice_seller_settings_are_empty_except_the_approved_legal_name(monkey
             settings.billing_seller_sac,
         )
     )
+
+
+@pytest.mark.parametrize("prefix", ["", "ABC", "ea", "E/", "E-", " EA", "EA\n"])
+def test_invoice_prefix_rejects_values_that_break_the_number_limit(prefix):
+    with pytest.raises(ValidationError, match="billing_invoice_prefix"):
+        Settings(_env_file=None, billing_invoice_prefix=prefix)
 
 
 def test_blank_optional_public_learner_tenant_is_unconfigured() -> None:

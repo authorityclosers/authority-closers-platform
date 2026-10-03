@@ -13,7 +13,7 @@ No dev/staging/production data, seller configuration, provider setting or keys
 are changed by this work. This is local implementation evidence; it does not
 claim a deployed payment or a full production snapshot/restore exercise.
 
-Verification on the billing checkout:
+Initial combined-B verification, before the B1/B2 split and review changes:
 
 - `uv run ruff format --check packages/python tests`: exit 0, 905 files.
 - `uv run ruff check packages/python tests`: exit 0.
@@ -45,8 +45,24 @@ older requests, the expectation reflects the saved flag, the fixture meets the
 existing minimum, and both receipt/webhook refunds now use the shared credit
 note path. Final focused reruns above passed. No tests ran against production.
 
-PR B boundary: the implementation is about 530 production lines including the
-migration and three parity tools. It can be reviewed as a schema/settings/parity
-commit (about 253) followed by a settlement/buyer/GST-flag commit (about 280).
-The card requires three PRs and about 300 lines per PR; CTO must reconcile this
-boundary before a PR is opened. Listing/download remains the separate PR C.
+The CTO approved A/B1/B2/C on 3 October. PR #235 contains B1 only; B2 is preserved
+as commit `63f9f2a` and a task attachment, with a 615-line allowance after B1
+merges. Listing/download remains PR C.
+
+B1 review changes: all four table creations have literal names, invoice numbers
+are constrained to 16 allowed characters, the prefix defaults to EA and accepts
+only 1–2 uppercase letters/digits, and tax amounts/place of supply are typed
+columns with currency, nonnegative, balance and component checks. GSTIN/SAC stay
+empty. B2 must adopt the compact four-digit financial year, typed money columns
+and text-only snapshots when cherry-picked.
+
+The root-skipped parity test hid missing 0069 count/contract expectations and
+an out-of-order new-table entry. Both are fixed alongside the literal-name CI
+failure. Direct invocation of the two pure assertions (packaged contracts and
+exact migration tables/counts) now passes. The full root-only file is required
+before the next push; Root Operator must supply a receipt for the corrected SHA.
+
+Revised B1 local checks: format 902 files, lint and mypy 381 sources passed.
+`uv run pytest tests/unit/application/test_settings.py tests/database/test_model_registry.py tests/database/test_conversation_postgresql.py::test_populated_migration_head_matches_real_model_registry tests/infra/test_ac_release.py tests/infra/test_capability_backup_parity.py -q --tb=short`
+passed 273 cases with 3151 root-only skips.
+These skips do not prove the complete parity gate. No production restore is run.
