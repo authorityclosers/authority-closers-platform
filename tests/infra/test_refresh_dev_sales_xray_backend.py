@@ -62,12 +62,21 @@ class FakeCommands:
         self.smoke_failure = False
         self.health_failures = 0
         self.health_calls = 0
+        self.units = dict.fromkeys(UNIT_ORDER, "inactive")
+        self.fail = set()
+        self.restart_status = 1
+
+    def step(self, args):
+        """Return the sandboxed argv after ``--`` for a systemd-run call."""
+        return args[args.index("--") + 1 :]
 
     def __call__(self, argv, **kwargs):
         args = list(map(str, argv))
         self.calls.append((args, kwargs))
         if self.smoke_failure and any(item.endswith("/ac_smoke.py") for item in args):
             return subprocess.CompletedProcess(args, 1, b"", b"secret smoke output")
+        if args[:2] == ["git", "clone"] and "clone" in self.fail:
+            return subprocess.CompletedProcess(args, 128, b"", b"secret clone output")
         if args[:2] == ["git", "--no-replace-objects"]:
             result = subprocess.run(  # noqa: S603 - args are fixed Git commands for a temp mirror
                 args, capture_output=True, check=False, timeout=30
@@ -83,17 +92,35 @@ class FakeCommands:
             return subprocess.CompletedProcess(args, 0, b"{}", b"")
         if args[0] == "uv":
             assert args == ["uv", "sync", "--frozen", "--no-dev", "--no-build"]
-        elif args[0] == "setpriv":
-            assert args[1:4] == ["--reuid=10001", "--regid=10001", "--clear-groups"]
-            assert kwargs["env"]["AC_ENVIRONMENT"] == "development"
+            if "uv" in self.fail:
+                return subprocess.CompletedProcess(args, 2, b"", b"secret uv output")
+        elif args[0] == "systemd-run":
+            assert args[1:5] == ["--wait", "--collect", "--quiet", "--service-type=exec"]
+            assert "User=10001" in args and "Group=10001" in args
+            if self.step(args)[-2:] == ["upgrade", "head"] and "migration" in self.fail:
+                return subprocess.CompletedProcess(args, 1, b"", b"postgresql://secret")
         elif args[0] == "systemctl":
+            if args[1] == "is-active":
+                state = self.units[args[2]]
+                return subprocess.CompletedProcess(
+                    args, 0 if state == "active" else 3, (state + "\n").encode(), b""
+                )
+            if args[1] == "stop":
+                if "stop" in self.fail:
+                    return subprocess.CompletedProcess(args, 1, b"", b"secret stop")
+                self.units[args[2]] = "inactive"
             if (
                 self.fail_api_restart
                 and not self.failed_once
                 and args == ["systemctl", "restart", "ac-dev-api.service"]
             ):
                 self.failed_once = True
-                return subprocess.CompletedProcess(args, 1, b"", b"secret diagnostic")
+                self.units[args[2]] = "failed"
+                return subprocess.CompletedProcess(
+                    args, self.restart_status, b"", b"secret diagnostic"
+                )
+            if args[1] == "restart":
+                self.units[args[2]] = "active"
         elif args[0] == "curl":
             self.health_calls += 1
             if self.health_failures:
@@ -118,6 +145,29 @@ class FakeCommands:
         return subprocess.CompletedProcess(args, 0, b"", b"")
 
 
+def identity(monkeypatch, *, missing=False, groups=(10001,), name="ac-sales-xray-runtime"):
+    def getpwuid(uid):
+        if missing or uid != 10001:
+            raise KeyError(uid)
+        return SimpleNamespace(pw_name=name, pw_uid=10001, pw_gid=10001)
+
+    monkeypatch.setattr(refresh.pwd, "getpwuid", getpwuid)
+    monkeypatch.setattr(
+        refresh.grp,
+        "getgrgid",
+        lambda gid: SimpleNamespace(gr_name="ac-sales-xray-native", gr_gid=gid, gr_mem=[]),
+    )
+    monkeypatch.setattr(refresh.os, "getgrouplist", lambda _user, _gid: list(groups))
+
+
+def sandbox_steps(fake):
+    return [args for args, _ in fake.calls if args[0] == "systemd-run"]
+
+
+def systemctl(fake, start=0):
+    return [args[1:] for args, _ in fake.calls[start:] if args[0] == "systemctl"]
+
+
 @pytest.fixture
 def tree(tmp_path, monkeypatch):
     monkeypatch.setattr(
@@ -125,6 +175,7 @@ def tree(tmp_path, monkeypatch):
         "getpwnam",
         lambda _: SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid()),
     )
+    identity(monkeypatch)
     app = tmp_path / "application"
     releases = app / "releases"
     releases.mkdir(parents=True)
@@ -202,6 +253,8 @@ def tree(tmp_path, monkeypatch):
             return "/usr/local/bin/uv"
         if name == "ac-studio-sync":
             return "/usr/local/bin/ac-studio-sync"
+        if name == "systemd-run":
+            return "/usr/bin/systemd-run"
         return real_which(name, path=path)
 
     monkeypatch.setattr(refresh.shutil, "which", fake_which)
@@ -223,10 +276,10 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     assert "AC_DEV_WORKER_MANIFEST_SHA256=" in paths.worker_dropin.read_text()
     assert json.loads((paths.development / "service.json").read_text())["release_id"] == sha
     assert any(args[0] == "uv" for args, _ in fake.calls)
-    assert any(args[0] == "setpriv" for args, _ in fake.calls)
+    assert not any(args[0] == "setpriv" for args, _ in fake.calls)
     assert any(args[:2] == ["git", "clone"] for args, _ in fake.calls)
     assert any(args[:4] == ["runuser", "-u", "acdev", "--"] for args, _ in fake.calls)
-    migration = next(args for args, _ in fake.calls if args[0] == "setpriv")
+    migration = sandbox_steps(fake)[0]
     assert migration[-3:] == [str(paths.backend / ".venv/bin/alembic"), "upgrade", "head"]
     uv_calls = [(args, kwargs) for args, kwargs in fake.calls if args[0] == "uv"]
     assert uv_calls and all(kwargs["env"] == refresh.UV_ENV for _, kwargs in uv_calls)
@@ -244,7 +297,11 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     assert "secret" not in output and "postgresql://" not in output
     # All three units restart only after the migration, in a fixed order.
     assert restarts(fake) == list(UNIT_ORDER)
-    migrate_at = next(i for i, (args, _) in enumerate(fake.calls) if args[0] == "setpriv")
+    migrate_at = next(
+        i
+        for i, (args, _) in enumerate(fake.calls)
+        if args[0] == "systemd-run" and args[-2:] == ["upgrade", "head"]
+    )
     first_restart = next(
         i for i, (args, _) in enumerate(fake.calls) if args[:2] == ["systemctl", "restart"]
     )
@@ -253,7 +310,7 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     calls = len(fake.calls)
     noop = refresh.refresh(paths, fake, uid=0)
     assert noop["noop"]
-    assert not any(args[0] in ("uv", "setpriv", "systemctl") for args, _ in fake.calls[calls:])
+    assert not any(args[0] in ("uv", "systemd-run", "systemctl") for args, _ in fake.calls[calls:])
 
 
 def test_staging_pick_uses_mirror_commit_and_stored_core(tree):
@@ -365,7 +422,8 @@ def test_restart_failure_restores_checkout_marker_and_dropins(tree, capsys):
     )
     failed = FakeCommands(new)
     failed.fail_api_restart = True
-    with pytest.raises(refresh.RefreshError):
+    failed.units = dict.fromkeys(failed.units, "active")
+    with pytest.raises(refresh.RefreshError, match="api_restart_failed"):
         refresh.refresh(paths, failed, uid=0)
     assert git("-C", str(paths.backend), "rev-parse", "HEAD") == old
     assert (paths.backend / ".ac-release-id").read_bytes() == old_marker
@@ -377,7 +435,11 @@ def test_restart_failure_restores_checkout_marker_and_dropins(tree, capsys):
     captured = capsys.readouterr()
     assert "secret" not in captured.out + captured.err
     result = json.loads(captured.out.splitlines()[-1])
-    assert result["error"] == "command_failed" and result["restarted"] == "rollback_attempted"
+    assert result["error"] == "api_restart_failed" and result["restarted"] == "rollback_attempted"
+    assert result["phase"] == "restart" and result["exit_status"] == 1
+    assert result["previous"] == old and result["rollback"]["ok"]
+    assert result["rollback"]["units"] == dict.fromkeys(failed.units, "restarted")
+    assert failed.units == dict.fromkeys(failed.units, "active")
     # The failed API restart stops the forward pass; rollback restarts all three units.
     assert restarts(failed) == ["ac-dev-api.service", *UNIT_ORDER]
 
@@ -398,6 +460,9 @@ def test_health_timeout_rolls_back_checkout_and_release_state(tree, capsys, monk
     result = json.loads(output.splitlines()[-1])
     assert result["error"] == "health_release_mismatch"
     assert result["restarted"] == "rollback_attempted"
+    assert result["previous"] is None and result["migrated"] == "yes"
+    assert result["rollback"]["units"] == dict.fromkeys(fake.units, "stopped")
+    assert fake.units == dict.fromkeys(fake.units, "inactive")
 
 
 def test_main_branch_uses_ff_only_and_smoke_failure_keeps_backend(tree, capsys):
@@ -494,3 +559,179 @@ def test_systemd_timer_and_service_contract():
             check=False,
         )
         assert result.returncode == 0, result.stderr.decode()
+
+
+def failure_report(capsys) -> dict:
+    captured = capsys.readouterr()
+    assert "secret" not in captured.out + captured.err
+    assert "postgresql://" not in captured.out + captured.err
+    return json.loads(captured.out.splitlines()[-1])
+
+
+def test_first_install_migrates_as_10001_behind_protected_ancestor(tree, tmp_path):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    refresh.refresh(paths, fake, uid=0)
+    migration, smoke = sandbox_steps(fake)
+    properties = [migration[i + 1] for i, item in enumerate(migration) if item == "--property"]
+    # uid 10001 never traverses root:acops 2750 /srv/authority-closers: it is
+    # masked by a read-only tmpfs and only the backend is bound back, read-only.
+    assert "TemporaryFileSystem=/srv/authority-closers:ro /run/ac-sales-xray:ro" in " ".join(
+        properties
+    )
+    assert f"BindReadOnlyPaths={paths.backend}" in properties
+    assert f"WorkingDirectory={paths.backend}" in properties
+    assert f"EnvironmentFile={paths.migrator_env}" in properties
+    assert "User=10001" in properties and "Group=10001" in properties
+    assert not any(
+        item.startswith(("SupplementaryGroups", "DynamicUser", "User=root", "Group=acops"))
+        for item in properties
+    )
+    assert "--unit=ac-dev-sales-xray-migrate.service" in migration
+    assert "--unit=ac-dev-sales-xray-smoke.service" in smoke
+    # The DSN stays in the root-only file: not in any argv or child environment.
+    for args, kwargs in fake.calls:
+        assert not any("secret" in item or "postgresql://" in item for item in args)
+        assert "AC_DATABASE_MIGRATOR_URL" not in (kwargs.get("env") or {})
+    # The step's executable is the backend's own Alembic, run only via the unit.
+    assert not any(args[0] == str(paths.backend / ".venv/bin/alembic") for args, _ in fake.calls)
+    systemd_analyze = shutil.which("systemd-analyze")
+    if systemd_analyze:
+        unit = tmp_path / "rendered-migrate.service"
+        unit.write_text(
+            "[Service]\nType=exec\n"
+            + "".join(item + "\n" for item in properties)
+            + "ExecStart=/usr/bin/true\n"
+        )
+        result = subprocess.run(  # noqa: S603 - fixed local parser command
+            [systemd_analyze, "verify", str(unit)], capture_output=True, check=False
+        )
+        assert result.returncode == 0, result.stderr.decode()
+
+
+def test_sandbox_matches_development_api_unit():
+    api = (ROOT / "infra/application/development/ac-dev-api.service").read_text().splitlines()
+    for item in refresh.SANDBOX_PROPERTIES:
+        if item.split("=", 1)[0] in ("StandardInput", "StandardOutput", "StandardError"):
+            continue
+        if item.startswith("TasksMax="):
+            assert item == "TasksMax=64"
+            continue
+        assert item in api, item
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "code"),
+    [
+        ({"missing": True}, "runtime_identity_missing"),
+        ({"groups": (10001, 1002)}, "runtime_identity_invalid"),
+        ({"name": "someone-else"}, "runtime_identity_invalid"),
+    ],
+)
+def test_runtime_identity_admission_refuses_before_any_change(tree, monkeypatch, kwargs, code):
+    paths, sha, _, _ = tree
+    identity(monkeypatch, **kwargs)
+    fake = FakeCommands(sha)
+    with pytest.raises(refresh.RefreshError, match=code):
+        refresh.refresh(paths, fake, uid=0)
+    assert not paths.backend.exists() and not paths.backend.parent.exists()
+    assert not any(args[0] in ("systemctl", "systemd-run", "uv") for args, _ in fake.calls)
+    assert not any(args[:2] == ["git", "clone"] for args, _ in fake.calls)
+
+
+def test_migrator_env_extra_key_refuses(tree):
+    paths, sha, _, _ = tree
+    paths.migrator_env.write_text(
+        "AC_ENVIRONMENT=development\nAC_DATABASE_MIGRATOR_URL=postgresql://user:secret@dev/db\n"
+        "PYTHONPATH=/tmp\n"
+    )
+    with pytest.raises(refresh.RefreshError, match="migrator_env_keys_invalid"):
+        refresh.refresh(paths, FakeCommands(sha), uid=0)
+    assert not paths.backend.exists()
+
+
+@pytest.mark.parametrize(
+    ("fail", "phase", "code", "status"),
+    [
+        ("clone", "clone", "clone_failed", 128),
+        ("uv", "dependencies", "dependency_sync_failed", 2),
+        ("migration", "migration", "migration_failed", 1),
+    ],
+)
+def test_first_install_failure_before_migration_restores_absent_state(
+    tree, capsys, fail, phase, code, status
+):
+    paths, sha, _, _ = tree
+    profile = paths.development / "service.json"
+    profile.write_text("existing secure profile\n")
+    profile.chmod(0o600)
+    fake = FakeCommands(sha)
+    fake.fail.add(fail)
+    with pytest.raises(refresh.RefreshError, match=code) as raised:
+        refresh.refresh(paths, fake, uid=0)
+    assert raised.value.exit_status == status
+    result = failure_report(capsys)
+    assert result["previous"] is None and result["migrated"] == "no"
+    assert (result["phase"], result["error"], result["exit_status"]) == (phase, code, status)
+    assert result["rollback"] == {
+        "ok": True,
+        "failed": [],
+        "units": dict.fromkeys(fake.units, "stopped"),
+    }
+    assert result["units_before"] == dict.fromkeys(fake.units, "inactive")
+    assert not paths.backend.exists() and not paths.backend.parent.exists()
+    assert not paths.api_dropin.exists() and not paths.api_dropin.parent.exists()
+    assert not paths.worker_dropin.exists() and not paths.worker_dropin.parent.exists()
+    assert profile.read_text() == "existing secure profile\n"
+    assert paths.migrator_env.exists() and (paths.development / "api.env").exists()
+    # Nothing is started without a backend, so no unit can enter a restart loop.
+    assert not any(cmd[0] in ("restart", "start") for cmd in systemctl(fake))
+    assert fake.units == dict.fromkeys(fake.units, "inactive")
+
+
+def test_first_install_restart_failure_with_no_previous_stops_units(tree, capsys):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.fail_api_restart = True
+    fake.restart_status = 217
+    with pytest.raises(refresh.RefreshError, match="api_restart_failed"):
+        refresh.refresh(paths, fake, uid=0)
+    result = failure_report(capsys)
+    assert (result["phase"], result["exit_status"], result["migrated"]) == ("restart", 217, "yes")
+    assert result["previous"] is None and result["rollback"]["ok"]
+    commands = systemctl(fake)
+    failed_at = commands.index(["restart", "ac-dev-api.service"])
+    assert ["stop", "ac-dev-sales-xray-worker.service"] in commands[failed_at:]
+    assert ["stop", "ac-dev-api.service"] in commands[failed_at:]
+    assert ["reset-failed", "ac-dev-api.service"] in commands[failed_at:]
+    assert not any(cmd[0] in ("restart", "start") for cmd in commands[failed_at + 1 :])
+    assert fake.units == dict.fromkeys(fake.units, "inactive")
+    assert not paths.backend.exists()
+    assert not (paths.development / "service.json").exists()
+
+
+def test_unstoppable_unit_keeps_checkout_and_reports_rollback_failed(tree, capsys):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.fail_api_restart = True
+    fake.fail.add("stop")
+    with pytest.raises(refresh.RefreshError, match="rollback_failed"):
+        refresh.refresh(paths, fake, uid=0)
+    result = failure_report(capsys)
+    assert result["error"] == "api_restart_failed" and not result["rollback"]["ok"]
+    assert "remove_checkout" in result["rollback"]["failed"]
+    assert paths.backend.exists()
+
+
+def test_main_prints_only_stable_code(tree, capsys, monkeypatch):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.fail.add("migration")
+    monkeypatch.setattr(refresh, "Paths", lambda: paths)
+    monkeypatch.setattr(refresh, "command", fake)
+    monkeypatch.setattr(refresh.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(refresh.refresh, "__defaults__", (fake,))
+    assert refresh.main([]) == 1
+    captured = capsys.readouterr()
+    assert captured.err.strip() == "migration_failed"
+    assert "secret" not in captured.out + captured.err

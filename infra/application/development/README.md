@@ -13,6 +13,16 @@ The Root specialist installs the reviewed units from
 Keep the admin-web alias `api.development.ac.internal.invalid:8000` working at
 cutover (AUT-285); these units do not change networking or Caddy.
 
+Host identity: systemd cannot start `User=10001` without an NSS entry (status
+217/USER). `scripts/install-dev-runtime-identity.py` (dry-run by default,
+`--apply`, `--rollback --apply`) adds the locked, home-less system account
+`ac-sales-xray-runtime` (uid 10001) whose only group is the existing
+`ac-sales-xray-native` (gid 10001) primary group. It adds no supplementary group
+(never `acops`), leaves the native group's member list empty, and its rollback
+removes only that account, never the group or any file. The refresh refuses with
+`runtime_identity_missing`/`runtime_identity_invalid` before any change unless
+exactly this identity exists.
+
 Expected host paths:
 
 - `/srv/authority-closers/development/backend`: root-owned checkout and `.venv`
@@ -114,14 +124,32 @@ descriptor. It requires `AC_ENVIRONMENT=development` and
 `AC_DATABASE_MIGRATOR_URL` in the root-only
 `/etc/authority-closers/development/migrator.env`. It refuses if the API
 environment file contains either the migrator URL or `AC_RELEASE_ID`.
-It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
-renders `service.json` from the root-owned development template, writes the
-release marker and API/worker drop-ins, restarts the API, Sales Xray worker and
-outbox worker units in that order, then
-polls `/health/ready` for up to 60 seconds. The refresh passes only when the API
-reports the target release and its database is ready. Failures during this
-refresh restore the previous checkout, marker, manifest and drop-ins before
-restarting all three units.
+The migrator file may hold only those two keys.
+It syncs the frozen production dependencies, then runs Alembic as uid/gid 10001
+in the transient unit `ac-dev-sales-xray-migrate.service` (`systemd-run --wait`)
+with the API unit's sandbox: `/srv/authority-closers` stays root:acops 2750 and
+is masked by a read-only tmpfs, with only the backend bound back read-only, so
+the step needs no traversal right or group. systemd reads `migrator.env` itself
+(`EnvironmentFile=`); the URL never enters argv, this process or the checkout.
+The smoke step uses the same sandbox (`ac-dev-sales-xray-smoke.service`).
+The refresh then renders `service.json` from the root-owned development
+template, writes the release marker and API/worker drop-ins, restarts the API, Sales Xray
+worker and outbox worker units in that order, then polls `/health/ready` for up to 60 seconds. The refresh
+passes only when the API reports the target release and its database is ready.
+
+On failure it prints one JSON line with stable fields only: `phase` (`clone`,
+`fetch`, `checkout`, `dependencies`, `migration`, `activation`, `restart`,
+`health`), `error` (for example `migration_failed`, `api_restart_failed`),
+`exit_status`, `previous`, `migrated`, `units_before` and `rollback`
+(`ok`, `failed` steps, final unit states). Command output and URLs are never
+printed. With a previous checkout, rollback restores the checkout, marker,
+manifest and drop-ins and restarts only the units that were running before.
+On a first install (`previous: null`) it stops all three units first, then removes
+the new checkout and any files and directories it created, restores
+`service.json` to its saved bytes, and leaves all three units stopped with their
+failed state cleared, so nothing restart-loops. If a unit cannot be stopped, the
+checkout is kept and the result is `rollback_failed`. Rollback never touches the
+database, storage or credential files; a completed migration stays applied.
 
 After backend health passes, the service runs the acdev-owned studio sync and
 merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio
