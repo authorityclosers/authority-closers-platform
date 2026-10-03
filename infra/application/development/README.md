@@ -204,3 +204,107 @@ sudo AC_INFISICAL_ENVIRONMENT=dev AC_INFISICAL_PATH=/sales-xray/dev-fixture-acco
 
 Done check: exit 0 and three `accounts` entries; a second run prints the same
 person ids. Then sign in on salesxray-dev with each password.
+
+## Admin dev image (AUT-970)
+
+Admin dev (`admin-dev.authorityclosers.com`, loopback edge `127.0.0.1:3017`)
+runs the `admin-web` service of the root-owned dev compose project `acdev-xray`
+(`/srv/authority-closers/development/compose.yaml`, AUT-285).
+`scripts/deploy-dev-admin-web.py` points that one service at the admin-web image
+of a core release the release engine already stored and loaded for staging. It
+never builds, pulls, retags or edits a container, and leaves `compose.yaml`,
+every other service, staging and production alone.
+
+Preflight (all before any change): the release is on `main` in
+`/var/lib/ac-release/mirror.git`; each `--require-ancestor` merge is in it; its
+stored `releases/<sha>` passes `RELEASE-FILES.sha256` and names it in
+`AC_RELEASE_ID`; the local tag `…/authority-closers-admin-web:<sha>` exists,
+carries `org.opencontainers.image.revision=<sha>` and is the same image as the
+release's `AC_ADMIN_IMAGE`; Compose accepts the candidate override. The default
+release is the `current-staging` core.
+
+Apply writes `compose.admin-web-release.yaml` (`image:` the tag,
+`pull_policy: never`) and runs `docker compose -p acdev-xray -f compose.yaml -f
+compose.admin-web-release.yaml up --detach --no-deps --no-build --pull never
+--force-recreate admin-web`. It passes only when the container is healthy on
+that image and revision and the edge returns `/` → 307 `/login` and `/login` →
+200; otherwise it restores the previous override and image. It records
+`/var/lib/ac-dev-admin-web/history.jsonl` and the root-owned 0644 receipt
+`deployed.json` (host, image, revision, verified merges) that the QA launcher
+pins. Every later Compose command for `acdev-xray` must pass both files, or
+Compose reverts admin-web; `status` reports that drift as `receipt_matches:
+false`.
+
+Root, from the released tree (`R=/srv/authority-closers/application/current-staging`):
+
+```sh
+S="$R/scripts/deploy-dev-admin-web.py"; M=1daeb17431a83a1330e9ec5f2362c29d3bb39c30
+sudo python3 "$S" status --require-ancestor "$M"          # read-only revision proof
+sudo python3 "$S" deploy --require-ancestor "$M"          # dry-run: preflight and plan
+sudo python3 "$S" deploy --require-ancestor "$M" --apply  # serve the staging release
+sudo python3 "$S" status --require-ancestor "$M"          # expect contains[M]=true, receipt_matches
+sudo python3 "$S" rollback                                # plan; add --apply to restore
+```
+
+## Admin dev QA browser credential (AUT-970)
+
+Browser QA signs a fictional identity into Admin dev without seeing its
+password. Declared reference (names only; the fixture task under AUT-959
+creates the account and the secret, not this code):
+
+| Identity | Account | Infisical `dev` folder | Secret name |
+| --- | --- | --- | --- |
+| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` |
+
+- `scripts/dev-qa-credential.py`, installed root:root 0750 as
+  `/usr/local/sbin/ac-dev-qa-credential`, is the only root step. It reuses
+  `/usr/local/sbin/ac-infisical-run` with `dev` and the identity's folder; a root
+  inner process writes only the one named value to a pipe. It refuses unless
+  called through sudo by a non-root user, from the installed launcher, with
+  stdout a pipe and an allowlisted identity. The bootstrap, `INFISICAL_TOKEN`,
+  the folder's other secrets and every API/DB credential stay in root.
+- `development/qa-admin-browser.py`, installed root:root 0755 as
+  `/usr/local/libexec/ac-dev-qa/qa-admin-browser.py`, runs as QA. Preflight:
+  non-root, allowlisted `@example.test` identity, origin exactly
+  `https://admin-dev.authorityclosers.com`, a root-owned receipt containing the
+  identity's required merge (AUT-890 for `billing-staff`), edge `/login` 200,
+  `/v1/me` 401 through the edge and the dev API ready. It then runs a fresh
+  sentinel through the same pipe into the real `/login` form, requires the API
+  to refuse it, and checks that the sentinel is absent from browser
+  argv/environments, profile files and its own output. Only then does it fetch
+  the password into a buffer, type it over the DevTools pipe, zero the buffer
+  and require `/v1/me` to return the named account. The browser reaches the
+  https origin through an in-process TLS bridge to the edge, trusted by the
+  ephemeral key's SPKI pin, so the real Host, Origin and `__Host-` cookies
+  apply. It uses Playwright's Chromium with `--no-sandbox`, as Playwright does on
+  this host (unprivileged user namespaces are off).
+- Limits: all agents share the `acdev` user, so the caller checks guard against
+  mistakes, not a hostile same-user process; the DevTools port (loopback) gives
+  any `acdev` process the signed-in session, never the password, until the hold
+  ends and the profile is deleted.
+
+Root install, once per reviewed release:
+
+```sh
+install -d -o root -g root -m 0755 /usr/local/libexec/ac-dev-qa
+install -o root -g root -m 0755 "$R/development/qa-admin-browser.py" /usr/local/libexec/ac-dev-qa/qa-admin-browser.py
+install -o root -g root -m 0750 "$R/scripts/dev-qa-credential.py" /usr/local/sbin/ac-dev-qa-credential
+cat > /etc/sudoers.d/ac-dev-qa-credential.new <<'SUDO'
+Defaults!/usr/local/sbin/ac-dev-qa-credential !use_pty
+acdev ALL=(root) NOPASSWD: /usr/local/sbin/ac-dev-qa-credential billing-staff, /usr/local/sbin/ac-dev-qa-credential billing-staff --sentinel
+SUDO
+visudo -cf /etc/sudoers.d/ac-dev-qa-credential.new && chmod 0440 /etc/sudoers.d/ac-dev-qa-credential.new \
+  && mv /etc/sudoers.d/ac-dev-qa-credential.new /etc/sudoers.d/ac-dev-qa-credential
+```
+
+Rollback: remove those three files. QA invocation (non-root):
+
+```sh
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff --sentinel-only  # transport proof only
+/usr/local/libexec/ac-dev-qa/qa-admin-browser.py --identity billing-staff                  # sign in and hand off
+```
+
+Output is JSON lines with no value. The `handoff` line gives `devtools`
+(`http://127.0.0.1:<port>`) for Playwright `chromium.connectOverCDP`; the browser
+stays up for `--hold-seconds` (default 3600) or until Ctrl-C/SIGTERM, then the
+profile is deleted. A `refused` line names the failed check.
