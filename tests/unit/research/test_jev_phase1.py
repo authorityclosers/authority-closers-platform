@@ -501,6 +501,10 @@ def test_arm_runners_never_open_truth(pk: dict, truth: dict, base_of: dict, tmp_
 
     def fake_run(cmd, **kw):
         assert "AI_GATEWAY_API_KEY" not in str(kw.get("env", "")) and kw["input"]
+        cwd = Path(kw["cwd"])  # empty, outside the repo and any git repository: no CLAUDE.md
+        assert cwd.is_dir() and not list(cwd.iterdir()) and ROOT not in cwd.parents
+        assert not any((p / ".git").exists() for p in (cwd, *cwd.parents))
+        assert not (cwd / "AGENTS.md").exists() and not (cwd / "CLAUDE.md").exists()
         reply = json.dumps(
             {q["id"]: {"label": q["options"][0], "probability": 0.5} for q in req["questions"]}
         )
@@ -517,9 +521,25 @@ def test_arm_runners_never_open_truth(pk: dict, truth: dict, base_of: dict, tmp_
         arms.run_arm("B", pk, req, 0, model="m", run=fake_run),
     ]
     assert not [p for p in OPENED if "/truth/" in p or p.endswith("truth")]
+    assert "--bare" not in arms.CLI["A"]  # bare mode skips the subscription login (part 2)
     assert [r["arm"] for r in recs] == ["D", "J", "A", "B"]
     assert all(set(r["answers"]) == {q["id"] for q in req["questions"]} for r in recs)
     assert recs[0] == arms.run_arm("D", pk, req, 0) | {"latency_ms": recs[0]["latency_ms"]}
+
+
+def test_cli_refuses_a_working_directory_inside_a_git_repository(pk: dict, monkeypatch) -> None:
+    import tempfile
+
+    inside = ROOT / ".pytest-tmp-inside-repo"
+    inside.mkdir(exist_ok=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(inside))
+    calls: list = []
+    try:
+        with pytest.raises(RuntimeError, match="inside a git repository"):
+            arms.run_arm("A", pk, pk["requests"][0], 0, run=lambda *a, **k: calls.append(a))
+    finally:
+        inside.rmdir()
+    assert calls == []
 
 
 def test_scorer_is_the_only_truth_reader() -> None:
