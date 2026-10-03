@@ -55,6 +55,9 @@ TRAIN_NOTIFIER = Path("/opt/ac-release/current/ac_train_notify.py")
 HEALTH_WAIT_SECONDS = 60
 HEALTH_POLL_SECONDS = 2
 HEALTH_REQUEST_TIMEOUT = 3
+# Settings.internal_api_host: the default and AC_INTERNAL_API_HOST are both allowed hosts.
+DEFAULT_INTERNAL_API_HOST = "localhost"
+PROBE_HOST = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
 RUNTIME_UID = 10001
 RUNTIME_GID = 10001
 RUNTIME_USER = "ac-sales-xray-runtime"
@@ -449,6 +452,16 @@ def migration_environment(paths: Paths) -> None:
         raise RefreshError("migrator_env_keys_invalid")
 
 
+def probe_host(paths: Paths) -> str:
+    """Return the Host the API's TrustedHostMiddleware accepts for the loopback probe."""
+    host = env_values(paths.development / "api.env").get(
+        "AC_INTERNAL_API_HOST", DEFAULT_INTERNAL_API_HOST
+    )
+    if not PROBE_HOST.fullmatch(host) or ".." in host:
+        raise RefreshError("probe_host_invalid")
+    return host
+
+
 def render_manifest(paths: Paths, target: str) -> tuple[bytes, str]:
     value = json.loads(paths.worker_template.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or value.get("environment") != "development":
@@ -487,7 +500,7 @@ def restore_file(path: Path, value: tuple[bytes, int] | None, parent_existed: bo
         atomic_write(path, value[0], value[1])
 
 
-def health(runner, target: str) -> dict[str, Any]:
+def health(runner, target: str, host: str) -> dict[str, Any]:
     deadline = time.monotonic() + HEALTH_WAIT_SECONDS
     max_attempts = max(1, HEALTH_WAIT_SECONDS // HEALTH_POLL_SECONDS + 1)
     release = None
@@ -499,6 +512,8 @@ def health(runner, target: str) -> dict[str, Any]:
                     "--silent",
                     "--show-error",
                     "--fail",
+                    "--header",
+                    f"Host: {host}",
                     "http://127.0.0.1:8100/health/ready",
                 ],
                 timeout=HEALTH_REQUEST_TIMEOUT,
@@ -850,6 +865,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
     if shutil.which("systemd-run", path=SAFE_PATH) is None:
         raise RefreshError("systemd_run_missing")
     migration_environment(paths)
+    host = probe_host(paths)
     manifest, digest = render_manifest(paths, target)
     existed = paths.backend.exists()
     service_json = paths.development / "service.json"
@@ -940,7 +956,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         phase = "restart"
         restart(runner)
         phase = "health"
-        checked = health(runner, target)
+        checked = health(runner, target, host)
         if not checked["ok"]:
             raise RefreshError("health_release_mismatch")
     except Exception as error:

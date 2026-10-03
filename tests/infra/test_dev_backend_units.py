@@ -1,11 +1,13 @@
 """Static deployment boundary and inert systemd verification; never start services."""
 
 import ast
+import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -165,6 +167,7 @@ def test_worker_argv_environment_release_and_drain():
     assert set(environment) <= allowed
     assert environment["HOME"] == "/tmp"  # noqa: S108 - isolated by bounded tmpfs
     assert environment["PATH"] == "/usr/local/bin:/usr/bin:/bin"
+    assert environment["LANG"] == "C.UTF-8"
     assert argv[end:] == [
         BACKEND + "/.venv/bin/python",
         "-m",
@@ -177,6 +180,34 @@ def test_worker_argv_environment_release_and_drain():
     assert not unit["Service", "EnvironmentFile"]
     assert unit["Service", "TimeoutStopSec"] == ["16min"]
     assert unit["Service", "KillMode"] == ["mixed"]
+
+
+def test_worker_interpreter_environment_stays_within_allowlist():
+    # AUT-965: without a locale, Python's C-locale coercion adds LC_CTYPE (not allowed).
+    from ac_platform.conversation_intelligence.service import validate_service_environment
+
+    argv = shlex.split(parse_unit(UNITS[1])["Service", "ExecStart"][0])
+    end = argv.index(BACKEND + "/.venv/bin/python")
+    probe = "import json, os; print(json.dumps(dict(os.environ)))"
+
+    def interpreter_environment(prefix):
+        result = subprocess.run(  # noqa: S603 - fixed env(1) argv from the reviewed unit
+            [*prefix, sys.executable, "-c", probe],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=30,
+        )
+        return json.loads(result.stdout)
+
+    environment = interpreter_environment(argv[:end])
+    assert environment["LANG"] == "C.UTF-8"
+    assert set(environment) == set(dict(item.split("=", 1) for item in argv[2:end]))
+    validate_service_environment(environment)
+    bare = interpreter_environment([item for item in argv[:end] if item != "LANG=C.UTF-8"])
+    if "LC_CTYPE" in bare:
+        with pytest.raises(ValueError, match="worker_environment_not_isolated"):
+            validate_service_environment(bare)
 
 
 def test_api_argv_and_separate_credential_delivery():
