@@ -78,6 +78,19 @@ class BillingApplication:
             database, caller, payment_id, reason=reason, idempotency_key=idempotency_key
         )
 
+    async def staff_refund_payment(
+        self,
+        database: AsyncSession,
+        caller: Caller,
+        payment_id: str,
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> RefundView:
+        return await self.settlement.staff_refund_payment(
+            database, caller, payment_id, reason=reason, idempotency_key=idempotency_key
+        )
+
     async def receive_webhook(
         self, database: AsyncSession, provider: str, headers: Mapping[str, str], raw_body: bytes
     ) -> WebhookReceipt:

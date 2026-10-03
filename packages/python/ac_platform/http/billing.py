@@ -18,6 +18,8 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, R
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 from ac_platform.application.settings import Settings
+from ac_platform.authorization.platform import platform_projection
+from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.commands import BillingCommands, Caller, CheckoutCommand
 from ac_platform.billing.errors import BillingIdempotencyKeyRequired, BillingValidationFailed
 from ac_platform.billing.tax import TaxMode
@@ -33,7 +35,12 @@ from ac_platform.billing.views import (
     RefundState,
     SubscriptionStatus,
 )
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.auth import (
+    AuthenticatedTransaction,
+    RequireActor,
+    require_admin_surface,
+    require_safe_origin,
+)
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_REASON_LENGTH = 500
@@ -369,6 +376,40 @@ def install_billing_http(
             _caller(request, auth),
             payment_id,
             reason=reason,
+            idempotency_key=key,
+        )
+        _no_store(response)
+        response.status_code = (
+            status.HTTP_202_ACCEPTED if view.state == "pending" else status.HTTP_200_OK
+        )
+        return RefundCommandResponse(refund=RefundResponse.model_validate(view))
+
+    @router.post(
+        "/platform/billing/payments/{payment_id}/refund", response_model=RefundCommandResponse
+    )
+    async def staff_refund_payment(
+        payment_id: Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")],
+        request: Request,
+        response: Response,
+        body: RefundRequest,
+        idempotency_key: IdempotencyHeader = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> RefundCommandResponse:
+        require_admin_surface(request, settings)
+        require_safe_origin(request, settings)
+        permissions = await platform_projection(
+            auth.database, auth.resolved.actor, operations_tenant_id=settings.operations_tenant_id
+        )
+        if "platform_billing_manage" not in permissions:
+            raise CapabilityDenied("A current platform billing assignment is required.")
+        key = _idempotency_key(idempotency_key)
+        if not body.reason.strip():
+            raise BillingValidationFailed("A refund reason is required.")
+        view = await service.staff_refund_payment(
+            auth.database,
+            _caller(request, auth),
+            payment_id,
+            reason=body.reason,
             idempotency_key=key,
         )
         _no_store(response)

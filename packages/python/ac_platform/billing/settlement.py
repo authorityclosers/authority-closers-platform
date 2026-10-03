@@ -17,10 +17,14 @@ from pydantic import TypeAdapter
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.audit.service import AuditRepository
+from ac_platform.authorization.platform import platform_projection
+from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.checkout import CheckoutService, one, recurring_provider
 from ac_platform.billing.commands import Caller, WebhookReceipt
 from ac_platform.billing.errors import (
     BillingRateLimited,
+    BillingValidationFailed,
     OrderNotFound,
     PaymentNotFound,
     PaymentUsed,
@@ -55,6 +59,7 @@ from ac_platform.billing.reducers import (
 )
 from ac_platform.billing.views import OrderView, RefundView
 from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.payments.ports import (
     Money,
     PaymentEvent,
@@ -226,13 +231,57 @@ class Settlement:
     ) -> RefundView:
         """C1 §4: within 7 days of verification and only if nothing from the payment was used."""
 
-        # The authenticated caller's transaction must not own the money-moving
-        # work: its rollback (or a process crash) cannot undo a submitted hold.
+        return await self._refund_payment(
+            database,
+            caller,
+            payment_id,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            staff=False,
+        )
+
+    async def staff_refund_payment(
+        self,
+        database: AsyncSession,
+        caller: Caller,
+        payment_id: str,
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> RefundView:
+        """Use fresh staff authority and commit the request's refund intent before sending."""
+
+        return await self._refund_payment(
+            database, caller, payment_id, reason=reason, idempotency_key=idempotency_key, staff=True
+        )
+
+    async def _refund_payment(
+        self,
+        database: AsyncSession,
+        caller: Caller,
+        payment_id: str,
+        *,
+        reason: str,
+        idempotency_key: str,
+        staff: bool,
+    ) -> RefundView:
+        # Commit the intent before submission: neither caller rollback nor a
+        # process crash may undo the hold after the provider receives a refund.
         async with AsyncSession(bind=database.bind, expire_on_commit=False) as durable:
-            async with durable.begin():
+            if staff:
+                # Fresh platform projection locks Person and Session. Prepare
+                # the attributable audit/hold in that same transaction so their
+                # foreign keys cannot wait on our own authentication locks.
+                # Commit the intent before any provider call, as on the customer path.
                 prepared = await self._prepare_refund(
-                    durable, caller, payment_id, reason, idempotency_key
+                    database, caller, payment_id, reason, idempotency_key, staff=True
                 )
+                await database.commit()
+            else:
+                async with durable.begin():
+                    prepared = await self._prepare_refund(
+                        durable, caller, payment_id, reason, idempotency_key
+                    )
             view, order, payment, money, send = prepared
             if not send:
                 return view
@@ -323,23 +372,39 @@ class Settlement:
         payment_id: str,
         reason: str,
         idempotency_key: str,
+        *,
+        staff: bool = False,
     ) -> tuple[RefundView, BillingOrder, BillingPaymentEvent, Money, bool]:
+        if staff:
+            permissions = await platform_projection(
+                database,
+                ActorContext(caller.person_id, caller.session_id, caller.tenant_id),
+                operations_tenant_id=self.service.operations_tenant_id,
+            )
+            if "platform_billing_manage" not in permissions:
+                raise CapabilityDenied("A current platform billing assignment is required.")
+            if not reason.strip() or len(reason) > 500:
+                raise BillingValidationFailed("A refund reason of 1 to 500 characters is required.")
         payment = await self._verified_payment(database, payment_id)
         if payment is None or payment.order_id is None:
             raise PaymentNotFound("That payment does not exist.")
         order = await database.get(BillingOrder, payment.order_id)
         assert order is not None
-        resolved = await self.service.account_by_id(database, caller, order.account_id, write=True)
-        if resolved is None:
+        if staff:
+            account = await database.get(BillingAccount, order.account_id)
+        else:
+            resolved = await self.service.account_by_id(
+                database, caller, order.account_id, write=True
+            )
+            account = None if resolved is None else resolved.account
+        if account is None:
             raise PaymentNotFound("That payment does not exist.")
-        await take_admission_lock(database, resolved.tenant_id)
+        await take_admission_lock(database, account.tenant_id)
         digest = self.service.digest(payment_id, reason)
         money = Money(
             payment.amount_minor or order.amount_minor, payment.currency or order.currency
         )
-        replay = await self.service._replay(
-            database, resolved.account, "refund", idempotency_key, digest
-        )
+        replay = await self.service._replay(database, account, "refund", idempotency_key, digest)
         if replay is not None:
             return TypeAdapter(RefundView).validate_python(replay), order, payment, money, False
         now = _utc(self.service.clock())
@@ -356,7 +421,7 @@ class Settlement:
             )
             await self.service._remember(
                 database,
-                resolved.account,
+                account,
                 "refund",
                 idempotency_key,
                 digest,
@@ -368,7 +433,7 @@ class Settlement:
         if now > verified_at + REFUND_WINDOW:
             raise RefundWindowClosed("Refunds are possible within 7 days of payment.")
         ledger = self.service.ledger(database)
-        entries = await ledger.entries(resolved.account.id)
+        entries = await ledger.entries(account.id)
         sources = await self._sources(database, order, payment)
         payment_lots = [
             entry
@@ -377,7 +442,7 @@ class Settlement:
         ]
         if not payment_lots:
             raise PaymentNotFound("This payment granted no minutes.")
-        projection = await self._projection(database, ledger, resolved.account, now)
+        projection = await self._projection(database, ledger, account, now)
         lots_by_id = {lot.lot_id: lot for lot in ledger.lots_from_entries(entries)}
         if not payment_refundable(
             projection, [lots_by_id[str(e.id)] for e in payment_lots], verified_at=verified_at
@@ -385,6 +450,25 @@ class Settlement:
             raise PaymentUsed(
                 "Minutes from this payment were already used, so it cannot be refunded."
             )
+        audit_id = None
+        if staff:
+            audit = await AuditRepository(database).append(
+                tenant_id=account.tenant_id,
+                actor_person_id=caller.person_id,
+                session_id=caller.session_id,
+                action="billing.staff_refund_requested",
+                resource_type="billing_payment",
+                resource_id=payment.id,
+                payload={
+                    "account_id": str(account.id),
+                    "order_id": str(order.id),
+                    "payment_id": payment_id,
+                },
+                reason=reason,
+                request_id=caller.request_id,
+                now=now,
+            )
+            audit_id = audit.id
         for entry in payment_lots:
             position = projection.position(str(entry.id))
             remainder = entry.seconds if position is None else position.unallocated
@@ -397,6 +481,7 @@ class Settlement:
                 actor_type="person",
                 actor_person_id=caller.person_id,
                 reason=reason,
+                audit_event_id=audit_id,
             )
         view = RefundView(
             payment_id=payment_id, state="pending", refundable_until=verified_at + REFUND_WINDOW
@@ -419,7 +504,7 @@ class Settlement:
         )
         await self.service._remember(
             database,
-            resolved.account,
+            account,
             "refund",
             idempotency_key,
             digest,
