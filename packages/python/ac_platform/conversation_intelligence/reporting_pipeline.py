@@ -31,6 +31,7 @@ from ac_platform.conversation_intelligence.completion_limits import completion_c
 from ac_platform.conversation_intelligence.contracts import C5RepairIntent
 from ac_platform.conversation_intelligence.entitlements import Quote
 from ac_platform.conversation_intelligence.inference_tasks import (
+    InferenceTaskError,
     PreparedTaskInput,
     prepare_coaching_input,
     prepare_fact_inputs,
@@ -577,19 +578,32 @@ class ReportingPipeline:
                 "speaker_roles": roles,
             }
         )
-        prepared = prepare_coaching_input(
-            transcript,
-            [packet for packet, _, _ in packets],
-            provider=request.provider,
-            profile=profile,
-            model=request.model,
-            max_completion_tokens=request.max_completion_tokens,
-            output_profile=request.output_profile,
-            coaching_prompt_revision=request.coaching_prompt_revision,
-            report_language=request.report_language or "en",
-            qualitative_pack_sha256=request.qualitative_pack_sha256,
-            speaker_roles=roles,
-        )
+
+        def prepare(role_snapshot: dict[str, Any] | None) -> PreparedTaskInput:
+            return prepare_coaching_input(
+                transcript,
+                [packet for packet, _, _ in packets],
+                provider=request.provider,
+                profile=profile,
+                model=request.model,
+                max_completion_tokens=request.max_completion_tokens,
+                output_profile=request.output_profile,
+                coaching_prompt_revision=request.coaching_prompt_revision,
+                report_language=request.report_language or "en",
+                qualitative_pack_sha256=request.qualitative_pack_sha256,
+                speaker_roles=role_snapshot,
+            )
+
+        try:
+            prepared = prepare(roles)
+        except InferenceTaskError as error:
+            if roles is None or str(error) != "report_prompt_budget_exceeded":
+                raise
+            # Optional attribution must not exceed the existing provider cap.
+            # Store the exact fallback request; no provider or repair retry.
+            request = request.model_copy(update={"speaker_roles": None})
+            _LOGGER.warning("speaker_roles_prompt_budget_exceeded")
+            prepared = prepare(None)
         if request.repair is not None:
             prepared = repair_coaching_input(prepared, request.repair)
         c5_config: dict[str, Any] = {
