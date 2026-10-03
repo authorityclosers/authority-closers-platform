@@ -1,0 +1,15 @@
+{
+    "source": {
+        "issue": "AUT-932",
+        "path": "/opt/ac-watchdog/ac_watchdog.py",
+        "exported_at_utc": "2026-10-03T14:38:17.455260+00:00",
+        "original_sha256": "2ea06ca27a39247aa3c085bb28a995fd72aa5d4abb753961a104f8818ff8e6f0",
+        "aut850_sha256": "9f893ef28a42714f5cbb01f3e0b2387d6b139f54ba3edcfc919a3b4ccc403747",
+        "repository_sha256": "be900d776aeeb725ed29bbbf6aea5e49238e8801b273411f6ce88833540be3cb",
+        "lines": 1399,
+        "approved_difference": "CEO directive on AUT-850: add scripts/ci/ to SENSITIVE_PATH; CEO decision on AUT-932: identity, auth, sessions, permissions/roles and organisation membership paths are sensitive (identity_path)",
+        "supersedes": "tests/infra/fixtures/ac_watchdog/aut850-reconcile.json",
+        "redactions": [],
+        "config_injection": []
+    }
+}

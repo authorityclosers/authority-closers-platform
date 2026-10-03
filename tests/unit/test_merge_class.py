@@ -53,6 +53,46 @@ PROTECTED = [
         "purchase",
     )
 ]
+# Identity, authentication, sessions, permissions/roles and organisation membership (AUT-932).
+PROTECTED += [
+    (path, "protected:identity")
+    for path in (
+        "packages/python/ac_platform/http/auth.py",
+        "packages/python/ac_platform/http/organisation.py",
+        "packages/python/ac_platform/identity/models.py",
+        "packages/python/ac_platform/authorization/policy.py",
+        "packages/python/ac_platform/tenancy/services.py",
+        "packages/python/ac_platform/organisations/service.py",
+        "packages/python/ac_platform/bootstrap/cli.py",
+        "packages/python/ac_platform/kernel/authz.py",
+        "packages/python/ac_platform/media/delivery_authorizer.py",
+        "packages/x/authorised.py",
+        "packages/x/authenticator.py",
+        "packages/x/oauth_callback.py",
+        "packages/x/csrf.py",
+        "packages/x/jwt.py",
+        "packages/x/credentials.py",
+        "packages/x/capability_grants.py",
+        "packages/x/organization.ts",
+        "packages/x/membership.py",
+        "packages/x/review_invitations.py",
+        "packages/x/ownership_transfer.py",
+        "apps/web/app/login/page.tsx",
+        "apps/web/app/sign-up.tsx",
+        "apps/web/app/sign-out-control.tsx",
+        "apps/web/app/forgot-password/page.tsx",
+        "apps/web/app/session-expired/page.tsx",
+        "apps/web/app/lib/server-auth.ts",
+        "apps/web/app/workspace-access.tsx",
+        "apps/web/app/people/grants/page.tsx",
+        "apps/web/app/role-picker.tsx",
+        "apps/web/app/permissions.ts",
+        "apps/web/app/members/list.tsx",
+        "apps/web/app/tenant-switcher.tsx",
+        "apps/web/app/cookie.ts",
+        "tests/security/test_http_boundary.py",
+    )
+]
 
 
 def classify(path, status="modified", previous=None):
@@ -88,6 +128,60 @@ def test_ordinary_roots(root, status):
         "class": "routine",
         "reasons": [],
     }
+
+
+# PR #221 (AUT-786: organisation roles and ownership transfer) merged on one review (AUT-932).
+PR_221 = [
+    "packages/python/ac_platform/http/organisation.py",
+    "packages/python/ac_platform/organisations/service.py",
+    "tests/integration/test_organisation_owner_transfer_postgresql.py",
+    "tests/unit/http/test_organisation_member_writes.py",
+]
+
+
+@pytest.mark.parametrize("files", [PR_221, *[[path] for path in PR_221]])
+def test_identity_and_membership_changes_escalate(files):
+    records = [{"filename": path, "status": "modified"} for path in files]
+    contents = {path: "fictional head" for path in files}
+    result = classify_changed_files(records, contents, changed_files=len(files))
+    assert result == {"class": "escalation", "reasons": ["protected:identity"]}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "apps/web/app/signIn.tsx",
+        "apps/web/app/SignOutButton.tsx",
+        "apps/web/app/adminRoles.ts",
+        "apps/web/app/userAuthPanel.tsx",
+        "apps/web/app/OAuthCallback.tsx",
+        "apps/web/app/teamMembers.tsx",
+    ],
+)
+def test_camel_case_identity_words_escalate(path):
+    assert classify(path) == {"class": "escalation", "reasons": ["protected:identity"]}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/python/ac_platform/conversation_intelligence/author_notes.py",
+        "apps/web/app/authority-closers-logo.svg",
+        "docs/authoring-guide.md",
+        "packages/python/ac_platform/media/signing.py",
+        "apps/web/app/maintenance.tsx",
+        "apps/web/app/accessibility.css",
+        "apps/web/app/roleplay/page.tsx",
+        "apps/web/app/remember-choice.ts",
+        "tools/authors.txt",
+    ],
+)
+@pytest.mark.parametrize("case", [str, str.upper])
+def test_identity_terms_avoid_lookalike_words(path, case):
+    result = classify(case(path))
+    assert "protected:identity" not in result["reasons"]
+    if case is str:
+        assert result == {"class": "routine", "reasons": []}
 
 
 @pytest.mark.parametrize(
@@ -179,7 +273,7 @@ def test_incomplete_evidence(files, contents, count, truncated, reason):
         ("apps/purchase.py", ["protected:name:purchase"]),
         (
             "scripts/data-changes/production-membership.py",
-            ["path:unknown-root", "protected:automation"],
+            ["path:unknown-root", "protected:automation", "protected:identity"],
         ),
         ("apps/deletion.py", ["protected:name:deletion"]),
     ],
