@@ -7,6 +7,7 @@ import { AcquisitionShell } from "../../acquisition-shell";
 import { CallAudioDock } from "../../call-audio-dock";
 import { CallContext } from "../../call-context";
 import { CallMap, CallMapMini } from "../../call-map";
+import { CallSignals } from "../../call-signals";
 import { DipakOverview, ReportAnalysis } from "../../dipak-overview";
 import { ReportCoaching } from "../../report-coaching";
 import { UploadSessionProvider } from "../../hooks/upload-session";
@@ -17,6 +18,7 @@ import type { ReportEvidence } from "../../report-contract";
 import { ReportHeader } from "../../report-header";
 import { ReportModes } from "../../report-modes";
 import { ReportMoments } from "../../report-moments";
+import { ReportRawData } from "../../report-raw-data";
 import { ReportScrollRail } from "../../report-scroll-rail";
 import {
   ReportTranscript,
@@ -263,6 +265,19 @@ export function FullShellPreview() {
                               transcript={transcript}
                               onSelectEvidence={seek}
                               onUnlock={unlock}
+                            />
+                            <CallSignals
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              onSeek={playFrom}
+                            />
+                            <ReportRawData
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              report={syntheticReport}
+                              durationMs={FIXTURE_DURATION_MS}
+                              runId={null}
+                              onSeek={playFrom}
                             />
                           </>
                         ),

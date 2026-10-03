@@ -796,6 +796,14 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(page.get_by_role("tab")).to_have_text(
                         ["Overview", "Transcript", "Moments", "Analysis", "Coaching"]
                     )
+                    await page.get_by_role("tab", name="Analysis", exact=True).click()
+                    analysis = page.get_by_role("tabpanel", name="Analysis", exact=True)
+                    await expect(
+                        analysis.get_by_text("Which voice is the salesperson?", exact=True)
+                    ).to_be_visible()
+                    await expect(
+                        analysis.get_by_role("textbox", name="Search the raw data", exact=True)
+                    ).to_be_visible()
                     # The reader can explicitly choose Reading view: one
                     # horizontal row of section links, all sections shown.
                     # The transcript lives in its own reader, not in Reading.

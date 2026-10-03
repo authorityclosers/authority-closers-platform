@@ -3115,6 +3115,13 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       .querySelector('[data-report-mode-section="analysis"]')
       ?.hasAttribute("hidden"),
   ).toBe(false);
+  const analysis = container.querySelector(
+    '[data-report-mode-section="analysis"]',
+  )!;
+  expect(analysis.textContent).toContain("Which voice is the salesperson?");
+  expect(
+    analysis.querySelector('input[aria-label="Search the raw data"]'),
+  ).not.toBeNull();
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
