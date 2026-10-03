@@ -66,3 +66,27 @@ Revised B1 local checks: format 902 files, lint and mypy 381 sources passed.
 `uv run pytest tests/unit/application/test_settings.py tests/database/test_model_registry.py tests/database/test_conversation_postgresql.py::test_populated_migration_head_matches_real_model_registry tests/infra/test_ac_release.py tests/infra/test_capability_backup_parity.py -q --tb=short`
 passed 273 cases with 3151 root-only skips.
 These skips do not prove the complete parity gate. No production restore is run.
+
+Root AUT-960 subsequently verified the unchanged `6cea6a8` source with 3151
+parity cases passed and no skips. Its receipt is task attachment
+`b9bd357f-d1c5-4dc0-b182-1cd2ac114adf`; this proves that earlier SHA only.
+
+The CEO then found SQLite registry setup failures in CI: PostgreSQL's `~`
+operator appeared in both document models' number CHECK. The shared constraint
+now uses the existing `.ddl_if(dialect="postgresql")` idiom. The frozen 0069
+migration is unchanged. Compiling both tables confirms PostgreSQL retains the
+regex CHECK and SQLite omits it; the other money/number constraints stay intact.
+
+Verification for the SQLite correction (all exit 0):
+
+- `uv run ruff format --check packages/python tests`: 902 files formatted.
+- `uv run ruff check packages/python tests`: passed.
+- `uv run mypy packages/python`: 381 sources, no issues.
+- `uv run pytest tests/unit/bootstrap/test_operations_only.py tests/unit/application/test_settings.py tests/database/test_model_registry.py -q --tb=short`:
+  219 passed, including SQLite creation of the complete model registry.
+- A direct `uv run python -` SQLAlchemy `CreateTable` compilation for both
+  document tables under PostgreSQL and SQLite verified the CHECK's dialect.
+
+Per the CTO and CEO's revised verification instruction, the new head's full
+parity receipt comes from CI; no further Root verification task is created.
+The new head requires CTO review followed by CEO approval before merge.

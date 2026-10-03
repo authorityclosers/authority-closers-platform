@@ -24,7 +24,9 @@ from ac_platform.db.base import Base
 
 def _tax_checks() -> tuple[CheckConstraint, ...]:
     return (
-        CheckConstraint("number ~ '^[A-Za-z0-9/-]{1,16}$'", name="number_shape"),
+        CheckConstraint("number ~ '^[A-Za-z0-9/-]{1,16}$'", name="number_shape").ddl_if(
+            dialect="postgresql"
+        ),
         CheckConstraint("currency = 'INR'", name="currency_inr"),
         CheckConstraint(
             "taxable_minor >= 0 AND cgst_minor >= 0 AND sgst_minor >= 0 "
