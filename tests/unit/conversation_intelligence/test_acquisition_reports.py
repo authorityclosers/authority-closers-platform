@@ -119,6 +119,9 @@ async def test_recovered_guest_transcript_projects_native_tail_for_playback(
     )
 
     class Database:
+        async def scalars(self, _query: object) -> list[object]:
+            return []  # no C2 checkpoints and no sensitive-segment marks
+
         async def scalar(self, _query: object) -> SimpleNamespace:
             return checkpoint
 

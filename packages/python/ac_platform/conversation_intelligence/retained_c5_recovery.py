@@ -70,6 +70,8 @@ from ac_platform.conversation_intelligence.reports import (
     FactPacket,
     load_report_profile,
 )
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
     ObjectKind,
@@ -925,7 +927,7 @@ class RetainedC5RecoveryService:
             previous = await self.database.get(ConversationRetainedC5Version, replay.result_id)
             if previous is None:
                 raise ConversationConflict("The retained recovery receipt is unavailable.")
-            return self._view(
+            return await self._guarded_view(
                 previous,
                 bound.recording,
                 message="The retained recovery version was already created.",
@@ -954,7 +956,7 @@ class RetainedC5RecoveryService:
                 utc(self.application.clock()),
                 resource_type="conversation_retained_c5_version",
             )
-            return self._view(
+            return await self._guarded_view(
                 existing,
                 bound.recording,
                 message="The retained recovery version was already created.",
@@ -1111,26 +1113,54 @@ class RetainedC5RecoveryService:
             resource_type="conversation_retained_c5_version",
         )
         if normalized is None:
-            return self._view(
+            return await self._guarded_view(
                 row,
                 bound.recording,
                 message="The retained C5 response needs an explicit correction proposal.",
             )
-        return self._view(
+        return await self._guarded_view(
             row,
             bound.recording,
             message="The retained C5 response was revalidated from retained bytes.",
         )
 
+    async def _guarded_view(
+        self,
+        version: ConversationRetainedC5Version,
+        recording: ConversationRecording,
+        *,
+        message: str,
+    ) -> dict[str, Any]:
+        """``_view`` withheld per the recording's marks (AUT-519 D3)."""
+
+        revision = (
+            version.payload.get("transcript_revision")
+            if isinstance(version.payload, dict)
+            else None
+        )
+        plan = await withheld_plan_for(
+            self.database,
+            recording_id=recording.id,
+            served_revisions=(revision,) if isinstance(revision, str) else (),
+        )
+        return withhold(self._view(version, recording, message=message), plan)
+
     async def owner_report(self, actor: ActorContext, run_id: UUID) -> dict[str, Any] | None:
         recording = await self._recording_for_owner(actor, run_id)
+        return await self.owner_version(run_id, recording)
+
+    async def owner_version(
+        self, run_id: UUID, recording: ConversationRecording
+    ) -> dict[str, Any] | None:
+        """The post-authorization owner view of the latest retained version, if any."""
+
         row = await self.database.scalar(
             select(ConversationRetainedC5Version)
             .where(
                 ConversationRetainedC5Version.run_id == run_id,
                 ConversationRetainedC5Version.recording_id == recording.id,
-                ConversationRetainedC5Version.tenant_id == actor.tenant_id,
-                ConversationRetainedC5Version.person_id == actor.person_id,
+                ConversationRetainedC5Version.tenant_id == recording.tenant_id,
+                ConversationRetainedC5Version.person_id == recording.person_id,
                 ConversationRetainedC5Version.erased_at.is_(None),
                 ConversationRetainedC5Version.payload.is_not(None),
             )
@@ -1139,7 +1169,7 @@ class RetainedC5RecoveryService:
         )
         if row is None:
             return None
-        return self._view(
+        return await self._guarded_view(
             row,
             recording,
             message="Your retained report was recovered from the original C5 response.",
@@ -1147,6 +1177,11 @@ class RetainedC5RecoveryService:
 
     async def admin_report(self, actor: ActorContext, run_id: UUID) -> dict[str, Any] | None:
         await self._admin_admit(actor)
+        return await self.render_admin_report(run_id)
+
+    async def render_admin_report(self, run_id: UUID) -> dict[str, Any] | None:
+        """The post-authorization Admin view of the latest retained version, if any."""
+
         query = select(ConversationRetainedC5Version).where(
             ConversationRetainedC5Version.run_id == run_id,
             ConversationRetainedC5Version.tenant_id.in_(self.recording_tenant_ids),
@@ -1210,7 +1245,7 @@ class RetainedC5RecoveryService:
             or row.generation != recording.generation
         ):
             raise ConversationConflict("The recovered report's retained binding is unavailable.")
-        return self._view(
+        return await self._guarded_view(
             row,
             recording,
             message="Recovered report loaded for authorized Admin review.",
