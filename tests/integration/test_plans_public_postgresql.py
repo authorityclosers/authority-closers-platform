@@ -74,7 +74,29 @@ def test_public_catalogue_reads_redacts_and_orders(postgres_harness: Any) -> Non
                 assert [plan["key"] for plan in plans] == SEED_KEYS
                 assert {plan["status"] for plan in plans} == {"coming_soon"}
                 assert all(plan["prices"] is None for plan in plans)
-                assert all(plan["per_seat"] is False for plan in plans)
+                assert [plan["per_seat"] for plan in plans] == [False, True, True]
+                assert [
+                    (
+                        plan["included_minutes"],
+                        plan["seat_min"],
+                        plan["seat_max"],
+                        plan["longest_call_minutes"],
+                        plan["revision"],
+                    )
+                    for plan in plans
+                ] == [(800, 1, 1, 90, 2), (1000, 2, 49, 90, 2), (1000, 50, None, 120, 2)]
+                assert [plan["feature_keys"] for plan in plans] == [
+                    [],
+                    [],
+                    ["long_calls_120", "priority_support", "onboarding_session"],
+                ]
+                for plan, key, minutes in zip(
+                    plans, ("topup_100", "topup_500", "topup_500"), (100, 500, 500), strict=True
+                ):
+                    assert plan["top_up_packs"] == [
+                        {"key": key, "minutes": minutes, "validity_rule": "billing_year_end"}
+                    ]
+                    assert "prices_include_gst" not in plan
                 assert all("id" not in plan and "created_at" not in plan for plan in plans)
 
                 async with sessions() as database, database.begin():

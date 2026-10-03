@@ -12,7 +12,23 @@ from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.billing.errors import NotOnSale
+from ac_platform.billing.tax import TaxMode
+
 PlanStatus = Literal["draft", "coming_soon", "active", "retired"]
+_GST_MODES: dict[str, TaxMode] = {
+    "personal": "inclusive",
+    "organisation": "exclusive",
+    "enterprise": "exclusive",
+}
+
+
+def tax_mode(plan_key: str) -> TaxMode:
+    """Owner-decided tax treatment, shared by subscriptions and their top-ups."""
+    try:
+        return _GST_MODES[plan_key]
+    except KeyError as error:
+        raise NotOnSale("This plan has no approved GST treatment.") from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +40,7 @@ class PackCopy:
 
 @dataclass(frozen=True, slots=True)
 class PlanCopy:
-    """One catalogue row as checkout needs it. Prices are GST-inclusive paise."""
+    """One catalogue row as checkout needs it. Paise use the plan's tax mode."""
 
     key: str
     name: str
@@ -67,4 +83,4 @@ class StaticCatalogue:
         return self._plans.get(key)
 
 
-__all__ = ["Catalogue", "PackCopy", "PlanCopy", "PlanStatus", "StaticCatalogue"]
+__all__ = ["Catalogue", "PackCopy", "PlanCopy", "PlanStatus", "StaticCatalogue", "tax_mode"]

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
@@ -14,6 +14,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
@@ -46,6 +47,33 @@ class MemberResponse(BaseModel):
 class MembersResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     members: list[MemberResponse]
+
+
+class MemberActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    person_id: UUID
+    calls: int
+    minutes: float
+    reports_ready: int
+    last_call_at: datetime | None
+
+
+class ActivityCallResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: UUID
+    owner_person_id: UUID
+    owner_name: str
+    label: str | None
+    created_at: datetime
+    duration_seconds: int
+    state: str
+    has_report: bool
+
+
+class ActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    members: list[MemberActivityResponse]
+    calls: list[ActivityCallResponse]
 
 
 class AddMemberRequest(BaseModel):
@@ -157,6 +185,19 @@ def install_organisation_http(
             )
         }
         return MembersResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/activity", response_model=ActivityResponse)
+    async def activity(
+        days: Annotated[int, Query(ge=1, le=90)] = 30,
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> ActivityResponse:
+        rows = await organisation_activity(
+            auth.database,
+            auth.resolved.actor,
+            days=days,
+            every_member=auth.resolved.membership_role != "member",
+        )
+        return ActivityResponse.model_validate_json(json.dumps(rows))
 
     def service(auth: AuthenticatedTransaction) -> OrganisationService:
         if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:

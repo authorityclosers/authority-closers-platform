@@ -25,6 +25,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates
@@ -161,6 +162,9 @@ class Plan(Base):
     seat_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     seat_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
     per_seat: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    prices_include_gst: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     longest_call_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rollover_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
