@@ -367,11 +367,11 @@ def test_racing_source_reuse_in_different_tenants_preserves_only_winning_audit(
 
 def test_fresh_migration_and_registered_unscaled_numeric(postgres_harness):
     config = Config(str(ROOT / "alembic.ini"))
-    assert ScriptDirectory.from_config(config).get_current_head() == "20261003_0072"
+    assert ScriptDirectory.from_config(config).get_current_head() == "20261003_0073"
     table = model_metadata().tables["billing_credit_entries"]
     assert table.c.quantity.type.precision is None and table.c.quantity.type.scale is None
     with postgres_harness.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_0072"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_0073"
         assert (
             connection.scalar(
                 text(
@@ -381,5 +381,5 @@ def test_fresh_migration_and_registered_unscaled_numeric(postgres_harness):
             )
             == 2
         )
-    migration = (ROOT / "db/migrations/versions/20261003_0072_credits_ledger.py").read_text()
+    migration = (ROOT / "db/migrations/versions/20261003_0073_credits_ledger.py").read_text()
     assert "raise RuntimeError" in migration.split("def downgrade() -> None:")[1]
