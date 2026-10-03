@@ -1218,8 +1218,8 @@ class ConversationProcessingPlans:
         if revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS:
             return None
         if row.speaker_roles is None and not _roles_freeze_progress(row):
-            # Callers hold the recording and plan locks. Even a null fallback
-            # is frozen; a later confirmation belongs to a new plan.
+            # Callers hold the plan lock. Even a null fallback is frozen;
+            # a confirmation committed later belongs to a new plan.
             owner = await _customer_person_id(self.db, recording, now=utc(self.app.clock()))
             person = None if owner is None else await self.db.get(Person, owner)
             choice = (
@@ -1231,6 +1231,7 @@ class ConversationProcessingPlans:
                         ConversationGuestSubmission.tenant_id == recording.tenant_id,
                         ConversationGuestSubmission.person_id == recording.person_id,
                         ConversationGuestSubmission.source_sha256 == recording.source_sha256,
+                        ConversationGuestSubmission.processing_lease_id == row.processing_lease_id,
                         ConversationSpeakerMapRevision.actor_person_id == owner,
                     )
                     .order_by(ConversationSpeakerMapRevision.revision.desc())

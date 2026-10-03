@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -13,6 +14,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -34,6 +36,7 @@ from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
 from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.speaker_report_basis import read_report_basis
 from ac_platform.outbox.models import Job
 from tests.conversation_overview_fixtures import overview_for
 from tests.database.test_conversation_inference_postgresql import (
@@ -302,14 +305,22 @@ async def completed_checkpoint(sessions: Any, view: dict[str, Any]) -> UUID:
 
 @pytest.mark.parametrize("multiple_chunks", [False, True])
 @pytest.mark.parametrize("provider", ["groq", "gemini"])
+@pytest.mark.parametrize("with_roles", [False, True])
 def test_saved_transcript_to_private_report_and_profile_reuse(
     postgres_harness: Any,
     tmp_path: Path,
     multiple_chunks: bool,
     provider: str,
     monkeypatch: pytest.MonkeyPatch,
+    with_roles: bool,
     entitlement_seconds: int = 1,
 ) -> None:
+    if with_roles:
+        monkeypatch.setattr(
+            "ac_platform.conversation_intelligence.reports.SPEAKER_ROLE_PROMPT_REVISIONS",
+            frozenset({"coaching-v3"}),
+        )
+
     async def exercise() -> None:
         prepared = await prepare_local(postgres_harness, tmp_path)
         assert await prepared.worker.run_once()
@@ -334,6 +345,7 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                     prepared.state.actor, prepared.recording_id
                 )
                 assert early["segments"][0]["text"].startswith("hello buyer")
+                holder = early["segments"][0]["speaker_id"]
             model = "gemini-3.8-flash" if provider == "gemini" else "openai/gpt-oss-120b"
             facts = StageRequest(
                 stage="C4",
@@ -381,6 +393,17 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                 provider=provider,
                 model=model,
                 max_completion_tokens=1800,
+                coaching_prompt_revision="coaching-v3" if with_roles else "coaching-v1",
+                speaker_roles={
+                    "origin": "text_predicted_roles",
+                    "transcript_revision": early["revision"],
+                    "map_revision": "b" * 64,
+                    "speakers": [
+                        {"speaker_id": holder, "role": "seller", "is_account_holder": True}
+                    ],
+                }
+                if with_roles
+                else None,
             )
             qid, quote = await text_quote(sessions, prepared, coaching)
             cview = await enqueue(sessions, prepared, qid, quote, coaching, "report-coaching")
@@ -388,6 +411,35 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
             await completed_checkpoint(sessions, cview)
             async with sessions() as db, db.begin():
                 reports = ConversationReports(ConversationApplication(db))
+                recording = await reports.application._recording(
+                    prepared.state.actor, prepared.recording_id
+                )
+                reader = AcquisitionReports(
+                    SimpleNamespace(database=db, clock=reports.application.clock)
+                )
+                basis = await read_report_basis(
+                    reader,
+                    recording,
+                    uuid4(),
+                    {
+                        "transcript_revision": early["revision"],
+                        "map_revision": "c" * 64,
+                        "speakers": [
+                            {"speaker_id": holder, "role": "you", "role_source": "confirmed"}
+                        ],
+                    },
+                )
+                assert basis == (
+                    {
+                        "status": "confirmed",
+                        "map_revision": "b" * 64,
+                        "you_speaker_id": holder,
+                        "matches_current": True,
+                    }
+                    if with_roles
+                    else None
+                )
+                assert not db.new and not db.dirty
                 response = await reports.get(prepared.state.actor, UUID(cview["id"]))
                 assert response["report"]["review_status"] == "draft_not_dipak_adjudicated"
                 assert response["report"]["summary"] == "A synthetic draft from saved facts."

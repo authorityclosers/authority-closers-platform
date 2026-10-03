@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.speaker_map_store import (
     read_speaker_map_revision,
     update_speaker_map,
 )
+from ac_platform.conversation_intelligence.speaker_report_basis import read_report_basis
 from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile import _resolved_name
 from ac_platform.kernel.authz import ActorContext
@@ -54,6 +55,8 @@ async def read_speaker_map(
     # A stale transcript choice is not applied, but its ETag still fences the
     # next append. Returning zero here would make every fresh choice conflict.
     result["user_revision"] = 0 if revision is None else revision["revision"]
+    if transcript is not None:
+        result["report_basis"] = await read_report_basis(reports, recording, submission_id, result)
     return result
 
 
