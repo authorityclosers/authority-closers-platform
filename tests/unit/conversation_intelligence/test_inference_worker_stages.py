@@ -29,6 +29,7 @@ from ac_platform.conversation_intelligence.inference_worker import (
     _safe_receipt_usage,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
@@ -103,6 +104,7 @@ def _scope(
     *,
     transcript: dict[str, Any] | None = None,
     profile: dict[str, Any] | None = None,
+    request: StageRequest | None = None,
 ) -> Scope:
     plan = SimpleNamespace(
         prepared=prepared,
@@ -110,6 +112,7 @@ def _scope(
         duration_ms=1_000,
         transcript=transcript,
         profile=profile,
+        request=request,
     )
     return cast(
         Scope,
@@ -242,7 +245,18 @@ def test_c5_validation_passes_plan_transcript_and_profile() -> None:
     from tests.conversation_overview_fixtures import overview_for
 
     report["overview"] = overview_for(report)
-    scope = _scope("C5", prepared, transcript=transcript, profile=profile)
+    scope = _scope(
+        "C5",
+        prepared,
+        transcript=transcript,
+        profile=profile,
+        request=StageRequest(
+            stage="C5",
+            transcript_checkpoint_id=uuid4(),
+            fact_checkpoint_ids=(uuid4(),),
+            profile=profile,
+        ),
+    )
 
     output = ConversationInferenceWorker._validate(
         scope,

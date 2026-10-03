@@ -1,4 +1,5 @@
 {
+  "description": "Fictional independent per-run receipts; increasing values are not cumulative snapshots.",
   "issues": [
     {"id": "done", "identifier": "DEMO-SESSION", "assigneeAgentId": "builder", "startedAt": "2026-09-20T00:00:00Z"},
     {"id": "unfinished", "identifier": "DEMO-OTHER", "assigneeAgentId": "builder"}
@@ -10,7 +11,7 @@
     {"id": "second", "agentId": "builder", "status": "succeeded", "startedAt": "2026-09-22T00:00:00Z", "contextSnapshot": {"issueId": "done"},
       "usageJson": {"persistedSessionId": "fictional-shared", "usageSource": "per_run", "inputTokens": 160, "outputTokens": 15, "cachedInputTokens": 100}},
     {"id": "other", "agentId": "builder", "status": "failed", "createdAt": "2026-09-21T00:00:00Z", "contextSnapshot": {"issueId": "unfinished"},
-      "usageJson": {"persistedSessionId": "fictional-other", "inputTokens": 20, "outputTokens": 2, "cachedInputTokens": 5}},
+      "usageJson": {"persistedSessionId": "fictional-other", "usageSource": "per_run", "inputTokens": 20, "outputTokens": 2, "cachedInputTokens": 5}},
     {"id": "first", "agentId": "builder", "status": "succeeded", "startedAt": "2026-09-20T00:00:00Z", "contextSnapshot": {"issueId": "done"},
       "usageJson": {"persistedSessionId": "fictional-shared", "usageSource": "per_run", "inputTokens": 100, "outputTokens": 10, "cachedInputTokens": 60}}
   ]

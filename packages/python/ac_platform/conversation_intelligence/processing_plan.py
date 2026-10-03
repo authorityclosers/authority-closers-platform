@@ -6,8 +6,9 @@ process loss: actual effects are still existing deduplicated, reserved AC jobs.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -36,6 +37,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Quote,
     effective_budget_cap_paise,
 )
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
     TRANSCRIPT_RECIPE_BY_ROUTE,
@@ -86,11 +88,25 @@ from ac_platform.conversation_intelligence.reports import (
     FACT_PROMPT_LEGACY,
     load_report_profile,
 )
-from ac_platform.conversation_intelligence.sensitive_segments_store import marks_in_force
+from ac_platform.conversation_intelligence.sensitive_segments import withhold
+from ac_platform.conversation_intelligence.sensitive_segments_store import (
+    marks_in_force,
+    withheld_plan_for,
+)
+from ac_platform.conversation_intelligence.speaker_map import (
+    SpeakerMapRevision,
+    project_speaker_roles,
+    resolve_speaker_map,
+)
+from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
+from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.conversation_intelligence.worker_account_gate import (
+    _customer_person_id,
     is_account_profile_hold,
 )
+from ac_platform.identity.models import Person
+from ac_platform.identity.sales_xray_profile import _resolved_name
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -100,6 +116,13 @@ NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
 _PROCESSING_DIAGNOSTIC_PHASES = frozenset(
     {"approval_evaluation", "quote_usage_reservation", "request_stage"}
 )
+_LOGGER = logging.getLogger(__name__)
+
+
+def _roles_freeze_progress(row: ConversationProcessingPlan) -> dict[str, bool]:
+    return (
+        {"speaker_roles_frozen": True} if row.progress.get("speaker_roles_frozen") is True else {}
+    )
 
 
 def _processing_failure_diagnostic(phase: str, error: BaseException) -> str | None:
@@ -1183,6 +1206,78 @@ class ConversationProcessingPlans:
                 return task.stage
         return None
 
+    async def _speaker_roles_for_c5(
+        self,
+        row: ConversationProcessingPlan,
+        recording: ConversationRecording,
+        transcript: dict[str, Any],
+        revision: str,
+    ) -> dict[str, Any] | None:
+        from ac_platform.conversation_intelligence import reports
+
+        if revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS:
+            return None
+        if row.speaker_roles is None and not _roles_freeze_progress(row):
+            # Callers hold the recording and plan locks. Even a null fallback
+            # is frozen; a later confirmation belongs to a new plan.
+            owner = await _customer_person_id(self.db, recording, now=utc(self.app.clock()))
+            person = None if owner is None else await self.db.get(Person, owner)
+            choice = (
+                await self.db.scalar(
+                    select(ConversationSpeakerMapRevision)
+                    .join(ConversationGuestSubmission)
+                    .where(
+                        ConversationGuestSubmission.recording_id == recording.id,
+                        ConversationGuestSubmission.tenant_id == recording.tenant_id,
+                        ConversationGuestSubmission.person_id == recording.person_id,
+                        ConversationGuestSubmission.source_sha256 == recording.source_sha256,
+                        ConversationSpeakerMapRevision.actor_person_id == owner,
+                    )
+                    .order_by(ConversationSpeakerMapRevision.revision.desc())
+                    .limit(1)
+                )
+                if owner is not None
+                else None
+            )
+            try:
+                visible_transcript = withhold(
+                    transcript,
+                    await withheld_plan_for(
+                        self.db,
+                        recording_id=recording.id,
+                        served_revisions=[transcript["revision"]],
+                    ),
+                )
+                resolved = resolve_speaker_map(
+                    visible_transcript,
+                    account_holder_name=_resolved_name(person) if person is not None else None,
+                    user_revision=None
+                    if choice is None
+                    else cast(
+                        SpeakerMapRevision,
+                        {
+                            "revision": choice.revision,
+                            "transcript_revision": choice.transcript_revision,
+                            "speakers": choice.speakers,
+                        },
+                    ),
+                )
+                if resolved["diagnostics"]:
+                    _LOGGER.warning("speaker_roles_source_invalid")
+                row.speaker_roles = validate_speaker_roles(
+                    project_speaker_roles(resolved), transcript
+                )
+            except (KeyError, TypeError, ValueError):
+                _LOGGER.warning("speaker_roles_snapshot_invalid")
+            row.progress = {**row.progress, "speaker_roles_frozen": True}
+        if row.speaker_roles is None:
+            return None
+        try:
+            return validate_speaker_roles(row.speaker_roles, transcript)
+        except ValueError:
+            _LOGGER.warning("speaker_roles_snapshot_invalid")
+            return None
+
     async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 
@@ -1252,6 +1347,9 @@ class ConversationProcessingPlans:
                     coaching_prompt_revision=value.coaching_prompt_revision,
                     report_language=value.report_language,
                     qualitative_pack_sha256=value.qualitative_pack_sha256,
+                    speaker_roles=await self._speaker_roles_for_c5(
+                        row, recording, first_plan.transcript, value.coaching_prompt_revision
+                    ),
                 )
                 judge = await self._enqueue(
                     actor,
@@ -1287,13 +1385,18 @@ class ConversationProcessingPlans:
                     if report is None:
                         raise ConversationConflict("The completed coaching report is unavailable.")
                     row.state = "completed"
-                    row.progress = {"current_stage": "C6", "report_run_id": str(judge.run_id)}
+                    row.progress = {
+                        **_roles_freeze_progress(row),
+                        "current_stage": "C6",
+                        "report_run_id": str(judge.run_id),
+                    }
                     if repair_progress is not None:
                         row.progress["c5_repair"] = repair_progress
                     return
         profile_hold_stage = await self._account_profile_hold_stage(row, tasks)
         if profile_hold_stage is not None:
             row.progress = {
+                **_roles_freeze_progress(row),
                 "current_stage": profile_hold_stage,
                 "failure_code": "account_profile_required",
             }
@@ -1304,9 +1407,13 @@ class ConversationProcessingPlans:
         )
         if bad is not None:
             row.state = "held"
-            row.progress = {"current_stage": bad.stage, "failure_code": f"stage_{bad.state}"}
+            row.progress = {
+                **_roles_freeze_progress(row),
+                "current_stage": bad.stage,
+                "failure_code": f"stage_{bad.state}",
+            }
         else:
-            row.progress = {"current_stage": current}
+            row.progress = {**_roles_freeze_progress(row), "current_stage": current}
         if repair_progress is not None:
             row.progress["c5_repair"] = repair_progress
         row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
@@ -1369,7 +1476,10 @@ class ProcessingPlanScheduler:
                 )
                 if row is not None and row.state == "active":
                     row.state = "held"
-                    row.progress = {"failure_code": "processing_authorization_or_input_unavailable"}
+                    row.progress = {
+                        **_roles_freeze_progress(row),
+                        "failure_code": "processing_authorization_or_input_unavailable",
+                    }
                     if plans is not None and plans.failure_diagnostic_code is not None:
                         row.progress["diagnostic_code"] = plans.failure_diagnostic_code
             return True

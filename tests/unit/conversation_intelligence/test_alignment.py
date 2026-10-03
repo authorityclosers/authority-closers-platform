@@ -16,6 +16,35 @@ from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256
 SOURCE_SHA = "a" * 64
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "unverified_provider_labels",
+        "text_predicted_roles",
+        "model_named_roles",
+        "user_confirmed_roles",
+        "channel_mapped_roles",
+    ],
+)
+def test_role_origins_echo_without_relabelling_segments_or_channels(origin):
+    transcript = _transcript(_segment("s1", 100, 200))
+    transcript["speaker_identity"] = origin
+    before = deepcopy(transcript)
+    result = build_alignment(_signal(channels=2), transcript)
+    assert result["speaker_identity"] == origin
+    assert result["segments"][0]["speaker_identity"] == "unverified_provider_label"
+    assert result["segments"][0]["channel"] is None
+    assert transcript == before
+
+
+@pytest.mark.parametrize("origin", ["verified_identity", "voice_match", "unknown", None, []])
+def test_unknown_and_voice_identity_still_fail_closed(origin):
+    transcript = _transcript(_segment("s1", 100, 200))
+    transcript["speaker_identity"] = origin
+    with pytest.raises(AlignmentError, match="^alignment_claimed_speaker_identity$"):
+        build_alignment(_signal(), transcript)
+
+
 def _signal(
     *, channels: int = 1, source_sha256: str = SOURCE_SHA, duration_ms: int = 1_000
 ) -> dict[str, Any]:

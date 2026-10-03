@@ -37,6 +37,13 @@ class Caller:
 
 
 @dataclass(frozen=True, slots=True)
+class BuyerTaxDetails:
+    name: str
+    gstin: str | None = None
+    state_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class CheckoutCommand:
     kind: OrderKind
     account: AccountName
@@ -46,6 +53,7 @@ class CheckoutCommand:
     interval: Interval | None = None
     seats: int | None = None
     pack_key: str | None = None
+    buyer: BuyerTaxDetails | None = None
 
 
 @dataclass(frozen=True, slots=True)

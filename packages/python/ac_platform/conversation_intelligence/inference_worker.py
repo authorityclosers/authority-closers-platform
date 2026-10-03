@@ -512,6 +512,8 @@ class ConversationInferenceWorker:
                 stage_plan.prepared,
                 stage_plan.transcript,
                 profile=stage_plan.profile,
+                coaching_prompt_revision=stage_plan.request.coaching_prompt_revision,
+                speaker_roles=stage_plan.request.speaker_roles,
             )
         raise ConversationConflict("The provider task stage is invalid.")
 

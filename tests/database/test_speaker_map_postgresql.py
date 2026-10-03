@@ -16,12 +16,19 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import (
+    ConversationApplication,
     ConversationConflict,
     ConversationDenied,
     ConversationNotFound,
 )
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
-from ac_platform.conversation_intelligence.models import ConversationPermission
+from ac_platform.conversation_intelligence.models import (
+    ConversationPermission,
+    ConversationProcessingPlan,
+    ConversationRecording,
+)
+from ac_platform.conversation_intelligence.processing_plan import ConversationProcessingPlans
 from ac_platform.conversation_intelligence.retention import ConversationRetentionScheduler
 from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
 from ac_platform.conversation_intelligence.speaker_map_store import (
@@ -30,6 +37,7 @@ from ac_platform.conversation_intelligence.speaker_map_store import (
 )
 from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
 from ac_platform.db.models import model_metadata
+from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile import erase_sales_xray_profile
 from tests.database.test_conversation_account_library_postgresql import (
     _seed_retained_guest_submission,
@@ -41,11 +49,164 @@ from tests.database.test_conversation_submission_labels_postgresql import (
     _retained_claimed_submission,
 )
 from tests.database.test_conversation_worker_postgresql import _reconcile
+from tests.unit.conversation_intelligence.test_speaker_map_service import TRANSCRIPT
 
 
 @pytest.fixture(scope="module")
 def postgres_harness() -> Any:
     yield from cast(Any, _postgres_harness).__wrapped__()
+
+
+def test_claimed_owner_roles_freeze_across_sessions_and_new_plan_uses_latest(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.reports.SPEAKER_ROLE_PROMPT_REVISIONS",
+        frozenset({"coaching-v3"}),
+    )
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            source = await _retained_claimed_submission(setup)
+            async with setup.sessions() as db, db.begin():
+                owner = await db.get(Person, setup.state.person_id)
+                owner.display_name = "Zoya"
+                recording = await db.get(ConversationRecording, source["recording_id"])
+                assert recording.person_id != owner.id
+                submission = await db.get(
+                    ConversationGuestSubmission, (recording.tenant_id, source["submission_id"])
+                )
+                row = ConversationProcessingPlan(
+                    id=uuid4(),
+                    tenant_id=recording.tenant_id,
+                    person_id=recording.person_id,
+                    recording_id=recording.id,
+                    processing_lease_id=submission.processing_lease_id,
+                    generation=1,
+                    plan_sha256="a" * 64,
+                    manifest={},
+                    state="quoted",
+                    progress={},
+                    created_at=setup.state.now,
+                    expires_at=setup.state.now + timedelta(minutes=30),
+                    next_check_at=setup.state.now,
+                )
+                db.add(row)
+                plan_id = row.id
+
+            async def current_transcript(_self: Any, _recording: Any) -> dict[str, Any]:
+                return TRANSCRIPT
+
+            monkeypatch.setattr(AcquisitionReports, "render_transcript", current_transcript)
+            choices = [
+                {"speaker_id": "speaker_0", "role": "you", "display_name": "Private owner name"},
+                {"speaker_id": "speaker_1", "role": "prospect", "display_name": None},
+            ]
+            async with setup.sessions() as db, db.begin():
+                await update_speaker_map(
+                    GuestOwnership(setup.factory(db)),
+                    source["submission_id"],
+                    actor=setup.state.actor,
+                    expected_revision=0,
+                    transcript_revision=TRANSCRIPT["revision"],
+                    speakers=choices,
+                )
+            async with setup.sessions() as db, db.begin():
+                row = await db.get(ConversationProcessingPlan, plan_id, with_for_update=True)
+                recording = await db.get(
+                    ConversationRecording, source["recording_id"], with_for_update=True
+                )
+                service = ConversationProcessingPlans(
+                    ConversationApplication(db, clock=lambda: setup.state.now), setup.authority
+                )
+                first = await service._speaker_roles_for_c5(
+                    row, recording, TRANSCRIPT, "coaching-v3"
+                )
+                assert first["origin"] == "user_confirmed_roles"
+                assert first["speakers"][0]["is_account_holder"] is True
+                assert "Private owner name" not in str(first)
+            choices[0]["role"], choices[1]["role"] = "prospect", "you"
+            async with setup.sessions() as db, db.begin():
+                await update_speaker_map(
+                    GuestOwnership(setup.factory(db)),
+                    source["submission_id"],
+                    actor=setup.state.actor,
+                    expected_revision=1,
+                    transcript_revision=TRANSCRIPT["revision"],
+                    speakers=choices,
+                )
+            async with setup.sessions() as db, db.begin():
+                row = await db.get(ConversationProcessingPlan, plan_id, with_for_update=True)
+                recording = await db.get(
+                    ConversationRecording, source["recording_id"], with_for_update=True
+                )
+                service = ConversationProcessingPlans(
+                    ConversationApplication(db, clock=lambda: setup.state.now), setup.authority
+                )
+                assert (
+                    await service._speaker_roles_for_c5(row, recording, TRANSCRIPT, "coaching-v3")
+                    == first
+                )
+                # An independent plan's unfrozen state observes the new choice.
+                fresh = ConversationProcessingPlan(speaker_roles=None, progress={})
+                latest = await service._speaker_roles_for_c5(
+                    fresh, recording, TRANSCRIPT, "coaching-v3"
+                )
+                assert latest["origin"] == "user_confirmed_roles"
+                assert latest["speakers"][1]["is_account_holder"] is True
+                assert row.speaker_roles == first
+                fallback = ConversationProcessingPlan(
+                    **{
+                        column.name: getattr(row, column.name)
+                        for column in ConversationProcessingPlan.__table__.columns
+                    }
+                )
+                fallback.id, fallback.speaker_roles = uuid4(), None
+                fallback.progress = {"speaker_roles_frozen": True}
+                db.add(fallback)
+                await db.flush()
+                with pytest.raises(DBAPIError):
+                    async with db.begin_nested():
+                        await db.execute(
+                            update(ConversationProcessingPlan)
+                            .where(ConversationProcessingPlan.id == fallback.id)
+                            .values(speaker_roles=first)
+                        )
+                for values in (
+                    {"speaker_roles": latest},
+                    {"speaker_roles": None},
+                    {"progress": {}},
+                    {"manifest": {"changed": True}},
+                ):
+                    with pytest.raises(DBAPIError):
+                        async with db.begin_nested():
+                            await db.execute(
+                                update(ConversationProcessingPlan)
+                                .where(ConversationProcessingPlan.id == plan_id)
+                                .values(**values)
+                            )
+                # Canonical erasure may clear content without rewriting history.
+                await db.execute(
+                    update(ConversationProcessingPlan)
+                    .where(ConversationProcessingPlan.id == plan_id)
+                    .values(
+                        manifest=None, speaker_roles=None, progress={}, erased_at=setup.state.now
+                    )
+                )
+                await db.refresh(row)
+                assert row.speaker_roles is None and row.erased_at is not None
+                with pytest.raises(DBAPIError):
+                    async with db.begin_nested():
+                        await db.execute(
+                            update(ConversationProcessingPlan)
+                            .where(ConversationProcessingPlan.id == plan_id)
+                            .values(speaker_roles=first, progress={"speaker_roles_frozen": True})
+                        )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 async def _choices(setup: Any, source: dict[str, Any], count: int = 1) -> None:

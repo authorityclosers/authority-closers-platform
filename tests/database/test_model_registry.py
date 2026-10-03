@@ -135,6 +135,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_canary_submissions",
         "conversation_sensitive_segment_marks",
         "conversation_acquisition_settlements",
+        "conversation_call_metrics",
         "conversation_processing_principals",
         "conversation_processing_leases",
         "conversation_guest_submissions",

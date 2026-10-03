@@ -7,6 +7,7 @@ its own immutable input, accepted quote, reservation and durable provider task.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
@@ -14,7 +15,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
+from ac_platform.conversation_intelligence import reports
 from ac_platform.conversation_intelligence.application import ConversationConflict, utc
+from ac_platform.conversation_intelligence.call_metrics import stored_summary
+from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
 from ac_platform.conversation_intelligence.checkpoints import (
     Checkpoint,
     assert_same_artifact,
@@ -27,6 +31,7 @@ from ac_platform.conversation_intelligence.completion_limits import completion_c
 from ac_platform.conversation_intelligence.contracts import C5RepairIntent
 from ac_platform.conversation_intelligence.entitlements import Quote
 from ac_platform.conversation_intelligence.inference_tasks import (
+    InferenceTaskError,
     PreparedTaskInput,
     prepare_coaching_input,
     prepare_fact_inputs,
@@ -57,6 +62,7 @@ from ac_platform.conversation_intelligence.reports import (
     load_report_profile,
     merge_fact_packets,
 )
+from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
 from ac_platform.outbox.models import Job
 
 if TYPE_CHECKING:
@@ -65,6 +71,7 @@ if TYPE_CHECKING:
 ALIGNMENT_RECIPE = "source-clock-support-v1"
 FACT_RECIPE = "source-fact-chunk-v1"
 COACHING_RECIPE = "qualitative-coaching-v1"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _raw_response_binding(
@@ -139,9 +146,17 @@ class StageRequest(BaseModel):
     acquisition_c5_benchmark_approval_id: UUID | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    speaker_roles: dict[str, Any] | None = Field(
+        default=None, repr=False, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
+        if self.speaker_roles is not None and (
+            self.stage != "C5"
+            or self.coaching_prompt_revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS
+        ):
+            raise ValueError("speaker_roles_revision_undeclared")
         if self.provider == "openai" and self.stage != "C5":
             raise ValueError("OpenAI is approved for coaching only.")
         if self.provider == "openai" and self.repair is not None:
@@ -547,24 +562,48 @@ class ReportingPipeline:
         )
         await self.save(recording, aggregate, aggregate_payload)
         profile = load_report_profile() if request.profile is None else request.profile
+        roles = request.speaker_roles
+        if roles is not None:
+            try:
+                roles = validate_speaker_roles(roles, transcript)
+            except ValueError:
+                # Attribution cannot hold a report. Keep fallback deterministic
+                # when the exact task intent is rebuilt on poll and dispatch.
+                roles = None
+                _LOGGER.warning("speaker_roles_snapshot_invalid")
         request = request.model_copy(
             update={
                 "profile": profile,
                 "fact_checkpoint_ids": tuple(identifier for _, _, identifier in packets),
+                "speaker_roles": roles,
             }
         )
-        prepared = prepare_coaching_input(
-            transcript,
-            [packet for packet, _, _ in packets],
-            provider=request.provider,
-            profile=profile,
-            model=request.model,
-            max_completion_tokens=request.max_completion_tokens,
-            output_profile=request.output_profile,
-            coaching_prompt_revision=request.coaching_prompt_revision,
-            report_language=request.report_language or "en",
-            qualitative_pack_sha256=request.qualitative_pack_sha256,
-        )
+
+        def prepare(role_snapshot: dict[str, Any] | None) -> PreparedTaskInput:
+            return prepare_coaching_input(
+                transcript,
+                [packet for packet, _, _ in packets],
+                provider=request.provider,
+                profile=profile,
+                model=request.model,
+                max_completion_tokens=request.max_completion_tokens,
+                output_profile=request.output_profile,
+                coaching_prompt_revision=request.coaching_prompt_revision,
+                report_language=request.report_language or "en",
+                qualitative_pack_sha256=request.qualitative_pack_sha256,
+                speaker_roles=role_snapshot,
+            )
+
+        try:
+            prepared = prepare(roles)
+        except InferenceTaskError as error:
+            if roles is None or str(error) != "report_prompt_budget_exceeded":
+                raise
+            # Optional attribution must not exceed the existing provider cap.
+            # Store the exact fallback request; no provider or repair retry.
+            request = request.model_copy(update={"speaker_roles": None})
+            _LOGGER.warning("speaker_roles_prompt_budget_exceeded")
+            prepared = prepare(None)
         if request.repair is not None:
             prepared = repair_coaching_input(prepared, request.repair)
         c5_config: dict[str, Any] = {
@@ -730,6 +769,27 @@ class ReportingPipeline:
                     charged_seconds=usage.reserved_seconds,
                     receipt_sha256=c6.manifest_sha256,
                 )
+                try:
+                    async with self.database.begin_nested():
+                        summary = stored_summary(plan.transcript["segments"], plan.duration_ms)
+                        outcome = (normalized.get("overview") or {}).get("outcome")
+                        self.database.add(
+                            ConversationCallMetrics(
+                                usage_id=usage.id,
+                                tenant_id=recording.tenant_id,
+                                submission_id=usage.submission_id,
+                                recording_id=recording.id,
+                                report_draft_id=draft.id,
+                                rules=summary["rules"],
+                                summary=summary,
+                                summary_sha256=content_hash(summary),
+                                outcome_kind=outcome["kind"] if outcome is not None else None,
+                                created_at=now,
+                            )
+                        )
+                        await self.database.flush()
+                except Exception as error:
+                    _LOGGER.warning("call_metrics_skipped %s", type(error).__name__)
             elif previous.kind != "completed" or previous.charged_seconds != usage.reserved_seconds:
                 raise ConversationConflict("The source usage receipt differs.")
             # A later authorized model/profile report retains the original

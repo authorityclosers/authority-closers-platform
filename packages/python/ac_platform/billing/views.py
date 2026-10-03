@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-from ac_platform.billing.catalogue import tax_mode
 from ac_platform.billing.tax import TaxBreakdown, tax_from_total
 
 AccountName = Literal["personal", "organisation"]
@@ -63,7 +62,9 @@ class OrderView:
 
     @property
     def tax(self) -> TaxBreakdown:
-        return tax_from_total(self.amount.minor, tax_mode(self.plan_key))
+        return tax_from_total(
+            self.amount.minor, "inclusive" if self.amount.gst_inclusive else "exclusive"
+        )
 
 
 @dataclass(frozen=True, slots=True)

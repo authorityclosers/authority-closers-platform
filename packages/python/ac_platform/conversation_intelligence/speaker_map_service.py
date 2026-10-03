@@ -6,7 +6,10 @@ from uuid import UUID
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
-from ac_platform.conversation_intelligence.application import ConversationNotFound
+from ac_platform.conversation_intelligence.application import (
+    ConversationDenied,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.speaker_map import resolve_speaker_map
 from ac_platform.conversation_intelligence.speaker_map_store import (
@@ -38,7 +41,8 @@ async def read_speaker_map(
         transcript = await reports.render_transcript(recording)
     except ConversationNotFound:
         transcript = None
-    assert actor is not None
+    if actor is None:
+        raise ConversationDenied("A signed-in call owner is required.")
     person = await ownership.database.scalar(select(Person).where(Person.id == actor.person_id))
     result = resolve_speaker_map(
         transcript,

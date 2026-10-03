@@ -31,6 +31,7 @@ from ac_platform.billing.errors import (
     ProviderUnavailable,
     RefundWindowClosed,
 )
+from ac_platform.billing.invoices import issue_credit_note, issue_invoice
 from ac_platform.billing.ledger import BillingLedger
 from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.billing.order_models import (
@@ -353,6 +354,7 @@ class Settlement:
                             order,
                             lots,
                             confirmed=state == "refunded",
+                            payment=payment,
                             now=_utc(self.service.clock()),
                         )
             # The immutable command result is acceptance (pending). Status reads
@@ -619,6 +621,7 @@ class Settlement:
         now: datetime,
     ) -> str:
         if isinstance(decision, GrantLots):
+            await issue_invoice(database, order, stored, now, self.service.invoice_settings)
             await self._write_lots(
                 database, account, decision.lots, "purchase", order.plan_key, stored
             )
@@ -646,6 +649,9 @@ class Settlement:
         now: datetime,
     ) -> str:
         if isinstance(decision, GrantLots):
+            await issue_invoice(
+                database, order or subscription, stored, now, self.service.invoice_settings
+            )
             assert stored.period_start is not None and stored.period_end is not None
             database.add(
                 BillingPeriod(
@@ -994,7 +1000,9 @@ class Settlement:
         sources = await self._sources(database, order, payment)
         ledger = self.service.ledger(database)
         lots = [e for e in await ledger.entries(order.account_id) if e.source_ref in sources]
-        await self._settle_refund(database, ledger, order, lots, confirmed=confirmed, now=now)
+        await self._settle_refund(
+            database, ledger, order, lots, confirmed=confirmed, payment=payment, now=now
+        )
         return "refund"
 
     async def _settle_refund(
@@ -1005,9 +1013,15 @@ class Settlement:
         payment_lots: list[BillingLedgerEntry],
         *,
         confirmed: bool,
+        payment: BillingPaymentEvent,
         now: datetime,
     ) -> None:
         """A confirmed refund writes the release and the refund; a refusal releases only."""
+
+        if confirmed:
+            refund = await self._latest_refund(database, order.id, payment.payment_ref)
+            assert refund is not None
+            await issue_credit_note(database, payment, refund, now, self.service.invoice_settings)
 
         entries = await ledger.entries(order.account_id)
         released = {e.hold_id for e in entries if e.kind == "refund_hold_release"}

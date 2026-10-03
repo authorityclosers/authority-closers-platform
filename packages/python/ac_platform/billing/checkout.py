@@ -19,8 +19,9 @@ from uuid import UUID, uuid4
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.billing.catalogue import Catalogue, PlanCopy, tax_mode
-from ac_platform.billing.commands import Caller, CheckoutCommand
+from ac_platform.application.settings import Settings
+from ac_platform.billing.catalogue import Catalogue, PlanCopy
+from ac_platform.billing.commands import BuyerTaxDetails, Caller, CheckoutCommand
 from ac_platform.billing.errors import (
     BillingForbidden,
     BillingIdempotencyConflict,
@@ -36,6 +37,7 @@ from ac_platform.billing.errors import (
     SubscriptionNotFound,
     TopUpNeedsPeriod,
 )
+from ac_platform.billing.invoice_models import BillingBuyerTaxDetails
 from ac_platform.billing.ledger import BillingLedger
 from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.order_models import (
@@ -85,6 +87,7 @@ from ac_platform.payments.recurring import (
     SubscriptionRequest,
 )
 from ac_platform.payments.registry import PaymentProviderRegistry, UnknownPaymentProviderError
+from ac_platform.plans.models import Plan
 from ac_platform.providers.ports import ProviderError
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -164,6 +167,7 @@ class CheckoutService:
         return_url_base: str,
         trial_policy: TrialPolicy | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        invoice_settings: Settings | None = None,
     ) -> None:
         if not return_url_base.startswith("https://"):
             raise ValueError("the return URL base must be an HTTPS origin")
@@ -172,6 +176,7 @@ class CheckoutService:
         self.operations_tenant_id = operations_tenant_id
         self.return_url_base = return_url_base.rstrip("/")
         self.trial_policy = trial_policy or TrialPolicy()
+        self.invoice_settings = invoice_settings
 
     def ledger(self, database: AsyncSession) -> BillingLedger:
         return BillingLedger(
@@ -372,6 +377,28 @@ class CheckoutService:
             view = await self._top_up_checkout(
                 database, resolved, command, plan, choice, customer, reference, description, now
             )
+        buyer = command.buyer
+        if buyer is None:
+            from ac_platform.identity.models import Person
+            from ac_platform.tenancy.models import Tenant
+
+            name_query = (
+                select(Person.display_name).where(Person.id == caller.person_id)
+                if resolved.name == "personal"
+                else select(Tenant.name).where(Tenant.id == resolved.tenant_id)
+            )
+            buyer = BuyerTaxDetails(await database.scalar(name_query) or "Buyer name pending")
+        database.add(
+            BillingBuyerTaxDetails(
+                id=uuid4(),
+                order_id=UUID(view.order.order_id),
+                name=buyer.name,
+                gstin=buyer.gstin,
+                state_code=buyer.state_code,
+                supersedes_id=None,
+                created_at=now,
+            )
+        )
         await self._remember(
             database,
             resolved.account,
@@ -425,7 +452,14 @@ class CheckoutService:
         if open_subscription is not None:
             raise SubscriptionExists("This account already has a subscription.")
         taxable_price = unit_price * seats if plan.per_seat else unit_price
-        amount = calculate_tax(taxable_price, tax_mode(plan.key)).total_minor
+        gst_inclusive = await database.scalar(
+            select(Plan.prices_include_gst).where(Plan.key == plan.key)
+        )
+        if gst_inclusive is None:
+            raise NotOnSale("This plan has no stored GST treatment.")
+        amount = calculate_tax(
+            taxable_price, "inclusive" if gst_inclusive else "exclusive"
+        ).total_minor
         # Round once on the total. The provider must reproduce it exactly as
         # plan x seat quantity; refuse a price that needs fractional paise per seat.
         if amount % seats:
@@ -465,7 +499,7 @@ class CheckoutService:
             included_minutes=plan.included_minutes,
             amount_minor=amount,
             currency="INR",
-            gst_inclusive=True,
+            gst_inclusive=gst_inclusive,
             renewal_needs_customer_approval=amount > E_MANDATE_LIMIT_PAISE,
             created_by_person_id=resolved.actor_person_id,
             created_at=now,
@@ -488,7 +522,7 @@ class CheckoutService:
             minutes=plan.included_minutes * seats,
             amount_minor=amount,
             currency="INR",
-            gst_inclusive=True,
+            gst_inclusive=gst_inclusive,
             created_by_person_id=resolved.actor_person_id,
             created_at=now,
             expires_at=now + CHECKOUT_VALIDITY,
@@ -553,7 +587,17 @@ class CheckoutService:
         )
         if not has_valid_period_grant(lots, now):
             raise TopUpNeedsPeriod("Top-ups need an active subscription period.")
-        money = Money(calculate_tax(pack.price_paise, tax_mode(plan.key)).total_minor, "INR")
+        gst_inclusive = await database.scalar(
+            select(Plan.prices_include_gst).where(Plan.key == plan.key)
+        )
+        if gst_inclusive is None:
+            raise NotOnSale("This plan has no stored GST treatment.")
+        money = Money(
+            calculate_tax(
+                pack.price_paise, "inclusive" if gst_inclusive else "exclusive"
+            ).total_minor,
+            "INR",
+        )
         order_id = uuid4()
         try:
             hosted = await choice.provider.create_checkout(
@@ -585,7 +629,7 @@ class CheckoutService:
             minutes=pack.minutes,
             amount_minor=money.amount_minor,
             currency="INR",
-            gst_inclusive=True,
+            gst_inclusive=gst_inclusive,
             created_by_person_id=resolved.actor_person_id,
             created_at=now,
             expires_at=now + CHECKOUT_VALIDITY,
