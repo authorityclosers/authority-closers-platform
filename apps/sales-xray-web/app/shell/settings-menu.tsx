@@ -324,17 +324,11 @@ export function SettingsMenu({
                   aria-hidden="true"
                 />
               </Link>
-              <Link href="/billing" className={styles.row} onClick={onClose}>
-                <span className={styles.rowIcon} aria-hidden="true">
-                  <CreditCard size={16} />
-                </span>
-                <span className={styles.rowLabel}>Billing</span>
-                <ChevronRight
-                  size={15}
-                  className={styles.chev}
-                  aria-hidden="true"
-                />
-              </Link>
+              <Row
+                icon={<CreditCard size={16} />}
+                label="Plan & billing"
+                onClick={() => settings("billing")}
+              />
               <Row
                 icon={<Sparkles size={16} />}
                 label="What's new"

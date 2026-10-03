@@ -662,3 +662,104 @@
     animation: none;
   }
 }
+
+/* Plan & billing inside Settings */
+.billingBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0 16px;
+}
+
+.billingCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-paper-2);
+}
+
+.billingCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.billingCardHead h3 {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 700 16px/1.2 var(--lx-font-ui);
+}
+
+.topUpsMiniGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.topUpMiniCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-surface);
+}
+
+.topUpMiniHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font: 700 13px/1.2 var(--lx-font-ui);
+  color: var(--lx-ink);
+}
+
+.topUpMiniPrice {
+  color: var(--lx-teal);
+  font-weight: 800;
+}
+
+.invoiceTableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-surface);
+}
+
+.invoiceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 12.5px/1.4 var(--lx-font-ui);
+  text-align: left;
+}
+
+.invoiceTable th,
+.invoiceTable td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.invoiceTable th {
+  color: var(--lx-muted);
+  font-weight: 600;
+  background: var(--lx-paper-2);
+}
+
+.invoiceTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.confirmCancelBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-danger-edge, var(--lx-line-strong));
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-surface);
+}
