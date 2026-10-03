@@ -29,6 +29,12 @@ an explicit retry state. Pending work is aborted when the page/form unmounts.
 - Organisation client suite: 51 tests passed.
 - Focused Admin page/navigation suite: 32 tests passed.
 - Admin TypeScript and lint passed.
+- Repository frontend formatting passed. The shared client test file also
+  passes TypeScript with Vitest resolved from the Admin test runner.
+- Full Admin run: 962 passed, one existing privacy-probe subprocess exceeded
+  its 5-second startup limit. The isolated retry passed all 13 privacy tests.
+  This matches the tracked dev-host timeout finding in Intake Ledger AUT-675;
+  no test timeout or privacy guard was changed.
 - Tests use fictional `example.test` accounts and synthetic UUIDs only.
 
 The live dev Platform read returned HTTP 403 from this run. No authenticated
