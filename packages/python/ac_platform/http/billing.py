@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_v
 from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
-from ac_platform.billing.commands import BillingCommands, Caller, CheckoutCommand
+from ac_platform.billing.commands import BillingCommands, BuyerTaxDetails, Caller, CheckoutCommand
 from ac_platform.billing.errors import BillingIdempotencyKeyRequired, BillingValidationFailed
 from ac_platform.billing.tax import TaxMode
 from ac_platform.billing.views import (
@@ -47,11 +47,19 @@ MAX_REASON_LENGTH = 500
 _PROVIDERS = {"razorpay", "fake"}
 
 
+class BuyerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: StrictStr = Field(min_length=1, max_length=200)
+    gstin: StrictStr | None = Field(default=None, pattern=r"^[0-9]{2}[A-Z0-9]{13}$")
+    state_code: StrictStr | None = Field(default=None, pattern=r"^[0-9]{2}$")
+
+
 class CheckoutRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: OrderKind
     account: AccountName
+    buyer: BuyerRequest | None = None
     plan_key: StrictStr = Field(min_length=2, max_length=40, pattern=r"^[a-z][a-z0-9_]{1,39}$")
     interval: Interval | None = None
     seats: StrictInt | None = Field(default=None, ge=1, le=50)
@@ -208,7 +216,10 @@ def _idempotency_key(value: str | None) -> str:
 
 
 def _body_digest(body: BaseModel) -> str:
-    canonical = json.dumps(body.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    data = body.model_dump(mode="json")
+    if isinstance(body, CheckoutRequest) and body.buyer is None:
+        data.pop("buyer")  # Preserve pre-invoice checkout idempotency digests.
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -271,6 +282,7 @@ def install_billing_http(
             pack_key=body.pack_key,
             idempotency_key=key,
             body_sha256=_body_digest(body),
+            buyer=None if body.buyer is None else BuyerTaxDetails(**body.buyer.model_dump()),
         )
         result = await service.checkout(auth.database, _caller(request, auth), command)
         _no_store(response)

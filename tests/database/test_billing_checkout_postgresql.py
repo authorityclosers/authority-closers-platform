@@ -981,7 +981,7 @@ def test_yearly_organisation_subscription_with_seats_and_roles(postgres_harness,
                 "awaiting_payment",
                 "test",
             )
-            assert order.amount == MoneyView(ORGANISATION_YEAR_TOTAL_PAISE, "INR", True)
+            assert order.amount == MoneyView(ORGANISATION_YEAR_TOTAL_PAISE, "INR", False)
             assert (order.plan_key, order.interval, order.seats, order.pack_key) == (
                 "organisation",
                 "year",
