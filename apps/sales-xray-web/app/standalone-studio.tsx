@@ -36,6 +36,7 @@ import {
   type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
 import { WorkspaceNoAccess } from "./workspace-no-access";
+import { FirstCallGuide } from "./guide-host";
 
 type Workspace = Readonly<{
   tenant_id: string;
@@ -199,7 +200,14 @@ function AppFrame({
   embedded: boolean;
   children: ReactNode;
 }) {
-  return embedded ? children : <PersistentShell>{children}</PersistentShell>;
+  return embedded ? (
+    children
+  ) : (
+    <>
+      <PersistentShell>{children}</PersistentShell>
+      <FirstCallGuide />
+    </>
+  );
 }
 
 export function StandaloneStudio({
