@@ -383,11 +383,24 @@ class OrganisationService:
             raise ResourceNotFound("No organisation selected.")
         return actor
 
-    async def _manager(self, tenant_id: UUID, actor_person_id: UUID) -> Membership:
-        actor = await self._actor(tenant_id, actor_person_id)
-        if actor.role not in {"owner", "admin"}:
-            raise AuthorizationDenied("Organisation administration is required.")
-        return actor
+    async def _acting(
+        self,
+        tenant_id: UUID,
+        actor_person_id: UUID,
+        operator_reference: str | None,
+        intent: dict[str, str],
+    ) -> str:
+        """Return the member's role, or ``operator`` for a platform operator.
+
+        The HTTP boundary has already proved the operator's platform capability;
+        an operator needs no membership and acts on any role. The reference is
+        part of the intent, so a member can never replay an operator's command.
+        """
+        if operator_reference is None:
+            return (await self._actor(tenant_id, actor_person_id)).role
+        intent["operator_reference"] = _required_text(operator_reference, "reason", 200)
+        await self._organisation(tenant_id, lock=True)
+        return "operator"
 
     async def _replay(
         self, tenant_id: UUID, command_id: UUID, intent: dict[str, str]
@@ -440,8 +453,8 @@ class OrganisationService:
         command_id: UUID,
         *,
         actor_person_id: UUID,
+        operator_reference: str | None = None,
     ) -> dict[str, object]:
-        actor = await self._actor(tenant_id, actor_person_id)
         role = _member_role(role)
         intent = {
             "action": "change_role",
@@ -449,12 +462,13 @@ class OrganisationService:
             "role": role,
             "actor_person_id": str(actor_person_id),
         }
+        acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
         prior = await self._replay(tenant_id, command_id, intent)
         if prior is not None:
             return cast(dict[str, object], prior.payload["result"])
-        if actor.role != "owner":
+        if acting not in {"owner", "operator"}:
             raise AuthorizationDenied("Only the owner can change a role.")
-        if person_id == actor_person_id:
+        if acting == "owner" and person_id == actor_person_id:
             raise ResourceConflict("Transfer ownership first.")
         target = (await self._lock_members(tenant_id, person_id)).get(person_id)
         if target is None:
@@ -478,33 +492,41 @@ class OrganisationService:
                 "before": before,
                 "after": {"role": role, "status": "active"},
             },
-            None,
+            operator_reference,
             actor_person_id=actor_person_id,
         )
         return result
 
     async def remove_member(
-        self, tenant_id: UUID, person_id: UUID, command_id: UUID, *, actor_person_id: UUID
+        self,
+        tenant_id: UUID,
+        person_id: UUID,
+        command_id: UUID,
+        *,
+        actor_person_id: UUID,
+        operator_reference: str | None = None,
     ) -> None:
-        actor = await self._actor(tenant_id, actor_person_id)
         intent = {
             "action": "remove",
             "person_id": str(person_id),
             "actor_person_id": str(actor_person_id),
         }
+        acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
         if await self._replay(tenant_id, command_id, intent) is not None:
             return
-        if person_id == actor_person_id:
-            if actor.role == "owner":
+        if acting == "operator":
+            pass
+        elif person_id == actor_person_id:
+            if acting == "owner":
                 raise ResourceConflict("Transfer ownership first.")
-        elif actor.role not in {"owner", "admin"}:
+        elif acting not in {"owner", "admin"}:
             raise AuthorizationDenied("Organisation administration is required.")
         target = (await self._lock_members(tenant_id, person_id)).get(person_id)
         if target is None:
             raise ResourceNotFound("Member not found.")
         if target.role == "owner":
             raise ResourceConflict("Transfer ownership first.")
-        if actor.role == "admin" and person_id != actor_person_id and target.role != "member":
+        if acting == "admin" and person_id != actor_person_id and target.role != "member":
             raise AuthorizationDenied("An admin can remove members only.")
         before = {"role": target.role, "status": "active"}
         # The membership row and its history stay; only its state ends.
@@ -524,28 +546,50 @@ class OrganisationService:
                 "before": before,
                 "after": {"role": target.role, "status": "inactive"},
             },
-            None,
+            operator_reference,
             actor_person_id=actor_person_id,
         )
 
     async def transfer_ownership(
-        self, tenant_id: UUID, person_id: UUID, command_id: UUID, *, actor_person_id: UUID
+        self,
+        tenant_id: UUID,
+        person_id: UUID,
+        command_id: UUID,
+        *,
+        actor_person_id: UUID,
+        operator_reference: str | None = None,
     ) -> dict[str, object]:
-        actor = await self._actor(tenant_id, actor_person_id)
         intent = {
             "action": "transfer_ownership",
             "person_id": str(person_id),
             "actor_person_id": str(actor_person_id),
         }
+        acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
         prior = await self._replay(tenant_id, command_id, intent)
         if prior is not None:
             return cast(dict[str, object], prior.payload["result"])
-        if actor.role != "owner":
+        owner_id = actor_person_id
+        if acting == "operator":
+            # The operator is not the owner; the single-owner check below
+            # still refuses an organisation with more than one.
+            current = await self.session.scalar(
+                select(Membership.person_id)
+                .where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.role == MembershipRole.OWNER.value,
+                    Membership.status == MembershipStatus.ACTIVE.value,
+                )
+                .limit(1)
+            )
+            if current is None:
+                raise OrganisationCommandError("organisation must have exactly one active owner")
+            owner_id = current
+        elif acting != "owner":
             raise AuthorizationDenied("Only the owner can transfer ownership.")
-        if person_id == actor_person_id:
+        if person_id == owner_id:
             raise ResourceConflict("This person is already the owner.")
-        locked = await self._lock_members(tenant_id, actor_person_id, person_id)
-        owner, target = locked.get(actor_person_id), locked.get(person_id)
+        locked = await self._lock_members(tenant_id, owner_id, person_id)
+        owner, target = locked.get(owner_id), locked.get(person_id)
         owners = await self.session.scalar(
             select(func.count())
             .select_from(Membership)
@@ -565,7 +609,7 @@ class OrganisationService:
             or person.email_verified_at is None
         ):
             raise ResourceNotFound("Member not found.")
-        before = {"owner_person_id": str(actor_person_id), "target_role": target.role}
+        before = {"owner_person_id": str(owner_id), "target_role": target.role}
         owner.role = MembershipRole.ADMIN.value
         target.role = MembershipRole.OWNER.value
         owner.revision += 1
@@ -573,7 +617,7 @@ class OrganisationService:
         await self.session.flush()
         result: dict[str, object] = {
             "owner": (await member_rows(self.session, tenant_id, person_id))[0],
-            "former_owner": (await member_rows(self.session, tenant_id, actor_person_id))[0],
+            "former_owner": (await member_rows(self.session, tenant_id, owner_id))[0],
         }
         await self._audit(
             tenant_id,
@@ -587,27 +631,37 @@ class OrganisationService:
                 "before": before,
                 "after": {
                     "owner_person_id": str(person_id),
-                    "former_owner_person_id": str(actor_person_id),
+                    "former_owner_person_id": str(owner_id),
                     "former_owner_role": "admin",
                 },
             },
-            None,
+            operator_reference,
             actor_person_id=actor_person_id,
         )
         return result
 
     async def request_member(
-        self, tenant_id: UUID, email: str, role: str, command_id: UUID, *, actor_person_id: UUID
+        self,
+        tenant_id: UUID,
+        email: str,
+        role: str,
+        command_id: UUID,
+        *,
+        actor_person_id: UUID,
+        operator_reference: str | None = None,
     ) -> dict[str, object]:
-        actor = await self._manager(tenant_id, actor_person_id)
         role = _member_role(role)
-        if actor.role == "admin" and role != "member":
+        intent = {"email": "", "role": role, "actor_person_id": str(actor_person_id)}
+        acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
+        if acting not in {"owner", "admin", "operator"}:
+            raise AuthorizationDenied("Organisation administration is required.")
+        if acting == "admin" and role != "member":
             raise AuthorizationDenied("Only the owner can add an admin.")
         try:
             email = normalize_email(email)
         except ValueError as error:
             raise OrganisationCommandError("A valid email is required.") from error
-        intent = {"email": email, "role": role, "actor_person_id": str(actor_person_id)}
+        intent["email"] = email
         prior = await self._replay(tenant_id, command_id, intent)
         if prior is not None:
             return cast(dict[str, object], prior.payload["result"])
@@ -630,7 +684,7 @@ class OrganisationService:
         )
         if person is not None:
             target = await self.session.get(Membership, (tenant_id, person.id))
-            if actor.role == "admin" and target is not None and target.role != "member":
+            if acting == "admin" and target is not None and target.role != "member":
                 raise AuthorizationDenied("An admin can add members only.")
             await self.add_member(
                 tenant_id,
@@ -638,6 +692,7 @@ class OrganisationService:
                 role,
                 command_id,
                 actor_person_id=actor_person_id,
+                reason=operator_reference,
                 http_intent=intent,
             )
             audit = await self._command_audit(tenant_id, command_id, "organisation.member_added")
@@ -674,18 +729,30 @@ class OrganisationService:
                 "before": None,
                 "after": {"status": "pending"},
             },
-            None,
+            operator_reference,
             actor_person_id=actor_person_id,
         )
         return result
 
     async def revoke_invite(
-        self, tenant_id: UUID, invite_id: UUID, command_id: UUID, *, actor_person_id: UUID
+        self,
+        tenant_id: UUID,
+        invite_id: UUID,
+        command_id: UUID,
+        *,
+        actor_person_id: UUID,
+        operator_reference: str | None = None,
     ) -> None:
-        await self._manager(tenant_id, actor_person_id)
+        acting = await self._acting(tenant_id, actor_person_id, operator_reference, {})
+        if acting not in {"owner", "admin", "operator"}:
+            raise AuthorizationDenied("Organisation administration is required.")
         prior = await self._command_audit(tenant_id, command_id, "organisation.invite_revoked")
         if prior is not None:
-            if prior.resource_id != str(invite_id) or prior.actor_person_id != actor_person_id:
+            if (
+                prior.resource_id != str(invite_id)
+                or prior.actor_person_id != actor_person_id
+                or prior.reason != operator_reference
+            ):
                 raise OrganisationCommandConflict(
                     "Idempotency-Key already records a different request."
                 )
@@ -702,7 +769,7 @@ class OrganisationService:
             "organisation_invite",
             invite_id,
             {"before": {"status": "pending"}, "after": {"status": "revoked"}},
-            None,
+            operator_reference,
             actor_person_id=actor_person_id,
         )
 

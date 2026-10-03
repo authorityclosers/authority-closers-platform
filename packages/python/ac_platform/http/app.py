@@ -51,6 +51,7 @@ from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.plans import install_plans_http
 from ac_platform.http.platform import install_platform_http
+from ac_platform.http.platform_organisations import install_platform_organisations_http
 from ac_platform.http.platform_sensitive_segments import (
     install_platform_sensitive_segments_http,
 )
@@ -237,6 +238,7 @@ def create_app(
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_platform_organisations_http(application, settings=settings, require_actor=require_actor)
     install_staff_billing_http(application, settings=settings, require_actor=require_actor)
     install_platform_sensitive_segments_http(
         application, settings=settings, require_actor=require_actor
