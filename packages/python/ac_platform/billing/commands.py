@@ -97,6 +97,16 @@ class BillingCommands(Protocol):
         idempotency_key: str,
     ) -> RefundView: ...
 
+    async def staff_refund_payment(
+        self,
+        database: AsyncSession,
+        caller: Caller,
+        payment_id: str,
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> RefundView: ...
+
     async def receive_webhook(
         self, database: AsyncSession, provider: str, headers: Mapping[str, str], raw_body: bytes
     ) -> WebhookReceipt: ...
