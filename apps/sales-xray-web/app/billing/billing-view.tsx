@@ -13,7 +13,13 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import type { Allowance, MePlan, Money, Subscriptions } from "./contract";
+import type {
+  Allowance,
+  MePlan,
+  Money,
+  Subscriptions,
+  Usage,
+} from "./contract";
 import { count, day, formatMoney, minutes } from "./money";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./billing.module.css";
@@ -30,6 +36,7 @@ export type BillingDocument = {
 
 export type BillingViewProps = {
   mePlan?: MePlan | null;
+  usage?: Usage | null;
   subs?: Subscriptions | null;
   documents?: BillingDocument[];
   status?: "loading" | "ready" | "error";
@@ -42,8 +49,9 @@ export type BillingViewProps = {
 /** Account data and actions arrive as props; this screen never invents payments. */
 export function BillingView({
   mePlan = null,
+  usage = null,
   subs = null,
-  documents = [],
+  documents,
   status = "error",
   busy = false,
   error,
@@ -57,7 +65,7 @@ export function BillingView({
   const current = subs?.current;
   const isPaidActive = current?.status === "active";
   const isCancelled = current?.cancelAtPeriodEnd === true;
-  const allowance = mePlan?.allowance;
+  const allowance = usage?.allowance ?? mePlan?.allowance;
   const planName = mePlan?.plan.name ?? "Unavailable";
 
   return (
@@ -148,6 +156,12 @@ export function BillingView({
                 were used.
               </li>
             </ul>
+
+            {current?.renewalNeedsCustomerApproval ? (
+              <p className={styles.hint}>
+                Your bank will ask you to approve each renewal above ₹15,000.
+              </p>
+            ) : null}
 
             <div className={styles.actions}>
               <Link className={styles.primary} href="/plans">
@@ -266,73 +280,75 @@ export function BillingView({
           </section>
 
           {/* Card 4: Invoices & Receipts */}
-          <section className={styles.card}>
-            <div className={styles.cardHead}>
-              <h2>Invoices &amp; Receipts</h2>
-            </div>
+          {documents ? (
+            <section className={styles.card}>
+              <div className={styles.cardHead}>
+                <h2>Invoices &amp; Receipts</h2>
+              </div>
 
-            {documents.length > 0 ? (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <caption className={styles.hint}>
-                    Invoices and receipts
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Description</th>
-                      <th scope="col">Amount</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Documents</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {documents.map((document) => (
-                      <tr key={document.id}>
-                        <td>{day(document.createdAt)}</td>
-                        <td>{document.description}</td>
-                        <td>{formatMoney(document.amount)}</td>
-                        <td>{document.status}</td>
-                        <td>
-                          {document.invoiceHref ? (
-                            <a
-                              href={document.invoiceHref}
-                              aria-label={`Invoice for ${document.description}`}
-                            >
-                              Invoice
-                            </a>
-                          ) : null}
-                          {document.invoiceHref && document.receiptHref
-                            ? " · "
-                            : ""}
-                          {document.receiptHref ? (
-                            <a
-                              href={document.receiptHref}
-                              aria-label={`Receipt for ${document.description}`}
-                            >
-                              Receipt
-                            </a>
-                          ) : null}
-                        </td>
+              {documents.length > 0 ? (
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <caption className={styles.hint}>
+                      Invoices and receipts
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Amount</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Documents</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className={styles.empty}>
-                <FileText size={24} aria-hidden="true" />
-                <p>
-                  {status === "ready"
-                    ? "No invoices or receipts yet."
-                    : "Invoices and receipts are currently unavailable."}
-                </p>
-                <Link className={styles.primary} href="/plans">
-                  Choose a plan
-                </Link>
-              </div>
-            )}
-          </section>
+                    </thead>
+                    <tbody>
+                      {documents.map((document) => (
+                        <tr key={document.id}>
+                          <td>{day(document.createdAt)}</td>
+                          <td>{document.description}</td>
+                          <td>{formatMoney(document.amount)}</td>
+                          <td>{document.status}</td>
+                          <td>
+                            {document.invoiceHref ? (
+                              <a
+                                href={document.invoiceHref}
+                                aria-label={`Invoice for ${document.description}`}
+                              >
+                                Invoice
+                              </a>
+                            ) : null}
+                            {document.invoiceHref && document.receiptHref
+                              ? " · "
+                              : ""}
+                            {document.receiptHref ? (
+                              <a
+                                href={document.receiptHref}
+                                aria-label={`Receipt for ${document.description}`}
+                              >
+                                Receipt
+                              </a>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.empty}>
+                  <FileText size={24} aria-hidden="true" />
+                  <p>
+                    {status === "ready"
+                      ? "No invoices or receipts yet."
+                      : "Invoices and receipts are currently unavailable."}
+                  </p>
+                  <Link className={styles.primary} href="/plans">
+                    Choose a plan
+                  </Link>
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
       </div>
     </AcquisitionShell>

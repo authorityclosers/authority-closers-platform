@@ -11,8 +11,8 @@ import {
   liveBilling,
   type BillingClient,
 } from "../billing/billing-api";
-import type { Order } from "../billing/contract";
-import { count, day, formatMoney } from "../billing/money";
+import type { Allowance, Order } from "../billing/contract";
+import { count, day, formatMoney, minutes } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./plans.module.css";
 
@@ -29,12 +29,31 @@ const settled = (order: Order) =>
   order.status !== "awaiting_payment" && order.status !== "confirming";
 
 /**
- * Where the payment page sends the buyer back (C1 §2). It only reads: the
- * order becomes paid when the provider confirms it to our server, never
- * because the browser came back. Polls every 3 s for a minute, then offers
- * one verified check.
+ * Where the payment page sends the buyer back (C1 §2).
+ * The server verifies payment; returning from checkout never grants minutes.
+ * Polls every 3 s for a minute after the initial verification.
  */
 export function OrderReturn({
+  orderId,
+  client = liveBilling,
+  plansHref = "/plans",
+}: {
+  orderId: string | null;
+  client?: BillingClient;
+  plansHref?: string;
+}) {
+  const access = useWorkspaceAccess();
+  return (
+    <OrderReturnState
+      key={JSON.stringify([orderId, access?.authenticated, access?.context])}
+      orderId={orderId}
+      client={client}
+      plansHref={plansHref}
+    />
+  );
+}
+
+function OrderReturnState({
   orderId,
   client = liveBilling,
   plansHref = "/plans",
@@ -48,15 +67,50 @@ export function OrderReturn({
   const [state, setState] = useState<State>({ status: "loading" });
   const [checking, setChecking] = useState(false);
   const verifyKey = useRef<string | null>(null);
+  const [balance, setBalance] = useState<{
+    orderId: string;
+    allowance: Allowance;
+  } | null>(null);
+  const paidId =
+    state.status === "order" &&
+    state.order.status === "paid" &&
+    state.order.orderId === orderId
+      ? orderId
+      : null;
+
+  useEffect(() => {
+    if (!authenticated || !paidId) return;
+    const controller = new AbortController();
+    client
+      .readUsage(controller.signal)
+      .then((usage) => {
+        if (!controller.signal.aborted)
+          setBalance({ orderId: paidId, allowance: usage.allowance });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [authenticated, client, paidId]);
 
   useEffect(() => {
     if (!orderId || !authenticated) return;
     const controller = new AbortController();
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | null = null;
+    verifyKey.current ??= idempotencyKey();
+    let first = true;
     const read = async () => {
       try {
-        const order = await client.readOrder(orderId, controller.signal);
+        let order: Order;
+        if (first) {
+          first = false;
+          try {
+            order = await client.verifyOrder(orderId, verifyKey.current!);
+          } catch (error) {
+            if (!(error instanceof BillingError && error.status === 429))
+              throw error;
+            order = await client.readOrder(orderId, controller.signal);
+          }
+        } else order = await client.readOrder(orderId, controller.signal);
         if (controller.signal.aborted) return;
         const waited = Date.now() - started >= POLL_FOR_MS;
         setState({ status: "order", order, waited });
@@ -181,6 +235,16 @@ export function OrderReturn({
               <dd>{count(order.minutes)}</dd>
             </div>
             <div>
+              <dt>New balance</dt>
+              <dd>
+                {balance?.orderId === order.orderId
+                  ? balance.allowance.unlimited
+                    ? "Unlimited analysis minutes"
+                    : `${count(minutes(balance.allowance.availableSeconds))} analysis minutes`
+                  : "Your updated minutes are being confirmed"}
+              </dd>
+            </div>
+            <div>
               <dt>Paid</dt>
               <dd>
                 {formatMoney(order.amount)} ·{" "}
@@ -195,6 +259,9 @@ export function OrderReturn({
             </Link>
             <Link className={styles.ghost} href={plansHref}>
               See your plan
+            </Link>
+            <Link className={styles.ghost} href="/account#billing">
+              Billing &amp; receipts
             </Link>
           </div>
           {order.refund?.state === "available" &&

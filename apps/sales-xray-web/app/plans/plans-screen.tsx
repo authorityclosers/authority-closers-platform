@@ -59,6 +59,7 @@ export type PlansScreenProps = {
   busy?: boolean;
   error?: string | null;
   paidOrder?: Order | null;
+  checkoutOrder?: Order | null;
   allowance?: Allowance | null;
   topUpPacks?: TopUpPack[];
 };
@@ -84,6 +85,7 @@ export function PlansScreen({
   busy = false,
   error,
   paidOrder,
+  checkoutOrder,
   allowance,
   topUpPacks = TOP_UP_PACKS,
 }: PlansScreenProps) {
@@ -126,23 +128,45 @@ export function PlansScreen({
       ? quote
       : null;
 
+  const confirmedOrder =
+    checkoutOrder &&
+    (selectedTopUp
+      ? checkoutOrder.kind === "top_up" &&
+        checkoutOrder.packKey === selectedTopUp.key &&
+        checkoutOrder.planKey === selectedTopUp.planKey
+      : selection &&
+        checkoutOrder.kind === "subscription" &&
+        checkoutOrder.planKey === selection.planKey &&
+        checkoutOrder.interval === interval &&
+        checkoutOrder.seats === seats)
+      ? checkoutOrder
+      : null;
+
   const unit = plan ? planPrice(plan, interval) : null;
   const subtotal =
-    quoted?.subtotalPaise ?? (unit === null ? null : unit * seats);
+    confirmedOrder?.tax?.taxableMinor ??
+    quoted?.subtotalPaise ??
+    (unit === null ? null : unit * seats);
   const gst =
+    confirmedOrder?.tax?.gstMinor ??
     quoted?.gstPaise ??
     (subtotal !== null && plan?.key !== "personal"
       ? Math.round(subtotal * gstRate)
       : 0);
   const total =
-    quoted?.totalPaise ?? (subtotal === null ? null : subtotal + gst);
+    confirmedOrder?.amount.minor ??
+    quoted?.totalPaise ??
+    (subtotal === null ? null : subtotal + gst);
   const period = interval === "month" ? "month" : "year";
   const paid = paidOrder?.status === "paid" ? paidOrder : null;
   const topUpGst =
-    selectedTopUp && !selectedTopUp.gstInclusive
+    confirmedOrder?.tax?.gstMinor ??
+    (selectedTopUp && !selectedTopUp.gstInclusive
       ? Math.round(selectedTopUp.pricePaise * gstRate)
-      : 0;
-  const topUpTotal = selectedTopUp ? selectedTopUp.pricePaise + topUpGst : null;
+      : 0);
+  const topUpTotal =
+    confirmedOrder?.amount.minor ??
+    (selectedTopUp ? selectedTopUp.pricePaise + topUpGst : null);
 
   const choosePlan = (key: string) => {
     setSelectedTopUp(null);
@@ -590,10 +614,12 @@ export function PlansScreen({
                   ? 0
                   : Math.round(pack.pricePaise * gstRate);
                 const packTotal = pack.pricePaise + packGst;
-                const isSelected = selectedTopUp?.key === pack.key;
+                const isSelected =
+                  selectedTopUp?.key === pack.key &&
+                  selectedTopUp.planKey === pack.planKey;
                 return (
                   <div
-                    key={pack.key}
+                    key={`${pack.planKey}:${pack.key}`}
                     className={styles.topUpCard}
                     data-selected={isSelected}
                   >
@@ -665,15 +691,22 @@ export function PlansScreen({
                   <dd>+{selectedTopUp.minutes} minutes</dd>
                 </div>
                 <div>
-                  <dt>Subtotal</dt>
-                  <dd>{money(selectedTopUp.pricePaise)}</dd>
+                  <dt>{confirmedOrder?.tax ? "Taxable value" : "Subtotal"}</dt>
+                  <dd>
+                    {money(
+                      confirmedOrder?.tax?.taxableMinor ??
+                        selectedTopUp.pricePaise,
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt>GST</dt>
                   <dd>
-                    {selectedTopUp.gstInclusive
-                      ? "Included"
-                      : `${gstRate * 100}% GST (${money(topUpGst)})`}
+                    {confirmedOrder?.tax
+                      ? money(confirmedOrder.tax.gstMinor)
+                      : selectedTopUp.gstInclusive
+                        ? "Included"
+                        : `${gstRate * 100}% GST (${money(topUpGst)})`}
                   </dd>
                 </div>
                 <div>
@@ -708,7 +741,11 @@ export function PlansScreen({
                       </dd>
                     </div>
                     <div>
-                      <dt>Subtotal</dt>
+                      <dt>
+                        {confirmedOrder?.tax
+                          ? "Taxable value"
+                          : `Subtotal (${seats} ${seats === 1 ? "seat" : "seats"})`}
+                      </dt>
                       <dd>{subtotal === null ? "—" : money(subtotal)}</dd>
                     </div>
                     <div>
@@ -719,12 +756,20 @@ export function PlansScreen({
                 ) : (
                   <>
                     <div>
-                      <dt>Subtotal</dt>
+                      <dt>
+                        {confirmedOrder?.tax
+                          ? "Taxable value"
+                          : "Subtotal (1 seat)"}
+                      </dt>
                       <dd>{subtotal === null ? "—" : money(subtotal)}</dd>
                     </div>
                     <div>
                       <dt>GST</dt>
-                      <dd>Included</dd>
+                      <dd>
+                        {confirmedOrder?.tax
+                          ? `${money(confirmedOrder.tax.gstMinor)} included`
+                          : "Included"}
+                      </dd>
                     </div>
                   </>
                 )}
@@ -749,6 +794,17 @@ export function PlansScreen({
                   <dd>{total === null ? "—" : money(total)}</dd>
                 </div>
               </dl>
+            ) : null}
+
+            {confirmedOrder ? (
+              <p role="status" className={styles.hint}>
+                Total confirmed. Continue to the payment page to pay.
+              </p>
+            ) : null}
+            {!selectedTopUp && total !== null && total > 1_500_000 ? (
+              <p className={styles.note}>
+                Your bank will ask you to approve each renewal above ₹15,000.
+              </p>
             ) : null}
 
             {/* Payment Method Badges & Assurance */}
@@ -803,22 +859,22 @@ export function PlansScreen({
               <button
                 type="button"
                 className={styles.pay}
-                disabled={
-                  busy || (selectedTopUp ? !onBuyTopUp : !quoted || !onBuy)
-                }
+                disabled={busy || (selectedTopUp ? !onBuyTopUp : !onBuy)}
                 onClick={() => {
                   if (selectedTopUp) {
                     onBuyTopUp?.(selectedTopUp);
-                  } else if (selection && quoted) {
+                  } else if (selection) {
                     onBuy?.(selection);
                   }
                 }}
               >
                 {busy
                   ? "Opening checkout…"
-                  : selectedTopUp
-                    ? `Pay ${money(topUpTotal ?? 0)} with Razorpay`
-                    : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
+                  : !confirmedOrder && !quoted
+                    ? "Review total with Razorpay"
+                    : selectedTopUp
+                      ? `Pay ${money(topUpTotal ?? 0)} with Razorpay`
+                      : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
               </button>
               <button
                 type="button"
