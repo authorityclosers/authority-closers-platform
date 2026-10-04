@@ -1,0 +1,304 @@
+{
+  "origin": "http://127.0.0.1:3026",
+  "checks": [
+    {
+      "width": 360,
+      "height": 800,
+      "report_width": 328,
+      "shell_padding": ["0px", "0px"],
+      "sections": [
+        {
+          "section": "overview",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "moments",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "analysis",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "coaching",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "tab-overview",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "tab-transcript",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "tab-moments",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "tab-analysis",
+          "width": 360,
+          "scroll": 360
+        },
+        {
+          "section": "tab-coaching",
+          "width": 360,
+          "scroll": 360
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "report_width": 358,
+      "shell_padding": ["0px", "0px"],
+      "sections": [
+        {
+          "section": "overview",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "moments",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "analysis",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "coaching",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "tab-overview",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "tab-transcript",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "tab-moments",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "tab-analysis",
+          "width": 390,
+          "scroll": 390
+        },
+        {
+          "section": "tab-coaching",
+          "width": 390,
+          "scroll": 390
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "report_width": 398,
+      "shell_padding": ["0px", "0px"],
+      "sections": [
+        {
+          "section": "overview",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "moments",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "analysis",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "coaching",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "tab-overview",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "tab-transcript",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "tab-moments",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "tab-analysis",
+          "width": 430,
+          "scroll": 430
+        },
+        {
+          "section": "tab-coaching",
+          "width": 430,
+          "scroll": 430
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "report_width": 984,
+      "shell_padding": ["48px", "48px"],
+      "sections": [
+        {
+          "section": "tab-overview",
+          "width": 1032,
+          "scroll": 1032
+        },
+        {
+          "section": "tab-transcript",
+          "width": 1032,
+          "scroll": 1032
+        },
+        {
+          "section": "tab-moments",
+          "width": 1032,
+          "scroll": 1032
+        },
+        {
+          "section": "tab-analysis",
+          "width": 1032,
+          "scroll": 1032
+        },
+        {
+          "section": "tab-coaching",
+          "width": 1032,
+          "scroll": 1032
+        }
+      ]
+    }
+  ],
+  "page_errors": [],
+  "intercepted_api_requests": [
+    {
+      "method": "GET",
+      "path": "/v1/me/sales-xray-profile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/sales-xray-profile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/sales-xray-profile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/sales-xray-profile"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/submissions/summary"
+    }
+  ]
+}

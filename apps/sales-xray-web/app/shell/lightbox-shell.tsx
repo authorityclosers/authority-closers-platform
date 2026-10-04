@@ -827,7 +827,16 @@ function LightboxShellFrame({
       >
         <Link
           className={styles.bottomLink}
+          href="/dashboard"
+          aria-current={active === "dashboard" ? "page" : undefined}
+        >
+          <LayoutGrid size={20} aria-hidden="true" />
+          <span>Dashboard</span>
+        </Link>
+        <Link
+          className={styles.bottomLink}
           href={newAnalysisHref}
+          aria-label="New analysis"
           aria-current={active === "analyse" ? "page" : undefined}
         >
           <Plus size={20} aria-hidden="true" />
