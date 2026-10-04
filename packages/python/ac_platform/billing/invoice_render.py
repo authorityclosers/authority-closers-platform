@@ -44,7 +44,7 @@ def render_invoice(invoice: BillingInvoice) -> str:
             taxes.append((f"{label} @ {rate}%", amount))
     gst = invoice.cgst_minor + invoice.sgst_minor + invoice.igst_minor
     includes_gst = (
-        "<p>Price includes GST</p>" if invoice.taxable_minor + gst == invoice.total_minor else ""
+        "<p>Total includes GST</p>" if invoice.taxable_minor + gst == invoice.total_minor else ""
     )
     amounts = "".join(
         f"<tr><th>{label}</th><td>{money(amount)}</td></tr>"
