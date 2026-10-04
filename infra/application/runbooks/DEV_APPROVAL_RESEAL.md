@@ -1,4 +1,4 @@
-# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117
+# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117 / AUT-1158
 
 Root Operator runs this tool from the **merged, released, root-owned application
 scripts directory**, after CTO review and CEO merge approval. Engineers do not
@@ -15,7 +15,7 @@ It never regenerates the candidate or uses `approval-candidate.json`.
 | Immutable input | Pin |
 | --- | --- |
 | Original default serving backend source | `b9f2f70e35c821f72d4f59184a8850977d696aad` |
-| Explicit serving source verified in Root's refusal receipt | `0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20` |
+| Explicit serving source verified by Root on 4 October 2026, 15:33 UTC | `0accda891cb7bdd4f0b677c1cb8588730b745e95` |
 | Preserved existing template release | `1e784afa128f8d4629aeece5179486d423c0ec52` |
 | Existing approval SHA256 | `07ca6c4ea9587ff81b7bd97a891eb81f1195179ca4eb3ff8fa03205267225881` |
 | Canonical candidate SHA256 | `72343b19c3028c21dd16fd51d455b6dfdd1008e570f14778abbd8fd3aeb3d217` |
@@ -25,7 +25,7 @@ The tool intentionally keeps the serving source unchanged while adopting
 configuration from a newer reviewed tool release. If any input pin differs,
 Root reports the stable failure code on AUT-1083; do not edit the inputs or
 relax the tool's pins. The tool release SHA and checksums must be taken from
-[AUT-1117](/AUT/issues/AUT-1117)'s final merged/released handoff, rather than a moving `current-staging`
+[AUT-1158](/AUT/issues/AUT-1158)'s final merged/released handoff, rather than a moving `current-staging`
 symlink or an agent checkout.
 
 `--serving-release-id` accepts one lowercase 40-hex commit SHA. Omitting it keeps
@@ -45,7 +45,7 @@ checksums against that release's source-reviewed files before executing.
 
 ```bash
 RESEAL_TOOL_RELEASE=<merged-released-tool-sha>
-RESEAL_SERVING_RELEASE=0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20
+RESEAL_SERVING_RELEASE=0accda891cb7bdd4f0b677c1cb8588730b745e95
 RESEAL_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}/scripts
 RESEAL_SCRIPT=${RESEAL_DIR}/reseal-dev-sales-xray-approval.py
 sha256sum "$RESEAL_SCRIPT" \
@@ -67,6 +67,35 @@ must be `true`; their environment must be `development`. The refresh timer
 must already be inactive and disabled, and refresh service inactive. The tool
 does not change holds, timers or the outbox. Transitional/failed unit states,
 untrusted files, policy changes, stale pins or missing credentials are refused.
+
+### Loaded credential sources on systemd 255
+
+Root's captured `systemctl show ... --property=LoadCredential --value` response
+was `LoadCredential=[unprintable]` for both API and dedicated worker. This is a
+display limitation, not evidence of missing credentials. The tool now reads the
+loaded manager property through `busctl --system --json=short --no-pager`:
+
+1. Call `org.freedesktop.systemd1.Manager.GetUnit` with the exact unit name.
+   Require an `o` response with one valid systemd unit object path.
+2. Read `org.freedesktop.systemd1.Service.LoadCredential` at that returned path.
+   Require the `a(ss)` signature and an array of two-string identifier/source pairs.
+3. Reject malformed JSON/envelopes, duplicate JSON keys/credential identifiers,
+   invalid identifiers or paths, missing required sources, wrong sources, and
+   command/D-Bus failures before any backup, write or managed-service mutation.
+
+The captured API mapping contains `approval.json` from the exact development
+approval source. The dedicated worker additionally loads `service.json` from
+the exact development service source. Source paths remain exact comparisons;
+the parser does not infer them, read static unit text, or accept a printable
+sentinel. The [systemd 255 busctl implementation](https://github.com/systemd/systemd/blob/v255/src/busctl/busctl.c)
+defines the typed JSON envelopes: `GetUnit` has `{"type":"o","data":["..."]}`;
+`get-property` has `{"type":"a(ss)","data":[["identifier","source"]]}`.
+
+These reads return metadata only. The independent adopted-credential bytes,
+hashes, regular-file/root-owner/mode and process-pin checks remain required.
+The same retrieval runs in dry-run/apply, the apply recheck, post-adoption
+verification, rollback preflight and restoration verification. No live unit
+configuration or credential is changed by this representation repair.
 
 Post the masked dry-run result on AUT-1083, then execute its already-authorized
 apply:
@@ -144,7 +173,7 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `e03bde6b318aea31ea4aa48837022985cdc83cec6343fc7aab98cd73ae523c49` |
+| `reseal-dev-sales-xray-approval.py` | `ac376f4c0ca6dbcdebd78f39312b828e4ab8e309d87afa19cffc87228ac9d941` |
 | `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
 | `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
 
@@ -167,7 +196,7 @@ holds/timer and file trust; isolated runtime contract/expiry checks; secret-free
 reports; partial-write, restart and health failures; exact byte/state rollback;
 and explicit rollback default/idempotence/guard checks.
 
-Local result (4 October 2026): 81 re-seal tests passed; the 59 unchanged
+Prior AUT-1117 local result (4 October 2026): 81 re-seal tests passed; the 59 unchanged
 refresh/preparation regression tests also passed (140 total). The later coherent
 source succeeds and preserves the template release; wrong supplied, Git, marker,
 API, service and readiness pins refuse writes/service mutations. Malformed pins
@@ -176,3 +205,14 @@ digests in all modes; plans, receipts, adoption and rollback retain that source.
 Repository Python format/lint and the task gate also passed. No live protected
 file was read and no host
 operation was executed by the engineer.
+
+AUT-1158 local result (4 October 2026): 324 re-seal tests and the same 59 helper
+regressions passed (383 total). Captured API/worker typed mappings are admitted
+despite the systemd 255 printable sentinel. Missing/wrong/duplicate sources,
+invalid signatures/envelopes/entries/identifiers/paths, malformed JSON/UTF-8 and
+GetUnit/property command failures refuse in dry-run/apply and rollback
+dry-run/apply, with no file writes, managed-service changes or leaked command
+output. Typed source admission still requires independent adopted-credential
+verification. Python format/lint and diff whitespace checks passed. Root's live
+verification, CTO review, CEO SHA-bound approval and immutable release handoff
+remain required; these fixture results do not claim adoption or intake success.

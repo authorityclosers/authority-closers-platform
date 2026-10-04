@@ -29,6 +29,27 @@ SECRET = "fictional-test-secret-do-not-print"  # noqa: S105 - fictional redactio
 EMAIL = "fictional-tester@example.invalid"
 LATER_RELEASE = "0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20"
 TEMPLATE_RELEASE = "1e784afa128f8d4629aeece5179486d423c0ec52"
+SYSTEMD_255_SENTINEL = b"LoadCredential=[unprintable]\n"
+UNIT_OBJECTS = {
+    tool.refresh.API_UNIT: "/org/freedesktop/systemd1/unit/ac_2ddev_2dapi_2eservice",
+    tool.refresh.WORKER_UNIT: (
+        "/org/freedesktop/systemd1/unit/ac_2ddev_2dsales_2dxray_2dworker_2eservice"
+    ),
+}
+# Captured typed mappings contain source paths only, never credential values.
+SYSTEMD_255_CREDENTIALS = {
+    tool.refresh.API_UNIT: {
+        "type": "a(ss)",
+        "data": [["approval.json", "/etc/authority-closers/development/approval.json"]],
+    },
+    tool.refresh.WORKER_UNIT: {
+        "type": "a(ss)",
+        "data": [
+            ["service.json", "/etc/authority-closers/development/service.json"],
+            ["approval.json", "/etc/authority-closers/development/approval.json"],
+        ],
+    },
+}
 
 
 def put(path, raw, mode=0o600):
@@ -59,6 +80,25 @@ class Host:
         self.health_release = pins.release
         self.git_release = pins.release
         self.api_release = pins.release
+        self.bus_replies = {}
+        for unit, response in SYSTEMD_255_CREDENTIALS.items():
+            self.bus_replies[unit, "GetUnit"] = tool.encoded(
+                {"type": "o", "data": [UNIT_OBJECTS[unit]]}
+            )
+            self.bus_replies[unit, "LoadCredential"] = tool.encoded(
+                {
+                    "type": response["type"],
+                    "data": [
+                        [
+                            name,
+                            source.replace(
+                                "/etc/authority-closers/development", str(paths.development)
+                            ),
+                        ]
+                        for name, source in response["data"]
+                    ],
+                }
+            )
 
     def __call__(self, argv, **_kwargs):
         self.calls.append(argv)
@@ -66,7 +106,29 @@ class Host:
         if self.fail_once == argv[:3]:
             self.fail_once = None
             return subprocess.CompletedProcess(argv, 19, SECRET.encode(), SECRET.encode())
-        if argv[0] == "git" and "rev-parse" in argv:
+        if argv[0] == "busctl":
+            assert argv[:4] == ["busctl", "--system", "--json=short", "--no-pager"]
+            assert argv[5] == "org.freedesktop.systemd1"
+            if argv[4] == "call":
+                assert argv[6:10] == [
+                    "/org/freedesktop/systemd1",
+                    "org.freedesktop.systemd1.Manager",
+                    "GetUnit",
+                    "s",
+                ]
+                assert len(argv) == 11
+                unit, stage = argv[10], "GetUnit"
+            else:
+                assert argv[4] == "get-property" and len(argv) == 9
+                assert argv[7:] == ["org.freedesktop.systemd1.Service", "LoadCredential"]
+                unit = next(unit for unit, path in UNIT_OBJECTS.items() if path == argv[6])
+                stage = "LoadCredential"
+            result = self.bus_replies[unit, stage]
+            if isinstance(result, Exception):
+                raise result
+            if isinstance(result, int):
+                code, result = result, SECRET.encode()
+        elif argv[0] == "git" and "rev-parse" in argv:
             result = self.git_release.encode()
         elif argv[0] == "curl":
             result = json.dumps({"release_id": self.health_release}).encode()
@@ -93,10 +155,7 @@ class Host:
                     digest = tool.manifest_pin(self.loaded["worker_dropin"])
                     result = f"{tool.WORKER_KEY}={digest}".encode()
             elif prop == "LoadCredential":
-                result = (
-                    f"approval.json:{self.paths.development / 'approval.json'} "
-                    f"service.json:{self.paths.development / 'service.json'}"
-                ).encode()
+                result = SYSTEMD_255_SENTINEL
         elif argv[:2] == ["systemctl", "stop"]:
             self.states[argv[2]] = "inactive"
         elif argv[:2] == ["systemctl", "restart"]:
@@ -244,6 +303,224 @@ def fixture(tmp_path, monkeypatch):
 def run(fixture, apply=False):
     paths, pins, host = fixture
     return tool.reseal(paths, pins=pins, runner=host, uid=0, apply=apply)
+
+
+@pytest.mark.parametrize("unit", tool.UNITS)
+def test_captured_systemd_255_typed_mapping_without_protected_reads(fixture, unit):
+    _, _, host = fixture
+    host.bus_replies[unit, "LoadCredential"] = tool.encoded(SYSTEMD_255_CREDENTIALS[unit])
+    assert tool.Commands(host).credential_sources(unit) == dict(
+        SYSTEMD_255_CREDENTIALS[unit]["data"]
+    )
+    assert len(host.calls) == 2 and all(call[0] == "busctl" for call in host.calls)
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("apply", [False, True])
+def test_systemd_255_sentinel_does_not_block_typed_preflight(fixture, rollback, apply):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    host.calls.clear()
+    result = (
+        tool.rollback(paths, run_id, runner=host, pins=pins, uid=0, apply=apply)
+        if rollback
+        else run(fixture, apply=apply)
+    )
+    assert result["apply"] is apply
+    for unit in tool.UNITS:
+        assert any(call[0] == "busctl" and call[-1] == unit for call in host.calls)
+        assert any(
+            call[0] == "busctl" and call[6] == UNIT_OBJECTS[unit] and call[-1] == "LoadCredential"
+            for call in host.calls
+        )
+    assert not any(
+        call[:2] == ["systemctl", "show"] and call[3] == "--property=LoadCredential"
+        for call in host.calls
+    )
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("apply", [False, True])
+@pytest.mark.parametrize("unit", tool.UNITS)
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "missing-approval",
+        "wrong-approval",
+        "duplicate",
+        "wrong-signature",
+        "wrong-envelope",
+        "extra-envelope-key",
+        "duplicate-json-key",
+        "missing-data",
+        "mapping-instead-of-array",
+        "wrong-entry-type",
+        "wrong-entry-length",
+        "non-string-id",
+        "non-string-path",
+        "invalid-id",
+        "relative-path",
+        "path-traversal",
+        "nul-path",
+        "sentinel",
+        "invalid-json",
+        "invalid-utf8",
+        "non-finite-json",
+    ],
+)
+def test_typed_credential_refusal_has_zero_writes_or_service_changes(
+    fixture, monkeypatch, rollback, apply, unit, bad
+):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    value = tool.decoded(host.bus_replies[unit, "LoadCredential"])
+    approval = next(entry for entry in value["data"] if entry[0] == "approval.json")
+    if bad == "missing-approval":
+        value["data"].remove(approval)
+    elif bad == "wrong-approval":
+        approval[1] = "/fictional/wrong/approval.json"
+    elif bad == "duplicate":
+        value["data"].append(approval.copy())
+    elif bad == "wrong-signature":
+        value["type"] = "a{ss}"
+    elif bad == "wrong-envelope":
+        value = value["data"]
+    elif bad == "extra-envelope-key":
+        value["extra"] = SECRET
+    elif bad == "missing-data":
+        del value["data"]
+    elif bad == "mapping-instead-of-array":
+        value["data"] = dict(value["data"])
+    elif bad == "wrong-entry-type":
+        value["data"] = [dict(value["data"])]
+    elif bad == "wrong-entry-length":
+        approval.append("unexpected")
+    elif bad == "non-string-id":
+        approval[0] = 123
+    elif bad == "non-string-path":
+        approval[1] = None
+    elif bad == "invalid-id":
+        approval[0] = "../approval.json"
+    elif bad == "relative-path":
+        approval[1] = "approval.json"
+    elif bad == "path-traversal":
+        approval[1] = str(paths.development / "../development/approval.json")
+    elif bad == "nul-path":
+        approval[1] += "\0"
+    raw = tool.encoded(value)
+    if bad == "duplicate-json-key":
+        raw = raw.replace(b'{"data":', b'{"type":"a(ss)","data":', 1)
+    elif bad == "sentinel":
+        raw = SYSTEMD_255_SENTINEL
+    elif bad == "invalid-json":
+        raw = (SECRET + EMAIL).encode()
+    elif bad == "invalid-utf8":
+        raw = b"\xff"
+    elif bad == "non-finite-json":
+        raw = b'{"type":"a(ss)","data":[NaN]}'
+    host.bus_replies[unit, "LoadCredential"] = raw
+    assert_credential_preflight_refusal(fixture, monkeypatch, run_id, apply)
+
+
+@pytest.mark.parametrize("apply", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("bad", ["missing-service", "wrong-service"])
+def test_worker_service_source_is_required(fixture, monkeypatch, rollback, apply, bad):
+    paths, _, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    value = tool.decoded(host.bus_replies[tool.refresh.WORKER_UNIT, "LoadCredential"])
+    service = next(entry for entry in value["data"] if entry[0] == "service.json")
+    if bad == "missing-service":
+        value["data"].remove(service)
+    else:
+        service[1] = str(paths.development / "service.operator-template.json")
+    host.bus_replies[tool.refresh.WORKER_UNIT, "LoadCredential"] = tool.encoded(value)
+    assert_credential_preflight_refusal(fixture, monkeypatch, run_id, apply)
+
+
+@pytest.mark.parametrize("apply", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("unit", tool.UNITS)
+@pytest.mark.parametrize("stage", ["GetUnit", "LoadCredential"])
+@pytest.mark.parametrize("failure", ["command-failed", "unavailable"])
+def test_dbus_failures_refuse_without_output_leaks_or_mutations(
+    fixture, monkeypatch, rollback, apply, unit, stage, failure
+):
+    _, _, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    host.bus_replies[unit, stage] = 19 if failure == "command-failed" else OSError(SECRET)
+    code = "command_failed" if failure == "command-failed" else "command_unavailable"
+    assert_credential_preflight_refusal(fixture, monkeypatch, run_id, apply, code)
+
+
+@pytest.mark.parametrize("apply", [False, True])
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"type": "s", "data": [UNIT_OBJECTS[tool.refresh.API_UNIT]]},
+        {"type": "o", "data": UNIT_OBJECTS[tool.refresh.API_UNIT]},
+        {"type": "o", "data": []},
+        {"type": "o", "data": [None]},
+        {"type": "o", "data": ["/org/freedesktop/systemd1"]},
+        {"type": "o", "data": ["/org/freedesktop/systemd1/unit/invalid/path"]},
+        {"type": "o", "data": [UNIT_OBJECTS[tool.refresh.API_UNIT]] * 2},
+    ],
+)
+def test_invalid_getunit_reply_refuses_before_property_read(
+    fixture, monkeypatch, rollback, apply, response
+):
+    _, _, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    host.bus_replies[tool.refresh.API_UNIT, "GetUnit"] = tool.encoded(response)
+    assert_credential_preflight_refusal(fixture, monkeypatch, run_id, apply)
+    assert not any(call[0] == "busctl" and call[4] == "get-property" for call in host.calls)
+
+
+def assert_credential_preflight_refusal(
+    fixture, monkeypatch, run_id, apply, code="unit_credential_mismatch"
+):
+    paths, pins, host = fixture
+    before, states, loaded = tree(paths.trusted_root), host.states.copy(), host.loaded.copy()
+    host.calls.clear()
+
+    def forbidden_write(*_args):
+        pytest.fail("credential preflight must refuse before every write, including audit files")
+
+    monkeypatch.setattr(tool, "write", forbidden_write)
+    with pytest.raises(tool.ResealError, match=code) as error:
+        if run_id:
+            tool.rollback(paths, run_id, runner=host, pins=pins, uid=0, apply=apply)
+        else:
+            run(fixture, apply=apply)
+    assert tree(paths.trusted_root) == before and host.states == states and host.loaded == loaded
+    assert not any(
+        call[0] == "systemctl" and call[1] in ("stop", "restart", "reset-failed", "daemon-reload")
+        for call in host.calls
+    )
+    assert not any(call[0] == "systemd-run" for call in host.calls)
+    assert SECRET not in json.dumps(error.value.report) and EMAIL not in json.dumps(
+        error.value.report
+    )
+
+
+def test_typed_sources_still_require_independent_adopted_credential_verification(
+    fixture, monkeypatch
+):
+    paths, _, host = fixture
+    before = tree(paths.trusted_root)
+
+    def refuse_adopted(*_args):
+        raise tool.ResealError("adopted_credential_mismatch")
+
+    monkeypatch.setattr(tool, "adopted_credentials", refuse_adopted)
+    with pytest.raises(tool.ResealError, match="adopted_credential_mismatch"):
+        run(fixture, apply=True)
+    assert tree(paths.trusted_root) == before
+    assert not any(
+        call[0] == "systemctl" and call[1] in ("stop", "restart", "reset-failed", "daemon-reload")
+        for call in host.calls
+    )
 
 
 def test_dry_run_has_no_writes_or_service_mutations(fixture):
