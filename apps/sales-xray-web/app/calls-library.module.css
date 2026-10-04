@@ -1,8 +1,538 @@
+/*
+ * Calls library (AUT-999, owner 5 Oct 2026): one compact, theme-true list.
+ * Colours come only from the lightbox tokens, so dark and light both work
+ * (the page used to force a light panel inside the dark app).
+ * `.root.root` outranks the older global calls-library rules in styles.css.
+ */
 .root {
   min-width: 0;
 }
 
-/* Empty-state card and text wrapping constraints for CallsLibrary */
+/* The page canvas follows the theme (it showed a white sheet in dark mode). */
+.root.root {
+  min-height: 100%;
+  background: var(--lx-paper);
+  color: var(--lx-ink);
+}
+
+/* ---------- Page heading ---------- */
+.title {
+  margin: 0;
+  font-family: var(--lx-font-display);
+  font-size: clamp(1.45rem, 1.2rem + 0.8vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--lx-ink);
+}
+
+.root.root :global(.calls-library-intro) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--lx-space-4);
+  margin-bottom: var(--lx-space-4);
+}
+
+.root.root :global(.calls-library-summary) {
+  margin: 4px 0 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+/* The top bar already carries the primary "New analysis"; this one stays quiet. */
+.root.root :global(.calls-library-new) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--lx-ink-2);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  transition:
+    border-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.root.root :global(.calls-library-new:hover) {
+  border-color: var(--lx-teal-edge);
+  color: var(--lx-teal);
+}
+
+/* ---------- Panel ---------- */
+.root.root :global(.calls-library-list-panel) {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--lx-shadow-1);
+  padding: var(--lx-space-4);
+  color: var(--lx-ink);
+}
+
+/* ---------- Toolbar ---------- */
+.root.root :global(.calls-library-list-heading) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lx-space-3);
+  padding-bottom: var(--lx-space-3);
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+
+.root.root :global(.calls-library-filters) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.root.root :global(.calls-library-filters button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--lx-radius-pill);
+  border: 1px solid var(--lx-line);
+  background: transparent;
+  color: var(--lx-ink-2);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition:
+    background var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    border-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.root.root :global(.calls-library-filters button:hover) {
+  border-color: var(--lx-line-strong);
+  color: var(--lx-ink);
+}
+
+.root.root :global(.calls-library-filters button[aria-pressed="true"]) {
+  background: var(--lx-ink);
+  border-color: var(--lx-ink);
+  color: var(--lx-paper);
+}
+
+.root.root :global(.calls-library-count) {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.root.root
+  :global(
+    .calls-library-filters button[aria-pressed="true"] .calls-library-count
+  ) {
+  background: color-mix(in srgb, var(--lx-paper) 22%, transparent);
+  color: var(--lx-paper);
+}
+
+.root.root :global(.calls-library-tools) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.search,
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--lx-radius-pill);
+  border: 1px solid var(--lx-line);
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.search:focus-within,
+.sort:focus-within {
+  border-color: var(--lx-teal);
+  box-shadow: var(--lx-ring-focus);
+}
+
+.search input,
+.sort select {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--lx-ink);
+  font: 500 13px/1 var(--lx-font-ui);
+}
+
+.search input {
+  width: 180px;
+}
+
+.search input::placeholder {
+  color: var(--lx-muted);
+}
+
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.sort select {
+  cursor: pointer;
+  appearance: none;
+  padding-right: 2px;
+}
+
+.sort select option {
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+}
+
+.searchClear {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lx-line);
+  color: var(--lx-ink-2);
+  cursor: pointer;
+}
+
+.root.root :global(.calls-library-refresh) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--lx-radius-pill);
+  color: var(--lx-teal);
+  font-weight: 600;
+}
+
+.root.root :global(.calls-library-refresh:hover:not(:disabled)) {
+  background: var(--lx-teal-soft);
+}
+
+.root.root :global(.calls-library-inline-status) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+/* ---------- Table ---------- */
+.root.root :global(.calls-library-columns),
+.root.root :global(.calls-library-list-panel .calls-library-item) {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(120px, 190px) 136px 128px;
+  align-items: center;
+  column-gap: var(--lx-space-4);
+}
+
+.root.root :global(.calls-library-columns) {
+  padding: var(--lx-space-3) 46px var(--lx-space-2) 14px;
+  color: var(--lx-muted);
+  font: 700 11px/1 var(--lx-font-ui);
+  letter-spacing: var(--lx-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.root.root :global(.calls-library-items) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.root.root :global(.calls-library-row) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--lx-radius-md);
+  transition: background var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+/* A thin tone accent so status reads at a glance. */
+.root.root :global(.calls-library-row)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: transparent;
+  transition: background var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.root.root :global(.calls-library-row[data-tone="ready"])::before {
+  background: var(--lx-strength);
+}
+
+.root.root :global(.calls-library-row[data-tone="active"])::before {
+  background: var(--lx-info);
+}
+
+.root.root :global(.calls-library-row[data-tone="attention"])::before {
+  background: var(--lx-warning);
+}
+
+.root.root :global(.calls-library-row:hover),
+.root.root :global(.calls-library-row:focus-within),
+.root.root :global(.calls-library-row[data-selected="true"]) {
+  background: var(--lx-sunken);
+}
+
+.root.root :global(.calls-library-row[data-selected="true"]) {
+  box-shadow: inset 0 0 0 1.5px var(--lx-teal-edge);
+}
+
+.root.root :global(.calls-library-list-panel .calls-library-item) {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--lx-radius-md);
+  background: transparent;
+  color: var(--lx-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.root.root :global(.calls-library-item:focus-visible) {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.root.root :global(.calls-library-icon) {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  transition: transform var(--lx-dur-quick) var(--lx-ease-pop);
+}
+
+.root.root :global(.calls-library-row:hover .calls-library-icon) {
+  transform: scale(1.06);
+}
+
+.root.root :global(.calls-library-copy) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.root.root :global(.calls-library-copy strong) {
+  overflow: hidden;
+  color: var(--lx-ink);
+  font: 600 15px/1.25 var(--lx-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root.root :global(.calls-library-copy small) {
+  color: var(--lx-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.root.root :global(.calls-library-duration) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.root.root :global(.calls-library-duration-track) {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-line-soft);
+}
+
+.root.root :global(.calls-library-duration-fill) {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+}
+
+.root.root :global(.calls-library-duration-clock) {
+  flex-shrink: 0;
+  color: var(--lx-ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.root.root :global(.calls-library-item .calls-library-state) {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  font: 600 12px/1.2 var(--lx-font-ui);
+  white-space: nowrap;
+}
+
+.root.root
+  :global(.calls-library-item .calls-library-state[data-tone="ready"]) {
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.root.root
+  :global(.calls-library-item .calls-library-state[data-tone="active"]) {
+  background: var(--lx-info-soft);
+  color: var(--lx-info);
+}
+
+.root.root
+  :global(.calls-library-item .calls-library-state[data-tone="attention"]) {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.root.root :global(.calls-library-open) {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 4px;
+  color: var(--lx-teal);
+  font: 600 13px/1 var(--lx-font-ui);
+  white-space: nowrap;
+}
+
+.root.root :global(.calls-library-open svg) {
+  transition: transform var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.root.root :global(.calls-library-row:hover .calls-library-open svg) {
+  transform: translateX(3px);
+}
+
+/* Rename: quiet until the row is hovered or focused. */
+.root.root :global(.calls-library-row > button:not(.calls-library-item)) {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-right: 6px;
+  border-radius: 50%;
+  opacity: 0.45;
+  color: var(--lx-ink-2);
+  transition:
+    opacity var(--lx-dur-quick) var(--lx-ease-quick),
+    background var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.root.root :global(.calls-library-row:hover > button:not(.calls-library-item)),
+.root.root
+  :global(.calls-library-row:focus-within > button:not(.calls-library-item)) {
+  opacity: 1;
+}
+
+.root.root :global(.calls-library-row > button:not(.calls-library-item):hover) {
+  background: var(--lx-line-soft);
+}
+
+.root.root :global(.calls-library-filter-empty),
+.root.root :global(.calls-library-filter-note) {
+  margin: var(--lx-space-4) 0 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.root.root :global(.calls-library-more) {
+  display: flex;
+  margin: var(--lx-space-4) auto 0;
+}
+
+/* ---------- Selected call ---------- */
+.selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lx-space-4);
+  margin-bottom: var(--lx-space-4);
+  padding: 14px 18px;
+  border: 1.5px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-teal-tint, var(--lx-sunken));
+}
+
+.selectedCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selectedTitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.selectedTitle strong {
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-size: 14.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedBadge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.selectedMeta {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.selectedActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.clear {
+  color: var(--lx-muted);
+}
+
+/* ---------- Empty and error states (unchanged constraints) ---------- */
 .root :global(.calls-library-state[aria-labelledby="calls-library-empty"]),
 .root :global(.panel.calls-library-state) {
   min-width: 0;
@@ -27,4 +557,68 @@
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+/* ---------- Phone: rows become cards ---------- */
+@media (max-width: 760px) {
+  .root.root :global(.calls-library-list-panel) {
+    padding: var(--lx-space-3);
+    border-radius: var(--lx-radius-md);
+  }
+
+  .root.root :global(.calls-library-tools) {
+    width: 100%;
+  }
+
+  .search {
+    flex: 1;
+  }
+
+  .search input {
+    width: 100%;
+  }
+
+  .root.root :global(.calls-library-columns) {
+    display: none;
+  }
+
+  .root.root :global(.calls-library-list-panel .calls-library-item) {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon copy copy"
+      "icon length state"
+      "icon open open";
+    row-gap: 8px;
+    column-gap: 12px;
+    padding: 12px;
+  }
+
+  .root.root :global(.calls-library-icon) {
+    grid-area: icon;
+    align-self: start;
+  }
+
+  .root.root :global(.calls-library-copy) {
+    grid-area: copy;
+  }
+
+  .root.root :global(.calls-library-duration) {
+    grid-area: length;
+  }
+
+  .root.root :global(.calls-library-item .calls-library-state) {
+    grid-area: state;
+    justify-self: end;
+  }
+
+  .root.root :global(.calls-library-open) {
+    grid-area: open;
+    justify-self: start;
+  }
+
+  .root.root :global(.calls-library-row > button:not(.calls-library-item)) {
+    align-self: flex-start;
+    margin-top: 10px;
+    opacity: 0.8;
+  }
 }

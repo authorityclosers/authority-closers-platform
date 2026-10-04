@@ -5,11 +5,14 @@ import { callHref } from "./acquisition-client";
 import { callTone, submissionState, type CallTone } from "./call-status";
 import {
   ArrowRight,
+  ArrowUpDown,
   AudioLines,
   FolderOpen,
   LoaderCircle,
   Plus,
   RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -67,6 +70,31 @@ function formatCreatedTime(createdAt: string) {
   return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
     new Date(createdAt),
   );
+}
+
+type CallSort = "newest" | "oldest" | "longest";
+
+const SORTS: { id: CallSort; label: string }[] = [
+  { id: "newest", label: "Newest first" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "longest", label: "Longest first" },
+];
+
+function sortCalls(rows: LibrarySubmission[], sort: CallSort) {
+  if (sort === "newest") return rows;
+  const copy = [...rows];
+  if (sort === "oldest")
+    copy.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  else
+    copy.sort(
+      (a, b) =>
+        (hasDurationEstimate(b) ? b.durationSeconds : 0) -
+        (hasDurationEstimate(a) ? a.durationSeconds : 0),
+    );
+  return copy;
 }
 
 const FILTERS: { id: "all" | CallTone; label: string }[] = [
@@ -171,6 +199,8 @@ function CallsLibraryContent({
     return "all";
   });
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<CallSort>("newest");
   const [attempt, setAttempt] = useState(0);
   const seenSubmissionIds = useRef(new Set<string>());
   const firstPageSubmissionIds = useRef(new Set<string>());
@@ -573,10 +603,21 @@ function CallsLibraryContent({
     },
     { ready: 0, active: 0, attention: 0, idle: 0 } as Record<CallTone, number>,
   );
-  const visibleSubmissions =
-    filter === "all"
-      ? submissions
-      : submissions.filter((submission) => callTone(submission) === filter);
+  const needle = query.trim().toLocaleLowerCase();
+  const visibleSubmissions = sortCalls(
+    submissions.filter(
+      (submission) =>
+        (filter === "all" || callTone(submission) === filter) &&
+        (!needle ||
+          callTitle(
+            submission.label,
+            `Sales call · ${formatCreatedDate(submission.createdAt)}`,
+          )
+            .toLocaleLowerCase()
+            .includes(needle)),
+    ),
+    sort,
+  );
   // Bars compare estimated lengths against the longest loaded estimate.
   const longestSeconds = Math.max(
     0,
@@ -646,6 +687,7 @@ function CallsLibraryContent({
       <div
         className="calls-library-row"
         key={submission.id}
+        data-tone={tone}
         data-selected={isSelected ? "true" : undefined}
       >
         <button
@@ -756,14 +798,13 @@ function CallsLibraryContent({
   const content = (
     <div
       className={`xray-app simple-app calls-library-app ${styles.root}`}
-      data-theme="light"
       data-variant={variant}
     >
       <Main className="studio-main calls-library-main">
         {/* One page heading; privacy is one quiet line, not a second title. */}
         <header className="calls-library-intro">
           <div>
-            <h1 id="calls-library-title" className="visually-hidden">
+            <h1 id="calls-library-title" className={styles.title}>
               Calls
             </h1>
             <p className="calls-library-summary">
@@ -832,61 +873,24 @@ function CallsLibraryContent({
             aria-labelledby="calls-library-title"
           >
             {selectedSubmission && (
-              <div
-                className="calls-library-selected-card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  padding: "14px 18px",
-                  marginBottom: 16,
-                  borderRadius: 10,
-                  background: "var(--lx-sunken)",
-                  border: "1.5px solid var(--lx-teal)",
-                  boxShadow: "0 2px 8px rgba(13, 148, 136, 0.08)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
-                >
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 8px",
-                        borderRadius: 99,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: "rgba(13, 148, 136, 0.12)",
-                        color: "var(--lx-teal)",
-                      }}
-                    >
-                      Selected Call
-                    </span>
-                    <strong style={{ fontSize: 14.5, color: "var(--lx-ink)" }}>
+              <div className={`calls-library-selected-card ${styles.selected}`}>
+                <div className={styles.selectedCopy}>
+                  <div className={styles.selectedTitle}>
+                    <span className={styles.selectedBadge}>Selected call</span>
+                    <strong>
                       {callTitle(
                         selectedSubmission.label,
                         `Sales call · ${formatCreatedDate(selectedSubmission.createdAt)}`,
                       )}
                     </strong>
                   </div>
-                  <span style={{ fontSize: 12, color: "var(--lx-muted)" }}>
+                  <span className={styles.selectedMeta}>
                     {submissionState(selectedSubmission)} ·{" "}
                     {formatDuration(selectedSubmission.durationSeconds)} ·{" "}
                     {formatCreatedDate(selectedSubmission.createdAt)}
                   </span>
                 </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexShrink: 0,
-                  }}
-                >
+                <div className={styles.selectedActions}>
                   <button
                     type="button"
                     className="primary-button"
@@ -899,6 +903,7 @@ function CallsLibraryContent({
                   </button>
                   <button
                     type="button"
+                    className={`text-button ${styles.clear}`}
                     onClick={() => {
                       try {
                         const url = new URL(window.location.href);
@@ -906,15 +911,6 @@ function CallsLibraryContent({
                         url.searchParams.delete("call");
                         router.push(url.pathname + (url.search || ""));
                       } catch {}
-                    }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--lx-muted)",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      padding: "6px 8px",
-                      borderRadius: 6,
                     }}
                     title="Clear selection"
                   >
@@ -950,6 +946,42 @@ function CallsLibraryContent({
                 })}
               </div>
               <div className="calls-library-tools">
+                <label className={styles.search}>
+                  <Search size={15} aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search calls"
+                    aria-label="Search loaded calls by name"
+                  />
+                  {query ? (
+                    <button
+                      type="button"
+                      className={styles.searchClear}
+                      onClick={() => setQuery("")}
+                      aria-label="Clear search"
+                    >
+                      <X size={13} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </label>
+                <label className={styles.sort}>
+                  <ArrowUpDown size={14} aria-hidden="true" />
+                  <select
+                    value={sort}
+                    onChange={(event) =>
+                      setSort(event.target.value as CallSort)
+                    }
+                    aria-label="Sort calls"
+                  >
+                    {SORTS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {loading || refreshing ? (
                   <span className="calls-library-inline-status" role="status">
                     <LoaderCircle
@@ -975,7 +1007,7 @@ function CallsLibraryContent({
             <div className="calls-library-columns" aria-hidden="true">
               <span />
               <span>Call</span>
-              <span>Est. length</span>
+              <span>Length</span>
               <span>Status</span>
               <span />
             </div>
@@ -984,11 +1016,16 @@ function CallsLibraryContent({
             </div>
             {visibleSubmissions.length === 0 && submissions.length > 0 ? (
               <p className="calls-library-filter-empty" role="status">
-                No loaded calls match this status.{" "}
+                {needle
+                  ? `No loaded calls match “${query.trim()}”.`
+                  : "No loaded calls match this status."}{" "}
                 <button
                   type="button"
                   className="text-button"
-                  onClick={() => setFilter("all")}
+                  onClick={() => {
+                    setFilter("all");
+                    setQuery("");
+                  }}
                 >
                   Show all calls
                 </button>
