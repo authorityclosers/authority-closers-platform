@@ -122,6 +122,7 @@ class _SessionScope:
 class _Service:
     def __init__(self, database: _Database, tenant_id: UUID = PUBLIC_TENANT) -> None:
         self.database, self.tenant_id = database, tenant_id
+        self.trial_enabled = tenant_id == PUBLIC_TENANT
         self.allowance_actors: list[ActorContext] = []
         self.allowance_lock_modes: list[bool] = []
 
