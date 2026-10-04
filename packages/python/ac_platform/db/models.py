@@ -45,6 +45,7 @@ from ac_platform.outbox import models as outbox_models
 from ac_platform.plans import models as plan_models
 from ac_platform.practice import focus_models
 from ac_platform.practice import models as practice_models
+from ac_platform.product_updates import models as product_update_models
 from ac_platform.providers import models as provider_models
 from ac_platform.tenancy import models as tenancy_models
 
@@ -54,6 +55,7 @@ MODEL_MODULES = (
     sales_xray_profile_models,
     tenancy_models,
     app_update_models,
+    product_update_models,
     community_models,
     conversation_models,
     acquisition_models,

@@ -39,6 +39,7 @@ PLATFORM_CAPABILITIES = frozenset(
         "platform_release_manage",
         "platform_billing_manage",
         "platform_content_safety_manage",
+        "platform_updates_manage",
     }
 )
 STUDIO_CAPABILITIES = frozenset(
@@ -65,6 +66,7 @@ class CapabilityGrant(Base):
             "'platform_catalog_read', 'platform_catalog_write', 'platform_catalog_publish', "
             "'platform_organisations_manage', 'platform_release_manage', "
             "'platform_billing_manage', 'platform_content_safety_manage', "
+            "'platform_updates_manage', "
             "'catalog_read', 'catalog_write', 'catalog_publish', 'learner_diagnose', "
             "'learning_review')",
             name="permission_supported",
@@ -81,7 +83,7 @@ class CapabilityGrant(Base):
             "'platform_tenants_read', 'platform_catalog_read', 'platform_catalog_write', "
             "'platform_catalog_publish', 'platform_organisations_manage', "
             "'platform_release_manage', 'platform_billing_manage', "
-            "'platform_content_safety_manage')) OR "
+            "'platform_content_safety_manage', 'platform_updates_manage')) OR "
             "(scope_kind IN ('tenant', 'program') AND permission IN ('catalog_read', "
             "'catalog_write', 'catalog_publish', 'learner_diagnose', 'learning_review'))",
             name="permission_scope",

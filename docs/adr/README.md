@@ -29,3 +29,4 @@ Business-rule changes must also propagate to the controlled Drive layer.
 - 0051 — [Sensitive-segment marks](0051-sensitive-segment-marks.md)
 - 0052 — [Billing ledger, subscriptions and top-ups](0052-billing-ledger-subscriptions-and-top-ups.md)
 - 0053 — [GST and immutable tax invoices](0053-gst-and-tax-invoices.md)
+- 0054 — [Product updates and notifications](0054-product-updates-and-notifications.md)
