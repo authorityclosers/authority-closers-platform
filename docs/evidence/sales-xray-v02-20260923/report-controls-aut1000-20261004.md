@@ -24,6 +24,12 @@ passed in isolation. The full-suite rerun with two workers and a 15-second timeo
 passed: 121 test files, 1191 tests; one file and six tests skipped (305.72 seconds).
 The test configuration is unchanged. CI must still pass on the PR head.
 
+The first PR run passed single-track and static checks, but the compiled
+acquisition journey still searched for mode buttons inside the closed disclosure.
+Its assertions now open the controls before inspecting choices and verify the
+workspace mode after a selection closes them. The required journey must pass
+on the updated PR head; this is a test adaptation, not a waiver of that gate.
+
 The public dev URL returned HTTP 403 from this runtime. These are local dev
 screenshots, not staging or production evidence. No Chrome Pro session or local
 `ac-orchestra` skill was available; the slice reuses the existing native report
