@@ -145,6 +145,7 @@ python -m ac_platform.bootstrap \
   --tenant-name "Authority Closers"
 ```
 
+After an owner changes the organisation handle, replay with the current handle.
 The owner command commits one transaction only after it has locked and validated the
 canonical person, the tenant, and the composite membership. Re-running the
 same command is safe when the existing tenant has the same name and the
