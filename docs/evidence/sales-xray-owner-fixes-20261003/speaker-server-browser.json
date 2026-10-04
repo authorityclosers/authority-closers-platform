@@ -1,0 +1,81 @@
+{
+  "environment": "local component harness; actual branch components/CSS; invented transcript; mocked server GET/PUT; no deployed account or service writes",
+  "results": [
+    {
+      "width": 390,
+      "height": 844,
+      "horizontal_overflow": false,
+      "dialog_bounds": {
+        "x": 31,
+        "y": 209.984375,
+        "width": 340,
+        "height": 542.34375
+      },
+      "fresh_server_read": false
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "horizontal_overflow": false,
+      "dialog_bounds": {
+        "x": 472.859375,
+        "y": 150.6875,
+        "width": 340,
+        "height": 542.34375
+      },
+      "fresh_server_read": true
+    }
+  ],
+  "puts": [
+    {
+      "if_match": "\"call-label-1\"",
+      "body": {
+        "transcript_revision": "synthetic-overview-r1",
+        "speakers": [
+          {
+            "speaker_id": "buyer",
+            "role": "you",
+            "display_name": "Fictional Seller",
+            "icon": null
+          },
+          {
+            "speaker_id": "closer",
+            "role": "prospect",
+            "display_name": "Updated Fictional Buyer",
+            "icon": "carpentry"
+          }
+        ]
+      }
+    },
+    {
+      "if_match": "\"call-label-1\"",
+      "body": {
+        "transcript_revision": "synthetic-overview-r1",
+        "speakers": [
+          {
+            "speaker_id": "buyer",
+            "role": "you",
+            "display_name": "Fictional Seller",
+            "icon": null
+          },
+          {
+            "speaker_id": "closer",
+            "role": "prospect",
+            "display_name": "Updated Fictional Buyer",
+            "icon": "carpentry"
+          }
+        ]
+      }
+    }
+  ],
+  "page_errors": [],
+  "checks": [
+    "cancel makes no write",
+    "503 keeps draft",
+    "explicit retry confirms",
+    "fresh browser reads name and icon",
+    "no speaker localStorage write",
+    "no local-save caption",
+    "390 and 1440 no horizontal overflow"
+  ]
+}

@@ -16,6 +16,7 @@ import {
   MAX_SPEAKER_NAME,
   voiceStyle,
   type SpeakerProfile,
+  type SpeakerProfiles,
   type SpeakerRole,
 } from "./speaker-profiles";
 import styles from "./speaker.module.css";
@@ -46,6 +47,9 @@ export function SpeakerEditor({
   profile,
   youName,
   suggestedIcon,
+  otherSpeakers,
+  speakerLabels,
+  saveError,
   onSave,
   onClose,
 }: {
@@ -61,7 +65,13 @@ export function SpeakerEditor({
   profile: SpeakerProfile | null | undefined;
   youName: string | null;
   suggestedIcon: string;
-  onSave: (profile: SpeakerProfile) => boolean;
+  otherSpeakers?: SpeakerProfiles;
+  speakerLabels?: Readonly<Record<string, string>>;
+  saveError?: string | null;
+  onSave: (
+    profile: SpeakerProfile,
+    others: SpeakerProfiles,
+  ) => boolean | Promise<boolean>;
   onClose: () => void;
 }) {
   const id = useId();
@@ -72,6 +82,9 @@ export function SpeakerEditor({
   const [icon, setIcon] = useState<string | null>(profile?.icon ?? null);
   const [query, setQuery] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
+  const [others, setOthers] = useState(otherSpeakers ?? {});
+  const [saving, setSaving] = useState(false);
+  const pending = useRef(false);
   const icons = searchSpeakerIcons(query);
 
   useLayoutEffect(() => {
@@ -127,6 +140,7 @@ export function SpeakerEditor({
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
+      if (pending.current) return;
       const target = event.target as Element | null;
       if (!target || box.current?.contains(target)) return;
       // The chips toggle and switch the editor themselves.
@@ -134,7 +148,7 @@ export function SpeakerEditor({
       onClose();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !pending.current) onClose();
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
@@ -145,20 +159,45 @@ export function SpeakerEditor({
   }, [onClose]);
 
   function pickRole(next: SpeakerRole) {
+    if (next === "you")
+      setOthers((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([id, profile]) => [
+            id,
+            profile.role === "you"
+              ? { ...profile, role: role === "you" ? null : role }
+              : profile,
+          ]),
+        ),
+      );
     setRole(next);
     if (next === "you" && !name.trim() && youName) setName(youName);
     if (next === "prospect" && !icon) setIcon(suggestedIcon);
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    setSaveFailed(
-      !onSave({
-        name: name.trim(),
-        role,
-        icon: role === "you" ? null : icon,
-      }),
-    );
+    if (pending.current) return;
+    pending.current = true;
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      const saved = await onSave(
+        {
+          name: name.trim(),
+          role,
+          icon: role === "you" ? null : icon,
+        },
+        others,
+      );
+      if (saved) onClose();
+      else setSaveFailed(true);
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      pending.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -170,7 +209,7 @@ export function SpeakerEditor({
       role="dialog"
       aria-label={`Edit ${label}`}
     >
-      <form onSubmit={submit}>
+      <form onSubmit={(event) => void submit(event)} aria-busy={saving}>
         <div className={styles.head}>
           <SpeakerAvatar
             voice={voice}
@@ -190,6 +229,7 @@ export function SpeakerEditor({
               maxLength={MAX_SPEAKER_NAME}
               placeholder={label}
               autoComplete="off"
+              disabled={saving}
               onChange={(event) => setName(event.target.value)}
             />
             <small>
@@ -206,6 +246,7 @@ export function SpeakerEditor({
               key={option.key}
               type="button"
               aria-pressed={role === option.key}
+              disabled={saving}
               onClick={() => pickRole(option.key)}
             >
               <option.Icon size={14} aria-hidden="true" />
@@ -229,6 +270,7 @@ export function SpeakerEditor({
                   value={query}
                   placeholder="Search icons"
                   aria-label="Search icons"
+                  disabled={saving}
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
@@ -241,6 +283,7 @@ export function SpeakerEditor({
                   title={item.label}
                   aria-label={item.label}
                   aria-pressed={icon === item.key}
+                  disabled={saving}
                   data-suggested={
                     item.key === suggestedIcon ? "true" : undefined
                   }
@@ -260,18 +303,70 @@ export function SpeakerEditor({
           </div>
         )}
 
+        {otherSpeakers && (
+          <div className={styles.nameBlock}>
+            <p className={styles.note}>Confirm roles for this call</p>
+            {Object.entries(others).map(([speakerId, profile], index) => (
+              <label key={speakerId}>
+                {speakerLabels?.[speakerId] ||
+                  profile.name ||
+                  `Other speaker ${index + 1}`}{" "}
+                <select
+                  aria-label={`Role for ${profile.name || speakerId}`}
+                  value={profile.role ?? ""}
+                  disabled={saving || speakerId === "unattributed"}
+                  onChange={(event) =>
+                    setOthers((current) => ({
+                      ...current,
+                      [speakerId]: {
+                        ...profile,
+                        role: event.target.value as SpeakerRole,
+                      },
+                    }))
+                  }
+                >
+                  <option value="" disabled>
+                    Choose a role
+                  </option>
+                  {ROLES.filter(
+                    (option) => option.key !== "you" || role !== "you",
+                  ).map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        )}
         {saveFailed && (
           <p role="alert" className={styles.empty}>
-            Couldn’t save on this device. Try again.
+            {saveError || "Couldn’t save speaker details. Try again."}
           </p>
         )}
         <div className={styles.foot}>
-          <small>Saved on this device for now</small>
-          <button type="button" className={styles.cancel} onClick={onClose}>
+          <button
+            type="button"
+            className={styles.cancel}
+            onClick={onClose}
+            disabled={saving}
+          >
             Cancel
           </button>
-          <button type="submit" className={styles.save}>
-            Save
+          <button
+            type="submit"
+            className={styles.save}
+            disabled={
+              saving ||
+              (otherSpeakers !== undefined &&
+                (role === null ||
+                  Object.values(others).some(
+                    (profile) => profile.role === null,
+                  )))
+            }
+          >
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </form>

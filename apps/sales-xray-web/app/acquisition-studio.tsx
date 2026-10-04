@@ -95,6 +95,7 @@ import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
 import { clearSpeakerProfiles } from "./speaker-profiles";
+import { SpeakerServerProfiles } from "./speaker-server-profiles";
 import { latestStage, projectProcessing } from "./processing-state";
 import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
@@ -3603,7 +3604,17 @@ export function AcquisitionStudio({
       </div>
     );
 
-    if (embedded) return content;
+    const reportContent = (
+      <SpeakerServerProfiles
+        key={`${submission?.id}:${result?.transcript.revision}:${result?.claimed}:${access?.context?.personId}:${access?.context?.sessionId}:${access?.context?.tenantId}:${access?.authenticated}`}
+        callId={submission?.id ?? null}
+        transcriptRevision={result?.transcript.revision ?? ""}
+        enabled={Boolean(result?.claimed && access?.authenticated === true)}
+      >
+        {content}
+      </SpeakerServerProfiles>
+    );
+    if (embedded) return reportContent;
     return (
       <AcquisitionShell
         active={activeRequestedCallId || reportReady ? "calls" : "analyse"}
@@ -3621,7 +3632,7 @@ export function AcquisitionStudio({
             : undefined
         }
       >
-        {content}
+        {reportContent}
       </AcquisitionShell>
     );
   }

@@ -225,7 +225,7 @@ export function CallSignals({
                     voices.length === 2
                       ? voices.find((voice) => voice !== id)
                       : undefined;
-                  save({
+                  void save({
                     [id]: {
                       name: profiles[id]?.name ?? "",
                       role: "salesperson",

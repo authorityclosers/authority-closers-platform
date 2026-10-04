@@ -312,7 +312,14 @@ export function CallMap({
   } | null>(null);
   const [declined, setDeclined] = useState<string[]>([]);
   const [lens, setLens] = useState<Lens>(readLens);
-  const { profiles, save, canSave } = useSpeakerProfiles(callId);
+  const {
+    profiles,
+    drafts,
+    save,
+    canSave,
+    error: saveError,
+    server,
+  } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const total = Math.max(1, durationMs);
   const { facts, laneOf, lanes, owners, samples } = useMemo(() => {
@@ -441,7 +448,7 @@ export function CallMap({
       : null);
   // "No" on a two-person call asks about the other voice instead.
   const askId: string | null =
-    canSave && !hasSeller && seller && lanes.length > 1
+    canSave && !server && !hasSeller && seller && lanes.length > 1
       ? !declined.includes(seller)
         ? seller
         : facts.voices.length === 2
@@ -479,7 +486,7 @@ export function CallMap({
           icon: current?.icon ?? prospectIcon,
         };
     }
-    save(changes);
+    void save(changes);
   }
 
   const editingLane = editingVoice === null ? null : lanes[editingVoice];
@@ -581,7 +588,10 @@ export function CallMap({
                     const profile = lane.speakerId
                       ? profiles[lane.speakerId]
                       : undefined;
-                    const editable = canSave && lane.speakerId !== null;
+                    const editable =
+                      canSave &&
+                      lane.speakerId !== null &&
+                      (!server || lane.speakerId !== "unattributed");
                     const name = laneName(lane);
                     return (
                       <button
@@ -630,14 +640,29 @@ export function CallMap({
                       label={`Speaker ${editing.voice + 1}`}
                       share={ratio[editing.voice] ?? 0}
                       sample={samples.get(editingId) ?? null}
-                      profile={profiles[editingId]}
+                      profile={drafts[editingId]}
+                      speakerLabels={Object.fromEntries(
+                        Object.keys(drafts).map((id) => [
+                          id,
+                          drafts[id].name ||
+                            `Speaker ${facts.voices.indexOf(id) + 1}`,
+                        ]),
+                      )}
+                      otherSpeakers={
+                        server
+                          ? Object.fromEntries(
+                              Object.entries(drafts).filter(
+                                ([id]) => id !== editingId,
+                              ),
+                            )
+                          : undefined
+                      }
+                      saveError={saveError}
                       youName={accountName}
                       suggestedIcon={prospectIcon}
-                      onSave={(profile) => {
-                        if (!save({ [editingId]: profile })) return false;
-                        setEditing(null);
-                        return true;
-                      }}
+                      onSave={(profile, others) =>
+                        save({ ...others, [editingId]: profile })
+                      }
                       onClose={closeEditor}
                     />
                   ) : null}
@@ -654,6 +679,7 @@ export function CallMap({
                     </span>
                     <button
                       type="button"
+                      disabled={!canSave}
                       onClick={() => confirmSeller(askId, askIsYou)}
                     >
                       Yes
