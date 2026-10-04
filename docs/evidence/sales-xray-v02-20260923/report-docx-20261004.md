@@ -16,7 +16,8 @@ Scope: one report-document capability, including its generator, view wiring, dep
 ## Verification
 
 - 47 targeted tests passed: valid ZIP checksums; every OOXML XML part parses; snapshots of headings, tables and styles; A4/margins; protected rows and repeated headers; native numbering and footer fields; Blob identity for preview/download; zoom reuse; stale generation; recovery; mode/navigation and mounted-state regressions.
-- App typecheck and lint passed during implementation. Full app checks are recorded in the PR receipt after completion.
+- App typecheck, lint and changed-file Prettier checks pass. The browser script also passes Ruff formatting/lint.
+- The first complete app suite ran 1,174 tests: four failures comprised two superseded HTML-document assertions (now updated and passing) and two five-second playback timeouts. Those playback assertions pass unchanged with a 15-second local allowance. The corrected complete suite passed with two workers and a 15-second local allowance: 1,168 passed, six skipped. GitHub frontend validation also passed on implementation head `cef2617` with the repository default test settings, including the build. No repository timeout configuration was changed.
 - Local live dev checks passed at 390×844 and 1440×900: exact preview/download byte equality, correct filename, all chapters and exact invented quotes, zoom ratios and unchanged download URL, no page-level horizontal overflow, view switching, zero page errors and external requests.
 - Browser evidence and the exact generated fictional file: [evidence directory](report-docx-20261004/). The two viewport files have different ZIP timestamps; equality is verified within each preview/download instance.
 - The public dev hostname returned Cloudflare Access sign-in. Verification used the existing authorized localhost service on port 3026; no access settings or credentials were changed.
@@ -25,8 +26,12 @@ Scope: one report-document capability, including its generator, view wiring, dep
 
 `docx-preview` renders the generated file within browser HTML capabilities. It does not implement all Word field evaluation or automatic overflow pagination; native PAGE/NUMPAGES fields are present in the downloaded DOCX. The in-app preview is the same file, but native viewer pagination and fields can differ. See the [renderer documentation](https://github.com/VolodymyrBaydalka/docxjs).
 
-LibreOffice/soffice and PDF rasterizer tools were unavailable in this run. [AUT-1095](https://paperclip.authorityclosers.com/AUT/issues/AUT-1095), assigned to Root Operator, owns the required LibreOffice → PDF → PNG render and attachments. Word, Google Docs and Pages opening/repair checks are not verified here. Visual follow-up does not gate merge when CI is green, per the current operating rules.
+LibreOffice/soffice and PDF rasterizer tools were unavailable in this run. [AUT-1095](/AUT/issues/AUT-1095), assigned to Root Operator, owns the required LibreOffice → PDF → PNG render and attachments. Word, Google Docs and Pages opening/repair checks are not verified here. Visual follow-up does not gate merge when CI is green, per the current operating rules.
 
 The referenced Windows AC Orchestra skill was not installed in this environment, and no Pro browser connection or existing chat artifacts were available. Local source integration, OOXML tests and browser verification supplied the implementation evidence; no substitute cloud claim was used.
 
 The package manifest and shared lockfile make this a sensitive change: CTO review followed by CEO approval, bound to the PR head. The Lead Engineer does not merge it.
+
+## PR gate and current handoff
+
+Draft [PR #282](https://github.com/authorityclosers/authority-closers-platform/pull/282), implementation head `cef2617`. `ac-gate check` passes. `ac-gate pr-check 282` reports a file collision with [PR #276](https://github.com/authorityclosers/authority-closers-platform/pull/276), owned by AUT-992: both change `apps/sales-xray-web/app/acquisition-studio.tsx`. AUT-983 adds only the report/transcript source props there. The PR remains draft until that required source file is free and the gate passes. No merge is attempted.
