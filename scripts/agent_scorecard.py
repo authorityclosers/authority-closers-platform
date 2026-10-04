@@ -532,7 +532,82 @@ def build_report(data, monday, start, end):
         gh = row["github"]
         if gh.get("total") and 100 * gh["pass"] / gh["total"] < 70:
             alerts.append(f"{label}: first-try CI {100 * gh['pass'] / gh['total']:.1f}% (<70%)")
-    return {"week": monday, "rows": rows, "failures": failures, "alerts": alerts}
+    distributions = defaultdict(list)
+    for issue_id in sorted(relevant):
+        description = issues.get(issue_id, {}).get("description") or ""
+        declarations = []
+        for field in ("Task type", "Tier"):
+            matches = re.findall(rf"^{field}:[ \t]*([^\n]+)", description, re.MULTILINE)
+            declarations.append(matches[0].strip() if len(matches) == 1 else "unknown")
+        if declarations[1] not in ("routine", "non-routine"):
+            declarations[1] = "unknown"
+        distributions[tuple(declarations)].append(by_issue.get(issue_id, []))
+    distribution_rows = []
+    for key, task_runs in sorted(distributions.items()):
+        covered = [sum(r["_tokens"] for r in runs) for runs in task_runs
+                   if runs and all(r["_tokens"] is not None for r in runs)]
+        unknown = sum(r["_tokens"] is None for runs in task_runs for r in runs)
+        subtotal = sum(r["_tokens"] for runs in task_runs for r in runs
+                       if r["_tokens"] is not None)
+        distribution_rows.append((*key, len(task_runs), len(covered), unknown, subtotal,
+                                  covered if len(covered) == len(task_runs) else []))
+    return {"week": monday, "rows": rows, "failures": failures, "alerts": alerts,
+            "distributions": distribution_rows}
+
+
+def render_fictional_d1(report, view="dashboard"):
+    """Render both D1 documents from the same normalized fictional fixture report."""
+    titles = {"dashboard": "D1 dashboard", "weekly-report": "D1 weekly report"}
+    if view not in titles:
+        raise ValueError("view must be dashboard or weekly-report")
+    output = [f"# {titles[view]}: {report['week'].isoformat()} UTC", "",
+              "**Fictional examples only; no live provider or customer data.**",
+              "Usage includes all returned runs for tasks accepted this week, including",
+              "runs outside the week. Reported subtotals exclude unknown runs; incomplete",
+              "groups supply no numeric baseline. Declared basis is not producer verification.",
+              "Task type/tier use explicit card declarations; missing or conflicting values",
+              "are unknown. Coverage requires at least one run and all task runs reported.", ""]
+
+    def table(headers, rows):
+        output.append("| " + " | ".join(headers) + " |")
+        output.append("| " + " | ".join("---" for _ in headers) + " |")
+        output.extend("| " + " | ".join(str(c).replace("|", "\\|") for c in row) + " |"
+                      for row in rows)
+        output.append("")
+
+    output += ["## A. Tokens per accepted task", ""]
+    cells = []
+    for kind, tier, accepted, covered, unknown, subtotal, totals in report["distributions"]:
+        cells.append([kind, tier, accepted, covered, f"{100 * covered / accepted:.1f}%",
+                      accepted - covered, unknown, f"{subtotal:.2f}",
+                      f"{statistics.median(totals):.2f}" if totals else "n/a (incomplete usage)",
+                      f"{percentile90(totals):.2f}" if totals else "n/a (incomplete usage)"])
+    table(["Task type", "Tier", "Accepted", "Covered", "Coverage", "Unknown tasks",
+           "Unreported runs", "Reported tokens (subtotal)", "Median tokens/task",
+           "p90 tokens/task"], cells)
+    company = dict(report["rows"])["Company"]
+    covered = sum(row[3] for row in report["distributions"])
+    output += [f"Accepted: {company['done']}; covered: {covered}; "
+               f"unknown tasks: {company['done'] - covered}; "
+               f"{company['unreported_runs']} runs unreported.", "",
+               f"Reported tokens (subtotal): {company['known_tokens']:.2f}.", "",
+               "## B. Allowance pace", ""]
+    table(["Provider", "Allowance used", "Window elapsed", "Pace gap"],
+          [[p, "unknown", "unknown", "unknown"] for p in ("Codex", "Claude", "Gemini")])
+    output += ["Provider allowance has no verified input; tokens do not establish quota.", "",
+               "## C. Quality-adjusted delivery", ""]
+    def duration(value):
+        return f"{value:.2f}d" if value is not None else "unknown"
+
+    gh = github_cells(company["github"])
+    table(["Cycle median", "Cycle p90", "Missing cycle tasks", "Review returns",
+           "Rework pushes", "First-try CI", "Post-merge bugs", "Independent Quality"],
+          [[duration(company["median"]), duration(company["p90"]), company["cycle_missing"],
+            company["bounces"], gh[3], gh[2], gh[5], "unknown"]])
+    output += ["Review returns are recorded scorecard bounces; rework pushes use GitHub",
+               "receipts. Rework runs and independent human Quality remain unknown.",
+               "No autonomous score, live baseline, savings or routing claim."]
+    return "\n".join(output) + "\n"
 
 
 def render_report(report):
