@@ -461,7 +461,11 @@ class OrganisationService:
         try:
             rows = await self.session.scalars(
                 select(Membership)
-                .where(Membership.tenant_id == tenant_id, Membership.person_id.in_(person_ids))
+                .where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.person_id.in_(person_ids),
+                    Membership.role != "processing",
+                )
                 .order_by(Membership.person_id)
                 .with_for_update(nowait=True)
                 .execution_options(populate_existing=True)
@@ -816,7 +820,7 @@ class OrganisationService:
         rows = await self.session.execute(
             select(Membership, Person)
             .join(Person, Person.id == Membership.person_id)
-            .where(Membership.tenant_id == tenant_id)
+            .where(Membership.tenant_id == tenant_id, Membership.role != "processing")
             .order_by(Person.email, Person.id)
         )
         return tuple(
