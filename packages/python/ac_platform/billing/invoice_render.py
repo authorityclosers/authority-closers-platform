@@ -16,24 +16,41 @@ def render_invoice(invoice: BillingInvoice) -> str:
     def party(key: str) -> str:
         snapshot = invoice.details.get(key, {})
         return "<br>".join(
-            text(value)
-            for value in (
-                snapshot.get("name"),
-                snapshot.get("address"),
-                snapshot.get("gstin"),
-                snapshot.get("state_code"),
+            label + text(value)
+            for label, value in (
+                ("", snapshot.get("name")),
+                ("", snapshot.get("address")),
+                ("GSTIN: ", snapshot.get("gstin")),
+                ("State code: ", snapshot.get("state_code")),
             )
             if value
         )
 
     seller = invoice.details.get("seller", {})
+    taxes = []
+    for label, amount in (
+        ("CGST", invoice.cgst_minor),
+        ("SGST", invoice.sgst_minor),
+        ("IGST", invoice.igst_minor),
+    ):
+        if amount:
+            # Recover whole-percent rates from saved paise, half-up to remove
+            # invoice rounding; never read the current catalogue or settings.
+            rate = (
+                (amount * 100 + invoice.taxable_minor // 2) // invoice.taxable_minor
+                if invoice.taxable_minor
+                else 0
+            )
+            taxes.append((f"{label} @ {rate}%", amount))
+    gst = invoice.cgst_minor + invoice.sgst_minor + invoice.igst_minor
+    includes_gst = (
+        "<p>Price includes GST</p>" if invoice.taxable_minor + gst == invoice.total_minor else ""
+    )
     amounts = "".join(
         f"<tr><th>{label}</th><td>{money(amount)}</td></tr>"
         for label, amount in (
             ("Taxable value", invoice.taxable_minor),
-            ("CGST", invoice.cgst_minor),
-            ("SGST", invoice.sgst_minor),
-            ("IGST", invoice.igst_minor),
+            *taxes,
             ("Total", invoice.total_minor),
         )
     )
@@ -54,9 +71,9 @@ td {{ text-align: right; }} address {{ font-style: normal; white-space: pre-line
 <h2>Seller</h2><address>{party("seller")}</address>
 <h2>Buyer</h2><address>{party("buyer")}</address>
 <p>Place of supply (state code): {text(invoice.place_of_supply or "Unknown")}<br>
-SAC: {text(seller.get("sac") or "SAC pending")}</p>
-<p>{text(invoice.details.get("plan_name"))}<br>
+SAC: {text(seller.get("sac") or "SAC pending")}<br>Reverse charge: No</p>
+<p>Service: Sales Xray — {text(invoice.details.get("plan_name"))}<br>
 Seats: {text(invoice.details.get("seats"))}<br>
 Period: {text(invoice.details.get("period_start"))} – {text(invoice.details.get("period_end"))}</p>
-<table aria-label="Invoice amounts"><tbody>{amounts}</tbody></table>
+{includes_gst}<table aria-label="Invoice amounts"><tbody>{amounts}</tbody></table>
 </body></html>"""

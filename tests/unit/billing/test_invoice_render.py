@@ -30,8 +30,10 @@ def test_invoice_html_escapes_every_snapshot_field_and_uses_saved_money() -> Non
     assert html.startswith("<!doctype html>") and '<html lang="en">' in html
     assert hostile not in html and "<script>" not in html
     assert html.count("&lt;script&gt;alert(&quot;fictional&quot;)&lt;/script&gt;&amp;") == 12
-    for amount in ("INR 2,117.80", "INR 190.60", "INR 0.00", "INR 2,499.00"):
+    for amount in ("INR 2,117.80", "INR 190.60", "INR 2,499.00"):
         assert amount in html
+    assert "INR 0.00" not in html and "IGST @" not in html
+    assert "CGST @ 9%" in html and "SGST @ 9%" in html
     assert "@media print" in html and "2026-10-04T00:00:00+00:00" in html
     invoice.details = {
         "seller": {"gstin": "GSTIN pending", "sac": "SAC pending"},
@@ -40,3 +42,47 @@ def test_invoice_html_escapes_every_snapshot_field_and_uses_saved_money() -> Non
     invoice.place_of_supply = None
     html = render_invoice(invoice)
     assert "GSTIN pending" in html and "SAC pending" in html and "Unknown" in html
+
+
+def test_invoice_html_labels_parties_service_rates_and_inclusive_total() -> None:
+    invoice = BillingInvoice(
+        number="EA/2627/00001",
+        financial_year="2026-27",
+        created_at=datetime(2026, 10, 4, tzinfo=UTC),
+        taxable_minor=211780,
+        cgst_minor=19060,
+        sgst_minor=19060,
+        igst_minor=0,
+        total_minor=249900,
+        details={
+            "seller": {
+                "name": "Vikriya Solutions LLP (trading as Estate Autopilots)",
+                "address": "Fictional registered address",
+                "gstin": "27AAAAA0000A1Z0",
+                "state_code": "27",
+            },
+            "buyer": {"name": "Fictional buyer", "gstin": "27BBBBB0000B1Z0", "state_code": "27"},
+            "plan_name": "Personal",
+            "seats": 1,
+            "period_start": "2026-10-04",
+            "period_end": "2026-11-04",
+        },
+    )
+    html = render_invoice(invoice)
+    assert "Vikriya Solutions LLP (trading as Estate Autopilots)" in html
+    for value in ("27AAAAA0000A1Z0", "27BBBBB0000B1Z0"):
+        assert f"GSTIN: {value}" in html
+    assert html.count("State code: 27") == 2
+    assert "Service: Sales Xray — Personal" in html and "Seats: 1" in html
+    assert "Period: 2026-10-04 – 2026-11-04" in html and "Reverse charge: No" in html
+    assert "Price includes GST" in html
+    assert "CGST @ 9%" in html and "SGST @ 9%" in html and "IGST @" not in html
+    invoice.cgst_minor = invoice.sgst_minor = 0
+    invoice.igst_minor = 38120
+    html = render_invoice(invoice)
+    assert "IGST @ 18%" in html and "CGST @" not in html and "SGST @" not in html
+    # The renderer recovers the rate from the saved amounts, not today's 18%.
+    invoice.taxable_minor, invoice.igst_minor, invoice.total_minor = 10000, 500, 10500
+    invoice.details["seats"] = 2
+    html = render_invoice(invoice)
+    assert "IGST @ 5%" in html and "Price includes GST" in html and "INR 105.00" in html
