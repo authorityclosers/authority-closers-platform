@@ -570,7 +570,7 @@ def _cost_view(
 
 
 class AdminConversationRecordings:
-    """Operations-tenant recording inventory with immutable read scope."""
+    """Operations-admin recording inventory with immutable read scope."""
 
     def __init__(
         self,
@@ -584,7 +584,16 @@ class AdminConversationRecordings:
         self.database: AsyncSession = application.database
         self.operations_tenant_id = operations_tenant_id
         self.recovery_enabled = recovery_enabled
-        candidates = (operations_tenant_id, *(recording_tenant_ids or ()))
+        # Explicit Sales Xray scopes never inherit the reviewer's workspace.
+        candidates = (
+            (operations_tenant_id,)
+            if recording_tenant_ids is None
+            else tuple(
+                identifier
+                for identifier in recording_tenant_ids
+                if identifier != operations_tenant_id
+            )
+        )
         if any(type(identifier) is not UUID for identifier in candidates):
             raise ValueError("recording tenant scope must contain UUIDs")
         self.recording_tenant_ids = tuple(dict.fromkeys(candidates))

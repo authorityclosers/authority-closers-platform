@@ -216,6 +216,7 @@ def create_app(
         application,
         settings=settings,
         require_actor=require_actor,
+        intake=resolved_conversation,
         # Recovery reads use the resolved hosted composition.  The old private
         # draft importer remains an explicit test-only seam and is not enabled
         # by passing the raw caller-supplied runtime here.
