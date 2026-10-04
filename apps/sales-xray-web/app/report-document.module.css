@@ -56,6 +56,9 @@
   flex-shrink: 0;
   font-family: Calibri, Arial, sans-serif;
 }
+.pages :global(section.report-docx span) {
+  font-family: Calibri, Arial, sans-serif;
+}
 .pages :global([data-report-mode-section]) {
   scroll-margin-top: var(--report-scroll-target-offset, 80px);
 }

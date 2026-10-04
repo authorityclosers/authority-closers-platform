@@ -47,6 +47,11 @@ def main() -> None:
             preview = page.get_by_role("region", name="Sales Xray document preview")
             expect(preview).to_be_visible()
             expect(preview).to_contain_text(SUMMARY)
+            # DOCX run styles must retain the requested browser fallback.
+            fonts = preview.locator("section.report-docx span").evaluate_all(
+                "spans => [...new Set(spans.map(span => getComputedStyle(span).fontFamily))]"
+            )
+            assert fonts and all("Calibri" in font and "Arial" in font for font in fonts)
             headings = preview.locator("[data-report-mode-section]")
             assert headings.all_text_contents() == [
                 "Overview",
@@ -103,6 +108,7 @@ def main() -> None:
                     "bytes": len(preview_bytes),
                     "sha256": hashlib.sha256(preview_bytes).hexdigest(),
                     "preview_equals_download": True,
+                    "preview_font_families": fonts,
                 }
             )
             page.close()
