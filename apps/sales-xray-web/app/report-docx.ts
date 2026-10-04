@@ -385,7 +385,7 @@ export async function createReportDocx(
           document: {
             run: { font: "Calibri", size: 21, color: "222222" },
             paragraph: {
-              spacing: { after: 100, line: 276 },
+              spacing: { after: 80, line: 276 },
             },
           },
           title: {
@@ -421,7 +421,7 @@ export async function createReportDocx(
             paragraph: {
               keepNext: true,
               keepLines: true,
-              spacing: { before: 180, after: 120 },
+              spacing: { before: 120, after: 80 },
             },
           },
         },
