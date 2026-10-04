@@ -87,7 +87,7 @@ const CHANGE = "ac:report-mode-change";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
   overview: FileText,
-  transcript: FileText,
+  transcript: BookOpen,
   moments: AudioLines,
   analysis: ChartNoAxesColumnIncreasing,
   coaching: Lightbulb,
