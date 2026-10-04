@@ -80,13 +80,13 @@ const callRecord = {
   facts: [
     {
       statement: "Will send the brochure tomorrow",
-      evidence: [],
-      tag: "promise",
+      evidence: [evidence(1000)],
+      tag: "Next steps and commitments",
     },
     {
       statement: "Monthly profit is around 10-15k",
-      evidence: [],
-      tag: "money",
+      evidence: [evidence(2000)],
+      tag: "Business details",
     },
   ],
   tags: null,
@@ -104,7 +104,11 @@ describe("extractInsight", () => {
     expect(insight.durationMs).toBe(761000);
     expect(insight.questions).toBe(9);
     expect(insight.callType).toBe("first_meeting");
-    expect(insight.signals).toEqual({ promises: 1, nextStep: 1, money: 1 });
+    expect(insight.signals).toEqual({
+      commitments: 1,
+      business: 1,
+      concerns: 0,
+    });
     expect(insight.strengths).toBe(1);
     expect(insight.missed).toBe(1);
     expect(insight.moments.map((moment) => moment.startMs)).toEqual([
@@ -119,7 +123,60 @@ describe("extractInsight", () => {
     expect(insight.assessment).toBe("Only a verdict");
     expect(insight.durationMs).toBeNull();
     expect(insight.questions).toBeNull();
+    expect(insight.strengths).toBeNull();
+    expect(insight.missed).toBeNull();
+    expect(insight.signals).toEqual({
+      commitments: null,
+      business: null,
+      concerns: null,
+    });
     expect(insight.moments).toEqual([]);
     expect(extractInsight("nonsense", 42).assessment).toBeNull();
+  });
+
+  it("counts only approved categories with record evidence", () => {
+    const facts = [
+      {
+        statement: "A commitment",
+        tag: "Next steps and commitments",
+        evidence: [],
+      },
+      { statement: "A promise", tag: "promise", evidence: [evidence(1)] },
+      { statement: "next step money ₹", evidence: [evidence(2)] },
+      { statement: "A concern", tag: "Concerns", evidence: [evidence(3)] },
+      ...callRecord.facts,
+    ];
+    expect(extractInsight({ ...callRecord, facts }, report).signals).toEqual({
+      commitments: 1,
+      business: 1,
+      concerns: 1,
+    });
+  });
+
+  it.each([undefined, -1, NaN, Infinity])(
+    "keeps invalid or missing question counts unavailable (%s)",
+    (questions) => {
+      const record = {
+        ...callRecord,
+        numbers: {
+          ...callRecord.numbers,
+          speakers: [{ ...callRecord.numbers.speakers[0], questions }],
+        },
+      };
+      const insight = extractInsight(record, report);
+      expect(insight.questions).toBeNull();
+      expect(insight.speakers).toEqual([]);
+      expect(insight.assessment).toBeTruthy();
+    },
+  );
+
+  it("rejects blank evidence rather than counting it", () => {
+    const record = {
+      ...callRecord,
+      facts: [
+        { ...callRecord.facts[0], evidence: [{ ...evidence(1), quote: " " }] },
+      ],
+    };
+    expect(extractInsight(record, report).signals.commitments).toBeNull();
   });
 });

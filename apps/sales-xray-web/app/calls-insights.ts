@@ -3,12 +3,18 @@
 /*
  * Per-call insights for the Calls workspace (AUT-999 v2, owner 5 Oct 2026).
  * Reads the existing GET-only endpoints (`/call-record`, `/report`) for calls
- * that have a report, three at a time, cached for the session. Extraction is
+ * that have a report, three at a time, cached for this mounted workspace. Extraction is
  * tolerant: a missing or changed field hides that insight, never the row.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { ACQUISITION, acquisition, submissionPath } from "./acquisition-client";
+import {
+  ACQUISITION,
+  AcquisitionError,
+  acquisition,
+  submissionPath,
+} from "./acquisition-client";
+import { parseCallRecord, type CallRecord } from "./call-record-contract";
 
 export type CallMoment = { label: string; startMs: number };
 
@@ -17,16 +23,21 @@ export type CallInsight = {
   speakers: { share: number; questions: number }[];
   questions: number | null;
   callType: string | null;
-  signals: { promises: number; nextStep: number; money: number };
+  signals: {
+    commitments: number | null;
+    business: number | null;
+    concerns: number | null;
+  };
   assessment: string | null;
   fixFirst: string | null;
   nextFocus: string | null;
-  strengths: number;
-  missed: number;
+  strengths: number | null;
+  missed: number | null;
   moments: CallMoment[];
 };
 
-const cache = new Map<string, CallInsight | null>();
+export type InsightReadState = "loading" | "ready" | "unavailable" | "error";
+type InsightRead = { status: InsightReadState; insight: CallInsight | null };
 
 function obj(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -80,35 +91,23 @@ function firstStart(value: unknown): number | null {
   return null;
 }
 
-function tagCount(facts: unknown[], words: RegExp) {
-  return facts.filter((fact) => {
-    const item = obj(fact);
-    const tag = typeof item.tag === "string" ? item.tag : "";
-    const statement = typeof item.statement === "string" ? item.statement : "";
-    return words.test(tag) || (!tag && words.test(statement));
-  }).length;
-}
-
 export function extractInsight(
   callRecord: unknown,
   report: unknown,
 ): CallInsight {
-  const recordValue =
-    callRecord && typeof callRecord === "object"
-      ? (callRecord as Record<string, unknown>)
-      : {};
-  const numbers =
-    recordValue.numbers && typeof recordValue.numbers === "object"
-      ? (recordValue.numbers as Record<string, unknown>)
-      : {};
-  const speakers = list(numbers.speakers).map((speaker) => {
-    const item = obj(speaker);
-    return {
-      share: typeof item.talk_share === "number" ? item.talk_share : 0,
-      questions: typeof item.questions === "number" ? item.questions : 0,
-    };
-  });
-  const facts = list(recordValue.facts);
+  let record: CallRecord | null = null;
+  try {
+    record = parseCallRecord(callRecord);
+  } catch {
+    /* Unavailable measurements stay unknown. */
+  }
+  const speakers =
+    record?.numbers.speakers.map((speaker) => ({
+      share: speaker.talk_share,
+      questions: speaker.questions,
+    })) ?? [];
+  const count = (tag: string) =>
+    record ? record.facts.filter((fact) => fact.tag === tag).length : null;
   // The report endpoint wraps the content: { report: { content: {...} } }.
   const outer = obj(report);
   const content = obj(obj(outer.report).content ?? outer.content ?? outer);
@@ -142,21 +141,18 @@ export function extractInsight(
   addMoment(text(nextAction.title), firstStart(nextAction));
   return {
     durationMs:
-      typeof numbers.duration_ms === "number" && numbers.duration_ms > 0
-        ? numbers.duration_ms
+      record && record.numbers.duration_ms > 0
+        ? record.numbers.duration_ms
         : null,
     speakers,
     questions: speakers.length
       ? speakers.reduce((sum, speaker) => sum + speaker.questions, 0)
       : null,
-    callType:
-      typeof recordValue.call_type === "string" ? recordValue.call_type : null,
+    callType: record?.call_type ?? null,
     signals: {
-      promises: tagCount(facts, /promis|commit/i),
-      nextStep:
-        tagCount(facts, /next[_ -]?step|follow/i) ||
-        (text(nextAction.title) ? 1 : 0),
-      money: tagCount(facts, /money|price|budget|income|profit|₹|rupee/i),
+      commitments: count("Next steps and commitments"),
+      business: count("Business details"),
+      concerns: count("Concerns"),
     },
     assessment:
       text(assessmentBlock.assessment) ??
@@ -168,8 +164,10 @@ export function extractInsight(
       text(assessmentBlock.next_focus) ??
       text(obj(overview.next_call_focus).behavior) ??
       text(nextAction.title),
-    strengths: strengthsList.length,
-    missed: list(content.missed_opportunities).length,
+    strengths: Array.isArray(content.strengths) ? strengthsList.length : null,
+    missed: Array.isArray(content.missed_opportunities)
+      ? content.missed_opportunities.length
+      : null,
     moments,
   };
 }
@@ -177,46 +175,65 @@ export function extractInsight(
 async function readJson(path: string, signal: AbortSignal) {
   try {
     return await acquisition(path, { signal });
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof AcquisitionError && error.status === 404) return null;
+    throw error;
   }
 }
 
 async function loadInsight(id: string, signal: AbortSignal) {
   const base = submissionPath(id);
-  const [callRecord, report] = await Promise.all([
+  const reads = await Promise.allSettled([
     readJson(`${base}/call-record`, signal),
     readJson(`${base}/report`, signal),
   ]);
-  if (!callRecord && !report) return null;
-  return extractInsight(callRecord, report);
+  const [callRecord, report] = reads.map((read) =>
+    read.status === "fulfilled" ? read.value : null,
+  );
+  const insight =
+    callRecord || report ? extractInsight(callRecord, report) : null;
+  return {
+    insight,
+    status: reads.some((read) => read.status === "rejected")
+      ? "error"
+      : insight
+        ? "ready"
+        : "unavailable",
+  } as InsightRead;
 }
 
 /** Insights for the given report-ready call ids; loads lazily, three at a time. */
 export function useCallInsights(ids: string[], enabled: boolean) {
   const [, setVersion] = useState(0);
-  const inFlight = useRef(new Set<string>());
+  const [attempt, setAttempt] = useState(0);
+  // CallsLibrary remounts on person/session/workspace changes. Never share reads globally.
+  const cache = useMemo(() => new Map<string, InsightRead>(), [enabled]);
   const key = ids.join(",");
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
     const queue = key
       .split(",")
-      .filter((id) => id && !cache.has(id) && !inFlight.current.has(id));
+      .filter(
+        (id) => id && (!cache.has(id) || cache.get(id)?.status === "error"),
+      );
     let active = 0;
     const next = () => {
       while (active < 3 && queue.length) {
         const id = queue.shift() as string;
         active += 1;
-        inFlight.current.add(id);
         void loadInsight(id, controller.signal)
-          .then((insight) => {
+          .then((read) => {
             if (controller.signal.aborted) return;
-            cache.set(id, insight);
+            cache.set(id, read);
+            setVersion((value) => value + 1);
+          })
+          .catch(() => {
+            if (controller.signal.aborted) return;
+            cache.set(id, { status: "error", insight: null });
             setVersion((value) => value + 1);
           })
           .finally(() => {
-            inFlight.current.delete(id);
             active -= 1;
             if (!controller.signal.aborted) next();
           });
@@ -224,8 +241,17 @@ export function useCallInsights(ids: string[], enabled: boolean) {
     };
     next();
     return () => controller.abort();
-  }, [key, enabled]);
-  return (id: string) => cache.get(id) ?? null;
+  }, [key, enabled, cache, attempt]);
+  return {
+    insightOf: (id: string) => cache.get(id)?.insight ?? null,
+    statusOf: (id: string): InsightReadState =>
+      cache.get(id)?.status ?? "loading",
+    retry: () => {
+      for (const [id, read] of cache)
+        if (read.status === "error") cache.delete(id);
+      setAttempt((value) => value + 1);
+    },
+  };
 }
 
 export function audioSource(id: string) {

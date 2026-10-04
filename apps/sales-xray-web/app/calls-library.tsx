@@ -7,11 +7,9 @@ import {
   ArrowRight,
   ArrowUpDown,
   AudioLines,
-  CalendarCheck,
   Download,
   Eye,
   Handshake,
-  IndianRupee,
   MessageCircleQuestion,
   FolderOpen,
   LoaderCircle,
@@ -41,6 +39,7 @@ import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
+import { csvRows } from "./csv-export";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -130,16 +129,8 @@ function hoursLabel(totalMs: number) {
   return `${hours} h ${minutes % 60} min`;
 }
 
-function csvCell(value: string | number | null | undefined) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
 function exportCsv(rows: string[][], filename: string) {
-  const blob = new Blob(
-    [rows.map((row) => row.map(csvCell).join(",")).join("\n")],
-    { type: "text/csv;charset=utf-8" },
-  );
+  const blob = new Blob([csvRows(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -688,7 +679,11 @@ function CallsLibraryContent({
     sort,
   );
   const workspace = insights && !preview;
-  const insightOf = useCallInsights(
+  const {
+    insightOf,
+    statusOf,
+    retry: retryInsights,
+  } = useCallInsights(
     visibleSubmissions
       .filter((submission) => submission.hasReport)
       .slice(0, 40)
@@ -746,8 +741,8 @@ function CallsLibraryContent({
           "Status",
           "Assessment",
           "Questions",
-          "Promises",
-          "Next steps",
+          "Next steps and commitments",
+          "Business details",
           "Link",
         ],
         ...rows.map((submission) => {
@@ -760,8 +755,8 @@ function CallsLibraryContent({
             submissionState(submission),
             insight?.assessment ?? "",
             String(insight?.questions ?? ""),
-            String(insight?.signals.promises ?? ""),
-            String(insight?.signals.nextStep ?? ""),
+            String(insight?.signals.commitments ?? ""),
+            String(insight?.signals.business ?? ""),
             `${window.location.origin}${callHref(submission.id, studioHref)}`,
           ];
         }),
@@ -894,42 +889,52 @@ function CallsLibraryContent({
                         {insight.questions}
                       </span>
                     ) : null}
-                    {insight.signals.promises ? (
-                      <span title="Promises made">
+                    {insight.signals.commitments ? (
+                      <span title="Next steps and commitments">
                         <Handshake size={12} aria-hidden="true" />
-                        {insight.signals.promises}
+                        {insight.signals.commitments}
                       </span>
                     ) : null}
-                    {insight.signals.nextStep ? (
-                      <span title="Next steps">
-                        <CalendarCheck size={12} aria-hidden="true" />
-                        {insight.signals.nextStep}
+                    {insight.signals.concerns ? (
+                      <span title="Concerns">
+                        <MessageCircleQuestion size={12} aria-hidden="true" />
+                        {insight.signals.concerns}
                       </span>
                     ) : null}
-                    {insight.signals.money ? (
-                      <span title="Money talked about">
-                        <IndianRupee size={12} aria-hidden="true" />
-                        {insight.signals.money}
+                    {insight.signals.business ? (
+                      <span title="Business details">
+                        <FolderOpen size={12} aria-hidden="true" />
+                        {insight.signals.business}
                       </span>
                     ) : null}
                   </span>
                 </span>
               ) : (
-                <span className={styles.rowPending}>Reading report…</span>
+                <span className={styles.rowPending}>
+                  {statusOf(submission.id) === "error"
+                    ? "Report could not be read"
+                    : statusOf(submission.id) === "unavailable"
+                      ? "Report insights unavailable"
+                      : "Reading report…"}
+                </span>
               )
             ) : null}
           </span>
           <span
             className="calls-library-duration"
             aria-label={
-              estimated
-                ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
-                : "Length unavailable"
+              insight?.durationMs
+                ? `Measured call duration: ${formatClock(insight.durationMs)}`
+                : estimated
+                  ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
+                  : "Length unavailable"
             }
             title={
-              estimated
-                ? "Estimated length, compared with the longest call in this list"
-                : undefined
+              insight?.durationMs
+                ? "Measured call duration; bar compares estimated lengths"
+                : estimated
+                  ? "Estimated length, compared with the longest call in this list"
+                  : undefined
             }
           >
             <span className="calls-library-duration-track" aria-hidden="true">
@@ -1028,39 +1033,35 @@ function CallsLibraryContent({
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
   const weekAgo = loadedAt - 7 * 86_400_000;
+  const durations = loadedInsights.flatMap((insight) =>
+    insight.durationMs === null ? [] : [insight.durationMs],
+  );
+  const questions = loadedInsights.flatMap((insight) =>
+    insight.questions === null ? [] : [insight.questions],
+  );
+  const commitments = loadedInsights.flatMap((insight) =>
+    insight.signals.commitments === null ? [] : [insight.signals.commitments],
+  );
   const stats = workspace
     ? {
         calls: `${submissions.length}${nextCursor ? "+" : ""}`,
         thisWeek: submissions.filter(
           (submission) => new Date(submission.createdAt).getTime() >= weekAgo,
         ).length,
-        time: hoursLabel(
-          submissions.reduce((sum, submission) => {
-            const measured = insightOf(submission.id)?.durationMs;
-            return (
-              sum +
-              (measured ??
-                (hasDurationEstimate(submission)
-                  ? submission.durationSeconds * 1000
-                  : 0))
-            );
-          }, 0),
-        ),
+        time: durations.length
+          ? hoursLabel(durations.reduce((sum, duration) => sum + duration, 0))
+          : null,
         ready: counts.ready,
         open: counts.active + counts.attention,
-        questions: loadedInsights.length
+        questions: questions.length
           ? Math.round(
-              loadedInsights.reduce(
-                (sum, insight) => sum + (insight.questions ?? 0),
-                0,
-              ) / loadedInsights.length,
+              questions.reduce((sum, count) => sum + count, 0) /
+                questions.length,
             )
           : null,
-        commitments: loadedInsights.reduce(
-          (sum, insight) =>
-            sum + insight.signals.promises + insight.signals.nextStep,
-          0,
-        ),
+        commitments: commitments.length
+          ? commitments.reduce((sum, count) => sum + count, 0)
+          : null,
       }
     : null;
   const renderRows = () => {
@@ -1170,9 +1171,9 @@ function CallsLibraryContent({
                   <small>{stats.thisWeek} this week</small>
                 </div>
                 <div>
-                  <span>Talk time analysed</span>
-                  <strong>{stats.time}</strong>
-                  <small>measured where the report is in</small>
+                  <span>Measured call duration</span>
+                  <strong>{stats.time ?? "—"}</strong>
+                  <small>across {durations.length} measured calls</small>
                 </div>
                 <div>
                   <span>Reports ready</span>
@@ -1182,12 +1183,12 @@ function CallsLibraryContent({
                 <div>
                   <span>Questions per call</span>
                   <strong>{stats.questions ?? "—"}</strong>
-                  <small>across loaded reports</small>
+                  <small>across {questions.length} measured calls</small>
                 </div>
                 <div>
-                  <span>Promises &amp; next steps</span>
-                  <strong>{stats.commitments}</strong>
-                  <small>to follow up</small>
+                  <span>Next steps and commitments</span>
+                  <strong>{stats.commitments ?? "—"}</strong>
+                  <small>with recorded evidence</small>
                 </div>
               </section>
             ) : null}
@@ -1331,6 +1332,18 @@ function CallsLibraryContent({
                       {picked.size ? `Export ${picked.size}` : "Export"}
                     </button>
                   ) : null}
+                  {workspace &&
+                  visibleSubmissions.some(
+                    (submission) => statusOf(submission.id) === "error",
+                  ) ? (
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      onClick={retryInsights}
+                    >
+                      Retry reports
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="text-button calls-library-refresh"
@@ -1431,12 +1444,15 @@ function CallsLibraryContent({
       </Main>
       {workspace && previewSubmission ? (
         <CallsDrawer
+          key={previewSubmission.id}
           id={previewSubmission.id}
           title={titleOf(previewSubmission)}
           meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
           status={submissionState(previewSubmission)}
           tone={callTone(previewSubmission)}
           insight={insightOf(previewSubmission.id)}
+          readState={statusOf(previewSubmission.id)}
+          onRetry={retryInsights}
           hasReport={previewSubmission.hasReport}
           canRename={Boolean(previewSubmission.label)}
           onOpen={() => openSubmission(previewSubmission)}

@@ -8,7 +8,7 @@ import {
   Check,
   Copy,
   Handshake,
-  IndianRupee,
+  FolderOpen,
   MessageCircleQuestion,
   Pencil,
   Play,
@@ -19,7 +19,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { callHref } from "./acquisition-client";
-import { audioSource, type CallInsight } from "./calls-insights";
+import {
+  audioSource,
+  type CallInsight,
+  type InsightReadState,
+} from "./calls-insights";
 import { formatClock } from "./lightbox/time";
 import styles from "./calls-library.module.css";
 
@@ -30,6 +34,8 @@ export function CallsDrawer({
   status,
   tone,
   insight,
+  readState,
+  onRetry,
   hasReport,
   canRename,
   onOpen,
@@ -42,6 +48,8 @@ export function CallsDrawer({
   status: string;
   tone: string;
   insight: CallInsight | null;
+  readState: InsightReadState;
+  onRetry: () => void;
   hasReport: boolean;
   canRename: boolean;
   onOpen: () => void;
@@ -50,14 +58,55 @@ export function CallsDrawer({
 }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const closeButton = useRef<HTMLButtonElement | null>(null);
+  const drawer = useRef<HTMLElement | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
+    const previous = document.activeElement;
     closeButton.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const containFocus = (event: FocusEvent) => {
+      if (
+        event.target instanceof Node &&
+        !drawer.current?.contains(event.target)
+      )
+        closeButton.current?.focus();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.addEventListener("focusin", containFocus);
+    return () => {
+      document.removeEventListener("focusin", containFocus);
+      if (previous instanceof HTMLElement && previous.isConnected)
+        previous.focus();
+    };
+  }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        drawer.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], audio[controls], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter(
+        (element) =>
+          !element.closest("[hidden], [inert]") &&
+          getComputedStyle(element).display !== "none" &&
+          getComputedStyle(element).visibility !== "hidden",
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   function play(startMs: number) {
@@ -82,6 +131,7 @@ export function CallsDrawer({
     <>
       <div className={styles.scrim} onClick={onClose} aria-hidden="true" />
       <aside
+        ref={drawer}
         className={styles.drawer}
         role="dialog"
         aria-modal="true"
@@ -202,28 +252,44 @@ export function CallsDrawer({
 
           {insight ? (
             <section className={styles.signalsRow}>
-              <span title="Promises made">
+              <span title="Next steps and commitments">
                 <Handshake size={14} aria-hidden="true" />
-                {insight.signals.promises}
+                {insight.signals.commitments ?? "—"}
               </span>
-              <span title="Next steps">
-                <CalendarCheck size={14} aria-hidden="true" />
-                {insight.signals.nextStep}
+              <span title="Concerns">
+                <MessageCircleQuestion size={14} aria-hidden="true" />
+                {insight.signals.concerns ?? "—"}
               </span>
-              <span title="Money talked about">
-                <IndianRupee size={14} aria-hidden="true" />
-                {insight.signals.money}
+              <span title="Business details">
+                <FolderOpen size={14} aria-hidden="true" />
+                {insight.signals.business ?? "—"}
               </span>
               <span title="Questions asked">
                 <MessageCircleQuestion size={14} aria-hidden="true" />
-                {insight.questions ?? 0}
+                {insight.questions ?? "—"}
               </span>
               <span title="Strengths and missed chances">
-                {insight.strengths} strengths · {insight.missed} missed
+                {insight.strengths ?? "—"} strengths · {insight.missed ?? "—"}{" "}
+                missed
               </span>
             </section>
           ) : hasReport ? (
-            <p className={styles.drawerLoading}>Reading this call’s report…</p>
+            <p className={styles.drawerLoading}>
+              {readState === "error"
+                ? "This report could not be read."
+                : readState === "unavailable"
+                  ? "Report insights unavailable."
+                  : "Reading this call’s report…"}
+            </p>
+          ) : null}
+          {hasReport && readState === "error" ? (
+            <button
+              type="button"
+              className={styles.ghostButton}
+              onClick={onRetry}
+            >
+              Retry report
+            </button>
           ) : null}
         </div>
 
