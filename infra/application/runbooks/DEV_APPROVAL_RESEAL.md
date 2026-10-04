@@ -1,0 +1,155 @@
+# Development approval re-seal: AUT-1083 / AUT-1089
+
+Root Operator runs this tool from the **merged, released, root-owned application
+scripts directory**, after CTO review and CEO merge approval. Engineers do not
+read the live sources, install the tool, or apply it. The existing tester
+authorization is CEO comment `13688c66-c67e-483a-831d-4b39b6463069` on
+[AUT-1083](/AUT/issues/AUT-1083); this tool does not request new authorization.
+
+The repair admits exactly the canonical candidate's appended tester
+`2c3d2101-ab7d-5ffd-bf12-b57f66a60751`, `ref:approval/AUT-1083`,
+`account_minutes` only. It rejects all other policy changes. The email is
+masked in output; the candidate digest binds its already-approved identity.
+It never regenerates the candidate or uses `approval-candidate.json`.
+
+| Immutable input | Pin |
+| --- | --- |
+| Serving backend source | `b9f2f70e35c821f72d4f59184a8850977d696aad` |
+| Existing approval SHA256 | `07ca6c4ea9587ff81b7bd97a891eb81f1195179ca4eb3ff8fa03205267225881` |
+| Canonical candidate SHA256 | `72343b19c3028c21dd16fd51d455b6dfdd1008e570f14778abbd8fd3aeb3d217` |
+| Canonical candidate path | `/srv/authority-closers/application/operator-inputs/development/aut-1083/approval-candidate-canonical.json` |
+
+The tool intentionally keeps the serving source unchanged while adopting
+configuration from a newer reviewed tool release. If any input pin differs,
+Root reports the stable failure code on AUT-1083; do not edit the inputs or
+relax the tool's pins. The tool release SHA and checksums must be taken from
+AUT-1089's final merged/released handoff, rather than a moving `current-staging`
+symlink or an agent checkout.
+
+## Dry-run and apply
+
+Execute as Root, one operator at a time, outside a release. Substitute the
+exact merged/released tool SHA from the handoff below. Check all three script
+checksums against that release's source-reviewed files before executing.
+
+```bash
+RESEAL_TOOL_RELEASE=<merged-released-tool-sha>
+RESEAL_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}/scripts
+RESEAL_SCRIPT=${RESEAL_DIR}/reseal-dev-sales-xray-approval.py
+sha256sum "$RESEAL_SCRIPT" \
+  "$RESEAL_DIR/refresh-dev-sales-xray-backend.py" \
+  "$RESEAL_DIR/prepare-sales-xray-native-activation.py"
+python3 "$RESEAL_SCRIPT"
+```
+
+Dry-run is the default. It acquires the installer's existing
+`application/.deployment.lock` without creating a file, reads trusted regular
+root-owned sources, verifies the serving Git revision and marker, and validates
+the current service and both canonical approvals in a network-isolated
+uid/gid-10001 transient unit. systemd opens root-only sources and delivers
+uid-private credentials to this unit. The application contract never runs as
+root. Dry-run does not write files or restart managed services.
+
+Before any durable write, API and outbox file **and running-process** holds
+must be `true`; their environment must be `development`. The refresh timer
+must already be inactive and disabled, and refresh service inactive. The tool
+does not change holds, timers or the outbox. Transitional/failed unit states,
+untrusted files, policy changes, stale pins or missing credentials are refused.
+
+Post the masked dry-run result on AUT-1083, then execute its already-authorized
+apply:
+
+```bash
+python3 "$RESEAL_SCRIPT" --apply
+```
+
+Apply first saves root-only exact byte backups and a plan containing source,
+approver/comment, five before/after hashes, modes, owners, guards and unit
+states. It stops only the API and dedicated worker so consumers cannot observe
+partly updated pins. It atomically renames each of these five files:
+
+1. `/etc/authority-closers/development/approval.json`
+2. `/etc/authority-closers/development/api.env` (existing approval digest only)
+3. `/etc/authority-closers/development/service.operator-template.json`
+4. `/etc/authority-closers/development/service.json`
+5. `/etc/systemd/system/ac-dev-sales-xray-worker.service.d/manifest.conf`
+
+Every other byte in the environment, template and service is preserved,
+including the template's prior release identity. The worker's new digest pins
+the exact updated service bytes. After daemon-reload, only previously active
+API/worker units restart; previously inactive units remain inactive. The tool
+checks loaded credential bytes, API process approval digest, holds, timer,
+unmodified outbox/release/native files, prior unit states and loopback API
+readiness at the same release. A repeat apply is a validated no-op.
+
+Success prints `run_id`. Root keeps backups under mode-0700
+`.../operator-inputs/development/aut-1083/reseal-history/<run_id>/`; backup and
+receipt files are mode 0600. Receipts append rather than overwrite history.
+Only bounded masked fields, hashes and command exit codes leave the process.
+No approval email, environment value or command output is reported.
+
+## Rollback and verification
+
+An adoption/write/health failure attempts exact byte, metadata and prior
+active/inactive state restoration automatically. Exit 2 with
+`apply_failed_restored` means verified restoration succeeded; `rollback_failed`
+requires Root recovery. Preserve the plan, backups and all event receipts.
+If interrupted, locate the latest run directory's `plan.json` as Root; do not
+copy backup approval/environment bytes into chat or Git.
+
+Rollback is also dry-run by default:
+
+```bash
+RESEAL_RUN_ID=<run-id-from-apply-or-plan>
+python3 "$RESEAL_SCRIPT" --rollback "$RESEAL_RUN_ID"
+python3 "$RESEAL_SCRIPT" --rollback "$RESEAL_RUN_ID" --apply
+```
+
+Rollback admits only recorded before/after bytes and metadata for the five
+targets, and requires unchanged outbox, release marker, API release drop-in
+and native descriptor. Either recorded worker pin may still be loaded after
+an interruption before daemon-reload. Holds and disabled refresh still apply.
+Rollback stops only API/worker, restores backups, adopts the prior states and
+verifies credentials and health. A repeated completed rollback is a no-op.
+
+Root then performs AUT-1083's authenticated verification: workspace HTTP 200
+with `intake_enabled:true`, acquisition enabled, submissions HTTP 200, the
+exact serving source, and preserved holds/timer. Post the run ID, masked result
+and endpoint outcomes on AUT-1083. There is no database write, migration,
+provider call, outbox/native restart, rebuild, public route or staging/production
+operation in this repair. This local tool test evidence does not replace Root's
+live credential and endpoint verification.
+
+## Implementation evidence
+
+Reviewed script checksums for this handoff:
+
+| Script | SHA256 |
+| --- | --- |
+| `reseal-dev-sales-xray-approval.py` | `2e42e6649eafd4c2701e45fe1b5d2f64cdc3cb41ba00059d9920ea4ded2c46d2` |
+| `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
+| `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
+
+The tool also enforces the two helper digests before it imports their code.
+
+```bash
+uv run ruff format --check infra/application/scripts/reseal-dev-sales-xray-approval.py \
+  tests/infra/test_reseal_dev_sales_xray_approval.py
+uv run ruff check infra/application/scripts/reseal-dev-sales-xray-approval.py \
+  tests/infra/test_reseal_dev_sales_xray_approval.py
+uv run pytest tests/infra/test_reseal_dev_sales_xray_approval.py \
+  tests/infra/test_refresh_dev_sales_xray_backend.py \
+  tests/unit/test_prepare_sales_xray_native_activation.py -q
+```
+
+Tests use fictional private files and simulated Root commands. They cover
+zero-write dry-run; permitted append and rejected policies/scopes; agreement
+of all pins; unchanged environment/service/native/release bytes; idempotence;
+holds/timer and file trust; isolated runtime contract/expiry checks; secret-free
+reports; partial-write, restart and health failures; exact byte/state rollback;
+and explicit rollback default/idempotence/guard checks.
+
+Local result (4 October 2026): 43 new-tool tests passed; the 59 unchanged
+refresh/preparation regression tests also passed. Ruff format and lint passed
+for both changed Python files. No live protected file was read and no host
+operation was executed by the engineer.
