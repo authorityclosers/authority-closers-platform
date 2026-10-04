@@ -1048,12 +1048,12 @@ export function PlanAndBillingPane({
               </dt>
               <dd>
                 {isCancelled
-                  ? day(current?.currentPeriod?.end ?? null) || "Unavailable"
+                  ? day(current?.currentPeriod?.end ?? null) || "—"
                   : current?.renewsAt
                     ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
                     : status === "ready" && !current
                       ? "No renewal scheduled"
-                      : "Unavailable"}
+                      : "—"}
               </dd>
             </div>
           </dl>
@@ -1187,9 +1187,19 @@ export function PlanAndBillingPane({
               Loading invoices…
             </p>
           ) : invoicesStatus !== "ready" ? (
-            <p className={styles.muted}>
-              Invoices and receipts are currently unavailable.
-            </p>
+            <div className={styles.error} role="alert">
+              <p>
+                Invoices and receipts could not be loaded. Please try again.
+              </p>
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={busy || !onRefresh}
+                onClick={onRefresh}
+              >
+                <RefreshCw size={15} aria-hidden="true" /> Reload invoices
+              </button>
+            </div>
           ) : documents.length === 0 ? (
             <p className={styles.muted}>No invoices or receipts yet.</p>
           ) : (
@@ -1232,7 +1242,7 @@ export function PlanAndBillingPane({
                           </a>
                         ) : null}
                         {!document.invoiceHref && !document.receiptHref
-                          ? "Unavailable"
+                          ? "—"
                           : null}
                       </td>
                     </tr>

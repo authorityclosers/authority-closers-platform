@@ -208,6 +208,47 @@ it("keeps loading billing distinct from an empty account", async () => {
   expect(pane.querySelector('[role="alert"]')).toBeNull();
 });
 
+it("retries failed invoice reads without changing billing state", async () => {
+  let retryInvoices: ((response: Response) => void) | undefined;
+  const reads = billingReads();
+  respond(reads);
+  fetchMock.mockImplementation((input: RequestInfo, init = {}) => {
+    const path = String(input).split("?")[0];
+    calls.push({ path, init });
+    if (path === "/v1/invoices") {
+      const attempts = calls.filter((call) => call.path === path).length;
+      return attempts === 1
+        ? Promise.resolve(json({}, 503))
+        : new Promise<Response>((resolve) => (retryInvoices = resolve));
+    }
+    return Promise.resolve(
+      reads[`GET ${path}` as keyof typeof reads]?.() ?? json({}, 404),
+    );
+  });
+  const pane = await openBilling();
+  expect(pane.querySelector('[role="alert"]')?.textContent).toContain(
+    "Invoices and receipts could not be loaded",
+  );
+  expect(pane.textContent).toContain("No subscription yet.");
+  expect(pane.textContent).not.toContain("No invoices or receipts yet.");
+  const retry = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.includes("Reload invoices"),
+  )!;
+  await act(async () => retry.click());
+  await flush();
+  expect(pane.querySelector('[role="alert"]')).toBeNull();
+  expect(pane.textContent).toContain("Loading invoices…");
+  expect(pane.textContent).not.toContain("No invoices or receipts yet.");
+  await act(async () => retryInvoices!(reads["GET /v1/invoices"]()));
+  await flush();
+  expect(pane.textContent).toContain("No invoices or receipts yet.");
+  expect(pane.textContent).not.toMatch(/unavailable/i);
+  expect(calls.filter(({ path }) => path === "/v1/invoices")).toHaveLength(2);
+  expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
+    true,
+  );
+});
+
 it("shows the verified profile and real allowance as its own destination", async () => {
   respond({
     "GET /v1/me/sales-xray-profile": () => json(PROFILE),

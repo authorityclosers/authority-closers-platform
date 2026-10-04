@@ -364,6 +364,47 @@ function SettingsBilling({ client }: { client: typeof fixtureBilling }) {
   return <AccountSettings billing={useBillingAccount(true, client)} />;
 }
 
+it.each([false, true])(
+  "shows a dash for missing renewal and document values (cancelled: %s)",
+  async (cancelAtPeriodEnd) => {
+    await activeSubscription();
+    const subs = await fixtureBilling.readSubscriptions("personal");
+    subs.current = {
+      ...subs.current!,
+      cancelAtPeriodEnd,
+      renewsAt: null,
+      currentPeriod: null,
+    };
+    await render(
+      <PlanAndBillingPane
+        subs={subs}
+        status="ready"
+        allowance={{ state: "error" }}
+        onRetry={() => {}}
+        documents={[
+          {
+            id: "fictional-document",
+            createdAt: "2026-10-04T00:00:00Z",
+            description: "Fictional invoice",
+            amount: subs.current.amount,
+            status: "Issued",
+            invoiceHref: null,
+            receiptHref: null,
+          },
+        ]}
+      />,
+    );
+    const renewal = [...host.querySelectorAll("dt")].find(
+      (label) =>
+        label.textContent ===
+        (cancelAtPeriodEnd ? "Access through" : "Next renewal"),
+    )!;
+    expect(renewal.nextElementSibling?.textContent).toBe("—");
+    expect(host.querySelector("tbody tr td:last-child")?.textContent).toBe("—");
+    expect(host.textContent).not.toMatch(/unavailable/i);
+  },
+);
+
 it("Settings keeps a paid subscription usable when only invoice reads fail", async () => {
   await activeSubscription();
   await render(
@@ -386,7 +427,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
   expect(host.textContent).toContain(
-    "Invoices and receipts are currently unavailable",
+    "Invoices and receipts could not be loaded",
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });

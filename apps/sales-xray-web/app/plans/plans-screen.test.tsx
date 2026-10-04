@@ -407,7 +407,7 @@ it("keeps invoices scoped to the workspace account and reports failed reads", as
     "other-workspace",
   );
   await until(() =>
-    text().includes("Invoices and receipts are currently unavailable"),
+    text().includes("Invoices and receipts could not be loaded"),
   );
   expect(text()).not.toContain("No invoices or receipts yet");
 });
@@ -440,7 +440,7 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
     rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),
   );
   await until(() =>
-    text().includes("Invoices and receipts are currently unavailable"),
+    text().includes("Invoices and receipts could not be loaded"),
   );
   expect(text()).toContain("Current: Trial");
   expect(text()).toContain("62 min left");
@@ -473,9 +473,7 @@ it("shows an empty invoice section on the first organisation visit when the API 
       "/v1/invoices?account=organisation",
       expect.any(Object),
     );
-    expect(text()).not.toContain(
-      "Invoices and receipts are currently unavailable",
-    );
+    expect(text()).not.toContain("Invoices and receipts could not be loaded");
     expect(text()).not.toContain("Billing details could not be loaded");
   } finally {
     fetch.mockRestore();
