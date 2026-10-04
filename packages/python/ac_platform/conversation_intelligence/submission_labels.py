@@ -111,6 +111,7 @@ async def read_submission_label(
     token: str | None = None,
     actor: ActorContext | None = None,
     shared_identity_locks: bool = False,
+    allow_organisation_read: bool = False,
 ) -> SubmissionLabel:
     """Read a label only while the underlying submission is currently readable."""
 
@@ -119,6 +120,7 @@ async def read_submission_label(
         token=token,
         actor=actor,
         shared_identity_locks=shared_identity_locks,
+        allow_organisation_read=allow_organisation_read,
     )
     row = await _latest(
         ownership.database, tenant_id=scope.tenant_id, submission_id=scope.submission_id

@@ -25,6 +25,7 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.submission_labels import read_submission_label
+from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
@@ -173,13 +174,15 @@ async def account_library(
     *,
     before: UUID | None = None,
     shared_identity_locks: bool = False,
+    include_owners: bool = False,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
-    The cursor is a selector into this account's immutable receipts, never an
+    The cursor is a selector into the permitted immutable receipts, never an
     owner assertion. It remains usable after deletion of a previous page's last
     call. Rounded duration comes from the immutable source allowance receipt.
-    Every selected row is rechecked through the same port as playback/report reads.
+    Every selected row is rechecked through the report read port. Organisation
+    owners/admins can read all account-owned calls; this grants no write/audio access.
     """
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(
@@ -188,11 +191,14 @@ async def account_library(
         now,
         shared_identity_locks=shared_identity_locks,
     )
+    every_owner = await ownership.organisation_call_reader(actor)
     usage = ConversationAcquisitionUsage
-    query = _account_library_query(actor, now)
+    query = _account_library_query(actor, now, every_owner=every_owner)
     if before is not None:
         cursor = await ownership.database.scalar(
-            _account_library_query(actor).where(usage.submission_id == before)
+            _account_library_query(actor, every_owner=every_owner).where(
+                usage.submission_id == before
+            )
         )
         if cursor is None:
             raise ConversationNotFound("This saved-call page is unavailable.")
@@ -205,6 +211,22 @@ async def account_library(
             query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE + 1)
         )
     ).all()
+    owners = {}
+    if include_owners and every_owner:
+        from ac_platform.organisations.activity import _mask_email
+
+        for receipt, person, name, email in await ownership.database.execute(
+            _account_library_query(actor, now, every_owner=True)
+            .join(
+                Person,
+                Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
+            )
+            .where(usage.id.in_([row.id for row in rows[:PAGE_SIZE]]))
+            .with_only_columns(usage.id, Person.id, Person.display_name, Person.email)
+        ):
+            owners[receipt] = dict(
+                owner_person_id=str(person), owner_name=name or _mask_email(email)
+            )
     reports = AcquisitionReports(ownership)
     entries = []
     for row in rows[:PAGE_SIZE]:
@@ -213,12 +235,14 @@ async def account_library(
                 row.submission_id,
                 actor=actor,
                 shared_identity_locks=shared_identity_locks,
+                allow_organisation_read=True,
             )
             label = await read_submission_label(
                 ownership,
                 row.submission_id,
                 actor=actor,
                 shared_identity_locks=shared_identity_locks,
+                allow_organisation_read=True,
             )
         except ConversationNotFound:
             # A concurrent deletion/revocation may win before the per-record locks.
@@ -233,6 +257,7 @@ async def account_library(
                 "display_name_revision": label.revision,
                 "state": progress["state"],
                 "has_report": progress["has_report"],
+                **owners.get(row.id, {}),
             }
         )
     return {
@@ -293,9 +318,10 @@ async def account_library_summary(
     """Count all visible submissions in one statement, skipping per-row report re-validation."""
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(None, actor, now, shared_identity_locks=shared_identity_locks)
+    every_owner = await ownership.organisation_call_reader(actor)
     has_report, latest_plan = _report_columns()
     rows = (
-        _account_library_query(actor, now)
+        _account_library_query(actor, now, every_owner=every_owner)
         .with_only_columns(
             has_report.label("has_report"), latest_plan.label("state"), maintain_column_froms=True
         )
