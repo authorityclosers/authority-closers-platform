@@ -2,7 +2,8 @@
 
 Source baseline: `a0d537cf3c72a7734a18cbe7d913864f9254e7bd`.
 Controlled sources: AUT-341 plan and decision brief; the AUT-348 spec, D8 amendment
-and ETH-03 addition. Fixtures use the checked-in fictional LumaBoard canary only.
+and ETH-03 addition. Primary v7 storage fixtures use the checked-in fictional
+LumaBoard canary; regression tests retain their existing fictional fixtures.
 
 The C5 parser applies B1's amended call-map checks, checks prose for provider
 speaker labels and requires a source-bound ethics note for an unverifiable claim.
@@ -43,8 +44,10 @@ Legacy fixture hashes captured before editing:
 Unset call-map and sensitive-segment fields are omitted. Prompt/schema snapshots
 and runtime refusal remain covered by the existing v7 prompt/v6 integration tests.
 
-Verification: focused Python output suite 62 tests, including actual finish-time
-publication and stored-draft read-back; related Python suites 358 passed. Ruff
+Verification: the complete conversation-intelligence unit directory passes
+2,367 tests, including the 62 v7 output tests with actual finish-time publication
+and stored-draft read-back. The targeted diagnostics, metrics and PostgreSQL
+harness run passes 42 tests. Ruff
 format/check, mypy (417 sources), web lint/typecheck, Prettier and `ac-gate check`
 passed. Focused web report, call-map and processing-copy suites: 126 passed. The
 unbounded full web runner stalled and was terminated; the two-worker full run
@@ -55,3 +58,27 @@ real calls before Gate 2 and the AUT-504 prerequisite.
 Production diff: 241 lines changed. Tests exceed the earlier total-size target
 to retain the complete requested D8, repair, ETH-03 and legacy matrix in one card.
 No unrelated implementation was added.
+
+CI regression repair: the diagnostics fixture now retains
+`conversation_report_dimension_evidence_required`; a different non-allowlisted
+bare code still checks redaction. The shared metrics finish fixture explicitly
+carries `coaching-v6`, matching the real request contract without weakening the
+production read. `test_conversation_postgresql.py:277` is the shared coroutine
+runner, not an incomplete request fake. No production code or validator pin
+changed in this repair.
+
+The broader unit run also required the existing prospect-rule fixtures to carry
+a complete v7 call map. Their assertions now account for D8 before the dormant
+prospect predicate: 0/1-ref observed assessments are downgraded, empty conflicted
+assessments fail, and 2-ref controls preserve seller/prospect/other coverage. The
+shipping confirmed-dimension subset remains empty; no prospect rule is activated.
+The targeted diagnostics, metrics and PostgreSQL harness run passed 42 tests;
+the updated prospect-rule file passed 83 tests.
+
+Run the complete unit directory with `umask 077` before
+`.venv/bin/python -m pytest -q tests/unit/conversation_intelligence --tb=short`.
+This process-local mask keeps synthetic approval files private, as the existing
+hosted loader requires; the shell's inherited 0002 mask makes those fixtures
+group-writable. Both hosted-runtime/organisation files passed all 56 checks with
+the private mask. No host configuration or production permission check changed.
+The final complete-directory run passed 2,367 tests in 134.38 seconds (exit 0).
