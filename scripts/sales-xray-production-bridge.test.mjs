@@ -169,6 +169,7 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
   const allowedRoutes = [
     ["GET", "/v1/me"],
     ["GET", "/v1/me/workspaces"],
+    ["GET", "/v1/me/sales-xray-workspaces"],
     ["GET", "/v1/context"],
     ["POST", "/v1/context"],
     ["GET", "/v1/conversation/workspace"],
@@ -346,6 +347,55 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
       { kind: "blocked" },
       `${method} ${path} is blocked in analysis read-only mode`,
     );
+});
+
+test("Sales Xray workspace directory forwards only an authenticated exact GET", async () => {
+  for (const analysisReadOnly of [false, true]) {
+    const calls = [];
+    const body = { selected_tenant_id: null, workspaces: [] };
+    const bridge = await startTestBridge(
+      async (target, init) => {
+        calls.push({ target: String(target), init });
+        return response(JSON.stringify(body));
+      },
+      { analysisReadOnly },
+    );
+    try {
+      const path = "/v1/me/sales-xray-workspaces";
+      assert.equal((await request(bridge, path)).status, 401);
+      const headers = {
+        cookie: `ac_sales_xray_dev_session=${bridge.bridge.sessionStore.create(sessionValue)}`,
+        origin: bridge.browserOrigin,
+      };
+      const directory = await request(bridge, path, { headers });
+      assert.equal(directory.status, 200);
+      assert.deepEqual(await directory.json(), body);
+      assert.equal(calls[0].target, `${PRODUCTION_UPSTREAM_ORIGIN}${path}`);
+      assert.equal(calls[0].init.method, "GET");
+      assert.equal(
+        calls[0].init.headers.get("cookie"),
+        `__Host-ac_session=${sessionValue}`,
+      );
+      for (const [method, blockedPath] of [
+        ["GET", "/v1/unknown"],
+        ["GET", `${path}/extra`],
+        ["GET", `${path}?tenant_id=other`],
+        ["POST", path],
+      ]) {
+        assert.equal(
+          (await request(bridge, blockedPath, { method, headers })).status,
+          404,
+        );
+      }
+      assert.equal(
+        calls.length,
+        1,
+        "rejected requests must not reach upstream",
+      );
+    } finally {
+      await bridge.close();
+    }
+  }
 });
 
 test("analysis read-only mode denies data mutations before upstream fetch", async () => {
