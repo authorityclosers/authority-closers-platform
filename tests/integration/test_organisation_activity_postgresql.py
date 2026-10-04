@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
@@ -17,6 +18,8 @@ from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.kernel.authz import ActorContext
+from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import Membership, Tenant
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
@@ -149,13 +152,68 @@ def test_activity_scope_on_postgresql(postgres_harness):  # noqa: F811
                 assert members[str(owner)]["calls"] == 0
                 assert members[str(first)]["reports_ready"] == 1
                 assert members[str(second)]["minutes"] == 1.5
+                assert body["per_rep"] == [
+                    dict(
+                        person_id=str(person),
+                        name=name,
+                        calls=1,
+                        recorded_minutes=1.5,
+                        reports_ready=ready,
+                    )
+                    for person, name, ready in sorted(
+                        [(first, "Fictional First", 1), (second, "s***@example.test", 0)],
+                        key=lambda row: str(row[0]),
+                    )
+                ]
+                assert sum(row["calls"] for row in body["per_day"]) == 2
+                assert sum(row["reports_ready"] for row in body["per_day"]) == 1
 
                 own = (await activity(first)).json()
                 assert [row["person_id"] for row in own["members"]] == [str(first)]
                 assert [row["id"] for row in own["calls"]] == [str(ids["first"])]
+                assert [row["person_id"] for row in own["per_rep"]] == [str(first)]
+                assert sum(row["calls"] for row in own["per_day"]) == 1
 
                 for days in (0, 91):
                     assert (await activity(owner, f"?days={days}")).status_code == 422
+
+                async with sessions() as db, db.begin():
+
+                    def seed_many(sync):
+                        for index in range(501):
+                            seed_call(
+                                sync,
+                                org.tenant_id,
+                                first,
+                                created_at=now - timedelta(days=2, seconds=index),
+                                seconds=60,
+                                report=index == 0,
+                            )
+
+                    await db.run_sync(seed_many)
+                many = (await activity(owner)).json()
+                assert len(many["calls"]) == 500
+                assert sum(row["calls"] for row in many["per_day"]) == 503
+                assert sum(row["calls"] for row in many["per_rep"]) == 503
+                assert sum(row["reports_ready"] for row in many["per_day"]) == 2
+                reps = {row["person_id"]: row for row in many["per_rep"]}
+                assert reps[str(first)]["recorded_minutes"] == 502.5
+                assert reps[str(first)]["reports_ready"] == 2
+                narrow = (await activity(owner, "?days=1")).json()
+                assert sum(row["calls"] for row in narrow["per_day"]) == 2
+                own_many = (await activity(first)).json()
+                assert len(own_many["calls"]) == 500
+                assert own_many["per_rep"] == [reps[str(first)]]
+                async with sessions() as db, db.begin():
+                    await db.execute(text("SET LOCAL TIME ZONE 'Pacific/Honolulu'"))
+                    offset = await organisation_activity(
+                        db,
+                        ActorContext(person_id=owner, session_id=uuid4(), tenant_id=org.tenant_id),
+                        days=30,
+                        every_member=True,
+                    )
+                    assert offset["per_day"] == many["per_day"]
+                    assert offset["per_rep"] == many["per_rep"]
         finally:
             await engine.dispose()
 
