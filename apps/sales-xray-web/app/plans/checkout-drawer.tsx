@@ -238,12 +238,6 @@ export function CheckoutDrawer({
           </button>
         </div>
 
-        {testPayment ? (
-          <p role="status" className={`${styles.note} ${styles.warn}`}>
-            <strong>Test payment · no money moves</strong>
-          </p>
-        ) : null}
-
         {topUp ? (
           <dl className={styles.rows}>
             <div>
@@ -456,6 +450,12 @@ export function CheckoutDrawer({
             </p>
           </div>
         </div>
+
+        {testPayment ? (
+          <p role="status" className={`${styles.note} ${styles.warn}`}>
+            <strong>Test payment · no money moves</strong>
+          </p>
+        ) : null}
 
         {/* Actions */}
         <div className={styles.actions}>
