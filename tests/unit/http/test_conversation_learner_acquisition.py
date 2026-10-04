@@ -548,6 +548,8 @@ async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unl
         for path in reads:
             served = await learner.get(path, headers={"X-Test-Tenant": "organisation"})
             assert served.status_code == 200, (path, served.text)
+            if path == "/v1/me/plan":
+                assert served.json()["plan"] == {"key": "none", "name": "No plan"}
             for name in ("operations", "unlisted"):
                 refused = await learner.get(path, headers={"X-Test-Tenant": name})
                 assert refused.status_code == 403, (path, name, refused.text)
@@ -558,6 +560,9 @@ async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unl
         personal = await learner.get(prefix + "/session", headers={"X-Test-Tenant": "personal"})
         assert personal.status_code == 200
         assert services[-1] == (PUBLIC_TENANT, True, None)
+        personal_plan = await learner.get("/v1/me/plan", headers={"X-Test-Tenant": "personal"})
+        assert personal_plan.status_code == 200
+        assert personal_plan.json()["plan"] == {"key": "trial", "name": "Trial"}
 
     services.clear()
     summaries.clear()

@@ -297,13 +297,14 @@ def install_acquisition_http(
         admit(request, response)
         async with learner_read_account(request) as auth:
             actor = auth.resolved.actor
-            allowance = await result(
-                service(auth.database, workspace(actor)).allowance(
-                    actor=actor, shared_identity_locks=True
-                )
-            )
+            app = service(auth.database, workspace(actor))
+            allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
         return {
-            "plan": {"key": "trial", "name": "Trial"},
+            "plan": (
+                {"key": "trial", "name": "Trial"}
+                if app.trial_enabled
+                else {"key": "none", "name": "No plan"}
+            ),
             "allowance": allowance,
             "longest_call_seconds": LONGEST_CALL_SECONDS,
         }
