@@ -35,6 +35,9 @@ jobs:
   build-sales-xray-web:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      actions: write
+      contents: read
     concurrency:
       group: application-release-packaging
       cancel-in-progress: false
@@ -374,7 +377,17 @@ jobs:
             printf 'Repository artifact usage could not be proven.\n' >&2
             exit 1
           }
-          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          # Reclaim only exact web bundles, after proving the replacement
+          # upload below. Application, native and unrelated artifacts stay
+          # counted, as in the existing Application packaging lifecycle.
+          superseded_web_bytes="$(jq '[.[]
+            | select((.name // "") | test("^ac-sales-xray-web-[0-9a-f]{40}$"))
+            | .size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$superseded_web_bytes" =~ ^[0-9]+$ && "$superseded_web_bytes" -le "$retained_bytes" ]] || {
+            printf 'Superseded web artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes - superseded_web_bytes + candidate_bytes))
           if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
             printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
               "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
@@ -384,9 +397,101 @@ jobs:
             "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
 
       - name: Upload the offline web image artifact
+        id: upload_web
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ac-sales-xray-web-${{ inputs.frozen_sha || github.sha }}
           path: ${{ runner.temp }}/ac-sales-xray-web-${{ inputs.frozen_sha || github.sha }}
           if-no-files-found: error
           retention-days: 1
+
+      - name: Reclaim superseded web artifacts after verified upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.upload_web.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
+          current_name="ac-sales-xray-web-${FROZEN_SHA}"
+          current_artifact_id="$UPLOADED_ARTIFACT_ID"
+          [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {
+            printf 'Uploaded web artifact identity is malformed.\n' >&2
+            exit 1
+          }
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          uploaded_artifact="$RUNNER_TEMP/uploaded-web-artifact.json"
+          uploaded_artifact_proven=0
+          for _attempt in 1 2 3 4 5; do
+            if gh api \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${current_artifact_id}" \
+              > "$uploaded_artifact" \
+              && jq --exit-status \
+                --arg current "$current_name" \
+                --argjson artifact_id "$current_artifact_id" \
+                --argjson run_id "$GITHUB_RUN_ID" \
+                '.id == $artifact_id
+                 and .name == $current
+                 and .workflow_run.id == $run_id
+                 and .expired == false
+                 and .size_in_bytes > 0' \
+                "$uploaded_artifact" > /dev/null; then
+              uploaded_artifact_proven=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$uploaded_artifact_proven" == 1 ]] || {
+            printf 'Uploaded web artifact could not be proven for this workflow run.\n' >&2
+            exit 1
+          }
+
+          artifacts_after_upload="$RUNNER_TEMP/sales-xray-web-artifacts-after-upload.json"
+          list_repository_artifacts > "$artifacts_after_upload"
+          mapfile -t superseded_artifact_ids < <(
+            jq --raw-output --argjson current_id "$current_artifact_id" \
+              '.[]
+               | select((.name // "") | test("^ac-sales-xray-web-[0-9a-f]{40}$"))
+               | select(.id != $current_id)
+               | .id' \
+              "$artifacts_after_upload"
+          )
+          for artifact_id in "${superseded_artifact_ids[@]}"; do
+            [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+              printf 'Refusing malformed superseded web artifact identity.\n' >&2
+              exit 1
+            }
+            gh api --method DELETE \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done
+
+          artifacts_final="$RUNNER_TEMP/sales-xray-web-artifacts-final.json"
+          list_repository_artifacts > "$artifacts_final"
+          final_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_final")"
+          final_current_count="$(
+            jq --argjson current_id "$current_artifact_id" \
+              '[.[] | select(.id == $current_id)] | length' "$artifacts_final"
+          )"
+          [[ "$final_bytes" =~ ^[0-9]+$ && "$final_current_count" == 1 ]] || {
+            printf 'Final web artifact pool could not be proven.\n' >&2
+            exit 1
+          }
+          if [ "$final_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Final repository artifact pool is %s bytes; ceiling is %s bytes.\n' \
+              "$final_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Verified web artifact %s; final repository pool is %s bytes.\n' \
+            "$current_artifact_id" "$final_bytes"
