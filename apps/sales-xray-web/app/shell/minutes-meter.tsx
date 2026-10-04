@@ -16,18 +16,7 @@ export function MinutesMeter({
   allowance?: Allowance | null;
   variant?: "rail" | "pill";
 }) {
-  if (!allowance) return null;
-  if (allowance.unlimited)
-    return (
-      <p
-        className={styles.meter}
-        data-variant={variant}
-        data-minutes-meter
-        title="Analysis time balance unavailable"
-      >
-        <span className={styles.label}>Time unavailable</span>
-      </p>
-    );
+  if (!allowance || allowance.unlimited) return null;
   const left = Math.floor(allowance.available_seconds / 60);
   const secs = allowance.available_seconds % 60;
   const total = Math.floor(allowance.allowance_seconds / 60);

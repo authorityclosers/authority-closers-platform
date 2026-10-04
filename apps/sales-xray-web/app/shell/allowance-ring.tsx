@@ -60,19 +60,7 @@ export function AllowanceRing({
     </svg>
   );
 
-  if (allowance.unlimited)
-    return (
-      <div
-        className={styles.meter}
-        data-level="unknown"
-        title="Analysis time balance unavailable"
-        data-minutes-meter
-      >
-        <span className={styles.text}>
-          <strong>Time unavailable</strong>
-        </span>
-      </div>
-    );
+  if (allowance.unlimited) return null;
 
   const share =
     allowance.allowance_seconds > 0

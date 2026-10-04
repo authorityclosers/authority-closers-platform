@@ -84,8 +84,7 @@ function initials(name: string | null, email: string | null) {
 }
 
 function minutesLine(allowance: Allowance | null) {
-  if (!allowance) return null;
-  if (allowance.unlimited) return { text: "Time unavailable", share: null };
+  if (!allowance || allowance.unlimited) return null;
   const left = formatAnalysisTime(allowance.available_seconds);
   const total = formatAnalysisTime(allowance.allowance_seconds);
   const share =

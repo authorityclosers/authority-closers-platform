@@ -78,7 +78,7 @@ it("keeps the account menu inside the mobile viewport by the active trigger", as
   expect(Number.parseFloat(menu.style.bottom)).toBeLessThan(800);
 });
 
-it.each<[Allowance, string]>([
+it.each<[Allowance, string | null]>([
   [
     {
       allowance_seconds: 600000,
@@ -94,7 +94,7 @@ it.each<[Allowance, string]>([
       committed_seconds: 0,
       unlimited: true,
     },
-    "Time unavailable",
+    null,
   ],
 ])("does not invent a plan for %j", async (allowance, text) => {
   host = document.createElement("div");
@@ -115,9 +115,18 @@ it.each<[Allowance, string]>([
   const menu = document.querySelector(
     '[role="dialog"][aria-label="Account menu"]',
   )!;
-  expect(menu.textContent).toContain(text);
-  expect(menu.textContent).not.toMatch(/Unlimited|Trial/);
+  if (text) expect(menu.textContent).toContain(text);
+  expect(menu.textContent).not.toMatch(/Unlimited|unavailable|Trial/i);
   expect(menu.querySelector('a[href="/plans"]')?.textContent).toBe("Plans");
-  if (allowance.unlimited)
+  if (allowance.unlimited) {
     expect(menu.querySelector('[aria-hidden="true"] i')).toBeNull();
+    const buttons = [...menu.querySelectorAll("button")];
+    expect(
+      buttons.some((button) => button.textContent?.includes("Analysis time")),
+    ).toBe(false);
+    expect(
+      buttons.find((button) => button.textContent?.startsWith("Usage"))
+        ?.textContent,
+    ).toBe("Usage");
+  }
 });

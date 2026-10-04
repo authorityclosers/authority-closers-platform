@@ -1806,7 +1806,7 @@ it("does not present a legacy tester flag as a plan or finite balance", () => {
       3600,
       false,
     ),
-  ).toBe("Analysis time balance unavailable");
+  ).toBeNull();
 });
 
 it("gives guests their owner-checked call link instead of promising an account library", async () => {

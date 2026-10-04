@@ -170,9 +170,9 @@ export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
   unknown: boolean,
-): string {
+): string | null {
   if (allowance) {
-    if (allowance.unlimited) return "Analysis time balance unavailable";
+    if (allowance.unlimited) return null;
     if (allowance.available_seconds > 3600)
       return `Remaining analysis time · ${formatAnalysisTime(allowance.available_seconds)}`;
     const minutes = Math.floor(allowance.available_seconds / 60);
@@ -2584,14 +2584,16 @@ export function AcquisitionStudio({
                       </svg>
                       <h2>Add a call to review</h2>
                     </div>
-                    <span className={styles.allowanceBadge}>
-                      <ShieldCheck size={19} aria-hidden="true" />
-                      {remainingAllowanceLabel(
-                        allowance,
-                        entry?.allowance_seconds ?? null,
-                        allowanceUnknown,
-                      )}
-                    </span>
+                    {!allowance?.unlimited && (
+                      <span className={styles.allowanceBadge}>
+                        <ShieldCheck size={19} aria-hidden="true" />
+                        {remainingAllowanceLabel(
+                          allowance,
+                          entry?.allowance_seconds ?? null,
+                          allowanceUnknown,
+                        )}
+                      </span>
+                    )}
                   </div>
                 )}
                 {/* The empty state already has its card heading; a step
@@ -2884,7 +2886,7 @@ export function AcquisitionStudio({
                   }
                   onChange={(event) => choose(event.target.files?.[0])}
                 />
-                {!deletionOnlyId && policy && (
+                {!deletionOnlyId && policy && !allowance?.unlimited && (
                   <div className={styles.allowance}>
                     <ShieldCheck size={16} />
                     <span>
@@ -3183,11 +3185,13 @@ export function AcquisitionStudio({
                         ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
                         : undefined
                     }
-                    allowanceLabel={remainingAllowanceLabel(
-                      allowance,
-                      entry?.allowance_seconds ?? null,
-                      allowanceUnknown,
-                    )}
+                    allowanceLabel={
+                      remainingAllowanceLabel(
+                        allowance,
+                        entry?.allowance_seconds ?? null,
+                        allowanceUnknown,
+                      ) ?? undefined
+                    }
                     paused={processingProjection.attention}
                   >
                     <button

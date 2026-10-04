@@ -217,8 +217,10 @@ it("shows analysis time only from a verified allowance", () => {
     ),
   );
   expect(unlimited.querySelector('[role="meter"]')).toBeNull();
-  expect(unlimited.textContent).toContain("Time unavailable");
-  expect(unlimited.textContent).not.toMatch(/unlimited|∞|0 min|100%/i);
+  expect(unlimited.querySelector("[data-minutes-meter]")).toBeNull();
+  expect(unlimited.textContent).not.toMatch(
+    /unlimited|unavailable|∞|0 min|100%/i,
+  );
 });
 
 it("shows hours in both shell pills and retains exact minutes for readers", () => {

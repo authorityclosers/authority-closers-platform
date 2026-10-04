@@ -70,3 +70,14 @@ it("shows the allowance and the three steps under the card", async () => {
     [...host.querySelectorAll("li")].map((step) => step.textContent),
   ).toEqual(["1Upload", "2We analyse", "3Your report"]);
 });
+
+it("omits the allowance line for an exempt account and keeps the steps", async () => {
+  await act(async () =>
+    root.render(<NewAnalysisFooter allowanceLabel={null} />),
+  );
+  expect(host.querySelector("svg")).toBeNull();
+  expect(host.textContent).not.toMatch(/unlimited|unavailable|analysis time/i);
+  expect(
+    [...host.querySelectorAll("li")].map((step) => step.textContent),
+  ).toEqual(["1Upload", "2We analyse", "3Your report"]);
+});
