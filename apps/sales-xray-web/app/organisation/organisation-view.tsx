@@ -31,7 +31,6 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { callDate } from "../call-status";
 import { readAllowance } from "../dashboard/dashboard-data";
 import { formatClock } from "../lightbox/time";
-import { useShellProfile } from "../shell/profile-store";
 import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
@@ -40,11 +39,14 @@ import { useWorkspaceAccess } from "../workspace-access";
 import {
   addMember,
   changeRole,
+  noOrganisationSelected,
   notLive,
+  OrgApiError,
   readActivity,
   readMembers,
   readOrganisation,
   removeMember,
+  revokeInvite,
   saveDomains,
   transferOwnership,
   type OrgActivity,
@@ -65,6 +67,7 @@ type Base =
 type Live<T> =
   | { status: "loading" }
   | { status: "off" }
+  | { status: "missing" }
   | { status: "error" }
   | { status: "ready"; value: T };
 
@@ -112,14 +115,28 @@ function useLive<T>(
     if (!enabled) return;
     const controller = new AbortController();
     read(controller.signal)
-      .then((value) => setState({ status: "ready", value }))
+      .then((value) => {
+        if (!controller.signal.aborted) setState({ status: "ready", value });
+      })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        setState({ status: notLive(error) ? "off" : "error" });
+        setState({
+          status: noOrganisationSelected(error)
+            ? "missing"
+            : notLive(error)
+              ? "off"
+              : "error",
+        });
       });
     return () => controller.abort();
   }, [read, enabled, attempt]);
-  return [state, useCallback(() => setAttempt((count) => count + 1), [])];
+  return [
+    state,
+    useCallback(() => {
+      setState({ status: "loading" });
+      setAttempt((count) => count + 1);
+    }, []),
+  ];
 }
 
 function Pending({
@@ -167,10 +184,10 @@ function Stat({
 export function OrganisationView() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
-  const profile = useShellProfile(authenticated);
   const [base, setBase] = useState<Base>({ status: "loading" });
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -197,18 +214,8 @@ export function OrganisationView() {
   const [members, reloadMembers] = useLive(readMembers, isOrganisation);
   const [activity] = useLive(readActivity, isOrganisation);
   const live = org.status === "ready";
-  const myRole: OrgRole | null = current?.role ?? null;
+  const myRole: OrgRole | null = org.status === "ready" ? org.value.role : null;
   const canManage = live && (myRole === "owner" || myRole === "admin");
-  const you = profile?.name?.trim() || "You";
-  const usedMinutes =
-    allowance && !allowance.unlimited
-      ? Math.max(
-          0,
-          Math.round(
-            (allowance.allowance_seconds - allowance.available_seconds) / 60,
-          ),
-        )
-      : null;
 
   return (
     <AcquisitionShell
@@ -228,7 +235,10 @@ export function OrganisationView() {
           <p className={styles.note} role="alert">
             The organisation could not be loaded. Refresh to try again.
           </p>
-        ) : !isOrganisation ? (
+        ) : !isOrganisation ||
+          missing ||
+          org.status === "missing" ||
+          members.status === "missing" ? (
           <PersonalCard
             organisations={base.workspaces.filter(
               (item) => item.kind === "organisation",
@@ -238,10 +248,14 @@ export function OrganisationView() {
           <>
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
-                {initials(current.name)}
+                {initials(
+                  org.status === "ready" ? org.value.name : current.name,
+                )}
               </span>
               <div className={styles.headerCopy}>
-                <h1>{current.name}</h1>
+                <h1>
+                  {org.status === "ready" ? org.value.name : current.name}
+                </h1>
                 <p>
                   Organisation
                   {org.status === "ready"
@@ -265,10 +279,11 @@ export function OrganisationView() {
             </header>
 
             {!live && org.status !== "loading" ? (
-              <p className={styles.banner}>
-                <span aria-hidden="true" />
-                Member management, domain joining and company-wide activity
-                switch on here soon. Until then you see your own details only.
+              <p className={styles.banner} role="alert">
+                The organisation could not be loaded.
+                <button type="button" onClick={reloadOrg}>
+                  Try again
+                </button>
               </p>
             ) : null}
 
@@ -321,10 +336,8 @@ export function OrganisationView() {
                   }}
                   canManage={canManage}
                   isOwner={live && myRole === "owner"}
-                  you={you}
-                  youEmail={profile?.email ?? ""}
-                  youRole={myRole}
-                  usedMinutes={usedMinutes}
+                  yourPersonId={access?.context?.personId ?? null}
+                  onMissing={() => setMissing(true)}
                 />
               )}
 
@@ -434,25 +447,26 @@ function MembersPanel({
   reload,
   canManage,
   isOwner,
-  you,
-  youEmail,
-  youRole,
-  usedMinutes,
+  yourPersonId,
+  onMissing,
 }: {
   members: Live<OrgMember[]>;
   reload: () => void;
   canManage: boolean;
   isOwner: boolean;
-  you: string;
-  youEmail: string;
-  youRole: OrgRole | null;
-  usedMinutes: number | null;
+  yourPersonId: string | null;
+  onMissing: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{
+    message: string;
+    action: () => Promise<unknown>;
+    added?: boolean;
+  } | null>(null);
+  const additionRole = isOwner ? newRole : "member";
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -461,8 +475,14 @@ function MembersPanel({
       await action();
       reload();
       return true;
-    } catch {
-      setProblem("That change was not saved. Try again.");
+    } catch (error) {
+      if (noOrganisationSelected(error)) onMissing();
+      else
+        setProblem(
+          error instanceof OrgApiError
+            ? error.message
+            : "That change was not saved. Try again.",
+        );
       return false;
     } finally {
       setBusy(false);
@@ -476,25 +496,22 @@ function MembersPanel({
       setProblem("Enter a full email address.");
       return;
     }
-    if (await run(() => addMember(address, newRole))) setEmail("");
+    setProblem("");
+    setConfirming({
+      message: `Add ${address} as ${ROLE_LABEL[additionRole]}?`,
+      action: () => addMember(address, additionRole),
+      added: true,
+    });
   };
 
-  const rows: OrgMember[] =
+  const rows =
     members.status === "ready"
-      ? members.value
-      : [
-          {
-            personId: "you",
-            name: you,
-            email: youEmail,
-            role: youRole ?? "member",
-            status: "active",
-            joinedAt: null,
-            lastActiveAt: null,
-            minutesUsed30d: usedMinutes ?? 0,
-            calls30d: 0,
-          },
-        ];
+      ? members.value.filter(
+          (member) => canManage || member.personId === yourPersonId,
+        )
+      : [];
+  const disabled =
+    !canManage || busy || confirming !== null || members.status !== "ready";
 
   return (
     <div className={styles.members}>
@@ -506,27 +523,25 @@ function MembersPanel({
             placeholder="name@company.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            disabled={!canManage || busy}
+            disabled={disabled}
             aria-label="Email to add"
           />
         </label>
         <select
-          value={newRole}
+          value={additionRole}
           onChange={(event) => setNewRole(event.target.value as OrgRole)}
-          disabled={!canManage || busy}
+          disabled={disabled}
           aria-label="Role for the new person"
         >
-          {ROLES.filter((item) => item !== "owner").map((item) => (
+          {ROLES.filter(
+            (item) => item === "member" || (isOwner && item === "admin"),
+          ).map((item) => (
             <option key={item} value={item}>
               {ROLE_LABEL[item]}
             </option>
           ))}
         </select>
-        <button
-          type="submit"
-          className={styles.primary}
-          disabled={!canManage || busy}
-        >
+        <button type="submit" className={styles.primary} disabled={disabled}>
           <UserPlus size={15} aria-hidden="true" /> Add
         </button>
         {!canManage ? (
@@ -537,6 +552,38 @@ function MembersPanel({
           </small>
         ) : null}
       </form>
+      {confirming ? (
+        <div
+          className={styles.card}
+          role="dialog"
+          aria-label="Confirm member change"
+        >
+          <p>{confirming.message}</p>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(confirming.action).then((saved) => {
+                  if (saved) {
+                    if (confirming.added) setEmail("");
+                    setConfirming(null);
+                  }
+                })
+              }
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
       {problem ? (
         <p className={styles.problem} role="alert">
           {problem}
@@ -554,12 +601,12 @@ function MembersPanel({
         </div>
         {rows.map((member, index) => {
           const isYou =
-            member.personId === "you" ||
-            (youEmail !== "" && member.email === youEmail);
-          const name = member.name || member.email.split("@")[0];
+            member.personId !== null && member.personId === yourPersonId;
+          const name =
+            member.name || member.email?.split("@")[0] || "Unnamed member";
           return (
             <div
-              key={member.personId}
+              key={`${member.status}:${member.personId ?? member.inviteId}`}
               className={styles.tr}
               role="row"
               style={{ "--i": index } as CSSProperties}
@@ -572,22 +619,29 @@ function MembersPanel({
                     {isYou ? " (you)" : ""}
                   </b>
                   <small>{member.email}</small>
+                  <small>
+                    Joined {member.joinedAt ? callDate(member.joinedAt) : "—"} ·
+                    Last active{" "}
+                    {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
+                  </small>
                 </span>
               </span>
               <span role="cell">
-                {isOwner && !isYou && member.role !== "owner" ? (
+                {isOwner &&
+                member.status === "active" &&
+                !isYou &&
+                member.role !== "owner" ? (
                   <select
                     className={styles.roleSelect}
                     value={member.role}
-                    disabled={busy}
-                    onChange={(event) =>
-                      void run(() =>
-                        changeRole(
-                          member.personId,
-                          event.target.value as OrgRole,
-                        ),
-                      )
-                    }
+                    disabled={busy || confirming !== null}
+                    onChange={(event) => {
+                      const nextRole = event.target.value as OrgRole;
+                      setConfirming({
+                        message: `Change ${name} to ${ROLE_LABEL[nextRole]}?`,
+                        action: () => changeRole(member.personId, nextRole),
+                      });
+                    }}
                     aria-label={`Role for ${name}`}
                   >
                     {ROLES.filter((item) => item !== "owner").map((item) => (
@@ -606,12 +660,10 @@ function MembersPanel({
                 )}
               </span>
               <span role="cell" className={styles.num}>
-                {members.status === "ready" ? member.calls30d : "—"}
+                {member.calls30d}
               </span>
               <span role="cell" className={styles.num}>
-                {member.minutesUsed30d || (isYou && usedMinutes !== null)
-                  ? member.minutesUsed30d
-                  : "—"}
+                {member.minutesUsed30d}
               </span>
               <span
                 role="cell"
@@ -622,57 +674,52 @@ function MembersPanel({
                 {member.status === "invited" ? "Invited" : "Active"}
               </span>
               <span role="cell" className={styles.rowActions}>
-                {isOwner && !isYou ? (
-                  confirming === member.personId ? (
-                    <>
+                {canManage &&
+                !isYou &&
+                member.role !== "owner" &&
+                (isOwner || member.role === "member") ? (
+                  <>
+                    {isOwner && member.status === "active" ? (
                       <button
                         type="button"
-                        className={styles.danger}
-                        disabled={busy}
+                        className={styles.icon}
+                        title="Make owner"
+                        aria-label={`Make ${name} the owner`}
+                        disabled={busy || confirming !== null}
                         onClick={() =>
-                          void run(() => removeMember(member.personId)).then(
-                            () => setConfirming(null),
-                          )
+                          setConfirming({
+                            message: `Transfer ownership to ${name}? You will become an admin.`,
+                            action: () => transferOwnership(member.personId),
+                          })
                         }
                       >
-                        Remove
+                        <Crown size={14} />
                       </button>
-                      <button
-                        type="button"
-                        className={styles.icon}
-                        aria-label="Cancel"
-                        onClick={() => setConfirming(null)}
-                      >
-                        <X size={14} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {member.status === "active" && member.role !== "owner" ? (
-                        <button
-                          type="button"
-                          className={styles.icon}
-                          title="Make owner"
-                          aria-label={`Make ${name} the owner`}
-                          disabled={busy}
-                          onClick={() =>
-                            void run(() => transferOwnership(member.personId))
-                          }
-                        >
-                          <Crown size={14} />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className={styles.icon}
-                        title="Remove"
-                        aria-label={`Remove ${name}`}
-                        onClick={() => setConfirming(member.personId)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.icon}
+                      title={
+                        member.status === "invited" ? "Revoke invite" : "Remove"
+                      }
+                      aria-label={`${member.status === "invited" ? "Revoke invite for" : "Remove"} ${name}`}
+                      disabled={busy || confirming !== null}
+                      onClick={() =>
+                        setConfirming({
+                          message:
+                            member.status === "invited"
+                              ? `Revoke the invite for ${name}?`
+                              : `Remove ${name} from the organisation?`,
+                          action: () =>
+                            member.status === "invited"
+                              ? revokeInvite(member.inviteId)
+                              : removeMember(member.personId),
+                        })
+                      }
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
                 ) : null}
               </span>
             </div>
@@ -680,7 +727,14 @@ function MembersPanel({
         })}
         {members.status !== "ready" ? (
           <p className={styles.tableNote}>
-            Everyone else in the organisation shows here. {NOT_LIVE}
+            {members.status === "loading"
+              ? "Loading members…"
+              : "Members could not be loaded."}
+            {members.status !== "loading" ? (
+              <button type="button" onClick={reload}>
+                Try again
+              </button>
+            ) : null}
           </p>
         ) : null}
       </div>
