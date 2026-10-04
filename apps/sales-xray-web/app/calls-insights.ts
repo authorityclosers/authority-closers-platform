@@ -6,7 +6,7 @@
  * that have a report, three at a time, cached for this mounted workspace. Extraction is
  * tolerant: a missing or changed field hides that insight, never the row.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ACQUISITION,
@@ -204,10 +204,10 @@ async function loadInsight(id: string, signal: AbortSignal) {
 
 /** Insights for the given report-ready call ids; loads lazily, three at a time. */
 export function useCallInsights(ids: string[], enabled: boolean) {
-  const [, setVersion] = useState(0);
+  const [reads, setReads] = useState(new Map<string, InsightRead>());
   const [attempt, setAttempt] = useState(0);
   // CallsLibrary remounts on person/session/workspace changes. Never share reads globally.
-  const cache = useMemo(() => new Map<string, InsightRead>(), [enabled]);
+  const cache = useRef(new Map<string, InsightRead>());
   const key = ids.join(",");
   useEffect(() => {
     if (!enabled) return;
@@ -215,7 +215,9 @@ export function useCallInsights(ids: string[], enabled: boolean) {
     const queue = key
       .split(",")
       .filter(
-        (id) => id && (!cache.has(id) || cache.get(id)?.status === "error"),
+        (id) =>
+          id &&
+          (!cache.current.has(id) || cache.current.get(id)?.status === "error"),
       );
     let active = 0;
     const next = () => {
@@ -225,13 +227,13 @@ export function useCallInsights(ids: string[], enabled: boolean) {
         void loadInsight(id, controller.signal)
           .then((read) => {
             if (controller.signal.aborted) return;
-            cache.set(id, read);
-            setVersion((value) => value + 1);
+            cache.current.set(id, read);
+            setReads(new Map(cache.current));
           })
           .catch(() => {
             if (controller.signal.aborted) return;
-            cache.set(id, { status: "error", insight: null });
-            setVersion((value) => value + 1);
+            cache.current.set(id, { status: "error", insight: null });
+            setReads(new Map(cache.current));
           })
           .finally(() => {
             active -= 1;
@@ -241,14 +243,16 @@ export function useCallInsights(ids: string[], enabled: boolean) {
     };
     next();
     return () => controller.abort();
-  }, [key, enabled, cache, attempt]);
+  }, [key, enabled, attempt]);
   return {
-    insightOf: (id: string) => cache.get(id)?.insight ?? null,
+    insightOf: (id: string) =>
+      enabled ? (reads.get(id)?.insight ?? null) : null,
     statusOf: (id: string): InsightReadState =>
-      cache.get(id)?.status ?? "loading",
+      enabled ? (reads.get(id)?.status ?? "loading") : "unavailable",
     retry: () => {
-      for (const [id, read] of cache)
-        if (read.status === "error") cache.delete(id);
+      for (const [id, read] of cache.current)
+        if (read.status === "error") cache.current.delete(id);
+      setReads(new Map(cache.current));
       setAttempt((value) => value + 1);
     },
   };

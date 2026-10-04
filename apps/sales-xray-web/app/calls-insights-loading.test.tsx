@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -31,7 +31,10 @@ function Harness({
   ids: string[];
   enabled?: boolean;
 }) {
-  latest = useCallInsights(ids, enabled);
+  const insights = useCallInsights(ids, enabled);
+  useEffect(() => {
+    latest = insights;
+  }, [insights]);
   return null;
 }
 const render = (ids: string[], enabled = true, key = "workspace") =>
