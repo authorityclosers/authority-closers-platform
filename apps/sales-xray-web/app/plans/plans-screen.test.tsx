@@ -139,7 +139,7 @@ it("uses live on-sale prices, retains the display fallback and signs in before c
   expect(text()).not.toContain("Coming soon");
   await click("Get Personal");
   expect(text()).toContain("Subtotal (1 seat)");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(checkout).not.toHaveBeenCalled();
   expect(push).toHaveBeenCalledWith("/login?returnTo=%2Fplans");
   await render(
@@ -170,9 +170,9 @@ it("reuses a failed checkout key, shows server tax before payment and handles SD
     .mockRejectedValueOnce(new Error("network"));
   await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
   await click("Get Personal");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(notify).toHaveBeenCalled();
-  await click("Review total with Razorpay");
+  await click("Review total");
   await until(() => text().includes("Total confirmed"));
   expect(checkout.mock.calls[0][1]).toBe(checkout.mock.calls[1][1]);
   expect(text()).toContain("Taxable value");
@@ -203,7 +203,7 @@ it("prices two team seats yearly, accepts the server total and warns about renew
   await act(async () => yearly.click());
   await fill("Organisation name", "Fictional Closers");
   await fill("GSTIN", "27abcde1234f1z5");
-  await click("Review total with Razorpay");
+  await click("Review total");
   await until(() => text().includes("Total confirmed"));
   expect(checkout.mock.calls[0][0]).toEqual({
     kind: "subscription",
@@ -219,7 +219,7 @@ it("prices two team seats yearly, accepts the server total and warns about renew
   expect(text()).toContain("approve each renewal above ₹15,000");
   await fill("Organisation name", "Renamed Fictional Closers");
   expect(text()).not.toContain("Total confirmed");
-  await click("Review total with Razorpay");
+  await click("Review total");
   await until(
     () =>
       checkout.mock.calls.length === 2 && text().includes("Total confirmed"),
@@ -236,10 +236,10 @@ it("requires an enterprise name and allows an omitted GSTIN", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
   await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
   await click("Get Enterprise");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(checkout).not.toHaveBeenCalled();
   await fill("Organisation name", "Fictional Enterprise");
-  await click("Review total with Razorpay");
+  await click("Review total");
   await until(() => text().includes("Total confirmed"));
   expect(checkout.mock.calls[0][0]).toMatchObject({
     planKey: "enterprise",
@@ -434,7 +434,7 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
   expect(text()).toContain("Loading invoices");
   expect(text()).not.toContain("No invoices or receipts yet");
   await click("Get Personal");
-  await click("Review total with Razorpay");
+  await click("Review total");
   await until(() => text().includes("Total confirmed"));
   await act(async () =>
     rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),

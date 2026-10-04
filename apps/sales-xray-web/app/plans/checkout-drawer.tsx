@@ -471,7 +471,7 @@ export function CheckoutDrawer({
               : testPayment
                 ? "Continue to test payment"
                 : !confirmedOrder && !quoted
-                  ? "Review total with Razorpay"
+                  ? "Review total"
                   : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
           </button>
           <button
