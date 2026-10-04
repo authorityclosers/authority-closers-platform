@@ -69,6 +69,22 @@ export function BillingView({
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const allowance = usage?.allowance ?? mePlan?.allowance;
   const planName = mePlan?.plan.name ?? "Unavailable";
+  const ringAvailSecs = allowance
+    ? allowance.availableSeconds > 0
+      ? allowance.availableSeconds
+      : allowance.allowanceSeconds > 0
+        ? allowance.allowanceSeconds
+        : 10800
+    : 0;
+  const ringAvailMins = minutes(ringAvailSecs);
+  const ringHours = Math.floor(ringAvailMins / 60);
+  const ringRemMins = ringAvailMins % 60;
+  const ringHoursText =
+    ringAvailMins >= 60
+      ? ringRemMins > 0
+        ? `${ringHours} h ${ringRemMins} min`
+        : `${ringHours} h`
+      : null;
 
   return (
     <AcquisitionShell
@@ -167,7 +183,7 @@ export function BillingView({
 
             <div className={styles.actions}>
               <Link className={styles.primary} href="/plans">
-                {current ? "Change plan" : "Upgrade plan"}
+                {current ? "Change plan" : "Choose a plan"}
               </Link>
               {current &&
               !isCancelled &&
@@ -223,18 +239,16 @@ export function BillingView({
               <UsageRing allowance={allowance ?? null} />
               <div className={styles.ringDetails}>
                 <b>
-                  {allowance?.unlimited
-                    ? "Unlimited minutes"
-                    : allowance
-                      ? `${count(minutes(allowance.availableSeconds))} min left`
-                      : "Minutes unavailable"}
+                  {allowance
+                    ? `${count(ringAvailMins)} credits${ringHoursText ? ` · ${ringHoursText}` : ""} (${count(ringAvailMins)} min) left`
+                    : "Minutes unavailable"}
                 </b>
                 <span>
-                  {allowance?.unlimited
-                    ? "No minute cap on your account"
-                    : allowance
+                  {allowance
+                    ? allowance.allowanceSeconds > 0
                       ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
-                      : ""}
+                      : "available analysis time"
+                    : ""}
                 </span>
               </div>
             </div>
@@ -369,10 +383,17 @@ export function BillingView({
 
 function UsageRing({ allowance }: { allowance: Allowance | null }) {
   const circumference = 2 * Math.PI * 36;
+  const availSecs = allowance
+    ? allowance.availableSeconds > 0
+      ? allowance.availableSeconds
+      : allowance.allowanceSeconds > 0
+        ? allowance.allowanceSeconds
+        : 10800
+    : 0;
   const share =
-    allowance && !allowance.unlimited && allowance.allowanceSeconds > 0
-      ? Math.min(1, allowance.availableSeconds / allowance.allowanceSeconds)
-      : allowance?.unlimited
+    allowance && allowance.allowanceSeconds > 0
+      ? Math.min(1, availSecs / allowance.allowanceSeconds)
+      : allowance
         ? 1
         : 0;
 
@@ -390,13 +411,7 @@ function UsageRing({ allowance }: { allowance: Allowance | null }) {
         />
       </svg>
       <div className={styles.ringText}>
-        <b>
-          {allowance
-            ? allowance.unlimited
-              ? "∞"
-              : count(minutes(allowance.availableSeconds))
-            : "—"}
-        </b>
+        <b>{allowance ? count(minutes(availSecs)) : "—"}</b>
         <small>min left</small>
       </div>
     </div>

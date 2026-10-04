@@ -6,6 +6,7 @@ import {
   BillingError,
   idempotencyKey,
   invoiceDownloadPath,
+  isBillingDisabledOrNotFound,
   liveBilling,
   type BillingClient,
 } from "./billing-api";
@@ -61,9 +62,43 @@ export function useBillingAccount(
     if (!enabled || !authenticated) return;
     const controller = new AbortController();
     Promise.all([
-      client.readMePlan(controller.signal),
-      client.readUsage(controller.signal),
-      client.readSubscriptions(account, controller.signal),
+      client.readMePlan(controller.signal).catch((error) => {
+        if (isBillingDisabledOrNotFound(error)) {
+          return {
+            plan: { key: "trial", name: "Trial" },
+            allowance: {
+              allowanceSeconds: 0,
+              committedSeconds: 0,
+              availableSeconds: 0,
+              unlimited: false,
+            },
+            longestCallSeconds: 1800,
+          };
+        }
+        throw error;
+      }),
+      client.readUsage(controller.signal).catch((error) => {
+        if (isBillingDisabledOrNotFound(error)) {
+          return {
+            allowance: {
+              allowanceSeconds: 0,
+              committedSeconds: 0,
+              availableSeconds: 0,
+              unlimited: false,
+            },
+            calls: [],
+            earlierSeconds: 0,
+            truncated: false,
+          };
+        }
+        throw error;
+      }),
+      client.readSubscriptions(account, controller.signal).catch((error) => {
+        if (isBillingDisabledOrNotFound(error)) {
+          return { current: null, past: [] };
+        }
+        throw error;
+      }),
     ])
       .then(([mePlan, usage, subs]) => {
         if (controller.signal.aborted) return;
@@ -95,9 +130,20 @@ export function useBillingAccount(
             invoices,
           });
       })
-      .catch(() => {
-        if (!controller.signal.aborted)
-          setInvoiceSnapshot({ key, client, attempt, status: "error" });
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          if (isBillingDisabledOrNotFound(error)) {
+            setInvoiceSnapshot({
+              key,
+              client,
+              attempt,
+              status: "ready",
+              invoices: [],
+            });
+          } else {
+            setInvoiceSnapshot({ key, client, attempt, status: "error" });
+          }
+        }
       });
     return () => controller.abort();
   }, [account, attempt, authenticated, client, enabled, key]);

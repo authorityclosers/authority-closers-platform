@@ -1109,10 +1109,11 @@ export function PlanAndBillingPane({
             href="/plans"
             replace={variant === "dialog"}
           >
-            Change or upgrade plan
+            {current ? "Change or upgrade plan" : "Choose a plan"}
           </Link>
-          {!isCancelled &&
-            (cancelAsk && current ? (
+          {current &&
+            !isCancelled &&
+            (cancelAsk ? (
               <div className={styles.confirmCancelBox}>
                 <p className={styles.muted}>
                   Renewal stops; access continues to the end of the period.

@@ -57,6 +57,67 @@ export const notOnSale = (error: unknown) =>
 export const signedOut = (error: unknown) =>
   error instanceof BillingError && error.status === 401;
 
+/**
+ * Route not deployed (404), not implemented (501), method not allowed (405)
+ * or explicit billing-off / not-on-sale response means billing is switched off
+ * or there is no subscription yet.
+ */
+export const isBillingDisabledOrNotFound = (error: unknown): boolean => {
+  if (!error) return false;
+  const status =
+    error instanceof BillingError
+      ? error.status
+      : typeof error === "object" &&
+          error !== null &&
+          "status" in error &&
+          typeof (error as { status: unknown }).status === "number"
+        ? (error as { status: number }).status
+        : 0;
+  if (status === 404 || status === 405 || status === 501) {
+    return true;
+  }
+  const code =
+    error instanceof BillingError
+      ? (error.code ?? "").toLowerCase()
+      : typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof (error as { code: unknown }).code === "string"
+        ? (error as { code: string }).code.toLowerCase()
+        : "";
+  if (
+    code === "billing_disabled" ||
+    code === "billing_off" ||
+    code === "not_on_sale" ||
+    code === "no_subscription" ||
+    code === "billing_not_enabled" ||
+    code === "not_found"
+  ) {
+    return true;
+  }
+  const detail =
+    error instanceof BillingError
+      ? (error.detail ?? "").toLowerCase()
+      : error instanceof Error
+        ? error.message.toLowerCase()
+        : typeof error === "object" &&
+            error !== null &&
+            "detail" in error &&
+            typeof (error as { detail: unknown }).detail === "string"
+          ? (error as { detail: string }).detail.toLowerCase()
+          : "";
+  if (
+    detail.includes("billing off") ||
+    detail.includes("billing disabled") ||
+    detail.includes("not enabled") ||
+    detail.includes("not found") ||
+    detail.includes("404")
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export type Buyer = { name: string; gstin: string | null };
 
 export type CheckoutRequest =
@@ -119,16 +180,22 @@ async function call(
   });
   if (response.ok) return response.status === 204 ? null : response.json();
   let problem = null;
+  let rawJson: Record<string, unknown> | null = null;
   try {
     const type = response.headers.get("content-type") ?? "";
-    if (/json/.test(type)) problem = parseProblem(await response.json());
+    if (/json/.test(type)) {
+      rawJson = (await response.json()) as Record<string, unknown>;
+      problem = parseProblem(rawJson);
+    }
   } catch {
     problem = null;
   }
+  const rawDetail = typeof rawJson?.detail === "string" ? rawJson.detail : null;
+  const rawCode = typeof rawJson?.code === "string" ? rawJson.code : null;
   throw new BillingError(
     response.status,
-    problem?.code ?? null,
-    problem?.detail ?? null,
+    problem?.code ?? rawCode,
+    problem?.detail ?? rawDetail,
   );
 }
 
