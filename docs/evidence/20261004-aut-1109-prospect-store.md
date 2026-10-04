@@ -110,6 +110,13 @@ they do not prove a deployed full database restore or every column value.
   host backup tools were changed.
 - Changed-area regressions, Ruff format/check and mypy results are recorded in
   the PR and issue handoff.
+- CI continuation: the existing fresh-migration regression pinned the global
+  Alembic head to the preceding credits migration. It now compares the applied
+  revision to Alembic's current head, retaining its numeric, history-trigger and
+  forward-only credits checks as later migrations are added.
+  Verification: all 28 cases across the credits migration regression, prospect
+  store, backup parity and model registry pass on disposable PostgreSQL. Full
+  Ruff format/check pass (995 files); mypy passes (417 source files).
 - Fictional dev: applied `uv run alembic upgrade head` using the task-authorized
   `~/.config/acdev/database.env` (`AC_ENVIRONMENT=local`, loopback database).
   Read-back confirms head `20261004_0074`, both tables empty (no backfill),
@@ -124,7 +131,7 @@ they do not prove a deployed full database restore or every column value.
 With an explicit disposable loopback `AC_CONVERSATION_POSTGRES_TEST_URL`:
 
 ```sh
-uv run pytest -q tests/database/test_prospect_store_postgresql.py tests/infra/test_prospect_backup_parity.py tests/database/test_model_registry.py
+uv run pytest -q tests/database/test_credits_ledger_postgresql.py tests/database/test_prospect_store_postgresql.py tests/infra/test_prospect_backup_parity.py tests/database/test_model_registry.py
 uv run ruff format --check packages/python tests
 uv run ruff check packages/python tests
 uv run mypy packages/python
