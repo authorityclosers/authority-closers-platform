@@ -97,6 +97,37 @@ const finiteSession = () =>
     },
   });
 
+function billingReads() {
+  const allowance = {
+    allowance_seconds: 3_600,
+    committed_seconds: 900,
+    available_seconds: 2_700,
+  };
+  return {
+    "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+    "GET /v1/conversation/acquisition/session": finiteSession,
+    "GET /v1/me/plan": () =>
+      json({
+        plan: { key: "trial", name: "Trial" },
+        allowance,
+        longest_call_seconds: 3600,
+      }),
+    "GET /v1/me/usage": () =>
+      json({ allowance, calls: [], earlier_seconds: 0, truncated: false }),
+    "GET /v1/subscriptions": () => json({ current: null, past: [] }),
+    "GET /v1/invoices": () => json({ invoices: [], next_before: null }),
+  };
+}
+
+async function openBilling() {
+  await renderAccount();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("#account-tab-billing")!.click(),
+  );
+  await flush();
+  return host.querySelector("#account-pane-billing")!;
+}
+
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
@@ -111,6 +142,70 @@ afterEach(async () => {
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("shows a confirmed empty subscription with the server plan and invoices", async () => {
+  respond(billingReads());
+  const pane = await openBilling();
+  expect(pane.textContent).toContain("Trial");
+  expect(pane.textContent).toContain("No subscription yet.");
+  expect(pane.textContent).toContain("No renewal scheduled");
+  expect(pane.textContent).toContain("No invoices or receipts yet.");
+  expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
+  const cancel = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.trim() === "Cancel renewal",
+  )!;
+  expect(cancel.disabled).toBe(true);
+  expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
+    true,
+  );
+});
+
+it("keeps billing failures distinct from an empty account and retries the live reads", async () => {
+  let failed = true;
+  const reads = billingReads();
+  respond({
+    ...reads,
+    "GET /v1/me/plan": () =>
+      failed ? json({}, 503) : reads["GET /v1/me/plan"](),
+  });
+  const pane = await openBilling();
+  expect(pane.querySelector('[role="alert"]')?.textContent).toContain(
+    "Billing details could not be loaded",
+  );
+  expect(pane.textContent).not.toContain("No subscription yet.");
+  expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
+  const retry = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.includes("Reload billing details"),
+  )!;
+  failed = false;
+  await act(async () => retry.click());
+  await flush();
+  expect(pane.querySelector('[role="alert"]')).toBeNull();
+  expect(pane.textContent).toContain("No subscription yet.");
+  expect(calls.filter(({ path }) => path === "/v1/me/plan")).toHaveLength(2);
+  expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
+    true,
+  );
+});
+
+it("keeps loading billing distinct from an empty account", async () => {
+  respond(billingReads());
+  fetchMock.mockImplementation((input: RequestInfo, init = {}) => {
+    const path = String(input).split("?")[0];
+    calls.push({ path, init });
+    if (path === "/v1/me/plan") return new Promise<Response>(() => {});
+    const reads = billingReads();
+    return Promise.resolve(
+      reads[`GET ${path}` as keyof typeof reads]?.() ?? json({}, 404),
+    );
+  });
+  const pane = await openBilling();
+  expect(pane.querySelector('[role="status"]')?.textContent).toContain(
+    "Loading billing details",
+  );
+  expect(pane.textContent).not.toContain("No subscription yet.");
+  expect(pane.querySelector('[role="alert"]')).toBeNull();
 });
 
 it("shows the verified profile and real allowance as its own destination", async () => {
