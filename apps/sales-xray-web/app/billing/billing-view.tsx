@@ -234,18 +234,16 @@ export function BillingView({
               <div className={styles.ringDetails}>
                 <b>
                   {allowance
-                    ? allowance.unlimited
-                      ? "Unlimited"
+                    ? ringHoursText
+                      ? `${count(ringAvailMins)} min (${ringHoursText}) left`
                       : `${count(ringAvailMins)} min left`
                     : "Minutes unavailable"}
                 </b>
                 <span>
                   {allowance
-                    ? allowance.unlimited
-                      ? "available analysis time"
-                      : allowance.allowanceSeconds > 0
-                        ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
-                        : "available analysis time"
+                    ? allowance.allowanceSeconds > 0
+                      ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
+                      : "available analysis time"
                     : ""}
                 </span>
               </div>
@@ -382,10 +380,8 @@ export function BillingView({
 function UsageRing({ allowance }: { allowance: Allowance | null }) {
   const circumference = 2 * Math.PI * 36;
   const availSecs = allowance ? allowance.availableSeconds : 0;
-  const isUnlimited = allowance?.unlimited === true;
-  const share = isUnlimited
-    ? 1
-    : allowance && allowance.allowanceSeconds > 0
+  const share =
+    allowance && allowance.allowanceSeconds > 0
       ? Math.min(1, availSecs / allowance.allowanceSeconds)
       : allowance
         ? 1
@@ -405,14 +401,8 @@ function UsageRing({ allowance }: { allowance: Allowance | null }) {
         />
       </svg>
       <div className={styles.ringText}>
-        <b style={isUnlimited ? { fontSize: "13px" } : undefined}>
-          {allowance
-            ? isUnlimited
-              ? "Unlimited"
-              : count(minutes(availSecs))
-            : "—"}
-        </b>
-        <small>{isUnlimited ? "analysis time" : "min left"}</small>
+        <b>{allowance ? count(minutes(availSecs)) : "—"}</b>
+        <small>min left</small>
       </div>
     </div>
   );

@@ -3,7 +3,11 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountSettings, PlanAndBillingPane } from "../account-settings";
-import { liveBilling, type CheckoutRequest } from "../billing/billing-api";
+import {
+  BillingError,
+  liveBilling,
+  type CheckoutRequest,
+} from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
 import { useBillingAccount } from "../billing/use-billing-account";
 import type { Checkout } from "../billing/contract";
@@ -396,7 +400,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });
 
-it("renders authoritative renewal date and amount when quote exists, or confirms at checkout", async () => {
+it("renders authoritative renewal date and amount when quote exists on live PlansPurchase, or confirms at checkout", async () => {
   const quote = {
     selection: { planKey: "personal", interval: "month" as const, seats: 1 },
     subtotalPaise: 249900,
@@ -404,13 +408,7 @@ it("renders authoritative renewal date and amount when quote exists, or confirms
     totalPaise: 249900,
     renewsAt: "2026-11-04T00:00:00.000Z",
   };
-  await render(
-    <PlansScreen
-      plans={PLANS_CATALOGUE_FIXTURE}
-      gstRate={PLANS_GST_RATE}
-      quote={quote}
-    />,
-  );
+  await render(<PlansPurchase client={fixtureBilling} quote={quote} />);
   await click("Get Personal");
   expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
   expect(host.textContent).not.toContain(
@@ -418,9 +416,59 @@ it("renders authoritative renewal date and amount when quote exists, or confirms
   );
 
   await click("Close checkout");
-  await render(
-    <PlansScreen plans={PLANS_CATALOGUE_FIXTURE} gstRate={PLANS_GST_RATE} />,
-  );
+  await render(<PlansPurchase client={fixtureBilling} />);
   await click("Get Personal");
   expect(host.textContent).toContain("Date and amount confirmed at checkout");
+});
+
+it("Settings treats subscription and invoice 404 as billing-off when canonical reads succeed", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readSubscriptions: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+        readInvoices: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).not.toContain("Billing details could not be loaded");
+  expect(host.textContent).toContain("Choose a plan");
+  expect(host.textContent).not.toContain("Cancel renewal");
+});
+
+it("Settings retains error state when canonical plan or usage reads return 404", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readMePlan: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).toContain("Billing details could not be loaded");
+  expect(button("Try again")).toBeDefined();
+});
+
+it("Settings retains error state on subscription 5xx server failure", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readSubscriptions: async () => {
+          throw new BillingError(500, null, "Server error");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).toContain("Billing details could not be loaded");
+  expect(button("Try again")).toBeDefined();
 });
