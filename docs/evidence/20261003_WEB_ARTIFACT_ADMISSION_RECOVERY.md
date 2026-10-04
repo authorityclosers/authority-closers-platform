@@ -88,6 +88,22 @@ shared-file gate, and route sensitive review. The required dependency output
 is release of that shared-file allowance, not a manager decision. The task
 remains blocked on the owning issue until that output is available.
 
+## Shared-file hold resolved on 2026-10-04
+
+The preceding hold is historical. PR #262 merged as
+`efd08ba`; the latest-main gate now reports this task branch free to continue,
+and the issue's blocker list is empty. `ac-gate check` passed. The branch was
+updated without conflicts from main
+`cf15c61b864e9e5911724abe3a11664d4c03c3d8`; the task diff still contains only
+the workflow, focused tests and this document. No implementation change was
+needed to resume.
+
+The same 37 focused tests passed again before the main update and after it
+(7.41 seconds on the updated branch). Ruff lint and formatting, YAML parsing,
+all six Bash syntax checks and `git diff --check` passed. This document was
+formatted with Prettier. Sensitive review and the automatic recovery receipts
+below remain required; no deployment success is claimed.
+
 ## Dev and staging completion checks
 
 This workflow change triggers the normal main-push web image build after the
