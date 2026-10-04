@@ -144,6 +144,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_retained_c5_versions",
         "conversation_submission_label_revisions",
         "conversation_speaker_map_revisions",
+        "conversation_prospects",
+        "conversation_prospect_memberships",
         "billing_provider_settings",
         "billing_orders",
         "billing_order_events",
