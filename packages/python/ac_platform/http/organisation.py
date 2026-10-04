@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
@@ -84,10 +84,28 @@ class ActivityCallResponse(BaseModel):
     has_report: bool
 
 
+class ActivityCountsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    calls: int
+    recorded_minutes: float
+    reports_ready: int
+
+
+class DailyActivityResponse(ActivityCountsResponse):
+    date: date
+
+
+class RepActivityResponse(ActivityCountsResponse):
+    person_id: UUID
+    name: str
+
+
 class ActivityResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     members: list[MemberActivityResponse]
     calls: list[ActivityCallResponse]
+    per_day: list[DailyActivityResponse]
+    per_rep: list[RepActivityResponse]
 
 
 class AddMemberRequest(BaseModel):

@@ -2,8 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_library import (
@@ -35,6 +36,11 @@ def _mask_email(email: str | None) -> str:
     return f"{local[:1]}***@{domain}"
 
 
+def _activity_counts(totals: list[int]) -> dict[str, int | float]:
+    calls, seconds, reports = totals
+    return dict(calls=calls, recorded_minutes=round(seconds / 60, 1), reports_ready=reports)
+
+
 async def organisation_activity(
     database: AsyncSession, actor: ActorContext, *, days: int, every_member: bool
 ) -> dict[str, Any]:
@@ -42,6 +48,9 @@ async def organisation_activity(
 
     ``every_member`` is the owner/admin view. Otherwise the scope is the actor's
     own row and calls, exactly as their saved-call library would list them.
+    Aggregates cover all permitted calls since the inclusive rolling cutoff;
+    dates are UTC and minutes use the call list's immutable duration receipt.
+    Empty dates and reps with no permitted calls are omitted from aggregates.
     """
     assert actor.tenant_id is not None
     now = datetime.now(UTC)
@@ -77,21 +86,39 @@ async def organisation_activity(
         )
     ).all()
     reported = scope.with_only_columns(
-        owner.label("owner"), has_report.label("has_report"), maintain_column_froms=True
+        owner.label("owner"),
+        Usage.created_at,
+        Usage.reserved_seconds,
+        has_report.label("has_report"),
+        maintain_column_froms=True,
     ).subquery()
-    reports_ready = {
-        person: count
-        for person, count in await database.execute(
-            select(reported.c.owner, func.count())
-            .where(reported.c.has_report)
-            .group_by(reported.c.owner)
-        )
-    }
+    # PostgreSQL timestamps carry offsets; bucket in UTC regardless of session timezone.
+    timestamp = (
+        func.timezone("UTC", reported.c.created_at)
+        if database.get_bind().dialect.name == "postgresql"
+        else reported.c.created_at
+    )
+    day = func.date(timestamp)
+    per_day: dict[str, list[int]] = {}
+    per_rep: dict[UUID, list[int]] = {}
+    for person, date, calls, seconds, reports in await database.execute(
+        select(
+            reported.c.owner,
+            day,
+            func.count(),
+            func.sum(reported.c.reserved_seconds),
+            func.sum(case((reported.c.has_report, 1), else_=0)),
+        ).group_by(reported.c.owner, day)
+    ):
+        for totals in (
+            per_day.setdefault(str(date), [0, 0, 0]),
+            per_rep.setdefault(person, [0, 0, 0]),
+        ):
+            for index, count in enumerate((calls, seconds, reports)):
+                totals[index] += count
     names = {
         person.id: person.display_name or _mask_email(person.email)
-        for person in await database.scalars(
-            select(Person).where(Person.id.in_({row[1] for row in call_rows}))
-        )
+        for person in await database.scalars(select(Person).where(Person.id.in_(per_rep)))
     }
     usage = await member_usage(database, actor.tenant_id, since)
     statement = (
@@ -116,7 +143,7 @@ async def organisation_activity(
                 person_id=str(person_id),
                 calls=calls,
                 minutes=round(seconds / 60, 1),
-                reports_ready=reports_ready.get(person_id, 0),
+                reports_ready=per_rep.get(person_id, [0, 0, 0])[2],
                 last_call_at=None
                 if last_call is None
                 else last_call.replace(tzinfo=UTC).isoformat(),
@@ -124,6 +151,15 @@ async def organisation_activity(
         )
     return dict(
         members=members,
+        per_day=[dict(date=date, **_activity_counts(per_day[date])) for date in sorted(per_day)],
+        per_rep=[
+            dict(
+                person_id=str(person),
+                name=names.get(person, "[redacted]"),
+                **_activity_counts(totals),
+            )
+            for person, totals in sorted(per_rep.items(), key=lambda row: (-row[1][0], str(row[0])))
+        ],
         calls=[
             dict(
                 id=str(submission_id),

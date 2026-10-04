@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage as Usage,
 )
+from ac_platform.conversation_intelligence.canary_models import ConversationCanarySubmission
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
     ConversationProcessingLease,
@@ -278,6 +279,25 @@ async def test_owner_and_admin_see_every_member_and_call(calls):
         assert (rep["calls"], rep["minutes"], rep["reports_ready"]) == (3, 4.5, 1)
         assert rep["last_call_at"] is not None
         assert members[str(calls.other)]["minutes"] == 0.5
+        reps = {row["person_id"]: row for row in body["per_rep"]}
+        assert reps == {
+            str(calls.member): dict(
+                person_id=str(calls.member),
+                name="Fictional Rep",
+                calls=2,
+                recorded_minutes=3.0,
+                reports_ready=1,
+            ),
+            str(calls.other): dict(
+                person_id=str(calls.other),
+                name=held["owner_name"],
+                calls=1,
+                recorded_minutes=0.5,
+                reports_ready=0,
+            ),
+        }
+        assert sum(row["calls"] for row in body["per_day"]) == 3
+        assert sum(row["reports_ready"] for row in body["per_day"]) == 1
 
 
 async def test_member_sees_only_their_own_row_and_calls(calls):
@@ -286,6 +306,16 @@ async def test_member_sees_only_their_own_row_and_calls(calls):
     body = (await call(calls, path="/activity", token=OTHER_TOKEN)).json()
     assert [row["person_id"] for row in body["members"]] == [str(calls.other)]
     assert [row["id"] for row in body["calls"]] == [str(calls.calls["held"])]
+    assert body["per_rep"] == [
+        dict(
+            person_id=str(calls.other),
+            name=body["calls"][0]["owner_name"],
+            calls=1,
+            recorded_minutes=0.5,
+            reports_ready=0,
+        )
+    ]
+    assert sum(row["calls"] for row in body["per_day"]) == 1
 
 
 async def test_days_window_bounds_and_call_cap(calls, monkeypatch):
@@ -294,6 +324,7 @@ async def test_days_window_bounds_and_call_cap(calls, monkeypatch):
     assert len(wide["calls"]) == 4
     for days in ("0", "91", "many"):
         assert (await call(calls, path=f"/activity?days={days}")).status_code == 422
+    uncapped = (await call(calls, path="/activity")).json()
     monkeypatch.setattr(activity_module, "MAX_CALLS", 2)
     capped = (await call(calls, path="/activity")).json()
     assert [row["id"] for row in capped["calls"]] == [
@@ -302,6 +333,79 @@ async def test_days_window_bounds_and_call_cap(calls, monkeypatch):
     assert {row["person_id"]: row["reports_ready"] for row in capped["members"]}[
         str(calls.member)
     ] == 1
+    assert capped["per_day"] == uncapped["per_day"]
+    assert capped["per_rep"] == uncapped["per_rep"]
+
+
+async def test_empty_activity_has_empty_aggregates(state):  # noqa: F811
+    body = (await call(state, path="/activity")).json()
+    assert body["per_day"] == body["per_rep"] == body["calls"] == []
+    assert len(body["members"]) == 3
+
+
+async def test_utc_days_inclusive_cutoff_and_duration_rounding(state, monkeypatch):  # noqa: F811
+    now = datetime.now(UTC).replace(microsecond=0)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(activity_module, "datetime", FixedDateTime)
+    cutoff = now - timedelta(days=30)
+    yesterday = now.replace(hour=0, minute=0, second=0) - timedelta(seconds=1)
+    with Session(state.engine) as db, db.begin():
+        seed_call(db, state.tenant, state.member, created_at=cutoff, seconds=60, report=True)
+        seed_call(db, state.tenant, state.member, created_at=cutoff - timedelta(microseconds=1))
+        seed_call(db, state.tenant, state.member, created_at=yesterday, seconds=2)
+        seed_call(db, state.tenant, state.other, created_at=yesterday, seconds=2)
+        seed_call(db, state.tenant, state.other, created_at=now, seconds=90, report=True)
+    body = (await call(state, path="/activity")).json()
+    assert body["per_day"] == [
+        dict(date=cutoff.date().isoformat(), calls=1, recorded_minutes=1.0, reports_ready=1),
+        dict(date=yesterday.date().isoformat(), calls=2, recorded_minutes=0.1, reports_ready=0),
+        dict(date=now.date().isoformat(), calls=1, recorded_minutes=1.5, reports_ready=1),
+    ]
+    reps = {row["person_id"]: row for row in body["per_rep"]}
+    assert (reps[str(state.member)]["calls"], reps[str(state.member)]["recorded_minutes"]) == (
+        2,
+        1.0,
+    )
+    assert (reps[str(state.other)]["calls"], reps[str(state.other)]["recorded_minutes"]) == (2, 1.5)
+    narrow = (await call(state, path="/activity?days=1")).json()
+    assert sum(row["calls"] for row in narrow["per_day"]) == 3
+
+
+@pytest.mark.parametrize("fence", ["deleting", "revoked", "expired_retention", "canary"])
+async def test_aggregates_keep_library_privacy_fences(calls, fence):
+    with Session(calls.engine) as db, db.begin():
+        recording = db.scalar(
+            select(ConversationRecording).where(
+                ConversationRecording.request_key == str(calls.calls["reported"])
+            )
+        )
+        permission = db.get(ConversationPermission, recording.permission_id)
+        if fence == "deleting":
+            recording.state = fence
+        elif fence == "revoked":
+            permission.revoked_at = datetime.now(UTC)
+        elif fence == "expired_retention":
+            permission.retention_until = datetime.now(UTC) - timedelta(seconds=1)
+        else:
+            db.add(
+                ConversationCanarySubmission(
+                    tenant_id=calls.tenant,
+                    submission_id=calls.calls["reported"],
+                    environment="test",
+                    fixture_sha256="a" * 64,
+                    created_at=datetime.now(UTC),
+                )
+            )
+    body = (await call(calls, path="/activity")).json()
+    assert sum(row["calls"] for row in body["per_day"]) == 2
+    assert sum(row["calls"] for row in body["per_rep"]) == 2
+    assert sum(row["reports_ready"] for row in body["per_rep"]) == 0
+    assert str(calls.calls["reported"]) not in {row["id"] for row in body["calls"]}
 
 
 async def test_statement_count_does_not_grow_with_calls(calls):
