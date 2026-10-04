@@ -73,6 +73,7 @@ function renderLibrary(
     authenticated?: boolean;
     context?: { personId: string; sessionId: string; tenantId: string } | null;
     preview?: boolean;
+    insights?: boolean;
     capture?: (store: UploadSessionStore | null) => void;
     indicator?: boolean;
   } = {},
@@ -91,7 +92,7 @@ function renderLibrary(
           retry: () => {},
         }}
       >
-        <CallsLibrary preview={options.preview} />
+        <CallsLibrary preview={options.preview} insights={options.insights} />
       </WorkspaceAccessProvider>
     </UploadSessionProvider>,
   );
@@ -135,6 +136,27 @@ const ok = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 const LIST = "GET /v1/conversation/acquisition/submissions";
+const insightPath = (id: string, kind: string) =>
+  `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
+const measuredRecord = {
+  version: "call-record/1",
+  numbers: {
+    duration_ms: 120000,
+    overlaps: 0,
+    speakers: [
+      {
+        speaker_id: "seller",
+        talk_ms: 120000,
+        talk_share: 1,
+        questions: 6,
+        longest_monologue_ms: 1000,
+      },
+    ],
+  },
+  facts: [],
+  tags: null,
+  call_type: null,
+};
 const labelPath = (id: string) =>
   `/v1/conversation/acquisition/submissions/${id}/label`;
 const setInput = (input: HTMLInputElement, value: string) => {
@@ -154,6 +176,57 @@ const submitEditor = () =>
       .querySelector<HTMLFormElement>("[data-call-label-editor]")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
+
+it("excludes reserved durations and unknown questions from measured summaries", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
+    [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
+    [insightPath(secondId, "call-record")]: () => ok({}, 404),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
+    [insightPath(secondId, "report")]: () =>
+      ok({ verdict: "Report without measurements" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+  const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
+  const value = (label: string) =>
+    Array.from(stats.children)
+      .find((child) => child.querySelector("span")?.textContent === label)
+      ?.querySelector("strong")?.textContent;
+  expect(value("Measured call duration")).toBe("2 min");
+  expect(value("Questions per call")).toBe("6");
+  expect(value("Next steps and commitments")).toBe("0");
+  expect(stats.textContent).toContain("across 1 measured calls");
+});
+
+it("shows unavailable summaries and lets failed report reads recover from the list", async () => {
+  let recovered = false;
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true)])),
+    [insightPath(firstId, "call-record")]: () =>
+      recovered ? ok(measuredRecord) : ok({}, 503),
+    [insightPath(firstId, "report")]: () =>
+      recovered ? ok({ verdict: "Recovered report" }) : ok({}, 503),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+  const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
+  expect(
+    Array.from(stats.querySelectorAll("strong")).filter(
+      (item) => item.textContent === "—",
+    ),
+  ).toHaveLength(3);
+  expect(host.textContent).toContain("Report could not be read");
+  recovered = true;
+  await act(async () =>
+    Array.from(host.querySelectorAll("button"))
+      .find((item) => item.textContent === "Retry reports")!
+      .click(),
+  );
+  await flush();
+  expect(host.textContent).toContain("Recovered report");
+  expect(host.textContent).not.toContain("Report could not be read");
+});
 
 it("renames a call only after the server confirms it (C1)", async () => {
   const patches: RequestInit[] = [];
