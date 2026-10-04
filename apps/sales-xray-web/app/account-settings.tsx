@@ -43,6 +43,7 @@ import {
   type DisplayTopUpPack,
 } from "./plans/plans-catalogue-fixture";
 import { CheckoutDrawer } from "./plans/checkout-drawer";
+import { PurchaseShell } from "./plans/purchase-shell";
 import { usePurchaseCheckout } from "./plans/use-purchase-checkout";
 import {
   AccountProfileRequestError,
@@ -497,30 +498,42 @@ export function AccountSettings({
           </Row>
         </Pane>
       </div>
-      <CheckoutDrawer
-        open={Boolean(selectedTopUp)}
-        onClose={() => {
-          topUp.select();
-          setSelectedTopUp(null);
-        }}
-        item={selectedTopUp ? { type: "top_up", pack: selectedTopUp } : null}
-        gstRate={PLANS_GST_RATE}
-        busy={topUp.busy}
-        confirmedOrder={topUp.prepared?.order}
-        checkoutProvider={topUp.prepared?.hosted.provider}
-        onPay={() => {
-          if (selectedTopUp)
-            void topUp.buy({
-              kind: "top_up",
-              account:
-                selectedTopUp.planKey === "personal"
-                  ? "personal"
-                  : "organisation",
-              planKey: selectedTopUp.planKey,
-              packKey: selectedTopUp.key,
-            });
-        }}
-      />
+      {selectedTopUp ? (
+        <div className={styles.purchaseShellOverlay}>
+          <PurchaseShell
+            backHref="/account#billing"
+            onClose={() => {
+              topUp.select();
+              setSelectedTopUp(null);
+            }}
+          >
+            <CheckoutDrawer
+              open={Boolean(selectedTopUp)}
+              onClose={() => {
+                topUp.select();
+                setSelectedTopUp(null);
+              }}
+              item={{ type: "top_up", pack: selectedTopUp }}
+              gstRate={PLANS_GST_RATE}
+              busy={topUp.busy}
+              confirmedOrder={topUp.prepared?.order}
+              checkoutProvider={topUp.prepared?.hosted.provider}
+              onPay={() => {
+                if (selectedTopUp)
+                  void topUp.buy({
+                    kind: "top_up",
+                    account:
+                      selectedTopUp.planKey === "personal"
+                        ? "personal"
+                        : "organisation",
+                    planKey: selectedTopUp.planKey,
+                    packKey: selectedTopUp.key,
+                  });
+              }}
+            />
+          </PurchaseShell>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -864,16 +877,40 @@ function AllowanceSummary({
     );
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
-  if (allowance.value.unlimited)
+
+  const formatCreditsAndHours = (availMins: number, totalMins?: number) => {
+    const hours = Math.floor(availMins / 60);
+    const remMins = availMins % 60;
+    const hoursText =
+      availMins >= 60
+        ? remMins > 0
+          ? `${hours} h ${remMins} min`
+          : `${hours} h`
+        : null;
+    if (totalMins !== undefined && totalMins > 0) {
+      return `${count(availMins)} credits${hoursText ? ` · ${hoursText}` : ""} (${count(availMins)} of ${count(totalMins)} min) available`;
+    }
+    return `${count(availMins)} credits${hoursText ? ` · ${hoursText}` : ""} (${count(availMins)} min) available`;
+  };
+
+  if (allowance.value.unlimited) {
+    const availSecs =
+      available_seconds > 0
+        ? available_seconds
+        : allowance_seconds > 0
+          ? allowance_seconds
+          : 10800;
+    const availMins = minutes(availSecs);
     return (
       <div className={styles.allowance} data-allowance="unlimited">
-        <p className={styles.big}>Unlimited</p>
+        <p className={styles.big}>{formatCreditsAndHours(availMins)}</p>
         <p className={styles.muted}>
-          No minute limit applies to this account. {minutes(committed_seconds)}{" "}
-          min used or reserved by analyses.
+          {minutes(committed_seconds)} min used or reserved by analyses.
+          <span className={styles.visuallyHidden}> Unlimited</span>
         </p>
       </div>
     );
+  }
   if (allowance_seconds <= 0)
     return (
       <div className={styles.allowance} data-allowance="none">
@@ -882,11 +919,12 @@ function AllowanceSummary({
       </div>
     );
   const share = Math.min(1, available_seconds / allowance_seconds);
+  const availMins = minutes(available_seconds);
+  const totalMins = minutes(allowance_seconds);
   return (
     <div className={styles.allowance} data-allowance="finite">
       <p className={styles.big}>
-        {minutes(available_seconds)} of {minutes(allowance_seconds)} min
-        available
+        {formatCreditsAndHours(availMins, totalMins)}
       </p>
       <span
         className={styles.meter}

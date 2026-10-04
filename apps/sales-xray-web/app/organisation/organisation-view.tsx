@@ -9,6 +9,7 @@ import {
   Globe,
   Mail,
   Plus,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -281,7 +282,12 @@ export function OrganisationView() {
             {!live && org.status !== "loading" ? (
               <p className={styles.banner} role="alert">
                 The organisation could not be loaded.
-                <button type="button" onClick={reloadOrg}>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={reloadOrg}
+                >
+                  <RefreshCw size={13} aria-hidden="true" />
                   Try again
                 </button>
               </p>
@@ -733,7 +739,12 @@ function MembersPanel({
               ? "Loading members…"
               : "Members could not be loaded."}
             {members.status !== "loading" ? (
-              <button type="button" onClick={reload}>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={reload}
+              >
+                <RefreshCw size={13} aria-hidden="true" />
                 Try again
               </button>
             ) : null}
