@@ -52,7 +52,7 @@ from ac_platform.conversation_intelligence.processing_actor import ProcessingAct
 from ac_platform.identity.models import PasswordCredential, Person, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +71,30 @@ class GuestOwnership:
     def __init__(self, sessions: AcquisitionSessions) -> None:
         self.sessions, self.database = sessions, sessions.database
         self.tenant_id, self.clock = sessions.tenant_id, sessions.clock
+
+    async def organisation_call_reader(self, actor: ActorContext) -> bool:
+        """Check current organisation authority after account admission, never cached roles."""
+        if (
+            actor.tenant_id != self.tenant_id
+            or self.tenant_id == self.sessions.operations_tenant_id
+        ):
+            return False
+        member = await self.database.scalar(
+            select(Membership)
+            .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
+            .where(
+                Membership.tenant_id == self.tenant_id,
+                Membership.person_id == actor.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        return (
+            member is not None
+            and member.status == "active"
+            and member.ended_at is None
+            and member.role in {"owner", "admin"}
+        )
 
     async def provision(
         self,
@@ -172,6 +196,7 @@ class GuestOwnership:
         actor: ActorContext | None,
         mutation: bool,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> tuple[ConversationAcquisitionUsage, datetime, bool]:
         if actor is not None:
             await ConversationApplication(self.database, clock=self.clock).admit(
@@ -202,7 +227,26 @@ class GuestOwnership:
             claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
             owner_matches = claim is not None and claim.person_id == person_id
         if not owner_matches:
-            raise ConversationNotFound("This upload is unavailable.")
+            if (
+                mutation
+                or not allow_organisation_read
+                or actor is None
+                or not await self.organisation_call_reader(actor)
+            ):
+                raise ConversationNotFound("This upload is unavailable.")
+            # The activity/library scope also excludes unclaimed guests and
+            # canaries, and verifies the immutable processing/source binding.
+            from ac_platform.conversation_intelligence.acquisition_library import (
+                _account_library_query,
+            )
+
+            readable = await self.database.scalar(
+                _account_library_query(actor, now, every_owner=True).where(
+                    ConversationAcquisitionUsage.submission_id == submission_id
+                )
+            )
+            if readable is None:
+                raise ConversationNotFound("This upload is unavailable.")
         return usage, now, person_id is not None
 
     async def resolve_processing_actor(
@@ -458,6 +502,7 @@ class GuestOwnership:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> SubmissionScope:
         usage, now, claimed = await self._owned_usage(
             submission_id,
@@ -465,6 +510,7 @@ class GuestOwnership:
             actor=actor,
             mutation=False,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         if usage.visitor_id is not None:
             await self.sessions.fence_visitor(usage.visitor_id, shared=True)
@@ -474,6 +520,7 @@ class GuestOwnership:
                 actor=actor,
                 mutation=False,
                 shared_identity_locks=shared_identity_locks,
+                allow_organisation_read=allow_organisation_read,
             )
         link = await self.database.get(ConversationGuestSubmission, (self.tenant_id, submission_id))
         if link is None or link.usage_id != usage.id or link.source_sha256 != usage.source_sha256:

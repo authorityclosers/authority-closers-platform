@@ -156,6 +156,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                 token: str | None = None,
                 actor: Any = None,
                 shared_identity_locks: bool = False,
+                allow_organisation_read: bool = False,
             ) -> dict[str, Any]:
                 result = await original_report(
                     self,
@@ -163,6 +164,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     token=token,
                     actor=actor,
                     shared_identity_locks=shared_identity_locks,
+                    allow_organisation_read=allow_organisation_read,
                 )
                 report = result.get("report")
                 if not isinstance(report, dict):

@@ -48,6 +48,7 @@ from ac_platform.http.media import install_media_http
 from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation import install_organisation_http
+from ac_platform.http.organisation_domains import install_organisation_domains_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.plans import install_plans_http
 from ac_platform.http.platform import install_platform_http
@@ -151,6 +152,7 @@ def create_app(
         provider=configured_identity_provider,
     )
     install_organisation_http(application, settings=settings, require_actor=require_actor)
+    install_organisation_domains_http(application, settings=settings, require_actor=require_actor)
     install_course_http(
         application,
         settings=settings,

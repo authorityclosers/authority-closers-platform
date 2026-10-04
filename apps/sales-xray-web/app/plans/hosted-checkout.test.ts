@@ -9,6 +9,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each(["fake", "stripe"])(
+  "hands off the opaque %s redirect URL unchanged",
+  async (provider) => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { assign } });
+    const hosted: Hosted = {
+      provider,
+      kind: "redirect",
+      url: "https://fictional-api.example/checkout/fictional-order?token=fictional%2Btoken&return=%2Faccount%2Fbilling%2Freturn",
+      params: { reference: "fictional-reference" },
+      expiresAt: null,
+    };
+    expect(await openHostedCheckout(hosted, "fictional-order")).toBe("left");
+    expect(assign).toHaveBeenCalledExactlyOnceWith(hosted.url);
+    expect(document.querySelector("script")).toBeNull();
+  },
+);
+
 it("passes the server subscription or order reference to the SDK and leaves payment verification to AC", async () => {
   const script = document.createElement("script");
   script.src = "https://checkout.razorpay.com/v1/checkout.js";

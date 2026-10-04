@@ -70,6 +70,7 @@ class CreditsLedger:
         actor_type: str,
         reason: str,
         actor_person_id: UUID | None = None,
+        session_id: UUID | None = None,
         corrected_entry_id: UUID | None = None,
     ) -> BillingCreditEntry:
         validate_credit_quantity(quantity)
@@ -125,6 +126,7 @@ class CreditsLedger:
                     tenant_id=tenant_id,
                     actor_person_id=actor_person_id,
                     actor_type=actor_type,
+                    session_id=session_id,
                     action=CREDIT_APPEND_ACTION,
                     resource_type="billing_credit_entry",
                     resource_id=identifier,

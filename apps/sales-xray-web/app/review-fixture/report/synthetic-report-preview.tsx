@@ -42,6 +42,10 @@ export function SyntheticReportPreview() {
         </aside>
         <ReportModes
           label="Synthetic report sections"
+          documentData={{
+            report: syntheticReport,
+            title: "Fictional sample call",
+          }}
           panels={[
             {
               id: "overview",

@@ -161,6 +161,7 @@ class AcquisitionReports:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> tuple[SubmissionScope, ConversationRecording]:
         # Root-owned per-visitor read fencing spans this caller transaction.
         # Streaming one call must not take the global acquisition lock or
@@ -170,6 +171,7 @@ class AcquisitionReports:
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         recording = await self.database.scalar(
             select(ConversationRecording)
@@ -191,6 +193,7 @@ class AcquisitionReports:
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         return scope, recording
 
@@ -215,12 +218,14 @@ class AcquisitionReports:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> dict[str, Any]:
         scope, recording = await self.recording(
             submission_id,
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         return await self.render_report(
             recording,
@@ -403,12 +408,14 @@ class AcquisitionReports:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> dict[str, Any]:
         scope, recording = await self.recording(
             submission_id,
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         local_run = await self.database.scalar(
             select(ConversationRun).where(

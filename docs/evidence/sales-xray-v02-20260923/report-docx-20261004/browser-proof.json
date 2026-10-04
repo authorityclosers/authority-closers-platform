@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "width": 390,
+      "bytes": 14744,
+      "sha256": "dfa3223511504c861d0906abb0647d89aec039b1f62467c4f50bd036d7adf171",
+      "preview_equals_download": true
+    },
+    {
+      "width": 1440,
+      "bytes": 14745,
+      "sha256": "0867139e7f1f201f08265a95493afcc28c9388549488854586885420b272ac72",
+      "preview_equals_download": true
+    }
+  ],
+  "page_errors": [],
+  "external_requests": []
+}

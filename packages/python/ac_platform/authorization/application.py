@@ -8,6 +8,7 @@ never invoked by login, account creation, email matching or the public API.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -218,6 +219,9 @@ class CapabilityApplication:
         permission: str,
         scope: CapabilityScope,
         reason: str,
+        *,
+        actor_type: str | None = None,
+        audit_payload: Mapping[str, object] | None = None,
     ) -> CapabilityGrant:
         existing = await self.database.get(CapabilityGrant, command_id)
         if existing is not None:
@@ -247,9 +251,9 @@ class CapabilityApplication:
         await AuditRepository(self.database).append(
             event_id=audit_id,
             tenant_id=audit_tenant,
-            actor_person_id=actor_id,
+            actor_person_id=None if actor_type == "operator_data_change" else actor_id,
             session_id=session_id,
-            actor_type="operator_bootstrap" if session_id is None else "person",
+            actor_type=actor_type or ("operator_bootstrap" if session_id is None else "person"),
             action="authorization.capability_granted",
             resource_type="capability_grant",
             resource_id=command_id,
@@ -259,6 +263,7 @@ class CapabilityApplication:
                 "scope_kind": scope.kind,
                 "tenant_id": str(scope.tenant_id) if scope.tenant_id else None,
                 "program_id": str(scope.program_id) if scope.program_id else None,
+                **(audit_payload or {}),
             },
             reason=reason,
             now=now,
