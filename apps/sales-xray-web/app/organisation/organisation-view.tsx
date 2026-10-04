@@ -677,7 +677,9 @@ function MembersPanel({
                 {canManage &&
                 !isYou &&
                 member.role !== "owner" &&
-                (isOwner || member.role === "member") ? (
+                (member.status === "invited" ||
+                  isOwner ||
+                  member.role === "member") ? (
                   <>
                     {isOwner && member.status === "active" ? (
                       <button

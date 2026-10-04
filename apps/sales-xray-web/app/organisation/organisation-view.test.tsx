@@ -275,8 +275,12 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   await click("Confirm");
   expect(JSON.parse(String(writes()[1][1].body)).role).toBe("member");
 });
-it("allows admins to add and remove members and revoke member invites only", async () => {
+it("allows admins to add/remove members and revoke pending invites", async () => {
   org().role = "admin";
+  const list = routes["/v1/organisation/members"] as {
+    members: (typeof active)[];
+  };
+  list.members[2].role = "admin";
   await render();
   await click("Members");
   expect(
