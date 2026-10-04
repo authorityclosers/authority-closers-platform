@@ -261,6 +261,20 @@ it("cancels a role change without writing", async () => {
       ?.value,
   ).toBe("member");
 });
+it("refreshes ownership permissions and uses member additions after a transfer", async () => {
+  await render();
+  await click("Members");
+  await select("Role for the new person", "admin");
+  await click("Make Dipak the owner");
+  org().role = "admin";
+  await click("Confirm");
+  expect(host.querySelector("header")?.textContent).toContain("you are Admin");
+  expect(button("Make Dipak the owner")).toBeUndefined();
+  expect(host.querySelector('select[aria-label="Role for Dipak"]')).toBeNull();
+  await add();
+  await click("Confirm");
+  expect(JSON.parse(String(writes()[1][1].body)).role).toBe("member");
+});
 it("allows admins to add and remove members and revoke member invites only", async () => {
   org().role = "admin";
   await render();
