@@ -15,18 +15,24 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import exists, select, tuple_
 
 from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.billing.application import BillingApplication
 from ac_platform.billing.commands import BillingCommands, BuyerTaxDetails, Caller, CheckoutCommand
-from ac_platform.billing.errors import BillingIdempotencyKeyRequired, BillingValidationFailed
+from ac_platform.billing.errors import (
+    BillingIdempotencyKeyRequired,
+    BillingValidationFailed,
+    BillingWebhookRejected,
+)
 from ac_platform.billing.invoice_models import BillingInvoice
 from ac_platform.billing.invoice_render import render_invoice
 from ac_platform.billing.models import BillingAccount
+from ac_platform.billing.simulation import FakeCheckout, SimulationAction, payment_page
 from ac_platform.billing.tax import TaxMode
 from ac_platform.billing.views import (
     AccountName,
@@ -47,6 +53,8 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.kernel.errors import DomainError
+from ac_platform.payments.ports import PaymentEventRejected
+from ac_platform.payments.registry import UnknownPaymentProviderError
 from ac_platform.tenancy.models import Membership
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
@@ -604,11 +612,58 @@ def install_billing_webhook_http(
         session_factory = sessions
         assert callable(session_factory)  # composition passes async_sessionmaker
         async with session_factory() as database, database.begin():
-            receipt = await service.receive_webhook(database, provider, headers, raw_body)
+            try:
+                receipt = await service.receive_webhook(database, provider, headers, raw_body)
+            except PaymentEventRejected as error:
+                raise BillingWebhookRejected(
+                    "The payment callback could not be verified."
+                ) from error
+            except UnknownPaymentProviderError as error:
+                raise BillingValidationFailed("Unknown payment provider callback.") from error
         response.headers["Cache-Control"] = "no-store"
         return WebhookResponse(outcome=receipt.outcome, replayed=receipt.replayed)
 
     application.include_router(router)
+
+    if isinstance(service, BillingApplication) and "fake" in service.service.providers.names:
+        simulation = FakeCheckout(service.service)
+        origin = service.service.fake_checkout_base_url
+
+        @application.get("/v1/payments/fake/checkout/{order_id}", response_class=HTMLResponse)
+        async def fake_checkout_page(
+            order_id: UUID,
+            token: Annotated[str, Query(min_length=64, max_length=64, pattern=r"^[a-f0-9]+$")],
+        ) -> HTMLResponse:
+            assert callable(sessions)
+            async with sessions() as database, database.begin():
+                order = await simulation.read(database, order_id, token)
+            return HTMLResponse(
+                payment_page(order, token, service.service._return_url(order_id)),
+                headers={
+                    "Cache-Control": "no-store",
+                    "Referrer-Policy": "strict-origin",
+                    "Content-Security-Policy": "default-src 'none'; form-action 'self'; "
+                    "base-uri 'none'; frame-ancestors 'none'",
+                },
+            )
+
+        @application.post("/v1/payments/fake/checkout/{order_id}/{action}")
+        async def fake_checkout_submit(
+            order_id: UUID,
+            action: SimulationAction,
+            request: Request,
+            token: Annotated[str, Query(min_length=64, max_length=64, pattern=r"^[a-f0-9]+$")],
+        ) -> RedirectResponse:
+            if origin is None or request.headers.get("origin") != origin:
+                raise BillingValidationFailed("Use the test payment page to submit this choice.")
+            assert callable(sessions)
+            async with sessions() as database, database.begin():
+                url = await simulation.submit(database, order_id, token, action)
+            return RedirectResponse(
+                url,
+                status_code=303,
+                headers={"Cache-Control": "no-store", "Referrer-Policy": "strict-origin"},
+            )
 
 
 __all__ = [

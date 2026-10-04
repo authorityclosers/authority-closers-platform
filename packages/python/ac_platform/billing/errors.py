@@ -107,6 +107,12 @@ class BillingValidationFailed(DomainError):
     status = 422
 
 
+class BillingWebhookRejected(DomainError):
+    code = "invalid_signature"
+    title = "The payment callback signature is invalid"
+    status = 400
+
+
 class BillingRateLimited(DomainError):
     code = "rate_limited"
     title = "Try again in a moment"
@@ -125,6 +131,7 @@ __all__ = [
     "BillingIdempotencyKeyRequired",
     "BillingRateLimited",
     "BillingValidationFailed",
+    "BillingWebhookRejected",
     "IntervalNotOffered",
     "NotOnSale",
     "OrderNotFound",

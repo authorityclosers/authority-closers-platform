@@ -20,6 +20,18 @@ from ac_platform.payments import (
 SIGNING_KEY = b"fictional-fake-provider-key".decode()
 
 
+def test_checkout_capability_is_order_bound_and_survives_provider_restart() -> None:
+    provider = FakePaymentProvider(signing_key=SIGNING_KEY)
+    token = provider.checkout_token("ord_TEST000001")
+    assert len(token) == 64
+    assert FakePaymentProvider(signing_key=SIGNING_KEY).checkout_token("ord_TEST000001") == token
+    assert provider.checkout_token("ord_TEST000002") != token
+    assert (
+        FakePaymentProvider(signing_key=SIGNING_KEY + "-other").checkout_token("ord_TEST000001")
+        != token
+    )
+
+
 def _order() -> CheckoutOrder:
     return CheckoutOrder(
         reference="ord_TEST000001",

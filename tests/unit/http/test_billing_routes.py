@@ -707,6 +707,26 @@ def test_fake_webhook_passes_the_raw_body_and_lower_cased_headers_through() -> N
     assert headers["content-type"] == "application/json"
 
 
+@pytest.mark.parametrize("registered", [False, True])
+def test_webhook_rejection_has_a_safe_problem_response(registered: bool) -> None:
+    from ac_platform.payments.ports import PaymentEventRejected
+    from ac_platform.payments.registry import UnknownPaymentProviderError
+
+    client, _actor, _database = _client(commands := _Commands())
+    commands.error = (
+        PaymentEventRejected("fictional private provider detail")
+        if registered
+        else UnknownPaymentProviderError("fictional private provider detail")
+    )
+    response = client.post("/v1/payments/webhooks/fake", content=b"{}")
+    _problem(
+        response,
+        400 if registered else 422,
+        "invalid_signature" if registered else "validation_failed",
+    )
+    assert "fictional private provider detail" not in response.text
+
+
 # ---- composition ----------------------------------------------------------------
 
 

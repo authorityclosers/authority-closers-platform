@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -71,6 +71,7 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     EligibleLearnerUnavailable,
     require_eligible_learner,
 )
+from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.ports import (
     CheckoutCustomer,
     CheckoutKind,
@@ -168,6 +169,7 @@ class CheckoutService:
         trial_policy: TrialPolicy | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         invoice_settings: Settings | None = None,
+        fake_checkout_base_url: str | None = None,
     ) -> None:
         if not return_url_base.startswith("https://"):
             raise ValueError("the return URL base must be an HTTPS origin")
@@ -177,6 +179,7 @@ class CheckoutService:
         self.return_url_base = return_url_base.rstrip("/")
         self.trial_policy = trial_policy or TrialPolicy()
         self.invoice_settings = invoice_settings
+        self.fake_checkout_base_url = fake_checkout_base_url
 
     def ledger(self, database: AsyncSession) -> BillingLedger:
         return BillingLedger(
@@ -376,6 +379,16 @@ class CheckoutService:
         else:
             view = await self._top_up_checkout(
                 database, resolved, command, plan, choice, customer, reference, description, now
+            )
+        if isinstance(choice.provider, FakePaymentProvider) and self.fake_checkout_base_url:
+            token = choice.provider.checkout_token(reference)
+            view = replace(
+                view,
+                hosted=replace(
+                    view.hosted,
+                    url=f"{self.fake_checkout_base_url}/v1/payments/fake/checkout/"
+                    f"{view.order.order_id}?token={token}",
+                ),
             )
         buyer = command.buyer
         if buyer is None:
