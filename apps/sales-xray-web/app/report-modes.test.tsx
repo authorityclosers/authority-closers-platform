@@ -3,6 +3,33 @@ import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportModes } from "./report-modes";
+import {
+  DOCUMENT_CHAPTERS,
+  type DocumentReportData,
+} from "./report-document-data";
+import { syntheticReport } from "./review-fixture/report/synthetic-report";
+
+// Exercise the mode controls; Blob generation and rendering have their own contract tests.
+vi.mock("./report-document", () => ({
+  ReportDocument: ({ data, id }: { data?: DocumentReportData; id: string }) => (
+    <div
+      data-document-export
+      data-title={data?.title}
+      data-revision={data?.analysisBasis?.transcriptRevision}
+    >
+      <a download href="blob:test">
+        Download .docx
+      </a>
+      {DOCUMENT_CHAPTERS.map((chapter) => (
+        <section key={chapter.id} data-report-mode-section={chapter.id}>
+          <h2 id={`${id}-heading-${chapter.id}`} tabIndex={-1}>
+            {chapter.label}
+          </h2>
+        </section>
+      ))}
+    </div>
+  ),
+}));
 import { useReportNavigation } from "./report-reading-context";
 
 (
@@ -67,12 +94,19 @@ function panels() {
 }
 async function render(boundCallId?: string) {
   await act(async () =>
-    root.render(<ReportModes panels={panels()} boundCallId={boundCallId} />),
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={boundCallId}
+        documentData={{ report: syntheticReport }}
+      />,
+    ),
   );
 }
-const sections = () => [
-  ...container.querySelectorAll<HTMLElement>("[data-report-mode-section]"),
-];
+const sections = () =>
+  [
+    ...container.querySelectorAll<HTMLElement>("[data-report-mode-section]"),
+  ].filter((section) => !section.closest("[data-reading-panels][hidden]"));
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 
 it("shows report sections in one continuous reading layout without transcript section", async () => {
@@ -1019,35 +1053,16 @@ it("switches to Document view and preserves the reader's place", async () => {
   expect(window.location.search).toContain("section=moments");
   expect(mode().dataset.reportSection).toBe("moments");
 
-  // Document view renders actions and pages
-  const pdfBtn = [...container.querySelectorAll("button")].find((b) =>
-    b.textContent?.includes("Print / Save PDF"),
-  );
-  expect(pdfBtn).not.toBeNull();
-  const wordBtn = [...container.querySelectorAll("button")].find((b) =>
-    b.textContent?.includes("Download Word"),
-  );
-  expect(wordBtn).toBeUndefined();
-
-  // Document renders the supplied panels, in the same order as other views.
-  const pages = container.querySelectorAll("[data-document-page]");
-  expect(pages).toHaveLength(6);
+  // Document mode delegates to the generated-file preview, without Reading content.
+  expect(container.querySelector("[data-document-export]")).not.toBeNull();
   expect(
     sections().map((section) => section.dataset.reportModeSection),
-  ).toEqual(panels().map((panel) => panel.id));
-  expect(container.textContent).toContain("Summary point");
-  expect(container.textContent).toContain("Conversation");
-  expect(container.textContent).not.toMatch(/Aarav|Priya|\d\.\d \/ 5/);
-
-  // Physical page counts belong to print pagination, never panel counts.
-  expect(container.textContent).not.toMatch(/Page \d+ of \d+/);
-
-  // Cover page has no running header; page 2 has running header
-  expect(pages[0].querySelector("[class*='docRunningHeader']")).toBeNull();
-  expect(pages[1].querySelector("[class*='docRunningHeader']")).not.toBeNull();
-  expect(pages[1].textContent).toContain(
-    "Authority Closers — Sales Xray call report",
-  );
+  ).toEqual(DOCUMENT_CHAPTERS.map((chapter) => chapter.id));
+  expect(container.textContent).toContain("Download .docx");
+  expect(
+    container.querySelector("[data-document-export]")?.textContent,
+  ).not.toContain("Summary point");
+  expect(container.querySelector("[data-document-page]")).toBeNull();
 
   // Switch back to Tabbed view preserves place
   const tabButton = container.querySelector<HTMLButtonElement>(
@@ -1193,7 +1208,7 @@ it.each(["document"])(
       );
       await settle();
       const heading = container.querySelector<HTMLElement>(
-        '[data-report-mode-section="transcript"] h2',
+        '[data-document-export] [data-report-mode-section="transcript"] h2',
       )!;
       expect(mode().dataset.view).toBe(nextView);
       expect(destinations).toEqual([heading]);
@@ -1249,9 +1264,7 @@ it("replaces the bookmark when toggling views from a scrolled chapter", async ()
   expect(replace).toHaveBeenCalledOnce();
 });
 
-it("renders only supplied document metadata and prints without a fake Word action", async () => {
-  const print = vi.fn();
-  vi.stubGlobal("print", print);
+it("passes supplied report metadata to the generated-file preview", async () => {
   window.history.replaceState(null, "", `/?call=${call}&view=document&print=1`);
   await act(async () =>
     root.render(
@@ -1259,8 +1272,8 @@ it("renders only supplied document metadata and prints without a fake Word actio
         panels={panels()}
         boundCallId={call}
         documentData={{
+          report: syntheticReport,
           title: "Bound call",
-          repName: "Fictional seller",
           analysisBasis: { transcriptRevision: "fixture-r2" },
         }}
       />,
@@ -1268,33 +1281,30 @@ it("renders only supplied document metadata and prints without a fake Word actio
   );
   expect(mode().dataset.view).toBe("document");
   expect(mode().dataset.reportPrint).toBe("true");
-  expect(container.textContent).toContain("Bound call");
-  expect(container.textContent).toContain("Transcript revision: fixture-r2");
-  expect(container.textContent).not.toMatch(/2 October|34:12|Download Word/);
-  expect(print).not.toHaveBeenCalled();
-  const button = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((b) => b.textContent?.includes("Print / Save PDF"))!;
-  await act(async () => button.click());
-  expect(print).toHaveBeenCalledOnce();
+  const documentView = container.querySelector<HTMLElement>(
+    "[data-document-export]",
+  )!;
+  expect(documentView.dataset.title).toBe("Bound call");
+  expect(documentView.dataset.revision).toBe("fixture-r2");
+  expect(container.querySelector("[class*='docTitle']")).toBeNull();
 });
 
-it("keeps print header text inside a quoted CSS string", async () => {
+it("does not inject document metadata into HTML or CSS", async () => {
   window.history.replaceState(null, "", `/?call=${call}&view=document`);
   await act(async () =>
     root.render(
       <ReportModes
         panels={panels()}
         boundCallId={call}
-        documentData={{ repName: 'Seller "</style><script>example</script>' }}
+        documentData={{
+          report: syntheticReport,
+          title: 'Seller "</style><script>example</script>',
+        }}
       />,
     ),
   );
-  const css = container.querySelector("style")!.textContent!;
-  expect(css).toContain("@top-right");
-  expect(css).toContain("\\3c ");
-  expect(css).not.toContain("</style>");
   expect(container.querySelector("script")).toBeNull();
+  expect(container.querySelector("style")).toBeNull();
 });
 
 it("marks the portaled shell toolbar hidden for the print renderer", async () => {
