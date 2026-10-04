@@ -36,12 +36,17 @@ class AdminConversationReports:
         application: ConversationApplication,
         operations_tenant_id: UUID,
         *,
-        recording_tenant_ids: tuple[UUID, ...] = (),
+        recording_tenant_ids: tuple[UUID, ...] | None = None,
     ) -> None:
         self.application = application
         self.database = application.database
         self.operations_tenant_id = operations_tenant_id
-        self.recording_tenant_ids = frozenset({operations_tenant_id, *recording_tenant_ids})
+        # Keep legacy internal reads; an explicit served scope excludes operations.
+        self.recording_tenant_ids = (
+            frozenset({operations_tenant_id})
+            if recording_tenant_ids is None
+            else frozenset(recording_tenant_ids) - {operations_tenant_id}
+        )
 
     async def get(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
         review = ConversationReviewService(

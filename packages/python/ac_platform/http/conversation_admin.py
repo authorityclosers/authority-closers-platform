@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5RecoveryService,
     RetainedC5RevalidationIntent,
 )
+from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_served_tenant_ids
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -44,6 +45,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 
 class ProviderConfigurationIntent(BaseModel):
@@ -69,6 +71,7 @@ def install_conversation_admin_http(
     *,
     settings: Settings,
     require_actor: RequireActor,
+    intake: ConversationIntakeRuntime | None = None,
     import_storage: PrivateLocalRecordingStorage | None = None,
     recovery_storage: PrivateLocalRecordingStorage | None = None,
 ) -> None:
@@ -76,6 +79,7 @@ def install_conversation_admin_http(
         raise ValueError("Internal proof import is limited to the local test composition.")
     router = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-admin"])
     dependency = Depends(require_actor, scope="function")
+    recording_tenant_ids = tuple(sorted(sales_xray_served_tenant_ids(settings, intake), key=str))
 
     def surface(request: Request, response: Response) -> None:
         require_admin_surface(request, settings)
@@ -158,11 +162,6 @@ def install_conversation_admin_http(
         if operations_tenant_id is None:
             raise HTTPException(503, "Conversation recordings are not configured.")
         try:
-            recording_tenant_ids = (
-                (settings.public_learner_tenant_id,)
-                if settings.public_learner_tenant_id is not None
-                else ()
-            )
             return await AdminConversationRecordings(
                 ConversationApplication(auth.database),
                 operations_tenant_id,
@@ -191,11 +190,6 @@ def install_conversation_admin_http(
         if operations_tenant_id is None:
             raise HTTPException(503, "Conversation reports are not configured.")
         try:
-            recording_tenant_ids = (
-                (settings.public_learner_tenant_id,)
-                if settings.public_learner_tenant_id is not None
-                else ()
-            )
             if recovery_storage is not None:
                 recovered = await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
@@ -358,11 +352,7 @@ def install_conversation_admin_http(
                 return await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
                     operations_tenant_id=operations_tenant_id,
-                    recording_tenant_ids=(
-                        (settings.public_learner_tenant_id,)
-                        if settings.public_learner_tenant_id is not None
-                        else ()
-                    ),
+                    recording_tenant_ids=recording_tenant_ids,
                 ).revalidate(
                     auth.resolved.actor,
                     run_id,
@@ -391,11 +381,7 @@ def install_conversation_admin_http(
                 return await RetainedC5RecoveryService(
                     ConversationApplication(auth.database),
                     operations_tenant_id=operations_tenant_id,
-                    recording_tenant_ids=(
-                        (settings.public_learner_tenant_id,)
-                        if settings.public_learner_tenant_id is not None
-                        else ()
-                    ),
+                    recording_tenant_ids=recording_tenant_ids,
                 ).revalidate(
                     auth.resolved.actor,
                     run_id,

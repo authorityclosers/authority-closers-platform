@@ -364,7 +364,7 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
 
     compiled = database.statements[0].compile(dialect=postgresql.dialect())
     tenant_lists = [value for value in compiled.params.values() if isinstance(value, list)]
-    assert any(set(values) == {OPS_TENANT, PUBLIC_TENANT} for values in tenant_lists)
+    assert any(set(values) == {PUBLIC_TENANT} for values in tenant_lists)
     assert UNRELATED_TENANT not in set(
         next(values for values in tenant_lists if isinstance(values, list))
     )
