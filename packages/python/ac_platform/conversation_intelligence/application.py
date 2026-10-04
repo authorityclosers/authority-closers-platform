@@ -1111,6 +1111,13 @@ class ConversationApplication:
         await erase_speaker_maps_for_recording(
             self.database, tenant_id=recording.tenant_id, recording_id=recording.id
         )
+        from ac_platform.conversation_intelligence.prospect_store import (
+            end_prospect_memberships_for_recording,
+        )
+
+        await end_prospect_memberships_for_recording(
+            self.database, tenant_id=recording.tenant_id, recording_id=recording.id, now=now
+        )
         from ac_platform.conversation_intelligence.call_metrics_models import (
             ConversationCallMetrics,
         )

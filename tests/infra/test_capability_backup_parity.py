@@ -72,6 +72,7 @@ SPEAKER_MAPS = "20261003_0070"
 CALL_METRICS = "20261003_0071"
 SPEAKER_ROLES_FREEZE = "20261003_0072"
 BILLING_CREDITS = "20261003_0073"
+PROSPECTS = "20261004_0074"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -126,7 +127,7 @@ HEADS = (
 )
 VERSIONED_HEADS = HEADS[1:]
 # Reserve parity before the separately owned billing migration lands.
-PARITY_HEADS = HEADS + (BILLING_CREDITS,)
+PARITY_HEADS = HEADS + (BILLING_CREDITS, PROSPECTS)
 TABLELESS_VERSIONED_HEADS = (
     SPEAKER_ROLES_FREEZE,
     REVISION,
@@ -251,7 +252,10 @@ NEW_TABLES = {
     SPEAKER_MAPS: ("conversation_speaker_map_revisions",),
     CALL_METRICS: ("conversation_call_metrics",),
 }
-PARITY_NEW_TABLES = NEW_TABLES | {BILLING_CREDITS: ("billing_credit_entries",)}
+PARITY_NEW_TABLES = NEW_TABLES | {
+    BILLING_CREDITS: ("billing_credit_entries",),
+    PROSPECTS: ("conversation_prospects", "conversation_prospect_memberships"),
+}
 ROOT = Path(__file__).parents[2]
 
 
@@ -392,6 +396,11 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         )
         assert len(module.parity_tables_for_head(SPEAKER_ROLES_FREEZE)) == 127
         assert len(module.parity_tables_for_head(BILLING_CREDITS)) == 128
+        assert module.VERSIONED_PARITY_CONTRACTS[PROSPECTS] == (
+            "ac-postgres-parity-v45",
+            module.parity_tables_for_head(BILLING_CREDITS) + PARITY_NEW_TABLES[PROSPECTS],
+        )
+        assert len(module.parity_tables_for_head(PROSPECTS)) == 130
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
             module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
@@ -1015,10 +1024,10 @@ def test_new_restore_evidence_requires_exact_migration_and_contract(
         proof._verify_row_count_parity(evidence, source["row_counts"], expected_migration_head=head)
 
 
-def test_billing_credit_parity_rejects_extra_tables_at_each_boundary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("head", [BILLING_CREDITS, PROSPECTS])
+def test_latest_parity_rejects_extra_tables_at_each_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, head: str
 ) -> None:
-    head = BILLING_CREDITS
     dump, metadata, payload = _metadata(tmp_path, head)
     expected = dict(payload["row_counts"])
     actual = expected | {"unexpected_credit_table": 0}
