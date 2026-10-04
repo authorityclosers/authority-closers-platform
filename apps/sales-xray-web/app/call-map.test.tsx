@@ -250,7 +250,7 @@ it("keeps speaker edits available for retry when device storage rejects a save",
   expect(write).toHaveBeenCalledOnce();
   expect(host.querySelector('[role="dialog"]') === editor).toBe(true);
   expect(editor.querySelector('[role="alert"]')?.textContent).toContain(
-    "Couldn’t save on this device. Try again.",
+    "Couldn’t save speaker details. Try again.",
   );
   expect(name.value).toBe("Fictional speaker");
   expect(prospect.getAttribute("aria-pressed")).toBe("true");

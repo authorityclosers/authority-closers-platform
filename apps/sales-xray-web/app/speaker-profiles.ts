@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  createContext,
+  useContext,
   useCallback,
   useMemo,
   useSyncExternalStore,
@@ -43,8 +45,8 @@ export function voiceStyle(voice: number): CSSProperties {
   } as CSSProperties;
 }
 
-// Until the account API stores speaker names (AUT-311), a call's speaker
-// profiles are kept on this device only.
+// Legacy storage is an edit prefill only on live calls. The standalone review
+// fixtures retain their local demonstration store; live reports use a provider.
 const storageKey = (callId: string) => `ac.xray.speakers.v1:${callId}`;
 
 function parse(raw: string | null): SpeakerProfiles {
@@ -142,11 +144,33 @@ function subscribe(notify: () => void) {
   };
 }
 
+export function clearLegacySpeakerProfiles() {
+  try {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith("ac.xray.speakers.v1:")) localStorage.removeItem(key);
+  } catch {
+    // Storage can be disabled. Server profiles remain the source of truth.
+  }
+}
+
+export type SpeakerProfilesState = {
+  callId: string | null;
+  profiles: SpeakerProfiles;
+  drafts: SpeakerProfiles;
+  save: (changes: SpeakerProfiles) => boolean | Promise<boolean>;
+  canSave: boolean;
+  error: string | null;
+  server: boolean;
+};
+export const SpeakerProfilesContext =
+  createContext<SpeakerProfilesState | null>(null);
+
 /** A call's speaker names, roles and icons, live across the page. */
 export function useSpeakerProfiles(callId: string | null) {
+  const server = useContext(SpeakerProfilesContext);
   const raw = useSyncExternalStore(
     subscribe,
-    () => readRaw(callId),
+    () => (server ? null : readRaw(callId)),
     () => null,
   );
   const profiles = useMemo(() => parse(raw), [raw]);
@@ -155,7 +179,24 @@ export function useSpeakerProfiles(callId: string | null) {
       callId ? saveSpeakerProfiles(callId, changes) : false,
     [callId],
   );
-  return { profiles, save, canSave: callId !== null };
+  if (server)
+    return server.callId === callId
+      ? server
+      : {
+          ...server,
+          profiles: {},
+          drafts: {},
+          canSave: false,
+          save: () => false,
+        };
+  return {
+    profiles,
+    drafts: profiles,
+    save,
+    canSave: callId !== null,
+    error: null,
+    server: false,
+  };
 }
 
 export function firstName(name: string | null | undefined): string | null {

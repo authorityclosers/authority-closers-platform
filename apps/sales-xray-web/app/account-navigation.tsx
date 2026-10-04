@@ -13,6 +13,7 @@ import {
   type UploadSessionStore,
 } from "./hooks/upload-session";
 import { useWorkspaceAccess } from "./workspace-access";
+import { clearLegacySpeakerProfiles } from "./speaker-profiles";
 
 const SIGN_OUT_ERROR = "We couldn’t confirm sign out. Try again.";
 const SIGN_OUT_UPLOAD_WARNING =
@@ -46,6 +47,7 @@ export async function requestSalesXrayLogout(
     if (response.status !== 204) throw new Error("logout_unconfirmed");
     rememberSubmission(null);
     rememberPendingUpload(null);
+    clearLegacySpeakerProfiles();
     upload?.completeSignOut();
   } catch (error) {
     upload?.cancelSignOut();
