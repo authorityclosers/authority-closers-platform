@@ -379,7 +379,14 @@ it.each([false, true])(
       <PlanAndBillingPane
         subs={subs}
         status="ready"
-        allowance={{ state: "error" }}
+        allowance={{
+          state: "ready",
+          value: {
+            allowance_seconds: 3600,
+            committed_seconds: 0,
+            available_seconds: 3600,
+          },
+        }}
         onRetry={() => {}}
         documents={[
           {
