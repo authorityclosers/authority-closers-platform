@@ -1143,7 +1143,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
       ?.textContent,
   ).toBe("Report ready");
   expect(container.querySelector(".studio-report-summary")).toBeNull();
-  expect(container.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(container.textContent).toContain("Remaining analysis time · 1 h");
   expect(container.textContent).not.toContain("free audio minutes");
   expect(container.textContent).not.toContain(
     "AI draft · not yet reviewed by Dipak",
@@ -1232,9 +1232,7 @@ it.each([
       status === 401,
     );
     if (status === 403) expect(alert.textContent).not.toContain("Sign in");
-    expect(container.textContent).toContain(
-      "Remaining analysis time · 99m 55s",
-    );
+    expect(container.textContent).toContain("Remaining analysis time · 1 h");
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
     expect(container.querySelector("audio")?.getAttribute("src")).toContain(
       submissionId,
@@ -2724,7 +2722,7 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   const allowanceBefore = [...container.querySelectorAll("span")].find(
     (element) => element.textContent?.includes("Remaining analysis time"),
   )?.textContent;
-  expect(allowanceBefore).toBe("Remaining analysis time · 100m 00s");
+  expect(allowanceBefore).toBe("Remaining analysis time · 1 h");
   await click("Review and continue analysis");
   const alert = container.querySelector('[role="alert"]');
   expect(alert).not.toBeNull();
