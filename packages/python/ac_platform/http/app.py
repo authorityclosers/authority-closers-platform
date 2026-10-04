@@ -20,6 +20,7 @@ from ac_platform.conversation_intelligence.internal_tester import (
     tester_rate_limit_resolver,
 )
 from ac_platform.db.session import engine, session_factory
+from ac_platform.http.admin_customers import install_admin_customers_http
 from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.app_updates import install_app_updates_http
@@ -150,6 +151,7 @@ def create_app(
         sessions=session_factory,
         provider=configured_identity_provider,
     )
+    install_admin_customers_http(application, settings=settings, require_actor=require_actor)
     install_organisation_http(application, settings=settings, require_actor=require_actor)
     install_course_http(
         application,
