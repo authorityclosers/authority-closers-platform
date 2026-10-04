@@ -19,6 +19,7 @@ class SpeakerDecision(TypedDict):
     speaker_id: str
     role: NotRequired[Role | None]
     display_name: NotRequired[str | None]
+    icon: NotRequired[str | None]
     spoken_name: NotRequired[str | None]
     evidence_segment_ids: NotRequired[list[str]]
     confidence: NotRequired[Literal["low", "medium", "high"] | None]
@@ -327,6 +328,10 @@ def resolve_speaker_map(
                         if row["id"] in decision["evidence_segment_ids"]
                     ]
         if source == "confirmed":
+            for speaker in result["speakers"]:
+                decision = by_id.get(speaker["speaker_id"], {})
+                if speaker["speaker_id"] != "unattributed" and "icon" in decision:
+                    speaker["icon"] = decision["icon"]
             result["user_revision"] = revision.get("revision", 0)
     priority = {None: 0, "predicted": 1, "model": 2, "channel": 3, "confirmed": 4}
     holders = sorted(
@@ -349,7 +354,14 @@ def resolve_speaker_map(
             speaker["confidence"] = None
     result["diagnostics"] = diagnostics
     result["map_revision"] = content_hash(
-        {"transcript_revision": result["transcript_revision"], "speakers": result["speakers"]}
+        {
+            "transcript_revision": result["transcript_revision"],
+            # Presentation choices must not change the map used by report provenance.
+            "speakers": [
+                {key: value for key, value in row.items() if key != "icon"}
+                for row in result["speakers"]
+            ],
+        }
     )
     origin = project_speaker_roles(result)["origin"]
     result["status"] = {

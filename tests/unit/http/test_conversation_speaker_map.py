@@ -41,7 +41,7 @@ from tests.unit.http.test_conversation_learner_acquisition import (
 HEADERS = {"Origin": ORIGIN, "If-Match": '"call-label-0"'}
 CHOICES = [
     {"speaker_id": "speaker_0", "role": "you", "display_name": None},
-    {"speaker_id": "speaker_1", "role": "prospect", "display_name": "रवि जी"},
+    {"speaker_id": "speaker_1", "role": "prospect", "display_name": "रवि जी", "icon": "carpentry"},
 ]
 
 
@@ -146,11 +146,28 @@ def test_http_predictions_confirmations_fences_and_no_analysis_side_effects(
                 )
                 assert saved.json()["speakers"][0]["display_name"] == "Different Name"
                 assert saved.json()["speakers"][1]["display_name"] == "रवि जी"
+                assert saved.json()["speakers"][1]["icon"] == "carpentry"
                 retry = await owner.put(
                     path, json={**payload, "speakers": list(reversed(CHOICES))}, headers=HEADERS
                 )
                 assert retry.status_code == 200 and retry.json() == saved.json()
                 assert (await owner.get(path)).json() == saved.json()
+                legacy = [
+                    {key: value for key, value in row.items() if key != "icon"} for row in CHOICES
+                ]
+                assert (
+                    await owner.put(path, json={**payload, "speakers": legacy}, headers=HEADERS)
+                ).json() == saved.json()
+                async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as reopened:
+                    reopened.cookies.set(setup.settings.session_cookie_name, setup.token)
+                    assert (await reopened.get(path)).json() == saved.json()
+                assert (
+                    await owner.put(
+                        path,
+                        json={**payload, "speakers": [CHOICES[0], {**CHOICES[1], "icon": None}]},
+                        headers=HEADERS,
+                    )
+                ).status_code == 409
                 swapped = [{**CHOICES[0], "role": "salesperson"}, {**CHOICES[1], "role": "you"}]
                 stale = await owner.put(
                     path, json={**payload, "speakers": swapped}, headers=HEADERS
@@ -171,7 +188,10 @@ def test_http_predictions_confirmations_fences_and_no_analysis_side_effects(
                             path,
                             json={
                                 **payload,
-                                "speakers": [swapped[0], {**swapped[1], "display_name": name}],
+                                "speakers": [
+                                    swapped[0],
+                                    {**swapped[1], "display_name": name, "icon": None},
+                                ],
                             },
                             headers={**HEADERS, "If-Match": '"call-label-1"'},
                         )
@@ -181,6 +201,7 @@ def test_http_predictions_confirmations_fences_and_no_analysis_side_effects(
                 assert sorted(item.status_code for item in simultaneous) == [200, 409]
                 changed = next(item for item in simultaneous if item.status_code == 200)
                 assert changed.status_code == 200 and changed.headers["etag"] == '"call-label-2"'
+                assert changed.json()["speakers"][1]["icon"] is None
                 transcript["revision"] = "new-c2"
                 fresh = await owner.get(path)
                 assert (
@@ -225,6 +246,10 @@ def test_http_predictions_confirmations_fences_and_no_analysis_side_effects(
                     {**payload, "speakers": [{**CHOICES[0], "display_name": value}, CHOICES[1]]}
                     for value in ("", "x\n", "x\u202e", "x" * 121)
                 ]
+                invalid_bodies += [
+                    {**payload, "speakers": [CHOICES[0], {**CHOICES[1], "icon": value}]}
+                    for value in ("../person", "<svg>", "x" * 65, 3)
+                ]
                 for invalid in invalid_bodies:
                     failure = await owner.put(path, json=invalid, headers=HEADERS)
                     assert (
@@ -253,6 +278,9 @@ def test_http_predictions_confirmations_fences_and_no_analysis_side_effects(
                         )
                     ).all()
                     assert [row.revision for row in revisions] == [1, 2, 3]
+                    assert revisions[0].speakers[1]["icon"] == "carpentry"
+                    assert revisions[1].speakers[1]["icon"] is None
+                    assert revisions[2].speakers[1]["icon"] == "carpentry"
                     events = (
                         await db.scalars(
                             select(AuditEvent).where(
