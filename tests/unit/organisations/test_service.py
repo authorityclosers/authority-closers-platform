@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
@@ -11,17 +11,21 @@ from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
 
 from ac_platform.audit.models import AuditEvent
+from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
+from ac_platform.billing.order_models import BillingPaymentEvent, BillingPeriod, BillingSubscription
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.organisations.service import (
     OrganisationCommandConflict,
     OrganisationCommandError,
+    OrganisationSeatsFull,
     OrganisationService,
 )
 from ac_platform.tenancy.models import (
     Membership,
     Organisation,
     OrganisationDomainSetting,
+    OrganisationInvite,
     Tenant,
 )
 
@@ -119,10 +123,209 @@ def state() -> Iterator[SimpleNamespace]:
     engine.dispose()
 
 
+async def seed_paid_seats(database, tenant_id, owner_id, *, seats=100, at=None):
+    """Fictional paid-period rows for existing membership tests; no provider call."""
+    now = at or datetime.now(UTC) - timedelta(seconds=1)
+    account_id, subscription_id, payment_id, period_id = (uuid4() for _ in range(4))
+    database.add(
+        BillingAccount(
+            id=account_id,
+            tenant_id=tenant_id,
+            person_id=None,
+            kind="organisation",
+            created_at=now,
+        )
+    )
+    await database.flush()
+    database.add(
+        BillingSubscription(
+            id=subscription_id,
+            account_id=account_id,
+            mode="test",
+            provider="fake",
+            provider_subscription_ref=f"fake_{subscription_id.hex}",
+            provider_plan_ref="fixture_plan",
+            plan_key="organisation",
+            plan_name="Fictional Organisation",
+            plan_revision=1,
+            interval="month",
+            seats=seats,
+            included_minutes=1000,
+            amount_minor=100 * seats,
+            currency="INR",
+            gst_inclusive=False,
+            renewal_needs_customer_approval=False,
+            created_by_person_id=owner_id,
+            created_at=now,
+        )
+    )
+    await database.flush()
+    database.add(
+        BillingPaymentEvent(
+            id=payment_id,
+            provider="fake",
+            provider_event_id=f"fixture_{payment_id}",
+            kind="subscription.charged",
+            source="webhook",
+            subscription_id=subscription_id,
+            payment_ref=f"fake_pay_{payment_id.hex}",
+            amount_minor=100 * seats,
+            currency="INR",
+            period_start=now,
+            period_end=now + timedelta(days=30),
+            payload_sha256="a" * 64,
+            received_at=now,
+            verified_at=now,
+            created_at=now,
+        )
+    )
+    await database.flush()
+    database.add(
+        BillingPeriod(
+            id=period_id,
+            subscription_id=subscription_id,
+            payment_event_id=payment_id,
+            period_start=now,
+            period_end=now + timedelta(days=30),
+            created_at=now,
+        )
+    )
+    database.add(
+        BillingLedgerEntry(
+            id=uuid4(),
+            account_id=account_id,
+            kind="period_grant",
+            seconds=seats * 1000 * 60,
+            valid_from=now,
+            expires_at=now + timedelta(days=60),
+            plan_key="organisation",
+            source_ref=f"period:{period_id}",
+            actor_type="provider",
+            created_at=now,
+        )
+    )
+    await database.flush()
+    return account_id
+
+
 async def create_org(state: SimpleNamespace, *, name: str = "Example Group"):
-    return await state.service.create(
+    organisation = await state.service.create(
         name, state.owner_id, uuid4(), "AUT-438", reason="reviewed setup"
     )
+    await seed_paid_seats(state.adapter, organisation.tenant_id, state.owner_id)
+    return organisation
+
+
+@pytest.mark.asyncio
+async def test_unpaid_organisation_refuses_invites_and_direct_adds_without_writes(state):
+    org = await state.service.create("Unpaid fixture", state.owner_id, uuid4(), "AUT-881")
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.add_member(org.tenant_id, state.worker_id, "member", uuid4())
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "new@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    assert state.session.scalar(select(func.count()).select_from(OrganisationInvite)) == 0
+    assert state.session.scalar(select(func.count()).select_from(AuditEvent)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["direct", "request"])
+async def test_operator_provisions_unpaid_org_but_self_service_still_needs_seats(state, method):
+    org = await state.service.create("Operator fixture", state.owner_id, uuid4(), "AUT-881")
+    reference = "AUT-881 fictional operator provisioning"
+    key = uuid4()
+    if method == "direct":
+        added = await state.service.add_member(
+            org.tenant_id,
+            state.worker_id,
+            "member",
+            key,
+            actor_person_id=state.owner_id,
+            operator_reference=reference,
+        )
+        assert added.status == "active"
+    else:
+        added = await state.service.request_member(
+            org.tenant_id,
+            "worker@example.test",
+            "member",
+            key,
+            actor_person_id=state.owner_id,
+            operator_reference=reference,
+        )
+        assert added["status"] == "active"
+    audit = state.session.scalar(select(AuditEvent).where(AuditEvent.request_id == str(key)))
+    assert audit.actor_person_id == state.owner_id
+    assert audit.payload["intent"]["operator_reference"] == reference
+    invited = await state.service.request_member(
+        org.tenant_id,
+        "staff-invite@example.test",
+        "member",
+        uuid4(),
+        actor_person_id=state.owner_id,
+        operator_reference=reference,
+    )
+    assert invited["status"] == "invited"
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "self-service@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    # Operator-created pending invites occupy seats when self-service later becomes paid.
+    await seed_paid_seats(state.adapter, org.tenant_id, state.owner_id, seats=3)
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "self-service@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    assert state.session.scalar(select(func.count()).select_from(AuditEvent)) == 3
+
+
+@pytest.mark.asyncio
+async def test_current_period_seats_are_not_extended_by_rollover_or_refunded_grants(state):
+    from ac_platform.organisations.usage import paid_seats
+
+    org = await state.service.create("Paid fixture", state.owner_id, uuid4(), "AUT-881")
+    now = datetime.now(UTC) - timedelta(seconds=1)
+    account_id = await seed_paid_seats(
+        state.adapter, org.tenant_id, state.owner_id, seats=2, at=now
+    )
+    assert await paid_seats(state.adapter, org.tenant_id, now) == 2
+    assert await paid_seats(state.adapter, org.tenant_id, now + timedelta(days=30)) == 0
+    lot = state.session.scalar(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.account_id == account_id,
+        )
+    )
+    state.session.add(
+        BillingLedgerEntry(
+            id=uuid4(),
+            account_id=account_id,
+            kind="refund",
+            seconds=-lot.seconds,
+            lot_id=lot.id,
+            valid_from=now,
+            plan_key="organisation",
+            source_ref=f"fixture-refund:{uuid4()}",
+            actor_type="provider",
+            created_at=now,
+        )
+    )
+    state.session.flush()
+    assert await paid_seats(state.adapter, org.tenant_id, now) == 0
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.add_member(org.tenant_id, state.worker_id, "member", uuid4())
 
 
 @pytest.mark.asyncio

@@ -24,7 +24,7 @@ from ac_platform.kernel.errors import (
     ResourceConflict,
     ResourceNotFound,
 )
-from ac_platform.organisations.usage import invite_row, member_rows
+from ac_platform.organisations.usage import invite_row, member_rows, organisation_seats
 from ac_platform.tenancy.models import (
     Membership,
     MembershipRole,
@@ -72,6 +72,14 @@ class OrganisationAdditionLimit(OrganisationCommandError):
     """The organisation's daily addition budget is exhausted."""
 
     status = 429
+
+
+class OrganisationSeatsFull(OrganisationCommandError):
+    """An addition would exceed seats from the organisation's verified paid period."""
+
+    code = "seats_full"
+    status = 409
+    title = "Organisation seats are full"
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +309,20 @@ class OrganisationService:
         before = (
             None if membership is None else {"role": membership.role, "status": membership.status}
         )
+        pending = await self.session.scalar(
+            select(OrganisationInvite)
+            .where(
+                OrganisationInvite.tenant_id == tenant_id,
+                OrganisationInvite.email_normalized == email,
+                OrganisationInvite.status == "pending",
+            )
+            .with_for_update()
+        )
+        # Audited operator provisioning does not require a paid subscription.
+        if operator_reference is None and (
+            membership is None or membership.status != "active" or membership.ended_at is not None
+        ):
+            await self._ensure_seat_available(tenant_id, extra=0 if pending is not None else 1)
         now = datetime.now(UTC)
         if membership is None:
             membership = Membership(
@@ -315,15 +337,6 @@ class OrganisationService:
             membership.status = MembershipStatus.ACTIVE.value
             membership.ended_at = None
             membership.revision += 1
-        pending = await self.session.scalar(
-            select(OrganisationInvite)
-            .where(
-                OrganisationInvite.tenant_id == tenant_id,
-                OrganisationInvite.email_normalized == email,
-                OrganisationInvite.status == "pending",
-            )
-            .with_for_update()
-        )
         if pending is not None:
             pending.status = "accepted"
             pending.closed_at = now
@@ -371,6 +384,15 @@ class OrganisationService:
             actor_person_id=actor_person_id,
         )
         return MemberResult(tenant_id, person_id, person.email, role, "active")
+
+    async def _ensure_seat_available(self, tenant_id: UUID, *, extra: int = 1) -> None:
+        # Every addition holds the registry lock, so competing commands cannot
+        # both consume the last seat. Accepting an invite replaces its seat.
+        seats = await organisation_seats(self.session, tenant_id)
+        if seats["active_members"] + seats["pending_invites"] + extra > seats["paid_seats"]:
+            raise OrganisationSeatsFull(
+                "All paid seats are occupied by members or pending invites."
+            )
 
     async def _actor(self, tenant_id: UUID, actor_person_id: UUID) -> Membership:
         await self._organisation(tenant_id, lock=True)
@@ -692,6 +714,7 @@ class OrganisationService:
                 role,
                 command_id,
                 actor_person_id=actor_person_id,
+                operator_reference=operator_reference,
                 reason=operator_reference,
                 http_intent=intent,
             )
@@ -707,6 +730,8 @@ class OrganisationService:
         )
         if pending is not None:
             raise ResourceConflict("A pending invite already exists for this email.")
+        if acting != "operator":
+            await self._ensure_seat_available(tenant_id)
         invite = OrganisationInvite(
             tenant_id=tenant_id,
             email_normalized=email,

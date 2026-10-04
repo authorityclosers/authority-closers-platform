@@ -217,6 +217,22 @@ class BillingLedger:
                 lots.append(_lot_from_entry(entry, closed.get(entry.id, 0)))
         return lots
 
+    async def organisation_entries(self, *, tenant_id: UUID) -> list[BillingLedgerEntry]:
+        """Read a pool without creating a billing account on an unpaid organisation."""
+        account_ids = select(BillingAccount.id).where(
+            BillingAccount.tenant_id == tenant_id, BillingAccount.kind == "organisation"
+        )
+        rows = await self.database.scalars(
+            select(BillingLedgerEntry)
+            .where(BillingLedgerEntry.account_id.in_(account_ids))
+            .order_by(BillingLedgerEntry.created_at, BillingLedgerEntry.id)
+        )
+        return list(rows)
+
+    async def organisation_uses(self, *, tenant_id: UUID) -> list[Use]:
+        """Reservations and settlements charged in this tenant, including former members."""
+        return await self._acquisition_uses(tenant_id, True)
+
     # ---- use reads (never written here) ---------------------------------
 
     async def person_uses(self, *, tenant_id: UUID, person_id: UUID) -> list[Use]:

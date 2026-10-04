@@ -24,6 +24,7 @@ from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import Membership, OrganisationInvite
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
+from tests.unit.organisations.test_service import seed_paid_seats
 
 
 def test_concurrent_http_budget_and_verified_add(postgres_harness):  # noqa: F811
@@ -62,6 +63,7 @@ def test_concurrent_http_budget_and_verified_add(postgres_harness):  # noqa: F81
                     public_learner_tenant_id=settings.public_learner_tenant_id,
                 )
                 org = await service.create("Fictional HTTP Team", owner, uuid4(), "AUT-439 fixture")
+                await seed_paid_seats(db, org.tenant_id, owner)
                 db.add(
                     IdentitySession(
                         id=identity,
