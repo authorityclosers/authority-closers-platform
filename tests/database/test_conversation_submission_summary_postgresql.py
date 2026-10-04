@@ -1,4 +1,4 @@
-"""Fictional mixed uploads prove whole-library counts and constant SQL cost."""
+"""Whole-library counts cost admission, one authority check and one count statement."""
 
 import hashlib
 import json
@@ -229,7 +229,13 @@ def test_mixed_summary_matches_all_pages_in_one_read_only_statement(postgres_har
                         counts = await account_library_summary(ownership, setup.state.actor)
                     finally:
                         event.remove(setup.engine.sync_engine, "before_cursor_execute", capture)
-                    assert len(statements) == admission + 1
+                    assert len(statements) == admission + 2
+                    authority = " ".join(statements[admission].lower().split())
+                    assert "from memberships join organisations" in authority
+                    assert "memberships.person_id =" in authority
+                    assert "memberships.tenant_id =" in authority
+                    assert authority.endswith("for share")
+                    assert statements[-1].lstrip().upper().startswith("SELECT COUNT(")
                     assert all(s.lstrip().upper().startswith("SELECT") for s in statements)
                 assert counts == COUNTS
                 assert (await client.get(PREFIX + "/submissions/summary")).json() == counts
