@@ -6,15 +6,28 @@ counts, markers and hashes; the marked segment's text is never asserted on.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from hashlib import sha256
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.conversation_intelligence import sensitive_segments_cli as cli
+from ac_platform.conversation_intelligence import sensitive_segments_store as store_module
 from ac_platform.conversation_intelligence.admin_reports import AdminConversationReports
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.checkpoints import canonical
-from ac_platform.conversation_intelligence.models import ConversationCheckpoint
+from ac_platform.conversation_intelligence.guest_models import ConversationProcessingPrincipal
+from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
+    ConversationInferenceTask,
+    ConversationRecording,
+    ConversationReportDraft,
+    ConversationRun,
+)
 from ac_platform.conversation_intelligence.report_access import (
     ReportAccess,
     ReportSourceBinding,
@@ -22,7 +35,11 @@ from ac_platform.conversation_intelligence.report_access import (
 )
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.report_store import ConversationReports
+from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.reports import ReportDraft
+from ac_platform.conversation_intelligence.sensitive_segment_models import (
+    ConversationSensitiveSegmentMark,
+)
 from ac_platform.conversation_intelligence.sensitive_segments import (
     WITHHELD_MARKER,
     grams,
@@ -31,8 +48,10 @@ from ac_platform.conversation_intelligence.sensitive_segments import (
 )
 from ac_platform.conversation_intelligence.sensitive_segments_cli import docx_text
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
+from tests.database.test_conversation_inference_postgresql import FakeBroker
 from tests.database.test_conversation_reviews_postgresql import (
     ReviewCase,
+    _build_report_case,
     _create_assignment,
     _service,
     run,
@@ -164,5 +183,218 @@ def test_marked_segment_is_withheld_on_every_surface_and_released_reads_are_iden
         async with case.sessions() as database, database.begin():
             released = await _surfaces(database, case, assignment_id)
         assert canonical(released) == baseline
+
+    run(exercise())
+
+
+@pytest.fixture
+def generation_harness():
+    # The review factory provisions one fixed admin address per disposable schema.
+    yield from postgres_harness.__wrapped__()
+
+
+@pytest.mark.parametrize("mode", ["hit", "no_hit", "error"])
+def test_generation_is_atomic_with_publication_and_replay_respects_release(
+    generation_harness,
+    tmp_path,
+    monkeypatch,
+    mode,
+):
+    original_execute, original_finish = FakeBroker.execute, ReportingPipeline.finish
+    captured = {}
+
+    async def execute(self, reservation, payload):
+        result = await original_execute(self, reservation, payload)
+        if mode != "no_hit":
+            data = {
+                **result.data,
+                "text": "cash only",
+                "words": [
+                    {**word, "text": text}
+                    for word, text in zip(result.data["words"], ("cash", "only"), strict=True)
+                ],
+            }
+            raw = canonical(data)
+            result = replace(
+                result, data=data, raw_json=raw, response_sha256=sha256(raw).hexdigest()
+            )
+        return result
+
+    async def finish(self, recording, task, report_run, *args):
+        captured.update(recording_id=recording.id, run_id=report_run.id, args=args)
+        self.database.add(
+            ConversationProcessingPrincipal(
+                id=uuid4(),
+                tenant_id=recording.tenant_id,
+                person_id=recording.person_id,
+                operator_reference="AUT-916 fictional",
+                created_at=recording.created_at,
+            )
+        )
+        await self.database.flush()
+        await original_finish(self, recording, task, report_run, *args)
+        # Another connection sees neither the report nor marks before the caller commits.
+        async with AsyncSession(self.database.bind) as observer:
+            for model in (ConversationReportDraft, ConversationSensitiveSegmentMark):
+                assert (
+                    await observer.scalar(
+                        select(func.count())
+                        .select_from(model)
+                        .where(
+                            model.recording_id == recording.id,
+                        )
+                    )
+                    == 0
+                )
+
+    monkeypatch.setattr(FakeBroker, "execute", execute)
+    monkeypatch.setattr(ReportingPipeline, "finish", finish)
+    if mode == "error":
+
+        def broken(_segments):
+            raise RuntimeError("fictional detector failure")
+
+        monkeypatch.setattr(
+            "ac_platform.conversation_intelligence.sensitive_segments_store.detect_sensitive_terms",
+            broken,
+        )
+
+    async def exercise():
+        if mode == "error":
+            with pytest.raises(AssertionError):
+                await _build_report_case(generation_harness, tmp_path)
+            from sqlalchemy.ext.asyncio import create_async_engine
+
+            engine = create_async_engine(generation_harness.url)
+            try:
+                async with AsyncSession(engine) as database:
+                    report_run = await database.get(ConversationRun, captured["run_id"])
+                    assert report_run.state != "completed" and report_run.completed_at is None
+                    for model in (ConversationReportDraft, ConversationSensitiveSegmentMark):
+                        assert (
+                            await database.scalar(
+                                select(func.count())
+                                .select_from(model)
+                                .where(
+                                    model.recording_id == captured["recording_id"],
+                                )
+                            )
+                            == 0
+                        )
+            finally:
+                await engine.dispose()
+            return
+        case = await _build_report_case(generation_harness, tmp_path)
+        try:
+            async with case.sessions() as database, database.begin():
+                app = ConversationApplication(database, clock=lambda: case.prepared.state.now)
+                before = await ConversationReports(app).get(case.source_actor, case.report_run_id)
+                rows = (
+                    await database.scalars(
+                        select(ConversationSensitiveSegmentMark).where(
+                            ConversationSensitiveSegmentMark.recording_id
+                            == case.prepared.recording_id,
+                        )
+                    )
+                ).all()
+                assert len(rows) == (1 if mode == "hit" else 0)
+                if mode == "no_hit":
+                    assert markers(before) == 0
+                if rows:
+                    assert rows[0].source == "generation"
+                    assert rows[0].reason_ref == "sensitive_terms_v1:cash_only"
+                    assert _quotes_for(before["report"], case.span_id) == [WITHHELD_MARKER]
+                    await SensitiveSegmentsStore(database).release(
+                        case.admin_actor,
+                        mark_id=rows[0].id,
+                        reason_ref="AUT-916 fictional release",
+                        idempotency_key="generation-release",
+                    )
+                released = await ConversationReports(app).get(case.source_actor, case.report_run_id)
+                from ac_platform.conversation_intelligence.inference import ConversationInference
+
+                pipeline = ReportingPipeline(ConversationInference(app))
+                recording = await database.get(ConversationRecording, case.prepared.recording_id)
+                task = await database.get(ConversationInferenceTask, case.report_run_id)
+                report_run = await database.get(ConversationRun, case.report_run_id)
+                await original_finish(pipeline, recording, task, report_run, *captured["args"])
+                assert canonical(
+                    await ConversationReports(app).get(case.source_actor, case.report_run_id)
+                ) == canonical(released)
+                assert (
+                    await database.scalar(
+                        select(func.count())
+                        .select_from(ConversationReportDraft)
+                        .where(
+                            ConversationReportDraft.run_id == case.report_run_id,
+                        )
+                    )
+                    == 1
+                )
+                assert await database.scalar(
+                    select(func.count())
+                    .select_from(ConversationSensitiveSegmentMark)
+                    .where(
+                        ConversationSensitiveSegmentMark.recording_id == recording.id,
+                    )
+                ) == (2 if mode == "hit" else 0)
+        finally:
+            await case.engine.dispose()
+
+    run(exercise())
+
+
+def test_census_dry_run_apply_and_replay_commit_reference_only_marks(
+    generation_harness,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("AC_ENVIRONMENT", "test")
+
+    def hits(segments):
+        segment_id, _text = next(iter(segments))
+        return ((segment_id, "SENSITIVE_FINANCIAL", "cash_only"),)
+
+    async def exercise():
+        case = await _build_report_case(generation_harness, tmp_path)
+        monkeypatch.setattr(
+            cli, "_database_url", lambda: case.engine.url.render_as_string(hide_password=False)
+        )
+        for module in (cli, store_module):
+            monkeypatch.setattr(module, "detect_sensitive_terms", hits)
+        async with case.sessions() as database, database.begin():
+            database.add(
+                ConversationProcessingPrincipal(
+                    id=uuid4(),
+                    tenant_id=case.prepared.state.tenant_id,
+                    person_id=case.prepared.state.person_id,
+                    operator_reference="AUT-916 fictional",
+                    created_at=case.prepared.state.now,
+                )
+            )
+
+        async def marks():
+            async with case.sessions() as database:
+                return (
+                    await database.scalars(
+                        select(ConversationSensitiveSegmentMark).where(
+                            ConversationSensitiveSegmentMark.recording_id
+                            == case.prepared.recording_id,
+                        )
+                    )
+                ).all()
+
+        args = cli.parser().parse_args(
+            ["census", "--recording-id", str(case.prepared.recording_id)]
+        )
+        assert await cli.census(args) and await marks() == []
+        args.apply, args.environment = True, "test"
+        await cli.census(args)
+        (first,) = await marks()
+        assert first.source == "generation"
+        assert first.reason_ref == "AUT-524 census sensitive_terms_v1:cash_only"
+        await cli.census(args)
+        assert [m.id for m in await marks()] == [first.id]
+        await case.engine.dispose()
 
     run(exercise())
