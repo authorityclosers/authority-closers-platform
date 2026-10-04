@@ -32,6 +32,18 @@ from ac_platform.conversation_intelligence.storage import StorageError
             "conversation_report_dimension_status_invalid",
         ),
         (
+            InferenceTaskError("report_dimension_prospect_evidence_required"),
+            "conversation_report_dimension_prospect_evidence_required",
+        ),
+        (
+            InferenceTaskError("report_dimension_evidence_required"),
+            "conversation_provider_result_validation_failed",
+        ),
+        (
+            InferenceTaskError("report_dimension_prospect_evidence_required: private words"),
+            "conversation_provider_result_validation_failed",
+        ),
+        (
             InferenceTaskError("report_dimension_status_invalid: private response"),
             "conversation_provider_result_validation_failed",
         ),

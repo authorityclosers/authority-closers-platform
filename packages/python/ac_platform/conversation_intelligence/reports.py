@@ -352,6 +352,16 @@ _CANONICAL_REPORT_ROOT_FIELDS = frozenset(
 class ReportError(ValueError):
     """Stable, non-content error raised by report preparation or validation."""
 
+    dimension_ids: tuple[str, ...] = ()
+
+
+# AUT-615 P-A: candidate IDs are not rubric approval. Populate the confirmed
+# subset only from recorded controlled-section evidence or CEO-routed sign-off.
+PROSPECT_DIMENSION_IDS = frozenset(
+    {"human_connection_trust", "discovery_deep_understanding", "qualification"}
+)
+CONFIRMED_PROSPECT_DIMENSIONS: frozenset[str] = frozenset()
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
@@ -1388,7 +1398,9 @@ def _normalise_dimensions(
         evidence: list[dict[str, Any]] = []
         if evidence_required and not isinstance(raw_evidence, list):
             raise ReportError("report_dimension_evidence_required")
-        retain_evidence = evidence_required or canonical_read
+        retain_evidence = (
+            evidence_required or canonical_read or coaching_prompt_revision == COACHING_PROMPT_V7
+        )
         if retain_evidence and raw_evidence is not None:
             if not isinstance(raw_evidence, list):
                 raise ReportError("report_dimension_evidence_invalid")
@@ -1748,7 +1760,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/8"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/9"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2691,6 +2703,39 @@ def _derived_source_label(transcript: Mapping[str, Any]) -> str:
     return f"Scribe transcript revision {transcript['revision']} · source-bound"
 
 
+def _require_dimension_prospect_evidence(
+    dimensions: list[dict[str, Any]],
+    transcript: Mapping[str, Any],
+    speaker_roles: Mapping[str, Any] | None,
+) -> None:
+    if speaker_roles is None or not CONFIRMED_PROSPECT_DIMENSIONS:
+        return
+    try:
+        snapshot = validate_speaker_roles(speaker_roles, transcript)
+    except ValueError:
+        return
+    if snapshot["origin"] not in {"user_confirmed_roles", "channel_mapped_roles"}:
+        return
+    prospects = {row["speaker_id"] for row in snapshot["speakers"] if row["role"] == "prospect"}
+    if not prospects:
+        return
+    segment_speakers = {row["id"]: row["speaker_id"] for row in transcript["segments"]}
+    failing = tuple(
+        row["dimension_id"]
+        for row in dimensions
+        if row["dimension_id"] in CONFIRMED_PROSPECT_DIMENSIONS & PROSPECT_DIMENSION_IDS
+        and row["status"] in {"observed", "conflicted"}
+        and not any(
+            segment_speakers[reference["segment_id"]] in prospects
+            for reference in row.get("evidence", [])
+        )
+    )
+    if failing:
+        error = ReportError("report_dimension_prospect_evidence_required")
+        error.dimension_ids = failing
+        raise error
+
+
 def parse_report_draft(
     payload: Mapping[str, Any],
     transcript: Mapping[str, Any],
@@ -2699,6 +2744,7 @@ def parse_report_draft(
     profile: Mapping[str, Any] | None = None,
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
     canonical_read: bool = False,
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> ReportDraft:
     """Validate a decoded model object and bind every claim to native transcript data."""
 
@@ -2805,6 +2851,10 @@ def parse_report_draft(
         salvaged=salvaged,
     )
     _truncate_evidence(normalized["dimensions"], ReportDimension, "dimensions", truncated)
+    if not canonical_read and coaching_prompt_revision in SPEAKER_ROLE_PROMPT_REVISIONS:
+        _require_dimension_prospect_evidence(
+            normalized["dimensions"], validated_transcript, speaker_roles
+        )
     if truncated:
         compatibility_extras["evidence_truncated"] = truncated
     if salvaged:
@@ -2845,6 +2895,7 @@ def parse_groq_response(
     source_label: str | None = None,
     profile: Mapping[str, Any] | None = None,
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
+    speaker_roles: Mapping[str, Any] | None = None,
 ) -> ReportDraft:
     """Decode only the model content; raw provider bytes remain the caller's receipt."""
 
@@ -2873,6 +2924,7 @@ def parse_groq_response(
         source_label=source_label,
         profile=profile,
         coaching_prompt_revision=coaching_prompt_revision,
+        speaker_roles=speaker_roles,
     )
 
 

@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
@@ -50,6 +50,7 @@ C5RepairFailureCode = Literal[
     "conversation_report_evidence_segment_invalid",
     "conversation_report_findings_invalid",
     "conversation_report_dimension_status_invalid",
+    "conversation_report_dimension_prospect_evidence_required",
     "conversation_report_overview_missing",
     "conversation_report_overview_invalid",
     "conversation_report_overview_schema_invalid",
@@ -67,6 +68,7 @@ C5_REPAIR_FAILURE_CODES = frozenset(
         "conversation_report_evidence_segment_invalid",
         "conversation_report_findings_invalid",
         "conversation_report_dimension_status_invalid",
+        "conversation_report_dimension_prospect_evidence_required",
         "conversation_report_overview_missing",
         "conversation_report_overview_invalid",
         "conversation_report_overview_schema_invalid",
@@ -86,6 +88,18 @@ class C5RepairIntent(Contract):
     failure_code: C5RepairFailureCode
     original_run_id: UUID
     original_response_sha256: Digest
+    dimension_ids: tuple[
+        Literal["human_connection_trust", "discovery_deep_understanding", "qualification"], ...
+    ] = Field(default=(), max_length=3, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def prospect_context(self) -> "C5RepairIntent":
+        if (
+            self.failure_code == "conversation_report_dimension_prospect_evidence_required"
+            and not self.dimension_ids
+        ):
+            raise ValueError("prospect_repair_dimensions_required")
+        return self
 
 
 class ReviewIntent(Contract):

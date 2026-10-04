@@ -7,6 +7,7 @@ its own immutable input, accepted quote, reservation and durable provider task.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
@@ -227,6 +228,26 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
     if prepared.provider == "openai":
         raise ConversationConflict("OpenAI coaching repair is not authorized.")
     body = prepared.as_provider_body()
+    prospect_ids: tuple[str, ...] = ()
+    if repair.failure_code == "conversation_report_dimension_prospect_evidence_required":
+        try:
+            user = (
+                body["messages"][1]["content"]
+                if prepared.provider == "groq"
+                else body["contents"][0]["parts"][0]["text"]
+            )
+            roles = json.loads(user.split("\n", 1)[1])["source_context"]["speaker_roles"]
+            prospect_ids = tuple(
+                row["speaker_id"] for row in roles["speakers"] if row["role"] == "prospect"
+            )
+            if roles["origin"] not in {"user_confirmed_roles", "channel_mapped_roles"}:
+                raise ValueError
+        except (KeyError, IndexError, TypeError, ValueError):
+            raise ConversationConflict(
+                "The frozen prospect repair context is unavailable."
+            ) from None
+        if not repair.dimension_ids or not prospect_ids:
+            raise ConversationConflict("The prospect repair context is incomplete.")
     if prepared.provider == "groq":
         messages = body.get("messages")
         if (
@@ -237,7 +258,7 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
         ):
             raise ConversationConflict("The coaching repair envelope is unavailable.")
         system = messages[0]["content"]
-        messages[0]["content"] = _repair_system_content(system, repair)
+        messages[0]["content"] = _repair_system_content(system, repair, prospect_ids)
     else:
         instruction = body.get("systemInstruction")
         parts = instruction.get("parts") if isinstance(instruction, dict) else None
@@ -248,7 +269,7 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
             or not isinstance(parts[0].get("text"), str)
         ):
             raise ConversationConflict("The coaching repair envelope is unavailable.")
-        parts[0]["text"] = _repair_system_content(parts[0]["text"], repair)
+        parts[0]["text"] = _repair_system_content(parts[0]["text"], repair, prospect_ids)
     payload = canonical(body)
     return replace(
         prepared,
@@ -257,7 +278,9 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
     )
 
 
-def _repair_system_content(system: str, repair: C5RepairIntent) -> str:
+def _repair_system_content(
+    system: str, repair: C5RepairIntent, prospect_ids: tuple[str, ...] = ()
+) -> str:
     marker = "Profile:\n"
     head, separator, profile = system.rpartition(marker)
     if not separator or not profile:
@@ -278,6 +301,17 @@ def _repair_system_content(system: str, repair: C5RepairIntent) -> str:
             "audio timestamps. Require 0 <= quote_start < quote_end <= len(segment.text), "
             "and an excerpt of at most 2000 characters. Do not copy start_ms/end_ms "
             "into quote_start/quote_end. The server supplies native timestamps."
+        )
+    if repair.failure_code == "conversation_report_dimension_prospect_evidence_required":
+        instruction += (
+            " Prospect evidence correction: failing confirmed dimension IDs "
+            + json.dumps(repair.dimension_ids)
+            + "; frozen prospect speaker IDs "
+            + json.dumps(prospect_ids)
+            + ". For each failing dimension, cite a valid segment from one of these "
+            "prospect speakers, or choose insufficient_evidence, not_applicable or unknown "
+            "yourself. Do not infer or replace roles. The complete response will be "
+            "validated again against the same frozen input."
         )
     return f"{head}\n{instruction}\n{marker}{profile}"
 

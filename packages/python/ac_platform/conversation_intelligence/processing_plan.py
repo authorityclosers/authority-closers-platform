@@ -213,6 +213,11 @@ def c5_repair_intent(task: ConversationInferenceTask, job: Job) -> C5RepairInten
             failure_code=job.last_error,
             original_run_id=task.run_id,
             original_response_sha256=receipt.get("response_sha256"),
+            dimension_ids=(
+                tuple(receipt.get("prospect_dimension_ids", ()))
+                if job.last_error == "conversation_report_dimension_prospect_evidence_required"
+                else ()
+            ),
         )
     except (TypeError, ValueError):
         return None
