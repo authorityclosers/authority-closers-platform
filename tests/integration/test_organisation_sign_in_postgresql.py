@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -21,12 +21,34 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.email_login import decrypt_email_login_code
 from ac_platform.identity.models import EmailLoginCode, Person, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.organisations.service import OrganisationService
+from ac_platform.organisations.service import OrganisationService, _tenant_slug
 from ac_platform.tenancy.models import Membership, OrganisationInvite, Tenant
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
 from tests.integration.test_password_identity_http_postgresql import _ExistingGoogleProvider
 from tests.unit.http.test_organisation_seat_exemptions import install_approval
 from tests.unit.organisations.test_service import seed_paid_seats
+
+
+def _organisation_name(name: str, case_id: UUID) -> str:
+    return f"{case_id.hex} {name}"
+
+
+def test_organisation_fixture_names_preserve_full_case_namespace(monkeypatch):
+    monkeypatch.setattr("ac_platform.organisations.service.secrets.token_hex", lambda _: "0000")
+    names = (
+        "Fictional invited organisation",
+        "Fictional domain organisation",
+        "Fictional concurrent sign-in",
+        "Fictional claim 0",
+        "Fictional claim 1",
+    )
+    slugs = [
+        _tenant_slug(_organisation_name(name, case_id))
+        for case_id in (UUID(int=1), UUID(int=2))
+        for name in names
+    ]
+    assert len(set(slugs)) == len(slugs)
+    assert all(len(slug.split("-", 1)[0]) == 32 for slug in slugs)
 
 
 @pytest.mark.parametrize("method", ["email", "google_authenticate", "google_register"])
@@ -91,10 +113,16 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
                     db, operations_tenant_id=operations, public_learner_tenant_id=public
                 )
                 invited = await service.create(
-                    "Fictional invited organisation", owner, uuid4(), "AUT-448 fixture"
+                    _organisation_name("Fictional invited organisation", operations),
+                    owner,
+                    uuid4(),
+                    "AUT-448 fixture",
                 )
                 domain = await service.create(
-                    "Fictional domain organisation", owner, uuid4(), "AUT-448 fixture"
+                    _organisation_name("Fictional domain organisation", operations),
+                    owner,
+                    uuid4(),
+                    "AUT-448 fixture",
                 )
                 await service.set_domains_attested(
                     domain.tenant_id, [email_domain], True, "fictional proof", uuid4()
@@ -270,7 +298,10 @@ def test_concurrent_sign_ins_use_one_seat_and_join_event(postgres_harness, disti
                     db, operations_tenant_id=operations, public_learner_tenant_id=public
                 )
                 org = await service.create(
-                    "Fictional concurrent sign-in", owner, uuid4(), "AUT-448 fixture"
+                    _organisation_name("Fictional concurrent sign-in", operations),
+                    owner,
+                    uuid4(),
+                    "AUT-448 fixture",
                 )
                 await service.set_domains_attested(
                     org.tenant_id, [email_domain], True, "fictional proof", uuid4()
@@ -329,7 +360,10 @@ def test_concurrent_domain_claims_have_one_winner_and_no_partial_history(postgre
                 orgs = [
                     (
                         await service.create(
-                            f"Fictional claim {i}", owner, uuid4(), "AUT-448 fixture"
+                            _organisation_name(f"Fictional claim {i}", operations),
+                            owner,
+                            uuid4(),
+                            "AUT-448 fixture",
                         )
                     ).tenant_id
                     for i in range(2)
