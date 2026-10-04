@@ -269,6 +269,31 @@ def workspace_route(route) -> None:
 
 def install_routes(page: Page) -> None:
     page.route("**/v1/me/workspaces", workspace_route)
+    page.route(
+        "**/v1/me/sales-xray-workspaces",
+        lambda route: json_response(
+            route,
+            {
+                "selected_tenant_id": "tenant-1",
+                "workspaces": [
+                    {
+                        "tenant_id": "tenant-1",
+                        "kind": "personal",
+                        "name": "Personal",
+                        "role": None,
+                        "sales_xray_enabled": True,
+                    },
+                    {
+                        "tenant_id": "organisation-1",
+                        "kind": "organisation",
+                        "name": "Synthetic QA organisation",
+                        "role": "owner",
+                        "sales_xray_enabled": True,
+                    },
+                ],
+            },
+        ),
+    )
     page.route("**/v1/conversation/**", route_api)
     page.add_init_script(
         """
