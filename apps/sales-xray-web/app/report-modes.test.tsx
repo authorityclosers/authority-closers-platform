@@ -140,6 +140,50 @@ it("dismisses report controls outside or with Escape and restores keyboard focus
   expect(menu.open).toBe(false);
 });
 
+it("recovers focus after an outside press hides the focused option", async () => {
+  await render();
+  const trigger = container.querySelector<HTMLElement>(
+    'summary[aria-label="Report view and text size"]',
+  )!;
+  const menu = trigger.closest("details")!;
+  const option = menu.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 125%"]',
+  )!;
+  menu.open = true;
+  option.focus();
+  await act(async () => {
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    option.blur();
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  });
+  expect(menu.open).toBe(false);
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("keeps focus on an outside input after a pointer dismisses the controls", async () => {
+  window.history.replaceState(null, "", "/?view=tabs&section=moments");
+  await render();
+  const menu = container
+    .querySelector<HTMLElement>(
+      'summary[aria-label="Report view and text size"]',
+    )!
+    .closest("details")!;
+  const input = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Moment note"]',
+  )!;
+  menu.open = true;
+  menu
+    .querySelector<HTMLButtonElement>('button[aria-label="Text size 125%"]')!
+    .focus();
+  await act(async () => {
+    input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    input.focus();
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  });
+  expect(menu.open).toBe(false);
+  expect(document.activeElement).toBe(input);
+});
+
 it("uses overflow to select a tab with its existing bookmark and mounted input state", async () => {
   window.history.replaceState(
     null,

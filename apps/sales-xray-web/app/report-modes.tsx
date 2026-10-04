@@ -111,12 +111,30 @@ function ReportDropdown({
   const hoverOpen = useRef(false);
   useEffect(() => {
     const closeOutside = (event: Event) => {
+      const current = menu.current;
       if (
-        event.target instanceof Node &&
-        !menu.current?.contains(event.target)
-      ) {
-        if (menu.current) menu.current.open = false;
-        hoverOpen.current = false;
+        !(event.target instanceof Node) ||
+        !current?.open ||
+        current.contains(event.target)
+      )
+        return;
+      const restoreFocus =
+        event.type === "pointerdown" &&
+        current.contains(document.activeElement) &&
+        document.activeElement !== current.querySelector("summary");
+      current.open = false;
+      hoverOpen.current = false;
+      if (restoreFocus) {
+        // Wait for the pointer's native focus change before recovering focus.
+        window.requestAnimationFrame(() => {
+          if (
+            menu.current === current &&
+            !current.open &&
+            (document.activeElement === document.body ||
+              current.contains(document.activeElement))
+          )
+            current.querySelector("summary")?.focus();
+        });
       }
     };
     document.addEventListener("pointerdown", closeOutside);

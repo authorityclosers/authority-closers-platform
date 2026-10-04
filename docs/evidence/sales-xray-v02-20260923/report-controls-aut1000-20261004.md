@@ -38,3 +38,35 @@ menu pattern without new research, provider calls or a new visual system.
 Remaining AUT-1000 slices: measurements, prospect presentation, richer charts,
 phone section padding, and final staging captures. This change does not complete
 the whole report-polish brief. Review this slice before beginning another area.
+
+## Review corrections
+
+The independent review at `30c82d2` found two defects. The retained-library
+browser journey now checks the visible report workspace's `data-view="tabs"`
+after mode selection closes the dropdown. An outside pointer press now recovers
+focus from a hidden option after the browser's native focus change, while keeping
+focus on an outside input or link. Two regression tests cover both outcomes.
+
+The review's focus defect reproduced on the current dev server at both 390 and
+1440 px before the repair. Afterwards, native browser checks passed at both
+widths: focus returned to the trigger after clicking the page heading; outside
+input and link focus remained intact. The fictional actual-shell checks also
+passed sticky placement, hover/click/keyboard dismissal and no horizontal
+page overflow, without page errors, external requests or API mutations. The first
+shell attempt timed out during initial route load; the same checks passed after
+loading completed and on the canonical `/analysis/calls/<id>` route.
+
+Current revision checks: 154 tests passed across `report-modes.test.tsx` (45) and
+`acquisition-studio.test.tsx` (109), using direct Vitest execution with two workers
+and a 15-second timeout. ESLint, TypeScript, Prettier, Ruff format/check, mypy,
+14 browser-gate infrastructure tests and the lane check passed. The package-script
+`test -- <file>` command did not apply the intended file filter; that unintended
+whole-suite run was stopped after acquisition test failures at the default
+timeout. The bounded two-file rerun passed, and no test configuration changed.
+The prior full-suite result above belongs to the earlier revision.
+
+The required compiled acquisition journey must still pass in CI on the new head;
+it was not rerun locally. The repair evidence bundle is attached to AUT-1000 as
+`06e94bba-cec8-4bb7-b24c-189750dfc398`. Staging, production and physical devices
+remain unverified. Other tasks' uncommitted Calls-library files were preserved
+and excluded from this commit.
