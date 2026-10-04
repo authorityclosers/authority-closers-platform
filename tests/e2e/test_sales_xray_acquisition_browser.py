@@ -789,16 +789,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     journey_checks.update(await db(assert_single_settlement()))
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
-                    view_controls = page.locator('summary[aria-label="Report view and text size"]')
-                    workspace = page.locator("[data-report-modes]")
-                    await view_controls.click()
                     reading_view = page.get_by_role("button", name="Reading view", exact=True)
                     tabbed_view = page.get_by_role("button", name="Tabbed view", exact=True)
                     # Intended default: a bound report URL without view= opens
                     # in Tabbed view on a desktop-width (>=1100px) viewport.
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     await expect(reading_view).to_have_attribute("aria-pressed", "false")
-                    await view_controls.click()
                     await expect(page.get_by_role("tab")).to_have_text(
                         ["Overview", "Transcript", "Moments", "Analysis", "Coaching"]
                     )
@@ -813,9 +809,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # The reader can explicitly choose Reading view: one
                     # horizontal row of section links, all sections shown.
                     # The transcript lives in its own reader, not in Reading.
-                    await view_controls.click()
                     await reading_view.click()
-                    await expect(workspace).to_have_attribute("data-view", "reading")
+                    await expect(reading_view).to_have_attribute("aria-pressed", "true")
                     reading_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
@@ -828,9 +823,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         reading_nav.get_by_role("link", name="Transcript", exact=True)
                     ).to_have_count(0)
                     assert "view=reading" in page.url
-                    await view_controls.click()
                     await tabbed_view.click()
-                    await expect(workspace).to_have_attribute("data-view", "tabs")
+                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     assert "view=tabs" in page.url
                     await page.get_by_role("tab", name="Moments", exact=True).click()
                     assert (
@@ -917,15 +911,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
-                    library_view_controls = library_page.locator(
-                        'summary[aria-label="Report view and text size"]'
-                    )
-                    await library_view_controls.click()
                     tabbed_view = library_page.get_by_role("button", name="Tabbed view", exact=True)
                     await tabbed_view.click()
-                    await expect(library_page.locator("[data-report-modes]")).to_have_attribute(
-                        "data-view", "tabs"
-                    )
+                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     await library_page.get_by_role("tab", name="Moments", exact=True).click()
                     player = library_page.locator("audio")
                     await expect(player).to_have_count(1)
