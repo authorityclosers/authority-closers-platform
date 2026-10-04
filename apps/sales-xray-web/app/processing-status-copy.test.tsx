@@ -68,6 +68,7 @@ it.each([
   "call_map_money_invalid",
   "report_speaker_label_leak",
   "ethics_unverifiable_claim_missing",
+  "report_dimension_evidence_required",
 ])("shows safe report guidance for %s", async (code) => {
   await render({
     needsAttention: true,

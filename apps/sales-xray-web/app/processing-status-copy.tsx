@@ -33,6 +33,8 @@ const REPORT_FAILURE_COPY: Record<string, string> = {
     "The report needs clear coaching language without provider speaker labels.",
   conversation_ethics_unverifiable_claim_missing:
     "The report needs a cited ethics note for an unverifiable claim.",
+  conversation_report_dimension_evidence_required:
+    "The report needs source evidence for its dimension assessments.",
 };
 
 function ObservedStatus({

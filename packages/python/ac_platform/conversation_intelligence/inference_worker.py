@@ -213,6 +213,7 @@ _VALIDATION_FAILURES = frozenset(
         "report_json_invalid",
         "report_findings_invalid",
         "report_dimension_status_invalid",
+        "report_dimension_evidence_required",
         "report_dimension_prospect_evidence_required",
         "report_overview_missing",
         "report_overview_invalid",

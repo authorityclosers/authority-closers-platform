@@ -190,6 +190,10 @@ def test_d8_all_dimensions_count_only_valid_distinct_segments(case, count, initi
         dimension.update(
             status=initial, evidence=[{"segment_id": f"s{i + 1}"} for i in range(count)]
         )
+    if initial == "conflicted" and count == 0:
+        with pytest.raises(InferenceTaskError, match="^report_dimension_evidence_required$"):
+            validated(case)
+        return
     unchanged = initial in {"not_applicable", "conflicted", "unknown"}
     expected = (
         initial
@@ -294,7 +298,12 @@ def test_unverifiable_claim_needs_an_ethics_note_citing_its_segment(case):
 
 @pytest.mark.parametrize(
     "code",
-    [*CALL_MAP_FAILURE_CODES, "report_evidence_segment_invalid", "report_evidence_quote_mismatch"],
+    [
+        *CALL_MAP_FAILURE_CODES,
+        "report_evidence_segment_invalid",
+        "report_evidence_quote_mismatch",
+        "report_dimension_evidence_required",
+    ],
 )
 def test_failure_codes_are_public_and_allow_exactly_one_automatic_repair(code):
     failure = "conversation_" + code

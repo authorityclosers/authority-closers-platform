@@ -477,7 +477,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "fb23d93cbc100106c5bf8c9a31665d8c64875ee35ed8a85c6d9c4792bf328fdd"
+        "1b46b7cc686bb8572a2f3e57be2bac8590ccd90e80faf250a35766e40495964a"
     )
 
 

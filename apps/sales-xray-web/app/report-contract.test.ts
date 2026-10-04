@@ -102,6 +102,29 @@ describe("CallStudio report contract", () => {
     );
   });
 
+  it("accepts a v7 conflicted dimension with cited transcript evidence", () => {
+    const report = validReport();
+    report.dimensions[0] = {
+      ...report.dimensions[0]!,
+      status: "conflicted",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    };
+    const source = {
+      ...binding,
+      transcript: parseTranscript(transcript, sourceSha256),
+    };
+    expect(
+      parseJobResponse(job(report), source).report?.dimensions[0]?.status,
+    ).toBe("conflicted");
+  });
+
   it.each(["en", "hi", "mr", "en-hi-mixed"] as const)(
     "provides partial copy in %s",
     (language) => {

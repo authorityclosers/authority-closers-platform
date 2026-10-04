@@ -1436,7 +1436,11 @@ def _normalise_dimensions(
             ]
         elif evidence_required:
             raise ReportError("report_dimension_evidence_required")
-        if status in {"observed", "conflicted"} and evidence_required and not v7 and not evidence:
+        if (
+            evidence_required
+            and not evidence
+            and (status == "conflicted" or (status == "observed" and not v7))
+        ):
             raise ReportError("report_dimension_evidence_required")
         if v7:
             status = dimension_state_ceiling(status, evidence)

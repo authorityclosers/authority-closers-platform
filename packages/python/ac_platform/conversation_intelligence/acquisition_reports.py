@@ -67,6 +67,7 @@ _VALIDATION_FAILURE_CODES = frozenset(
         "report_json_invalid",
         "report_findings_invalid",
         "report_dimension_status_invalid",
+        "report_dimension_evidence_required",
         "report_overview_missing",
         "report_overview_invalid",
         "report_overview_schema_invalid",
