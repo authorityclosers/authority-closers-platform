@@ -20,8 +20,9 @@ and download contain identical bytes and that all three sizes still work.
 Checks: 43 report-mode tests passed; TypeScript, ESLint, Prettier, the lane gate,
 and the existing DOCX browser check passed. The default full app run ended with
 1188 passed, 6 skipped and two 5-second upload-test timeouts (SIGTERM). Both tests
-passed in isolation. The full-suite rerun uses two workers and a 15-second timeout
-for this busy host; its result must be recorded before handoff.
+passed in isolation. The full-suite rerun with two workers and a 15-second timeout
+passed: 121 test files, 1191 tests; one file and six tests skipped (305.72 seconds).
+The test configuration is unchanged. CI must still pass on the PR head.
 
 The public dev URL returned HTTP 403 from this runtime. These are local dev
 screenshots, not staging or production evidence. No Chrome Pro session or local
