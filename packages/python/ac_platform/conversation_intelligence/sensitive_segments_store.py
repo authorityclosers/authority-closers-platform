@@ -2,8 +2,9 @@
 
 Every write happens in the caller's transaction, adds one row per segment and
 one audit event per row in the recording's tenant, and names the operator and a
-``reason_ref``. Nothing here reads, stores or returns segment text: a mark is
-checked against the segment IDs of a non-erased C2 checkpoint only.
+``reason_ref``. Marks never store or return segment text. Generation detects
+hits in retained C2 text in-process; every mark is validated against that
+recording's non-erased C2 segment IDs.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.guest_models import ConversationProcessingPrincipal
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
@@ -36,6 +38,7 @@ from ac_platform.conversation_intelligence.sensitive_segments import (
     grams,
     withheld_plan,
 )
+from ac_platform.conversation_intelligence.sensitive_terms import VERSION, detect_sensitive_terms
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 
@@ -273,13 +276,8 @@ class SensitiveSegmentsStore:
                 raise SensitiveSegmentInvalid(f"Segment {segment_id} is listed twice.")
             requested[segment_id] = category
         recording = await self._recording(recording_id, lock=True)
-        revisions = await self._revisions(recording)
-        known = revisions.get(transcript_revision)
-        if known is None:
-            raise SensitiveSegmentRevisionUnknown(
-                f"Recording {recording.id} holds no transcript revision {transcript_revision}."
-            )
-        unknown = sorted(set(requested) - known)
+        known = await self._revision(recording, transcript_revision)
+        unknown = sorted(set(requested) - set(known))
         if unknown:
             raise SensitiveSegmentInvalid(
                 f"Segment {unknown[0]} is not in transcript revision {transcript_revision}."
@@ -341,8 +339,9 @@ class SensitiveSegmentsStore:
                 continue
             result.append(
                 await self._append(
-                    actor,
                     recording,
+                    actor_person_id=actor.person_id,
+                    session_id=actor.session_id,
                     command_id=command_id,
                     transcript_revision=transcript_revision,
                     segment_id=segment_id,
@@ -355,6 +354,77 @@ class SensitiveSegmentsStore:
                 )
             )
         return tuple(result)
+
+    async def mark_generation(
+        self, *, recording_id: UUID, transcript_revision: str, reason_prefix: str = ""
+    ) -> tuple[ConversationSensitiveSegmentMark, ...]:
+        """Detect and append in the caller's transaction; operator releases win forever.
+
+        The recording lock serializes generation, operator marks and releases.
+        No-hit and replay requests append neither mark rows nor audit events.
+        Detector errors propagate so publication rolls back with the marks.
+        """
+        recording = await self._recording(recording_id, lock=True)
+        texts = await self._revision(recording, transcript_revision)
+        hits = detect_sensitive_terms(texts.items())
+        if not hits:
+            return ()
+        history = tuple(
+            await self.database.scalars(
+                select(ConversationSensitiveSegmentMark).where(
+                    ConversationSensitiveSegmentMark.recording_id == recording.id,
+                    ConversationSensitiveSegmentMark.transcript_revision == transcript_revision,
+                )
+            )
+        )
+        released = {row.segment_id for row in history if row.action == "release"}
+        superseded = {row.supersedes_mark_id for row in history if row.action == "release"}
+        occupied = {
+            (row.segment_id, row.category)
+            for row in history
+            if row.action == "mark" and row.id not in superseded
+        }
+        pending: dict[tuple[str, str], str] = {}
+        for segment_id, category, rule_id in hits:
+            if category not in SENSITIVE_CATEGORIES or segment_id not in texts:
+                raise SensitiveSegmentInvalid("The detected segment or category is unavailable.")
+            reason = _reason_ref(f"{reason_prefix}{VERSION}:{rule_id}")
+            if segment_id not in released and (segment_id, category) not in occupied:
+                pending.setdefault((segment_id, category), reason)
+        if not pending:
+            return ()
+        principal = await self.database.scalar(
+            select(ConversationProcessingPrincipal)
+            .where(
+                ConversationProcessingPrincipal.tenant_id == recording.tenant_id,
+                ConversationProcessingPrincipal.revoked_at.is_(None),
+            )
+            .with_for_update(read=True)
+        )
+        if principal is None:
+            raise SensitiveSegmentInvalid("The processing principal is unavailable.")
+        rows = []
+        for (segment_id, category), reason in pending.items():
+            rows.append(
+                await self._append(
+                    recording,
+                    actor_person_id=principal.person_id,
+                    session_id=None,
+                    command_id=uuid5(
+                        _COMMAND_NAMESPACE,
+                        f"generation|{recording.id}|{transcript_revision}|{segment_id}|{category}",
+                    ),
+                    transcript_revision=transcript_revision,
+                    segment_id=segment_id,
+                    category=category,
+                    action="mark",
+                    supersedes_mark_id=None,
+                    source="generation",
+                    reason_ref=reason,
+                    now=datetime.now(UTC),
+                )
+            )
+        return tuple(rows)
 
     async def release(
         self, actor: ActorContext, *, mark_id: UUID, reason_ref: str, idempotency_key: str
@@ -381,8 +451,9 @@ class SensitiveSegmentsStore:
         if released is not None:
             raise SensitiveSegmentConflict(f"Mark {mark.id} was already released.")
         return await self._append(
-            actor,
             recording,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
             command_id=command_id,
             transcript_revision=mark.transcript_revision,
             segment_id=mark.segment_id,
@@ -408,6 +479,14 @@ class SensitiveSegmentsStore:
 
         texts = await _c2_segment_texts(self.database, recording.id, tenant_id=recording.tenant_id)
         return {revision: frozenset(segments) for revision, segments in texts.items()}
+
+    async def _revision(self, recording: ConversationRecording, revision: str) -> dict[str, str]:
+        texts = await _c2_segment_texts(self.database, recording.id, tenant_id=recording.tenant_id)
+        if revision not in texts:
+            raise SensitiveSegmentRevisionUnknown(
+                f"Recording {recording.id} holds no transcript revision {revision}."
+            )
+        return texts[revision]
 
     async def _request_receipt(
         self,
@@ -448,9 +527,10 @@ class SensitiveSegmentsStore:
 
     async def _append(
         self,
-        actor: ActorContext,
         recording: ConversationRecording,
         *,
+        actor_person_id: UUID,
+        session_id: UUID | None,
         command_id: UUID,
         transcript_revision: str,
         segment_id: str,
@@ -465,8 +545,8 @@ class SensitiveSegmentsStore:
         await AuditRepository(self.database).append(
             event_id=audit_id,
             tenant_id=recording.tenant_id,
-            actor_person_id=actor.person_id,
-            session_id=actor.session_id,
+            actor_person_id=actor_person_id,
+            session_id=session_id,
             action=f"conversation.sensitive_segment.{action}",
             resource_type="conversation_sensitive_segment_mark",
             resource_id=command_id,
@@ -493,7 +573,7 @@ class SensitiveSegmentsStore:
             action=action,
             supersedes_mark_id=supersedes_mark_id,
             source=source,
-            actor_person_id=actor.person_id,
+            actor_person_id=actor_person_id,
             reason_ref=reason_ref,
             audit_event_id=audit_id,
             created_at=now,

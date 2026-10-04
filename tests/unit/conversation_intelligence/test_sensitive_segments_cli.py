@@ -205,7 +205,7 @@ async def test_census_always_rolls_back_and_disposes(monkeypatch, fail):
     monkeypatch.setattr(
         cli, "census_lines", AsyncMock(side_effect=RuntimeError if fail else None, return_value=[])
     )
-    args = SimpleNamespace(recording_id=[])
+    args = SimpleNamespace(recording_id=[], apply=False)
     if fail:
         with pytest.raises(RuntimeError):
             await cli.census(args)
@@ -214,3 +214,29 @@ async def test_census_always_rolls_back_and_disposes(monkeypatch, fail):
     transaction.rollback.assert_awaited_once()
     database.commit.assert_not_called()
     engine.dispose.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "environment,configured,allow",
+    [
+        (None, "development", False),
+        ("staging", "production", True),
+        ("production", "production", False),
+        ("production", "", True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_census_apply_requires_matching_environment_and_production_opt_in(
+    monkeypatch,
+    environment,
+    configured,
+    allow,
+):
+    monkeypatch.setenv("AC_ENVIRONMENT", configured)
+    engine = Mock()
+    monkeypatch.setattr(cli, "create_async_engine", engine)
+    args = cli.parser().parse_args(["census", "--apply"])
+    args.environment, args.allow_production = environment, allow
+    with pytest.raises(cli.CommandError):
+        await cli.census(args)
+    engine.assert_not_called()

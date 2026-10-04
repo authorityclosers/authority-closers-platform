@@ -6,7 +6,8 @@ transaction that is always rolled back. ``overlap`` checks a body fetched over
 HTTP (JSON or ``.docx``). Both print JSON lines with counts and hashes only;
 no segment text, quote or report prose is ever printed. ``census`` detects word
 patterns in retained C2 transcripts; its optional request file contains API
-paths and mark bodies for review only. No command applies a mark.
+paths and mark bodies for review. Dry run is the default; ``census --apply``
+appends generation marks in one transaction per recording.
 """
 
 from __future__ import annotations
@@ -65,6 +66,7 @@ from ac_platform.conversation_intelligence.sensitive_segments import (
     shared_grams,
 )
 from ac_platform.conversation_intelligence.sensitive_segments_store import (
+    SensitiveSegmentsStore,
     _effective_statement,
     marks_in_force,
     withheld_plan_for,
@@ -95,11 +97,14 @@ def parser() -> argparse.ArgumentParser:
     overlap = commands.add_parser("overlap", help="count shared 4-grams in a fetched body")
     overlap.add_argument("--recording-id", type=UUID, required=True)
     overlap.add_argument("--file", required=True)
-    census = commands.add_parser(
-        "census", help="read-only candidate IDs and report citation counts"
-    )
+    census = commands.add_parser("census", help="candidate IDs and report citation counts")
     census.add_argument("--recording-id", type=UUID, action="append", default=[])
     census.add_argument("--requests-out", type=Path)
+    census.add_argument("--apply", action="store_true")
+    census.add_argument(
+        "--environment", choices=("local", "test", "development", "staging", "production")
+    )
+    census.add_argument("--allow-production", action="store_true")
     return root
 
 
@@ -377,14 +382,36 @@ async def census_lines(database: AsyncSession, recording_ids: list[UUID]) -> lis
 
 
 async def census(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if args.apply:
+        configured = os.getenv("AC_ENVIRONMENT", "").strip().lower()
+        if not args.environment or args.environment != configured:
+            raise CommandError("The explicit environment must match AC_ENVIRONMENT.")
+        if configured == "production" and not args.allow_production:
+            raise CommandError("Production requires --allow-production.")
     engine = create_async_engine(_database_url(), pool_pre_ping=True)
     try:
         sessions = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
         async with sessions() as database, database.begin() as transaction:
             try:
-                return await census_lines(database, args.recording_id)
+                lines = await census_lines(database, args.recording_id)
             finally:
                 await transaction.rollback()
+        if args.apply:
+            revisions: dict[UUID, set[str]] = {}
+            for line in lines:
+                revisions.setdefault(UUID(line["recording_id"]), set()).add(
+                    line["transcript_revision"]
+                )
+            for recording_id, held in revisions.items():
+                async with sessions() as database, database.begin():
+                    store = SensitiveSegmentsStore(database)
+                    for revision in sorted(held):
+                        await store.mark_generation(
+                            recording_id=recording_id,
+                            transcript_revision=revision,
+                            reason_prefix="AUT-524 census ",
+                        )
+        return lines
     finally:
         await engine.dispose()
 
