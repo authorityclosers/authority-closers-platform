@@ -878,7 +878,7 @@ function AllowanceSummary({
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
 
-  const formatCreditsAndHours = (availMins: number, totalMins?: number) => {
+  const formatAnalysisTime = (availMins: number, totalMins?: number) => {
     const hours = Math.floor(availMins / 60);
     const remMins = availMins % 60;
     const hoursText =
@@ -888,54 +888,63 @@ function AllowanceSummary({
           : `${hours} h`
         : null;
     if (totalMins !== undefined && totalMins > 0) {
-      return `${count(availMins)} credits${hoursText ? ` · ${hoursText}` : ""} (${count(availMins)} of ${count(totalMins)} min) available`;
+      return hoursText
+        ? `${count(availMins)} of ${count(totalMins)} min (${hoursText}) available`
+        : `${count(availMins)} of ${count(totalMins)} min available`;
     }
-    return `${count(availMins)} credits${hoursText ? ` · ${hoursText}` : ""} (${count(availMins)} min) available`;
+    return hoursText
+      ? `${count(availMins)} min (${hoursText}) available`
+      : `${count(availMins)} min available`;
   };
 
   if (allowance.value.unlimited) {
-    const availSecs =
-      available_seconds > 0
-        ? available_seconds
-        : allowance_seconds > 0
-          ? allowance_seconds
-          : 10800;
-    const availMins = minutes(availSecs);
+    if (available_seconds <= 0) {
+      return (
+        <div className={styles.allowance} data-allowance="none">
+          <p className={styles.big}>No analysis time yet</p>
+          <p className={styles.muted}>Ask the AC team to allot minutes.</p>
+        </div>
+      );
+    }
+    const availMins = minutes(available_seconds);
     return (
-      <div className={styles.allowance} data-allowance="unlimited">
-        <p className={styles.big}>{formatCreditsAndHours(availMins)}</p>
+      <div className={styles.allowance} data-allowance="finite">
+        <p className={styles.big}>{formatAnalysisTime(availMins)}</p>
         <p className={styles.muted}>
           {minutes(committed_seconds)} min used or reserved by analyses.
-          <span className={styles.visuallyHidden}> Unlimited</span>
         </p>
       </div>
     );
   }
-  if (allowance_seconds <= 0)
+  if (allowance_seconds <= 0 && available_seconds <= 0)
     return (
       <div className={styles.allowance} data-allowance="none">
         <p className={styles.big}>No analysis time yet</p>
         <p className={styles.muted}>Ask the AC team to allot minutes.</p>
       </div>
     );
-  const share = Math.min(1, available_seconds / allowance_seconds);
+  const share =
+    allowance_seconds > 0
+      ? Math.min(1, available_seconds / allowance_seconds)
+      : 1;
   const availMins = minutes(available_seconds);
-  const totalMins = minutes(allowance_seconds);
+  const totalMins =
+    allowance_seconds > 0 ? minutes(allowance_seconds) : undefined;
   return (
     <div className={styles.allowance} data-allowance="finite">
-      <p className={styles.big}>
-        {formatCreditsAndHours(availMins, totalMins)}
-      </p>
-      <span
-        className={styles.meter}
-        role="meter"
-        aria-label="Analysis time available"
-        aria-valuemin={0}
-        aria-valuemax={allowance_seconds}
-        aria-valuenow={available_seconds}
-      >
-        <span style={{ width: `${share * 100}%` }} />
-      </span>
+      <p className={styles.big}>{formatAnalysisTime(availMins, totalMins)}</p>
+      {allowance_seconds > 0 ? (
+        <span
+          className={styles.meter}
+          role="meter"
+          aria-label="Analysis time available"
+          aria-valuemin={0}
+          aria-valuemax={allowance_seconds}
+          aria-valuenow={available_seconds}
+        >
+          <span style={{ width: `${share * 100}%` }} />
+        </span>
+      ) : null}
       <p className={styles.muted}>
         {minutes(committed_seconds)} min used or reserved by analyses.
       </p>

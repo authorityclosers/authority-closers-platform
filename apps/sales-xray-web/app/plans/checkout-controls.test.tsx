@@ -15,6 +15,11 @@ import {
 import { WorkspaceAccessContext } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
 import { PlansPurchase } from "./plans-purchase";
+import { PlansScreen } from "./plans-screen";
+import {
+  PLANS_CATALOGUE_FIXTURE,
+  PLANS_GST_RATE,
+} from "./plans-catalogue-fixture";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -389,4 +394,33 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
     "Invoices and receipts are currently unavailable",
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
+});
+
+it("renders authoritative renewal date and amount when quote exists, or confirms at checkout", async () => {
+  const quote = {
+    selection: { planKey: "personal", interval: "month" as const, seats: 1 },
+    subtotalPaise: 249900,
+    gstPaise: 0,
+    totalPaise: 249900,
+    renewsAt: "2026-11-04T00:00:00.000Z",
+  };
+  await render(
+    <PlansScreen
+      plans={PLANS_CATALOGUE_FIXTURE}
+      gstRate={PLANS_GST_RATE}
+      quote={quote}
+    />,
+  );
+  await click("Get Personal");
+  expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
+  expect(host.textContent).not.toContain(
+    "Date and amount confirmed at checkout",
+  );
+
+  await click("Close checkout");
+  await render(
+    <PlansScreen plans={PLANS_CATALOGUE_FIXTURE} gstRate={PLANS_GST_RATE} />,
+  );
+  await click("Get Personal");
+  expect(host.textContent).toContain("Date and amount confirmed at checkout");
 });

@@ -1,5 +1,9 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { BillingError, invoiceDownloadPath, liveBilling } from "./billing-api";
+import {
+  BillingError,
+  invoiceDownloadPath,
+  isBillingDisabledOrNotFound,
+  liveBilling,
+} from "./billing-api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -155,4 +159,46 @@ it("treats a missing organisation billing account as empty, retaining personal 4
   await expect(liveBilling.readInvoices("personal")).rejects.toMatchObject({
     status: 404,
   });
+});
+
+it("distinguishes 404 and billing-disabled states from real server and network failures", () => {
+  expect(
+    isBillingDisabledOrNotFound(new BillingError(404, null, "Not found")),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(
+      new BillingError(405, null, "Method not allowed"),
+    ),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(
+      new BillingError(400, "billing_disabled", null),
+    ),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(new BillingError(400, "billing_off", null)),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(new BillingError(400, "not_on_sale", null)),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(
+      new BillingError(400, null, "billing is disabled"),
+    ),
+  ).toBe(true);
+  expect(
+    isBillingDisabledOrNotFound(
+      new BillingError(500, null, "Internal server error"),
+    ),
+  ).toBe(false);
+  expect(
+    isBillingDisabledOrNotFound(new BillingError(501, null, "Not implemented")),
+  ).toBe(false);
+  expect(
+    isBillingDisabledOrNotFound(
+      new BillingError(503, null, "Service unavailable"),
+    ),
+  ).toBe(false);
+  expect(isBillingDisabledOrNotFound(new Error("Network failure"))).toBe(false);
+  expect(isBillingDisabledOrNotFound(null)).toBe(false);
 });

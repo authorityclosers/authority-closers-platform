@@ -73,7 +73,10 @@ export const isBillingDisabledOrNotFound = (error: unknown): boolean => {
           typeof (error as { status: unknown }).status === "number"
         ? (error as { status: number }).status
         : 0;
-  if (status === 404 || status === 405 || status === 501) {
+  if (status >= 500) {
+    return false;
+  }
+  if (status === 404 || status === 405) {
     return true;
   }
   const code =
@@ -90,28 +93,17 @@ export const isBillingDisabledOrNotFound = (error: unknown): boolean => {
     code === "billing_off" ||
     code === "not_on_sale" ||
     code === "no_subscription" ||
-    code === "billing_not_enabled" ||
-    code === "not_found"
+    code === "billing_not_enabled"
   ) {
     return true;
   }
   const detail =
-    error instanceof BillingError
-      ? (error.detail ?? "").toLowerCase()
-      : error instanceof Error
-        ? error.message.toLowerCase()
-        : typeof error === "object" &&
-            error !== null &&
-            "detail" in error &&
-            typeof (error as { detail: unknown }).detail === "string"
-          ? (error as { detail: string }).detail.toLowerCase()
-          : "";
+    error instanceof BillingError ? (error.detail ?? "").toLowerCase() : "";
   if (
-    detail.includes("billing off") ||
-    detail.includes("billing disabled") ||
-    detail.includes("not enabled") ||
-    detail.includes("not found") ||
-    detail.includes("404")
+    detail === "billing is disabled" ||
+    detail === "billing off" ||
+    detail === "billing disabled" ||
+    detail === "billing is not enabled"
   ) {
     return true;
   }

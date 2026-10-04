@@ -69,13 +69,7 @@ export function BillingView({
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const allowance = usage?.allowance ?? mePlan?.allowance;
   const planName = mePlan?.plan.name ?? "Unavailable";
-  const ringAvailSecs = allowance
-    ? allowance.availableSeconds > 0
-      ? allowance.availableSeconds
-      : allowance.allowanceSeconds > 0
-        ? allowance.allowanceSeconds
-        : 10800
-    : 0;
+  const ringAvailSecs = allowance ? allowance.availableSeconds : 0;
   const ringAvailMins = minutes(ringAvailSecs);
   const ringHours = Math.floor(ringAvailMins / 60);
   const ringRemMins = ringAvailMins % 60;
@@ -240,7 +234,7 @@ export function BillingView({
               <div className={styles.ringDetails}>
                 <b>
                   {allowance
-                    ? `${count(ringAvailMins)} credits${ringHoursText ? ` · ${ringHoursText}` : ""} (${count(ringAvailMins)} min) left`
+                    ? `${count(ringAvailMins)} min left`
                     : "Minutes unavailable"}
                 </b>
                 <span>
@@ -383,13 +377,7 @@ export function BillingView({
 
 function UsageRing({ allowance }: { allowance: Allowance | null }) {
   const circumference = 2 * Math.PI * 36;
-  const availSecs = allowance
-    ? allowance.availableSeconds > 0
-      ? allowance.availableSeconds
-      : allowance.allowanceSeconds > 0
-        ? allowance.allowanceSeconds
-        : 10800
-    : 0;
+  const availSecs = allowance ? allowance.availableSeconds : 0;
   const share =
     allowance && allowance.allowanceSeconds > 0
       ? Math.min(1, availSecs / allowance.allowanceSeconds)

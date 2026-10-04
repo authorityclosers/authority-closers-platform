@@ -201,7 +201,7 @@ export function PlansScreen({
             ) : null}
             <p className={styles.successAllowance}>
               {allowance
-                ? `${count(minutes(allowance.availableSeconds > 0 ? allowance.availableSeconds : allowance.allowanceSeconds > 0 ? allowance.allowanceSeconds : (paid.minutes ?? 0) * 60))} analysis minutes available on your account.`
+                ? `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
                 : "Your updated analysis minutes are being confirmed."}
             </p>
             <div className={styles.actions}>
@@ -232,7 +232,7 @@ export function PlansScreen({
                 <div className={styles.trial}>
                   <span>
                     <b>Current: {mePlan.plan.name}</b> ·{" "}
-                    {`${count(minutes(mePlan.allowance.availableSeconds > 0 ? mePlan.allowance.availableSeconds : mePlan.allowance.allowanceSeconds))} minutes left`}
+                    {`${count(minutes(mePlan.allowance.availableSeconds))} minutes left`}
                   </span>
                 </div>
               ) : null}
