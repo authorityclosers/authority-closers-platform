@@ -15,6 +15,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import exists, select, tuple_
 
@@ -385,16 +386,16 @@ def install_billing_http(
             next_before=rows[limit - 1].id if len(rows) > limit else None,
         )
 
-    @router.get("/invoices/{invoice_id}/download", response_class=Response)
+    @router.get("/invoices/{invoice_id}/download", response_class=HTMLResponse)
     async def download_invoice(
         invoice_id: Annotated[UUID, Path()],
         request: Request,
         auth: AuthenticatedTransaction = read_actor_dependency,
-    ) -> Response:
+    ) -> HTMLResponse:
         if request.query_params:
             raise BillingValidationFailed("Invoice downloads accept no query parameters.")
         invoice = await _read_invoice(auth, settings, invoice_id)
-        response = Response(render_invoice(invoice), media_type="text/html")
+        response = HTMLResponse(render_invoice(invoice))
         _no_store(response)
         response.headers["Content-Disposition"] = (
             f'attachment; filename="invoice-{invoice_id}.html"'
