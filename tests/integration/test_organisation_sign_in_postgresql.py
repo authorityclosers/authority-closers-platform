@@ -25,15 +25,22 @@ from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import Membership, OrganisationInvite, Tenant
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
 from tests.integration.test_password_identity_http_postgresql import _ExistingGoogleProvider
+from tests.unit.http.test_organisation_seat_exemptions import install_approval
+from tests.unit.organisations.test_service import seed_paid_seats
 
 
 @pytest.mark.parametrize("method", ["email", "google_authenticate", "google_register"])
-@pytest.mark.parametrize("fail_hook", [False, True, "database"])
+@pytest.mark.parametrize(
+    "fail_hook,seat_mode",
+    [(False, "paid"), (False, "exempt"), (False, "full"), (True, "paid"), ("database", "paid")],
+)
 def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_session(
     postgres_harness,  # noqa: F811
     monkeypatch,
     method,
     fail_hook,  # noqa: F811
+    seat_mode,
+    tmp_path,
 ):
     async def exercise():
         engine = create_async_engine(postgres_harness.schema_url)
@@ -92,6 +99,10 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
                 await service.set_domains_attested(
                     domain.tenant_id, [email_domain], True, "fictional proof", uuid4()
                 )
+                if seat_mode != "exempt":
+                    await seed_paid_seats(
+                        db, domain.tenant_id, owner, seats=1 if seat_mode == "full" else 3
+                    )
                 db.add(
                     OrganisationInvite(
                         tenant_id=invited.tenant_id,
@@ -110,6 +121,12 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
                 monkeypatch.setattr(sign_in, "append_audit_event", fail)
             provider = _ExistingGoogleProvider(email=email, subject=subject)
             app = FastAPI()
+            if seat_mode == "exempt":
+                from types import SimpleNamespace
+
+                install_approval(
+                    SimpleNamespace(app=app, settings=settings, tenant=domain.tenant_id), tmp_path
+                )
             register_problem_handlers(app)
             install_identity_http(
                 app, settings=settings, sessions=cast(Any, sessions), provider=provider
@@ -184,7 +201,10 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
                 if fail_hook:
                     assert memberships == [None, None] and invite.status == "pending"
                 else:
-                    assert [member.role for member in memberships] == ["admin", "member"]
+                    assert memberships[0].role == "admin"
+                    assert (memberships[1] is None) is (seat_mode == "full")
+                    if seat_mode != "full":
+                        assert memberships[1].role == "member"
                     assert invite.status == "accepted" and invite.accepted_person_id == signed_in.id
                     for tenant in [invited.tenant_id, domain.tenant_id]:
                         event = db.scalar(
@@ -193,6 +213,9 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
                                 AuditEvent.action == "organisation.member_joined",
                             )
                         )
+                        if tenant == domain.tenant_id and seat_mode == "full":
+                            assert event is None
+                            continue
                         assert event.actor_person_id == signed_in.id
                         assert event.reason == (
                             "invite_accepted" if tenant == invited.tenant_id else "domain_auto_join"
@@ -204,11 +227,13 @@ def test_verified_sign_in_accepts_invite_and_domain_join_without_blocking_sessio
     asyncio.run(exercise())
 
 
-def test_concurrent_sign_ins_write_one_membership_and_join_event(postgres_harness):  # noqa: F811
+@pytest.mark.parametrize("distinct_people", [False, True])
+def test_concurrent_sign_ins_use_one_seat_and_join_event(postgres_harness, distinct_people):  # noqa: F811
     async def exercise():
         engine = create_async_engine(postgres_harness.schema_url)
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         owner, person, operations, public = (uuid4() for _ in range(4))
+        second = uuid4() if distinct_people else person
         email_domain = f"race-{person.hex}.example.test"
         settings = Settings(
             _env_file=None,
@@ -232,6 +257,14 @@ def test_concurrent_sign_ins_write_one_membership_and_join_event(postgres_harnes
                         ),
                     ]
                 )
+                if distinct_people:
+                    db.add(
+                        Person(
+                            id=second,
+                            email=f"other@{email_domain}",
+                            email_verified_at=datetime.now(UTC),
+                        )
+                    )
                 await db.flush()
                 service = OrganisationService(
                     db, operations_tenant_id=operations, public_learner_tenant_id=public
@@ -242,14 +275,17 @@ def test_concurrent_sign_ins_write_one_membership_and_join_event(postgres_harnes
                 await service.set_domains_attested(
                     org.tenant_id, [email_domain], True, "fictional proof", uuid4()
                 )
+                await seed_paid_seats(db, org.tenant_id, owner, seats=2)
 
-            async def join():
+            async def join(person_id):
                 async with sessions() as db, db.begin():
-                    await sign_in.join_at_sign_in_best_effort(db, person, settings=settings)
+                    await sign_in.join_at_sign_in_best_effort(db, person_id, settings=settings)
 
-            await asyncio.wait_for(asyncio.gather(join(), join()), timeout=15)
+            await asyncio.wait_for(asyncio.gather(join(person), join(second)), timeout=15)
             with Session(postgres_harness.engine) as db:
-                assert db.get(Membership, (org.tenant_id, person)).role == "member"
+                joined = [db.get(Membership, (org.tenant_id, p)) for p in {person, second}]
+                assert sum(member is not None for member in joined) == 1
+                assert next(member for member in joined if member is not None).role == "member"
                 assert (
                     db.scalar(
                         select(func.count())

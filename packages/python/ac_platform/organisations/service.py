@@ -405,8 +405,10 @@ class OrganisationService:
                 "All paid seats are occupied by members or pending invites."
             )
 
-    async def _actor(self, tenant_id: UUID, actor_person_id: UUID) -> Membership:
-        await self._organisation(tenant_id, lock=True)
+    async def _actor(
+        self, tenant_id: UUID, actor_person_id: UUID, *, lock: bool = True
+    ) -> Membership:
+        await self._organisation(tenant_id, lock=lock)
         actor = await self.session.scalar(
             select(Membership)
             .where(Membership.tenant_id == tenant_id, Membership.person_id == actor_person_id)
@@ -840,6 +842,33 @@ class OrganisationService:
         normalized = tuple(sorted({_normalize_domain(domain) for domain in domains}))
         if type(auto_join) is not bool:
             raise OrganisationCommandError("auto_join must be a boolean")
+        preverified: set[str] = set()
+        if verify_domain is not None:
+            actor = await self._actor(tenant_id, cast(UUID, actor_person_id), lock=False)
+            if actor.role != MembershipRole.OWNER.value:
+                raise AuthorizationDenied("Only the owner can set domains.")
+            prior = await self.session.scalar(
+                select(OrganisationDomainSetting).where(
+                    OrganisationDomainSetting.command_id == command_id
+                )
+            )
+            if prior is None:
+                latest = await self._latest_domain_settings(tenant_id)
+                before = set() if latest is None else set(latest.verified_domains)
+                for org in await self.session.scalars(select(Organisation)):
+                    if org.tenant_id != tenant_id:
+                        other = await self._latest_domain_settings(org.tenant_id)
+                        if other is not None and set(normalized).intersection(
+                            other.verified_domains
+                        ):
+                            raise OrganisationDomainConflict(
+                                "a domain is already verified by another organisation"
+                            )
+                organisation = await self._organisation(tenant_id)
+                # No registry locks are held across external DNS requests.
+                for domain in sorted(set(normalized) - before):
+                    await verify_domain(domain, organisation.domain_verification_token)
+                    preverified.add(domain)
         # Lock every registry row in one order so two domain changes cannot
         # concurrently claim the same JSON-backed domain.
         organisations = tuple(
@@ -895,10 +924,8 @@ class OrganisationService:
                     "a domain is already verified by another organisation"
                 )
         newly_added = set(normalized) - set(before_domains)
-        if verify_domain is not None:
-            organisation = next(org for org in organisations if org.tenant_id == tenant_id)
-            for domain in sorted(newly_added):
-                await verify_domain(domain, organisation.domain_verification_token)
+        if verify_domain is not None and not newly_added.issubset(preverified):
+            raise OrganisationDomainConflict("domains changed, retry")
         checked_at = datetime.now(UTC).isoformat()
         proof = {
             domain: {

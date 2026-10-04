@@ -7,7 +7,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
@@ -21,7 +21,7 @@ from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 class DomainsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    verified_domains: list[str]
+    verified_domains: list[str] = Field(max_length=20)
     auto_join: bool
 
 
@@ -51,11 +51,13 @@ async def verify_dns_txt(domain: str, token: str, resolver_url: str) -> None:
             raise ValueError("DNS resolution failed")
         records = answer.get("Answer", []) if answer["Status"] == 0 else []
         for record in records:
-            if (
-                record["type"] == 16
-                and record["name"].rstrip(".").lower() == name
-                and "".join(shlex.split(record["data"])) == f"ac-verify={token}"
-            ):
+            if record["type"] != 16 or record["name"].rstrip(".").lower() != name:
+                continue
+            try:
+                value = "".join(shlex.split(record["data"]))
+            except ValueError:
+                continue
+            if value == f"ac-verify={token}":
                 return
     except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as error:
         raise ResolverUnavailable("The DNS resolver is unavailable. Try again later.") from error

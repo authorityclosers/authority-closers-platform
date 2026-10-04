@@ -130,6 +130,7 @@ async def test_owner_proof_and_append_only_idempotent_settings(state, resolver):
         ("wrong_name", 422),
         ("wrong_type", 422),
         ("nxdomain", 422),
+        ("unparseable_txt", 422),
         ("timeout", 503),
         ("bad_status", 503),
         ("http_error", 503),
@@ -145,6 +146,8 @@ async def test_resolver_failures_roll_back_settings_and_audit(state, resolver, c
         answer["Answer"][0][key] = 1 if key == "type" else "incorrect"
     elif case == "nxdomain":
         answer["Status"] = 3
+    elif case == "unparseable_txt":
+        answer["Answer"][0]["data"] = '"unfinished'
     elif case == "timeout":
         answer["failure"] = httpx.ConnectTimeout("fictional timeout")
     elif case == "bad_status":
@@ -160,6 +163,26 @@ async def test_resolver_failures_roll_back_settings_and_audit(state, resolver, c
     with Session(state.engine) as db:
         assert db.scalar(select(func.count()).select_from(OrganisationDomainSetting)) == 0
         assert db.scalar(select(func.count()).select_from(AuditEvent)) == 0
+
+
+async def test_malformed_txt_does_not_hide_a_valid_record(state, resolver):
+    resolver[1]["Answer"].insert(
+        0, {"name": "_ac-verify.example.test.", "type": 16, "data": '"unfinished'}
+    )
+    assert (await call(state, "PUT", "/domains", body=body(), key=uuid4())).status_code == 200
+
+
+@pytest.mark.parametrize("count,expected", [(20, 200), (21, 422)])
+async def test_twenty_domain_limit_is_checked_before_dns(state, resolver, count, expected):
+    response = await call(
+        state,
+        "PUT",
+        "/domains",
+        body=body(["example.test"] * count),
+        key=uuid4(),
+    )
+    assert response.status_code == expected
+    assert len(resolver[0]) == int(expected == 200)
 
 
 @pytest.mark.parametrize("role", ["admin", "member"])

@@ -1819,7 +1819,14 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                         ip_address=request.client.host if request.client else None,
                     )
-                    await join_at_sign_in_best_effort(database, person.id, settings=settings)
+                    await join_at_sign_in_best_effort(
+                        database,
+                        person.id,
+                        settings=settings,
+                        internal_tester_policy=getattr(
+                            application.state, "internal_tester_policy", None
+                        ),
+                    )
                     if tenant_id is not None:
                         await identity.select_tenant(issued.token, tenant_id)
                     if verified.consent_audit_required:
@@ -2865,7 +2872,13 @@ def install_identity_http(
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
                     await join_at_sign_in_best_effort(
-                        database, registered.person.id, settings=settings, assertion=assertion
+                        database,
+                        registered.person.id,
+                        settings=settings,
+                        assertion=assertion,
+                        internal_tester_policy=getattr(
+                            application.state, "internal_tester_policy", None
+                        ),
                     )
                     profile_claims = await _record_google_profile_claims_best_effort(
                         database,
@@ -2914,7 +2927,13 @@ def install_identity_http(
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
                     await join_at_sign_in_best_effort(
-                        database, issued.metadata.person_id, settings=settings, assertion=assertion
+                        database,
+                        issued.metadata.person_id,
+                        settings=settings,
+                        assertion=assertion,
+                        internal_tester_policy=getattr(
+                            application.state, "internal_tester_policy", None
+                        ),
                     )
                     profile_claims = await _record_google_profile_claims_best_effort(
                         database,

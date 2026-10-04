@@ -11,6 +11,7 @@ import ac_platform.organisations.sign_in as sign_in
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
+from ac_platform.billing.order_models import BillingPeriod, BillingSubscription
 from ac_platform.identity.models import Person
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import (
@@ -18,11 +19,12 @@ from ac_platform.tenancy.models import (
     OrganisationInvite,
     Tenant,
 )
+from tests.unit.http.test_organisation_seat_exemptions import install_approval
 from tests.unit.http.test_workspaces import HttpDatabase
 from tests.unit.organisations.test_service import create_org, state  # noqa: F401
 
 
-async def join(state, *, assertion=None):  # noqa: F811
+async def join(state, *, assertion=None, policy=None):  # noqa: F811
     await sign_in.join_at_sign_in_best_effort(
         HttpDatabase(state.session),
         state.worker_id,
@@ -33,6 +35,7 @@ async def join(state, *, assertion=None):  # noqa: F811
             public_learner_tenant_id=state.public_id,
         ),
         assertion=assertion,
+        internal_tester_policy=policy,
     )
 
 
@@ -80,6 +83,8 @@ async def test_domain_join_is_member_and_replay_has_no_command_id_scan(state, mo
         "wrong_domain",
         "mismatched_hd",
         "unverified_assertion",
+        "missing_assertion_email",
+        "mismatched_assertion_email",
         "latest_removed",
     ],
 )
@@ -105,8 +110,20 @@ async def test_domain_join_fails_closed(state, case):  # noqa: F811
         state.session.get(Tenant, org.tenant_id).status = "suspended"
     elif case == "wrong_domain":
         state.session.get(Person, state.worker_id).email = "worker@other.test"
-    elif case in {"mismatched_hd", "unverified_assertion"}:
+    elif case in {
+        "mismatched_hd",
+        "unverified_assertion",
+        "missing_assertion_email",
+        "mismatched_assertion_email",
+    }:
         assertion = SimpleNamespace(
+            email=(
+                None
+                if case == "missing_assertion_email"
+                else "other@old.test"
+                if case == "mismatched_assertion_email"
+                else "worker@example.test"
+            ),
             email_verified=case != "unverified_assertion",
             hosted_domain="wrong.test" if case == "mismatched_hd" else None,
         )
@@ -130,8 +147,72 @@ async def test_domain_join_fails_closed(state, case):  # noqa: F811
 async def test_matching_or_absent_google_hd_joins(state, hosted_domain):  # noqa: F811
     org = await create_org(state)
     await set_domains(state, org.tenant_id)
-    await join(state, assertion=SimpleNamespace(email_verified=True, hosted_domain=hosted_domain))
+    await join(
+        state,
+        assertion=SimpleNamespace(
+            email=" worker@EXAMPLE.test ", email_verified=True, hosted_domain=hosted_domain
+        ),
+    )
     assert state.session.get(Membership, (org.tenant_id, state.worker_id)).role == "member"
+
+
+@pytest.mark.parametrize("paid,pending,joins", [(1, 0, False), (2, 1, False), (2, 0, True)])
+async def test_domain_join_respects_active_and_pending_seats(state, paid, pending, joins, caplog):  # noqa: F811
+    org = await create_org(state)
+    await set_domains(state, org.tenant_id)
+    state.session.scalar(select(BillingSubscription)).seats = paid
+    if pending:
+        state.session.add(
+            OrganisationInvite(
+                tenant_id=org.tenant_id,
+                email_normalized="pending@example.test",
+                role="member",
+                command_id=uuid4(),
+            )
+        )
+    state.session.flush()
+    with caplog.at_level("INFO", logger=sign_in.__name__):
+        await join(state)
+    assert (state.session.get(Membership, (org.tenant_id, state.worker_id)) is not None) is joins
+    assert ("organisation_domain_auto_join_seats_full" in caplog.text) is not joins
+    assert "worker@example.test" not in caplog.text and "example.test" not in caplog.text
+    assert state.session.scalar(
+        select(func.count())
+        .select_from(AuditEvent)
+        .where(AuditEvent.action == "organisation.member_joined")
+    ) == int(joins)
+
+
+@pytest.mark.parametrize(
+    "approval", ["current", "missing", "expired", "wrong_environment", "tampered"]
+)
+async def test_unpaid_auto_join_requires_current_pinned_seat_exemption(state, tmp_path, approval):  # noqa: F811
+    org = await create_org(state)
+    await set_domains(state, org.tenant_id)
+    period = state.session.scalar(select(BillingPeriod))
+    period.period_start = datetime(2019, 12, 1, tzinfo=UTC)
+    period.period_end = datetime(2020, 1, 1, tzinfo=UTC)
+    policy = None
+    if approval != "missing":
+        fixture = SimpleNamespace(
+            tenant=org.tenant_id,
+            app=SimpleNamespace(state=SimpleNamespace()),
+            settings=Settings(
+                _env_file=None, environment="test", operations_tenant_id=state.operations_id
+            ),
+        )
+        updates = {"environment": "staging"} if approval == "wrong_environment" else {}
+        if approval == "expired":
+            updates.update(issued_at_epoch=1000, expires_at_epoch=2000)
+        path = install_approval(fixture, tmp_path, **updates)
+        if approval == "tampered":
+            path.write_bytes(path.read_bytes() + b" ")
+        policy = fixture.app.state.internal_tester_policy
+    state.session.flush()
+    await join(state, policy=policy)
+    assert (state.session.get(Membership, (org.tenant_id, state.worker_id)) is not None) is (
+        approval == "current"
+    )
 
 
 async def test_accepts_all_pending_invites_and_restores_only_explicit_invite(state):  # noqa: F811
