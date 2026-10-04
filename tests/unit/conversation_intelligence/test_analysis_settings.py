@@ -153,7 +153,8 @@ async def test_replayed_admin_save_returns_the_original_revision() -> None:
     application._replay.assert_awaited_once()
 
 
-async def test_admin_save_blocks_v6_before_lock_or_receipt() -> None:
+@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])
+async def test_admin_save_blocks_v6_before_lock_or_receipt(revision: str) -> None:
     application = SimpleNamespace(database=object())
     service = ConversationAnalysisSettingsAdmin(
         application=application, operations_tenant_id=uuid4()
@@ -165,14 +166,14 @@ async def test_admin_save_blocks_v6_before_lock_or_receipt() -> None:
         c5_max_completion_tokens=4096,
         c5_output_profile="standard",
         c5_coaching_prompt_revision="coaching-v6",
-    )
+    ).model_copy(update={"c5_coaching_prompt_revision": revision})
 
     with pytest.raises(ConversationError, match="AC-SVAL-01 Gate 2"):
         await service.save(
             ActorContext(uuid4(), uuid4(), service.operations_tenant_id),
             settings,
             expected_revision=0,
-            key="blocked-v6-candidate",
+            key="blocked-candidate",
         )
 
     service.admit.assert_awaited_once()

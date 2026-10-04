@@ -1236,6 +1236,175 @@ def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired
     run(exercise())
 
 
+@pytest.mark.parametrize("repair_result", ["evidence", "unknown", "repeat", "budget_rejected"])
+def test_prospect_dimension_repairs_returned_invalid_c5_once(
+    postgres_harness: Any, tmp_path: Any, monkeypatch: Any, repair_result: str
+) -> None:
+    from ac_platform.conversation_intelligence import processing_plan, reports
+    from ac_platform.conversation_intelligence.analysis_settings import DEFAULT_ANALYSIS_SETTINGS
+    from tests.database.test_conversation_reporting_pipeline_postgresql import (
+        ChunkedReportingBroker,
+    )
+
+    # Candidate-only fictional execution; shipping refusal and P-A are unchanged.
+    monkeypatch.setattr(reports, "CONFIRMED_PROSPECT_DIMENSIONS", reports.PROSPECT_DIMENSION_IDS)
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.coaching_validation_gate.coaching_revision_runtime_block",
+        lambda _: None,
+    )
+
+    async def settings(*_):
+        return None, DEFAULT_ANALYSIS_SETTINGS.model_copy(
+            update={"c5_coaching_prompt_revision": "coaching-v7", "c5_max_completion_tokens": 8000}
+        )
+
+    monkeypatch.setattr(processing_plan, "latest_analysis_settings", settings)
+    live = {"reads": 0, "swapped": False}
+
+    def resolve(transcript, **_):
+        live["reads"] += 1
+        return {
+            "diagnostics": [],
+            "transcript_revision": transcript["revision"],
+            "map_revision": "b" * 64,
+            "speakers": [
+                {
+                    "speaker_id": f"speaker_{index}",
+                    "role": "prospect" if index == (0 if live["swapped"] else 1) else "salesperson",
+                    "role_source": "confirmed",
+                }
+                for index in range(3)
+            ],
+        }
+
+    monkeypatch.setattr(processing_plan, "resolve_speaker_map", resolve)
+
+    async def exercise():
+        setup = await _setup(postgres_harness, tmp_path, text_provider="gemini")
+        try:
+            c5 = setup.bundle.stages[2].model_copy(
+                update={
+                    "max_requests": 1 if repair_result == "budget_rejected" else 2,
+                    "max_completion_tokens": 8000,
+                }
+            )
+            setup.bundle_box["bundle"] = setup.bundle.model_copy(
+                update={"stages": (*setup.bundle.stages[:2], c5)}
+            )
+            broker = ChunkedReportingBroker(setup.prepared.data)
+            setup.worker.broker = broker
+            execute = broker.execute
+
+            async def candidate(reservation, payload):
+                result = await execute(reservation, payload)
+                if result.provider != "gemini":
+                    return result
+                body = json.loads(payload)
+                user = body["contents"][0]["parts"][0]["text"]
+                if user.startswith("{"):
+                    return result
+                source = json.loads(user.split("\n", 1)[1])["source_context"]
+                segments = [
+                    dict(zip(source["columns"], row, strict=True)) for row in source["rows"]
+                ]
+                repaired = "SERVER_REPAIR" in body["systemInstruction"]["parts"][0]["text"]
+                report = json.loads(result.data["candidates"][0]["content"]["parts"][0]["text"])
+                report["dimensions"] = [
+                    {
+                        "dimension_id": row["id"],
+                        "status": "unknown",
+                        "observation": "Fictional evidence is incomplete.",
+                        "evidence": [],
+                    }
+                    for row in reports.load_report_profile()["dimensions"]
+                ]
+                report["dimensions"][0].update(
+                    status="unknown" if repaired and repair_result == "unknown" else "observed",
+                    evidence=[
+                        {
+                            "segment_id": segments[
+                                1 if repaired and repair_result == "evidence" else 0
+                            ]["id"]
+                        }
+                    ],
+                )
+                live["swapped"] = True  # Later confirmation cannot replace the plan's frozen map.
+                envelope = {
+                    "candidates": [
+                        {
+                            "finishReason": "STOP",
+                            "content": {"role": "model", "parts": [{"text": json.dumps(report)}]},
+                        }
+                    ]
+                }
+                raw = canonical(envelope)
+                return ProviderResult(
+                    provider="gemini",
+                    model=result.model,
+                    request_id="fictional-prospect-repair",
+                    response_sha256=hashlib.sha256(raw).hexdigest(),
+                    raw_json=raw,
+                    data=envelope,
+                    usage={"total_tokens": 0},
+                    input_sha256=result.input_sha256,
+                )
+
+            broker.execute = candidate
+            quote = await _quote(setup, "fictional-prospect-quote")
+            await _accept(setup, quote, "fictional-prospect-accept")
+            plan_id = UUID(quote["id"])
+            scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+            for _ in range(12):
+                await setup.worker.run_once()
+                await _make_due(setup, plan_id)
+                await scheduler.step()
+                view = await _view(setup, plan_id)
+                if view["state"] in {"completed", "held"}:
+                    break
+            assert view["state"] == (
+                "completed" if repair_result in {"evidence", "unknown"} else "held"
+            )
+            assert view["report_ready"] == (repair_result in {"evidence", "unknown"})
+            assert live["reads"] == 1
+            async with setup.sessions() as database:
+                plan = await database.get(ConversationProcessingPlan, plan_id)
+                tasks = list(
+                    (
+                        await database.scalars(
+                            select(ConversationInferenceTask)
+                            .where(
+                                ConversationInferenceTask.recording_id
+                                == setup.prepared.recording_id,
+                                ConversationInferenceTask.stage == "C5",
+                            )
+                            .order_by(ConversationInferenceTask.created_at)
+                        )
+                    ).all()
+                )
+                assert len(tasks) == (1 if repair_result == "budget_rejected" else 2)
+                assert all(
+                    task.intent["request"]["speaker_roles"] == plan.speaker_roles for task in tasks
+                )
+                for task in tasks:
+                    job = await database.get(Job, task.job_id)
+                    if task.state == "uncertain":
+                        assert (
+                            job.last_error
+                            == "conversation_report_dimension_prospect_evidence_required"
+                        )
+                        assert job.provider_receipt["prospect_dimension_ids"] == [
+                            "human_connection_trust"
+                        ]
+                if len(tasks) == 2:
+                    assert tasks[1].intent["request"]["repair"]["dimension_ids"] == [
+                        "human_connection_trust"
+                    ]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_processing_plan_acceptance_and_scheduler_restart_do_not_duplicate_effects(
     postgres_harness: Any, tmp_path: Any
 ) -> None:

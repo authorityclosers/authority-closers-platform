@@ -84,6 +84,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V4,
     COACHING_PROMPT_V5,
     COACHING_PROMPT_V6,
+    COACHING_PROMPT_V7,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -212,6 +213,11 @@ def c5_repair_intent(task: ConversationInferenceTask, job: Job) -> C5RepairInten
             failure_code=job.last_error,
             original_run_id=task.run_id,
             original_response_sha256=receipt.get("response_sha256"),
+            dimension_ids=(
+                tuple(receipt.get("prospect_dimension_ids", ()))
+                if job.last_error == "conversation_report_dimension_prospect_evidence_required"
+                else ()
+            ),
         )
     except (TypeError, ValueError):
         return None
@@ -243,7 +249,13 @@ class PlanManifest(BaseModel):
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
     coaching_prompt_revision: Literal[
-        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"
+        "coaching-v1",
+        "coaching-v2",
+        "coaching-v3",
+        "coaching-v4",
+        "coaching-v5",
+        "coaching-v6",
+        "coaching-v7",
     ] = COACHING_PROMPT_LEGACY
     report_language: ReportLanguage | None = None
     qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
@@ -274,9 +286,10 @@ class PlanManifest(BaseModel):
         ):
             raise ValueError("processing_plan_scope_invalid")
         c2, c4, c5 = self.stages
-        if self.coaching_prompt_revision == COACHING_PROMPT_V6 and not supports_coaching_v6_route(
-            c5.provider_id, c5.model_id
-        ):
+        if self.coaching_prompt_revision in {
+            COACHING_PROMPT_V6,
+            COACHING_PROMPT_V7,
+        } and not supports_coaching_v6_route(c5.provider_id, c5.model_id):
             raise ValueError("processing_plan_coaching_v6_route_unsupported")
         repair_cost = self.automatic_c5_repair_cost_paise or 0
         if (
@@ -303,6 +316,7 @@ class PlanManifest(BaseModel):
             COACHING_PROMPT_V4,
             COACHING_PROMPT_V5,
             COACHING_PROMPT_V6,
+            COACHING_PROMPT_V7,
         }:
             if (
                 self.report_language is None
@@ -874,9 +888,10 @@ class ConversationProcessingPlans:
         if block := coaching_revision_runtime_block(coaching_prompt_revision):
             raise ConversationDenied(block)
         selected_language = report_language or analysis_settings.report_language_default
-        if coaching_prompt_revision == COACHING_PROMPT_V6 and not supports_coaching_v6_route(
-            approvals["C5"].provider_id, approvals["C5"].model_id
-        ):
+        if coaching_prompt_revision in {
+            COACHING_PROMPT_V6,
+            COACHING_PROMPT_V7,
+        } and not supports_coaching_v6_route(approvals["C5"].provider_id, approvals["C5"].model_id):
             raise ConversationDenied(
                 "Coaching v6 needs the approved Gemini 3.8 Flash or OpenAI C5 route. "
                 "No plan or allowance has been created; use a supported C5 route before quoting."
@@ -889,7 +904,7 @@ class ConversationProcessingPlans:
         qualitative_pack_sha256 = (
             load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
             if coaching_prompt_revision
-            in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6}
+            in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6, COACHING_PROMPT_V7}
             else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
@@ -963,7 +978,12 @@ class ConversationProcessingPlans:
                 report_language=(
                     selected_language
                     if coaching_prompt_revision
-                    in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6}
+                    in {
+                        COACHING_PROMPT_V4,
+                        COACHING_PROMPT_V5,
+                        COACHING_PROMPT_V6,
+                        COACHING_PROMPT_V7,
+                    }
                     or report_language is not None
                     else None
                 ),

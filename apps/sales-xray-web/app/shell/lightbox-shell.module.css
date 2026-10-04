@@ -990,8 +990,11 @@
     z-index: 20;
     top: 0;
     display: flex;
-    min-height: 56px;
-    padding: 0 var(--lx-space-4);
+    box-sizing: border-box;
+    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px)
+      max(var(--lx-space-4), env(safe-area-inset-right, 0px)) 0
+      max(var(--lx-space-4), env(safe-area-inset-left, 0px));
     background: var(--lx-surface);
     border-bottom: 1px solid var(--lx-line);
   }
@@ -1032,6 +1035,13 @@
 
   .shell[data-mobile-fit="true"] .content {
     box-sizing: border-box;
+  }
+
+  /* The report scroller already owns its reading margin. Nested shell
+     padding was taking another 48px away from the phone viewport. */
+  .shell[data-mobile-fit="true"]
+    .main:has(> :global(.xray-app[data-stage="report"])) {
+    padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   }
 }
 

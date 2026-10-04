@@ -312,8 +312,10 @@ def test_save_raw_streams_provider_response_in_storage_chunks(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])
 async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_input(
     monkeypatch: pytest.MonkeyPatch,
+    revision: str,
 ) -> None:
     run_id, job_id = uuid4(), uuid4()
     tenant_id, person_id, recording_id = uuid4(), uuid4(), uuid4()
@@ -327,7 +329,7 @@ async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_inpu
         erased_at=None,
         generation=1,
         stage="C5",
-        intent={"request": {"coaching_prompt_revision": "coaching-v6"}},
+        intent={"request": {"coaching_prompt_revision": revision}},
     )
     run = SimpleNamespace(
         state="queued",

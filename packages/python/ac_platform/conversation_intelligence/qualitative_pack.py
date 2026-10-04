@@ -117,7 +117,7 @@ def load_qualitative_pack_for_revision(revision: str) -> QualitativePack:
         if pack.id != QUALITATIVE_PACK_V5_ID:
             raise ValueError("qualitative_pack_id_mismatch")
         return pack
-    if revision == "coaching-v6":
+    if revision in {"coaching-v6", "coaching-v7"}:
         pack = QualitativePack.model_validate_json(_PACK_V6_PATH.read_bytes())
         if pack.id != QUALITATIVE_PACK_V6_ID:
             raise ValueError("qualitative_pack_id_mismatch")

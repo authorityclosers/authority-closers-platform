@@ -119,6 +119,34 @@ def main() -> None:
                 ),
             ),
         )
+        page.route(
+            "**/v1/me/sales-xray-workspaces",
+            lambda route: route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "selected_tenant_id": "tenant-1",
+                        "workspaces": [
+                            {
+                                "tenant_id": "tenant-1",
+                                "kind": "personal",
+                                "name": "Personal",
+                                "role": None,
+                                "sales_xray_enabled": True,
+                            },
+                            {
+                                "tenant_id": "organisation-1",
+                                "kind": "organisation",
+                                "name": "Synthetic QA organisation",
+                                "role": "owner",
+                                "sales_xray_enabled": True,
+                            },
+                        ],
+                    }
+                ),
+            ),
+        )
         page.on(
             "response",
             lambda response: network.append(

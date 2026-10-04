@@ -64,6 +64,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
+from ac_platform.conversation_intelligence.reports import PROSPECT_DIMENSION_IDS
 from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
@@ -210,6 +211,7 @@ _VALIDATION_FAILURES = frozenset(
         "report_json_invalid",
         "report_findings_invalid",
         "report_dimension_status_invalid",
+        "report_dimension_prospect_evidence_required",
         "report_overview_missing",
         "report_overview_invalid",
         "report_overview_schema_invalid",
@@ -839,6 +841,19 @@ class ConversationInferenceWorker:
             failed.failure_detail = build_failure_detail(
                 error, stage=stage, failure_code=failure_code
             )
+            if (
+                failure_code == "conversation_report_dimension_prospect_evidence_required"
+                and isinstance(error, InferenceTaskError)
+                and isinstance(job.provider_receipt, dict)
+            ):
+                job.provider_receipt = {
+                    **job.provider_receipt,
+                    "prospect_dimension_ids": [
+                        dimension
+                        for dimension in error.dimension_ids
+                        if dimension in PROSPECT_DIMENSION_IDS
+                    ],
+                }
 
     async def run_once(self) -> bool:
         work = await self.claim()

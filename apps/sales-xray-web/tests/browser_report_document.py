@@ -91,6 +91,7 @@ def main() -> None:
             page.screenshot(path=str(OUT / f"document-{width}.png"))
             sheet = preview.locator("section.report-docx").first
             base_width = sheet.bounding_box()["width"]
+            page.locator('summary[aria-label="Report view and text size"]').click()
             for size, scale in [("125", 1.25), ("112.5", 1.125), ("100", 1.0)]:
                 page.get_by_role("button", name=f"Text size {size}%", exact=True).click()
                 assert link.get_attribute("href") == url
@@ -100,6 +101,7 @@ def main() -> None:
             page.get_by_title("Reading view", exact=True).click()
             expect(workspace).to_have_attribute("data-view", "reading")
             expect(preview).not_to_be_visible()
+            page.locator('summary[aria-label="Report view and text size"]').click()
             page.get_by_title("Document view", exact=True).click()
             expect(page.get_by_role("region", name="Sales Xray document preview")).to_be_visible()
             proof.append(

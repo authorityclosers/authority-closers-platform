@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     learner_consent_version: str | None = None
     public_learner_tenant_id: UUID | None = None
     operations_tenant_id: UUID | None = None
+    organisation_dns_resolver_url: AnyHttpUrl = AnyHttpUrl("https://cloudflare-dns.com/dns-query")
     trusted_proxy_addresses: str = ""
 
     # Media provider configuration is deliberately disabled by default.  The

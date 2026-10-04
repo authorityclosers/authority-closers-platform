@@ -307,6 +307,7 @@ function resolveApiRouteBase(method, pathname, search = "") {
   if (
     exact("GET", "/v1/me") ||
     exact("GET", "/v1/me/workspaces") ||
+    exact("GET", "/v1/me/sales-xray-workspaces") ||
     exact("GET", "/v1/context") ||
     exact("POST", "/v1/context") ||
     exact("POST", "/v1/auth/password/login") ||

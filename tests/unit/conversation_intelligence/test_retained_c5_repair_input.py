@@ -82,3 +82,47 @@ def test_retained_repair_rebuild_rejects_a_second_attempt():
             input_metadata=base.as_dict(),
             request={**request, "repair": {**repair.model_dump(mode="json"), "attempt": 2}},
         )
+
+
+@pytest.mark.parametrize("provider,model", [("gemini", "gemini-3.8-flash")])
+def test_prospect_repair_retains_frozen_roles_and_only_names_failed_ids(provider, model):
+    transcript, facts, request, _, _ = _fixture(provider, model)
+    roles = {
+        "origin": "user_confirmed_roles",
+        "transcript_revision": transcript["revision"],
+        "map_revision": "b" * 64,
+        "speakers": [{"speaker_id": "speaker-1", "role": "prospect", "is_account_holder": False}],
+    }
+    request.update(
+        coaching_prompt_revision="coaching-v7",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v7").sha256,
+        speaker_roles=roles,
+    )
+    base = prepare_coaching_input(
+        transcript, [facts], provider=provider, model=model, max_completion_tokens=8000, **request
+    )
+    repair = C5RepairIntent(
+        failure_code="conversation_report_dimension_prospect_evidence_required",
+        original_run_id=UUID(int=1),
+        original_response_sha256="a" * 64,
+        dimension_ids=("qualification",),
+    )
+    dispatched = repair_coaching_input(base, repair)
+    rebuilt = _rebuild_prepared_c5_input(
+        transcript,
+        (facts,),
+        profile=load_report_profile(),
+        input_metadata=dispatched.as_dict(),
+        request={**request, "repair": repair.model_dump(mode="json")},
+    )
+    assert rebuilt.payload == dispatched.payload
+    assert b'failing confirmed dimension IDs [\\"qualification\\"]' in dispatched.payload
+    assert b'frozen prospect speaker IDs [\\"speaker-1\\"]' in dispatched.payload
+    assert b"choose insufficient_evidence, not_applicable or unknown yourself" in dispatched.payload
+    # Repair changes the instruction only; source context remains byte-identical.
+    body, original = dispatched.as_provider_body(), base.as_provider_body()
+    key = "messages" if provider == "groq" else "contents"
+    if provider == "groq":
+        assert body[key][1] == original[key][1]
+    else:
+        assert body[key] == original[key]

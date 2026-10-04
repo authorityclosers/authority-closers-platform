@@ -127,6 +127,7 @@ def install_platform_organisations_http(
             .select_from(Membership)
             .where(
                 Membership.tenant_id == Organisation.tenant_id,
+                Membership.role != "processing",
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
             )

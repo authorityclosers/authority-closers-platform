@@ -223,10 +223,10 @@ def test_explicit_v6_plan_binds_language_and_exact_pack_hash_without_changing_de
 def plan_with_coaching_revision(revision: str) -> ConversationProcessingPlan:
     row = saved_plan()
     data = manifest_for(row).as_dict()
-    if revision == "coaching-v6":
+    if revision in {"coaching-v6", "coaching-v7"}:
         data["stages"][2].update(provider_id="openai", model_id="gpt-6-luna")
     data["coaching_prompt_revision"] = revision
-    if revision in {"coaching-v4", "coaching-v5", "coaching-v6"}:
+    if revision in {"coaching-v4", "coaching-v5", "coaching-v6", "coaching-v7"}:
         pack = load_qualitative_pack_for_revision(revision)
         data.update({"report_language": "en", "qualitative_pack_sha256": pack.sha256})
     value = PlanManifest.model_validate_json(canonical(data))
@@ -241,6 +241,8 @@ def plan_with_coaching_revision(revision: str) -> ConversationProcessingPlan:
     [
         ("replay", "coaching-v6", True),
         ("active", "coaching-v6", True),
+        ("replay", "coaching-v7", True),
+        ("active", "coaching-v7", True),
         ("replay", "coaching-v5", False),
         ("active", "coaching-v5", False),
         ("replay", "coaching-v1", False),
@@ -557,6 +559,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
         "conversation_gemini_response_json_invalid",
         "conversation_report_payload_missing_field",
         "conversation_report_overview_invalid",
+        "conversation_report_dimension_prospect_evidence_required",
     ],
 )
 def test_c5_repair_accepts_only_known_returned_provider_report_failures(
@@ -565,6 +568,7 @@ def test_c5_repair_accepts_only_known_returned_provider_report_failures(
     task = SimpleNamespace(
         stage="C5", state="uncertain", intent={"request": {"stage": "C5"}}, run_id=uuid4()
     )
+
     job = SimpleNamespace(
         kind="conversation.infer_provider.v1",
         dispatch_started_at=datetime.now(UTC),
@@ -582,12 +586,18 @@ def test_c5_repair_accepts_only_known_returned_provider_report_failures(
             "response_sha256": "b" * 64,
         },
     )
+    if failure_code == "conversation_report_dimension_prospect_evidence_required":
+        job.provider_receipt["prospect_dimension_ids"] = ["qualification"]
 
     repair = c5_repair_intent(task, job)
 
     assert repair is not None
     assert repair.failure_code == failure_code
     assert repair.original_response_sha256 == "b" * 64
+    if failure_code == "conversation_report_dimension_prospect_evidence_required":
+        assert repair.dimension_ids == ("qualification",)
+    task.intent["request"]["repair"] = repair.model_dump(mode="json")
+    assert c5_repair_intent(task, job) is None
 
 
 @pytest.mark.parametrize(

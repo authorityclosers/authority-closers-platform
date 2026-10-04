@@ -507,6 +507,7 @@ export function AccountSettings({
         gstRate={PLANS_GST_RATE}
         busy={topUp.busy}
         confirmedOrder={topUp.prepared?.order}
+        checkoutProvider={topUp.prepared?.hosted.provider}
         onPay={() => {
           if (selectedTopUp)
             void topUp.buy({
@@ -922,6 +923,7 @@ export function PlanAndBillingPane({
   invoicesStatus = status,
   busy = false,
   error,
+  onRefresh,
   onCancel,
   onBuyTopUp,
   topUpPacks = TOP_UP_PACKS,
@@ -938,11 +940,16 @@ export function PlanAndBillingPane({
     current && ["active", "past_due", "halted"].includes(current.status);
   const loading = status === "loading";
   useEffect(() => {
-    if (!active || !error) return;
+    if (!active || status !== "ready" || !error) return;
     const id = "settings-billing-error";
-    notify({ id, tone: "error", title: "Billing unavailable", message: error });
+    notify({
+      id,
+      tone: "error",
+      title: "Billing update failed",
+      message: error,
+    });
     return () => dismissNotice(id);
-  }, [active, error]);
+  }, [active, error, status]);
 
   return (
     <div className={styles.billingBlock}>
@@ -961,7 +968,7 @@ export function PlanAndBillingPane({
             {loading
               ? "Loading…"
               : status !== "ready"
-                ? "Unavailable"
+                ? "Try again"
                 : isCancelled
                   ? "Cancels at period end"
                   : current?.status === "active"
@@ -989,18 +996,33 @@ export function PlanAndBillingPane({
             <i />
             <i />
           </div>
+        ) : status !== "ready" ? (
+          <div className={styles.error} role="alert">
+            <p>
+              {error ??
+                "Billing details could not be loaded. Please try again."}
+            </p>
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={busy || !onRefresh}
+              onClick={onRefresh}
+            >
+              <RefreshCw size={15} aria-hidden="true" /> Reload billing details
+            </button>
+          </div>
         ) : (
           <dl className={styles.facts}>
             <div className={styles.row}>
               <dt className={styles.rowLabel}>Plan</dt>
-              <dd>{mePlan?.plan.name ?? current?.planName ?? "Unavailable"}</dd>
+              <dd>{mePlan?.plan.name ?? current?.planName ?? "—"}</dd>
             </div>
             <div className={styles.row}>
               <dt className={styles.rowLabel}>Price</dt>
               <dd>
                 {current
                   ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
-                  : "Unavailable"}
+                  : "No subscription"}
               </dd>
             </div>
             {current?.seats ? (
@@ -1036,6 +1058,12 @@ export function PlanAndBillingPane({
             </div>
           </dl>
         )}
+
+        {status === "ready" && !current ? (
+          <p className={styles.muted}>
+            No subscription yet. View plans when you’re ready to choose one.
+          </p>
+        ) : null}
 
         <div className={styles.actions}>
           <Link
