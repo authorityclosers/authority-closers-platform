@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
@@ -29,6 +30,19 @@ class OrganisationResponse(BaseModel):
     verified_domains: list[str]
     auto_join: bool
     member_count: int
+
+
+class OrganisationProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    tenant_id: UUID
+    handle: str
+    name: str
+    your_role: Literal["owner", "admin", "member"]
+
+
+class ChangeHandleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    handle: str
 
 
 class MemberResponse(BaseModel):
@@ -137,18 +151,26 @@ def install_organisation_http(
 ) -> None:
     router = APIRouter(prefix="/v1/organisation", tags=["organisation"])
 
+    def no_organisation(request: Request) -> ResourceNotFound:
+        suffix = (
+            ""
+            if request.url.path in {"/v1/organisation/profile", "/v1/organisation/handle"}
+            else "."
+        )
+        return ResourceNotFound("No organisation selected" + suffix)
+
     async def organisation_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             resolver = require_actor.read_only if request.method == "GET" else require_actor  # type: ignore[attr-defined]
-            async for auth in resolver(request):
+            async with asynccontextmanager(resolver)(request) as auth:
                 yield auth
         except TenantScopeDeniedError as error:
-            raise ResourceNotFound("No organisation selected.") from error
+            raise no_organisation(request) from error
 
     actor_dependency = Depends(organisation_actor, scope="function")
 
     async def selected(
-        response: Response, auth: AuthenticatedTransaction = actor_dependency
+        request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
     ) -> AuthenticatedTransaction:
         tenant_id = auth.resolved.actor.tenant_id
         # Canonical authentication holds the active tenant and membership fences.
@@ -157,7 +179,7 @@ def install_organisation_http(
             or auth.resolved.membership_role not in {"owner", "admin", "member"}
             or await auth.database.get(Organisation, tenant_id) is None
         ):
-            raise ResourceNotFound("No organisation selected.")
+            raise no_organisation(request)
         response.headers["cache-control"] = "private, no-store"
         response.headers["vary"] = "Cookie"
         return auth
@@ -174,6 +196,34 @@ def install_organisation_http(
         return parsed
 
     command_dependency = Depends(command_id)
+
+    @router.get("/profile", response_model=OrganisationProfileResponse)
+    async def profile(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationProfileResponse:
+        tenant = await auth.database.get(Tenant, auth.resolved.actor.tenant_id)
+        assert tenant is not None
+        return OrganisationProfileResponse(
+            tenant_id=tenant.id,
+            handle=tenant.slug,
+            name=tenant.name,
+            your_role=cast(Literal["owner", "admin", "member"], auth.resolved.membership_role),
+        )
+
+    @router.put("/handle", response_model=OrganisationProfileResponse)
+    async def handle(
+        body: ChangeHandleRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> OrganisationProfileResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).change_handle(
+            auth.resolved.actor.tenant_id,
+            body.handle,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return OrganisationProfileResponse.model_validate_json(json.dumps(result))
 
     @router.get("", response_model=OrganisationResponse)
     async def organisation(

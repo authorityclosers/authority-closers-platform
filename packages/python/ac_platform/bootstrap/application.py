@@ -258,6 +258,12 @@ class BootstrapApplication:
         tenant = await self._tenancy.get_tenant_by_slug_for_update(normalized_slug)
         tenant_created = tenant is None
         if tenant is None:
+            memberships = await self._tenancy.list_memberships(person.id)
+            if any(row.is_active and row.role == MembershipRole.OWNER.value for row in memberships):
+                raise BootstrapError(
+                    "person already owns a tenant; replay with its current handle "
+                    "or use the organisation API"
+                )
             candidate = TenantSnapshot(
                 id=uuid4(),
                 slug=normalized_slug,
