@@ -1,0 +1,77 @@
+.document {
+  min-width: 0;
+  width: 100%;
+  color: #222;
+  font:
+    14px Arial,
+    sans-serif;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+}
+.actions span {
+  color: #6b6b6b;
+}
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 18px;
+  background: #16283f;
+  color: white;
+  font: inherit;
+  text-decoration: none;
+}
+.download:disabled {
+  opacity: 0.5;
+}
+.download svg,
+.document button svg {
+  width: 18px;
+  height: 18px;
+}
+.document > p {
+  padding: 16px;
+}
+.scroll {
+  overflow: auto;
+  max-width: 100%;
+  background: #e9ebee;
+}
+.pages {
+  zoom: var(--document-zoom);
+  font-family: Calibri, Arial, sans-serif;
+}
+.pages :global(.report-docx-wrapper) {
+  padding: 20px;
+}
+.pages :global(section.report-docx) {
+  flex-shrink: 0;
+  font-family: Calibri, Arial, sans-serif;
+}
+.pages :global([data-report-mode-section]) {
+  scroll-margin-top: var(--report-scroll-target-offset, 80px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scroll {
+    scroll-behavior: smooth;
+  }
+}
+@media print {
+  .actions,
+  .document > p {
+    display: none;
+  }
+  .scroll {
+    overflow: visible;
+  }
+  .pages {
+    zoom: 1;
+  }
+}

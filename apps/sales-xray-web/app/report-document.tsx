@@ -1,0 +1,137 @@
+"use client";
+
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Download, RefreshCw } from "lucide-react";
+import type { DocumentReportData } from "./report-document-data";
+import styles from "./report-document.module.css";
+
+/** One generated Blob owns both the rendered document and its download URL. */
+export function ReportDocument({
+  data,
+  id,
+  textSize,
+  section,
+}: {
+  data?: DocumentReportData;
+  id: string;
+  textSize: string;
+  section?: string;
+}) {
+  const source = JSON.stringify(data ?? {});
+  const host = useRef<HTMLDivElement>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{
+    source: string;
+    url?: string;
+    filename?: string;
+    failed?: boolean;
+  }>();
+  const ready = result?.source === source && result.url;
+  const failed = result?.source === source && result.failed;
+
+  useEffect(() => {
+    let cancelled = false;
+    let url: string | undefined;
+    const body = document.createElement("div");
+    const sheetStyles = document.createElement("div");
+    host.current?.replaceChildren();
+    async function prepare() {
+      const [
+        { createReportDocx, reportDocxFilename, DOCUMENT_CHAPTERS },
+        { renderAsync },
+      ] = await Promise.all([import("./report-docx"), import("docx-preview")]);
+      const data: DocumentReportData = JSON.parse(source);
+      const blob = await createReportDocx(data);
+      if (cancelled) return;
+      await renderAsync(blob, body, sheetStyles, {
+        className: "report-docx",
+        inWrapper: true,
+        breakPages: true,
+        renderHeaders: true,
+        renderFooters: true,
+        ignoreWidth: false,
+        ignoreHeight: false,
+        renderAltChunks: false,
+      });
+      if (cancelled) return;
+      // Word bookmarks connect existing section navigation to the actual DOCX.
+      for (const chapter of DOCUMENT_CHAPTERS) {
+        const anchor = body.querySelector(`a[name="${chapter.id}"]`);
+        const heading = anchor?.closest("p");
+        if (!heading) continue;
+        heading.id = `${id}-heading-${chapter.id}`;
+        heading.tabIndex = -1;
+        heading.dataset.reportModeSection = chapter.id;
+        heading.setAttribute("role", "heading");
+        heading.setAttribute("aria-level", "1");
+      }
+      url = URL.createObjectURL(blob);
+      host.current?.replaceChildren(sheetStyles, body);
+      setResult({ source, url, filename: reportDocxFilename(data.title) });
+    }
+    void prepare().catch(() => {
+      if (!cancelled) setResult({ source, failed: true });
+    });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [source, id, attempt]);
+
+  useEffect(() => {
+    if (ready && section)
+      document
+        .getElementById(`${id}-heading-${section}`)
+        ?.scrollIntoView?.({ block: "start" });
+  }, [ready, id, section]);
+
+  return (
+    <div className={styles.document} data-document-export>
+      <div className={styles.actions}>
+        {ready ? (
+          <a
+            className={styles.download}
+            href={ready}
+            download={result.filename}
+          >
+            <Download aria-hidden="true" /> Download .docx
+          </a>
+        ) : (
+          <button className={styles.download} type="button" disabled>
+            <Download aria-hidden="true" /> Download .docx
+          </button>
+        )}
+        <span>A4 · {textSize}% zoom</span>
+      </div>
+      <p role={failed ? "alert" : "status"} hidden={Boolean(ready)}>
+        {failed
+          ? "The document could not be prepared. Please try again."
+          : "Preparing your document…"}
+        {failed && (
+          <button
+            type="button"
+            onClick={() => {
+              setResult(undefined);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            <RefreshCw aria-hidden="true" /> Try again
+          </button>
+        )}
+      </p>
+      <div
+        className={styles.scroll}
+        role="region"
+        aria-label="Sales Xray document preview"
+        tabIndex={0}
+        hidden={!ready}
+      >
+        <div
+          ref={host}
+          className={styles.pages}
+          style={{ "--document-zoom": Number(textSize) / 100 } as CSSProperties}
+        />
+      </div>
+    </div>
+  );
+}
