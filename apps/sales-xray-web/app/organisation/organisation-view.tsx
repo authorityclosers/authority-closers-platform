@@ -366,7 +366,9 @@ export function OrganisationView() {
                     <span>Your minutes</span>
                     <b>
                       {allowance
-                        ? `${Math.floor(allowance.available_seconds / 60)} left`
+                        ? allowance.unlimited
+                          ? "Unlimited"
+                          : `${Math.floor(allowance.available_seconds / 60)} left`
                         : "—"}
                     </b>
                     {allowance && !allowance.unlimited ? (

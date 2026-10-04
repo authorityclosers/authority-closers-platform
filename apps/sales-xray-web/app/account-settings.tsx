@@ -898,18 +898,9 @@ function AllowanceSummary({
   };
 
   if (allowance.value.unlimited) {
-    if (available_seconds <= 0) {
-      return (
-        <div className={styles.allowance} data-allowance="none">
-          <p className={styles.big}>No analysis time yet</p>
-          <p className={styles.muted}>Ask the AC team to allot minutes.</p>
-        </div>
-      );
-    }
-    const availMins = minutes(available_seconds);
     return (
-      <div className={styles.allowance} data-allowance="finite">
-        <p className={styles.big}>{formatAnalysisTime(availMins)}</p>
+      <div className={styles.allowance} data-allowance="unlimited">
+        <p className={styles.big}>Unlimited</p>
         <p className={styles.muted}>
           {minutes(committed_seconds)} min used or reserved by analyses.
         </p>
