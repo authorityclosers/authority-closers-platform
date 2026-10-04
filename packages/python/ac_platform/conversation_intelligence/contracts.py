@@ -45,6 +45,18 @@ class QuoteAcceptance(Contract):
 
 
 C5RepairFailureCode = Literal[
+    "conversation_call_map_invalid",
+    "conversation_call_map_evidence_unresolved",
+    "conversation_call_map_time_out_of_range",
+    "conversation_call_map_phase_order_invalid",
+    "conversation_call_map_reference_unknown",
+    "conversation_call_map_role_mismatch",
+    "conversation_call_map_qualification_invalid",
+    "conversation_call_map_word_cap_exceeded",
+    "conversation_call_map_signal_kind_unknown",
+    "conversation_call_map_money_invalid",
+    "conversation_report_speaker_label_leak",
+    "conversation_ethics_unverifiable_claim_missing",
     "conversation_report_evidence_invalid",
     "conversation_report_evidence_quote_mismatch",
     "conversation_report_evidence_segment_invalid",
@@ -63,6 +75,18 @@ C5RepairFailureCode = Literal[
 
 C5_REPAIR_FAILURE_CODES = frozenset(
     {
+        "conversation_call_map_invalid",
+        "conversation_call_map_evidence_unresolved",
+        "conversation_call_map_time_out_of_range",
+        "conversation_call_map_phase_order_invalid",
+        "conversation_call_map_reference_unknown",
+        "conversation_call_map_role_mismatch",
+        "conversation_call_map_qualification_invalid",
+        "conversation_call_map_word_cap_exceeded",
+        "conversation_call_map_signal_kind_unknown",
+        "conversation_call_map_money_invalid",
+        "conversation_report_speaker_label_leak",
+        "conversation_ethics_unverifiable_claim_missing",
         "conversation_report_evidence_invalid",
         "conversation_report_evidence_quote_mismatch",
         "conversation_report_evidence_segment_invalid",

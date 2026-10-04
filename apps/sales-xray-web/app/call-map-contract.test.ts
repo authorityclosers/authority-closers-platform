@@ -33,6 +33,30 @@ function codeOf(change: (map: Draft) => void, duration = fixture.duration_ms) {
 }
 
 describe("parseCallMap", () => {
+  it.each([
+    "8 points",
+    "4 stars",
+    "7 marks",
+    "eight points",
+    "four stars",
+    "seven marks",
+  ])("rejects the numeric judgement %s", (verdict) =>
+    expect(codeOf((map) => (map.verdict_line = verdict))).toBe(
+      "call_map_invalid",
+    ),
+  );
+
+  it.each(["Review set for 10/12", "Review set for 10/12/2026"])(
+    "allows the plain date in %s",
+    (verdict) => {
+      const map = draft();
+      map.verdict_line = verdict;
+      expect(
+        parseCallMap(map, segments, fixture.duration_ms)?.verdict_line,
+      ).toBe(verdict);
+    },
+  );
+
   it("parses the fictional fixture and fills every field", () => {
     const map = parseCallMap(
       fixture.call_map,

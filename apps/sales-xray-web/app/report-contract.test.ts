@@ -12,6 +12,7 @@ import {
   type SalesReport,
 } from "./report-contract";
 import overviewFixture from "../tests/fixtures/dipak-overview.json";
+import { getReportUiCopy } from "./report-ui-copy";
 
 const sourceSha256 = "00".repeat(32);
 const binding = { sourceSha256, durationMs: 4_000 };
@@ -71,6 +72,44 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it("accepts a source-bound partial dimension without changing legacy reports", () => {
+    const report = validReport();
+    report.dimensions[0] = {
+      ...report.dimensions[0]!,
+      status: "partial",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    };
+    const source = {
+      ...binding,
+      transcript: parseTranscript(transcript, sourceSha256),
+    };
+    expect(
+      parseJobResponse(job(report), source).report?.dimensions[0]?.status,
+    ).toBe("partial");
+    expect(parseJobResponse(job(validReport()), binding).report).toEqual(
+      validReport(),
+    );
+    report.dimensions[0].evidence = [];
+    expect(() => parseJobResponse(job(report), source)).toThrow(
+      "report_dimension_0_evidence_required",
+    );
+  });
+
+  it.each(["en", "hi", "mr", "en-hi-mixed"] as const)(
+    "provides partial copy in %s",
+    (language) => {
+      expect(getReportUiCopy(language).factorStatus.partial).toBeTruthy();
+      expect(getReportUiCopy("en").factorStatus.partial).toBe("Partly seen");
+    },
+  );
+
   it("accepts the nullable server hold without changing report source checks", () => {
     const payload = { ...job(), execution_hold: null };
     expect(parseJobResponse(payload, binding).report).toBeDefined();

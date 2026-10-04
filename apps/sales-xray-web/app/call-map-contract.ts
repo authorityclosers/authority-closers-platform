@@ -65,7 +65,17 @@ const PERIODS = ["once", "day", "week", "month", "year"] as const;
 const PROMISE_MS = { min: 60000, max: 14400000 } as const;
 // Verdicts are readings, never judgements by number (AGENTS.md, AC-SVAL).
 const SCORE_WORDS =
-  /\b(scor\w*|grad(e|es|ed|ing)|rat(ing|ings|ed)|percent\w*)\b|\d\s*%|\bout\s+of\s+(\d+|five|ten|hundred)\b|\d+\s*\/\s*\d+/i;
+  /\b(scor\w*|grad(e|es|ed|ing)|rat(ing|ings|ed)|percent\w*)\b|\d\s*%|\bout\s+of\s+(\d+|five|ten|hundred)\b|\b(?:\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred)\s*(?:points?|stars?|marks?)\b|\d\s+\/\s*\d|\d\s*\/\s+\d|\bgot\s+\d+\/\d+/i;
+const DATE = /^(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])(?:\/\d{2,4})?$/;
+
+function hasScoreProse(text: string): boolean {
+  return (
+    SCORE_WORDS.test(text) ||
+    (text.match(/\d+\/\d+(?:\/\d+)?/g) ?? []).some(
+      (fraction) => !DATE.test(fraction),
+    )
+  );
+}
 
 type Polarity = keyof typeof SIGNAL_KINDS_V1;
 type Qualification = (typeof QUALIFICATION_ITEMS)[number];
@@ -355,7 +365,7 @@ export function parseCallMap(
     capped.every(([text, cap]) => words(text) <= cap),
     "call_map_word_cap_exceeded",
   );
-  check(!SCORE_WORDS.test(map.verdict_line));
+  check(!hasScoreProse(map.verdict_line));
 
   check(
     map.money.every(
