@@ -20,13 +20,8 @@ from ac_platform.conversation_intelligence.internal_tester import (
     tester_rate_limit_resolver,
 )
 from ac_platform.db.session import engine, session_factory
-from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
-from ac_platform.http.admin_learning import install_admin_learning_http
-from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.billing import install_billing_http, install_billing_webhook_http
-from ac_platform.http.certificates import install_certificate_http
-from ac_platform.http.community import install_community_http
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_acquisition_runtime import (
     compose_acquisition,
@@ -36,7 +31,6 @@ from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_reviews import install_conversation_review_http
-from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import (
     ActivityMediaResolver,
@@ -47,28 +41,22 @@ from ac_platform.http.learning import (
 from ac_platform.http.media import install_media_http
 from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
-from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.organisation_domains import install_organisation_domains_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.plans import install_plans_http
-from ac_platform.http.platform import install_platform_http
 from ac_platform.http.platform_organisations import install_platform_organisations_http
-from ac_platform.http.platform_sensitive_segments import (
-    install_platform_sensitive_segments_http,
-)
-from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 from ac_platform.http.reviewer_auth import install_reviewer_identity_http
+from ac_platform.http.routes import RouteContext, discover_routes, install_routes
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
 from ac_platform.http.staff_billing import install_staff_billing_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
-from ac_platform.http.telemetry import install_telemetry_http
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 from ac_platform.media.studio_video_completion import StudioVideoCompletion
 
@@ -151,15 +139,11 @@ def create_app(
         sessions=session_factory,
         provider=configured_identity_provider,
     )
-    install_organisation_http(application, settings=settings, require_actor=require_actor)
+    ctx = RouteContext(settings=settings, require_actor=require_actor, sessions=session_factory)
+    routes = discover_routes()
+    install_routes(application, ctx, routes, stop=200)
     install_organisation_domains_http(application, settings=settings, require_actor=require_actor)
-    install_course_http(
-        application,
-        settings=settings,
-        sessions=session_factory,
-        require_actor=require_actor,
-    )
-    install_practice_http(application, settings=settings, require_actor=require_actor)
+    install_routes(application, ctx, routes, start=200, stop=500)
     if conversation_intake_runtime is not None and settings.environment not in {"local", "test"}:
         raise RuntimeError(
             "Hosted conversation intake requires its reviewed deployment composition."
@@ -238,14 +222,10 @@ def create_app(
         ),
         storage=resolved_conversation.storage if resolved_conversation else None,
     )
-    install_community_http(application, settings=settings, require_actor=require_actor)
-    install_app_updates_http(application, settings=settings, require_actor=require_actor)
-    install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_routes(application, ctx, routes, start=500, stop=1400)
     install_platform_organisations_http(application, settings=settings, require_actor=require_actor)
     install_staff_billing_http(application, settings=settings, require_actor=require_actor)
-    install_platform_sensitive_segments_http(
-        application, settings=settings, require_actor=require_actor
-    )
+    install_routes(application, ctx, routes, start=1400, stop=1500)
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(
@@ -257,11 +237,7 @@ def create_app(
     # Learner telemetry is present as a fail-closed API boundary only.  A
     # verified server consent resolver and explicit retention policy must be
     # composed by a later controlled promotion before any row is stored.
-    install_telemetry_http(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-    )
+    install_routes(application, ctx, routes, start=1500, stop=1700)
     resolved_media_runtime = media_runtime or create_default_media_runtime(settings)
     install_learning_http(
         application,
@@ -279,20 +255,7 @@ def create_app(
             else None
         ),
     )
-    install_certificate_http(
-        application,
-        require_actor=require_actor,
-    )
-    install_admin_learning_http(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-    )
-    install_admin_diagnosis_http(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-    )
+    install_routes(application, ctx, routes, start=1700)
     install_media_http(
         application,
         settings=settings,
