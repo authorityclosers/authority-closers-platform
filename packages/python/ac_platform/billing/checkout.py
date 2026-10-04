@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, select
@@ -493,7 +494,7 @@ class CheckoutService:
                     billing_cycles=BILLING_CYCLES[interval],
                     customer=customer,
                     description=description,
-                    return_url=self._return_url(order_id),
+                    return_url=self.return_url(order_id),
                     quantity=seats,
                 )
             )
@@ -621,7 +622,7 @@ class CheckoutService:
                     money=money,
                     description=f"{description} top-up {pack.minutes} minutes",
                     customer=customer,
-                    return_url=self._return_url(order_id),
+                    return_url=self.return_url(order_id),
                 )
             )
         except ProviderError as error:
@@ -668,7 +669,14 @@ class CheckoutService:
             hosted=self._hosted_view(hosted, now),
         )
 
-    def _return_url(self, order_id: UUID) -> str:
+    @property
+    def return_origin(self) -> str:
+        """The configured app origin, without a return path or order query."""
+
+        url = urlsplit(self.return_url_base)
+        return f"{url.scheme}://{url.netloc}"
+
+    def return_url(self, order_id: UUID) -> str:
         return f"{self.return_url_base}/account/billing/return?order={order_id}"
 
     def _hosted_view(self, hosted: HostedCheckout, now: datetime) -> HostedView:

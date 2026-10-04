@@ -96,7 +96,7 @@ class FakeCheckout:
                 quantity=order.seats,
             )
             await Settlement(self.service).receive_webhook(database, "fake", headers, body)
-        return self.service._return_url(order.id)
+        return self.service.return_url(order.id)
 
 
 def payment_page(order: OrderView, token: str, return_url: str) -> str:

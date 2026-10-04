@@ -638,12 +638,13 @@ def install_billing_webhook_http(
             async with sessions() as database, database.begin():
                 order = await simulation.read(database, order_id, token)
             return HTMLResponse(
-                payment_page(order, token, service.service._return_url(order_id)),
+                payment_page(order, token, service.service.return_url(order_id)),
                 headers={
                     "Cache-Control": "no-store",
                     "Referrer-Policy": "strict-origin",
-                    "Content-Security-Policy": "default-src 'none'; form-action 'self'; "
-                    "base-uri 'none'; frame-ancestors 'none'",
+                    # Chromium checks form-action through the POST's 303 redirect.
+                    "Content-Security-Policy": "default-src 'none'; form-action 'self' "
+                    f"{service.service.return_origin}; base-uri 'none'; frame-ancestors 'none'",
                 },
             )
 
