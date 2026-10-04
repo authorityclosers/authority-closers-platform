@@ -1,0 +1,272 @@
+"""Isolated fictional PostgreSQL proof; no production account or settings are read."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditChainHead, AuditEvent
+from ac_platform.audit.service import AuditRepository, verify_audit_chain_sync
+from ac_platform.identity.models import EmailChallenge, PasswordCredential, Person
+from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.tenancy.models import Membership, Tenant
+from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
+from tests.unit.identity.test_smoke_verification_data_change import arguments, tool
+
+
+@pytest.fixture
+def state(postgres_harness, monkeypatch):  # noqa: F811
+    person, other, operations, public = (uuid4() for _ in range(4))
+    email = f"fictional-{person}+ac-qa-production@authorityclosers.com"
+    now = datetime.now(UTC)
+    with Session(postgres_harness.engine) as db, db.begin():
+        db.add_all(
+            [
+                Tenant(id=key, slug=f"fictional-{key}", name="Fictional")
+                for key in (operations, public)
+            ]
+        )
+        db.add_all(
+            [
+                Person(
+                    id=person,
+                    email=email,
+                    first_name="Rowan Fixture",
+                    display_name="Rowan Fixture",
+                    consent_version="fictional-v1",
+                    consented_at=now,
+                ),
+                Person(id=other, email=f"other-{other}@example.test"),
+            ]
+        )
+        db.flush()
+        db.add(PasswordCredential(person_id=person, password_hash=uuid4().hex))
+        db.add(
+            EmailChallenge(
+                person_id=person,
+                kind="email_verification",
+                token_hash=uuid4().bytes + uuid4().bytes,
+                encrypted_token=uuid4().hex,
+                issued_at=now,
+                expires_at=now + timedelta(days=1),
+            )
+        )
+        db.add(
+            IdentitySession(
+                person_id=person,
+                token_hash=uuid4().bytes + uuid4().bytes,
+                created_at=now,
+                expires_at=now + timedelta(days=1),
+            )
+        )
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        operations_tenant_id=operations,
+        public_learner_tenant_id=public,
+    ).model_copy(
+        update={
+            "environment": "production",
+            "release_id": "1" * 40,
+            "database_url": postgres_harness.schema_url.render_as_string(hide_password=False),
+        }
+    )
+    monkeypatch.setattr(tool, "_settings", lambda _: settings)
+    monkeypatch.setattr(tool, "_email_from_stdin", lambda: email)
+    return SimpleNamespace(
+        person=person,
+        other=other,
+        operations=operations,
+        public=public,
+        email=email,
+        harness=postgres_harness,
+    )
+
+
+def snapshot(state):
+    with state.harness.engine.connect() as connection:
+        return {
+            model.__tablename__: [tuple(row) for row in connection.execute(select(model.__table__))]
+            for model in (
+                Person,
+                PasswordCredential,
+                EmailChallenge,
+                IdentitySession,
+                Membership,
+                Tenant,
+                AuditEvent,
+                AuditChainHead,
+            )
+        }
+
+
+@pytest.mark.asyncio
+async def test_default_preview_is_read_only_with_no_writes(state, capsys, monkeypatch):
+    before = snapshot(state)
+    original = tool._change
+
+    async def checked(session, *args):
+        from sqlalchemy import text
+
+        assert await session.scalar(text("SHOW transaction_read_only")) == "on"
+        return await original(session, *args)
+
+    monkeypatch.setattr(tool, "_change", checked)
+    assert await tool._run(arguments(state.person)) == 0
+    output = capsys.readouterr().out
+    report = json.loads(output)
+    assert report["mode"] == "dry_run"
+    assert report["before"] == {"email_verified": False, "revision": 0}
+    assert report["after"] == {"email_verified": True, "revision": 1}
+    assert report["audit_tenant_id"] == str(state.operations)
+    assert state.email not in output
+    assert snapshot(state) == before
+
+
+@pytest.mark.asyncio
+async def test_first_apply_audits_once_and_replay_preserves_timestamp(state, capsys):
+    before = snapshot(state)
+    args = arguments(state.person, apply=True)
+    assert await tool._run(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "applied"
+    applied = snapshot(state)
+    for table in ("password_credentials", "email_challenges", "sessions", "memberships", "tenants"):
+        assert applied[table] == before[table]
+    with Session(state.harness.engine) as db:
+        person = db.get(Person, state.person)
+        timestamp = person.email_verified_at
+        assert timestamp is not None and person.revision == 1
+        assert db.get(Person, state.other).email_verified_at is None
+        audit = db.scalar(select(AuditEvent).where(AuditEvent.request_id == str(args.command_id)))
+        assert audit.actor_type == "operator" and audit.actor_person_id is None
+        assert audit.payload["intent"] == {
+            "person_id": str(state.person),
+            "email_verified": True,
+            **report["attribution"],
+        }
+        assert audit.payload["before"] == {
+            "email_verified": False,
+            "revision": 0,
+            "email_verified_at": None,
+        }
+        assert datetime.fromisoformat(audit.payload["after"]["email_verified_at"]) == timestamp
+        assert tool.OWNER in json.dumps(audit.payload) and "AUT-398" in audit.reason
+        assert verify_audit_chain_sync(db, state.operations).valid
+    assert await tool._run(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "replayed"
+    assert snapshot(state) == applied
+    assert await tool._run(arguments(state.person, apply=True)) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "already_verified"
+    assert snapshot(state) == applied
+
+
+@pytest.mark.asyncio
+async def test_audit_failure_rolls_back_verification_and_chain(state, monkeypatch, capsys):
+    before = snapshot(state)
+    original = AuditRepository.append
+
+    async def fail(self, **kwargs):
+        await original(self, **kwargs)
+        raise tool.SmokeVerificationError("fictional failure after audit append")
+
+    monkeypatch.setattr(AuditRepository, "append", fail)
+    with pytest.raises(tool.SmokeVerificationError):
+        await tool._run(arguments(state.person, apply=True))
+    assert snapshot(state) == before
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "pin",
+        "absent",
+        "inactive",
+        "name",
+        "consent",
+        "credential",
+        "privileged",
+        "wrong_tenant",
+        "inactive_tenant",
+    ],
+)
+async def test_unexpected_targets_fail_closed_without_writes(state, monkeypatch, invalid, capsys):
+    args = arguments(state.person, apply=True)
+    with Session(state.harness.engine) as db, db.begin():
+        person = db.get(Person, state.person)
+        if invalid == "pin":
+            args.person_id = state.other
+        elif invalid == "absent":
+            monkeypatch.setattr(
+                tool, "_email_from_stdin", lambda: "absent+ac-qa-production@authorityclosers.com"
+            )
+        elif invalid == "inactive":
+            person.status = "suspended"
+        elif invalid == "name":
+            person.display_name = "Unexpected Fixture"
+        elif invalid == "consent":
+            person.consented_at = None
+        elif invalid == "credential":
+            db.delete(
+                db.scalar(
+                    select(PasswordCredential).where(PasswordCredential.person_id == state.person)
+                )
+            )
+        elif invalid in ("privileged", "wrong_tenant"):
+            db.add(
+                Membership(
+                    person_id=state.person,
+                    tenant_id=state.public if invalid == "privileged" else state.operations,
+                    role="admin" if invalid == "privileged" else "learner",
+                )
+            )
+        else:
+            db.get(Tenant, state.operations).status = "suspended"
+    before = snapshot(state)
+    with pytest.raises(tool.SmokeVerificationError):
+        await tool._run(args)
+    assert snapshot(state) == before
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["operator_reference", "run_reference", "person_id"])
+async def test_command_conflicts_fail_closed(state, field, capsys):
+    args = arguments(state.person, apply=True)
+    await tool._run(args)
+    capsys.readouterr()
+    setattr(args, field, uuid4())
+    before = snapshot(state)
+    with pytest.raises(tool.SmokeVerificationError):
+        await tool._run(args)
+    assert snapshot(state) == before
+
+
+@pytest.mark.asyncio
+async def test_concurrent_apply_serializes_one_update_and_one_audit(state, capsys):
+    args = arguments(state.person, apply=True)
+    await asyncio.wait_for(asyncio.gather(tool._run(args), tool._run(args)), timeout=15)
+    reports = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert sorted(row["status"] for row in reports) == ["applied", "replayed"]
+    with Session(state.harness.engine) as db:
+        assert (
+            len(
+                list(
+                    db.scalars(
+                        select(AuditEvent).where(AuditEvent.resource_id == str(state.person))
+                    )
+                )
+            )
+            == 1
+        )
+        assert db.get(Person, state.person).revision == 1
