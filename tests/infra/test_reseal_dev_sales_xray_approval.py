@@ -27,6 +27,8 @@ sys.modules[SPEC.name] = tool
 SPEC.loader.exec_module(tool)
 SECRET = "fictional-test-secret-do-not-print"  # noqa: S105 - fictional redaction sentinel
 EMAIL = "fictional-tester@example.invalid"
+LATER_RELEASE = "0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20"
+TEMPLATE_RELEASE = "1e784afa128f8d4629aeece5179486d423c0ec52"
 
 
 def put(path, raw, mode=0o600):
@@ -55,6 +57,8 @@ class Host:
         self.enabled = "disabled"
         self.runtime_hold = "true"
         self.health_release = pins.release
+        self.git_release = pins.release
+        self.api_release = pins.release
 
     def __call__(self, argv, **_kwargs):
         self.calls.append(argv)
@@ -63,7 +67,7 @@ class Host:
             self.fail_once = None
             return subprocess.CompletedProcess(argv, 19, SECRET.encode(), SECRET.encode())
         if argv[0] == "git" and "rev-parse" in argv:
-            result = self.pins.release.encode()
+            result = self.git_release.encode()
         elif argv[0] == "curl":
             result = json.dumps({"release_id": self.health_release}).encode()
         elif argv[:2] == ["systemctl", "is-active"]:
@@ -84,7 +88,7 @@ class Host:
                 result = f"{self.paths.development / (name + '.env')} (ignore_errors=no)".encode()
             elif prop == "Environment":
                 if unit == tool.refresh.API_UNIT:
-                    result = f"AC_RELEASE_ID={self.pins.release}".encode()
+                    result = f"AC_RELEASE_ID={self.api_release}".encode()
                 elif unit == tool.refresh.WORKER_UNIT:
                     digest = tool.manifest_pin(self.loaded["worker_dropin"])
                     result = f"{tool.WORKER_KEY}={digest}".encode()
@@ -107,6 +111,7 @@ class Host:
             assert f"LoadCredential=candidate.json:{self.paths.candidate}" in argv
             assert not any("EnvironmentFile=" in arg for arg in argv)
             assert SECRET not in " ".join(argv) and EMAIL not in " ".join(argv)
+            assert argv[argv.index("--validate-credentials") + 1] == self.pins.release
         return subprocess.CompletedProcess(argv, code, result, SECRET.encode())
 
     def process_environment(self, _commands, unit):
@@ -173,7 +178,7 @@ def fixture(tmp_path, monkeypatch):
     )
     approval["internal_tester_accounts"][-1]["email"] = EMAIL
     candidate = load_hosted_approval_bundle(approval).to_json()
-    pins = tool.Pins(tool.sha(before), tool.sha(candidate), "b" * 40)
+    pins = tool.Pins(tool.sha(before), tool.sha(candidate), LATER_RELEASE)
     service = {
         "schema_version": "ac.sales_xray.worker_service/1",
         "environment": "development",
@@ -199,7 +204,7 @@ def fixture(tmp_path, monkeypatch):
         ],
     }
     raw_service = (json.dumps(service, indent=2) + "\n").encode()
-    template = {**service, "release_id": "a" * 40}
+    template = {**service, "release_id": TEMPLATE_RELEASE}
     put(dev / "approval.json", before)
     put(paths.candidate, candidate)
     put(dev / "service.json", raw_service)
@@ -259,6 +264,9 @@ def test_apply_pins_agree_preserves_other_bytes_and_repeat_is_noop(fixture):
     paths, pins, host = fixture
     before, guards = tool.snapshot(paths)
     report = run(fixture, apply=True)
+    assert report["release"] == LATER_RELEASE
+    plan = tool.decoded(paths.history.joinpath(report["run_id"], "plan.json").read_bytes())
+    assert plan["release"] == LATER_RELEASE
     after, after_guards = tool.snapshot(paths)
     assert after_guards == guards
     assert tool.sha(after["approval"].raw) == pins.after
@@ -267,6 +275,7 @@ def test_apply_pins_agree_preserves_other_bytes_and_repeat_is_noop(fixture):
         old, new = tool.decoded(before[name].raw), tool.decoded(after[name].raw)
         new["sales_xray_approval_sha256"] = pins.before
         assert old == new
+    assert tool.decoded(after["template"].raw)["release_id"] == TEMPLATE_RELEASE
     assert (
         after["api_env"].raw.replace(pins.after.encode(), pins.before.encode())
         == before["api_env"].raw
@@ -384,6 +393,7 @@ def test_restart_failure_restores_exact_bytes_and_prior_unit_states(fixture, uni
     assert host.states == states
     events = list(paths.history.glob("*/failed-restored-*.json"))
     assert len(events) == 1
+    assert json.loads(events[0].read_bytes())["release"] == LATER_RELEASE
     assert any(item["exit"] == 19 for item in json.loads(events[0].read_bytes())["command_exits"])
     assert SECRET not in events[0].read_text() and EMAIL not in events[0].read_text()
 
@@ -435,6 +445,12 @@ def test_explicit_rollback_is_dry_by_default_idempotent_and_guarded(fixture):
     report = run(fixture, apply=True)
     applied = tree(paths.trusted_root)
     result = tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0)
+    assert result["release"] == LATER_RELEASE
+    validation = [call for call in host.calls if call[0] == "systemd-run"][-1]
+    directory = paths.history / report["run_id"]
+    assert f"LoadCredential=current.json:{directory / 'approval.before'}" in validation
+    assert f"LoadCredential=service.json:{directory / 'service.before'}" in validation
+    assert f"LoadCredential=template.json:{directory / 'template.before'}" in validation
     assert result["apply"] is False and tree(paths.trusted_root) == applied
     tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0, apply=True)
     assert tool.snapshot(paths) == before
@@ -447,6 +463,107 @@ def test_explicit_rollback_is_dry_by_default_idempotent_and_guarded(fixture):
     paths.api_dropin.write_bytes(b"[Service]\n# changed elsewhere\n")
     with pytest.raises(tool.ResealError, match="rollback_guard_changed"):
         tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0, apply=True)
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("source", ["supplied", "marker", "git", "api", "service", "readiness"])
+def test_release_disagreement_refuses_without_writes_or_service_changes(fixture, source, rollback):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if rollback else None
+    if source == "supplied":
+        pins = replace(pins, release=tool.SERVING_RELEASE)
+    elif source == "marker":
+        put(paths.backend / ".ac-release-id", (tool.SERVING_RELEASE + "\n").encode(), 0o644)
+    elif source in ("git", "api"):
+        setattr(host, source + "_release", tool.SERVING_RELEASE)
+    elif source == "service":
+        path = paths.targets()["service"]
+        path.write_bytes(
+            path.read_bytes().replace(LATER_RELEASE.encode(), tool.SERVING_RELEASE.encode())
+        )
+    else:
+        host.health_release = tool.SERVING_RELEASE
+    before = tree(paths.trusted_root)
+    states = host.states.copy()
+    host.calls.clear()
+    with pytest.raises(tool.ResealError):
+        if rollback:
+            tool.rollback(paths, run_id, runner=host, pins=pins, uid=0, apply=True)
+        else:
+            tool.reseal(paths, runner=host, pins=pins, uid=0, apply=True)
+    assert tree(paths.trusted_root) == before and host.states == states
+    assert not any(
+        call[0] == "systemctl" and call[1] in ("stop", "restart", "reset-failed", "daemon-reload")
+        for call in host.calls
+    )
+
+
+@pytest.mark.parametrize("apply", [False, True])
+def test_rollback_runtime_contract_failure_refuses_without_writes(fixture, apply):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"]
+    before = tree(paths.trusted_root)
+    states = host.states.copy()
+    host.fail_once = ["systemd-run", "--wait", "--collect"]
+    with pytest.raises(tool.ResealError, match="command_failed"):
+        tool.rollback(paths, run_id, runner=host, pins=pins, uid=0, apply=apply)
+    assert tree(paths.trusted_root) == before and host.states == states
+
+
+@pytest.mark.parametrize("field", ["approval_before_sha256", "approval_after_sha256"])
+def test_rollback_plan_cannot_change_approval_authorization(fixture, field):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"]
+    path = paths.history / run_id / "plan.json"
+    plan = tool.decoded(path.read_bytes())
+    plan[field] = "c" * 64
+    path.write_bytes(tool.encoded(plan))
+    before = tree(paths.trusted_root)
+    host.calls.clear()
+    with pytest.raises(tool.ResealError, match="rollback_plan_invalid"):
+        tool.rollback(paths, run_id, runner=host, pins=pins, uid=0, apply=True)
+    assert tree(paths.trusted_root) == before and host.calls == []
+
+
+@pytest.mark.parametrize("release", [None, LATER_RELEASE])
+@pytest.mark.parametrize(
+    "mode",
+    [[], ["--apply"], ["--rollback", "recorded-run"], ["--rollback", "recorded-run", "--apply"]],
+)
+def test_cli_routes_same_release_with_fixed_approval_pins(monkeypatch, capsys, release, mode):
+    calls = []
+
+    def capture(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(tool, "reseal", capture)
+    monkeypatch.setattr(tool, "rollback", capture)
+    arguments = mode + (["--serving-release-id", release] if release else [])
+    assert tool.main(arguments) == 0
+    assert calls == [
+        {"apply": "--apply" in mode, "pins": tool.Pins(release=release or tool.SERVING_RELEASE)}
+    ]
+    assert calls[0]["pins"].before == tool.APPROVAL_BEFORE
+    assert calls[0]["pins"].after == tool.APPROVAL_AFTER
+    capsys.readouterr()
+
+
+@pytest.mark.parametrize(
+    "release", ["", "main", "a" * 39, "a" * 41, "g" * 40, "/moving/current", LATER_RELEASE + "\n"]
+)
+@pytest.mark.parametrize("rollback", [False, True])
+def test_malformed_release_rejected_before_protected_reads(monkeypatch, capsys, release, rollback):
+    def unexpected_paths():
+        pytest.fail("malformed input must fail before paths or protected operations")
+
+    monkeypatch.setattr(tool, "Paths", unexpected_paths)
+    arguments = ["--serving-release-id", release, "--apply"]
+    if rollback:
+        arguments += ["--rollback", "recorded-run"]
+    assert tool.main(arguments) == 2
+    output = capsys.readouterr()
+    assert json.loads(output.err) == {"ok": False, "code": "serving_release_id_invalid"}
 
 
 def test_rollback_recovers_interruption_before_daemon_reload(fixture):
@@ -545,6 +662,7 @@ def test_runtime_credentials_use_real_serving_contract_and_expiry(fixture, monke
         "candidate.json": paths.candidate,
         "service.json": paths.development / "service.json",
         "template.json": paths.development / "service.operator-template.json",
+        ".ac-release-id": paths.backend / ".ac-release-id",
     }
 
     def read_credential(path, **kwargs):
@@ -557,7 +675,6 @@ def test_runtime_credentials_use_real_serving_contract_and_expiry(fixture, monke
     }
     monkeypatch.setattr(config, "read_private_file", read_credential)
     monkeypatch.setattr(config, "load_service_config", lambda path, _digest: configs[path.name])
-    monkeypatch.setattr(config, "verify_installed_release", lambda _config, _marker: None)
     monkeypatch.setattr(tool.os, "geteuid", lambda: 10001)
     files, _ = tool.snapshot(paths)
     arguments = [
@@ -568,6 +685,11 @@ def test_runtime_credentials_use_real_serving_contract_and_expiry(fixture, monke
         tool.sha(files["template"].raw),
     ]
     tool.validate_credentials(arguments)
+    marker = mapping[".ac-release-id"]
+    put(marker, (tool.SERVING_RELEASE + "\n").encode(), 0o644)
+    with pytest.raises(ValueError, match="worker_release_mismatch"):
+        tool.validate_credentials(arguments)
+    put(marker, (pins.release + "\n").encode(), 0o644)
     value = tool.decoded(paths.candidate.read_bytes())
     value["expires_at_epoch"] = 2
     raw = load_hosted_approval_bundle(value).to_json()

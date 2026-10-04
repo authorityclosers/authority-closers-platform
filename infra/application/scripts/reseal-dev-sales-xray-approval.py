@@ -115,6 +115,11 @@ class Pins:
 DEFAULT_PINS = Pins()
 
 
+def validate_release(pins: Pins) -> None:
+    if not re.fullmatch(r"[0-9a-f]{40}", pins.release):
+        raise ResealError("serving_release_id_invalid")
+
+
 @dataclass(frozen=True)
 class File:
     raw: bytes
@@ -448,7 +453,12 @@ def manifest_pin(raw: bytes) -> str:
 
 
 def runtime_validation(
-    paths: Paths, commands: Commands, pins: Pins, files: dict[str, File]
+    paths: Paths,
+    commands: Commands,
+    pins: Pins,
+    files: dict[str, File],
+    *,
+    backup: Path | None = None,
 ) -> None:
     refresh.runtime_identity()
     helpers = Path(__file__).resolve().parent
@@ -470,15 +480,19 @@ def runtime_validation(
         environment=(f"PATH={refresh.SAFE_PATH}", "HOME=/", "PYTHONDONTWRITEBYTECODE=1"),
         runtime=60,
     )
+    sources = {
+        name: backup / (name + ".before") if backup else paths.targets()[name]
+        for name in ("approval", "service", "template")
+    }
     properties = [
         "PrivateNetwork=yes",
         "StandardError=null",
         f"BindReadOnlyPaths={helpers}:/opt/ac-dev-approval-reseal",
         f"BindReadOnlyPaths={paths.backend / '.ac-release-id'}:/app/.ac-release-id",
-        f"LoadCredential=current.json:{paths.development / 'approval.json'}",
+        f"LoadCredential=current.json:{sources['approval']}",
         f"LoadCredential=candidate.json:{paths.candidate}",
-        f"LoadCredential=service.json:{paths.development / 'service.json'}",
-        f"LoadCredential=template.json:{paths.development / 'service.operator-template.json'}",
+        f"LoadCredential=service.json:{sources['service']}",
+        f"LoadCredential=template.json:{sources['template']}",
     ]
     position = argv.index("--")
     argv[position:position] = [token for prop in properties for token in ("--property", prop)]
@@ -621,6 +635,22 @@ def healthy(paths: Paths, commands: Commands, pins: Pins, states: dict[str, str]
         raise ResealError("health_release_mismatch")
 
 
+def serving_source(paths: Paths, commands: Commands, pins: Pins) -> None:
+    if (
+        read(paths.backend / ".ac-release-id", paths, private=False).raw.strip()
+        != pins.release.encode()
+        or commands.run(
+            "serving_git_revision",
+            ["git", "--no-replace-objects", "-C", str(paths.backend), "rev-parse", "HEAD"],
+        ).strip()
+        != pins.release.encode()
+    ):
+        raise ResealError("serving_release_mismatch")
+    commands.run(
+        "serving_git_clean", ["git", "-C", str(paths.backend), "diff", "--quiet", "HEAD", "--"]
+    )
+
+
 def receipt_base(pins: Pins, commands: Commands) -> dict:
     return {
         "schema": "ac.dev-approval-reseal/1",
@@ -715,23 +745,14 @@ def restore(
 def reseal(
     paths: Paths, *, apply=False, runner=refresh.command, pins=DEFAULT_PINS, uid=None
 ) -> dict:
+    validate_release(pins)
     if (os.geteuid() if uid is None else uid) != 0:
         raise ResealError("root_required")
     commands = Commands(runner)
     with audit_errors(pins, commands), deployment_lock(paths):
         files, guards = snapshot(paths)
         after = prepare(paths, pins, files, guards)
-        if (
-            commands.run(
-                "serving_git_revision",
-                ["git", "--no-replace-objects", "-C", str(paths.backend), "rev-parse", "HEAD"],
-            ).strip()
-            != pins.release.encode()
-        ):
-            raise ResealError("serving_release_mismatch")
-        commands.run(
-            "serving_git_clean", ["git", "-C", str(paths.backend), "diff", "--quiet", "HEAD", "--"]
-        )
+        serving_source(paths, commands, pins)
         states = controls(paths, commands, pins)
         runtime_validation(paths, commands, pins, files)
         adopted_credentials(paths, commands, files, states)
@@ -784,6 +805,7 @@ def reseal(
 def rollback(
     paths: Paths, run_id: str, *, apply=False, runner=refresh.command, pins=DEFAULT_PINS, uid=None
 ) -> dict:
+    validate_release(pins)
     if (os.geteuid() if uid is None else uid) != 0:
         raise ResealError("root_required")
     if str(uuid.UUID(run_id)) != run_id:
@@ -795,6 +817,8 @@ def rollback(
         if (
             plan.get("schema") != "ac.dev-approval-reseal/1"
             or plan.get("release") != pins.release
+            or plan.get("approval_before_sha256") != pins.before
+            or plan.get("approval_after_sha256") != pins.after
             or plan.get("authorization_comment") != AUTHORIZATION_COMMENT
         ):
             raise ResealError("rollback_plan_invalid")
@@ -819,6 +843,11 @@ def rollback(
             ):
                 raise ResealError("rollback_pin_mismatch")
             before[name] = File(raw, metadata["mode"], metadata["uid"], metadata["gid"])
+        if decoded(files["service"].raw).get("release_id") != pins.release:
+            raise ResealError("service_release_mismatch")
+        serving_source(paths, commands, pins)
+        runtime_validation(paths, commands, pins, before, backup=directory)
+        healthy(paths, commands, pins, states)
         report = {
             **receipt_base(pins, commands),
             "run_id": run_id,
@@ -845,11 +874,14 @@ def main(argv=None) -> int:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument("--apply", action="store_true")
         parser.add_argument("--rollback", metavar="RUN_ID")
+        parser.add_argument("--serving-release-id", default=SERVING_RELEASE, metavar="40_HEX_SHA")
         args = parser.parse_args(arguments)
+        pins = Pins(release=args.serving_release_id)
+        validate_release(pins)
         result = (
-            rollback(Paths(), args.rollback, apply=args.apply)
+            rollback(Paths(), args.rollback, apply=args.apply, pins=pins)
             if args.rollback
-            else reseal(Paths(), apply=args.apply)
+            else reseal(Paths(), apply=args.apply, pins=pins)
         )
         print(json.dumps(result, sort_keys=True))
         return 0

@@ -1,4 +1,4 @@
-# Development approval re-seal: AUT-1083 / AUT-1089
+# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117
 
 Root Operator runs this tool from the **merged, released, root-owned application
 scripts directory**, after CTO review and CEO merge approval. Engineers do not
@@ -14,7 +14,9 @@ It never regenerates the candidate or uses `approval-candidate.json`.
 
 | Immutable input | Pin |
 | --- | --- |
-| Serving backend source | `b9f2f70e35c821f72d4f59184a8850977d696aad` |
+| Original default serving backend source | `b9f2f70e35c821f72d4f59184a8850977d696aad` |
+| Explicit serving source verified in Root's refusal receipt | `0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20` |
+| Preserved existing template release | `1e784afa128f8d4629aeece5179486d423c0ec52` |
 | Existing approval SHA256 | `07ca6c4ea9587ff81b7bd97a891eb81f1195179ca4eb3ff8fa03205267225881` |
 | Canonical candidate SHA256 | `72343b19c3028c21dd16fd51d455b6dfdd1008e570f14778abbd8fd3aeb3d217` |
 | Canonical candidate path | `/srv/authority-closers/application/operator-inputs/development/aut-1083/approval-candidate-canonical.json` |
@@ -23,8 +25,17 @@ The tool intentionally keeps the serving source unchanged while adopting
 configuration from a newer reviewed tool release. If any input pin differs,
 Root reports the stable failure code on AUT-1083; do not edit the inputs or
 relax the tool's pins. The tool release SHA and checksums must be taken from
-AUT-1089's final merged/released handoff, rather than a moving `current-staging`
+[AUT-1117](/AUT/issues/AUT-1117)'s final merged/released handoff, rather than a moving `current-staging`
 symlink or an agent checkout.
+
+`--serving-release-id` accepts one lowercase 40-hex commit SHA. Omitting it keeps
+the original default; it never discovers a release or resolves a moving symlink.
+Root must independently verify the serving source before each run: backend Git
+HEAD and marker, API release override, current service release and authenticated
+readiness must agree. The tool checks these inputs, runtime identity/contract and
+loopback readiness against the supplied pin. If dev advances again, Root records
+that evidence and explicitly supplies its actual verified source in every command.
+This changes neither approval digest, tester scope nor the template's release.
 
 ## Dry-run and apply
 
@@ -34,12 +45,13 @@ checksums against that release's source-reviewed files before executing.
 
 ```bash
 RESEAL_TOOL_RELEASE=<merged-released-tool-sha>
+RESEAL_SERVING_RELEASE=0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20
 RESEAL_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}/scripts
 RESEAL_SCRIPT=${RESEAL_DIR}/reseal-dev-sales-xray-approval.py
 sha256sum "$RESEAL_SCRIPT" \
   "$RESEAL_DIR/refresh-dev-sales-xray-backend.py" \
   "$RESEAL_DIR/prepare-sales-xray-native-activation.py"
-python3 "$RESEAL_SCRIPT"
+python3 "$RESEAL_SCRIPT" --serving-release-id "$RESEAL_SERVING_RELEASE"
 ```
 
 Dry-run is the default. It acquires the installer's existing
@@ -60,7 +72,7 @@ Post the masked dry-run result on AUT-1083, then execute its already-authorized
 apply:
 
 ```bash
-python3 "$RESEAL_SCRIPT" --apply
+python3 "$RESEAL_SCRIPT" --serving-release-id "$RESEAL_SERVING_RELEASE" --apply
 ```
 
 Apply first saves root-only exact byte backups and a plan containing source,
@@ -101,13 +113,19 @@ Rollback is also dry-run by default:
 
 ```bash
 RESEAL_RUN_ID=<run-id-from-apply-or-plan>
-python3 "$RESEAL_SCRIPT" --rollback "$RESEAL_RUN_ID"
-python3 "$RESEAL_SCRIPT" --rollback "$RESEAL_RUN_ID" --apply
+python3 "$RESEAL_SCRIPT" --serving-release-id "$RESEAL_SERVING_RELEASE" --rollback "$RESEAL_RUN_ID"
+python3 "$RESEAL_SCRIPT" --serving-release-id "$RESEAL_SERVING_RELEASE" --rollback "$RESEAL_RUN_ID" --apply
 ```
 
 Rollback admits only recorded before/after bytes and metadata for the five
 targets, and requires unchanged outbox, release marker, API release drop-in
-and native descriptor. Either recorded worker pin may still be loaded after
+and native descriptor. The supplied source must match the plan's recorded release,
+and the plan must record both fixed approval digests. Rollback rechecks serving Git HEAD/cleanliness,
+marker, API override, current service release, runtime identity/contract and
+readiness before writes. Isolated validation uses the trusted saved approval,
+service and template credentials, so it can recover an interrupted mixed-pin
+write without treating those mixed files as a valid runtime configuration.
+Either recorded worker pin may still be loaded after
 an interruption before daemon-reload. Holds and disabled refresh still apply.
 Rollback stops only API/worker, restores backups, adopts the prior states and
 verifies credentials and health. A repeated completed rollback is a no-op.
@@ -126,7 +144,7 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `2e42e6649eafd4c2701e45fe1b5d2f64cdc3cb41ba00059d9920ea4ded2c46d2` |
+| `reseal-dev-sales-xray-approval.py` | `e03bde6b318aea31ea4aa48837022985cdc83cec6343fc7aab98cd73ae523c49` |
 | `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
 | `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
 
@@ -149,7 +167,12 @@ holds/timer and file trust; isolated runtime contract/expiry checks; secret-free
 reports; partial-write, restart and health failures; exact byte/state rollback;
 and explicit rollback default/idempotence/guard checks.
 
-Local result (4 October 2026): 43 new-tool tests passed; the 59 unchanged
-refresh/preparation regression tests also passed. Ruff format and lint passed
-for both changed Python files. No live protected file was read and no host
+Local result (4 October 2026): 81 re-seal tests passed; the 59 unchanged
+refresh/preparation regression tests also passed (140 total). The later coherent
+source succeeds and preserves the template release; wrong supplied, Git, marker,
+API, service and readiness pins refuse writes/service mutations. Malformed pins
+fail before protected reads. CLI routes the same source with fixed approval
+digests in all modes; plans, receipts, adoption and rollback retain that source.
+Repository Python format/lint and the task gate also passed. No live protected
+file was read and no host
 operation was executed by the engineer.
