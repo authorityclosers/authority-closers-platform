@@ -5,16 +5,18 @@ import { useWorkspaceAccess } from "../workspace-access";
 import {
   BillingError,
   idempotencyKey,
+  invoiceDownloadPath,
   liveBilling,
   type BillingClient,
 } from "./billing-api";
-import type { MePlan, Subscriptions, Usage } from "./contract";
+import type { Invoice, MePlan, Subscriptions, Usage } from "./contract";
 
 type Snapshot = {
   key: string;
   mePlan: MePlan;
   usage: Usage;
   subs: Subscriptions;
+  invoices: Invoice[];
 };
 
 /** Account facts are read from AC; provider states never supply the allowance. */
@@ -55,10 +57,11 @@ export function useBillingAccount(
       client.readMePlan(controller.signal),
       client.readUsage(controller.signal),
       client.readSubscriptions(account, controller.signal),
+      client.readInvoices(account, controller.signal),
     ])
-      .then(([mePlan, usage, subs]) => {
+      .then(([mePlan, usage, subs, invoices]) => {
         if (controller.signal.aborted) return;
-        setSnapshot({ key, mePlan, usage, subs });
+        setSnapshot({ key, mePlan, usage, subs, invoices });
         setFailure(null);
       })
       .catch(() => {
@@ -118,6 +121,21 @@ export function useBillingAccount(
     mePlan: current?.mePlan ?? null,
     usage: current?.usage ?? null,
     subs: current?.subs ?? null,
+    documents: (current?.invoices ?? []).map((invoice) => ({
+      id: invoice.invoiceId,
+      createdAt: invoice.createdAt,
+      description: invoice.number,
+      amount: {
+        minor: invoice.totalMinor,
+        currency: invoice.currency,
+        gstInclusive: true,
+      },
+      status: "Issued",
+      invoiceHref: (client.invoiceDownloadHref ?? invoiceDownloadPath)(
+        invoice.invoiceId,
+      ),
+      receiptHref: null,
+    })),
     status: current
       ? ("ready" as const)
       : error

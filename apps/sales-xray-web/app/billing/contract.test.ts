@@ -4,6 +4,7 @@ import {
   ContractError,
   onSale,
   parseCheckout,
+  parseInvoices,
   parseMePlan,
   parseOfflinePayment,
   parseOrder,
@@ -54,6 +55,51 @@ const SUBSCRIPTION = {
   renewal_needs_customer_approval: false,
   created_at: "2026-09-30T18:00:00Z",
 };
+
+const INVOICE = {
+  invoice_id: "00000000-0000-4000-8000-0000000000cc",
+  number: "TEST-2026-0001",
+  created_at: "2026-10-03T00:00:00Z",
+  currency: "INR",
+  taxable_minor: 2000000,
+  cgst_minor: 0,
+  sgst_minor: 0,
+  igst_minor: 360000,
+  total_minor: 2360000,
+  place_of_supply: "27",
+};
+
+it("strictly parses invoice pages and rejects drift and malformed money", () => {
+  expect(
+    parseInvoices({ invoices: [INVOICE], next_before: INVOICE.invoice_id }),
+  ).toMatchObject({
+    invoices: [
+      {
+        invoiceId: INVOICE.invoice_id,
+        totalMinor: 2360000,
+        placeOfSupply: "27",
+      },
+    ],
+    nextBefore: INVOICE.invoice_id,
+  });
+  expect(parseInvoices({ invoices: [], next_before: null }).invoices).toEqual(
+    [],
+  );
+  for (const invoice of [
+    { ...INVOICE, total_minor: "2360000" },
+    { ...INVOICE, credit_note: {} },
+  ])
+    expect(() =>
+      parseInvoices({ invoices: [invoice], next_before: null }),
+    ).toThrow(ContractError);
+  expect(() => parseInvoices({ invoices: [], next_before: 1 })).toThrow(
+    ContractError,
+  );
+  expect(() => parseInvoices({ invoices: [] })).toThrow(ContractError);
+  expect(() =>
+    parseInvoices({ invoices: [], next_before: null, extra: true }),
+  ).toThrow(ContractError);
+});
 
 describe("plans catalogue (GET /v1/plans)", () => {
   it("parses the public coming-soon and active response from PR #206", () => {

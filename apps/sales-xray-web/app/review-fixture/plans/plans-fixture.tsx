@@ -12,6 +12,7 @@ import { WorkspaceAccessProvider } from "../../workspace-access";
 import {
   FIXTURE_RETURN_PATH,
   fixtureBilling,
+  fixtureAccount,
   fixtureProviderReports,
   resetFixtureBilling,
 } from "./fixture-billing";
@@ -62,7 +63,20 @@ function Banner() {
 export function PlansFixture() {
   const params = useSearchParams();
   return (
-    <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
+    <WorkspaceAccessProvider
+      value={{
+        ...FIXTURE_ACCESS,
+        workspaces: [
+          {
+            tenant_id: "fixture-workspace",
+            kind: fixtureAccount(),
+            name: "Fictional workspace",
+            role: "owner",
+            sales_xray_enabled: true,
+          },
+        ],
+      }}
+    >
       <Banner />
       {params.get("view") === "billing" ? (
         <FixtureBilling />

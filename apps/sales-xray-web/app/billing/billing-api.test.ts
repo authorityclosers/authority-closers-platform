@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { BillingError, liveBilling } from "./billing-api";
+import { BillingError, invoiceDownloadPath, liveBilling } from "./billing-api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -45,6 +45,7 @@ it("sends only C1 checkout fields, verifies bodylessly and retains error codes",
       planKey: "organisation",
       interval: "year",
       seats: 2,
+      buyer: { name: "Fictional Closers", gstin: "27ABCDE1234F1Z5" },
     },
     "retry-key",
   );
@@ -58,6 +59,7 @@ it("sends only C1 checkout fields, verifies bodylessly and retains error codes",
     plan_key: "organisation",
     interval: "year",
     seats: 2,
+    buyer: { name: "Fictional Closers", gstin: "27ABCDE1234F1Z5" },
   });
   fetch.mockImplementationOnce(
     async () =>
@@ -88,4 +90,55 @@ it("sends only C1 checkout fields, verifies bodylessly and retains error codes",
   expect(
     (fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body,
   ).toBeUndefined();
+});
+
+it("reads every invoice page for the selected account and builds a same-origin download", async () => {
+  const invoice = {
+    invoice_id: "00000000-0000-4000-8000-0000000000cc",
+    number: "TEST-1",
+    created_at: "2026-10-03T00:00:00Z",
+    currency: "INR",
+    taxable_minor: 2000000,
+    cgst_minor: 0,
+    sgst_minor: 0,
+    igst_minor: 360000,
+    total_minor: 2360000,
+    place_of_supply: "27",
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ invoices: [invoice], next_before: invoice.invoice_id }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        invoices: [{ ...invoice, invoice_id: "second" }],
+        next_before: null,
+      }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const signal = new AbortController().signal;
+  expect(await liveBilling.readInvoices("organisation", signal)).toHaveLength(
+    2,
+  );
+  expect(fetch.mock.calls.map(([path]) => path)).toEqual([
+    "/v1/invoices?account=organisation",
+    `/v1/invoices?account=organisation&before=${invoice.invoice_id}`,
+  ]);
+  expect(fetch.mock.calls[0][1]).toMatchObject({
+    credentials: "same-origin",
+    cache: "no-store",
+    signal,
+  });
+  expect(invoiceDownloadPath("id/one")).toBe("/v1/invoices/id%2Fone/download");
+});
+
+it("does not interpret an invoice failure as an empty list", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("", { status: 403 })),
+  );
+  await expect(liveBilling.readInvoices("personal")).rejects.toMatchObject({
+    status: 403,
+  });
 });

@@ -286,7 +286,13 @@ export function BillingView({
                 <h2>Invoices &amp; Receipts</h2>
               </div>
 
-              {documents.length > 0 ? (
+              {status !== "ready" ? (
+                <p className={styles.hint} role={loading ? "status" : "alert"}>
+                  {loading
+                    ? "Loading invoices…"
+                    : "Invoices and receipts are currently unavailable."}
+                </p>
+              ) : documents.length > 0 ? (
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <caption className={styles.hint}>
@@ -312,6 +318,7 @@ export function BillingView({
                             {document.invoiceHref ? (
                               <a
                                 href={document.invoiceHref}
+                                download
                                 aria-label={`Invoice for ${document.description}`}
                               >
                                 Invoice

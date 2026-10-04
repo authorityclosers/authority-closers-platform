@@ -23,6 +23,7 @@ import { dismissNotice, notify } from "../notice-center";
 import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
 import { PurchaseShell } from "./purchase-shell";
 import { CheckoutDrawer } from "./checkout-drawer";
+import type { Buyer } from "../billing/billing-api";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
 
@@ -30,6 +31,7 @@ export type PlanSelection = {
   planKey: string;
   interval: Interval;
   seats: number;
+  buyer?: Buyer;
 };
 
 export type PurchaseQuote = {
@@ -165,11 +167,11 @@ export function PlansScreen({
     }
   };
 
-  const handlePay = () => {
+  const handlePay = (buyer?: Buyer) => {
     if (selectedTopUp) {
       onBuyTopUp?.(selectedTopUp);
     } else if (selection) {
-      onBuy?.(selection);
+      onBuy?.({ ...selection, ...(buyer ? { buyer } : {}) });
     }
   };
 
@@ -540,6 +542,7 @@ export function PlansScreen({
 
         {/* Checkout Drawer (Side panel, never at page bottom) */}
         <CheckoutDrawer
+          key={selectedPlanKey ?? selectedTopUp?.key ?? "none"}
           open={Boolean(selectedPlanKey || selectedTopUp)}
           onClose={closeCheckout}
           item={
@@ -562,6 +565,7 @@ export function PlansScreen({
           confirmedOrder={confirmedOrder}
           quoted={quoted}
           onPay={handlePay}
+          onBuyerChange={() => selection && onSelectionChange?.(selection)}
           summaryRef={summaryRef}
         />
       </div>

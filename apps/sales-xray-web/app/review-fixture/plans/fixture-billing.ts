@@ -6,11 +6,13 @@
  */
 import {
   BillingError,
+  type Buyer,
   type BillingClient,
   type CheckoutRequest,
 } from "../../billing/billing-api";
 import {
   parseCheckout,
+  parseInvoices,
   parseMePlan,
   parseOfflinePayment,
   parseOrder,
@@ -74,6 +76,8 @@ type Store = {
   subscriptions: Record<string, unknown>[];
   minutesLeft: number;
   minutesTotal: number;
+  invoices?: Record<string, unknown>[];
+  buyers?: Record<string, Buyer>;
 };
 
 function read(): Store {
@@ -122,6 +126,23 @@ export function fixtureProviderReports(
   order.status = outcome;
   order.paid_at = outcome === "paid" ? now() : null;
   if (outcome === "paid") {
+    const tax = order.tax as {
+      taxable_minor: number;
+      gst_minor: number;
+      total_minor: number;
+    };
+    (store.invoices ??= []).unshift({
+      invoice_id: orderId,
+      number: `FIXTURE-${(store.invoices?.length ?? 0) + 1}`,
+      created_at: order.paid_at,
+      currency: "INR",
+      taxable_minor: tax.taxable_minor,
+      cgst_minor: 0,
+      sgst_minor: 0,
+      igst_minor: tax.gst_minor,
+      total_minor: tax.total_minor,
+      place_of_supply: store.buyers?.[orderId]?.gstin?.slice(0, 2) ?? null,
+    });
     order.refund = {
       payment_id: `pay_${orderId}`,
       refundable_until: new Date(
@@ -170,6 +191,12 @@ export function resetFixtureBilling() {
   } catch {
     // Nothing to forget.
   }
+}
+
+export function fixtureAccount(): "personal" | "organisation" {
+  return liveSubscription(read())?.account === "organisation"
+    ? "organisation"
+    : "personal";
 }
 
 export const fixtureBilling: BillingClient = {
@@ -240,6 +267,33 @@ export const fixtureBilling: BillingClient = {
       current,
       past: mine.filter((item) => item !== current).slice(0, 10),
     });
+  },
+  async readInvoices(account) {
+    await wait();
+    const store = read();
+    return parseInvoices({
+      invoices: (store.invoices ?? []).filter(
+        (invoice) =>
+          store.orders[String(invoice.invoice_id)]?.account === account,
+      ),
+      next_before: null,
+    }).invoices;
+  },
+  invoiceDownloadHref(invoiceId) {
+    const store = read();
+    return `data:application/octet-stream,${encodeURIComponent(
+      JSON.stringify(
+        {
+          document: "Fictional tax invoice — no payment or tax document exists",
+          buyer: store.buyers?.[invoiceId] ?? null,
+          invoice: store.invoices?.find(
+            (invoice) => invoice.invoice_id === invoiceId,
+          ),
+        },
+        null,
+        2,
+      ),
+    )}`;
   },
   async readOfflinePayment() {
     await wait();
@@ -362,6 +416,8 @@ export const fixtureBilling: BillingClient = {
       total_minor: total,
     };
     store.orders[orderId] = order;
+    if (request.kind === "subscription" && request.buyer)
+      (store.buyers ??= {})[orderId] = { ...request.buyer };
     write(store);
     return parseCheckout({
       order,

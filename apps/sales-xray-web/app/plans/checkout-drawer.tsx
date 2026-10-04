@@ -8,7 +8,8 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type { Buyer } from "../billing/billing-api";
 import type { Interval, Order, Plan } from "../billing/contract";
 import { count, day, money } from "../billing/money";
 import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
@@ -35,7 +36,8 @@ export type CheckoutDrawerProps = {
   busy?: boolean;
   confirmedOrder?: Order | null;
   quoted?: PurchaseQuote | null;
-  onPay?: () => void;
+  onPay?: (buyer?: Buyer) => void;
+  onBuyerChange?: () => void;
   summaryRef?: React.RefObject<HTMLElement | null>;
 };
 
@@ -53,8 +55,11 @@ export function CheckoutDrawer({
   confirmedOrder,
   quoted,
   onPay,
+  onBuyerChange,
   summaryRef,
 }: CheckoutDrawerProps) {
+  const [buyerName, setBuyerName] = useState("");
+  const [gstin, setGstin] = useState("");
   const localSummaryRef = useRef<HTMLElement>(null);
   const panelRef = summaryRef ?? localSummaryRef;
   const visible = open && item !== null;
@@ -339,6 +344,47 @@ export function CheckoutDrawer({
           </dl>
         ) : null}
 
+        {team ? (
+          <form
+            id="checkout-buyer"
+            className={styles.fields}
+            onSubmit={(event) => {
+              event.preventDefault();
+              onPay?.({ name: buyerName.trim(), gstin: gstin || null });
+            }}
+          >
+            <label className={styles.field}>
+              Organisation name
+              <input
+                required
+                maxLength={200}
+                pattern={".*\\S.*"}
+                autoComplete="organization"
+                value={buyerName}
+                disabled={busy}
+                onChange={(event) => {
+                  setBuyerName(event.target.value);
+                  onBuyerChange?.();
+                }}
+              />
+            </label>
+            <label className={styles.field}>
+              GSTIN (optional)
+              <input
+                maxLength={15}
+                pattern="[0-9]{2}[A-Z0-9]{13}"
+                title="Enter a 15-character GSTIN starting with two digits."
+                value={gstin}
+                disabled={busy}
+                onChange={(event) => {
+                  setGstin(event.target.value.trim().toUpperCase());
+                  onBuyerChange?.();
+                }}
+              />
+            </label>
+          </form>
+        ) : null}
+
         {confirmedOrder ? (
           <p role="status" className={styles.hint}>
             Total confirmed. Continue to the payment page to pay.
@@ -399,10 +445,11 @@ export function CheckoutDrawer({
         {/* Actions */}
         <div className={styles.actions}>
           <button
-            type="button"
+            type={team ? "submit" : "button"}
+            form={team ? "checkout-buyer" : undefined}
             className={styles.pay}
             disabled={busy || !onPay}
-            onClick={onPay}
+            onClick={team ? undefined : () => onPay?.()}
           >
             {busy
               ? "Opening checkout…"
