@@ -557,6 +557,8 @@ class Settings(BaseSettings):
             raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT must carry a UTC offset")
 
     def _validate_billing(self) -> None:
+        if self.environment == "production" and self.billing_fake_provider_signing_key is not None:
+            raise ValueError("the fake payment provider is forbidden in production")
         if not self.billing_enabled:
             return
         if self.public_learner_tenant_id is None or self.operations_tenant_id is None:
@@ -574,10 +576,6 @@ class Settings(BaseSettings):
                 "AC_RAZORPAY_KEY_ID, AC_RAZORPAY_KEY_SECRET and AC_RAZORPAY_WEBHOOK_SECRET "
                 "are set together"
             )
-        if self.environment in {"staging", "production"} and (
-            self.billing_fake_provider_signing_key is not None
-        ):
-            raise ValueError("the fake payment provider is for local and test environments only")
         if self.billing_allow_live and self.environment != "production":
             raise ValueError("AC_BILLING_ALLOW_LIVE is a production-only owner switch")
 

@@ -1,8 +1,8 @@
 """Compose the billing application from settings (ADR 0052; provider keys via Infisical).
 
 Nothing is composed unless ``AC_BILLING_ENABLED`` is on. The Razorpay adapter
-needs its key pair and webhook secret; the fake provider exists only for local
-and test runs and needs its own signing key. The catalogue is the ``plans``
+needs its key pair and webhook secret; the fake provider is forbidden in
+production and needs its own signing key. The catalogue is the ``plans``
 table once it is on ``main``; until then an explicit empty catalogue keeps
 every plan "not on sale".
 """
@@ -61,6 +61,7 @@ def compose_billing(
         public_learner_tenant_id=public_tenant,
         operations_tenant_id=operations_tenant,
         return_url_base=str(settings.sales_xray_app_url).rstrip("/"),
+        fake_checkout_base_url=str(settings.api_url).rstrip("/"),
         trial_policy=TrialPolicy(
             settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
         ),

@@ -105,6 +105,46 @@ def _staging_values() -> dict[str, str]:
     return values
 
 
+@pytest.mark.parametrize("environment", ["local", "test", "development", "staging"])
+def test_fake_billing_accepts_nonproduction_environments(environment: str) -> None:
+    from ac_platform.billing.compose import compose_billing
+
+    values = _staging_values() if environment == "staging" else {}
+    settings = Settings(
+        _env_file=None,
+        environment=environment,
+        **(
+            values
+            | {
+                "billing_enabled": True,
+                "public_learner_tenant_id": "10000000-0000-4000-8000-000000000002",
+                "operations_tenant_id": "10000000-0000-4000-8000-000000000001",
+                "sales_xray_app_url": "https://salesxray-staging.authorityclosers.com",
+                "billing_fake_provider_signing_key": "fictional-test-signing-key",
+            }
+        ),
+    )
+    app = compose_billing(settings)
+    assert app is not None and app.service.providers.names == ("fake",)
+    assert app.service.fake_checkout_base_url == str(settings.api_url).rstrip("/")
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_production_refuses_fake_signing_key_even_when_billing_disabled(enabled: bool) -> None:
+    with pytest.raises(ValidationError, match="fake payment provider is forbidden in production"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            **(
+                _production_values()
+                | {
+                    "billing_enabled": enabled,
+                    "billing_fake_provider_signing_key": "fictional-test-signing-key",
+                }
+            ),
+        )
+
+
 _DEPLOYMENT_ORIGINS = {
     "staging": {
         "public_app_url": "https://staging.authorityclosers.com",

@@ -61,6 +61,7 @@ from ac_platform.billing.reducers import (
 from ac_platform.billing.views import OrderView, RefundView
 from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.ports import (
     Money,
     PaymentEvent,
@@ -162,7 +163,11 @@ class Settlement:
             raise BillingRateLimited("Wait a few seconds before checking again.")
         provider = self.service.providers.get(order.provider)
         try:
-            if order.kind == "top_up" and order.provider_order_ref is not None:
+            if isinstance(provider, FakePaymentProvider) and self.service.fake_checkout_base_url:
+                # Hosted test checkout settles synchronously through signed webhooks.
+                # Process-local snapshots cannot supersede its durable verified state.
+                pass
+            elif order.kind == "top_up" and order.provider_order_ref is not None:
                 snapshot = await provider.fetch_payment(
                     order_reference=order.order_ref, provider_order_ref=order.provider_order_ref
                 )
@@ -686,6 +691,15 @@ class Settlement:
                 "provider state",
                 now,
             )
+            if decision.state in {SubscriptionState.CANCELLED, SubscriptionState.HALTED} and (
+                order is not None
+                and (latest := await self.service.latest_order_event(database, order.id))
+                is not None
+                and latest.status in {"awaiting_payment", "confirming"}
+            ):
+                await self._order_event(
+                    database, order, "failed", stored.id, "authorisation stopped", now
+                )
             if (
                 decision.state is SubscriptionState.ACTIVE
                 and order is not None

@@ -11,9 +11,10 @@ from __future__ import annotations
 import hashlib
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, select
@@ -71,6 +72,7 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     EligibleLearnerUnavailable,
     require_eligible_learner,
 )
+from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.ports import (
     CheckoutCustomer,
     CheckoutKind,
@@ -168,6 +170,7 @@ class CheckoutService:
         trial_policy: TrialPolicy | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         invoice_settings: Settings | None = None,
+        fake_checkout_base_url: str | None = None,
     ) -> None:
         if not return_url_base.startswith("https://"):
             raise ValueError("the return URL base must be an HTTPS origin")
@@ -177,6 +180,7 @@ class CheckoutService:
         self.return_url_base = return_url_base.rstrip("/")
         self.trial_policy = trial_policy or TrialPolicy()
         self.invoice_settings = invoice_settings
+        self.fake_checkout_base_url = fake_checkout_base_url
 
     def ledger(self, database: AsyncSession) -> BillingLedger:
         return BillingLedger(
@@ -377,6 +381,16 @@ class CheckoutService:
             view = await self._top_up_checkout(
                 database, resolved, command, plan, choice, customer, reference, description, now
             )
+        if isinstance(choice.provider, FakePaymentProvider) and self.fake_checkout_base_url:
+            token = choice.provider.checkout_token(reference)
+            view = replace(
+                view,
+                hosted=replace(
+                    view.hosted,
+                    url=f"{self.fake_checkout_base_url}/v1/payments/fake/checkout/"
+                    f"{view.order.order_id}?token={token}",
+                ),
+            )
         buyer = command.buyer
         if buyer is None:
             from ac_platform.identity.models import Person
@@ -480,7 +494,7 @@ class CheckoutService:
                     billing_cycles=BILLING_CYCLES[interval],
                     customer=customer,
                     description=description,
-                    return_url=self._return_url(order_id),
+                    return_url=self.return_url(order_id),
                     quantity=seats,
                 )
             )
@@ -608,7 +622,7 @@ class CheckoutService:
                     money=money,
                     description=f"{description} top-up {pack.minutes} minutes",
                     customer=customer,
-                    return_url=self._return_url(order_id),
+                    return_url=self.return_url(order_id),
                 )
             )
         except ProviderError as error:
@@ -655,7 +669,14 @@ class CheckoutService:
             hosted=self._hosted_view(hosted, now),
         )
 
-    def _return_url(self, order_id: UUID) -> str:
+    @property
+    def return_origin(self) -> str:
+        """The configured app origin, without a return path or order query."""
+
+        url = urlsplit(self.return_url_base)
+        return f"{url.scheme}://{url.netloc}"
+
+    def return_url(self, order_id: UUID) -> str:
         return f"{self.return_url_base}/account/billing/return?order={order_id}"
 
     def _hosted_view(self, hosted: HostedCheckout, now: datetime) -> HostedView:

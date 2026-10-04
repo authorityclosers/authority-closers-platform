@@ -68,6 +68,12 @@ class FakePaymentProvider:
     def _order_ref(self, reference: str) -> str:
         return f"{self._name}_order_{reference}"
 
+    def checkout_token(self, reference: str) -> str:
+        """An order-bound capability, separate from the webhook signature domain."""
+
+        message = f"checkout:{require_order_reference(reference)}".encode()
+        return hmac.new(self._signing_key, message, hashlib.sha256).hexdigest()
+
     async def create_checkout(self, order: CheckoutOrder) -> HostedCheckout:
         self.orders[order.reference] = order
         return HostedCheckout(
@@ -284,7 +290,14 @@ class FakePaymentProvider:
     async def cancel_subscription(
         self, provider_subscription_ref: str, *, at_period_end: bool
     ) -> SubscriptionSnapshot:
-        current = self.subscriptions[provider_subscription_ref]
+        # The hosted simulator may run in another worker or after a restart.
+        # Acknowledging cancellation needs no provider memory; our append-only
+        # billing events retain the request and paid access remains ledger-based.
+        current = self.subscriptions.get(provider_subscription_ref) or SubscriptionSnapshot(
+            provider=self._name,
+            provider_subscription_ref=provider_subscription_ref,
+            state=SubscriptionState.AUTHORISED,
+        )
         # A cancellation at the period end leaves the state unchanged until that day.
         if not at_period_end or current.state is SubscriptionState.PENDING:
             current = SubscriptionSnapshot(

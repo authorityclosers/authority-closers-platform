@@ -6,6 +6,7 @@ import hashlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,8 +14,12 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from ac_platform.application.settings import Settings
+from ac_platform.billing.application import BillingApplication
+from ac_platform.billing.catalogue import StaticCatalogue
+from ac_platform.billing.checkout import CheckoutService
 from ac_platform.billing.commands import Caller, CheckoutCommand, WebhookReceipt
 from ac_platform.billing.errors import OrderNotFound, SubscriptionNotActive
+from ac_platform.billing.simulation import FakeCheckout
 from ac_platform.billing.views import (
     AccountName,
     CheckoutView,
@@ -32,6 +37,8 @@ from ac_platform.http.billing import install_billing_http, install_billing_webho
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.payments.fake import FakePaymentProvider
+from ac_platform.payments.registry import PaymentProviderRegistry
 
 NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 ORDER_ID = str(UUID(int=1))
@@ -707,7 +714,61 @@ def test_fake_webhook_passes_the_raw_body_and_lower_cased_headers_through() -> N
     assert headers["content-type"] == "application/json"
 
 
+@pytest.mark.parametrize("registered", [False, True])
+def test_webhook_rejection_has_a_safe_problem_response(registered: bool) -> None:
+    from ac_platform.payments.ports import PaymentEventRejected
+    from ac_platform.payments.registry import UnknownPaymentProviderError
+
+    client, _actor, _database = _client(commands := _Commands())
+    commands.error = (
+        PaymentEventRejected("fictional private provider detail")
+        if registered
+        else UnknownPaymentProviderError("fictional private provider detail")
+    )
+    response = client.post("/v1/payments/webhooks/fake", content=b"{}")
+    _problem(
+        response,
+        400 if registered else 422,
+        "invalid_signature" if registered else "validation_failed",
+    )
+    assert "fictional private provider detail" not in response.text
+
+
 # ---- composition ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "app_origin", ["https://salesxray.example.test", "https://salesxray.example.test:8443"]
+)
+def test_fake_page_csp_allows_only_self_and_the_configured_return_origin(
+    monkeypatch, app_origin: str
+) -> None:
+    service = CheckoutService(
+        catalogue=StaticCatalogue(()),
+        providers=PaymentProviderRegistry([FakePaymentProvider(signing_key="fictional-csp-key")]),
+        public_learner_tenant_id=uuid4(),
+        operations_tenant_id=uuid4(),
+        return_url_base=app_origin,
+        fake_checkout_base_url="https://api.example.test",
+    )
+    monkeypatch.setattr(FakeCheckout, "read", AsyncMock(return_value=_order()))
+    app = FastAPI()
+    install_billing_webhook_http(
+        app,
+        sessions=lambda: _SessionContext(_WebhookDatabase()),
+        commands=BillingApplication(service),
+    )
+    response = TestClient(app).get(
+        f"/v1/payments/fake/checkout/{ORDER_ID}", params={"token": "a" * 64}
+    )
+    assert response.status_code == 200
+    assert response.headers["content-security-policy"] == (
+        f"default-src 'none'; form-action 'self' {app_origin}; "
+        "base-uri 'none'; frame-ancestors 'none'"
+    )
+    assert response.headers["referrer-policy"] == "strict-origin"
+    assert response.headers["cache-control"] == "no-store"
+    assert service.return_url(UUID(ORDER_ID)) in response.text
 
 
 def test_without_commands_no_billing_route_is_installed() -> None:
