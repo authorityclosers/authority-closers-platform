@@ -1143,7 +1143,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
       ?.textContent,
   ).toBe("Report ready");
   expect(container.querySelector(".studio-report-summary")).toBeNull();
-  expect(container.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(container.textContent).toContain("Remaining analysis time · 1 h");
   expect(container.textContent).not.toContain("free audio minutes");
   expect(container.textContent).not.toContain(
     "AI draft · not yet reviewed by Dipak",
@@ -1232,9 +1232,7 @@ it.each([
       status === 401,
     );
     if (status === 403) expect(alert.textContent).not.toContain("Sign in");
-    expect(container.textContent).toContain(
-      "Remaining analysis time · 99m 55s",
-    );
+    expect(container.textContent).toContain("Remaining analysis time · 1 h");
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
     expect(container.querySelector("audio")?.getAttribute("src")).toContain(
       submissionId,
@@ -1782,10 +1780,11 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
 it.each([
   [0, "Remaining analysis time · 0m 00s · exhausted"],
   [45, "Remaining analysis time · 0m 45s"],
+  [600000, "Remaining analysis time · 166 h"],
 ])("formats a confirmed %s-second allowance", (seconds, expected) => {
   const confirmed = {
-    allowance_seconds: allowance.allowance_seconds,
-    committed_seconds: allowance.allowance_seconds - seconds,
+    allowance_seconds: Math.max(allowance.allowance_seconds, seconds),
+    committed_seconds: Math.max(allowance.allowance_seconds - seconds, 0),
     available_seconds: seconds,
   };
   expect(
@@ -1793,7 +1792,7 @@ it.each([
   ).toBe(expected);
 });
 
-it("renders an explicit unlimited tester allowance", () => {
+it("does not present a legacy tester flag as a plan or finite balance", () => {
   expect(
     remainingAllowanceLabel(
       {
@@ -1805,7 +1804,7 @@ it("renders an explicit unlimited tester allowance", () => {
       3600,
       false,
     ),
-  ).toBe("Unlimited analysis time");
+  ).toBeNull();
 });
 
 it("gives guests their owner-checked call link instead of promising an account library", async () => {
@@ -2723,7 +2722,7 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   const allowanceBefore = [...container.querySelectorAll("span")].find(
     (element) => element.textContent?.includes("Remaining analysis time"),
   )?.textContent;
-  expect(allowanceBefore).toBe("Remaining analysis time · 100m 00s");
+  expect(allowanceBefore).toBe("Remaining analysis time · 1 h");
   await click("Review and continue analysis");
   const alert = container.querySelector('[role="alert"]');
   expect(alert).not.toBeNull();

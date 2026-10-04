@@ -61,9 +61,22 @@ it("leaves the name out when the profile has none", async () => {
 
 it("shows the allowance and the three steps under the card", async () => {
   await act(async () =>
-    root.render(<NewAnalysisFooter allowanceLabel="Unlimited analysis time" />),
+    root.render(
+      <NewAnalysisFooter allowanceLabel="Remaining analysis time · 166 h" />,
+    ),
   );
-  expect(host.textContent).toContain("Unlimited analysis time");
+  expect(host.textContent).toContain("Remaining analysis time · 166 h");
+  expect(
+    [...host.querySelectorAll("li")].map((step) => step.textContent),
+  ).toEqual(["1Upload", "2We analyse", "3Your report"]);
+});
+
+it("omits the allowance line for an exempt account and keeps the steps", async () => {
+  await act(async () =>
+    root.render(<NewAnalysisFooter allowanceLabel={null} />),
+  );
+  expect(host.querySelector("svg")).toBeNull();
+  expect(host.textContent).not.toMatch(/unlimited|unavailable|analysis time/i);
   expect(
     [...host.querySelectorAll("li")].map((step) => step.textContent),
   ).toEqual(["1Upload", "2We analyse", "3Your report"]);

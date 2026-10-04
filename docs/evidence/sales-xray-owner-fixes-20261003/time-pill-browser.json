@@ -1,0 +1,31 @@
+{
+  "scope": "Actual branch MinutesMeter/AllowanceRing/SettingsMenu/NewAnalysisFooter and application CSS; fictional props; Next Link stubbed as an anchor; no deployed account or credit balance claim",
+  "records": [
+    {
+      "width": 390,
+      "largeAllowanceSeconds": 600000,
+      "compactTime": "166 h",
+      "exactMinuteLabel": "10000 of 10000 analysis minutes left",
+      "exemptHasMeter": false,
+      "exemptUsagePercentage": false,
+      "exemptFooterAllowanceLine": false,
+      "exemptCopyAbsent": ["Unlimited", "unavailable"],
+      "boundary": "60 min",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "width": 1440,
+      "largeAllowanceSeconds": 600000,
+      "compactTime": "166 h",
+      "exactMinuteLabel": "10000 of 10000 analysis minutes left",
+      "exemptHasMeter": false,
+      "exemptUsagePercentage": false,
+      "exemptFooterAllowanceLine": false,
+      "exemptCopyAbsent": ["Unlimited", "unavailable"],
+      "boundary": "60 min",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ]
+}

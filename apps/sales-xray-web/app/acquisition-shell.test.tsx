@@ -177,7 +177,7 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   ).toBeNull();
 });
 
-it("shows trial minutes only from a verified allowance", () => {
+it("shows analysis time only from a verified allowance", () => {
   const without = render(
     renderToStaticMarkup(
       <AcquisitionShell authenticated>
@@ -198,7 +198,7 @@ it("shows trial minutes only from a verified allowance", () => {
   expect(meter.getAttribute("aria-valuenow")).toBe("2520");
   expect(meter.getAttribute("aria-valuemax")).toBe("3600");
   expect(meter.getAttribute("aria-valuetext")).toBe(
-    "42 of 60 trial minutes left",
+    "42 of 60 analysis minutes left",
   );
   expect(shell.textContent).toContain("42 of 60 left");
   expect(shell.textContent).toContain("42 min left");
@@ -217,7 +217,39 @@ it("shows trial minutes only from a verified allowance", () => {
     ),
   );
   expect(unlimited.querySelector('[role="meter"]')).toBeNull();
-  expect(unlimited.textContent).toContain("Unlimited analysis time");
+  expect(unlimited.querySelector("[data-minutes-meter]")).toBeNull();
+  expect(unlimited.textContent).not.toMatch(
+    /unlimited|unavailable|∞|0 min|100%/i,
+  );
+});
+
+it("shows hours in both shell pills and retains exact minutes for readers", () => {
+  const shell = render(
+    renderToStaticMarkup(
+      <AcquisitionShell
+        authenticated
+        allowance={{
+          allowance_seconds: 600000,
+          available_seconds: 600000,
+          committed_seconds: 0,
+        }}
+      >
+        <p>Content</p>
+      </AcquisitionShell>,
+    ),
+  );
+  const meters = shell.querySelectorAll("[data-minutes-meter]");
+  expect(meters).toHaveLength(2);
+  for (const meter of meters) {
+    expect(meter.textContent).toContain("166 h");
+    expect(meter.getAttribute("title")).toBe(
+      "10000 of 10000 analysis minutes left",
+    );
+  }
+  expect(
+    shell.querySelector('[role="meter"]')?.getAttribute("aria-valuenow"),
+  ).toBe("600000");
+  expect(shell.textContent).toContain("100%");
 });
 
 it("shows the public policy footer on signed-out shells", async () => {

@@ -36,14 +36,16 @@ const STEPS = ["Upload", "We analyse", "Your report"] as const;
 export function NewAnalysisFooter({
   allowanceLabel,
 }: {
-  allowanceLabel: string;
+  allowanceLabel: string | null;
 }) {
   return (
     <div className={styles.footer}>
-      <span className={styles.allowance}>
-        <ShieldCheck size={15} aria-hidden="true" />
-        {allowanceLabel}
-      </span>
+      {allowanceLabel && (
+        <span className={styles.allowance}>
+          <ShieldCheck size={15} aria-hidden="true" />
+          {allowanceLabel}
+        </span>
+      )}
       <ol className={styles.trail} aria-label="How it works">
         {STEPS.map((step, index) => (
           <li key={step}>

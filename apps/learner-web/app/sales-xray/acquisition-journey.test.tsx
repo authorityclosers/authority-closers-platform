@@ -233,7 +233,7 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(
     host.querySelector('[aria-label="Sales Xray account navigation"]'),
   ).toBeNull();
-  expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(host.textContent).toContain("Remaining analysis time · 1 h");
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
   const file = new File(["synthetic"], "Learner call.wav", {
     type: "audio/wav",
@@ -260,7 +260,7 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
   expect(host.textContent).toContain(envelope.report.content.summary);
   expect(host.textContent).not.toContain("Sign in to save this call");
-  expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(host.textContent).toContain("Remaining analysis time · 1 h");
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
@@ -292,7 +292,7 @@ it("runs the actual learner upload and report journey under one Academy main and
   await mount();
   expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
   expect(mutationRequests()).toHaveLength(before);
-  expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(host.textContent).toContain("Remaining analysis time · 1 h");
 });
 
 it.each(["workspace", "entry", "session"])(
@@ -359,7 +359,7 @@ it("keeps a pending ownership claim explicit and restores its report without re-
   expect(mutationRequests().map(({ path }) => path)).toEqual([
     "/v1/conversation/acquisition/claim",
   ]);
-  expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(host.textContent).toContain("Remaining analysis time · 1 h");
 });
 
 it("shows a neutral opening state while a learner deep link is checked, then opens the saved report", async () => {
