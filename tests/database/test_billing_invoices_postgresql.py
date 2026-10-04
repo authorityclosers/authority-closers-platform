@@ -3,15 +3,20 @@
 import asyncio
 from dataclasses import asdict, replace
 from datetime import timedelta
+from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import DBAPIError
 
 from ac_platform.application.settings import Settings
 from ac_platform.billing.catalogue import StaticCatalogue
 from ac_platform.billing.commands import BuyerTaxDetails, Caller, CheckoutCommand
+from ac_platform.billing.errors import BillingValidationFailed
 from ac_platform.billing.invoice_models import (
     BillingBuyerTaxDetails,
     BillingCreditNote,
@@ -19,8 +24,14 @@ from ac_platform.billing.invoice_models import (
     BillingInvoiceCounter,
 )
 from ac_platform.billing.invoices import issue_invoice
+from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.order_models import BillingOrder, BillingPaymentEvent, BillingSubscription
 from ac_platform.billing.periods import add_months
+from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.billing import BuyerRequest, install_billing_http
+from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import ResolvedActorContext
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.payments.ports import Money
 from ac_platform.plans.models import Plan
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
@@ -35,6 +46,38 @@ from tests.database.test_billing_settlement_postgresql import _clock_at_t0 as _c
 from tests.database.test_billing_settlement_postgresql import postgres_harness as postgres_harness
 from tests.database.test_billing_settlement_postgresql import world as world
 from tests.database.test_conversation_postgresql import wait_blocked
+
+
+def invoice_client(lab: Lab, caller: Caller) -> AsyncClient:
+    async def require_actor():
+        async with lab.sessions() as database, database.begin():
+            yield AuthenticatedTransaction(
+                database=database,
+                identity=cast(Any, None),
+                resolved=ResolvedActorContext(
+                    actor=ActorContext(caller.person_id, caller.session_id, caller.tenant_id),
+                    membership_role=caller.membership_role,
+                    person_revision=0,
+                    session_revision=0,
+                    tenant_revision=0,
+                    membership_revision=0,
+                ),
+                token="fictional-invoice-session",  # noqa: S106
+            )
+
+    app = FastAPI()
+    register_problem_handlers(app)
+    install_billing_http(
+        app,
+        settings=Settings(
+            _env_file=None,
+            public_learner_tenant_id=lab.world.public_tenant_id,
+            operations_tenant_id=lab.world.operations_tenant_id,
+        ),
+        require_actor=require_actor,
+        commands=lab.app,
+    )
+    return AsyncClient(transport=ASGITransport(app), base_url="https://billing.example.test")
 
 
 async def buy(lab: Lab, account: str, *, buyer: BuyerTaxDetails | None = None):
@@ -267,5 +310,189 @@ def test_checkout_obeys_the_stored_flag_and_the_order_retains_it(postgres_harnes
                 await database.execute(
                     update(Plan).where(Plan.key == "personal").values(prices_include_gst=True)
                 )
+
+    scenario(postgres_harness, world, exercise)
+
+
+def test_renewal_invoice_keeps_the_original_buyer_and_gstin_place_of_supply(
+    postgres_harness, world
+):
+    async def exercise(lab: Lab):
+        buyer = BuyerTaxDetails(
+            **BuyerRequest(name="Fictional Renewal Buyer", gstin="29AAAAA0000A1Z0").model_dump()
+        )
+        view, callback, _ = await buy(lab, "organisation", buyer=buyer)
+        assert await lab.webhook(*callback) == ("paid", False)
+        async with lab.sessions() as database, database.begin():
+            subscription = await database.get(BillingSubscription, UUID(view.order.subscription_id))
+            renewal = lab.fake.charge(
+                subscription.provider_subscription_ref,
+                event_id=uuid4().hex,
+                order_reference="renewal-unmatched",  # Original order is found by subscription.
+                money=Money(view.order.amount.minor, "INR"),
+                period_start=add_months(T0, 1),
+                period_end=add_months(T0, 2),
+            )
+        assert await lab.webhook(*renewal) == ("paid", False)
+        async with lab.sessions() as database, database.begin():
+            invoices = list(
+                await database.scalars(
+                    select(BillingInvoice).where(
+                        BillingInvoice.order_id == UUID(view.order.order_id)
+                    )
+                )
+            )
+            assert len(invoices) == 2
+            for invoice in invoices:
+                assert invoice.details["buyer"] == asdict(buyer)
+                assert invoice.place_of_supply == "29"
+                assert (invoice.cgst_minor, invoice.sgst_minor, invoice.igst_minor) == (
+                    0,
+                    0,
+                    360000,
+                )
+
+    scenario(postgres_harness, world, exercise)
+
+
+def test_invoice_http_reads_are_scoped_paginated_and_download_the_saved_snapshot(
+    postgres_harness, world
+):
+    async def exercise(lab: Lab):
+        personal, paid, owner = await buy(lab, "personal")
+        assert await lab.webhook(*paid) == ("paid", False)
+        organisation, paid, org_owner = await buy(lab, "organisation")
+        assert await lab.webhook(*paid) == ("paid", False)
+        async with lab.sessions() as database, database.begin():
+            subscription = await database.get(
+                BillingSubscription, UUID(personal.order.subscription_id)
+            )
+            renewal = lab.fake.charge(
+                subscription.provider_subscription_ref,
+                event_id=uuid4().hex,
+                order_reference="renewal-unmatched",
+                money=Money(personal.order.amount.minor, "INR"),
+                period_start=add_months(T0, 1),
+                period_end=add_months(T0, 2),
+            )
+            org_invoice = await database.scalar(
+                select(BillingInvoice).where(
+                    BillingInvoice.order_id == UUID(organisation.order.order_id)
+                )
+            )
+            org_invoice_id = org_invoice.id
+        assert await lab.webhook(*renewal) == ("paid", False)
+        lab.app.service.invoice_settings = Settings(
+            _env_file=None, billing_seller_legal_name="Changed seller after payment"
+        )
+        async with invoice_client(lab, owner) as client:
+            first = await client.get("/v1/invoices?limit=1")
+            assert first.status_code == 200, first.text
+            body = first.json()
+            assert len(body["invoices"]) == 1 and body["next_before"]
+            invoice = body["invoices"][0]
+            assert invoice["total_minor"] == 249900 and invoice["currency"] == "INR"
+            second = (await client.get(f"/v1/invoices?limit=1&before={body['next_before']}")).json()
+            assert second["next_before"] is None and len(second["invoices"]) == 1
+            assert second["invoices"][0]["invoice_id"] != invoice["invoice_id"]
+            download = await client.get(f"/v1/invoices/{invoice['invoice_id']}/download")
+            assert download.status_code == 200 and "INR 2,499.00" in download.text
+            assert "Fictional Seller LLP" in download.text
+            assert "Changed seller after payment" not in download.text
+            assert download.headers["content-type"] == "text/html; charset=utf-8"
+            assert download.headers["content-disposition"].endswith('.html"')
+            for response in (first, download):
+                assert response.headers["cache-control"] == "private, no-store"
+                assert response.headers["vary"] == "Cookie"
+            assert download.headers["x-content-type-options"] == "nosniff"
+            assert "default-src 'none'" in download.headers["content-security-policy"]
+            for path in (
+                f"/v1/invoices/{org_invoice_id}/download",
+                f"/v1/invoices?before={org_invoice_id}",
+                f"/v1/invoices/{uuid4()}/download",
+            ):
+                denied = await client.get(path)
+                assert denied.status_code == 404 and denied.json()["code"] == "invoice_not_found"
+        async with invoice_client(lab, replace(org_owner, tenant_id=owner.tenant_id)) as client:
+            assert (await client.get(f"/v1/invoices/{org_invoice_id}/download")).status_code == 404
+        for role in ("owner", "admin", "member", "ended", "other"):
+            actor = await lab.learner()
+            async with lab.sessions() as database, database.begin():
+                if role != "other":
+                    database.add(
+                        Membership(
+                            tenant_id=org_owner.tenant_id,
+                            person_id=actor.person_id,
+                            role="admin" if role == "ended" else role,
+                            status="inactive" if role == "ended" else "active",
+                            ended_at=T0 if role == "ended" else None,
+                        )
+                    )
+            async with lab.sessions() as database:
+                accounts_before = await database.scalar(
+                    select(func.count()).select_from(BillingAccount)
+                )
+            caller = Caller(actor.person_id, actor.session_id, org_owner.tenant_id, "owner")
+            async with invoice_client(lab, caller) as client:
+                for path in (
+                    "/v1/invoices?account=organisation",
+                    f"/v1/invoices/{org_invoice_id}/download",
+                ):
+                    response = await client.get(path)
+                    assert response.status_code == (200 if role in {"owner", "admin"} else 404), (
+                        response.text
+                    )
+                    if role in {"owner", "admin"} and path.startswith("/v1/invoices?"):
+                        assert [row["invoice_id"] for row in response.json()["invoices"]] == [
+                            str(org_invoice_id)
+                        ]
+                assert (await client.get("/v1/invoices")).json()["invoices"] == []
+                assert (
+                    await client.get(f"/v1/invoices/{invoice['invoice_id']}/download")
+                ).status_code == 404
+            async with lab.sessions() as database:
+                assert (
+                    await database.scalar(select(func.count()).select_from(BillingAccount))
+                    == accounts_before
+                )
+
+    scenario(postgres_harness, world, exercise)
+
+
+def test_pre_b2_payment_without_an_invoice_cannot_settle_a_refund(
+    postgres_harness, world, monkeypatch
+):
+    async def exercise(lab: Lab):
+        learner = await lab.learner()
+        # Reproduce the pre-B2 writer, without deleting or rewriting audit rows.
+        with monkeypatch.context() as pre_b2:
+            pre_b2.setattr("ac_platform.billing.settlement.issue_invoice", AsyncMock())
+            paid = await lab.subscribe_and_pay(learner)
+        with pytest.raises(BillingValidationFailed, match="original tax invoice"):
+            await lab.refund(learner, paid.payment_ref, key="pre-b2-refund")
+        assert len(lab.provider_refunds(paid.order_ref)) == 1
+        assert [event.state for event in await lab.refund_events(paid.order_id)] == ["pending"]
+        assert (await lab.read_order(learner, paid.order_id)).refund.state == "pending"
+        assert all(kinds == ["refund_hold"] for kinds in (await lab.closings(learner)).values())
+        assert (
+            await lab.refund(learner, paid.payment_ref, key="pre-b2-refund-retry")
+        ).state == "pending"
+        assert len(lab.provider_refunds(paid.order_ref)) == 1
+        async with lab.sessions() as database, database.begin():
+            assert (
+                await database.scalar(
+                    select(BillingInvoice.id).where(BillingInvoice.order_id == paid.order_id)
+                )
+                is None
+            )
+            assert (
+                await database.scalar(
+                    select(BillingCreditNote.id).where(
+                        BillingCreditNote.account_id
+                        == (await database.get(BillingOrder, paid.order_id)).account_id
+                    )
+                )
+                is None
+            )
 
     scenario(postgres_harness, world, exercise)
