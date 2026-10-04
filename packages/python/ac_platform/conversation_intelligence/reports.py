@@ -8,6 +8,7 @@ report source label, transcript hash and revision.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -44,7 +45,7 @@ from ac_platform.conversation_intelligence.report_overview import (
 )
 from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
 
-SPEAKER_ROLE_PROMPT_REVISIONS: frozenset[str] = frozenset()
+SPEAKER_ROLE_PROMPT_REVISIONS: frozenset[str] = frozenset({"coaching-v7"})
 
 REPORT_PROFILE_PATH = Path(__file__).with_name("profiles") / "dipak_report_v1.json"
 GROQ_MODEL = "openai/gpt-oss-120b"
@@ -84,9 +85,65 @@ COACHING_PROMPT_V3: Literal["coaching-v3"] = "coaching-v3"
 COACHING_PROMPT_V4: Literal["coaching-v4"] = "coaching-v4"
 COACHING_PROMPT_V5: Literal["coaching-v5"] = "coaching-v5"
 COACHING_PROMPT_V6: Literal["coaching-v6"] = "coaching-v6"
+COACHING_PROMPT_V7: Literal["coaching-v7"] = "coaching-v7"
 CoachingPromptRevision = Literal[
-    "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"
+    "coaching-v1",
+    "coaching-v2",
+    "coaching-v3",
+    "coaching-v4",
+    "coaching-v5",
+    "coaching-v6",
+    "coaching-v7",
 ]
+COACHING_PROMPT_V7_MARKER = "COACHING_MAP: honest-call-map-v7."
+COACHING_PROMPT_V7_INSTRUCTION = (
+    "Also return call_map (call-map/1), display-only speakers[] and sensitive_segments[]. "
+    "HEU-03: judge only stages that happened. A dimension whose stage is absent is "
+    "not_applicable, with one 'what to ask next time' line in observation. A first-meeting or "
+    "discovery-only call has no close penalty. Do not infer poor performance from an absent stage. "
+    "Observed needs quotes from exactly two distinct segments; partial needs one. "
+    "Make atomic claims supported by their own 1-2 segment refs; never borrow a summary's "
+    "aggregate 1-3 refs. Any future optional Tier 1 check sees only one claim and its cited "
+    "segments, in the existing C5/current provider; no extra stage or call. All evidence_ref "
+    "selectors use segment_id. Golden moments use direct evidence[], never index selectors; "
+    "finding_index is navigation only. Call-map evidence is {segment_id,quote}, copied literally "
+    "from C2, at most 20 words. Seller tasks, claims and objection replies cite seller segments; "
+    "objections and prospect_facts cite prospect segments. Objection reply starts at or after "
+    "the first objection segment, required unless ignored. Seller tasks are what you said you "
+    "would send or do; result guarantees stay in claims. Words only from the transcript, no score. "
+    "Every qualification item is a gap unless the prospect's own words confirm it. Money below "
+    "the price means a budget gap plus affordability_gap. A misused business term is "
+    "seller_error: term, never a vocabulary note. Every unverifiable claim appears in an ethics "
+    "note with its own evidence. One sentence per Overview card, at most 20 words. "
+    "The v7 wire limits below tighten canonical B1; select the most material supported items. "
+    "Call-map word limits: verdict_line 12; signals text 8; pitch_items, pains, claims, "
+    "prospect_tasks, seller_tasks and objections text 12 each; money label 6, "
+    "finite nonnegative ordered values, unit <=12 chars. "
+    "Speakers <=16, all C2 speaker ids; phases 1-8, increasing start_ms within call duration, "
+    "no consecutive equal phases; pitch intervals within duration. time_promise is null unless "
+    "stated, 60000-14400000 ms with one ref. Qualification gaps and confirmed partition all "
+    "five items. Ask for the prospect's own words in prospect_facts: industry/team_size/"
+    "company/role, text <=8 words with one prospect ref. Evidence-backed call_purpose is "
+    "sales/support/onboarding/internal/personal/unclear, 0-1 refs, unclear without support. "
+    "outcome.next_step_when is literal <=6-word spoken wording or null; never convert a spoken "
+    "date. seller_tasks.due_text follows the same rule. pains.answer_fit is specific/generic/none. "
+    "Use only the frozen names-free source_context.speaker_roles snapshot (origin, "
+    "transcript_revision, map_revision, speakers with speaker_id/role/is_account_holder), never "
+    "a live map, browser state or output-inferred role. Address the account holder as you only "
+    "from is_account_holder; other seller is salesperson. Say the prospect, never provider "
+    "speaker labels in prose. Missing roles stay uncertain; label unverified_provider_labels, "
+    "text_predicted_roles and model_named_roles as predicted. Automatic you requires the "
+    "approved profile-match gate in the server resolver. No account profile name in this block. "
+    "Display-only speakers[]: speaker_id from C2, spoken_name exact spoken spelling/honorific "
+    "or null if no stated name; role you/salesperson/prospect/other from the frozen mapping; "
+    "evidence_segment_ids exactly one C2 id; confidence low/medium/high only. Names must occur "
+    "literally after normalization in a cited segment; never fabricate a name. This closed label "
+    "is the only model confidence allowed; no numeric confidence, call type, score or ratio. "
+    "sensitive_segments[]: segment_id from C2, category SENSITIVE_FINANCIAL/SENSITIVE_LEGAL, "
+    "closed fields, no quoted text, empty list allowed, unique segment/category pairs. "
+    "sensitive_terms_v1 covers legal-exposure material only: informal books, cash-only, tax "
+    "treatment, undeclared income. Ordinary business figures stay BIZ-03. "
+)
 COACHING_PROMPT_REFINED_MARKER = "COACHING_STATE: commercial-state-v2."
 COACHING_PROMPT_REFINED_INSTRUCTION = (
     "Preserve commercial state exactly. Say declined or refused only for an explicit source-"
@@ -2296,6 +2353,105 @@ def build_report_groq_prompt(
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
+    if coaching_prompt_revision == COACHING_PROMPT_V7:
+        from ac_platform.conversation_intelligence.call_map import SIGNALS_PATH
+        from ac_platform.conversation_intelligence.coaching_schema import (
+            coaching_v7_bounds_instruction,
+        )
+
+        if not detailed_overview:
+            raise ReportError("report_v7_detailed_overview_required")
+        prompt = build_report_groq_prompt(
+            transcript,
+            fact_packets,
+            profile=profile,
+            max_completion_tokens=max_completion_tokens,
+            model=model,
+            detailed_overview=True,
+            provider=provider,
+            coaching_prompt_revision=COACHING_PROMPT_V6,
+            report_language=report_language,
+            qualitative_pack_sha256=qualitative_pack_sha256,
+        )
+        system = prompt["messages"][0]["content"]
+        system = system.replace(COACHING_VOICE_INSTRUCTION, "")
+        system = system.replace(COACHING_PROMPT_V6_MARKER, COACHING_PROMPT_V7_MARKER)
+        system = system.replace("Use existing fields, not additional output sections.", "")
+        system = system.replace(
+            "Evidence selectors are {segment_id} or {segment_id,quote_start,quote_end}. "
+            "Offsets are zero-based, end-exclusive Unicode code points within one native segment.",
+            "Evidence selectors are direct {segment_id} only.",
+        )
+        system = system.replace(
+            "SourceNotes contain 1–3 references; findings and dimensions allow at most 8; "
+            "each rewatch item contains exactly 1.",
+            "SourceNotes contain one reference, ethics notes 1–2; findings and dimensions "
+            "allow at most two, observed exactly two and partial one; "
+            "rewatch contains exactly one.",
+        )
+        system = system.replace(
+            "Do not impose a sentence-count or length target on assessment.",
+            "Use one sentence per assessment field within the v7 wire limits.",
+        )
+        system = system.replace(
+            "Do not emit quotation text or timestamps in new selectors.",
+            "Call-map refs include literal quote; report refs use selectors only.",
+        )
+        old_format = json.dumps(OVERVIEW_V6_FORMAT, ensure_ascii=False, separators=(",", ":"))
+        new_format = {
+            **OVERVIEW_V6_FORMAT,
+            "diagnosis": "SourceNote(text<=120 chars)|null",
+            "golden_moments": "[{evidence:[{segment_id}],why_effective}],at most one",
+            "prospect_interpretations": (
+                "[{source:SourceNote,possible_concern,interpretation_kind:inference}],at most one"
+            ),
+            "rewatch": (
+                "[SourceNote+{purpose:must_watch|watch|repeat}],at most one;one segment each"
+            ),
+            "ethics_notes": "[SourceNote],at most two;observations only",
+            "final_assessment": (
+                "{repeat,fix_first,next_focus,assessment:truthful strings,one sentence each}"
+            ),
+        }
+        system = system.replace(
+            old_format, json.dumps(new_format, ensure_ascii=False, separators=(",", ":"))
+        )
+        signals = json.loads(SIGNALS_PATH.read_bytes())
+        signal_instruction = (
+            f"CALL_SIGNALS: {signals['version']}; sha256="
+            + hashlib.sha256(SIGNALS_PATH.read_bytes()).hexdigest()
+            + "; "
+            + json.dumps(
+                {key: signals[key] for key in ("forward", "risk", "objection_kinds")},
+                separators=(",", ":"),
+            )
+            + ". "
+        )
+        system = system.replace(
+            "Profile:\n",
+            COACHING_PROMPT_V7_INSTRUCTION
+            + coaching_v7_bounds_instruction()
+            + signal_instruction
+            + "\nProfile:\n",
+            1,
+        )
+        source = json.loads(prompt["messages"][1]["content"].split("\n", 1)[1])
+        source["source_context"] = coaching_source_context(transcript, speaker_roles=speaker_roles)
+        prompt["messages"] = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": "Complete transcript + selective C4 observations:\n"
+                + json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            },
+        ]
+        if provider == "gemini":
+            try:
+                prepare_gemini_body(prompt, task="coaching")
+            except GeminiTaskError as exc:
+                raise ReportError(str(exc)) from None
+        return prompt
+
     if type(
         max_completion_tokens
     ) is not int or not 256 <= max_completion_tokens <= completion_ceiling(provider, model, "C5"):
@@ -2726,6 +2882,8 @@ __all__ = [
     "COACHING_PROMPT_V5_MARKER",
     "COACHING_PROMPT_V6",
     "COACHING_PROMPT_V6_MARKER",
+    "COACHING_PROMPT_V7",
+    "COACHING_PROMPT_V7_MARKER",
     "CoachingPromptRevision",
     "DEFAULT_INPUT_CHARS",
     "AggregateFactPacket",

@@ -66,6 +66,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V4,
     COACHING_PROMPT_V5,
     COACHING_PROMPT_V6,
+    COACHING_PROMPT_V7,
     REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
@@ -87,7 +88,13 @@ _PATH = re.compile(r"(?:^|/)(?:[^/~]|~[01])+(?:/(?:[^/~]|~[01])+)*\Z")
 _REVIEW_ORIGIN = "Codex automated proposal"
 _RECOVERY_SCHEMA = "ac.sales-xray.retained-c5-recovery-proof/1"
 C5PromptRevision = Literal[
-    "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"
+    "coaching-v1",
+    "coaching-v2",
+    "coaching-v3",
+    "coaching-v4",
+    "coaching-v5",
+    "coaching-v6",
+    "coaching-v7",
 ]
 
 
@@ -102,6 +109,7 @@ def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
         COACHING_PROMPT_V4,
         COACHING_PROMPT_V5,
         COACHING_PROMPT_V6,
+        COACHING_PROMPT_V7,
     }:
         raise ValueError("The stored C5 prompt revision is invalid.")
     return value
@@ -115,7 +123,7 @@ def _coaching_prompt_options(
     revision = _coaching_prompt_revision(request)
     language = request.get("report_language")
     pack_sha256 = request.get("qualitative_pack_sha256")
-    if revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6}:
+    if revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6, COACHING_PROMPT_V7}:
         if not isinstance(language, str) or language not in {
             "en",
             "hi-Deva+en",

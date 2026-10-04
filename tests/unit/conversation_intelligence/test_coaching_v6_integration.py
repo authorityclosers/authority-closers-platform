@@ -75,7 +75,10 @@ def _v6_task(transcript: dict[str, Any], packet: FactPacket, *, provider: str, m
 
 
 @pytest.mark.asyncio
-async def test_runtime_request_stage_blocks_v6_before_quote_or_allowance_work() -> None:
+@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])
+async def test_runtime_request_stage_blocks_v6_before_quote_or_allowance_work(
+    revision: str,
+) -> None:
     application = SimpleNamespace(
         admit=AsyncMock(return_value=None),
         get=AsyncMock(),
@@ -91,9 +94,9 @@ async def test_runtime_request_stage_blocks_v6_before_quote_or_allowance_work() 
         provider="openai",
         model="gpt-6-luna",
         max_completion_tokens=512,
-        coaching_prompt_revision=COACHING_PROMPT_V6,
+        coaching_prompt_revision=revision,
         report_language="en",
-        qualitative_pack_sha256=load_qualitative_pack_for_revision(COACHING_PROMPT_V6).sha256,
+        qualitative_pack_sha256=load_qualitative_pack_for_revision(revision).sha256,
     )
 
     with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):

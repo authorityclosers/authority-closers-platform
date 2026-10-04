@@ -110,15 +110,22 @@ async def test_openai_c5_http_selection_uses_canonical_settings_and_saved_checkp
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])
 async def test_http_selection_blocks_v6_before_constructing_runtime_request(
     monkeypatch: pytest.MonkeyPatch,
+    revision: str,
 ) -> None:
     selection = analysis_module.AnalysisSelection(
         stage="C5",
         transcript_checkpoint_id=TRANSCRIPT_ID,
         fact_checkpoint_ids=(FACT_ID,),
     )
-    seen = patch_settings(monkeypatch, settings(revision="coaching-v6"))
+    seen = patch_settings(
+        monkeypatch,
+        settings(revision="coaching-v6").model_copy(
+            update={"c5_coaching_prompt_revision": revision}
+        ),
+    )
 
     with pytest.raises(ConversationError, match="AC-SVAL-01 Gate 2"):
         await selection.stage_request(

@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKE
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V5_MARKER,
     COACHING_PROMPT_V6_MARKER,
+    COACHING_PROMPT_V7_MARKER,
 )
 
 OPENAI_TASK_MODELS = frozenset({"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"})
@@ -44,8 +45,14 @@ def _schema_for_prompt(system: str) -> tuple[str, dict[str, Any]]:
         _fail("openai_c5_detailed_overview_required")
     if COACHING_PROMPT_V6_MARKER in system and COACHING_PROMPT_V5_MARKER in system:
         _fail("openai_c5_revision_marker_invalid")
+    if COACHING_PROMPT_V7_MARKER in system and (
+        COACHING_PROMPT_V6_MARKER in system or COACHING_PROMPT_V5_MARKER in system
+    ):
+        _fail("openai_c5_revision_marker_invalid")
     revision = (
-        "coaching-v6"
+        "coaching-v7"
+        if COACHING_PROMPT_V7_MARKER in system
+        else "coaching-v6"
         if COACHING_PROMPT_V6_MARKER in system
         else "coaching-v5"
         if COACHING_PROMPT_V5_MARKER in system

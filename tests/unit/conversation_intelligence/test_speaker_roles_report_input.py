@@ -27,7 +27,7 @@ def snapshot(origin="user_confirmed_roles"):
 
 @pytest.mark.parametrize("revision", [f"coaching-v{n}" for n in range(1, 7)])
 def test_undeclared_revisions_omit_roles_byte_for_byte(revision):
-    assert frozenset() == reports.SPEAKER_ROLE_PROMPT_REVISIONS
+    assert revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS
     transcript, packet = source_and_facts()
     options = dict(provider="gemini", model="gemini-3.8-flash", coaching_prompt_revision=revision)
     if revision in {"coaching-v4", "coaching-v5", "coaching-v6"}:

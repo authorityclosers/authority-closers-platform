@@ -8,6 +8,8 @@ evidence are added after the response is validated.
 
 from __future__ import annotations
 
+from copy import deepcopy
+from sys import float_info
 from typing import Any
 
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_VERSION
@@ -42,6 +44,287 @@ _REWATCH_PURPOSES = ("must_watch", "watch", "repeat")
 _COACHING_V4 = "coaching-v4"
 _COACHING_V5 = "coaching-v5"
 _COACHING_V6 = "coaching-v6"
+_COACHING_V7 = "coaching-v7"
+
+
+def _coaching_v7_schema() -> dict[str, Any]:
+    from ac_platform.conversation_intelligence.call_map import (
+        OBJECTION_KINDS_V1,
+        SIGNAL_KINDS_V1,
+        CallMap,
+    )
+
+    schema = coaching_response_json_schema(_COACHING_V6)
+    defs = schema["$defs"]
+
+    def wire(value: Any) -> Any:
+        if isinstance(value, dict):
+            result = {key: wire(item) for key, item in value.items() if key != "title"}
+            if "$ref" in result:
+                result["$ref"] = result["$ref"].replace("#/$defs/", "#/$defs/call_map_")
+            if "const" in result:
+                result["enum"] = [result.pop("const")]
+            return result
+        if isinstance(value, list):
+            return [wire(item) for item in value]
+        return value
+
+    call_map = wire(CallMap.model_json_schema())
+    defs.update({"call_map_" + key: item for key, item in call_map.pop("$defs").items()})
+    defs["call_map_Signal"]["properties"]["kind"]["enum"] = [
+        *SIGNAL_KINDS_V1["forward"],
+        *SIGNAL_KINDS_V1["risk"],
+    ]
+    defs["call_map_Objection"]["properties"]["kind"]["enum"] = list(OBJECTION_KINDS_V1)
+    defs["golden_moment"] = {
+        "type": "object",
+        "properties": {
+            "evidence": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/evidence_ref"},
+                "minItems": 1,
+                "maxItems": 2,
+            },
+            "why_effective": {"type": "string"},
+        },
+        "required": ["evidence", "why_effective"],
+        "additionalProperties": False,
+    }
+    variants = defs["dimension"]["anyOf"]
+    variants[0]["properties"]["evidence"]["minItems"] = 2
+    variants.append(
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                **variants[0]["properties"],
+                "status": {"type": "string", "enum": ["partial"]},
+                "evidence": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/evidence_ref"},
+                    "minItems": 1,
+                    "maxItems": 1,
+                },
+            },
+            "required": ["dimension_id", "status", "observation", "evidence"],
+        }
+    )
+    # Only observed needs two segments; conflicted retains its independent rule.
+    variants[0]["properties"]["status"]["enum"] = ["observed"]
+    variants.append(
+        {
+            **variants[0],
+            "properties": {
+                **variants[0]["properties"],
+                "status": {"type": "string", "enum": ["conflicted"]},
+                "evidence": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/evidence_ref"},
+                    "minItems": 1,
+                    "maxItems": 8,
+                },
+            },
+        }
+    )
+    additions = {
+        "call_map": call_map,
+        "speakers": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "speaker_id": {"type": "string"},
+                    "spoken_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "role": {"type": "string", "enum": ["you", "salesperson", "prospect", "other"]},
+                    "evidence_segment_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 5,
+                    },
+                    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+                },
+                "required": [
+                    "speaker_id",
+                    "spoken_name",
+                    "role",
+                    "evidence_segment_ids",
+                    "confidence",
+                ],
+            },
+        },
+        "sensitive_segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "segment_id": {"type": "string"},
+                    "category": {
+                        "type": "string",
+                        "enum": ["SENSITIVE_FINANCIAL", "SENSITIVE_LEGAL"],
+                    },
+                },
+                "required": ["segment_id", "category"],
+            },
+        },
+    }
+    schema["properties"].update(additions)
+    schema["required"].extend(additions)
+    _bound_v7_schema(schema)
+    return schema
+
+
+def _bound_v7_schema(schema: dict[str, Any]) -> None:
+    """Tighten only the fresh v7 wire tree; B1 and legacy revisions stay canonical."""
+    string_limits = {
+        "summary": 300,
+        "verdict": 300,
+        "title": 60,
+        "explanation": 240,
+        "observation": 240,
+        "segment_id": 16,
+        "speaker_id": 16,
+        "raised_by": 16,
+        "id": 16,
+        "addressed_by": 16,
+        "evidence_segment_ids": 16,
+        "spoken_name": 40,
+        "quote": 64,
+        "due_text": 60,
+        "next_step_when": 60,
+        "label": 60,
+        "unit": 12,
+    }
+
+    def bound(node: Any, field: str = "") -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "string":
+            maximum = (
+                max(map(len, node["enum"])) if "enum" in node else string_limits.get(field, 120)
+            )
+            node["maxLength"] = min(node.get("maxLength", maximum), maximum)
+        if node.get("type") == "array":
+            node["maxItems"] = max(node.get("minItems", 0), min(node.get("maxItems", 2), 2))
+            bound(node["items"], field)
+        if node.get("type") == "integer":
+            node["maximum"] = min(node.get("maximum", 2147483647), 2147483647)
+        if node.get("type") == "number":
+            node.update(minimum=0, maximum=float_info.max)
+        for key, child in node.get("properties", {}).items():
+            bound(child, key)
+        for child in node.get("anyOf", []):
+            bound(child, field)
+        for child in node.get("$defs", {}).values():
+            bound(child)
+
+    bound(schema)
+    defs = schema["$defs"]
+    # Direct IDs avoid repeating offset pairs throughout the completion.
+    defs["evidence_ref"] = defs["evidence_ref"]["anyOf"][0]
+    for name, text_limit in {
+        "PitchItem": 120,
+        "Pain": 120,
+        "Claim": 160,
+        "ProspectTask": 120,
+        "SellerTask": 120,
+        "Objection": 120,
+        "ProspectFact": 80,
+        "Signal": 80,
+    }.items():
+        defs["call_map_" + name]["properties"]["text"]["maxLength"] = text_limit
+    for key, maximum in {
+        "strengths": 1,
+        "improvements": 1,
+        "missed_opportunities": 1,
+        "objection_analysis": 1,
+        "closing_analysis": 1,
+        "speakers": 8,
+        "sensitive_segments": 12,
+    }.items():
+        schema["properties"][key]["maxItems"] = maximum
+    call_map = schema["properties"]["call_map"]["properties"]
+    for key, maximum in {
+        "speakers": 16,
+        "phases": 8,
+        "qualification_gaps": 5,
+        "qualification_confirmed": 5,
+        "prospect_facts": 2,
+        "pitch_items": 1,
+        "pains": 1,
+        "money": 3,
+        "prospect_tasks": 1,
+        "seller_tasks": 1,
+        "objections": 2,
+    }.items():
+        call_map[key]["maxItems"] = maximum
+    for field in ("value_min", "value_max"):
+        defs["call_map_Money"]["properties"][field]["maximum"] = 1e12
+    for name in (
+        "PitchItem",
+        "Pain",
+        "Money",
+        "ProspectTask",
+        "SellerTask",
+        "QualificationConfirmed",
+        "ProspectFact",
+    ):
+        defs["call_map_" + name]["properties"]["evidence"]["maxItems"] = 1
+    schema["properties"]["speakers"]["items"]["properties"]["evidence_segment_ids"]["maxItems"] = 1
+    defs["business_impact"]["properties"]["missing_inputs"]["maxItems"] = 1
+    defs["source_note"]["properties"]["evidence"]["maxItems"] = 1
+    defs["ethics_note"] = deepcopy(defs["source_note"])
+    defs["ethics_note"]["properties"]["evidence"]["maxItems"] = 2
+    overview = defs["overview"]["properties"]
+    overview["ethics_notes"].update(maxItems=2, items={"$ref": "#/$defs/ethics_note"})
+    for key in ("golden_moments", "prospect_interpretations", "rewatch"):
+        overview[key]["maxItems"] = 1
+    for key, findings in {
+        "strength_details": "strengths",
+        "improvement_details": "improvements",
+        "missed_details": "missed_opportunities",
+    }.items():
+        overview[key]["maxItems"] = schema["properties"][findings]["maxItems"]
+    for name in ("strength_detail", "improvement_detail", "missed_detail"):
+        defs[name]["properties"]["finding_index"]["maximum"] = 0
+    defs["call_map_TimePromise"]["properties"]["promised_ms"].update(
+        minimum=60000, maximum=14400000
+    )
+
+
+def coaching_v7_bounds_instruction() -> str:
+    """State every local wire limit in the prompt without changing provider schemas."""
+    groups: dict[tuple[str, int], set[str]] = {}
+
+    def visit(node: Any, path: str) -> None:
+        if not isinstance(node, dict):
+            return
+        for keyword, unit in (("maxLength", "characters"), ("maxItems", "items")):
+            if keyword in node:
+                groups.setdefault((unit, node[keyword]), set()).add(path)
+        for key, child in node.get("properties", {}).items():
+            visit(child, f"{path}.{key}")
+        if "items" in node:
+            visit(node["items"], path + "[]")
+        for index, child in enumerate(node.get("anyOf", [])):
+            visit(child, f"{path}.option{index}")
+
+    schema = coaching_response_json_schema(_COACHING_V7)
+    visit(schema, "report")
+    for key, node in schema["$defs"].items():
+        visit(node, key)
+    return (
+        "V7 WIRE LIMITS (bounds, not quotas): "
+        + " ".join(
+            f"At most {maximum} {unit}: {', '.join(sorted(paths))}."
+            for (unit, maximum), paths in sorted(groups.items())
+        )
+        + " Integers are at most 2147483647; monetary amounts are finite nonnegative "
+        "binary64 values, with value_min and value_max at most 1000000000000. "
+    )
 
 
 def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
@@ -53,6 +336,8 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
     server resolves those references to quote and timing fields.
     """
 
+    if revision == _COACHING_V7:
+        return _coaching_v7_schema()
     if revision not in {_COACHING_V4, _COACHING_V5, _COACHING_V6}:
         raise ValueError("coaching_schema_revision_invalid")
 
@@ -348,6 +633,8 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
 def coaching_generation_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
     """Describe wire shape while leaving numeric/cardinality validation local."""
     local_bounds = {"minItems", "maxItems", "minimum", "maximum"}
+    if revision == _COACHING_V7:
+        local_bounds |= {"minLength", "maxLength", "pattern"}
 
     def shape(value: Any) -> Any:
         if isinstance(value, dict):

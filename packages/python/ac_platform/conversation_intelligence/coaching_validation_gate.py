@@ -7,6 +7,7 @@ COACHING_V6_RUNTIME_BLOCK_MESSAGE = (
     "AC-SVAL-01 Gate 2 (AI feedback) evidence and approval are recorded. "
     "Select coaching-v5 or another available revision."
 )
+COACHING_V7_RUNTIME_BLOCK_MESSAGE = COACHING_V6_RUNTIME_BLOCK_MESSAGE.replace("v6", "v7")
 
 
 def coaching_revision_runtime_block(revision: str) -> str | None:
@@ -19,7 +20,13 @@ def coaching_revision_runtime_block(revision: str) -> str | None:
 
     if revision == "coaching-v6":
         return COACHING_V6_RUNTIME_BLOCK_MESSAGE
+    if revision == "coaching-v7":
+        return COACHING_V7_RUNTIME_BLOCK_MESSAGE
     return None
 
 
-__all__ = ["COACHING_V6_RUNTIME_BLOCK_MESSAGE", "coaching_revision_runtime_block"]
+__all__ = [
+    "COACHING_V6_RUNTIME_BLOCK_MESSAGE",
+    "COACHING_V7_RUNTIME_BLOCK_MESSAGE",
+    "coaching_revision_runtime_block",
+]

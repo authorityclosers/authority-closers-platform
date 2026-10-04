@@ -223,10 +223,10 @@ def test_explicit_v6_plan_binds_language_and_exact_pack_hash_without_changing_de
 def plan_with_coaching_revision(revision: str) -> ConversationProcessingPlan:
     row = saved_plan()
     data = manifest_for(row).as_dict()
-    if revision == "coaching-v6":
+    if revision in {"coaching-v6", "coaching-v7"}:
         data["stages"][2].update(provider_id="openai", model_id="gpt-6-luna")
     data["coaching_prompt_revision"] = revision
-    if revision in {"coaching-v4", "coaching-v5", "coaching-v6"}:
+    if revision in {"coaching-v4", "coaching-v5", "coaching-v6", "coaching-v7"}:
         pack = load_qualitative_pack_for_revision(revision)
         data.update({"report_language": "en", "qualitative_pack_sha256": pack.sha256})
     value = PlanManifest.model_validate_json(canonical(data))
@@ -241,6 +241,8 @@ def plan_with_coaching_revision(revision: str) -> ConversationProcessingPlan:
     [
         ("replay", "coaching-v6", True),
         ("active", "coaching-v6", True),
+        ("replay", "coaching-v7", True),
+        ("active", "coaching-v7", True),
         ("replay", "coaching-v5", False),
         ("active", "coaching-v5", False),
         ("replay", "coaching-v1", False),
