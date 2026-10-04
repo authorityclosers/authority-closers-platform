@@ -31,7 +31,7 @@ def authority() -> fixture.Authority:
 def environment() -> dict[str, str]:
     return {
         variable: "fictional-fixture-password" for variable in fixture.PASSWORD_VARIABLES.values()
-    } | {fixture.TOKEN_VARIABLE: "fictional-operator-session"}
+    }
 
 
 @pytest.mark.parametrize(
@@ -79,7 +79,7 @@ def test_apply_requires_owner_authority_before_connecting(monkeypatch, approval)
         run_async(fixture.initialize(settings(), environment(), apply=True, authority=recorded))
 
 
-@pytest.mark.parametrize("variable", [*fixture.PASSWORD_VARIABLES.values(), fixture.TOKEN_VARIABLE])
+@pytest.mark.parametrize("variable", fixture.PASSWORD_VARIABLES.values())
 def test_missing_secret_names_refuse_before_connecting(monkeypatch, variable):
     monkeypatch.setattr(fixture, "create_async_engine", lambda *a, **k: pytest.fail("Connected"))
     environ = environment()

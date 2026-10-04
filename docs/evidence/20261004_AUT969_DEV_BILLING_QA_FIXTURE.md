@@ -1,7 +1,9 @@
 # AUT-969: development billing QA fixture
 
-Implementation source: latest main `8ae81a4b8b00bf8be90ad4ce1c08bb477c58ad27`,
-started through `ac-gate start billing 969-dev-billing-fixture`.
+Rework source: latest main `241419fd508ba7582f9ca4f11953b51b42596423`,
+started through `ac-gate start billing 969-dev-billing-operator` after AUT-828
+merged. Preserved fixture commit `ca5b051` was cherry-picked; this rework
+addresses the CTO's PR #285 review, including its session-token blocker.
 `ac-gate check` passed. This is an implementation and isolated PostgreSQL proof,
 not a receipt for application to the development database or a deployed journey.
 
@@ -22,9 +24,15 @@ stored catalogue price/status changes. The existing Personal plan row supplies
 its stored GST treatment, through the normal checkout service.
 
 `PasswordIdentityService` registers the new identities and consumes their
-one-use verification challenges without mail. `CapabilityApplication.grant`
-requires an existing authenticated platform access manager; this command never
-bootstraps a manager or makes the fixture staff an owner. The customer setup
+one-use verification challenges without mail. Following AUT-828, the command
+takes `CapabilityApplication._governance()` first and refuses unless an
+unrevoked platform-scoped `platform_access_manage` grant already exists.
+`_insert_grant` writes only the fixed `platform_billing_manage` permission with
+`actor_type="operator_data_change"`. Audit actor and session are NULL, with
+approver, issue, environment and the fixed grant command ID in the payload.
+The non-null grant model's attribution FK names the fictional staff subject,
+as in AUT-828; it does not identify an authenticated operator. This command
+never bootstraps a manager or makes the fixture staff an owner. The customer setup
 session is created through the identity service, used for checkout, and revoked
 before commit. Its token is not returned.
 
@@ -45,15 +53,18 @@ rolls the entire transaction back, including identities, sessions, grants,
 audit events and payments. Its JSON shows `applied: false`, `before`, `after`
 and `replayed`. Proposed IDs in a new preview are not reserved; apply generates
 its own IDs. The preview requires the same credential/configuration inputs and
-existing manager authority as apply, and cannot bypass an unsafe-state check.
+existing unrevoked manager grant as apply, and cannot bypass an unsafe-state check.
+It requires no manager session, token or sign-in.
 
 Apply requires `--apply`, the exact owner identifier, three nonzero recorded
 approval-reference UUIDs (data, secrets, billing/settings), and a run UUID.
 Root must verify those records cover this exact fixture and development
 environment. Arguments record permission; supplying UUIDs does not grant it.
-The permanent seed audit records the issue, owner, all references, run, actual
-operator person/session, fictional identity IDs and payment ID. The capability
-grant also carries its normal canonical audit.
+The permanent seed audit uses `operator_data_change` with NULL actor/session
+and records the issue, owner, environment, fixed seed command ID, all references,
+run, fictional identity IDs and payment ID. The capability grant also carries
+its canonical audit with the operator attribution described above. A preview
+without authority records no approver, and all prospective audits roll back.
 
 Both modes refuse any target other than environment `development`, driver
 `postgresql+psycopg`, host `acdev-postgres`, port 5432, database `ac_platform`,
@@ -86,18 +97,18 @@ created, copied or disclosed in this implementation run.
 | Name | Purpose |
 | --- | --- |
 | `AC_DATABASE_URL` | Runtime-role URL for the exact dev endpoint above |
-| `AC_SESSION_TOKEN_PEPPER` | Existing dev identity session validation |
+| `AC_SESSION_TOKEN_PEPPER` | Existing dev fictional customer setup session and normal sign-in |
 | `AC_EMAIL_CHALLENGE_SECRET` | Existing dev registration challenge protection |
 | `AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF` | Fictional staff password |
 | `AC_DEV_BILLING_FIXTURE_PASSWORD_CUSTOMER` | Fictional customer password |
-| `AC_DEV_BILLING_FIXTURE_OPERATOR_SESSION_TOKEN` | Current dev session of an existing platform access manager; short-lived operator injection only |
 | `AC_BILLING_FAKE_PROVIDER_SIGNING_KEY` | Dev-only fake signature verification; same value for the released API runtime |
 
 Required configuration: `AC_ENVIRONMENT=development`, existing distinct
 `AC_PUBLIC_LEARNER_TENANT_ID` / `AC_OPERATIONS_TENANT_ID`, and the reviewed
 `AC_LEARNER_CONSENT_VERSION`. Missing keys are a stop, not an invitation to use
-Razorpay credentials or production values. Root owns obtaining the existing
-manager session through ordinary sign-in and handling it without logging it.
+Razorpay credentials or production values. Root does not obtain or inject an
+owner/manager session token. The existing access-manager grant is checked under
+the governance fence, without impersonating that manager.
 
 From the reviewed released tree, inside the approved dev network with those
 inputs injected, preview:
@@ -129,21 +140,30 @@ billing commands, the API needs the explicitly authorized
 either setting or enable a catalogue for public sale. Root checks the app's
 Admin billing readback and posts the actual apply receipt on AUT-959.
 
+## Private application dependencies
+
+This development-only tool intentionally uses
+`CapabilityApplication._governance`, `CapabilityApplication._insert_grant`,
+`Settlement._verified_payment` and `Settlement._sources`. Changes to these
+private methods must update this command and its integration proof together.
+The `_insert_grant` operator-attribution support is AUT-828's merged output;
+this task changes no authorization or billing service module.
+
 ## Reproduced checks
 
 All commands exited 0 after the final changes:
 
 ```text
 ac-gate check
-  ok: task/billing/969-dev-billing-fixture may be worked on
+  ok: task/billing/969-dev-billing-operator may be worked on
 uv run ruff format --check packages/python tests
-  954 files already formatted
+  991 files already formatted
 uv run ruff check packages/python tests
   All checks passed!
 uv run mypy packages/python
-  Success: no issues found in 397 source files
+  Success: no issues found in 415 source files
 uv run pytest tests/unit/test_dev_billing_qa_fixture.py tests/integration/test_dev_billing_qa_fixture_postgresql.py -q -s --tb=short
-  31 passed in 28.02s; no skips
+  30 passed in 33.29s; no skips
 ```
 
 The migrated PostgreSQL proof used a random test schema on the injected
@@ -152,7 +172,10 @@ engine factory is redirected to that disposable schema inside the test.
 Provider HTTP is made a test failure during fixture execution. No dev,
 staging or production database was connected to or changed by this run.
 
-The proof checks unchanged table counts/catalogue after preview, collisions,
+The proof checks missing and revoked access-manager refusal, NULL grant/seed
+audit actor and session, recorded operator attribution, no manager session,
+and a minted-then-revoked fictional customer session. It also checks unchanged
+table counts/catalogue after preview, collisions,
 remote/live history refusal, duplicate apply, wrong credentials, revoked grant,
 closed window, changed lot, and paid use. It verifies that usage before the
 payment can consume trial capacity without invalidating this payment. It signs
@@ -174,14 +197,14 @@ UUIDs in the full test output are fictional test inputs, not actual permission:
     "seed": "aut969-billing-qa-v1",
     "issue": "AUT-969",
     "audit_id": "3ee5ea49-5e7f-5d27-a978-a16ef5fdd456",
-    "staff_person_id": "94ca78d1-0090-418d-beb9-5cb5ce53c083",
-    "owner_person_id": "c5269d0e-2d76-41d9-9270-129276688740",
-    "order_id": "59ae0161-7e21-474a-90c3-46941b43f9c5",
-    "payment_id": "fake_pay_ac7b574f90fa2cc97c",
+    "staff_person_id": "fef39cd9-641a-4048-b4eb-824eb768ec85",
+    "owner_person_id": "e6b237dc-fcde-4313-90ed-d39c092b493a",
+    "order_id": "74af54cd-d55a-440e-8ce0-403581638ec6",
+    "payment_id": "fake_pay_ac209e6c85dc69e1be",
     "provider": "fake",
     "mode": "test",
     "kind": "subscription.charged",
-    "verified_at": "2026-10-04T04:31:15.924899+00:00",
+    "verified_at": "2026-10-04T12:37:55.746954+00:00",
     "unused_minutes": 30
   },
   "replayed": false

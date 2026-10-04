@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Never
 from uuid import UUID, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -58,7 +58,6 @@ NAMESPACE = UUID("84ae8f38-a905-4c7c-a85a-75a579264bc3")
 AUDIT_ID, GRANT_ID = (uuid5(NAMESPACE, name) for name in ("seed", "staff-grant"))
 EMAILS = {kind: f"qa-billing-{kind}-aut969@example.test" for kind in ("staff", "customer")}
 PASSWORD_VARIABLES = {kind: f"AC_DEV_BILLING_FIXTURE_PASSWORD_{kind.upper()}" for kind in EMAILS}
-TOKEN_VARIABLE = "AC_DEV_BILLING_FIXTURE_OPERATOR_SESSION_TOKEN"  # noqa: S105
 REASON = f"{ISSUE}: fictional development billing QA only"
 PLAN = PlanCopy("personal", "AUT-969 fictional QA", 1, "active", 100, None, 30, 1, 1, False, 30, 0)
 
@@ -236,14 +235,21 @@ async def seed(
     capabilities = CapabilityApplication(
         database, operations_tenant_id=settings.operations_tenant_id
     )
-    # Match the capability CLI's governance -> identity -> subject lock order.
+    # Fence first, matching AUT-828's operator grant and first-manager guard.
     await capabilities._governance()
+    manager_exists = await database.scalar(
+        select(
+            exists().where(
+                CapabilityGrant.permission == "platform_access_manage",
+                CapabilityGrant.scope_kind == "platform",
+                ~exists().where(CapabilityRevocation.grant_id == CapabilityGrant.id),
+            )
+        )
+    )
+    if not manager_exists:
+        raise FixtureRefused("An unrevoked platform access manager must already exist.")
     identity = AsyncIdentityApplication(
         database, token_pepper=settings.session_token_pepper.get_secret_value()
-    )
-    actor = (await identity.resolve_actor_read_only(environ[TOKEN_VARIABLE])).actor
-    await capabilities.require(
-        actor.person_id, "platform_access_manage", CapabilityScope("platform")
     )
     await take_admission_lock(database, settings.public_learner_tenant_id)
     if await database.scalar(
@@ -300,13 +306,21 @@ async def seed(
         tenant_id=settings.public_learner_tenant_id,
         required_consent_version=settings.learner_consent_version or "",
     )
-    await capabilities.grant(
-        actor,
-        command_id=GRANT_ID,
-        subject_person_id=people["staff"],
-        permission="platform_billing_manage",
-        scope=CapabilityScope("platform"),
-        reason=REASON,
+    await capabilities._insert_grant(
+        people["staff"],
+        None,
+        GRANT_ID,
+        people["staff"],
+        "platform_billing_manage",
+        CapabilityScope("platform"),
+        REASON,
+        actor_type="operator_data_change",
+        audit_payload={
+            "approver": authority.approver if authority else None,
+            "issue": ISSUE,
+            "environment": settings.environment,
+            "command_id": str(GRANT_ID),
+        },
     )
     command = CheckoutCommand(
         "subscription",
@@ -338,13 +352,17 @@ async def seed(
     audit = await AuditRepository(database).append(
         event_id=AUDIT_ID,
         tenant_id=settings.operations_tenant_id,
-        actor_person_id=actor.person_id,
-        session_id=actor.session_id,
+        actor_person_id=None,
+        session_id=None,
+        actor_type="operator_data_change",
         action="development.billing_qa_fixture_created",
         resource_type="billing_qa_fixture",
         resource_id=SEED,
         payload={
+            "approver": authority.approver if authority else None,
             "issue": ISSUE,
+            "environment": settings.environment,
+            "command_id": str(AUDIT_ID),
             "seed": SEED,
             "people": {k: str(v) for k, v in people.items()},
             "order_id": str(order.id),
@@ -389,7 +407,7 @@ async def initialize(
         )
     ):
         raise FixtureRefused("Apply requires recorded owner data, secrets and billing authorities.")
-    for variable in (*PASSWORD_VARIABLES.values(), TOKEN_VARIABLE):
+    for variable in PASSWORD_VARIABLES.values():
         if not environ.get(variable):
             raise FixtureRefused(f"Missing {variable}.")
     for variable in PASSWORD_VARIABLES.values():

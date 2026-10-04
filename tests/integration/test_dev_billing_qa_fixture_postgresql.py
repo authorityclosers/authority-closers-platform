@@ -13,9 +13,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
 from ac_platform.audit.models import AuditEvent
-from ac_platform.audit.service import verify_audit_chain_sync
+from ac_platform.audit.service import AuditRepository, verify_audit_chain_sync
 from ac_platform.authorization.application import CapabilityApplication
-from ac_platform.authorization.models import CapabilityGrant
+from ac_platform.authorization.models import CapabilityGrant, CapabilityRevocation
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.billing.application import BillingApplication
 from ac_platform.billing.catalogue import StaticCatalogue
@@ -104,15 +104,6 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
                 Membership(tenant_id=operations, person_id=manager, role="owner", status="active")
             )
             await database.flush()
-            await CapabilityApplication(
-                database, operations_tenant_id=operations
-            ).bootstrap_first_manager(
-                person_id=manager, command_id=uuid4(), reason="Fictional test authority"
-            )
-            issued = await AsyncIdentityApplication(
-                database, token_pepper=settings.session_token_pepper.get_secret_value()
-            ).issue_authenticated_session(manager)
-            password_values[fixture.TOKEN_VARIABLE] = issued.token
 
         def snapshot():
             with Session(postgres_harness.engine) as database:
@@ -124,6 +115,7 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
                         EmailChallenge,
                         IdentitySession,
                         CapabilityGrant,
+                        CapabilityRevocation,
                         AuditEvent,
                         BillingAccount,
                         BillingOrder,
@@ -140,6 +132,31 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
                     (p.id, p.revision, p.monthly_price_paise, p.status)
                     for p in database.scalars(select(Plan).order_by(Plan.key))
                 )
+
+        async def revoke_for_test(database, grant_id):
+            command_id = uuid4()
+            reason = "Fictional revoked fixture"
+            audit = await AuditRepository(database).append(
+                event_id=uuid4(),
+                tenant_id=operations,
+                actor_type="operator_data_change",
+                actor_person_id=None,
+                action="authorization.capability_revoked",
+                resource_type="capability_grant",
+                resource_id=grant_id,
+                payload={"command_id": str(command_id), "grant_id": str(grant_id)},
+                reason=reason,
+            )
+            database.add(
+                CapabilityRevocation(
+                    id=command_id,
+                    grant_id=grant_id,
+                    revoked_by_person_id=manager,
+                    audit_event_id=audit.id,
+                    reason=reason,
+                )
+            )
+            await database.flush()
 
         # The CLI's exact dev target guard still runs. Only its connector is
         # redirected to the disposable test schema, never the development DB.
@@ -159,6 +176,27 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
         )
         before = snapshot()
         try:
+            with pytest.raises(fixture.FixtureRefused, match="unrevoked platform access manager"):
+                await fixture.initialize(dev_settings, password_values)
+            assert snapshot() == before
+            async with sessions() as database, database.begin():
+                manager_grant = await CapabilityApplication(
+                    database, operations_tenant_id=operations
+                ).bootstrap_first_manager(
+                    person_id=manager, command_id=uuid4(), reason="Fictional test authority"
+                )
+            before = snapshot()
+            with pytest.raises(fixture.FixtureRefused, match="unrevoked platform access manager"):
+                async with sessions() as database, database.begin():
+                    await revoke_for_test(database, manager_grant.id)
+                    await fixture.seed(
+                        database,
+                        dev_settings,
+                        password_values,
+                        authority=recorded,
+                        now=datetime.now(UTC),
+                    )
+            assert snapshot() == before
             preview = await fixture.initialize(dev_settings, password_values)
             assert preview["applied"] is False and preview["after"]["unused_minutes"] == 30
             assert snapshot() == before
@@ -206,6 +244,34 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
             after = result["after"]
             assert after["provider"] == "fake" and after["mode"] == "test"
             assert after["unused_minutes"] == 30 and after["kind"] == "subscription.charged"
+            with Session(postgres_harness.engine) as database:
+                grant = database.get(CapabilityGrant, fixture.GRANT_ID)
+                assert grant.permission == "platform_billing_manage"
+                assert grant.granted_by_person_id == UUID(after["staff_person_id"])
+                grant_audit = database.get(AuditEvent, grant.audit_event_id)
+                seed_audit = database.get(AuditEvent, fixture.AUDIT_ID)
+                for audit, command_id in (
+                    (grant_audit, fixture.GRANT_ID),
+                    (seed_audit, fixture.AUDIT_ID),
+                ):
+                    assert audit.actor_type == "operator_data_change"
+                    assert audit.actor_person_id is None and audit.session_id is None
+                    assert audit.payload["approver"] == recorded.approver
+                    assert audit.payload["issue"] == fixture.ISSUE
+                    assert audit.payload["environment"] == "development"
+                    assert audit.payload["command_id"] == str(command_id)
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == manager)
+                    )
+                    == 0
+                )
+                customer_sessions = list(database.scalars(select(IdentitySession)))
+                assert len(customer_sessions) == 1
+                assert customer_sessions[0].person_id == UUID(after["owner_person_id"])
+                assert customer_sessions[0].revoked_at is not None
             applied = snapshot()
             replay = await fixture.initialize(
                 dev_settings, password_values, apply=True, authority=recorded
@@ -233,18 +299,7 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
                 assert snapshot() == applied
             with pytest.raises(ValueError, match="capability differs"):
                 async with sessions() as database, database.begin():
-                    capabilities = CapabilityApplication(database, operations_tenant_id=operations)
-                    actor = (
-                        await AsyncIdentityApplication(
-                            database, token_pepper=settings.session_token_pepper.get_secret_value()
-                        ).resolve_actor_read_only(issued.token)
-                    ).actor
-                    await capabilities.revoke(
-                        actor,
-                        command_id=uuid4(),
-                        grant_id=fixture.GRANT_ID,
-                        reason="Fictional revoked fixture",
-                    )
+                    await revoke_for_test(database, fixture.GRANT_ID)
                     await fixture.seed(
                         database,
                         settings,
