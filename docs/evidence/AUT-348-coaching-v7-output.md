@@ -25,7 +25,8 @@ marks with `reason_ref=coaching-v7:sensitive_segments`, alongside detector hits;
 replays and operator releases retain their existing precedence. No external
 provider, customer recording, live database, migration or runtime gate is used.
 The generation-store argument and finish-time forwarding are the two necessary
-same-task file additions to the original allowed-file list.
+same-task file additions to the original allowed-file list. The existing validator
+source-pin test is updated; its legacy validator revision stays /8.
 
 Legacy fixture hashes captured before editing:
 
@@ -35,7 +36,10 @@ Legacy fixture hashes captured before editing:
 Unset call-map and sensitive-segment fields are omitted. Prompt/schema snapshots
 and runtime refusal remain covered by the existing v7 prompt/v6 integration tests.
 
-Initial verification: focused Python output suite 60 passed; focused web report,
-call-map and processing-copy suites 124 passed. Full required checks follow before
-PR handoff. Dev verification is offline as specified; v7 remains unavailable to
+Verification: focused Python output suite 61 tests, including actual finish-time
+publication and stored-draft read-back; related Python suites 357 passed. Ruff
+format/check, mypy (417 sources), web lint/typecheck, Prettier and `ac-gate check`
+passed. Focused web report, call-map and processing-copy suites: 124 passed. The
+unbounded full web runner stalled; a bounded two-worker run is checked separately
+before PR handoff. Dev verification is offline as specified; v7 remains unavailable to
 real calls before Gate 2 and the AUT-504 prerequisite.

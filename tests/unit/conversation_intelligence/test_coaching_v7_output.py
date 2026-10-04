@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -16,7 +16,11 @@ from sqlalchemy.orm import Session
 from ac_platform.audit.models import AuditEvent
 from ac_platform.conversation_intelligence.acquisition_reports import _safe_progress_failure_code
 from ac_platform.conversation_intelligence.call_map import CALL_MAP_FAILURE_CODES
-from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.checkpoints import (
+    STAGE_PARENTS,
+    build_checkpoint,
+    content_hash,
+)
 from ac_platform.conversation_intelligence.contracts import C5_REPAIR_FAILURE_CODES
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
@@ -30,6 +34,7 @@ from ac_platform.conversation_intelligence.qualitative_pack import (
     load_qualitative_pack_for_revision,
 )
 from ac_platform.conversation_intelligence.report_store import ConversationReports
+from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.reports import (
     load_report_profile,
     parse_fact_packet,
@@ -332,6 +337,83 @@ def test_sensitive_segments_drop_invalid_entries_without_report_failure(case):
     ]
     assert payload["provider_extras"]["compatibility"]["sensitive_segments_dropped"] == 3
     assert "missing" not in json.dumps(payload["provider_extras"])
+
+
+@pytest.mark.asyncio
+async def test_finish_persists_validated_map_and_forwards_model_marks(case):
+    from ac_platform.conversation_intelligence.inference import binding_for
+
+    case[2]["sensitive_segments"] = [{"segment_id": "s2", "category": "SENSITIVE_LEGAL"}]
+    payload = validated(case)
+    recording = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        person_id=uuid4(),
+        source_revision=1,
+        source_sha256=case[0]["source_sha256"],
+    )
+    task = SimpleNamespace(quote_id=uuid4())
+    run = SimpleNamespace(id=uuid4())
+    database = AsyncMock()
+    database.add = MagicMock()
+    database.scalar.return_value = None
+    application = SimpleNamespace(clock=lambda: datetime.now(UTC), _receipt=AsyncMock())
+    pipeline = ReportingPipeline(SimpleNamespace(database=database, application=application))
+    c2 = SimpleNamespace(id=uuid4(), payload=case[0])
+    pipeline.checkpoint = AsyncMock(return_value=(c2, None))
+    transcription = SimpleNamespace(run_id=uuid4())
+    pipeline.provider_task = AsyncMock(
+        return_value=(transcription, {"response_sha256": case[0]["revision"]})
+    )
+    pipeline.save = AsyncMock(return_value=SimpleNamespace(id=uuid4()))
+    plan = SimpleNamespace(
+        transcript=case[0],
+        native_transcript=case[0],
+        profile=load_report_profile(),
+        request=SimpleNamespace(
+            transcript_checkpoint_id=c2.id, coaching_prompt_revision="coaching-v7"
+        ),
+    )
+    nodes = {}
+    for stage, parents in STAGE_PARENTS.items():
+        nodes[stage] = build_checkpoint(
+            binding_for(recording),
+            stage,
+            "fictional-v7",
+            {},
+            [nodes[parent] for parent in parents],
+            content_hash(payload),
+        )
+    c5 = nodes["C5"]
+    with (
+        patch(
+            "ac_platform.conversation_intelligence.inference.verified_checkpoint", return_value=c5
+        ),
+        patch(
+            "ac_platform.conversation_intelligence.reporting_pipeline.actor_from_row",
+            return_value=ActorContext(uuid4(), uuid4(), recording.tenant_id),
+        ),
+        patch.object(SensitiveSegmentsStore, "mark_generation", new_callable=AsyncMock) as marks,
+    ):
+        await pipeline.finish(
+            recording,
+            task,
+            run,
+            plan,
+            SimpleNamespace(id=uuid4()),
+            payload,
+            SimpleNamespace(response_sha256="b" * 64),
+        )
+    marks.assert_awaited_once_with(
+        recording_id=recording.id,
+        transcript_revision=case[0]["revision"],
+        model_segments=(("s2", "SENSITIVE_LEGAL"),),
+    )
+    draft = database.add.call_args.args[0]
+    assert isinstance(draft, ConversationReportDraft)
+    report, _ = ConversationReports._validated(draft, recording)
+    assert report.model_dump(mode="json") == payload
+    application._receipt.assert_awaited_once()
 
 
 @pytest.mark.asyncio
