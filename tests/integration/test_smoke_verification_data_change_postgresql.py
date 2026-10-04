@@ -17,6 +17,10 @@ from ac_platform.audit.models import AuditChainHead, AuditEvent
 from ac_platform.audit.service import AuditRepository, verify_audit_chain_sync
 from ac_platform.identity.models import EmailChallenge, PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.tenancy.learner_provisioning import (
+    AsyncLearnerProvisioningApplication,
+    LearnerProvisioningError,
+)
 from ac_platform.tenancy.models import Membership, Tenant
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
 from tests.unit.identity.test_smoke_verification_data_change import arguments, tool
@@ -72,6 +76,7 @@ def state(postgres_harness, monkeypatch):  # noqa: F811
         environment="test",
         operations_tenant_id=operations,
         public_learner_tenant_id=public,
+        learner_consent_version="fictional-v1",
     ).model_copy(
         update={
             "environment": "production",
@@ -87,6 +92,7 @@ def state(postgres_harness, monkeypatch):  # noqa: F811
         operations=operations,
         public=public,
         email=email,
+        settings=settings,
         harness=postgres_harness,
     )
 
@@ -124,24 +130,49 @@ async def test_default_preview_is_read_only_with_no_writes(state, capsys, monkey
     output = capsys.readouterr().out
     report = json.loads(output)
     assert report["mode"] == "dry_run"
-    assert report["before"] == {"email_verified": False, "revision": 0}
-    assert report["after"] == {"email_verified": True, "revision": 1}
+    assert report["before"] == {
+        "email_verified": False,
+        "revision": 0,
+        "learner_membership": "absent",
+    }
+    assert report["after"] == {
+        "email_verified": True,
+        "revision": 1,
+        "learner_membership": "planned",
+    }
     assert report["audit_tenant_id"] == str(state.operations)
     assert state.email not in output
     assert snapshot(state) == before
 
 
 @pytest.mark.asyncio
-async def test_first_apply_audits_once_and_replay_preserves_timestamp(state, capsys):
+@pytest.mark.parametrize("existing_membership", [False, True])
+async def test_first_apply_audits_once_and_replay_preserves_timestamp(
+    state, capsys, existing_membership
+):
+    if existing_membership:
+        with Session(state.harness.engine) as db, db.begin():
+            db.add(Membership(person_id=state.person, tenant_id=state.public, role="learner"))
     before = snapshot(state)
     args = arguments(state.person, apply=True)
     assert await tool._run(args) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "applied"
     applied = snapshot(state)
-    for table in ("password_credentials", "email_challenges", "sessions", "memberships", "tenants"):
+    for table in ("password_credentials", "email_challenges", "sessions", "tenants"):
         assert applied[table] == before[table]
+    if existing_membership:
+        assert applied["memberships"] == before["memberships"]
     with Session(state.harness.engine) as db:
+        membership = db.scalars(
+            select(Membership).where(Membership.person_id == state.person)
+        ).one()
+        assert (membership.person_id, membership.tenant_id, membership.role, membership.status) == (
+            state.person,
+            state.public,
+            "learner",
+            "active",
+        )
         person = db.get(Person, state.person)
         timestamp = person.email_verified_at
         assert timestamp is not None and person.revision == 1
@@ -151,13 +182,18 @@ async def test_first_apply_audits_once_and_replay_preserves_timestamp(state, cap
         assert audit.payload["intent"] == {
             "person_id": str(state.person),
             "email_verified": True,
+            "learner_tenant_id": str(state.public),
+            "required_consent_version": "fictional-v1",
             **report["attribution"],
         }
         assert audit.payload["before"] == {
             "email_verified": False,
             "revision": 0,
             "email_verified_at": None,
+            "learner_membership": "present" if existing_membership else "absent",
         }
+        assert audit.payload["after"]["learner_membership"] == "present"
+        assert report["after"]["learner_membership"] == "present"
         assert datetime.fromisoformat(audit.payload["after"]["email_verified_at"]) == timestamp
         assert tool.OWNER in json.dumps(audit.payload) and "AUT-398" in audit.reason
         assert verify_audit_chain_sync(db, state.operations).valid
@@ -167,6 +203,64 @@ async def test_first_apply_audits_once_and_replay_preserves_timestamp(state, cap
     assert await tool._run(arguments(state.person, apply=True)) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "already_verified"
     assert snapshot(state) == applied
+
+
+@pytest.mark.asyncio
+async def test_verified_fixture_missing_membership_preserves_timestamp(state, capsys):
+    timestamp = datetime.now(UTC) - timedelta(days=1)
+    with Session(state.harness.engine) as db, db.begin():
+        db.get(Person, state.person).email_verified_at = timestamp
+    args = arguments(state.person, apply=True)
+    assert await tool._run(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "applied"
+    assert report["before"]["learner_membership"] == "absent"
+    assert report["after"]["learner_membership"] == "present"
+    with Session(state.harness.engine) as db:
+        person = db.get(Person, state.person)
+        assert person.email_verified_at == timestamp and person.revision == 0
+        membership = db.scalars(
+            select(Membership).where(Membership.person_id == state.person)
+        ).one()
+        assert membership.tenant_id == state.public and membership.person_id == state.person
+        audit = db.scalars(
+            select(AuditEvent).where(AuditEvent.request_id == str(args.command_id))
+        ).one()
+        assert audit.payload["before"]["email_verified_at"] == timestamp.isoformat()
+        assert audit.payload["after"]["email_verified_at"] == timestamp.isoformat()
+    applied = snapshot(state)
+    assert await tool._run(args) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "replayed"
+    assert snapshot(state) == applied
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("apply", [False, True])
+async def test_consent_version_mismatch_refused_without_writes(state, capsys, apply):
+    state.settings.learner_consent_version = "fictional-v2"
+    before = snapshot(state)
+    with pytest.raises(tool.SmokeVerificationError, match="exact configured learner consent"):
+        await tool._run(arguments(state.person, apply=apply))
+    assert snapshot(state) == before
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.asyncio
+async def test_provisioning_failure_rolls_back_verification_and_membership(
+    state, monkeypatch, capsys
+):
+    before = snapshot(state)
+    original = AsyncLearnerProvisioningApplication.ensure
+
+    async def fail(self, **kwargs):
+        await original(self, **kwargs)
+        raise LearnerProvisioningError("fictional-private-provisioning-marker")
+
+    monkeypatch.setattr(AsyncLearnerProvisioningApplication, "ensure", fail)
+    with pytest.raises(LearnerProvisioningError):
+        await tool._run(arguments(state.person, apply=True))
+    assert snapshot(state) == before
+    assert capsys.readouterr().out == ""
 
 
 @pytest.mark.asyncio
@@ -270,3 +364,12 @@ async def test_concurrent_apply_serializes_one_update_and_one_audit(state, capsy
             == 1
         )
         assert db.get(Person, state.person).revision == 1
+        membership = db.scalars(
+            select(Membership).where(Membership.person_id == state.person)
+        ).one()
+        assert (membership.person_id, membership.tenant_id, membership.role, membership.status) == (
+            state.person,
+            state.public,
+            "learner",
+            "active",
+        )

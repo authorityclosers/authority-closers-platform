@@ -23,6 +23,7 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.services import normalize_email
+from ac_platform.tenancy.learner_provisioning import AsyncLearnerProvisioningApplication
 from ac_platform.tenancy.models import Membership, Tenant
 
 OWNER = "ZyTZxLQfn8zFPFVZ5OjwisIX96Xmo4j0"
@@ -67,6 +68,8 @@ def _settings(args: argparse.Namespace) -> Settings:
         or settings.operations_tenant_id == settings.public_learner_tenant_id
     ):
         raise SmokeVerificationError("distinct canonical audit and learner tenants required")
+    if not (settings.learner_consent_version or "").strip():
+        raise SmokeVerificationError("configured learner consent version required")
     return settings
 
 
@@ -87,8 +90,12 @@ def _email_from_stdin() -> str:
     return email
 
 
-def _state(person: Person) -> dict[str, object]:
-    return {"email_verified": person.email_verified_at is not None, "revision": person.revision}
+def _state(person: Person, *, has_membership: bool) -> dict[str, object]:
+    return {
+        "email_verified": person.email_verified_at is not None,
+        "revision": person.revision,
+        "learner_membership": "present" if has_membership else "absent",
+    }
 
 
 async def _change(
@@ -115,6 +122,9 @@ async def _change(
         or not person.consent_version
     ):
         raise SmokeVerificationError("pinned active internal fixture required")
+    consent_version = (settings.learner_consent_version or "").strip()
+    if not consent_version or person.consent_version != consent_version:
+        raise SmokeVerificationError("exact configured learner consent required")
     # Select only the credential ID, never its password verifier.
     if (
         await session.scalar(
@@ -132,7 +142,7 @@ async def _change(
     ):
         raise SmokeVerificationError("unexpected fixture memberships")
     # Identity's global operator audit uses operations, as in email_login.py.
-    # This unverified password registrant need not have a membership yet.
+    # Verification provisions the public learner context only when applying.
     tenants = list(
         await session.scalars(
             select(Tenant).where(Tenant.id.in_([audit_tenant_id, learner_tenant_id]))
@@ -147,7 +157,13 @@ async def _change(
         "operator": str(args.operator_reference),
         "run": str(args.run_reference),
     }
-    intent = {"person_id": str(person.id), "email_verified": True, **attribution}
+    intent = {
+        "person_id": str(person.id),
+        "email_verified": True,
+        "learner_tenant_id": str(learner_tenant_id),
+        "required_consent_version": consent_version,
+        **attribution,
+    }
     prior = list(
         await session.scalars(
             select(AuditEvent).where(AuditEvent.request_id == str(args.command_id)).limit(2)
@@ -161,20 +177,30 @@ async def _change(
         or prior[0].resource_id != str(person.id)
         or prior[0].payload.get("intent") != intent
         or person.email_verified_at is None
+        or not members
     ):
         raise SmokeVerificationError("command has conflicting intent or state")
-    before = _state(person)
-    after = (
-        before
-        if before["email_verified"]
-        else {"email_verified": True, "revision": person.revision + 1}
-    )
-    status = "replayed" if prior else "already_verified" if before["email_verified"] else "eligible"
+    before = _state(person, has_membership=bool(members))
+    before_timestamp = person.email_verified_at
+    after: dict[str, object] = {
+        "email_verified": True,
+        "revision": person.revision + (0 if before["email_verified"] else 1),
+        "learner_membership": "present" if members else "planned",
+    }
+    complete = bool(before["email_verified"] and members)
+    status = "replayed" if prior else "already_verified" if complete else "eligible"
     if args.apply and status == "eligible":
         now = datetime.now(UTC)
-        person.email_verified_at = now
-        person.revision += 1
+        if person.email_verified_at is None:
+            person.email_verified_at = now
+            person.revision += 1
         await session.flush()
+        await AsyncLearnerProvisioningApplication(session).ensure(
+            person_id=person.id,
+            tenant_id=learner_tenant_id,
+            required_consent_version=consent_version,
+        )
+        after = _state(person, has_membership=True)
         await AuditRepository(session).append(
             tenant_id=audit_tenant_id,
             actor_person_id=None,
@@ -186,8 +212,11 @@ async def _change(
             reason="AUT-398: owner-approved internal production smoke verification",
             payload={
                 "intent": intent,
-                "before": {**before, "email_verified_at": None},
-                "after": {**after, "email_verified_at": now.isoformat()},
+                "before": {
+                    **before,
+                    "email_verified_at": before_timestamp.isoformat() if before_timestamp else None,
+                },
+                "after": {**after, "email_verified_at": person.email_verified_at.isoformat()},
             },
             now=now,
         )

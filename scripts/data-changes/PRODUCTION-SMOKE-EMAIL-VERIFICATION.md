@@ -24,8 +24,10 @@ Pin `--person-id` from Root's read-only application-model lookup of that exact
 field before preview. Do not guess an ID or change fixture fields to pass the
 checks. The target must be active, have both names `Rowan Fixture`, use the
 recorded production QA alias pattern on the company domain, retain registration
-consent and an existing password credential. Memberships may be absent or
-active public-learner memberships only. Any other state is refused.
+consent matching the configured, nonblank `learner_consent_version` and an
+existing password credential. Memberships may be absent or active public-learner
+memberships only. Any other state is refused, including a consent-version mismatch
+in preview. The script never records or replaces consent.
 
 With the confidential email stream connected to stdin, run:
 
@@ -41,31 +43,42 @@ python scripts/data-changes/production-smoke-email-verification.py \
   --command-id <stable-command-uuid>
 ```
 
-Preview is PostgreSQL-enforced read-only. Its `after` reports planned verification
-and revision; it makes no timestamp or audit write. Identity operator audits use
-the configured operations tenant, following `identity/email_login.py`; both that
-tenant and the configured public learner tenant must exist and be active. No
-membership is created to satisfy audit tenancy.
+Preview is PostgreSQL-enforced read-only. Its `before.learner_membership` reports
+`present` or `absent`; `after.learner_membership` reports `present` or `planned`.
+It reports planned verification and revision without timestamp, membership or
+audit writes. Identity operator audits use the configured operations tenant,
+following `identity/email_login.py`; both that tenant and the configured public
+learner tenant must exist and be active.
 
 Add `--apply` only after the recorded production snapshot and preview steps.
 Keep the same target, command and attribution. One transaction changes the
 verification timestamp, increments the person's revision (with the model's
-automatic update time), and appends the hash-chained audit including actual
-before/after timestamps and owner, approval, issue, operator and run references.
-It does not consume challenges or alter credentials, sessions, memberships,
-access, billing or credits. Success is printed only after commit. Expected
-failures return exit 2 with a fixed message and no confidential input.
+automatic update time), ensures the one active public-learner membership through
+the app's `AsyncLearnerProvisioningApplication`, and appends the hash-chained audit
+including actual before/after timestamps, membership state and owner, approval,
+issue, operator and run references. This is the same learner provisioning used by
+the app's email verification route. Only an absent learner membership may be
+created; existing roles and memberships are preserved. It does not consume
+challenges or alter credentials, sessions, other accounts, billing or credits.
+Success is printed only after commit. Provisioning and audit failures roll back
+the entire change and return exit 2 with a fixed message and no confidential input.
 
 The same command returns `replayed` without writes; a new command for an already
-verified fixture returns `already_verified` without writes. Existing timestamps
-are preserved. Reusing a command with different attribution or target is refused.
-Do not change attribution on an existing command to accommodate a later run.
+verified fixture with its learner membership returns `already_verified` without
+writes. A verified fixture lacking that membership is eligible for provisioning;
+its timestamp and revision remain unchanged. No repeat creates a second membership
+or audit. Reusing a command with different attribution, target, configured learner
+tenant or consent version is refused. Do not change attribution on an existing
+command to accommodate a later run.
 
 Root then verifies through the app/API and completes AUT-398's three smoke
 checks: acquisition HTTP 200 with `state: account` and at least 195 seconds,
 profile write-eligibility HTTP 204, and authenticated dashboard HTTP 200. Report
 only statuses, state, seconds and session file path/mode. Keep the session at
-0600 and its directory at 0700. Within two working days, Root and Chief of Staff
+0600 and its directory at 0700. The 195-second check depends on the account's
+personal allowance or tester exemption; this script grants no minutes. If that
+check fails, Root raises the minute grant with the CEO on AUT-398. Within two
+working days, Root and Chief of Staff
 must arrange an approved seed or Admin feature covering this state. This remains
 a follow-up on this card until capacity permits; it is outside this script.
 
@@ -80,6 +93,7 @@ The injected local `AC_TEST_DATABASE_URL` is restricted to localhost. The tests
 migrate and remove an isolated schema, insert fictional fixtures, and substitute
 test settings without reading production configuration. They prove a read-only
 preview, exact target checks, atomic rollback after audit append, first apply,
-repeat preservation, command conflict refusal, output containment and concurrent
-apply serialization. No public endpoint or screen changes; the existing dev site
+repeat timestamp/membership preservation, consent-version refusal, command
+conflict refusal, output containment and concurrent apply serialization. No public
+endpoint or screen changes; the existing dev site
 is https://salesxray-dev.authorityclosers.com.

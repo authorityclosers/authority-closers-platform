@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from ac_platform.application.settings import Settings
+from ac_platform.tenancy.learner_provisioning import LearnerProvisioningError
 
 SCRIPT = (
     Path(__file__).resolve().parents[3]
@@ -79,8 +80,26 @@ def test_missing_injection_and_canonical_tenants_refused(monkeypatch):
     with pytest.raises(tool.SmokeVerificationError, match="canonical"):
         tool._settings(arguments())
     settings.operations_tenant_id, settings.public_learner_tenant_id = uuid4(), uuid4()
+    settings.learner_consent_version = "fictional-v1"
     assert tool._settings(arguments()) is settings
     assert checked == ["1" * 40, "1" * 40]
+
+
+@pytest.mark.parametrize("version", [None, "", "   "])
+def test_blank_learner_consent_configuration_refused(monkeypatch, version):
+    monkeypatch.setenv("AC_ENVIRONMENT", "production")
+    monkeypatch.setenv("AC_DATABASE_URL", "postgresql+psycopg://unused/unused")
+    settings = Settings(
+        _env_file=None,
+        environment="test",
+        operations_tenant_id=uuid4(),
+        public_learner_tenant_id=uuid4(),
+        learner_consent_version=version,
+    ).model_copy(update={"environment": "production", "release_id": "1" * 40})
+    monkeypatch.setattr(tool, "Settings", lambda **_: settings)
+    monkeypatch.setattr(tool, "require_baked_release_id", lambda _: None)
+    with pytest.raises(tool.SmokeVerificationError, match="configured learner consent"):
+        tool._settings(arguments())
 
 
 @pytest.mark.parametrize(
@@ -101,7 +120,9 @@ def test_parse_failures_do_not_echo_confidential_inputs(capsys, flag, value):
     assert value not in output.err
 
 
-@pytest.mark.parametrize("error", [ValueError, RuntimeError, OSError, SQLAlchemyError])
+@pytest.mark.parametrize(
+    "error", [ValueError, RuntimeError, OSError, SQLAlchemyError, LearnerProvisioningError]
+)
 def test_expected_runtime_failures_are_sanitized(monkeypatch, capsys, error):
     async def fail(_args):
         raise error("fictional-private-runtime-marker")
