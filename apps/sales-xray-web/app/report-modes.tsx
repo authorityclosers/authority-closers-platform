@@ -775,7 +775,8 @@ export function ReportModes({
     focus = false,
     history: "push" | "replace" = "push",
   ) {
-    if (!activePanels.some((panel) => panel.id === section)) return;
+    if (!panelsForView(panels, nextView).some((panel) => panel.id === section))
+      return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
       const current = new URL(window.location.href);
@@ -886,8 +887,12 @@ export function ReportModes({
   }
 
   function changeView(nextView: View) {
-    const section =
+    const candidate =
       view !== "tabs" ? currentSection : (selected ?? activePanels[0]?.id);
+    const nextPanels = panelsForView(panels, nextView);
+    const section = nextPanels.some((panel) => panel.id === candidate)
+      ? candidate
+      : nextPanels[0]?.id;
     if (section && nextView !== view)
       navigate(section, nextView, true, "replace");
   }

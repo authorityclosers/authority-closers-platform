@@ -168,7 +168,11 @@ function returnFocusTarget(opener: HTMLElement | null): HTMLElement | null {
   return closedMenu?.querySelector<HTMLElement>("summary") ?? opener;
 }
 
-export function TranscriptReader({
+export function TranscriptReader(props: TranscriptReaderProps) {
+  return <CallTranscriptReader key={props.callId ?? "none"} {...props} />;
+}
+
+function CallTranscriptReader({
   isOpen,
   onClose,
   transcript,
