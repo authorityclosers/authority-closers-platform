@@ -73,6 +73,7 @@ function Purchase({ client }: { client: BillingClient }) {
       onBuy={buyPlan}
       onBuyTopUp={buyTopUp}
       checkoutOrder={prepared?.order}
+      checkoutProvider={prepared?.hosted.provider}
       topUpPacks={
         catalogue
           ? catalogue.filter(onSale).flatMap((plan) =>

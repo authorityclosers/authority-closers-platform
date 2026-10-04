@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Buyer } from "../billing/billing-api";
-import type { Interval, Order, Plan } from "../billing/contract";
+import type { Hosted, Interval, Order, Plan } from "../billing/contract";
 import { count, day, money } from "../billing/money";
 import type { DisplayTopUpPack } from "./plans-catalogue-fixture";
 import type { PurchaseQuote } from "./plans-screen";
@@ -35,6 +35,7 @@ export type CheckoutDrawerProps = {
   gstRate: number;
   busy?: boolean;
   confirmedOrder?: Order | null;
+  checkoutProvider?: Hosted["provider"];
   quoted?: PurchaseQuote | null;
   onPay?: (buyer?: Buyer) => void;
   onBuyerChange?: () => void;
@@ -53,6 +54,7 @@ export function CheckoutDrawer({
   gstRate,
   busy = false,
   confirmedOrder,
+  checkoutProvider,
   quoted,
   onPay,
   onBuyerChange,
@@ -149,6 +151,7 @@ export function CheckoutDrawer({
 
   if (!open || !item) return null;
 
+  const testPayment = checkoutProvider === "fake";
   const isPlan = item.type === "plan";
   const plan = isPlan ? item.plan : null;
   const interval = isPlan ? item.interval : "month";
@@ -234,6 +237,12 @@ export function CheckoutDrawer({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
+
+        {testPayment ? (
+          <p role="status" className={`${styles.note} ${styles.warn}`}>
+            <strong>Test payment · no money moves</strong>
+          </p>
+        ) : null}
 
         {topUp ? (
           <dl className={styles.rows}>
@@ -387,7 +396,9 @@ export function CheckoutDrawer({
 
         {confirmedOrder ? (
           <p role="status" className={styles.hint}>
-            Total confirmed. Continue to the payment page to pay.
+            {testPayment
+              ? "Total confirmed. Continue to the simulated payment page."
+              : "Total confirmed. Continue to the payment page to pay."}
           </p>
         ) : null}
 
@@ -398,23 +409,27 @@ export function CheckoutDrawer({
         ) : null}
 
         {/* Payment Methods */}
-        <div className={styles.paymentMethodsBlock}>
-          <span className={styles.paymentMethodsLabel}>
-            Accepted payment methods:
-          </span>
-          <div className={styles.paymentBadges}>
-            <span className={styles.methodBadge}>
-              <Smartphone size={14} aria-hidden="true" /> UPI
+        {!testPayment ? (
+          <div className={styles.paymentMethodsBlock}>
+            <span className={styles.paymentMethodsLabel}>
+              Accepted payment methods:
             </span>
-            <span className={styles.methodBadge}>
-              <CreditCard size={14} aria-hidden="true" /> Cards
-            </span>
-            <span className={styles.methodBadge}>
-              <Landmark size={14} aria-hidden="true" /> Netbanking
-            </span>
+            <div className={styles.paymentBadges}>
+              <span className={styles.methodBadge}>
+                <Smartphone size={14} aria-hidden="true" /> UPI
+              </span>
+              <span className={styles.methodBadge}>
+                <CreditCard size={14} aria-hidden="true" /> Cards
+              </span>
+              <span className={styles.methodBadge}>
+                <Landmark size={14} aria-hidden="true" /> Netbanking
+              </span>
+            </div>
+            <p className={styles.razorpayTag}>
+              Paid securely through Razorpay.
+            </p>
           </div>
-          <p className={styles.razorpayTag}>Paid securely through Razorpay.</p>
-        </div>
+        ) : null}
 
         {/* Refund & Guarantee */}
         <div className={styles.guaranteeBox}>
@@ -453,9 +468,11 @@ export function CheckoutDrawer({
           >
             {busy
               ? "Opening checkout…"
-              : !confirmedOrder && !quoted
-                ? "Review total with Razorpay"
-                : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
+              : testPayment
+                ? "Continue to test payment"
+                : !confirmedOrder && !quoted
+                  ? "Review total with Razorpay"
+                  : `Pay ${total !== null ? money(total) : ""} with Razorpay`}
           </button>
           <button
             type="button"

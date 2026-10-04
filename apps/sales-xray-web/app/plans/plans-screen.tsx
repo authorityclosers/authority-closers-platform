@@ -14,6 +14,7 @@ import {
   onSale,
   type Allowance,
   type Interval,
+  type Hosted,
   type MePlan,
   type Order,
   type Plan,
@@ -56,6 +57,7 @@ export type PlansScreenProps = {
   error?: string | null;
   paidOrder?: Order | null;
   checkoutOrder?: Order | null;
+  checkoutProvider?: Hosted["provider"];
   allowance?: Allowance | null;
   topUpPacks?: TopUpPack[];
 };
@@ -84,6 +86,7 @@ export function PlansScreen({
   error,
   paidOrder,
   checkoutOrder,
+  checkoutProvider,
   allowance,
 }: PlansScreenProps) {
   const [interval, setInterval] = useState<Interval>("month");
@@ -563,6 +566,7 @@ export function PlansScreen({
           gstRate={gstRate}
           busy={busy}
           confirmedOrder={confirmedOrder}
+          checkoutProvider={confirmedOrder ? checkoutProvider : undefined}
           quoted={quoted}
           onPay={handlePay}
           onBuyerChange={() => selection && onSelectionChange?.(selection)}

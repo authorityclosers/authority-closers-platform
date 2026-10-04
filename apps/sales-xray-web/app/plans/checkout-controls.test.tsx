@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountSettings, PlanAndBillingPane } from "../account-settings";
-import { liveBilling } from "../billing/billing-api";
+import { liveBilling, type CheckoutRequest } from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
 import { useBillingAccount } from "../billing/use-billing-account";
 import type { Checkout } from "../billing/contract";
@@ -80,6 +80,7 @@ beforeEach(() => {
   root = createRoot(host);
   resetFixtureBilling();
   vi.clearAllMocks();
+  vi.mocked(openHostedCheckout).mockReset().mockResolvedValue("dismissed");
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response("{}", { status: 404 })),
@@ -91,6 +92,97 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+const testBanner = "Test payment · no money moves";
+const hostedFor = (provider: "fake" | "razorpay"): Checkout["hosted"] => ({
+  provider,
+  kind: provider === "fake" ? "redirect" : "client_sdk",
+  url:
+    provider === "fake"
+      ? "https://fictional-api.example/v1/payments/fake/checkout/fictional-order?token=fictional%2Btoken"
+      : null,
+  params:
+    provider === "fake"
+      ? { reference: "fictional-reference" }
+      : { key_id: "fictional-public-key", order_ref: "fictional-order" },
+  expiresAt: null,
+});
+
+it.each(["fake", "razorpay"] as const)(
+  "plans reviews %s checkout before handing off the server response",
+  async (provider) => {
+    const checkout = vi.fn(async (request: CheckoutRequest, key: string) => ({
+      ...(await fixtureBilling.checkout(request, key)),
+      hosted: hostedFor(provider),
+    }));
+    await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+    await click("Get Personal");
+    expect(host.textContent).not.toContain(testBanner);
+    await click("Review total with Razorpay");
+    await act(async () => {
+      await checkout.mock.results[0].value;
+    });
+    expect(openHostedCheckout).not.toHaveBeenCalled();
+    const prepared = await checkout.mock.results[0].value;
+    expect(prepared.order.mode).toBe("test");
+    expect(host.textContent?.includes(testBanner)).toBe(provider === "fake");
+    expect(host.textContent?.includes("Paid securely through Razorpay")).toBe(
+      provider !== "fake",
+    );
+    vi.mocked(openHostedCheckout).mockResolvedValueOnce("left");
+    await click(
+      provider === "fake"
+        ? "Continue to test payment"
+        : "Pay ₹2,499 with Razorpay",
+    );
+    expect(checkout).toHaveBeenCalledTimes(1);
+    expect(openHostedCheckout).toHaveBeenCalledWith(
+      prepared.hosted,
+      prepared.order.orderId,
+    );
+    expect(push).not.toHaveBeenCalled();
+    await click("Close checkout");
+    await click("Get Personal");
+    expect(host.textContent).not.toContain(testBanner);
+  },
+);
+
+it.each(["fake", "razorpay"] as const)(
+  "Settings top-ups review %s checkout before handing off the server response",
+  async (provider) => {
+    await activeSubscription();
+    const checkout = vi
+      .spyOn(liveBilling, "checkout")
+      .mockImplementation(async (request, key) => ({
+        ...(await fixtureBilling.checkout(request, key)),
+        hosted: hostedFor(provider),
+      }));
+    await render(<AccountSettings billing={{ status: "ready" }} />);
+    await click("Plan & billing");
+    await click("Top up 100 min");
+    expect(host.textContent).not.toContain(testBanner);
+    await click("Review total with Razorpay");
+    await act(async () => {
+      await checkout.mock.results[0].value;
+    });
+    expect(openHostedCheckout).not.toHaveBeenCalled();
+    const prepared = await checkout.mock.results[0].value;
+    expect(prepared.order.mode).toBe("test");
+    expect(host.textContent?.includes(testBanner)).toBe(provider === "fake");
+    vi.mocked(openHostedCheckout).mockResolvedValueOnce("left");
+    await click(
+      provider === "fake"
+        ? "Continue to test payment"
+        : "Pay ₹299 with Razorpay",
+    );
+    expect(checkout).toHaveBeenCalledTimes(1);
+    expect(openHostedCheckout).toHaveBeenCalledWith(
+      prepared.hosted,
+      prepared.order.orderId,
+    );
+    expect(push).not.toHaveBeenCalled();
+  },
+);
 
 it("shell Back and Close leave plans; drawer Close only dismisses checkout", async () => {
   await render(<PlansPurchase client={fixtureBilling} />);
