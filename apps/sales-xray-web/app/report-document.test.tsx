@@ -25,7 +25,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (_blob, body: HTMLElement) => {
       body.innerHTML =
-        '<section><p><a name="overview">Overview</a></p></section>';
+        '<section><p><span id="overview"></span>Overview</p></section>';
     });
   url.mockReturnValue("blob:generated-report");
   vi.stubGlobal(

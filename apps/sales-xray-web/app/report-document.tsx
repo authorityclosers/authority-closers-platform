@@ -19,6 +19,8 @@ export function ReportDocument({
 }) {
   const source = JSON.stringify(data ?? {});
   const host = useRef<HTMLDivElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{
     source: string;
@@ -28,6 +30,17 @@ export function ReportDocument({
   }>();
   const ready = result?.source === source && result.url;
   const failed = result?.source === source && result.failed;
+
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth)
+        setFit(Math.min(1, element.clientWidth / (793.7 + 40)));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +69,7 @@ export function ReportDocument({
       if (cancelled) return;
       // Word bookmarks connect existing section navigation to the actual DOCX.
       for (const chapter of DOCUMENT_CHAPTERS) {
-        const anchor = body.querySelector(`a[name="${chapter.id}"]`);
+        const anchor = body.querySelector(`[id="${chapter.id}"]`);
         const heading = anchor?.closest("p");
         if (!heading) continue;
         heading.id = `${id}-heading-${chapter.id}`;
@@ -120,6 +133,7 @@ export function ReportDocument({
         )}
       </p>
       <div
+        ref={viewport}
         className={styles.scroll}
         role="region"
         aria-label="Sales Xray document preview"
@@ -129,7 +143,12 @@ export function ReportDocument({
         <div
           ref={host}
           className={styles.pages}
-          style={{ "--document-zoom": Number(textSize) / 100 } as CSSProperties}
+          style={
+            {
+              "--document-zoom": Number(textSize) / 100,
+              "--document-fit": fit,
+            } as CSSProperties
+          }
         />
       </div>
     </div>

@@ -7,6 +7,7 @@ import {
   Header,
   HeadingLevel,
   LevelFormat,
+  LineRuleType,
   Packer,
   PageNumber,
   Paragraph,
@@ -200,6 +201,13 @@ export async function createReportDocx(
         ["Review status", "Draft · not human-adjudicated"],
         ...Object.entries(data.analysisBasis ?? {})
           .filter((entry): entry is [string, string] => Boolean(entry[1]))
+          .filter(
+            ([key, value]) =>
+              !(
+                key === "transcriptRevision" &&
+                value === report.transcript_revision
+              ) && !(key === "recordingLength" && value === data.callLength),
+          )
           .map(([key, value]) => [
             (
               {
@@ -382,7 +390,15 @@ export async function createReportDocx(
           },
           title: {
             run: { size: 52, bold: true, color: NAVY },
-            paragraph: { keepNext: true, spacing: { before: 600, after: 240 } },
+            paragraph: {
+              keepNext: true,
+              spacing: {
+                before: 600,
+                after: 240,
+                line: 600,
+                lineRule: LineRuleType.EXACT,
+              },
+            },
           },
           heading1: {
             run: { size: 30, bold: true, color: NAVY },

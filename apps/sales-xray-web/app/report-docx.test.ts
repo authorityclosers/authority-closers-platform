@@ -33,7 +33,7 @@ print(json.dumps({
  'tables': [[text(c) for c in t.findall('w:tr/w:tc',ns)] for t in d.findall('.//w:tbl',ns)],
  'unsplitRows': len(d.findall('.//w:trPr/w:cantSplit',ns)),
  'rows': len(d.findall('.//w:tr',ns)),
- 'repeatedHeaders': len([h for h in d.findall('.//w:trPr/w:tblHeader',ns) if attr(h,'val') not in ('false','0')]),
+ 'repeatedHeaders': len([h for h in d.findall('.//w:trPr/w:tblHeader',ns) if attr(h,'val') not in ('false','0','off')]),
  'page': {k: attr(d.find('.//w:pgSz',ns), k) for k in ('w','h')},
  'margin': {k: attr(d.find('.//w:pgMar',ns),k) for k in ('top','bottom','left','right')},
  'styles': [attr(s,'styleId') for s in styles.findall('w:style',ns)],

@@ -494,8 +494,10 @@ export function ReportModes({
   boundCallId,
   lightSurface = true,
   documentData,
+  initialView,
 }: {
   label?: string;
+  initialView?: View;
   panels: ReportPanel[];
   /** Keeps the report on the light surface; false follows a dark app theme. */
   lightSurface?: boolean;
@@ -541,7 +543,7 @@ export function ReportModes({
     desktopSnapshot,
     serverDesktopSnapshot,
   );
-  const preferredView: View = desktop ? "tabs" : "reading";
+  const preferredView: View = initialView ?? (desktop ? "tabs" : "reading");
   const slot = useSyncExternalStore(
     subscribeToolbar,
     toolbarSlot,

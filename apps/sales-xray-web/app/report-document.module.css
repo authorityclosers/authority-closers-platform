@@ -45,7 +45,8 @@
   background: #e9ebee;
 }
 .pages {
-  zoom: var(--document-zoom);
+  min-width: calc(21cm + 40px);
+  zoom: calc(var(--document-fit, 1) * var(--document-zoom));
   font-family: Calibri, Arial, sans-serif;
 }
 .pages :global(.report-docx-wrapper) {

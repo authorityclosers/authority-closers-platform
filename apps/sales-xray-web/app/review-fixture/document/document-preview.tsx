@@ -21,6 +21,7 @@ export function DocumentPreview() {
           </div>
         </header>
         <ReportModes
+          initialView="document"
           boundCallId={callId}
           documentData={{
             report: syntheticReport,
