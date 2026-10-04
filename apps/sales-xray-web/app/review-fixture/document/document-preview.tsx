@@ -21,8 +21,23 @@ export function DocumentPreview() {
           </div>
         </header>
         <ReportModes
+          initialView="document"
           boundCallId={callId}
           documentData={{
+            report: syntheticReport,
+            transcript: {
+              source_sha256: syntheticReport.source_sha256,
+              revision: syntheticReport.transcript_revision,
+              timebase_id: "synthetic",
+              duration_ms: 35000,
+              segments: quotes.map((e) => ({
+                id: e.segment_id,
+                speaker_id: null,
+                start_ms: e.start_ms,
+                end_ms: e.end_ms,
+                text: e.quote,
+              })),
+            },
             title: "Fictional seller — sample call report",
             workspaceName: "Synthetic display only",
             repName: "Fictional seller",

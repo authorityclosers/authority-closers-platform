@@ -3435,6 +3435,8 @@ export function AcquisitionStudio({
                   lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
                   documentData={{
+                    report,
+                    transcript: result.transcript,
                     title: callTitle(
                       result.label,
                       file?.name ?? "Sales Xray call report",

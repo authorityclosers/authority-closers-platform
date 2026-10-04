@@ -13,7 +13,6 @@ import {
   Undo2,
   UserRound,
   X,
-  Printer,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -37,21 +36,12 @@ export type ReportPanel = {
   summary?: string;
 };
 
-export type DocumentReportData = {
-  title?: string;
-  workspaceName?: string;
-  repName?: string;
-  prospectName?: string;
-  callType?: string;
-  callDate?: string;
-  callLength?: string;
-  analysedDate?: string;
-  analysisBasis?: {
-    recordingLength?: string;
-    transcriptRevision?: string;
-    analysisVersion?: string;
-  };
-};
+export type { DocumentReportData } from "./report-document-data";
+import {
+  DOCUMENT_CHAPTERS,
+  type DocumentReportData,
+} from "./report-document-data";
+import { ReportDocument } from "./report-document";
 
 type View = "reading" | "tabs" | "document";
 type TextSize = "100" | "112.5" | "125";
@@ -432,181 +422,53 @@ function renderReportPanels(
   panels: ReportPanel[],
   view: View,
   selected: string,
-  docData?: DocumentReportData,
 ) {
-  const documentView = view === "document";
-  const title =
-    docData?.title ??
-    ([docData?.repName, docData?.prospectName].filter(Boolean).join(" — ") ||
-      "Sales Xray call") + " report";
-  const basis = docData?.analysisBasis;
-  const printRep = JSON.stringify((docData?.repName ?? "").replace(/\s/g, " "))
-    .replaceAll("<", "\\3c ")
-    .replaceAll(">", "\\3e ");
-
   return (
-    <div className={documentView ? styles.documentContainer : undefined}>
-      {documentView && (
-        <style>{`@page { @top-right { content: ${printRep}; font: 8pt sans-serif; } }
-        @page :first { @top-right { content: none; } }`}</style>
-      )}
-      {documentView && (
-        <div className={styles.documentActions}>
-          <button
-            type="button"
-            className={styles.docBtnPrimary}
-            onClick={() => window.print()}
-          >
-            <Printer aria-hidden="true" />
-            <span>Print / Save PDF</span>
-          </button>
-          <span className={styles.documentActionsNote}>
-            A4 portrait · 210×297 mm
-          </span>
-        </div>
-      )}
-      <div
-        key="report-panels"
-        className={documentView ? styles.documentPages : styles.sections}
-      >
-        {panels.map((panel, index) => (
-          <section
-            key={panel.id}
-            id={`${id}-section-${panel.id}`}
-            className={documentView ? styles.documentPage : styles.section}
-            data-document-page={documentView || undefined}
-            data-report-mode-section={panel.id}
-            role={view === "tabs" ? "tabpanel" : "region"}
-            aria-labelledby={
-              view === "tabs"
-                ? `${id}-tab-${panel.id}`
-                : `${id}-heading-${panel.id}`
-            }
-            hidden={view === "tabs" && selected !== panel.id}
-            tabIndex={view === "tabs" ? 0 : -1}
-          >
-            {documentView &&
-              (index === 0 ? (
-                <>
-                  {docData?.workspaceName && (
-                    <div className={styles.docKicker}>
-                      {docData.workspaceName}
-                    </div>
-                  )}
-                  {(docData?.callType || docData?.callDate) && (
-                    <div className={styles.docSubtitle}>
-                      {[docData.callType, docData.callDate]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                  )}
-                  <h1 className={styles.docTitle}>{title}</h1>
-                  {(docData?.callLength || docData?.analysedDate) && (
-                    <div className={styles.docMetaLine}>
-                      {[
-                        docData.callLength &&
-                          `Call length ${docData.callLength}`,
-                        docData.analysedDate &&
-                          `Analysed ${docData.analysedDate}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                  )}
-                  {basis && (
-                    <aside
-                      className={styles.docBasisCallout}
-                      aria-label="Analysis basis"
-                    >
-                      <div className={styles.docBasisLabel}>Analysis basis</div>
-                      {basis.recordingLength && (
-                        <p className={styles.docBasisText}>
-                          Recording length: {basis.recordingLength}
-                        </p>
-                      )}
-                      {basis.transcriptRevision && (
-                        <p className={styles.docBasisText}>
-                          Transcript revision: {basis.transcriptRevision}
-                        </p>
-                      )}
-                      {basis.analysisVersion && (
-                        <p className={styles.docBasisText}>
-                          Analysis version: {basis.analysisVersion}
-                        </p>
-                      )}
-                    </aside>
-                  )}
-                </>
-              ) : (
-                <div className={styles.docRunningHeader}>
-                  <span>Authority Closers — Sales Xray call report</span>
-                  {docData?.repName && <span>{docData.repName}</span>}
-                </div>
-              ))}
-            <div
-              key="section"
-              className={documentView ? styles.docSection : undefined}
+    <div className={styles.sections}>
+      {panels.map((panel, index) => (
+        <section
+          key={panel.id}
+          id={`${id}-section-${panel.id}`}
+          className={styles.section}
+          data-report-mode-section={panel.id}
+          role={view === "tabs" ? "tabpanel" : "region"}
+          aria-labelledby={
+            view === "tabs"
+              ? `${id}-tab-${panel.id}`
+              : `${id}-heading-${panel.id}`
+          }
+          hidden={view === "tabs" && selected !== panel.id}
+          tabIndex={view === "tabs" ? 0 : -1}
+        >
+          {view === "tabs" ? (
+            <h2
+              id={`${id}-heading-${panel.id}`}
+              tabIndex={-1}
+              className={styles.visuallyHiddenHeading}
             >
-              {view === "tabs" ? (
+              {panel.label}
+            </h2>
+          ) : (
+            <div className={styles.chapterOpener}>
+              <div className={styles.chapterHeader}>
+                <span className={styles.chapterNumber}>{index + 1}.</span>
                 <h2
                   id={`${id}-heading-${panel.id}`}
                   tabIndex={-1}
-                  className={styles.visuallyHiddenHeading}
+                  className={styles.chapterTitle}
                 >
                   {panel.label}
                 </h2>
-              ) : (
-                <div
-                  className={documentView ? undefined : styles.chapterOpener}
-                >
-                  <div
-                    className={
-                      documentView
-                        ? styles.docSectionHeader
-                        : styles.chapterHeader
-                    }
-                  >
-                    <span
-                      className={
-                        documentView
-                          ? styles.docSectionNumber
-                          : styles.chapterNumber
-                      }
-                    >
-                      {index + 1}.
-                    </span>
-                    <h2
-                      id={`${id}-heading-${panel.id}`}
-                      tabIndex={-1}
-                      className={
-                        documentView
-                          ? styles.docSectionTitle
-                          : styles.chapterTitle
-                      }
-                    >
-                      {panel.label}
-                    </h2>
-                  </div>
-                  <div className={styles.chapterRule} aria-hidden="true" />
-                  {!documentView && (
-                    <p className={styles.chapterSummary}>
-                      {panel.summary ?? `${panel.label} report section.`}
-                    </p>
-                  )}
-                </div>
-              )}
-              <div
-                key="content"
-                className={
-                  documentView ? styles.docContent : styles.reportContent
-                }
-              >
-                {panel.content}
               </div>
+              <div className={styles.chapterRule} aria-hidden="true" />
+              <p className={styles.chapterSummary}>
+                {panel.summary ?? `${panel.label} report section.`}
+              </p>
             </div>
-          </section>
-        ))}
-      </div>
+          )}
+          <div className={styles.reportContent}>{panel.content}</div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -630,8 +492,10 @@ export function ReportModes({
   boundCallId,
   lightSurface = true,
   documentData,
+  initialView,
 }: {
   label?: string;
+  initialView?: View;
   panels: ReportPanel[];
   /** Keeps the report on the light surface; false follows a dark app theme. */
   lightSurface?: boolean;
@@ -677,7 +541,7 @@ export function ReportModes({
     desktopSnapshot,
     serverDesktopSnapshot,
   );
-  const preferredView: View = desktop ? "tabs" : "reading";
+  const preferredView: View = initialView ?? (desktop ? "tabs" : "reading");
   const slot = useSyncExternalStore(
     subscribeToolbar,
     toolbarSlot,
@@ -753,14 +617,25 @@ export function ReportModes({
   }, []);
 
   const linked = boundCallId
-    ? addressFromSearch(search, boundCallId, panels, pathname)
+    ? addressFromSearch(
+        search,
+        boundCallId,
+        documentData?.report &&
+          new URLSearchParams(search).get("view") === "document"
+          ? DOCUMENT_CHAPTERS.map((chapter) => ({ ...chapter, content: null }))
+          : panels,
+        pathname,
+      )
     : null;
   const address = linked ?? local;
   const view: View = linked
     ? (linked.view ?? preferredView)
     : (local.view ?? preferredView);
 
-  const activePanels = panelsForView(panels, view);
+  const activePanels: ReportPanel[] =
+    view === "document" && documentData?.report
+      ? DOCUMENT_CHAPTERS.map((chapter) => ({ ...chapter, content: null }))
+      : panelsForView(panels, view);
 
   const selected = activePanels.some((panel) => panel.id === address.section)
     ? address.section
@@ -1188,12 +1063,26 @@ export function ReportModes({
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
         <ReportReadingProvider
-          reading={view !== "tabs"}
+          reading={view === "reading"}
           inline
-          documentView={view === "document"}
           navigate={navigateToReport}
         >
-          {renderReportPanels(id, activePanels, view, selected, documentData)}
+          <div data-reading-panels hidden={view === "document"}>
+            {renderReportPanels(
+              view === "document" ? `${id}-source` : id,
+              panelsForView(panels, view === "document" ? "tabs" : view),
+              view === "document" ? "tabs" : view,
+              selected,
+            )}
+          </div>
+          {view === "document" && (
+            <ReportDocument
+              data={documentData}
+              id={id}
+              textSize={textSize}
+              section={selected}
+            />
+          )}
         </ReportReadingProvider>
       </div>
       {returnPoint && (
