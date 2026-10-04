@@ -1,6 +1,6 @@
 """Checkout, orders, subscriptions, refunds and provider webhooks (Contract C1).
 
-The router owns request shapes, account-scoped invoice reads, origin and header
+The router owns request shapes, account-scoped tax document reads, origin and header
 rules and the no-store headers. Payment commands live behind :class:`BillingCommands`.
 Without a composed command service the routes are not installed at all, so a
 screen that ships first sees a plain 404 and shows "Not on sale yet".
@@ -29,8 +29,8 @@ from ac_platform.billing.errors import (
     BillingValidationFailed,
     BillingWebhookRejected,
 )
-from ac_platform.billing.invoice_models import BillingInvoice
-from ac_platform.billing.invoice_render import render_invoice
+from ac_platform.billing.invoice_models import BillingCreditNote, BillingInvoice
+from ac_platform.billing.invoice_render import render_credit_note, render_invoice
 from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.simulation import FakeCheckout, SimulationAction, payment_page
 from ac_platform.billing.tax import TaxMode
@@ -236,10 +236,9 @@ class InvoiceNotFound(DomainError):
     status = 404
 
 
-class InvoiceResponse(BaseModel):
+class TaxDocumentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
-    invoice_id: UUID = Field(validation_alias="id")
     number: str
     created_at: datetime
     currency: str
@@ -249,6 +248,23 @@ class InvoiceResponse(BaseModel):
     igst_minor: int
     total_minor: int
     place_of_supply: str | None
+
+
+class InvoiceResponse(TaxDocumentResponse):
+    invoice_id: UUID = Field(validation_alias="id")
+
+
+class CreditNoteResponse(TaxDocumentResponse):
+    credit_note_id: UUID = Field(validation_alias="id")
+    invoice_id: UUID
+    refund_ref: str
+
+
+class CreditNotesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    credit_notes: list[CreditNoteResponse]
+    next_before: UUID | None
 
 
 class InvoicesResponse(BaseModel):
@@ -303,6 +319,18 @@ async def _read_invoice(
         raise InvoiceNotFound("That invoice does not exist.")
     assert invoice is not None
     return invoice
+
+
+async def _read_credit_note(
+    auth: AuthenticatedTransaction, settings: Settings, credit_note_id: UUID
+) -> BillingCreditNote:
+    note = await auth.database.get(BillingCreditNote, credit_note_id)
+    if note is None:
+        raise InvoiceNotFound("That invoice does not exist.")
+    invoice = await _read_invoice(auth, settings, note.invoice_id)
+    if note.account_id != invoice.account_id:
+        raise InvoiceNotFound("That invoice does not exist.")
+    return note
 
 
 def _idempotency_key(value: str | None) -> str:
@@ -407,6 +435,60 @@ def install_billing_http(
         _no_store(response)
         response.headers["Content-Disposition"] = (
             f'attachment; filename="invoice-{invoice_id}.html"'
+        )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @router.get("/credit-notes", response_model=CreditNotesResponse)
+    async def list_credit_notes(
+        request: Request,
+        response: Response,
+        account: Annotated[AccountName, Query()] = "personal",
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        before: Annotated[UUID | None, Query()] = None,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> CreditNotesResponse:
+        if set(request.query_params) - {"account", "limit", "before"}:
+            raise BillingValidationFailed("Only account, limit and before are accepted.")
+        account_id = await _invoice_account(auth, settings, account)
+        statement = select(BillingCreditNote).where(BillingCreditNote.account_id == account_id)
+        if before is not None:
+            cursor = await _read_credit_note(auth, settings, before)
+            if cursor.account_id != account_id:
+                raise InvoiceNotFound("That invoice does not exist.")
+            statement = statement.where(
+                tuple_(BillingCreditNote.created_at, BillingCreditNote.id)
+                < (cursor.created_at, cursor.id)
+            )
+        rows = list(
+            await auth.database.scalars(
+                statement.order_by(
+                    BillingCreditNote.created_at.desc(), BillingCreditNote.id.desc()
+                ).limit(limit + 1)
+            )
+        )
+        _no_store(response)
+        return CreditNotesResponse(
+            credit_notes=[CreditNoteResponse.model_validate(row) for row in rows[:limit]],
+            next_before=rows[limit - 1].id if len(rows) > limit else None,
+        )
+
+    @router.get("/credit-notes/{credit_note_id}/download", response_class=HTMLResponse)
+    async def download_credit_note(
+        credit_note_id: Annotated[UUID, Path()],
+        request: Request,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> HTMLResponse:
+        if request.query_params:
+            raise BillingValidationFailed("Credit note downloads accept no query parameters.")
+        note = await _read_credit_note(auth, settings, credit_note_id)
+        response = HTMLResponse(render_credit_note(note))
+        _no_store(response)
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="credit-note-{credit_note_id}.html"'
         )
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"

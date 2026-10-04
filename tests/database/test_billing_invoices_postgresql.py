@@ -24,7 +24,7 @@ from ac_platform.billing.invoice_models import (
     BillingInvoiceCounter,
 )
 from ac_platform.billing.invoices import issue_invoice
-from ac_platform.billing.models import BillingAccount
+from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.billing.order_models import BillingOrder, BillingPaymentEvent, BillingSubscription
 from ac_platform.billing.periods import add_months
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -455,6 +455,191 @@ def test_invoice_http_reads_are_scoped_paginated_and_download_the_saved_snapshot
                     await database.scalar(select(func.count()).select_from(BillingAccount))
                     == accounts_before
                 )
+
+    scenario(postgres_harness, world, exercise)
+
+
+def test_credit_note_http_reads_preserve_snapshots_scope_pagination_and_all_billing_rows(
+    postgres_harness, world
+):
+    async def exercise(lab: Lab):
+        hostile = '<script>alert("fictional")</script>&'
+        learner = await lab.learner()
+        owner = Caller(learner.person_id, learner.session_id, learner.tenant_id, "learner")
+        lab.app.service.invoice_settings = Settings(
+            _env_file=None,
+            billing_seller_legal_name="Fictional Seller LLP",
+            billing_seller_registered_address=hostile,
+        )
+        personal = await lab.subscribe_and_pay(learner)
+        top_up = await lab.top_up_and_pay(learner, "credit-note-top-up")
+        await lab.refund(learner, personal.payment_ref, key="credit-note-personal")
+        await lab.refund(learner, top_up.payment_ref, key="credit-note-pack")
+        organisation, paid, org_owner = await buy(
+            lab, "organisation", buyer=BuyerTaxDetails(hostile, state_code="29")
+        )
+        assert await lab.webhook(*paid) == ("paid", False)
+        async with lab.sessions() as database, database.begin():
+            org_invoice = await database.scalar(
+                select(BillingInvoice).where(
+                    BillingInvoice.order_id == UUID(organisation.order.order_id)
+                )
+            )
+            await lab.app.refund_payment(
+                database,
+                org_owner,
+                org_invoice.payment_ref,
+                reason="Fictional refund",
+                idempotency_key="credit-note-organisation",
+            )
+        async with lab.sessions() as database:
+            notes = list(await database.scalars(select(BillingCreditNote)))
+            personal_account = await database.scalar(
+                select(BillingAccount.id).where(BillingAccount.person_id == owner.person_id)
+            )
+            personal_notes = sorted(
+                (note for note in notes if note.account_id == personal_account),
+                key=lambda note: (note.created_at, note.id),
+                reverse=True,
+            )
+            org_note = next(note for note in notes if note.invoice_id == org_invoice.id)
+        # Change current inputs; reads must continue to use issued facts.
+        lab.app.service.invoice_settings = Settings(
+            _env_file=None, billing_seller_legal_name="Changed seller after refund"
+        )
+        lab.app.service.catalogue = StaticCatalogue((replace(PERSONAL, name="Changed plan"),))
+
+        async def counts():
+            async with lab.sessions() as database:
+                return [
+                    await database.scalar(select(func.count()).select_from(model))
+                    for model in (
+                        BillingAccount,
+                        BillingOrder,
+                        BillingPaymentEvent,
+                        BillingLedgerEntry,
+                        BillingInvoice,
+                        BillingCreditNote,
+                    )
+                ]
+
+        before_reads = await counts()
+        async with invoice_client(lab, owner) as client:
+            first = await client.get("/v1/credit-notes?limit=1")
+            assert first.status_code == 200, first.text
+            assert first.json()["next_before"] == str(personal_notes[0].id)
+            second = await client.get(
+                f"/v1/credit-notes?limit=1&before={first.json()['next_before']}"
+            )
+            assert second.status_code == 200 and second.json()["next_before"] is None
+            for response, note in zip((first, second), personal_notes, strict=True):
+                assert response.json()["credit_notes"] == [
+                    {
+                        "credit_note_id": str(note.id),
+                        "invoice_id": str(note.invoice_id),
+                        "refund_ref": note.refund_ref,
+                        "number": note.number,
+                        "created_at": note.created_at.isoformat().replace("+00:00", "Z"),
+                        "currency": note.currency,
+                        "taxable_minor": note.taxable_minor,
+                        "cgst_minor": note.cgst_minor,
+                        "sgst_minor": note.sgst_minor,
+                        "igst_minor": note.igst_minor,
+                        "total_minor": note.total_minor,
+                        "place_of_supply": note.place_of_supply,
+                    }
+                ]
+                download = await client.get(f"/v1/credit-notes/{note.id}/download")
+                assert download.status_code == 200 and f"Credit note {note.number}" in download.text
+                assert f"Original invoice: {note.details['invoice_number']}" in download.text
+                assert note.refund_ref in download.text and "Fictional Seller LLP" in download.text
+                assert "Service: Sales Xray — Personal" in download.text
+                assert (
+                    f"INR {note.total_minor // 100:,}.{note.total_minor % 100:02d}" in download.text
+                )
+                assert hostile not in download.text and "&lt;script&gt;" in download.text
+                assert "Changed seller" not in download.text and "Changed plan" not in download.text
+                assert download.headers["content-type"] == "text/html; charset=utf-8"
+                assert download.headers["content-disposition"] == (
+                    f'attachment; filename="credit-note-{note.id}.html"'
+                )
+                assert download.headers["content-security-policy"] == (
+                    "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+                )
+                assert download.headers["x-content-type-options"] == "nosniff"
+                for result in (response, download):
+                    assert result.headers["cache-control"] == "private, no-store"
+                    assert result.headers["vary"] == "Cookie"
+            for path in (
+                f"/v1/credit-notes/{org_note.id}/download",
+                f"/v1/credit-notes?before={org_note.id}",
+                f"/v1/credit-notes/{uuid4()}/download",
+                f"/v1/credit-notes?before={uuid4()}",
+                f"/v1/credit-notes/{personal_notes[0].invoice_id}/download",
+                f"/v1/credit-notes?before={personal_notes[0].invoice_id}",
+            ):
+                denied = await client.get(path)
+                assert denied.status_code == 404 and denied.json()["code"] == "invoice_not_found"
+            assert (
+                await client.get(f"/v1/credit-notes?before={personal_notes[-1].id}")
+            ).json() == {"credit_notes": [], "next_before": None}
+        async with invoice_client(lab, org_owner) as client:
+            assert (await client.get("/v1/credit-notes?account=organisation")).json()[
+                "credit_notes"
+            ][0]["credit_note_id"] == str(org_note.id)
+            download = await client.get(f"/v1/credit-notes/{org_note.id}/download")
+            assert download.status_code == 200 and "IGST @ 18%" in download.text
+            assert "INR 23,600.00" in download.text and hostile not in download.text
+            assert "&lt;script&gt;" in download.text
+            assert (
+                await client.get(f"/v1/credit-notes?before={org_note.id}")
+            ).status_code == 404  # Authorised cursor, wrong selected account.
+        async with invoice_client(lab, replace(org_owner, tenant_id=owner.tenant_id)) as client:
+            assert (await client.get(f"/v1/credit-notes/{org_note.id}/download")).status_code == 404
+        for role in ("owner", "admin", "member", "ended", "other"):
+            actor = await lab.learner()
+            async with lab.sessions() as database, database.begin():
+                if role != "other":
+                    database.add(
+                        Membership(
+                            tenant_id=org_owner.tenant_id,
+                            person_id=actor.person_id,
+                            role="admin" if role == "ended" else role,
+                            status="inactive" if role == "ended" else "active",
+                            ended_at=T0 if role == "ended" else None,
+                        )
+                    )
+            caller = Caller(
+                actor.person_id,
+                actor.session_id,
+                org_owner.tenant_id,
+                "member" if role in {"owner", "admin"} else "owner",
+            )
+            async with invoice_client(lab, caller) as client:
+                for path in (
+                    "/v1/credit-notes?account=organisation",
+                    f"/v1/credit-notes/{org_note.id}/download",
+                    f"/v1/credit-notes?account=organisation&before={org_note.id}",
+                ):
+                    response = await client.get(path)
+                    assert response.status_code == (200 if role in {"owner", "admin"} else 404), (
+                        response.text
+                    )
+                assert (await client.get("/v1/credit-notes")).json() == {
+                    "credit_notes": [],
+                    "next_before": None,
+                }
+                for path in (
+                    f"/v1/credit-notes/{personal_notes[0].id}/download",
+                    f"/v1/credit-notes?before={personal_notes[0].id}",
+                ):
+                    assert (await client.get(path)).status_code == 404
+        async with invoice_client(
+            lab, replace(owner, tenant_id=lab.world.operations_tenant_id)
+        ) as client:
+            for path in ("/v1/credit-notes", f"/v1/credit-notes/{personal_notes[0].id}/download"):
+                assert (await client.get(path)).status_code == 404
+        assert await counts() == before_reads
 
     scenario(postgres_harness, world, exercise)
 
