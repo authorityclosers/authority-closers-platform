@@ -42,6 +42,136 @@ _REWATCH_PURPOSES = ("must_watch", "watch", "repeat")
 _COACHING_V4 = "coaching-v4"
 _COACHING_V5 = "coaching-v5"
 _COACHING_V6 = "coaching-v6"
+_COACHING_V7 = "coaching-v7"
+
+
+def _coaching_v7_schema() -> dict[str, Any]:
+    from ac_platform.conversation_intelligence.call_map import (
+        OBJECTION_KINDS_V1,
+        SIGNAL_KINDS_V1,
+        CallMap,
+    )
+
+    schema = coaching_response_json_schema(_COACHING_V6)
+    defs = schema["$defs"]
+
+    def wire(value: Any) -> Any:
+        if isinstance(value, dict):
+            result = {key: wire(item) for key, item in value.items() if key != "title"}
+            if "$ref" in result:
+                result["$ref"] = result["$ref"].replace("#/$defs/", "#/$defs/call_map_")
+            if "const" in result:
+                result["enum"] = [result.pop("const")]
+            return result
+        if isinstance(value, list):
+            return [wire(item) for item in value]
+        return value
+
+    call_map = wire(CallMap.model_json_schema())
+    defs.update({"call_map_" + key: item for key, item in call_map.pop("$defs").items()})
+    defs["call_map_Signal"]["properties"]["kind"]["enum"] = [
+        *SIGNAL_KINDS_V1["forward"],
+        *SIGNAL_KINDS_V1["risk"],
+    ]
+    defs["call_map_Objection"]["properties"]["kind"]["enum"] = list(OBJECTION_KINDS_V1)
+    defs["golden_moment"] = {
+        "type": "object",
+        "properties": {
+            "evidence": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/evidence_ref"},
+                "minItems": 1,
+                "maxItems": 2,
+            },
+            "why_effective": {"type": "string"},
+        },
+        "required": ["evidence", "why_effective"],
+        "additionalProperties": False,
+    }
+    variants = defs["dimension"]["anyOf"]
+    variants[0]["properties"]["evidence"]["minItems"] = 2
+    variants.append(
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                **variants[0]["properties"],
+                "status": {"type": "string", "enum": ["partial"]},
+                "evidence": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/evidence_ref"},
+                    "minItems": 1,
+                    "maxItems": 1,
+                },
+            },
+            "required": ["dimension_id", "status", "observation", "evidence"],
+        }
+    )
+    # Only observed needs two segments; conflicted retains its independent rule.
+    variants[0]["properties"]["status"]["enum"] = ["observed"]
+    variants.append(
+        {
+            **variants[0],
+            "properties": {
+                **variants[0]["properties"],
+                "status": {"type": "string", "enum": ["conflicted"]},
+                "evidence": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/evidence_ref"},
+                    "minItems": 1,
+                    "maxItems": 8,
+                },
+            },
+        }
+    )
+    additions = {
+        "call_map": call_map,
+        "speakers": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "speaker_id": {"type": "string"},
+                    "spoken_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "role": {"type": "string", "enum": ["you", "salesperson", "prospect", "other"]},
+                    "evidence_segment_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 5,
+                    },
+                    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+                },
+                "required": [
+                    "speaker_id",
+                    "spoken_name",
+                    "role",
+                    "evidence_segment_ids",
+                    "confidence",
+                ],
+            },
+        },
+        "sensitive_segments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "segment_id": {"type": "string"},
+                    "category": {
+                        "type": "string",
+                        "enum": ["SENSITIVE_FINANCIAL", "SENSITIVE_LEGAL"],
+                    },
+                },
+                "required": ["segment_id", "category"],
+            },
+        },
+    }
+    schema["properties"].update(additions)
+    schema["required"].extend(additions)
+    return schema
 
 
 def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
@@ -53,6 +183,8 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
     server resolves those references to quote and timing fields.
     """
 
+    if revision == _COACHING_V7:
+        return _coaching_v7_schema()
     if revision not in {_COACHING_V4, _COACHING_V5, _COACHING_V6}:
         raise ValueError("coaching_schema_revision_invalid")
 
@@ -348,6 +480,8 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
 def coaching_generation_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
     """Describe wire shape while leaving numeric/cardinality validation local."""
     local_bounds = {"minItems", "maxItems", "minimum", "maximum"}
+    if revision == _COACHING_V7:
+        local_bounds |= {"minLength", "maxLength", "pattern"}
 
     def shape(value: Any) -> Any:
         if isinstance(value, dict):

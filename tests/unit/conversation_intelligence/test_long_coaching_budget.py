@@ -11,6 +11,7 @@ from ac_platform.conversation_intelligence.activation_contract import HostedAppr
 from ac_platform.conversation_intelligence.admin_pricing import PRICING_SNAPSHOTS
 from ac_platform.conversation_intelligence.broker_router import ProviderRouterError
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.coaching_schema import coaching_response_json_schema
 from ac_platform.conversation_intelligence.gemini_tasks import (
     GeminiTaskError,
     gemini_prompt_view,
@@ -20,6 +21,9 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     prepare_coaching_input,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE
 from ac_platform.conversation_intelligence.reports import load_report_profile
 from tests.unit.conversation_intelligence.test_broker_router import (
@@ -28,6 +32,10 @@ from tests.unit.conversation_intelligence.test_broker_router import (
     _reservation,
     _router,
     _stage,
+)
+from tests.unit.conversation_intelligence.test_coaching_v7_prompt import (
+    v7_response,
+    validate_schema,
 )
 from tests.unit.conversation_intelligence.test_mixed_script_prompt_budget import (
     _assert_lossless_coaching_context,
@@ -103,6 +111,70 @@ def test_exact_structured_byte_bound_and_conservative_cost_boundary():
     payload = canonical(body)
     with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
         replace(prepared, payload=payload, input_sha256=hashlib.sha256(payload).hexdigest())
+
+
+def test_v7_sixty_minute_complete_context_fits_unchanged_input_and_completion_cap():
+    transcript, packet = _full_call_c5_case()
+    for index, segment in enumerate(transcript["segments"]):
+        segment.update(start_ms=index * 23000, end_ms=index * 23000 + 22000)
+    transcript["duration_ms"] = 3600000
+    # Timing changed, so reconstruct the source-bound packet against the new C2.
+    from ac_platform.conversation_intelligence.reports import parse_fact_packet
+
+    packet = parse_fact_packet(
+        {"overview": "Fictional hour-long discussion.", "observations": [], "uncertainties": []},
+        transcript,
+    )
+    prepared = prepare_coaching_input(
+        transcript,
+        [packet],
+        provider="gemini",
+        model="gemini-3.8-flash",
+        max_completion_tokens=8000,
+        coaching_prompt_revision="coaching-v7",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v7").sha256,
+    )
+    body = prepared.as_provider_body()
+    source = json.loads(body["contents"][0]["parts"][0]["text"].split("\n", 1)[1])
+    _assert_lossless_coaching_context(source, transcript, packet)
+    assert body["generationConfig"]["maxOutputTokens"] == 8000
+    assert "speakers" in body["generationConfig"]["responseJsonSchema"]["properties"]
+    assert "sensitive_segments" in body["generationConfig"]["responseJsonSchema"]["properties"]
+    require_long_coaching_cost_approval(body, **approval_fields())
+
+
+def oversized_v7_response():
+    response = v7_response()
+    # Retained finding limits: 3/3/10/8/8, explanation <=4000 chars,
+    # two direct refs each. This is not even a largest call-map output.
+    for name, count in [
+        ("strengths", 3),
+        ("improvements", 3),
+        ("missed_opportunities", 10),
+        ("objection_analysis", 8),
+        ("closing_analysis", 8),
+    ]:
+        response[name] = [
+            {
+                "title": f"Fictional finding {index}",
+                "explanation": (
+                    "Ask what the prospect needs and confirm which change they want. " * 65
+                )[:4000],
+                "evidence": [{"segment_id": "s1"}, {"segment_id": "s2"}],
+            }
+            for index in range(count)
+        ]
+    return response
+
+
+def test_v7_largest_output_acceptance_is_blocked_by_retained_prose_bounds():
+    """A valid lower bound already exceeds the cap; never claim a small fixture proves it."""
+    response = oversized_v7_response()
+    validate_schema(response, coaching_response_json_schema("coaching-v7"))
+    assert len(canonical(response)) == 137948
+    # Conservative byte units, not measured provider usage. Even /3 is above
+    # the fixed 8000 total-output cap; schema strings have no length bounds.
+    assert (len(canonical(response)) + 2) // 3 > 8000
 
 
 @pytest.mark.asyncio

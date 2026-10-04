@@ -47,6 +47,8 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V5_MARKER,
     COACHING_PROMPT_V6,
     COACHING_PROMPT_V6_MARKER,
+    COACHING_PROMPT_V7,
+    COACHING_PROMPT_V7_MARKER,
     FACT_PROMPT_COMPACT_MARKER,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
@@ -1120,7 +1122,9 @@ def validate_coaching_result(
             transcript,
             profile=resolved_profile,
             coaching_prompt_revision=(
-                COACHING_PROMPT_V6
+                COACHING_PROMPT_V7
+                if COACHING_PROMPT_V7_MARKER in prompt["messages"][0]["content"]
+                else COACHING_PROMPT_V6
                 if COACHING_PROMPT_V6_MARKER in prompt["messages"][0]["content"]
                 else COACHING_PROMPT_V5
                 if COACHING_PROMPT_V5_MARKER in prompt["messages"][0]["content"]
