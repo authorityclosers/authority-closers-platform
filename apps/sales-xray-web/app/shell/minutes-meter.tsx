@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import type { Allowance } from "../acquisition-client";
+import { formatAnalysisTime } from "../analysis-time";
 import styles from "./minutes-meter.module.css";
 
 /**
@@ -18,8 +19,13 @@ export function MinutesMeter({
   if (!allowance) return null;
   if (allowance.unlimited)
     return (
-      <p className={styles.meter} data-variant={variant} data-minutes-meter>
-        <span className={styles.label}>Unlimited analysis time</span>
+      <p
+        className={styles.meter}
+        data-variant={variant}
+        data-minutes-meter
+        title="Analysis time balance unavailable"
+      >
+        <span className={styles.label}>Time unavailable</span>
       </p>
     );
   const left = Math.floor(allowance.available_seconds / 60);
@@ -27,13 +33,18 @@ export function MinutesMeter({
   const total = Math.floor(allowance.allowance_seconds / 60);
   const availableText =
     secs > 0 ? `${left}m ${secs}s available` : `${left}m available`;
-  const text = `${left} of ${total} trial minutes left`;
+  const text = `${left} of ${total} analysis minutes left`;
   const balanceText = `${left} of ${total} left`;
   if (variant === "pill")
     return (
-      <p className={styles.meter} data-variant="pill" data-minutes-meter>
+      <p
+        className={styles.meter}
+        data-variant="pill"
+        data-minutes-meter
+        title={text}
+      >
         <span className={styles.value} aria-hidden="true">
-          {left} min left
+          {formatAnalysisTime(allowance.available_seconds)} left
         </span>
         <span className={styles.visuallyHidden}>{text}</span>
       </p>
@@ -72,7 +83,7 @@ export function MinutesMeter({
       <div
         className={styles.track}
         role="meter"
-        aria-label="Trial minutes left"
+        aria-label="Analysis time left"
         aria-valuemin={0}
         aria-valuemax={allowance.allowance_seconds}
         aria-valuenow={allowance.available_seconds}

@@ -1782,10 +1782,11 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
 it.each([
   [0, "Remaining analysis time · 0m 00s · exhausted"],
   [45, "Remaining analysis time · 0m 45s"],
+  [600000, "Remaining analysis time · 166 h"],
 ])("formats a confirmed %s-second allowance", (seconds, expected) => {
   const confirmed = {
-    allowance_seconds: allowance.allowance_seconds,
-    committed_seconds: allowance.allowance_seconds - seconds,
+    allowance_seconds: Math.max(allowance.allowance_seconds, seconds),
+    committed_seconds: Math.max(allowance.allowance_seconds - seconds, 0),
     available_seconds: seconds,
   };
   expect(
@@ -1793,7 +1794,7 @@ it.each([
   ).toBe(expected);
 });
 
-it("renders an explicit unlimited tester allowance", () => {
+it("does not present a legacy tester flag as a plan or finite balance", () => {
   expect(
     remainingAllowanceLabel(
       {
@@ -1805,7 +1806,7 @@ it("renders an explicit unlimited tester allowance", () => {
       3600,
       false,
     ),
-  ).toBe("Unlimited analysis time");
+  ).toBe("Analysis time balance unavailable");
 });
 
 it("gives guests their owner-checked call link instead of promising an account library", async () => {

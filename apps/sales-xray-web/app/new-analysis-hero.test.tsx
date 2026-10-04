@@ -61,9 +61,11 @@ it("leaves the name out when the profile has none", async () => {
 
 it("shows the allowance and the three steps under the card", async () => {
   await act(async () =>
-    root.render(<NewAnalysisFooter allowanceLabel="Unlimited analysis time" />),
+    root.render(
+      <NewAnalysisFooter allowanceLabel="Remaining analysis time · 166 h" />,
+    ),
   );
-  expect(host.textContent).toContain("Unlimited analysis time");
+  expect(host.textContent).toContain("Remaining analysis time · 166 h");
   expect(
     [...host.querySelectorAll("li")].map((step) => step.textContent),
   ).toEqual(["1Upload", "2We analyse", "3Your report"]);

@@ -25,6 +25,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 
 import type { Allowance } from "../acquisition-client";
+import { formatAnalysisTime } from "../analysis-time";
 import { openSettings } from "../settings-open";
 import { CHANGELOG } from "./changelog";
 import styles from "./settings-menu.module.css";
@@ -84,14 +85,14 @@ function initials(name: string | null, email: string | null) {
 
 function minutesLine(allowance: Allowance | null) {
   if (!allowance) return null;
-  if (allowance.unlimited) return { text: "Unlimited analysis time", share: 1 };
-  const left = Math.floor(allowance.available_seconds / 60);
-  const total = Math.floor(allowance.allowance_seconds / 60);
+  if (allowance.unlimited) return { text: "Time unavailable", share: null };
+  const left = formatAnalysisTime(allowance.available_seconds);
+  const total = formatAnalysisTime(allowance.allowance_seconds);
   const share =
     allowance.allowance_seconds > 0
       ? Math.min(1, allowance.available_seconds / allowance.allowance_seconds)
       : 0;
-  return { text: `${left} of ${total} min left`, share };
+  return { text: `${left} of ${total} left`, share };
 }
 
 function Row({
@@ -274,12 +275,14 @@ export function SettingsMenu({
                 onClick={() => settings("usage")}
               >
                 <span className={styles.usageTop}>
-                  <span>{allowance?.unlimited ? "Unlimited" : "Trial"}</span>
+                  <span>Analysis time</span>
                   <b>{minutes.text}</b>
                 </span>
-                <span className={styles.meter} aria-hidden="true">
-                  <i style={{ width: `${minutes.share * 100}%` }} />
-                </span>
+                {minutes.share !== null ? (
+                  <span className={styles.meter} aria-hidden="true">
+                    <i style={{ width: `${minutes.share * 100}%` }} />
+                  </span>
+                ) : null}
               </button>
             ) : null}
             <div className={styles.list}>
@@ -304,7 +307,7 @@ export function SettingsMenu({
                 icon={<Clock3 size={16} />}
                 label="Usage"
                 value={
-                  minutes && !allowance?.unlimited
+                  minutes && minutes.share !== null
                     ? `${Math.round(minutes.share * 100)}% left`
                     : undefined
                 }
@@ -315,9 +318,6 @@ export function SettingsMenu({
                   <Gem size={16} />
                 </span>
                 <span className={styles.rowLabel}>Plans</span>
-                <span className={styles.rowValue}>
-                  {allowance?.unlimited ? "Unlimited" : "Trial"}
-                </span>
                 <ChevronRight
                   size={15}
                   className={styles.chev}

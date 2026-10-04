@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 
 import type { Allowance } from "../acquisition-client";
+import { formatAnalysisTime } from "../analysis-time";
 import styles from "./allowance-ring.module.css";
 
 const RADIUS = 15;
@@ -38,7 +39,7 @@ export function AllowanceRing({
       </div>
     ) : null;
 
-  const ring = (share: number, sweep: boolean) => (
+  const ring = (share: number) => (
     <svg className={styles.ring} viewBox="0 0 36 36" aria-hidden="true">
       <defs>
         <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
@@ -56,9 +57,6 @@ export function AllowanceRing({
         strokeDasharray={CIRCUMFERENCE}
         strokeDashoffset={drawn ? CIRCUMFERENCE * (1 - share) : CIRCUMFERENCE}
       />
-      {sweep ? (
-        <circle className={styles.sweep} cx="18" cy="18" r={RADIUS} />
-      ) : null}
     </svg>
   );
 
@@ -66,19 +64,13 @@ export function AllowanceRing({
     return (
       <div
         className={styles.meter}
-        data-level="unlimited"
-        title="Unlimited analysis time"
+        data-level="unknown"
+        title="Analysis time balance unavailable"
         data-minutes-meter
       >
-        {ring(1, true)}
-        <span className={styles.center} aria-hidden="true">
-          ∞
+        <span className={styles.text}>
+          <strong>Time unavailable</strong>
         </span>
-        <span className={styles.text} aria-hidden="true">
-          <strong>Unlimited</strong>
-          <small>analysis time</small>
-        </span>
-        <span className={styles.visuallyHidden}>Unlimited analysis time</span>
       </div>
     );
 
@@ -89,13 +81,13 @@ export function AllowanceRing({
   const percent = Math.round(share * 100);
   const left = Math.floor(allowance.available_seconds / 60);
   const total = Math.floor(allowance.allowance_seconds / 60);
-  const text = `${left} of ${total} trial minutes left`;
+  const text = `${left} of ${total} analysis minutes left`;
   return (
     <div
       className={styles.meter}
       data-level={share === 0 ? "empty" : share < 0.2 ? "low" : "ok"}
       role="meter"
-      aria-label="Trial minutes left"
+      aria-label="Analysis time left"
       aria-valuemin={0}
       aria-valuemax={allowance.allowance_seconds}
       aria-valuenow={allowance.available_seconds}
@@ -103,14 +95,14 @@ export function AllowanceRing({
       title={text}
       data-minutes-meter
     >
-      {ring(share, false)}
+      {ring(share)}
       <span className={styles.center} aria-hidden="true">
         {percent}%
       </span>
       <span className={styles.text} aria-hidden="true">
-        <strong>{left} min</strong> left
+        <strong>{formatAnalysisTime(allowance.available_seconds)}</strong> left
         <span className={styles.more}>
-          <span>of {total} min</span>
+          <span>of {formatAnalysisTime(allowance.allowance_seconds)}</span>
         </span>
       </span>
       <span className={styles.visuallyHidden}>

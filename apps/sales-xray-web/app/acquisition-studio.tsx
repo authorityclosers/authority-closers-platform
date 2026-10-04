@@ -132,6 +132,7 @@ import {
   type SourcePlaybackRange,
 } from "./source-playback-context";
 import styles from "./acquisition-studio.module.css";
+import { formatAnalysisTime } from "./analysis-time";
 
 type Result = {
   report: SalesReport;
@@ -171,8 +172,9 @@ export function remainingAllowanceLabel(
   unknown: boolean,
 ): string {
   if (allowance) {
-    // No limit applies: say so plainly, never as a percentage.
-    if (allowance.unlimited) return "Unlimited analysis time";
+    if (allowance.unlimited) return "Analysis time balance unavailable";
+    if (allowance.available_seconds > 3600)
+      return `Remaining analysis time · ${formatAnalysisTime(allowance.available_seconds)}`;
     const minutes = Math.floor(allowance.available_seconds / 60);
     const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
     return allowance.available_seconds === 0
