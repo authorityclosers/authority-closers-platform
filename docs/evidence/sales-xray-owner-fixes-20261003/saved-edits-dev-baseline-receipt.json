@@ -1,0 +1,8 @@
+{
+  "route": "http://127.0.0.1:3026/review-fixture/shell",
+  "width": 390,
+  "headerIcon": "lucide lucide-book-open",
+  "menuIcon": "lucide lucide-book-open",
+  "overflow": 0,
+  "capture": "dev loopback fixture; API reads mocked unauthenticated; writes and external hosts blocked"
+}

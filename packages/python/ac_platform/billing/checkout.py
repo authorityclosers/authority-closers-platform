@@ -442,6 +442,8 @@ class CheckoutService:
             raise IntervalNotOffered("This plan is not offered at that interval.")
         if resolved.name == "personal" and seats != 1:
             raise SeatsOutOfRange("A Personal plan has exactly one seat.")
+        if plan.key == "enterprise" and seats < 50:
+            raise SeatsOutOfRange("An Enterprise plan requires at least 50 seats.")
         if resolved.name == "organisation" and (
             seats < plan.seat_min or (plan.seat_max is not None and seats > plan.seat_max)
         ):

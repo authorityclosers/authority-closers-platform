@@ -85,6 +85,24 @@ List every transcript speaker exactly once, at most 32, with roles `you|salesper
 
 Phase 3 alone adds `GET` / `PUT /v1/conversation/acquisition/speaker-settings`: `{two_channel_you_side: left|right|null, revision: 0}`.
 
+#### E0 presentation addition (3 October 2026)
+
+To move the existing speaker icon picker off the device store, PUT accepts an
+optional per-speaker `icon`: null or a 1–64 character lowercase slug matching
+`[a-z][a-z0-9-]{0,63}`. It stores the selected presentation key in the existing
+append-only JSON revision. Explicit null clears the choice; omission preserves
+the current same-transcript choice for compatibility with older clients. The
+browser resolves the key through its existing icon library and uses its default
+for an unknown key. No arbitrary markup or asset URL is accepted.
+
+GET includes `icon` only when the current user revision has that field. Stale
+transcript revisions, predicted/model/channel sources and unattributed speech
+cannot supply a user icon. Icon-only changes retain the same `map_revision` and
+names-free report snapshot; icons are excluded from the hash used for report
+provenance. The existing revision conflicts, owner checks, content-free audit
+and canonical erasure apply. This addition does not wire the browser store;
+that remains a separate E0 slice.
+
 ### Frozen snapshot and enforcement boundary (R1–R8)
 
 Exact shape: `origin`, `transcript_revision`, `map_revision`, `speakers[{speaker_id, role: seller|prospect|other, is_account_holder}]`:

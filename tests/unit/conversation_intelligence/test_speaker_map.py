@@ -20,6 +20,40 @@ from ac_platform.conversation_intelligence.speaker_map import (
 CASES = json.loads((Path(__file__).parent / "fixtures/speaker_map/parity.json").read_text())
 
 
+def test_user_icons_do_not_change_report_provenance_or_rewrite_sources() -> None:
+    transcript = CASES[0]["transcript"]
+    source = {
+        "revision": 1,
+        "transcript_revision": transcript["revision"],
+        "speakers": [{"speaker_id": "s0", "role": "you"}, {"speaker_id": "s1", "role": "prospect"}],
+    }
+    baseline = resolve_speaker_map(
+        transcript, account_holder_name="Suyash Rao", user_revision=source
+    )
+    for icon in ("carpentry", "business", None):
+        decorated = deepcopy(source)
+        decorated["speakers"][1]["icon"] = icon
+        before = deepcopy((transcript, decorated))
+        result = resolve_speaker_map(
+            transcript, account_holder_name="Suyash Rao", user_revision=decorated
+        )
+        assert result["speakers"][1]["icon"] == icon
+        assert result["map_revision"] == baseline["map_revision"]
+        assert project_speaker_roles(result) == project_speaker_roles(baseline)
+        assert (transcript, decorated) == before
+        decorated["transcript_revision"] = "old-c2"
+        stale = resolve_speaker_map(
+            transcript, account_holder_name="Suyash Rao", user_revision=decorated
+        )
+        assert all("icon" not in speaker for speaker in stale["speakers"])
+    model_source = deepcopy(source)
+    model_source["speakers"][1]["icon"] = "carpentry"
+    model = resolve_speaker_map(
+        transcript, account_holder_name="Suyash Rao", model_revision=model_source
+    )
+    assert all("icon" not in speaker for speaker in model["speakers"])
+
+
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case["case"])
 def test_shipped_web_parity_and_server_roles(case: dict[str, Any]) -> None:
     transcript, account = case["transcript"], case["account"]

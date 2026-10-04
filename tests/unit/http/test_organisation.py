@@ -1,5 +1,6 @@
 """Fictional HTTP contract evidence using canonical cookies and relational state."""
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -41,6 +42,7 @@ from tests.unit.http.test_workspaces import (  # noqa: F401
     HttpDatabase,
     workspace_state,
 )
+from tests.unit.organisations.test_service import seed_paid_seats
 
 
 @pytest.fixture
@@ -82,6 +84,8 @@ def state(request):
         db.query(IdentitySession).filter(
             IdentitySession.person_id == state.other
         ).one().selected_tenant_id = state.tenant
+        db.flush()
+        asyncio.run(seed_paid_seats(HttpDatabase(db), state.tenant, state.person))
 
     @asynccontextmanager
     async def sessions():
@@ -107,12 +111,14 @@ async def call(state, method="GET", path="", *, body=None, token=TOKEN, key=None
 
 
 @pytest.mark.parametrize("token", [None, "bad"])
-async def test_session_required(state, token):
-    assert (await call(state, token=token)).status_code == 401
+@pytest.mark.parametrize("path", ["", "/usage", "/billing"])
+async def test_session_required(state, token, path):
+    assert (await call(state, token=token, path=path)).status_code == 401
 
 
 @pytest.mark.parametrize("selected", [None, "Beta", "Other", "Inactive"])
-async def test_requires_registered_selected_organisation(state, selected):
+@pytest.mark.parametrize("path", ["", "/usage", "/billing"])
+async def test_requires_registered_selected_organisation(state, selected, path):
     with Session(state.engine) as db, db.begin():
         if selected == "Other":
             db.add(
@@ -122,9 +128,16 @@ async def test_requires_registered_selected_organisation(state, selected):
         db.get(IdentitySession, state.session).selected_tenant_id = (
             None if selected is None else state.tenants[selected]
         )
-    response = await call(state)
+    response = await call(state, path=path)
     assert response.status_code == 404
     assert response.json()["detail"] == "No organisation selected."
+
+
+@pytest.mark.parametrize("role", ["admin", "member"])
+async def test_paid_seat_count_is_owner_only(state, role):
+    with Session(state.engine) as db, db.begin():
+        db.get(Membership, (state.tenant, state.person)).role = role
+    assert (await call(state, path="/billing")).status_code == 403
 
 
 async def test_profile_latest_settings_and_read_only_directory(state):

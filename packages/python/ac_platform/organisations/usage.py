@@ -6,8 +6,13 @@ from uuid import UUID
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ac_platform.audit.models import AuditEvent
+from ac_platform.billing.ledger import BillingLedger
+from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
+from ac_platform.billing.order_models import BillingPeriod, BillingSubscription
+from ac_platform.billing.projection import project
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement as Settlement,
 )
@@ -17,6 +22,100 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.tenancy.models import Membership, OrganisationInvite
+
+
+async def paid_seats(database: AsyncSession, tenant_id: UUID, at: datetime) -> int:
+    """Seats of a paid current period, backed by an unclosed period grant.
+
+    Provider/order status is not entitlement evidence. Rollover lots can retain
+    minutes after a period ends, but do not extend its member seat capacity.
+    """
+    current = (
+        await database.execute(
+            select(BillingSubscription.seats, BillingPeriod.id, BillingAccount.id)
+            .join(BillingPeriod, BillingPeriod.subscription_id == BillingSubscription.id)
+            .join(BillingAccount, BillingAccount.id == BillingSubscription.account_id)
+            .where(
+                BillingAccount.tenant_id == tenant_id,
+                BillingAccount.kind == "organisation",
+                BillingPeriod.period_start <= at,
+                BillingPeriod.period_end > at,
+                BillingPeriod.created_at <= at,
+            )
+            .order_by(BillingPeriod.period_start.desc(), BillingPeriod.created_at.desc())
+            .limit(1)
+        )
+    ).first()
+    if current is None:
+        return 0
+    seats, period_id, account_id = current
+    sources = {f"period:{period_id}", *(f"period:{period_id}:m{k}" for k in range(12))}
+    closing = aliased(BillingLedgerEntry)
+    net_closings = (
+        select(func.sum(closing.seconds))
+        .where(closing.lot_id == BillingLedgerEntry.id)
+        .correlate(BillingLedgerEntry)
+        .scalar_subquery()
+    )
+    grant = await database.scalar(
+        select(BillingLedgerEntry.id)
+        .where(
+            BillingLedgerEntry.account_id == account_id,
+            BillingLedgerEntry.kind == "period_grant",
+            BillingLedgerEntry.source_ref.in_(sources),
+            BillingLedgerEntry.valid_from <= at,
+            BillingLedgerEntry.expires_at > at,
+            BillingLedgerEntry.seconds + func.coalesce(net_closings, 0) > 0,
+        )
+        .limit(1)
+    )
+    return seats if grant is not None else 0
+
+
+async def organisation_seats(database: AsyncSession, tenant_id: UUID) -> dict[str, int]:
+    active = (
+        await database.scalar(
+            select(func.count())
+            .select_from(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
+        )
+        or 0
+    )
+    pending = (
+        await database.scalar(
+            select(func.count())
+            .select_from(OrganisationInvite)
+            .where(
+                OrganisationInvite.tenant_id == tenant_id, OrganisationInvite.status == "pending"
+            )
+        )
+        or 0
+    )
+    paid = await paid_seats(database, tenant_id, datetime.now(UTC))
+    return dict(
+        paid_seats=paid,
+        active_members=active,
+        pending_invites=pending,
+        seats_available=max(0, paid - active - pending),
+    )
+
+
+async def organisation_pool(database: AsyncSession, tenant_id: UUID) -> dict[str, int]:
+    ledger = BillingLedger(database)
+    projection = project(
+        ledger.lots_from_entries(await ledger.organisation_entries(tenant_id=tenant_id)),
+        await ledger.organisation_uses(tenant_id=tenant_id),
+        at=datetime.now(UTC),
+    )
+    return dict(
+        available_seconds=projection.available,
+        balance_seconds=projection.balance,
+        used_seconds=projection.used_seconds,
+    )
 
 
 async def member_usage(

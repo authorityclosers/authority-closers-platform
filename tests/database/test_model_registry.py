@@ -29,6 +29,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "organisation_invites",
         "billing_accounts",
         "billing_ledger_entries",
+        "billing_credit_entries",
         "academy_public_profiles",
         "community_public_profiles",
         "academy_leaderboard_preferences",
