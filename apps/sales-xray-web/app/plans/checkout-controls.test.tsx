@@ -118,7 +118,11 @@ it.each(["fake", "razorpay"] as const)(
     await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
     await click("Get Personal");
     expect(host.textContent).not.toContain(testBanner);
-    await click("Review total with Razorpay");
+    expect(button("Review total")).toBeDefined();
+    expect(button("Review total with Razorpay")).toBeUndefined();
+    expect(checkout).not.toHaveBeenCalled();
+    expect(openHostedCheckout).not.toHaveBeenCalled();
+    await click("Review total");
     await act(async () => {
       await checkout.mock.results[0].value;
     });
@@ -161,7 +165,11 @@ it.each(["fake", "razorpay"] as const)(
     await click("Plan & billing");
     await click("Top up 100 min");
     expect(host.textContent).not.toContain(testBanner);
-    await click("Review total with Razorpay");
+    expect(button("Review total")).toBeDefined();
+    expect(button("Review total with Razorpay")).toBeUndefined();
+    expect(checkout).not.toHaveBeenCalled();
+    expect(openHostedCheckout).not.toHaveBeenCalled();
+    await click("Review total");
     await act(async () => {
       await checkout.mock.results[0].value;
     });
@@ -257,11 +265,11 @@ it("Settings reviews the server total, retains uncertain retries, and prevents d
   await render(<AccountSettings billing={{ status: "ready" }} />);
   await click("Plan & billing");
   await click("Top up 100 min");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(openHostedCheckout).not.toHaveBeenCalled();
   await act(async () => {
-    button("Review total with Razorpay").click();
-    button("Review total with Razorpay").click();
+    button("Review total").click();
+    button("Review total").click();
   });
   expect(checkout).toHaveBeenCalledTimes(2);
   expect(checkout.mock.calls[0][1]).toBe(checkout.mock.calls[1][1]);
@@ -311,7 +319,7 @@ it("rejects a pending Settings top-up after workspace identity changes", async (
   await render(screen);
   await click("Plan & billing");
   await click("Top up 100 min");
-  await click("Review total with Razorpay");
+  await click("Review total");
   await render(screen, "other-fictional-workspace");
   const prepared = await fixtureBilling.checkout(
     checkout.mock.calls[0][0],

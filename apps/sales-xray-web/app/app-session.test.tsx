@@ -131,7 +131,7 @@ it.each(["/plans", "/plans/"])(
     });
     expectFocusedShell();
     await click("Get Personal");
-    await click("Review total with Razorpay");
+    await click("Review total");
     const orders = fetchMock.mock.calls.filter(
       ([path]) => path === "/v1/checkout",
     );
@@ -161,7 +161,7 @@ it("retains signed-out plans sign-in without preparing an order", async () => {
   await mount();
   expectFocusedShell();
   await click("Get Personal");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(push).toHaveBeenCalledExactlyOnceWith("/login?returnTo=%2Fplans");
   expect(paths()).not.toContain("/v1/checkout");
   expect(paths()).not.toContain("/v1/me/sales-xray-workspaces");
@@ -181,7 +181,7 @@ it("withholds checkout while the session is pending", async () => {
   expectFocusedShell();
   await act(async () => resolve(json(identity)));
   await click("Get Personal");
-  await click("Review total with Razorpay");
+  await click("Review total");
   expect(paths()).toContain("/v1/checkout");
 });
 
@@ -202,7 +202,7 @@ it.each(["identity", "directory"])(
     expectFocusedShell();
     await click("Try again");
     await click("Get Personal");
-    await click("Review total with Razorpay");
+    await click("Review total");
     expect(paths()).toContain("/v1/checkout");
   },
 );
