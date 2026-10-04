@@ -107,6 +107,7 @@ from ac_platform.identity.services import (
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.kernel.events import EventCategory, EventEnvelope
+from ac_platform.organisations.sign_in import join_at_sign_in_best_effort
 from ac_platform.outbox.repository import OutboxRepository
 from ac_platform.tenancy.learner_provisioning import (
     AsyncLearnerProvisioningApplication,
@@ -1818,6 +1819,7 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                         ip_address=request.client.host if request.client else None,
                     )
+                    await join_at_sign_in_best_effort(database, person.id, settings=settings)
                     if tenant_id is not None:
                         await identity.select_tenant(issued.token, tenant_id)
                     if verified.consent_audit_required:
@@ -2862,6 +2864,9 @@ def install_identity_http(
                     )
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
+                    await join_at_sign_in_best_effort(
+                        database, registered.person.id, settings=settings, assertion=assertion
+                    )
                     profile_claims = await _record_google_profile_claims_best_effort(
                         database,
                         person_id=registered.person.id,
@@ -2908,6 +2913,9 @@ def install_identity_http(
                     )
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
+                    await join_at_sign_in_best_effort(
+                        database, issued.metadata.person_id, settings=settings, assertion=assertion
+                    )
                     profile_claims = await _record_google_profile_claims_best_effort(
                         database,
                         person_id=issued.metadata.person_id,
