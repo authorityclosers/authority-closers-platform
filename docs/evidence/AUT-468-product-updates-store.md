@@ -26,7 +26,11 @@ after `20261003_0073`. Backup parity advances from v44 (128 tables) to v45
 
 The migration, models, seed text and parity changes are approximately 450
 production lines; the mechanical schema and two enforcement layers account for
-the increase over the card's approximate 350-line target. File scope is unchanged.
+the increase over the card's approximate 350-line target. The CI continuation
+also adjusts the existing credit-ledger migration regression: it checks that
+0073 remains in the applied chain and the database reaches the current head,
+following the established billing-ledger test pattern. This required test-only
+scope addition preserves its numeric, trigger and forward-only checks.
 
 ## Verification
 
@@ -46,10 +50,18 @@ test database are used. Each schema is removed by its test fixture.
 - `uv run --frozen pytest tests/infra/test_restore_drill.py
   tests/infra/test_ac_release.py -q -x --tb=short`: 180 passed, 2 skipped.
   Skips: Docker daemon unavailable; approved-dump restore integration not enabled.
-- Full root-owned `tests/infra/test_capability_backup_parity.py`: cannot run in
-  this engineer session (`sudo -n` requires a password). Root Operator must run
-  it against the final pushed commit. The portable inventory test separately
-  checks all three helper contracts, exact new tables and historical head.
+- Full root-owned `tests/infra/test_capability_backup_parity.py`: **3,737 passed,
+  zero skipped**, in 79.46 seconds at `05b4306b9d508c1b0825fc94990c3aec3e804096`.
+  [Root's receipt](/AUT/issues/AUT-1171#comment-bab2c023-519f-426e-b9de-d89e15ffbd6a)
+  records effective uid 0, exact command, uploaded output and JUnit evidence.
+  The continuation changes only this receipt and the credit-ledger regression;
+  the parity suite, helpers, migration, models and all other tracked inputs are
+  identical to that verified commit. No claim of a second Root run is made.
+- Initial CI shard 2 failed only because the credit-ledger regression expected
+  `20261003_0073` to remain the current head. The same failure was reproduced
+  locally before the fix. After the fix, `uv run --frozen pytest
+  tests/database/test_credits_ledger_postgresql.py -q -x --tb=short`: **8 passed**,
+  no skips. Repository format (998 files), lint and mypy (417 files) pass again.
 
 ## Dev check and handoff
 
