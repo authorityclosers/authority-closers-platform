@@ -32,6 +32,16 @@ The referenced Windows AC Orchestra skill was not installed in this environment,
 
 The package manifest and shared lockfile make this a sensitive change: CTO review followed by CEO approval, bound to the PR head. The Lead Engineer does not merge it.
 
-## PR gate and current handoff
+## Initial PR gate (03:15 UTC)
 
 Draft [PR #282](https://github.com/authorityclosers/authority-closers-platform/pull/282), implementation head `cef2617`. `ac-gate check` passes. `ac-gate pr-check 282` reports a file collision with [PR #276](https://github.com/authorityclosers/authority-closers-platform/pull/276), owned by AUT-992: both change `apps/sales-xray-web/app/acquisition-studio.tsx`. AUT-983 adds only the report/transcript source props there. The PR remains draft until that required source file is free and the gate passes. No merge is attempted.
+
+## Continuation (05:25 UTC)
+
+PR #276 merged at 05:04 UTC. The UI Studio checkpoint `f9e21de` already incorporated main through `6573ad1`; the Lead Engineer preserved and pushed that clean checkpoint, reopened PR #282, and confirmed both `ac-gate check` and `ac-gate pr-check 282` pass. The acquisition-studio diff retains only the report/transcript props above.
+
+[AUT-1095](/AUT/issues/AUT-1095) completed the native render of the original fictional DOCX, SHA-256 `0867139e7f1f201f08265a95493afcc28c9388549488854586885420b272ac72`: [seven-page PDF](/api/attachments/49cffb71-f47f-4a73-9fcf-9897c0a72c4d/content), [verification receipt](/api/attachments/05893847-55d4-4de4-8401-be56caea47d2/content), and [every PNG page and support bundle](/api/attachments/423d4627-ce9c-4858-953d-0f4905a9cb28/content). LibreOffice 24.2.7.2 retained all 140 nonempty paragraphs, the invented English and Devanagari quotes, tables and final transcript appendix. Page fields resolved correctly; no clipping, missing glyphs, orphan headings or broken tables were found. Carlito substituted for unavailable Calibri, with Noto Sans Devanagari.
+
+The native render revealed two Analysis paragraphs on an otherwise sparse continuation page. After inspecting that output and the live dev fixture, body after-spacing was reduced from 6 pt to 5 pt and Heading 2 before-spacing from 12 pt to 9 pt. Font sizes, line spacing, A4 dimensions, margins, chapter breaks and report content remain the same. The original evidence above is retained; it does **not** certify the revised pagination.
+
+The revised fixture is in [pagination evidence](report-docx-20261004-pagination/). Its laptop DOCX SHA-256 is `40454fa2608fdd31cfa0455e9efc1d100eadfb76d36b73d2ef2385a7e6e54459`. All 56 targeted DOCX, view, fixture and summary-hook tests pass after the main update and spacing change. Live dev browser checks again pass at 390×844 and 1440×900, including byte equality between preview and download, unchanged Blob on zoom, view switching, zero page errors and zero external requests. Root Operator will rerender this exact revised file through AUT-1095; final native pagination and Word, Google Docs and Pages opening checks remain unverified. Final-head CI is required before the sensitive CTO/CEO review handoff.
