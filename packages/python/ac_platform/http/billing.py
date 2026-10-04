@@ -1,9 +1,9 @@
 """Checkout, orders, subscriptions, refunds and provider webhooks (Contract C1).
 
-The router owns request shapes, origin and header rules and the no-store
-headers. Every billing rule lives behind :class:`BillingCommands`. Without a
-composed command service the routes are not installed at all, so a screen that
-ships first sees a plain 404 and shows "Not on sale yet".
+The router owns request shapes, account-scoped invoice reads, origin and header
+rules and the no-store headers. Payment commands live behind :class:`BillingCommands`.
+Without a composed command service the routes are not installed at all, so a
+screen that ships first sees a plain 404 and shows "Not on sale yet".
 """
 
 from __future__ import annotations
@@ -15,13 +15,18 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
+from sqlalchemy import exists, select, tuple_
 
 from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.commands import BillingCommands, BuyerTaxDetails, Caller, CheckoutCommand
 from ac_platform.billing.errors import BillingIdempotencyKeyRequired, BillingValidationFailed
+from ac_platform.billing.invoice_models import BillingInvoice
+from ac_platform.billing.invoice_render import render_invoice
+from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.tax import TaxMode
 from ac_platform.billing.views import (
     AccountName,
@@ -41,6 +46,8 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.kernel.errors import DomainError
+from ac_platform.tenancy.models import Membership
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_REASON_LENGTH = 500
@@ -52,6 +59,15 @@ class BuyerRequest(BaseModel):
     name: StrictStr = Field(min_length=1, max_length=200)
     gstin: StrictStr | None = Field(default=None, pattern=r"^[0-9]{2}[A-Z0-9]{13}$")
     state_code: StrictStr | None = Field(default=None, pattern=r"^[0-9]{2}$")
+
+    @model_validator(mode="after")
+    def check_gstin_state(self) -> BuyerRequest:
+        if self.gstin is not None:
+            state = self.gstin[:2]
+            if self.state_code is not None and self.state_code != state:
+                raise ValueError("state_code must match the GSTIN's first two digits")
+            self.state_code = state
+        return self
 
 
 class CheckoutRequest(BaseModel):
@@ -206,6 +222,81 @@ class WebhookResponse(BaseModel):
     replayed: bool
 
 
+class InvoiceNotFound(DomainError):
+    code = "invoice_not_found"
+    title = "The invoice does not exist"
+    status = 404
+
+
+class InvoiceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    invoice_id: UUID = Field(validation_alias="id")
+    number: str
+    created_at: datetime
+    currency: str
+    taxable_minor: int
+    cgst_minor: int
+    sgst_minor: int
+    igst_minor: int
+    total_minor: int
+    place_of_supply: str | None
+
+
+class InvoicesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    invoices: list[InvoiceResponse]
+    next_before: UUID | None
+
+
+async def _invoice_account(
+    auth: AuthenticatedTransaction, settings: Settings, account: AccountName
+) -> UUID | None:
+    """Read existing accounts only; use current membership, not the session's role copy."""
+    actor = auth.resolved.actor
+    statement = select(BillingAccount.id).where(BillingAccount.kind == account)
+    if settings.operations_tenant_id is not None:
+        if actor.tenant_id == settings.operations_tenant_id:
+            raise InvoiceNotFound("That invoice does not exist.")
+        statement = statement.where(BillingAccount.tenant_id != settings.operations_tenant_id)
+    if account == "personal":
+        statement = statement.where(BillingAccount.person_id == actor.person_id)
+        if settings.public_learner_tenant_id is not None:
+            statement = statement.where(
+                BillingAccount.tenant_id == settings.public_learner_tenant_id
+            )
+    else:
+        membership = exists().where(
+            Membership.tenant_id == BillingAccount.tenant_id,
+            Membership.person_id == actor.person_id,
+            Membership.role.in_(("owner", "admin")),
+            Membership.status == "active",
+            Membership.ended_at.is_(None),
+        )
+        statement = statement.where(BillingAccount.tenant_id == actor.tenant_id, membership)
+    account_id: UUID | None = await auth.database.scalar(statement)
+    if account == "organisation" and account_id is None:
+        raise InvoiceNotFound("That invoice does not exist.")
+    return account_id
+
+
+async def _read_invoice(
+    auth: AuthenticatedTransaction, settings: Settings, invoice_id: UUID
+) -> BillingInvoice:
+    invoice = await auth.database.get(BillingInvoice, invoice_id)
+    account = (
+        None if invoice is None else await auth.database.get(BillingAccount, invoice.account_id)
+    )
+    if account is None or account.kind not in {"personal", "organisation"}:
+        raise InvoiceNotFound("That invoice does not exist.")
+    name: AccountName = "personal" if account.kind == "personal" else "organisation"
+    if await _invoice_account(auth, settings, name) != account.id:
+        raise InvoiceNotFound("That invoice does not exist.")
+    assert invoice is not None
+    return invoice
+
+
 def _idempotency_key(value: str | None) -> str:
     if value is None or not value.strip():
         raise BillingIdempotencyKeyRequired("Send an Idempotency-Key header with this request.")
@@ -260,6 +351,60 @@ def install_billing_http(
     actor_dependency = Depends(require_actor, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
     read_actor_dependency = Depends(read_require_actor, scope="function")
+
+    @router.get("/invoices", response_model=InvoicesResponse)
+    async def list_invoices(
+        request: Request,
+        response: Response,
+        account: Annotated[AccountName, Query()] = "personal",
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        before: Annotated[UUID | None, Query()] = None,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> InvoicesResponse:
+        if set(request.query_params) - {"account", "limit", "before"}:
+            raise BillingValidationFailed("Only account, limit and before are accepted.")
+        account_id = await _invoice_account(auth, settings, account)
+        statement = select(BillingInvoice).where(BillingInvoice.account_id == account_id)
+        if before is not None:
+            cursor = await _read_invoice(auth, settings, before)
+            if cursor.account_id != account_id:
+                raise InvoiceNotFound("That invoice does not exist.")
+            statement = statement.where(
+                tuple_(BillingInvoice.created_at, BillingInvoice.id)
+                < (cursor.created_at, cursor.id)
+            )
+        rows = list(
+            await auth.database.scalars(
+                statement.order_by(
+                    BillingInvoice.created_at.desc(), BillingInvoice.id.desc()
+                ).limit(limit + 1)
+            )
+        )
+        _no_store(response)
+        return InvoicesResponse(
+            invoices=[InvoiceResponse.model_validate(row) for row in rows[:limit]],
+            next_before=rows[limit - 1].id if len(rows) > limit else None,
+        )
+
+    @router.get("/invoices/{invoice_id}/download", response_class=HTMLResponse)
+    async def download_invoice(
+        invoice_id: Annotated[UUID, Path()],
+        request: Request,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> HTMLResponse:
+        if request.query_params:
+            raise BillingValidationFailed("Invoice downloads accept no query parameters.")
+        invoice = await _read_invoice(auth, settings, invoice_id)
+        response = HTMLResponse(render_invoice(invoice))
+        _no_store(response)
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="invoice-{invoice_id}.html"'
+        )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     @router.post("/checkout", response_model=CheckoutResponse, status_code=status.HTTP_201_CREATED)
     async def checkout(

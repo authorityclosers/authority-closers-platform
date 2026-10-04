@@ -477,6 +477,47 @@ def test_checkout_top_up_body_maps_to_the_command() -> None:
 # ---- orders ------------------------------------------------------------------------
 
 
+def test_checkout_derives_buyer_state_from_gstin_and_refuses_a_mismatch() -> None:
+    client, _actor, _database = _client(commands := _Commands())
+    buyer = {"name": "Fictional Buyer", "gstin": "29AAAAA0000A1Z0"}
+    response = client.post(
+        "/v1/checkout", json={**SUBSCRIPTION_BODY, "buyer": buyer}, headers=_headers("gstin-1")
+    )
+    assert response.status_code == 201, response.text
+    assert commands.calls[-1][1]["command"].buyer.state_code == "29"
+    for state in ("29", "27"):
+        response = client.post(
+            "/v1/checkout",
+            json={**SUBSCRIPTION_BODY, "buyer": {**buyer, "state_code": state}},
+            headers=_headers(f"gstin-{state}"),
+        )
+        assert response.status_code == (201 if state == "29" else 422), response.text
+    assert len(commands.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/invoices?debug=1",
+        "/v1/invoices?account=team",
+        "/v1/invoices?limit=0",
+        "/v1/invoices?limit=101",
+        "/v1/invoices?before=invalid",
+        f"/v1/invoices/{ORDER_ID}/download?debug=1",
+        "/v1/invoices/invalid/download",
+    ],
+)
+def test_invoice_reads_reject_unknown_or_invalid_query_parameters(path: str) -> None:
+    client, _actor, _database = _client(_Commands())
+    assert client.get(path, headers={"Host": HOST}).status_code == 422
+
+
+def test_invoice_routes_are_absent_when_billing_is_not_composed() -> None:
+    client, _actor, _database = _client(None)
+    for path in ("/v1/invoices", f"/v1/invoices/{ORDER_ID}/download"):
+        assert client.get(path, headers={"Host": HOST}).status_code == 404
+
+
 def test_read_order_is_private_no_store() -> None:
     client, actor, _database = _client(commands := _Commands())
     response = client.get(f"/v1/orders/{ORDER_ID}", headers={"Host": HOST})
