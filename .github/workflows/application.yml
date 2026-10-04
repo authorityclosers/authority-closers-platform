@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: application-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  # Main pushes finish validation and packaging while newer main work queues.
+  # Updated PRs still cancel their stale validation; dispatch keeps its behavior.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   academy-capacity-simulation:
