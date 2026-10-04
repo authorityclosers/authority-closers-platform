@@ -40,6 +40,11 @@ Verification: focused Python output suite 61 tests, including actual finish-time
 publication and stored-draft read-back; related Python suites 357 passed. Ruff
 format/check, mypy (417 sources), web lint/typecheck, Prettier and `ac-gate check`
 passed. Focused web report, call-map and processing-copy suites: 124 passed. The
-unbounded full web runner stalled; a bounded two-worker run is checked separately
-before PR handoff. Dev verification is offline as specified; v7 remains unavailable to
+unbounded full web runner stalled and was terminated; the two-worker full run
+reached its 240-second bound (exit 124), without a completion summary. Full web
+suite completion is unverified locally and must pass CI before merge. Dev verification is offline as specified; v7 remains unavailable to
 real calls before Gate 2 and the AUT-504 prerequisite.
+
+Production diff: 231 lines changed. Tests exceed the earlier total-size target
+to retain the complete requested D8, repair, ETH-03 and legacy matrix in one card.
+No unrelated implementation was added.
