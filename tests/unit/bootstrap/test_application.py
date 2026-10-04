@@ -92,6 +92,11 @@ class FakeTenantRepository:
     async def save_membership(self, membership: MembershipSnapshot) -> None:
         self.membership = membership
 
+    async def list_memberships(self, person_id: UUID) -> tuple[MembershipSnapshot, ...]:
+        if self.membership is not None and self.membership.person_id == person_id:
+            return (self.membership,)
+        return ()
+
 
 def _person(*, email_verified_at: datetime | None = NOW) -> PersonSnapshot:
     return PersonSnapshot(

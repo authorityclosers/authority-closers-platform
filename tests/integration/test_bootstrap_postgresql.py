@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
@@ -199,6 +199,55 @@ def test_concurrent_same_bootstrap_is_idempotent(postgres_harness: URL) -> None:
         _cleanup(
             sync_engine, person_id=person_id, tenant_ids=() if tenant_id is None else (tenant_id,)
         )
+        _run_async(engine.dispose())
+        sync_engine.dispose()
+
+
+def test_owner_bootstrap_after_handle_change_preserves_identity(postgres_harness: URL) -> None:
+    engine = create_async_engine(postgres_harness)
+    sync_engine = create_engine(postgres_harness)
+    person_id = _seed_person(sync_engine)
+    email = _person_email(sync_engine, person_id)
+    original, current = f"original-{uuid4().hex}", f"current-{uuid4().hex}"
+
+    async def scenario() -> None:
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+        async def bootstrap(slug):
+            async with sessions() as database, database.begin():
+                return await BootstrapApplication(database).bootstrap_owner(
+                    email=email, tenant_slug=slug, tenant_name="Fictional Handle Team", now=NOW
+                )
+
+        first = await bootstrap(original)
+        assert first.tenant_created and first.membership_created
+        with Session(sync_engine) as db, db.begin():
+            db.get(Tenant, first.tenant_id).slug = current
+
+        def snapshot():
+            with Session(sync_engine) as db:
+                return (
+                    db.scalar(select(func.count()).select_from(Tenant)),
+                    db.scalar(select(func.count()).select_from(Membership)),
+                    db.get(Tenant, first.tenant_id).slug,
+                )
+
+        before = snapshot()
+        with pytest.raises(
+            BootstrapError,
+            match="person already owns a tenant; replay with its current handle "
+            "or use the organisation API",
+        ):
+            await bootstrap(original)
+        assert snapshot() == before
+        replay = await bootstrap(current)
+        assert replay.tenant_id == first.tenant_id
+        assert not replay.tenant_created and not replay.membership_created
+        assert snapshot() == before
+
+    try:
+        _run_async(scenario())
+    finally:
         _run_async(engine.dispose())
         sync_engine.dispose()
 

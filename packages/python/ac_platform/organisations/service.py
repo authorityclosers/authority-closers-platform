@@ -12,7 +12,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.models import AuditEvent
@@ -57,6 +57,13 @@ _FREE_EMAIL_DOMAINS = frozenset(
     }
 )
 _DOMAIN_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+_HANDLE = re.compile(r"[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])\Z")
+# Keep the reviewed reserved-word list together for comparison with the card.
+_RESERVED_HANDLES = frozenset(
+    "admin api app www support help billing settings login signin signup "  # noqa: SIM905
+    "static assets internal ops platform system root staff personal public me "
+    "new organisation".split()
+)
 
 
 class OrganisationCommandError(DomainError, ValueError):
@@ -226,6 +233,79 @@ class OrganisationService:
             reason,
         )
         return OrganisationResult(tenant_id, tenant_id, name, slug, owner_person_id, "owner")
+
+    async def change_handle(
+        self, tenant_id: UUID, handle: str, command_id: UUID, *, actor_person_id: UUID
+    ) -> dict[str, object]:
+        if tenant_id in self._protected_tenant_ids:
+            raise ResourceNotFound("No organisation selected")
+        if (await self._actor(tenant_id, actor_person_id)).role != "owner":
+            raise AuthorizationDenied("Only the owner can change the organisation handle.")
+        if not _HANDLE.fullmatch(handle) or "--" in handle or handle in _RESERVED_HANDLES:
+            raise OrganisationCommandError("Invalid organisation handle.")
+        intent = {
+            "action": "change_handle",
+            "handle": handle,
+            "actor_person_id": str(actor_person_id),
+        }
+        prior = await self._replay(tenant_id, command_id, intent)
+        if prior is not None:
+            return cast(dict[str, object], prior.payload["result"])
+        try:
+            # Authentication holds shared tenant fences; never wait into an upgrade cycle.
+            tenant = await self.session.scalar(
+                select(Tenant)
+                .where(Tenant.id == tenant_id)
+                .with_for_update(nowait=True)
+                .execution_options(populate_existing=True)
+            )
+        except DBAPIError as error:
+            if getattr(error.orig, "sqlstate", None) == "55P03":
+                raise ResourceConflict(
+                    "Organisation is busy; retry with the same Idempotency-Key."
+                ) from error
+            raise
+        if tenant is None:
+            raise ResourceNotFound("No organisation selected")
+        if (
+            await self.session.scalar(
+                select(Tenant.id).where(func.lower(Tenant.slug) == handle, Tenant.id != tenant_id)
+            )
+            is not None
+        ):
+            raise ResourceConflict("Handle taken")
+        before = tenant.slug
+        tenant.slug = handle
+        tenant.revision += 1
+        try:
+            await self.session.flush()
+        except IntegrityError as error:
+            # Lowercase input and the existing unique slug constraint fence competing claims.
+            if getattr(error.orig, "sqlstate", None) == "23505":
+                raise ResourceConflict("Handle taken") from error
+            raise
+        result: dict[str, object] = {
+            "tenant_id": str(tenant_id),
+            "handle": handle,
+            "name": tenant.name,
+            "your_role": "owner",
+        }
+        await self._audit(
+            tenant_id,
+            command_id,
+            "organisation.handle_changed",
+            "organisation",
+            tenant_id,
+            {
+                "http_intent": intent,
+                "result": result,
+                "before": {"handle": before},
+                "after": {"handle": handle},
+            },
+            None,
+            actor_person_id=actor_person_id,
+        )
+        return result
 
     async def add_member(
         self,
@@ -461,7 +541,11 @@ class OrganisationService:
         try:
             rows = await self.session.scalars(
                 select(Membership)
-                .where(Membership.tenant_id == tenant_id, Membership.person_id.in_(person_ids))
+                .where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.person_id.in_(person_ids),
+                    Membership.role != "processing",
+                )
                 .order_by(Membership.person_id)
                 .with_for_update(nowait=True)
                 .execution_options(populate_existing=True)
@@ -816,7 +900,7 @@ class OrganisationService:
         rows = await self.session.execute(
             select(Membership, Person)
             .join(Person, Person.id == Membership.person_id)
-            .where(Membership.tenant_id == tenant_id)
+            .where(Membership.tenant_id == tenant_id, Membership.role != "processing")
             .order_by(Person.email, Person.id)
         )
         return tuple(

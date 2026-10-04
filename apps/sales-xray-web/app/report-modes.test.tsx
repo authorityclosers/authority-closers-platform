@@ -1306,6 +1306,30 @@ it("preserves the current Reading section when moving through Document and Secti
 });
 
 // Reading has no transcript section (AUT-785); Document keeps it as the last appendix.
+it("normalises the Transcript tab to the first Reading section and focuses it", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?call=${call}&view=tabs&section=transcript`,
+  );
+  await render(call);
+  await settle();
+  await act(async () => buttonNamed("Reading view")!.click());
+  await settle();
+
+  expect(new URLSearchParams(window.location.search).get("section")).toBe(
+    "overview",
+  );
+  expect(mode().dataset.view).toBe("reading");
+  expect(mode().dataset.reportSection).toBe("overview");
+  expect(document.activeElement).toBe(
+    container.querySelector('[data-report-mode-section="overview"] h2'),
+  );
+  expect(
+    container.querySelector('[data-report-mode-section="transcript"]'),
+  ).toBeNull();
+});
+
 it.each(["document"])(
   "positions the selected Transcript heading after rendering %s from Sections",
   async (nextView) => {
