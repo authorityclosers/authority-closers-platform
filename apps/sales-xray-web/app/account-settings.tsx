@@ -507,6 +507,7 @@ export function AccountSettings({
         gstRate={PLANS_GST_RATE}
         busy={topUp.busy}
         confirmedOrder={topUp.prepared?.order}
+        checkoutProvider={topUp.prepared?.hosted.provider}
         onPay={() => {
           if (selectedTopUp)
             void topUp.buy({
