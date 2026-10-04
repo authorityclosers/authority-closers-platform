@@ -1,16 +1,33 @@
-"""Admin → Billing staff read (AUT-879); refunds and grants keep their own routes."""
+"""Admin billing overview and audited staff credit grants."""
 
 from datetime import UTC, datetime
-from typing import Literal
+from decimal import Decimal, InvalidOperation
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Request
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, FastAPI, Header, Request
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from sqlalchemy import select
 
 from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied, CapabilityInvalid
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
+from ac_platform.billing.credit_grants import CreditGrantService
+from ac_platform.billing.credits import validate_credit_quantity
+from ac_platform.billing.errors import (
+    BillingForbidden,
+    BillingIdempotencyConflict,
+    BillingIdempotencyKeyRequired,
+    BillingValidationFailed,
+)
+from ac_platform.billing.ledger import BillingConflict, BillingError
+from ac_platform.billing.models import BillingAccount
+from ac_platform.http.auth import (
+    AuthenticatedTransaction,
+    RequireActor,
+    require_admin_surface,
+    require_safe_origin,
+)
 from ac_platform.staff_billing.read import PAGE_LIMIT, billing_overview
 
 BILLING_CAPABILITY = "platform_billing_manage"
@@ -112,6 +129,41 @@ class StaffBillingResponse(_Strict):
     subscriptions: list[SubscriptionResponse]
 
 
+class CreditGrantRequest(_Strict):
+    quantity: StrictStr
+    reason: StrictStr = Field(min_length=1, max_length=500)
+
+    @field_validator("quantity")
+    @classmethod
+    def exact_positive_quantity(cls, value: str) -> str:
+        try:
+            quantity = Decimal(value)
+            validate_credit_quantity(quantity)
+            if quantity < 0 or value != value.strip() or "_" in value:
+                raise BillingError("Invalid credit quantity.")
+        except (InvalidOperation, BillingError) as error:
+            raise ValueError(
+                "An exact positive finite credit quantity string is required."
+            ) from error
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def named_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("A reason is required.")
+        return value
+
+
+class CreditGrantResponse(_Strict):
+    entry_id: StrictStr
+    account_id: StrictStr
+    quantity: StrictStr
+    source_ref: StrictStr
+    audit_event_id: StrictStr
+    created_at: StrictStr
+
+
 def install_staff_billing_http(
     application: FastAPI, *, settings: Settings, require_actor: RequireActor
 ) -> None:
@@ -145,6 +197,63 @@ def install_staff_billing_http(
                 SubscriptionResponse.model_validate(row) for row in overview.subscriptions
             ],
         )
+
+    @router.post(
+        "/billing/accounts/{tenant_id}/{account_id}/credit-grants",
+        response_model=CreditGrantResponse,
+    )
+    async def grant_credits(
+        tenant_id: UUID,
+        account_id: UUID,
+        request: Request,
+        body: CreditGrantRequest,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> CreditGrantResponse:
+        require_safe_origin(request, settings)
+        if request.query_params:
+            raise CapabilityInvalid("Credit grants accept no query parameters.")
+        actor = auth.resolved.actor
+        permissions = await platform_projection(
+            auth.database, actor, operations_tenant_id=settings.operations_tenant_id
+        )
+        if "platform_access_manage" not in permissions:
+            raise CapabilityDenied("A current platform access-management assignment is required.")
+        if idempotency_key is None or not idempotency_key.strip():
+            raise BillingIdempotencyKeyRequired("Supply a stable Idempotency-Key for this grant.")
+        if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
+            raise CapabilityDenied("Staff credit grants are unavailable.")
+        # Check stored ownership only after fresh authority; never create a target
+        # or trust a caller's person/account-kind hint to bypass self-grant refusal.
+        account = await auth.database.scalar(
+            select(BillingAccount).where(
+                BillingAccount.id == account_id, BillingAccount.tenant_id == tenant_id
+            )
+        )
+        if account is None:
+            raise BillingForbidden("The billing account is unavailable.")
+        if account.kind == "personal" and account.person_id == actor.person_id:
+            raise BillingForbidden("Staff cannot grant credits to their own Personal account.")
+        try:
+            receipt = await CreditGrantService(
+                auth.database,
+                operations_tenant_id=settings.operations_tenant_id,
+                public_learner_tenant_id=settings.public_learner_tenant_id,
+            ).grant(
+                actor=actor,
+                tenant_id=tenant_id,
+                account_id=account_id,
+                quantity=Decimal(body.quantity),
+                operation_id=idempotency_key,
+                reason=body.reason,
+            )
+        except BillingConflict as error:
+            raise BillingIdempotencyConflict(str(error)) from error
+        except BillingError as error:
+            raise BillingValidationFailed(str(error)) from error
+        return CreditGrantResponse.model_validate(receipt.to_dict())
 
     application.include_router(router)
 
