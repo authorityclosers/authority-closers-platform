@@ -29,6 +29,7 @@ import { newCallHref } from "./new-call-navigation";
 import { callTitle, type CallLabel } from "./call-label";
 import { readCallLabel, renameCall } from "./call-label-client";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
+import styles from "./calls-library.module.css";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -754,7 +755,7 @@ function CallsLibraryContent({
 
   const content = (
     <div
-      className="xray-app simple-app calls-library-app"
+      className={`xray-app simple-app calls-library-app ${styles.root}`}
       data-theme="light"
       data-variant={variant}
     >

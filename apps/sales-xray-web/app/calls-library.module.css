@@ -1,0 +1,30 @@
+.root {
+  min-width: 0;
+}
+
+/* Empty-state card and text wrapping constraints for CallsLibrary */
+.root :global(.calls-library-state[aria-labelledby="calls-library-empty"]),
+.root :global(.panel.calls-library-state) {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+}
+
+.root :global(.calls-library-state[aria-labelledby="calls-library-empty"]) > *,
+.root :global(.panel.calls-library-state) > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.root :global(.calls-library-state[aria-labelledby="calls-library-empty"]) h2,
+.root :global(.calls-library-state[aria-labelledby="calls-library-empty"]) p,
+.root :global(.panel.calls-library-state) h2,
+.root :global(.panel.calls-library-state) p {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
