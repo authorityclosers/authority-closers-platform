@@ -76,6 +76,62 @@ function list(value: unknown, path: string): unknown[] {
   return value;
 }
 
+/* ---------- Immutable invoices: GET /v1/invoices (AUT-878) ---------- */
+
+export type Invoice = {
+  invoiceId: string;
+  number: string;
+  createdAt: string;
+  currency: string;
+  taxableMinor: number;
+  cgstMinor: number;
+  sgstMinor: number;
+  igstMinor: number;
+  totalMinor: number;
+  placeOfSupply: string | null;
+};
+
+export function parseInvoices(value: unknown): {
+  invoices: Invoice[];
+  nextBefore: string | null;
+} {
+  const raw = object(value, "invoices", ["invoices", "next_before"]);
+  return {
+    invoices: list(raw.invoices, "invoices.invoices").map((value, index) => {
+      const path = `invoices[${index}]`;
+      const invoice = object(value, path, [
+        "invoice_id",
+        "number",
+        "created_at",
+        "currency",
+        "taxable_minor",
+        "cgst_minor",
+        "sgst_minor",
+        "igst_minor",
+        "total_minor",
+        "place_of_supply",
+      ]);
+      return {
+        invoiceId: text(invoice, "invoice_id", path),
+        number: text(invoice, "number", path),
+        createdAt: text(invoice, "created_at", path),
+        currency: text(invoice, "currency", path),
+        taxableMinor: integer(invoice, "taxable_minor", path),
+        cgstMinor: integer(invoice, "cgst_minor", path),
+        sgstMinor: integer(invoice, "sgst_minor", path),
+        igstMinor: integer(invoice, "igst_minor", path),
+        totalMinor: integer(invoice, "total_minor", path),
+        placeOfSupply:
+          invoice.place_of_supply === null
+            ? null
+            : text(invoice, "place_of_supply", path),
+      };
+    }),
+    nextBefore:
+      raw.next_before === null ? null : text(raw, "next_before", "invoices"),
+  };
+}
+
 /* ---------- Plans catalogue: GET /v1/plans (AUT-418) ---------- */
 
 export type PlanStatus = "coming_soon" | "active";

@@ -6,6 +6,7 @@
  */
 import {
   parseCheckout,
+  parseInvoices,
   parseMePlan,
   parseOfflinePayment,
   parseOrder,
@@ -17,6 +18,7 @@ import {
   type Account,
   type Checkout,
   type Interval,
+  type Invoice,
   type MePlan,
   type OfflinePayment,
   type Order,
@@ -55,6 +57,8 @@ export const notOnSale = (error: unknown) =>
 export const signedOut = (error: unknown) =>
   error instanceof BillingError && error.status === 401;
 
+export type Buyer = { name: string; gstin: string | null };
+
 export type CheckoutRequest =
   | {
       kind: "subscription";
@@ -62,6 +66,7 @@ export type CheckoutRequest =
       planKey: string;
       interval: Interval;
       seats: number;
+      buyer?: Buyer;
     }
   | { kind: "top_up"; account: Account; planKey: string; packKey: string };
 
@@ -74,6 +79,9 @@ export interface BillingClient {
     signal?: AbortSignal,
   ): Promise<Subscriptions>;
   readOfflinePayment(signal?: AbortSignal): Promise<OfflinePayment>;
+  readInvoices(account: Account, signal?: AbortSignal): Promise<Invoice[]>;
+  /** The development fixture supplies a fictional downloadable document. */
+  invoiceDownloadHref?(invoiceId: string): string;
   checkout(request: CheckoutRequest, idempotencyKey: string): Promise<Checkout>;
   readOrder(orderId: string, signal?: AbortSignal): Promise<Order>;
   verifyOrder(orderId: string, idempotencyKey: string): Promise<Order>;
@@ -136,6 +144,36 @@ export const liveBilling: BillingClient = {
     ),
   readOfflinePayment: async (signal) =>
     parseOfflinePayment(await call("/v1/billing/offline-payment", { signal })),
+  readInvoices: async (account, signal) => {
+    const invoices: Invoice[] = [];
+    const cursors = new Set<string>();
+    let before: string | null = null;
+    do {
+      const query = new URLSearchParams({ account });
+      if (before) query.set("before", before);
+      let response: unknown;
+      try {
+        response = await call(`/v1/invoices?${query}`, { signal });
+      } catch (error) {
+        // A first organisation visit can precede creation of its billing account.
+        if (
+          account === "organisation" &&
+          before === null &&
+          error instanceof BillingError &&
+          error.status === 404
+        )
+          return [];
+        throw error;
+      }
+      const page = parseInvoices(response);
+      invoices.push(...page.invoices);
+      before = page.nextBefore;
+      if (before && cursors.has(before))
+        throw new Error("Repeated invoice cursor");
+      if (before) cursors.add(before);
+    } while (before);
+    return invoices;
+  },
   checkout: async (request, key) =>
     parseCheckout(
       await call("/v1/checkout", {
@@ -149,6 +187,14 @@ export const liveBilling: BillingClient = {
                 plan_key: request.planKey,
                 interval: request.interval,
                 seats: request.seats,
+                ...(request.buyer
+                  ? {
+                      buyer: {
+                        name: request.buyer.name,
+                        gstin: request.buyer.gstin,
+                      },
+                    }
+                  : {}),
               }
             : {
                 kind: "top_up",
@@ -186,3 +232,6 @@ export const liveBilling: BillingClient = {
 /** Where the server sends the buyer back; fixed by the contract, never chosen by the client. */
 export const returnPath = (orderId: string) =>
   `/account/billing/return?order=${encodeURIComponent(orderId)}`;
+
+export const invoiceDownloadPath = (invoiceId: string) =>
+  `/v1/invoices/${encodeURIComponent(invoiceId)}/download`;

@@ -39,6 +39,7 @@ export type BillingViewProps = {
   usage?: Usage | null;
   subs?: Subscriptions | null;
   documents?: BillingDocument[];
+  invoicesStatus?: "loading" | "ready" | "error";
   status?: "loading" | "ready" | "error";
   busy?: boolean;
   error?: string | null;
@@ -53,6 +54,7 @@ export function BillingView({
   subs = null,
   documents,
   status = "error",
+  invoicesStatus = status,
   busy = false,
   error,
   onRefresh,
@@ -286,7 +288,16 @@ export function BillingView({
                 <h2>Invoices &amp; Receipts</h2>
               </div>
 
-              {documents.length > 0 ? (
+              {invoicesStatus !== "ready" ? (
+                <p
+                  className={styles.hint}
+                  role={invoicesStatus === "loading" ? "status" : "alert"}
+                >
+                  {invoicesStatus === "loading"
+                    ? "Loading invoices…"
+                    : "Invoices and receipts are currently unavailable."}
+                </p>
+              ) : documents.length > 0 ? (
                 <div className={styles.tableWrap}>
                   <table className={styles.table}>
                     <caption className={styles.hint}>
@@ -312,6 +323,7 @@ export function BillingView({
                             {document.invoiceHref ? (
                               <a
                                 href={document.invoiceHref}
+                                download
                                 aria-label={`Invoice for ${document.description}`}
                               >
                                 Invoice
@@ -338,7 +350,7 @@ export function BillingView({
                 <div className={styles.empty}>
                   <FileText size={24} aria-hidden="true" />
                   <p>
-                    {status === "ready"
+                    {invoicesStatus === "ready"
                       ? "No invoices or receipts yet."
                       : "Invoices and receipts are currently unavailable."}
                   </p>

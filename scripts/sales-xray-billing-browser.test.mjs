@@ -121,6 +121,8 @@ test("fictional plan purchase → server verification → balance → billing �
         waitUntil: "networkidle",
       });
       await page.getByText("Current: Trial", { exact: false }).waitFor();
+      if (width === 390)
+        await page.getByRole("tab", { name: "Personal", exact: true }).click();
       await page
         .getByRole("button", { name: "Get Personal", exact: true })
         .click();
@@ -175,6 +177,78 @@ test("fictional plan purchase → server verification → balance → billing �
       await page.reload({ waitUntil: "networkidle" });
       await page.getByText("Cancels at period end", { exact: true }).waitFor();
       await page.getByText("862 min left", { exact: true }).waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+      );
+      await page
+        .getByRole("button", { name: "Start again", exact: true })
+        .click();
+      await page.goto(`${origin}/review-fixture/plans`, {
+        waitUntil: "networkidle",
+      });
+      await page
+        .getByRole("button", { name: "Get Organisation", exact: true })
+        .click();
+      const review = page.getByRole("button", {
+        name: "Review total with Razorpay",
+        exact: true,
+      });
+      await review.click();
+      assert.equal(
+        await page.getByText("Total confirmed.", { exact: false }).count(),
+        0,
+      );
+      await page.getByLabel("Organisation name").fill("Fictional Closers");
+      await page.getByLabel("GSTIN (optional)").fill("invalid");
+      await review.click();
+      assert.equal(
+        await page.getByText("Total confirmed.", { exact: false }).count(),
+        0,
+      );
+      await page.getByLabel("GSTIN (optional)").fill("27abcde1234f1z5");
+      assert.equal(
+        await page.getByLabel("GSTIN (optional)").inputValue(),
+        "27ABCDE1234F1Z5",
+      );
+      await review.click();
+      await page.getByText("Total confirmed.", { exact: false }).waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+      );
+      await page
+        .getByRole("button", { name: "Pay ₹23,600 with Razorpay", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "Fictional payment page" })
+        .waitFor();
+      await page
+        .getByRole("button", { name: "Payment confirmed", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "Payment confirmed", exact: true })
+        .waitFor();
+      await page
+        .getByRole("button", { name: "Manage billing", exact: true })
+        .click();
+      await page.getByText("FIXTURE-1", { exact: true }).waitFor();
+      const downloadPromise = page.waitForEvent("download");
+      await page
+        .getByRole("link", { name: "Invoice for FIXTURE-1", exact: true })
+        .click();
+      const download = await downloadPromise;
+      let invoice = "";
+      for await (const chunk of await download.createReadStream())
+        invoice += chunk.toString();
+      assert.match(invoice, /Fictional Closers/);
+      assert.match(invoice, /27ABCDE1234F1Z5/);
+      assert.match(invoice, /2360000/);
+      assert.equal(await download.failure(), null);
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth,

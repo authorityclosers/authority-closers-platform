@@ -2,7 +2,11 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BillingError, type BillingClient } from "../billing/billing-api";
+import {
+  BillingError,
+  liveBilling,
+  type BillingClient,
+} from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
 import { useBillingAccount } from "../billing/use-billing-account";
 import { notify } from "../notice-center";
@@ -66,6 +70,7 @@ async function render(
   node: ReactNode,
   authenticated = true,
   tenantId = "fixture-workspace",
+  account: "personal" | "organisation" = "personal",
 ) {
   await act(async () =>
     root.render(
@@ -81,6 +86,15 @@ async function render(
               }
             : null,
           retry: () => {},
+          workspaces: [
+            {
+              tenant_id: tenantId,
+              kind: account,
+              name: "Fictional workspace",
+              role: "owner",
+              sales_xray_enabled: true,
+            },
+          ],
         }}
       >
         {node}
@@ -89,6 +103,18 @@ async function render(
   );
 }
 const click = async (label: string) => act(async () => button(label).click());
+async function fill(label: string, value: string) {
+  const input = [...host.querySelectorAll("label")]
+    .find((node) => node.textContent?.includes(label))!
+    .querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 it("uses live on-sale prices, retains the display fallback and signs in before checkout", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
@@ -175,6 +201,8 @@ it("prices two team seats yearly, accepts the server total and warns about renew
     (b) => b.textContent?.startsWith("Yearly"),
   )!;
   await act(async () => yearly.click());
+  await fill("Organisation name", "Fictional Closers");
+  await fill("GSTIN", "27abcde1234f1z5");
   await click("Review total with Razorpay");
   await until(() => text().includes("Total confirmed"));
   expect(checkout.mock.calls[0][0]).toEqual({
@@ -183,11 +211,41 @@ it("prices two team seats yearly, accepts the server total and warns about renew
     planKey: "organisation",
     interval: "year",
     seats: 2,
+    buyer: { name: "Fictional Closers", gstin: "27ABCDE1234F1Z5" },
   });
   expect(text()).toContain("₹2,16,000");
   expect(text()).toContain("₹38,880");
   expect(text()).toContain("₹2,54,880");
   expect(text()).toContain("approve each renewal above ₹15,000");
+  await fill("Organisation name", "Renamed Fictional Closers");
+  expect(text()).not.toContain("Total confirmed");
+  await click("Review total with Razorpay");
+  await until(
+    () =>
+      checkout.mock.calls.length === 2 && text().includes("Total confirmed"),
+  );
+  expect(
+    checkout.mock.calls[1][0].kind === "subscription" &&
+      checkout.mock.calls[1][0].buyer?.name,
+  ).toBe("Renamed Fictional Closers");
+  expect(checkout.mock.calls[1][1]).not.toBe(checkout.mock.calls[0][1]);
+  expect(openHostedCheckout).not.toHaveBeenCalled();
+});
+
+it("requires an enterprise name and allows an omitted GSTIN", async () => {
+  const checkout = vi.fn(fixtureBilling.checkout);
+  await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+  await click("Get Enterprise");
+  await click("Review total with Razorpay");
+  expect(checkout).not.toHaveBeenCalled();
+  await fill("Organisation name", "Fictional Enterprise");
+  await click("Review total with Razorpay");
+  await until(() => text().includes("Total confirmed"));
+  expect(checkout.mock.calls[0][0]).toMatchObject({
+    planKey: "enterprise",
+    seats: 50,
+    buyer: { name: "Fictional Enterprise", gstin: null },
+  });
 });
 
 it("return verification shows minutes and the canonical new balance, with no duplicate grant on reload", async () => {
@@ -258,7 +316,7 @@ it("keeps the final announcement stable while the visible minutes animate", asyn
 function AccountBilling({ client }: { client: BillingClient }) {
   return <BillingView {...useBillingAccount(true, client)} />;
 }
-it("loads billing usage, hides undeployed invoices, and cancels renewal at period end", async () => {
+it("loads billing usage and invoices, and cancels renewal at period end", async () => {
   const checkout = await fixtureBilling.checkout(
     {
       kind: "subscription",
@@ -276,7 +334,11 @@ it("loads billing usage, hides undeployed invoices, and cancels renewal at perio
   const client = { ...fixtureBilling, cancelSubscription };
   await render(<AccountBilling client={client} />);
   await until(() => text().includes("862 min left"));
-  expect(text()).not.toContain("Invoices & Receipts");
+  expect(text()).toContain("Invoices & Receipts");
+  expect(text()).toContain("FIXTURE-1");
+  expect(host.querySelector("a[download]")?.getAttribute("href")).toMatch(
+    /^data:application\/octet-stream/,
+  );
   await click("Cancel renewal");
   await click("Yes, cancel renewal");
   expect(text()).toContain("Try again");
@@ -296,4 +358,126 @@ it("loads billing usage, hides undeployed invoices, and cancels renewal at perio
     "different-workspace",
   );
   expect(text()).not.toContain("862 min left");
+  expect(text()).not.toContain("FIXTURE-1");
+});
+
+it("keeps invoices scoped to the workspace account and reports failed reads", async () => {
+  const checkout = await fixtureBilling.checkout(
+    {
+      kind: "subscription",
+      account: "organisation",
+      planKey: "organisation",
+      interval: "month",
+      seats: 2,
+      buyer: { name: "Fictional Closers", gstin: null },
+    },
+    "fictional",
+  );
+  fixtureProviderReports(checkout.order.orderId, "paid");
+  const readInvoices = vi.fn(fixtureBilling.readInvoices);
+  const client = { ...fixtureBilling, readInvoices };
+  await render(<AccountBilling client={client} />);
+  await until(() => text().includes("No invoices or receipts yet"));
+  expect(readInvoices).toHaveBeenLastCalledWith(
+    "personal",
+    expect.any(AbortSignal),
+  );
+  await render(
+    <AccountBilling client={client} />,
+    true,
+    "org-workspace",
+    "organisation",
+  );
+  expect(text()).not.toContain("FIXTURE-1");
+  await until(() => text().includes("FIXTURE-1"));
+  expect(readInvoices).toHaveBeenLastCalledWith(
+    "organisation",
+    expect.any(AbortSignal),
+  );
+  await render(
+    <AccountBilling
+      client={{
+        ...fixtureBilling,
+        readInvoices: async () => {
+          throw new Error("unavailable");
+        },
+      }}
+    />,
+    true,
+    "other-workspace",
+  );
+  await until(() =>
+    text().includes("Invoices and receipts are currently unavailable"),
+  );
+  expect(text()).not.toContain("No invoices or receipts yet");
+});
+
+it("keeps plan, usage, subscription facts and checkout usable while invoices load or fail", async () => {
+  const rejectInvoices: Array<(error: Error) => void> = [];
+  const checkout = vi.fn(fixtureBilling.checkout);
+  const client = {
+    ...fixtureBilling,
+    checkout,
+    readInvoices: () =>
+      new Promise<never>((_resolve, reject) => rejectInvoices.push(reject)),
+  };
+  await render(
+    <>
+      <PlansPurchase client={client} />
+      <AccountBilling client={client} />
+    </>,
+  );
+  await until(
+    () => text().includes("Current: Trial") && text().includes("62 min left"),
+  );
+  expect(text()).toContain("No renewal scheduled");
+  expect(text()).toContain("Loading invoices");
+  expect(text()).not.toContain("No invoices or receipts yet");
+  await click("Get Personal");
+  await click("Review total with Razorpay");
+  await until(() => text().includes("Total confirmed"));
+  await act(async () =>
+    rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),
+  );
+  await until(() =>
+    text().includes("Invoices and receipts are currently unavailable"),
+  );
+  expect(text()).toContain("Current: Trial");
+  expect(text()).toContain("62 min left");
+  expect(text()).toContain("No renewal scheduled");
+  expect(text()).not.toContain("Billing details could not be loaded");
+  await click("Pay ₹2,499 with Razorpay");
+  expect(checkout).toHaveBeenCalledOnce();
+  expect(openHostedCheckout).toHaveBeenCalledOnce();
+});
+
+it("shows an empty invoice section on the first organisation visit when the API returns 404", async () => {
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response("", { status: 404 }));
+  try {
+    await render(
+      <AccountBilling
+        client={{ ...fixtureBilling, readInvoices: liveBilling.readInvoices }}
+      />,
+      true,
+      "new-org",
+      "organisation",
+    );
+    await until(
+      () =>
+        text().includes("No invoices or receipts yet") &&
+        text().includes("62 min left"),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/invoices?account=organisation",
+      expect.any(Object),
+    );
+    expect(text()).not.toContain(
+      "Invoices and receipts are currently unavailable",
+    );
+    expect(text()).not.toContain("Billing details could not be loaded");
+  } finally {
+    fetch.mockRestore();
+  }
 });

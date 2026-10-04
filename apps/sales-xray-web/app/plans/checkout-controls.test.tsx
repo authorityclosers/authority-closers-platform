@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountSettings, PlanAndBillingPane } from "../account-settings";
 import { liveBilling } from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
+import { useBillingAccount } from "../billing/use-billing-account";
 import type { Checkout } from "../billing/contract";
 import {
   fixtureBilling,
@@ -257,4 +258,35 @@ it("offers no Resume action on either cancelled-subscription screen", async () =
   );
   expect(host.textContent).not.toContain("Resume renewal");
   expect(host.textContent).toContain("Cancels at period end");
+});
+
+function SettingsBilling({ client }: { client: typeof fixtureBilling }) {
+  return <AccountSettings billing={useBillingAccount(true, client)} />;
+}
+
+it("Settings keeps a paid subscription usable when only invoice reads fail", async () => {
+  await activeSubscription();
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readInvoices: async () => {
+          throw new Error("invoice outage");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  for (
+    let i = 0;
+    i < 100 && (!button("Cancel renewal") || button("Cancel renewal").disabled);
+    i++
+  )
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+  expect(button("Cancel renewal").disabled).toBe(false);
+  expect(host.textContent).toContain("Personal");
+  expect(host.textContent).toContain(
+    "Invoices and receipts are currently unavailable",
+  );
+  expect(host.textContent).not.toContain("No invoices or receipts yet");
 });
