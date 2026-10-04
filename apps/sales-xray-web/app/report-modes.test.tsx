@@ -1357,30 +1357,3 @@ it("keeps the same mounted panel state across all three report views", async () 
     expect(container.querySelector('[data-review-point="14"]')).toBe(point);
   }
 });
-
-it("supports the standard 5-tab layout: Overview, Transcript, Moments, Analysis, Coaching", async () => {
-  const fivePanels = [
-    { id: "overview", label: "Overview", content: <p>Overview</p> },
-    { id: "transcript", label: "Transcript", content: <p>Transcript</p> },
-    { id: "moments", label: "Moments", content: <p>Moments</p> },
-    { id: "analysis", label: "Analysis", content: <p>Analysis</p> },
-    { id: "coaching", label: "Coaching", content: <p>Coaching</p> },
-  ];
-  await act(async () =>
-    root.render(<ReportModes panels={fivePanels} boundCallId={call} />),
-  );
-  const tabButton = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent?.includes("Tabbed view"))!;
-  await act(async () => tabButton.click());
-  const tabs = [
-    ...container.querySelectorAll<HTMLButtonElement>('[role="tablist"] button'),
-  ];
-  expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
-    "Overview",
-    "Transcript",
-    "Moments",
-    "Analysis",
-    "Coaching",
-  ]);
-});

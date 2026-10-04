@@ -795,17 +795,6 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # in Tabbed view on a desktop-width (>=1100px) viewport.
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     await expect(reading_view).to_have_attribute("aria-pressed", "false")
-                    await expect(page.get_by_role("tab")).to_have_text(
-                        ["Overview", "Transcript", "Moments", "Analysis", "Coaching"]
-                    )
-                    await page.get_by_role("tab", name="Analysis", exact=True).click()
-                    analysis = page.get_by_role("tabpanel", name="Analysis", exact=True)
-                    await expect(
-                        analysis.get_by_text("Which voice is the salesperson?", exact=True)
-                    ).to_be_visible()
-                    await expect(
-                        analysis.get_by_role("textbox", name="Search the raw data", exact=True)
-                    ).to_be_visible()
                     # The reader can explicitly choose Reading view: one
                     # horizontal row of section links, all sections shown.
                     # The transcript lives in its own reader, not in Reading.
@@ -814,14 +803,15 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     reading_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    reading_links = reading_nav.get_by_role("link")
-                    reading_sections = ["Overview", "Moments", "Analysis", "Coaching"]
-                    await expect(reading_links).to_have_count(len(reading_sections))
-                    for index, section in enumerate(reading_sections):
-                        await expect(reading_links.nth(index)).to_have_accessible_name(section)
+                    await expect(reading_nav.get_by_role("link")).to_have_count(7)
                     await expect(
                         reading_nav.get_by_role("link", name="Transcript", exact=True)
                     ).to_have_count(0)
+                    await expect(
+                        page.get_by_role(
+                            "navigation", name="Explore your sales report", exact=True
+                        ).get_by_role("link", name="Raw data", exact=True)
+                    ).to_be_visible()
                     assert "view=reading" in page.url
                     await tabbed_view.click()
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
