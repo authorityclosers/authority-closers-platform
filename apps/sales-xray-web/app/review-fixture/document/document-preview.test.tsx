@@ -3,11 +3,6 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { DocumentPreview } from "./document-preview";
 import Page from "./page";
-import { ReportDocument } from "../../report-document";
-import { syntheticReport } from "../report/synthetic-report";
-vi.mock("../../report-document", () => ({
-  ReportDocument: vi.fn(() => <div data-document-export />),
-}));
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -19,7 +14,7 @@ vi.mock("next/navigation", () => ({
 ).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllEnvs());
 
-it("supplies the fictional report and transcript to the file preview", async () => {
+it("renders seven fictional sections with exact source quotes and no numeric scoring", async () => {
   window.history.replaceState(
     null,
     "",
@@ -33,15 +28,14 @@ it("supplies the fictional report and transcript to the file preview", async () 
     expect(
       container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
     ).toBe("document");
-    expect(container.querySelectorAll("[data-document-export]")).toHaveLength(
-      1,
-    );
-    const { data } = vi.mocked(ReportDocument).mock.calls.at(-1)![0];
-    expect(data?.report).toBe(syntheticReport);
-    expect(data?.transcript?.segments.map((s) => s.text)).toContain(
+    expect(container.querySelectorAll("[data-document-page]")).toHaveLength(7);
+    expect(container.textContent).not.toMatch(/Page \d+ of \d+/);
+    expect(container.textContent).toContain(
       "I don't want to set another step today. Please don't follow up.",
     );
-    expect(container.querySelector("[data-document-page]")).toBeNull();
+    expect(container.textContent).not.toMatch(
+      /\b\d\.\d \/ 5|Aarav|Download Word/,
+    );
   } finally {
     await act(async () => root.unmount());
     container.remove();

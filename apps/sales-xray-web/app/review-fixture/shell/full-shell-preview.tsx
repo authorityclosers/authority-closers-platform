@@ -162,11 +162,6 @@ export function FullShellPreview() {
                     onRequestDeletion={() => {}}
                   />
                   <ReportModes
-                    documentData={{
-                      report: syntheticReport,
-                      transcript,
-                      title: "Fictional sample call",
-                    }}
                     label="Explore your sales report"
                     lightSurface={resolvedTheme !== "dark"}
                     boundCallId={FIXTURE_CALL_ID}

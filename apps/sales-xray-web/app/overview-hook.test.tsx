@@ -8,12 +8,6 @@ import { talkShareSeries } from "./call-data";
 import type { SalesReport, Transcript } from "./report-contract";
 import { ReportReadingProvider } from "./report-reading-context";
 import { ReportModes } from "./report-modes";
-import type { DocumentReportData } from "./report-document-data";
-vi.mock("./report-document", () => ({
-  ReportDocument: ({ data }: { data?: DocumentReportData }) => (
-    <div data-docx-preview-stub>{data?.report?.summary}</div>
-  ),
-}));
 import { saveSpeakerProfiles } from "./speaker-profiles";
 
 (
@@ -163,7 +157,7 @@ async function renderOverview(
 }
 
 it.each(["", "&print=1"])(
-  "passes the full source summary to Document without opening the Reading disclosure%s",
+  "includes the closed full summary in Document output%s",
   async (printQuery) => {
     const boundCall = "00000000-0000-4000-8000-000000000002";
     window.history.replaceState(
@@ -177,10 +171,6 @@ it.each(["", "&print=1"])(
       root.render(
         <ReportModes
           boundCallId={boundCall}
-          documentData={{
-            report: { ...report, summary: fullSummary },
-            transcript,
-          }}
           panels={[
             {
               id: "overview",
@@ -204,13 +194,10 @@ it.each(["", "&print=1"])(
     await act(async () =>
       host.querySelector<HTMLButtonElement>('[title="Document view"]')!.click(),
     );
-    expect(host.querySelector("[data-docx-preview-stub]")?.textContent).toBe(
-      fullSummary,
-    );
-    expect(disclosure.open).toBe(false);
-    expect(
-      disclosure.closest("[data-reading-panels]")?.hasAttribute("hidden"),
-    ).toBe(true);
+    const summary = host.querySelector("[class*='inShort'] p")!;
+    expect(summary.textContent).toBe(fullSummary);
+    expect(summary.closest("details")).toBeNull();
+    expect(host.textContent).not.toContain("Read the full summary");
   },
 );
 
