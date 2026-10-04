@@ -242,7 +242,7 @@ def _bound_v7_schema(schema: dict[str, Any]) -> None:
         "missed_opportunities": 1,
         "objection_analysis": 1,
         "closing_analysis": 1,
-        "speakers": 16,
+        "speakers": 8,
         "sensitive_segments": 12,
     }.items():
         schema["properties"][key]["maxItems"] = maximum
@@ -255,12 +255,14 @@ def _bound_v7_schema(schema: dict[str, Any]) -> None:
         "prospect_facts": 2,
         "pitch_items": 1,
         "pains": 1,
-        "money": 1,
+        "money": 3,
         "prospect_tasks": 1,
         "seller_tasks": 1,
-        "objections": 1,
+        "objections": 2,
     }.items():
         call_map[key]["maxItems"] = maximum
+    for field in ("value_min", "value_max"):
+        defs["call_map_Money"]["properties"][field]["maximum"] = 1e12
     for name in (
         "PitchItem",
         "Pain",
@@ -321,7 +323,7 @@ def coaching_v7_bounds_instruction() -> str:
             for (unit, maximum), paths in sorted(groups.items())
         )
         + " Integers are at most 2147483647; monetary amounts are finite nonnegative "
-        "binary64 values. "
+        "binary64 values, with value_min and value_max at most 1000000000000. "
     )
 
 

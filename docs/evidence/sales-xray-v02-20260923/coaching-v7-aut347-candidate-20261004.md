@@ -27,7 +27,11 @@ this card. No provider was called, and all fixtures are fictional.
 
 The focused suite covers the new candidate, existing v4–v6 prompt/schema pins,
 the pack, C5 adapters, plans, runtime gates, frozen attribution, the B1 call
-map and the report parser/source pin. **507 tests passed**. Ruff format/check
+map and the report parser/source pin. **507 tests passed at `b8e0f51`**; its
+four CI Python shards were green. The narrow price/budget rebalance passes
+**43 prompt/schema/budget tests**, including a price of 180 and prospect budget
+of 120 with a budget gap and `affordability_gap`. That fixture also passes
+canonical B1 source validation. Ruff format/check
 and mypy passed (397 source files). New negative cases reject oversized prose,
 names, segment IDs, sensitive lists, offset selectors and excess dimension
 evidence. Positive cases cover observed two refs, partial one and conflicted
@@ -54,13 +58,13 @@ the fixed 8,000 cap. This section supersedes that unresolved acceptance.
 the entire local schema. It includes optional properties, every array at
 `maxItems`, every free string at `maxLength` using JSON-escape-free ASCII,
 the longest enum and the largest serialized `anyOf` branch. Numeric bounds
-are also included, including the 309-digit integer spelling of the finite
-binary64 monetary maximum. The resulting fictional fixture validates against
+are also included; monetary `value_min` and `value_max` are now capped at
+1e12 in v7 only. The resulting fictional fixture validates against
 the local schema. It is a conservative wire-shape maximum; transcript-bound
 and cross-field B1 rules can only narrow that envelope.
 
-The CTO's ASCII `/3` planning convention gives **23,535 canonical bytes /
-7,845 units**, below **24,000 bytes / 8,000 units**, with 465 bytes of room.
+The CTO's ASCII `/3` planning convention gives **22,670 canonical bytes /
+7,557 units**, below **24,000 bytes / 8,000 units**, with 1,330 bytes of room.
 These are planning units, not measured provider tokens. Provider generation
 schemas still omit local bounds, as requested; this proof covers the bounded
 local acceptance schema rather than arbitrary provider output.
@@ -77,11 +81,11 @@ local acceptance schema rather than arbitrary provider output.
 | review_status         |            45 |
 | dimensions            |         3,398 |
 | overview              |         5,565 |
-| call_map              |         8,053 |
-| speakers              |         2,860 |
+| call_map              |         8,612 |
+| speakers              |         1,436 |
 | sensitive_segments    |           826 |
 | Outer braces + commas |            14 |
-| **Total**             |    **23,535** |
+| **Total**             |    **22,670** |
 
 Member sizes include the quoted property key, colon and complete value;
 separators and the root braces are counted once in the final row.
@@ -89,9 +93,10 @@ separators and the root braces are counted once in the final row.
 The explicit v7 choices reduce counts before shortening prose: one item per
 finding category and corresponding detail, golden moment, interpretation and
 rewatch; two atomic claims, signals, prospect facts and ethics notes; one
-pitch item, pain, money item, prospect task, seller task and objection.
+pitch item, pain, prospect task and seller task; three money items and two
+objections. The money list can retain both the price and lower prospect budget.
 The envelope retains eight dimensions, up to eight phases, all five
-qualification items, sixteen speakers in both blocks and twelve sensitive
+qualification items, sixteen call-map speakers, eight display speakers and twelve sensitive
 segments. Each display speaker cites one segment. All required fields remain.
 
 Summary/verdict allow 300 characters; finding explanations and dimension
@@ -100,6 +105,11 @@ claims 160 and facts/signals 80; names 40; literal quotes 64; dates 60; IDs 16. 
 only; findings/dimensions allow at most two refs, observed exactly two, partial
 one and golden moments one or two. B1 is untouched. Every local string/list
 limit is stated in the v7 prompt from the fresh schema.
+
+The `b8e0f51` envelope fit at 23,535 bytes but allowed only one money row.
+The CTO's second review requested exactly this rebalance: three money rows,
+1e12 monetary maxima, eight display speakers and two objections. Finding
+counts remain one. The accepted proof method and every other limit are unchanged.
 
 ## Scope choice
 

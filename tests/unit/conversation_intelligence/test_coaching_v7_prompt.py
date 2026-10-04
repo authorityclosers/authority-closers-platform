@@ -76,7 +76,7 @@ def validate_schema(value, schema, root=None):
 def v7_response():
     response = _valid_response()
     response["call_map"] = _call_map()
-    for key in ("pitch_items", "pains", "money", "seller_tasks"):
+    for key in ("pitch_items", "pains", "seller_tasks"):
         response["call_map"][key] = response["call_map"][key][:1]
     response["call_map"]["signals"] = response["call_map"]["signals"][:2]
     for key in (
@@ -294,6 +294,25 @@ def test_owner_fields_and_sensitive_closed_categories_accept_literal_fictional_d
     validate_schema(response, coaching_response_json_schema("coaching-v7"))
     assert response["call_map"]["outcome"]["next_step_when"] == "next Tuesday"
     assert set(response["sensitive_segments"][0]) == {"segment_id", "category"}
+
+
+def test_v7_can_represent_price_and_lower_prospect_budget_with_the_required_gap():
+    response = v7_response()
+    call_map = response["call_map"]
+    price, budget = call_map["money"]
+    assert budget["value_max"] == 120 < price["value_min"] == 180
+    call_map["qualification_gaps"].append("budget")
+    call_map["qualification_confirmed"] = [
+        item for item in call_map["qualification_confirmed"] if item["item"] != "budget"
+    ]
+    risk = next(row for row in _call_map()["signals"] if row["kind"] == "price_concern")
+    risk["kind"] = "affordability_gap"
+    call_map["signals"] = [risk]
+    validate_schema(response, coaching_response_json_schema("coaching-v7"))
+    assert "budget" in call_map["qualification_gaps"]
+    assert call_map["signals"][0]["kind"] == "affordability_gap"
+    segments = _segments()
+    assert check_call_map(call_map, segments, max(row["end_ms"] for row in segments)) == []
 
 
 @pytest.mark.parametrize(

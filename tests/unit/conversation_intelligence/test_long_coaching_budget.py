@@ -189,6 +189,7 @@ def test_v7_largest_valid_output_fits_unchanged_completion_cap():
     section_bytes = v7_output_section_bytes(response)
     total = sum(section_bytes.values()) + len(section_bytes) - 1 + 2
     assert total == len(canonical(response))
+    assert total == 22670
     assert total <= 24000, section_bytes
     assert (total + 2) // 3 <= 8000
 
