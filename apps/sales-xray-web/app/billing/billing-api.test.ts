@@ -141,4 +141,18 @@ it("does not interpret an invoice failure as an empty list", async () => {
   await expect(liveBilling.readInvoices("personal")).rejects.toMatchObject({
     status: 403,
   });
+  await expect(liveBilling.readInvoices("organisation")).rejects.toMatchObject({
+    status: 403,
+  });
+});
+
+it("treats a missing organisation billing account as empty, retaining personal 404 errors", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("", { status: 404 })),
+  );
+  await expect(liveBilling.readInvoices("organisation")).resolves.toEqual([]);
+  await expect(liveBilling.readInvoices("personal")).rejects.toMatchObject({
+    status: 404,
+  });
 });

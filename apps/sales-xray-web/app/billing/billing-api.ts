@@ -151,9 +151,21 @@ export const liveBilling: BillingClient = {
     do {
       const query = new URLSearchParams({ account });
       if (before) query.set("before", before);
-      const page = parseInvoices(
-        await call(`/v1/invoices?${query}`, { signal }),
-      );
+      let response: unknown;
+      try {
+        response = await call(`/v1/invoices?${query}`, { signal });
+      } catch (error) {
+        // A first organisation visit can precede creation of its billing account.
+        if (
+          account === "organisation" &&
+          before === null &&
+          error instanceof BillingError &&
+          error.status === 404
+        )
+          return [];
+        throw error;
+      }
+      const page = parseInvoices(response);
       invoices.push(...page.invoices);
       before = page.nextBefore;
       if (before && cursors.has(before))

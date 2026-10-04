@@ -919,6 +919,7 @@ export function PlanAndBillingPane({
   subs = null,
   documents,
   status = "error",
+  invoicesStatus = status,
   busy = false,
   error,
   onCancel,
@@ -1153,11 +1154,11 @@ export function PlanAndBillingPane({
           <div className={styles.billingCardHead}>
             <h3>Invoices &amp; Receipts</h3>
           </div>
-          {loading ? (
+          {invoicesStatus === "loading" ? (
             <p className={styles.muted} role="status">
               Loading invoices…
             </p>
-          ) : status !== "ready" ? (
+          ) : invoicesStatus !== "ready" ? (
             <p className={styles.muted}>
               Invoices and receipts are currently unavailable.
             </p>

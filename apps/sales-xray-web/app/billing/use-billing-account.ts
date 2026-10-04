@@ -16,8 +16,13 @@ type Snapshot = {
   mePlan: MePlan;
   usage: Usage;
   subs: Subscriptions;
-  invoices: Invoice[];
 };
+
+type InvoiceSnapshot = {
+  key: string;
+  client: BillingClient;
+  attempt: number;
+} & ({ status: "ready"; invoices: Invoice[] } | { status: "error" });
 
 /** Account facts are read from AC; provider states never supply the allowance. */
 export function useBillingAccount(
@@ -32,6 +37,8 @@ export function useBillingAccount(
   const key = JSON.stringify([access?.context, account]);
   const identity = useRef<string | null>(key);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [invoiceSnapshot, setInvoiceSnapshot] =
+    useState<InvoiceSnapshot | null>(null);
   const [failure, setFailure] = useState<{
     key: string;
     message: string;
@@ -57,11 +64,10 @@ export function useBillingAccount(
       client.readMePlan(controller.signal),
       client.readUsage(controller.signal),
       client.readSubscriptions(account, controller.signal),
-      client.readInvoices(account, controller.signal),
     ])
-      .then(([mePlan, usage, subs, invoices]) => {
+      .then(([mePlan, usage, subs]) => {
         if (controller.signal.aborted) return;
-        setSnapshot({ key, mePlan, usage, subs, invoices });
+        setSnapshot({ key, mePlan, usage, subs });
         setFailure(null);
       })
       .catch(() => {
@@ -74,7 +80,37 @@ export function useBillingAccount(
     return () => controller.abort();
   }, [account, attempt, authenticated, client, enabled, key]);
 
+  useEffect(() => {
+    if (!enabled || !authenticated) return;
+    const controller = new AbortController();
+    client
+      .readInvoices(account, controller.signal)
+      .then((invoices) => {
+        if (!controller.signal.aborted)
+          setInvoiceSnapshot({
+            key,
+            client,
+            attempt,
+            status: "ready",
+            invoices,
+          });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setInvoiceSnapshot({ key, client, attempt, status: "error" });
+      });
+    return () => controller.abort();
+  }, [account, attempt, authenticated, client, enabled, key]);
+
   const current = snapshot?.key === key && authenticated ? snapshot : null;
+  const currentInvoices =
+    authenticated &&
+    enabled &&
+    invoiceSnapshot?.key === key &&
+    invoiceSnapshot.client === client &&
+    invoiceSnapshot.attempt === attempt
+      ? invoiceSnapshot
+      : null;
   const error = failure?.key === key ? failure.message : null;
   const onRefresh = () => setAttempt((value) => value + 1);
   const onCancel = async (id: string) => {
@@ -121,7 +157,11 @@ export function useBillingAccount(
     mePlan: current?.mePlan ?? null,
     usage: current?.usage ?? null,
     subs: current?.subs ?? null,
-    documents: (current?.invoices ?? []).map((invoice) => ({
+    invoicesStatus: currentInvoices?.status ?? ("loading" as const),
+    documents: (currentInvoices?.status === "ready"
+      ? currentInvoices.invoices
+      : []
+    ).map((invoice) => ({
       id: invoice.invoiceId,
       createdAt: invoice.createdAt,
       description: invoice.number,

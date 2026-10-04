@@ -2,7 +2,11 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BillingError, type BillingClient } from "../billing/billing-api";
+import {
+  BillingError,
+  liveBilling,
+  type BillingClient,
+} from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
 import { useBillingAccount } from "../billing/use-billing-account";
 import { notify } from "../notice-center";
@@ -406,4 +410,74 @@ it("keeps invoices scoped to the workspace account and reports failed reads", as
     text().includes("Invoices and receipts are currently unavailable"),
   );
   expect(text()).not.toContain("No invoices or receipts yet");
+});
+
+it("keeps plan, usage, subscription facts and checkout usable while invoices load or fail", async () => {
+  const rejectInvoices: Array<(error: Error) => void> = [];
+  const checkout = vi.fn(fixtureBilling.checkout);
+  const client = {
+    ...fixtureBilling,
+    checkout,
+    readInvoices: () =>
+      new Promise<never>((_resolve, reject) => rejectInvoices.push(reject)),
+  };
+  await render(
+    <>
+      <PlansPurchase client={client} />
+      <AccountBilling client={client} />
+    </>,
+  );
+  await until(
+    () => text().includes("Current: Trial") && text().includes("62 min left"),
+  );
+  expect(text()).toContain("No renewal scheduled");
+  expect(text()).toContain("Loading invoices");
+  expect(text()).not.toContain("No invoices or receipts yet");
+  await click("Get Personal");
+  await click("Review total with Razorpay");
+  await until(() => text().includes("Total confirmed"));
+  await act(async () =>
+    rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),
+  );
+  await until(() =>
+    text().includes("Invoices and receipts are currently unavailable"),
+  );
+  expect(text()).toContain("Current: Trial");
+  expect(text()).toContain("62 min left");
+  expect(text()).toContain("No renewal scheduled");
+  expect(text()).not.toContain("Billing details could not be loaded");
+  await click("Pay ₹2,499 with Razorpay");
+  expect(checkout).toHaveBeenCalledOnce();
+  expect(openHostedCheckout).toHaveBeenCalledOnce();
+});
+
+it("shows an empty invoice section on the first organisation visit when the API returns 404", async () => {
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response("", { status: 404 }));
+  try {
+    await render(
+      <AccountBilling
+        client={{ ...fixtureBilling, readInvoices: liveBilling.readInvoices }}
+      />,
+      true,
+      "new-org",
+      "organisation",
+    );
+    await until(
+      () =>
+        text().includes("No invoices or receipts yet") &&
+        text().includes("62 min left"),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/invoices?account=organisation",
+      expect.any(Object),
+    );
+    expect(text()).not.toContain(
+      "Invoices and receipts are currently unavailable",
+    );
+    expect(text()).not.toContain("Billing details could not be loaded");
+  } finally {
+    fetch.mockRestore();
+  }
 });
