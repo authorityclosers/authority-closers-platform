@@ -28,6 +28,26 @@ MAX_IMAGE_EDGE = 8192
 MAX_VARIANT_BYTES = 2 * 1024 * 1024
 _IMAGE_GATE = threading.BoundedSemaphore(1)
 _FORMATS = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+
+
+def sanitize_organisation_logo(body: bytes, content_type: str) -> bytes:
+    """Reuse the avatar decode policy and process gate; persist only new pixels."""
+    if not 0 < len(body) <= MAX_LOGO_BYTES:
+        raise MediaProcessingError("The organisation logo exceeds its 2 MB byte limit.")
+    if not _IMAGE_GATE.acquire(blocking=False):
+        raise MediaQuotaExceeded("Another image is being processed; retry shortly.")
+    try:
+        with (
+            decode_avatar(body, content_type) as pixels,
+            ImageOps.fit(pixels, (512, 512), method=Image.Resampling.LANCZOS) as square,
+        ):
+            square.info.clear()
+            output = io.BytesIO()
+            square.save(output, format="WEBP", quality=88, method=4)
+            return output.getvalue()
+    finally:
+        _IMAGE_GATE.release()
 
 
 def decode_avatar(body: bytes, content_type: str) -> Image.Image:

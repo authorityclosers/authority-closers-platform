@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.organisation_settings import install_organisation_settings_routes
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
@@ -400,4 +401,11 @@ def install_organisation_http(
         )
         return OwnerTransferResponse.model_validate_json(json.dumps(result))
 
+    install_organisation_settings_routes(
+        router,
+        application,
+        settings=settings,
+        selected_dependency=selected_dependency,
+        command_dependency=command_dependency,
+    )
     application.include_router(router)
