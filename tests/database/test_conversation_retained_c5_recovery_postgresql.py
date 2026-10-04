@@ -71,10 +71,11 @@ from ac_platform.conversation_intelligence.storage import ObjectKey, ObjectKind
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.identity.models import Person
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import canonical_receipt_digest
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Tenant
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import (
     ORIGIN as ACQUISITION_ORIGIN,
@@ -997,8 +998,26 @@ def test_retained_c5_recovery_http_admin_and_acquisition_reads(
     async def exercise() -> None:
         case = await _seed_guest_retained_case(postgres_harness, tmp_path)
         setup = case["setup"]
+        operations_tenant_id = uuid4()
+        async with setup.sessions() as database, database.begin():
+            database.add(
+                Tenant(
+                    id=operations_tenant_id,
+                    slug=operations_tenant_id.hex,
+                    name="Disposable recovery operations tenant",
+                )
+            )
+            await database.flush()
+            database.add(
+                Membership(
+                    tenant_id=operations_tenant_id, person_id=setup.state.person_id, role="admin"
+                )
+            )
+            session = await database.get(IdentitySession, setup.state.session_id)
+            assert session is not None
+            session.selected_tenant_id = operations_tenant_id
         admin_settings = setup.settings.model_copy(
-            update={"operations_tenant_id": setup.state.tenant_id}
+            update={"operations_tenant_id": operations_tenant_id}
         )
         require_actor = install_identity_http(
             setup.app, settings=admin_settings, sessions=setup.sessions
@@ -1007,6 +1026,7 @@ def test_retained_c5_recovery_http_admin_and_acquisition_reads(
             setup.app,
             settings=admin_settings,
             require_actor=require_actor,
+            intake=setup.runtime,
             recovery_storage=setup.runtime.storage,
         )
         try:
