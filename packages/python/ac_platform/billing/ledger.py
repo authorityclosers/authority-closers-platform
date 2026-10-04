@@ -123,8 +123,7 @@ class BillingLedger:
         self.database, self.clock = database, clock
         self.trial_policy = trial_policy or TrialPolicy()
         self.operations_tenant_id = operations_tenant_id
-        # Organisations get no derived trial lot: their minutes come only from
-        # tester exemptions and Admin grants until shared credits (ADR 0052, C2).
+        # Organisations get no derived trial lot (ADR 0052, C2).
         self.trial_enabled = trial_enabled
 
     # ---- accounts -------------------------------------------------------
@@ -218,13 +217,31 @@ class BillingLedger:
         return lots
 
     async def organisation_entries(self, *, tenant_id: UUID) -> list[BillingLedgerEntry]:
-        """Read a pool without creating a billing account on an unpaid organisation."""
-        account_ids = select(BillingAccount.id).where(
+        """Pool entries, including member grants held in this tenant (AUT-954).
+
+        Read without creating an account; retain each lot's closings and history.
+        """
+        account_ids = select(BillingAccount.id).where(BillingAccount.tenant_id == tenant_id)
+        organisation_ids = select(BillingAccount.id).where(
             BillingAccount.tenant_id == tenant_id, BillingAccount.kind == "organisation"
+        )
+        member_lots = select(BillingLedgerEntry.id).where(
+            BillingLedgerEntry.account_id.in_(account_ids),
+            or_(
+                BillingLedgerEntry.kind == "grant",
+                (BillingLedgerEntry.kind == "correction") & (BillingLedgerEntry.seconds > 0),
+            ),
         )
         rows = await self.database.scalars(
             select(BillingLedgerEntry)
-            .where(BillingLedgerEntry.account_id.in_(account_ids))
+            .where(
+                BillingLedgerEntry.account_id.in_(account_ids),
+                or_(
+                    BillingLedgerEntry.account_id.in_(organisation_ids),
+                    BillingLedgerEntry.id.in_(member_lots),
+                    BillingLedgerEntry.lot_id.in_(member_lots),
+                ),
+            )
             .order_by(BillingLedgerEntry.created_at, BillingLedgerEntry.id)
         )
         return list(rows)
@@ -344,6 +361,72 @@ class BillingLedger:
         return written
 
     # ---- projection -------------------------------------------------------
+
+    async def project_organisation(
+        self, *, tenant_id: UUID, now: datetime, mirror: bool = False
+    ) -> AccountProjection:
+        """One tenant pool: organisation/member lots and all acquisition uses, no trial.
+
+        Verify legacy grants for every tenant account, including former members.
+        Reads derive missing lots; reservations mirror them under the tenant
+        admission lock, keeping their original person attribution and source ref.
+        """
+        if self.operations_tenant_id is not None and tenant_id == self.operations_tenant_id:
+            raise BillingError("The operations tenant has no billing account.")
+        now = _utc(now)
+        account = await self.database.scalar(
+            select(BillingAccount).where(
+                BillingAccount.tenant_id == tenant_id, BillingAccount.kind == "organisation"
+            )
+        )
+        entries = await self.organisation_entries(tenant_id=tenant_id)
+        lots = self.lots_from_entries(entries)
+        mirrored = {entry.source_ref for entry in entries}
+        if self.operations_tenant_id is not None:
+            legacy_rows = await self.database.scalars(
+                select(ConversationMinuteAccount)
+                .where(ConversationMinuteAccount.tenant_id == tenant_id)
+                .execution_options(populate_existing=True)
+            )
+            for row in legacy_rows:
+                legacy_account = MinuteAccount.from_dict(row.snapshot)
+                if (legacy_account.tenant_id, legacy_account.account_id) != (
+                    str(tenant_id),
+                    str(row.person_id),
+                ):
+                    raise ValueError("The processing account does not match its owner.")
+                verified = await audited_admin_grants(
+                    self.database,
+                    account=legacy_account,
+                    tenant_id=tenant_id,
+                    person_id=row.person_id,
+                    operations_tenant_id=self.operations_tenant_id,
+                )
+                missing = []
+                for grant, event in verified:
+                    source_ref = f"{LEGACY_GRANT_PREFIX}{event.id}"
+                    if source_ref not in mirrored:
+                        missing.append((grant.seconds, event, grant.reason))
+                        mirrored.add(source_ref)
+                if missing and mirror:
+                    member_account = await self.personal_account(
+                        tenant_id=tenant_id, person_id=row.person_id, create=True
+                    )
+                    assert member_account is not None
+                    written = await self.mirror_legacy_grants(member_account, missing, now)
+                    lots.extend(self.lots_from_entries(written))
+                else:
+                    lots.extend(
+                        Lot(
+                            lot_id=f"{LEGACY_GRANT_PREFIX}{event.id}",
+                            kind=LotKind.GRANT,
+                            seconds=seconds,
+                            valid_from=_legacy_valid_from(event, now),
+                        )
+                        for seconds, event, _ in missing
+                    )
+        uses = await self.organisation_uses(tenant_id=tenant_id)
+        return self._finish(account, lots, uses, None, now)
 
     async def project_person(
         self, *, tenant_id: UUID, person_id: UUID, now: datetime, mirror: bool = False

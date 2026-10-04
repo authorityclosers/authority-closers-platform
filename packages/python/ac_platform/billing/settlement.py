@@ -45,7 +45,7 @@ from ac_platform.billing.order_models import (
     BillingSubscriptionEvent,
 )
 from ac_platform.billing.periods import AccountKind, Interval, PlannedLot
-from ac_platform.billing.projection import REFUND_WINDOW, Projection, payment_refundable, project
+from ac_platform.billing.projection import REFUND_WINDOW, Projection, payment_refundable
 from ac_platform.billing.reducers import (
     Decision,
     GrantLots,
@@ -955,8 +955,9 @@ class Settlement:
                 tenant_id=account.tenant_id, person_id=account.person_id, now=now, mirror=True
             )
             return projected.projection
-        entries = await ledger.entries(account.id)
-        return project(ledger.lots_from_entries(entries), [], now)
+        return (
+            await ledger.project_organisation(tenant_id=account.tenant_id, now=now, mirror=True)
+        ).projection
 
     async def _refund_outcome(
         self,
