@@ -98,6 +98,8 @@ _MAX_DURATION_MS = 7_200_000
 class InferenceTaskError(ValueError):
     """Stable local validation code without provider or source content."""
 
+    dimension_ids: tuple[str, ...] = ()
+
 
 def _fail(code: str) -> NoReturn:
     raise InferenceTaskError(code)
@@ -1121,6 +1123,7 @@ def validate_coaching_result(
             _text_response(result),
             transcript,
             profile=resolved_profile,
+            speaker_roles=speaker_roles,
             coaching_prompt_revision=(
                 COACHING_PROMPT_V7
                 if COACHING_PROMPT_V7_MARKER in prompt["messages"][0]["content"]
@@ -1132,7 +1135,9 @@ def validate_coaching_result(
             ),
         )
     except ReportError as exc:
-        raise InferenceTaskError(str(exc)) from None
+        error = InferenceTaskError(str(exc))
+        error.dimension_ids = exc.dimension_ids
+        raise error from None
     if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
         _fail("report_overview_missing")
     return _output(

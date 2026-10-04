@@ -559,6 +559,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
         "conversation_gemini_response_json_invalid",
         "conversation_report_payload_missing_field",
         "conversation_report_overview_invalid",
+        "conversation_report_dimension_prospect_evidence_required",
     ],
 )
 def test_c5_repair_accepts_only_known_returned_provider_report_failures(
@@ -567,6 +568,7 @@ def test_c5_repair_accepts_only_known_returned_provider_report_failures(
     task = SimpleNamespace(
         stage="C5", state="uncertain", intent={"request": {"stage": "C5"}}, run_id=uuid4()
     )
+
     job = SimpleNamespace(
         kind="conversation.infer_provider.v1",
         dispatch_started_at=datetime.now(UTC),
@@ -584,12 +586,18 @@ def test_c5_repair_accepts_only_known_returned_provider_report_failures(
             "response_sha256": "b" * 64,
         },
     )
+    if failure_code == "conversation_report_dimension_prospect_evidence_required":
+        job.provider_receipt["prospect_dimension_ids"] = ["qualification"]
 
     repair = c5_repair_intent(task, job)
 
     assert repair is not None
     assert repair.failure_code == failure_code
     assert repair.original_response_sha256 == "b" * 64
+    if failure_code == "conversation_report_dimension_prospect_evidence_required":
+        assert repair.dimension_ids == ("qualification",)
+    task.intent["request"]["repair"] = repair.model_dump(mode="json")
+    assert c5_repair_intent(task, job) is None
 
 
 @pytest.mark.parametrize(
