@@ -229,7 +229,11 @@ def install_submission_http(
         else:
             raise fail(404, "Upload entry not found.")
         queries = request.query_params.multi_items()
-        if queries and not (library and len(queries) == 1 and queries[0][0] == "before"):
+        if queries and not (
+            library
+            and len({key for key, _ in queries}) == len(queries)
+            and all(key in {"before", "include_owners"} for key, _ in queries)
+        ):
             raise fail(422, "Upload access comes from your current session.")
         if write:
             try:
@@ -443,10 +447,10 @@ def install_submission_http(
 
         async def read(current: _Owner) -> tuple[dict[str, Any], SubmissionLabel]:
             progress = await AcquisitionReports(current.ownership).progress(
-                submission_id, **current.arguments
+                submission_id, **current.arguments, allow_organisation_read=True
             )
             label = await read_submission_label(
-                current.ownership, submission_id, **current.arguments
+                current.ownership, submission_id, **current.arguments, allow_organisation_read=True
             )
             return progress, label
 
@@ -460,7 +464,7 @@ def install_submission_http(
             await owner.ownership.database.rollback()
             async with sessions() as database, database.begin():
                 retry_owner = _Owner(
-                    ownership(database),
+                    ownership(database, owner.ownership.tenant_id),
                     owner.token,
                     owner.actor,
                     owner.shared_identity_locks,
@@ -492,7 +496,10 @@ def install_submission_http(
 
     @router.get("/submissions")
     async def saved_calls(
-        request: Request, response: Response, before: UUID | None = None
+        request: Request,
+        response: Response,
+        before: UUID | None = None,
+        include_owners: bool = False,
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
@@ -507,6 +514,7 @@ def install_submission_http(
                     auth.resolved.actor,
                     before=before,
                     shared_identity_locks=True,
+                    include_owners=include_owners,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -738,8 +746,12 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        result = await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
-        label = await read_submission_label(owner.ownership, submission_id, **owner.arguments)
+        result = await AcquisitionReports(owner.ownership).report(
+            submission_id, **owner.arguments, allow_organisation_read=True
+        )
+        label = await read_submission_label(
+            owner.ownership, submission_id, **owner.arguments, allow_organisation_read=True
+        )
         return {
             **result,
             "display_name": label.display_name,

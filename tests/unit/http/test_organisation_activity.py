@@ -45,6 +45,7 @@ def seed_call(
     plan_state: str | None = None,
     report: bool = False,
     label: str | None = None,
+    visitor_id: UUID | None = None,
 ) -> UUID:
     """Insert one direct account upload the way the acquisition services leave it."""
     principal = db.scalar(
@@ -74,7 +75,8 @@ def seed_call(
         Usage(
             id=usage,
             tenant_id=tenant,
-            person_id=owner,
+            person_id=owner if visitor_id is None else None,
+            visitor_id=visitor_id,
             submission_id=submission,
             source_sha256=source,
             duration_evidence_sha256="b" * 64,

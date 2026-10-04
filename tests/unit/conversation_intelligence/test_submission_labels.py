@@ -320,6 +320,7 @@ async def test_read_uses_the_retained_owner_gate() -> None:
         token=None,
         actor=actor,
         shared_identity_locks=False,
+        allow_organisation_read=False,
     )
 
 
