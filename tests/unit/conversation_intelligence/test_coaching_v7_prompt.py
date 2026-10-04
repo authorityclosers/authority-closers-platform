@@ -11,6 +11,7 @@ import pytest
 from ac_platform.conversation_intelligence import reports
 from ac_platform.conversation_intelligence.call_map import (
     SIGNALS_PATH,
+    CallMap,
     check_call_map,
     dimension_state_ceiling,
 )
@@ -75,6 +76,23 @@ def validate_schema(value, schema, root=None):
 def v7_response():
     response = _valid_response()
     response["call_map"] = _call_map()
+    for key in ("pitch_items", "pains", "money", "seller_tasks"):
+        response["call_map"][key] = response["call_map"][key][:1]
+    response["call_map"]["signals"] = response["call_map"]["signals"][:2]
+    for key in (
+        "pitch_items",
+        "pains",
+        "money",
+        "prospect_tasks",
+        "seller_tasks",
+        "qualification_confirmed",
+        "prospect_facts",
+    ):
+        for row in response["call_map"][key]:
+            row["evidence"] = row["evidence"][:1]
+    for rows in (response["strengths"], response["objection_analysis"]):
+        for row in rows:
+            row["evidence"] = [{"segment_id": ref["segment_id"]} for ref in row["evidence"]]
     response["speakers"] = [
         {
             "speaker_id": row["speaker_id"],
@@ -190,10 +208,19 @@ def test_v7_prompt_contains_honest_report_and_owner_amendments():
         "informal books",
         "undeclared income",
         "Ordinary business figures stay BIZ-03",
+        "exactly two distinct segments",
+        "Evidence selectors are direct {segment_id} only",
+        "At most 16 characters",
+        "At most 120 characters",
+        "At most 240 characters",
+        "At most 300 characters",
+        "At most 12 items: report.sensitive_segments",
     ]:
         assert rule in system, rule
     assert "strength_index" not in system and "evidence_index" not in system
     assert reports.COACHING_PROMPT_V6_MARKER not in system
+    assert "findings and dimensions allow at most 8" not in system
+    assert "no sentence-count target" not in system
     assert hashlib.sha256(SIGNALS_PATH.read_bytes()).hexdigest() in system
     signals = json.loads(SIGNALS_PATH.read_bytes())
     assert all(
@@ -282,6 +309,9 @@ def test_owner_fields_and_sensitive_closed_categories_accept_literal_fictional_d
         "sensitive_category",
         "one_observed_ref",
         "two_partial_refs",
+        "offset_ref",
+        "three_observed_refs",
+        "three_conflicted_refs",
     ],
 )
 def test_v7_schema_accepts_direct_evidence_and_rejects_invalid_amendments(mutation):
@@ -311,6 +341,13 @@ def test_v7_schema_accepts_direct_evidence_and_rejects_invalid_amendments(mutati
             status="observed" if mutation == "one_observed_ref" else "partial",
             evidence=[{"segment_id": "s1"}] * (1 if mutation == "one_observed_ref" else 2),
         )
+    elif mutation == "offset_ref":
+        response["strengths"][0]["evidence"][0].update(quote_start=0, quote_end=5)
+    elif mutation in {"three_observed_refs", "three_conflicted_refs"}:
+        response["dimensions"][0].update(
+            status="observed" if mutation == "three_observed_refs" else "conflicted",
+            evidence=[{"segment_id": "s1"}] * 3,
+        )
     schema = coaching_response_json_schema("coaching-v7")
     if mutation:
         with pytest.raises(AssertionError):
@@ -318,6 +355,89 @@ def test_v7_schema_accepts_direct_evidence_and_rejects_invalid_amendments(mutati
     else:
         validate_schema(response, schema)
         validate_schema(response, coaching_generation_json_schema("coaching-v7"))
+
+
+@pytest.mark.parametrize(
+    "status,count", [("observed", 2), ("partial", 1), ("conflicted", 1), ("conflicted", 2)]
+)
+def test_v7_accepts_bounded_dimension_evidence(status, count):
+    response = v7_response()
+    response["dimensions"][0].update(
+        status=status, evidence=[{"segment_id": f"s{index + 1}"} for index in range(count)]
+    )
+    validate_schema(response, coaching_response_json_schema("coaching-v7"))
+
+
+@pytest.mark.parametrize(
+    "field", ["summary", "explanation", "spoken_name", "segment_id", "sensitive_segments"]
+)
+def test_v7_rejects_previously_unbounded_prose_and_lists(field):
+    response = v7_response()
+    if field == "summary":
+        response["summary"] = "x" * 301
+    elif field == "explanation":
+        response["strengths"][0]["explanation"] = "x" * 241
+    elif field == "spoken_name":
+        response["speakers"][0]["spoken_name"] = "x" * 41
+    elif field == "segment_id":
+        response["strengths"][0]["evidence"][0]["segment_id"] = "x" * 17
+    else:
+        response["sensitive_segments"] = [{"segment_id": "s1", "category": "SENSITIVE_LEGAL"}] * 13
+    with pytest.raises(AssertionError):
+        validate_schema(response, coaching_response_json_schema("coaching-v7"))
+
+
+def test_v7_bounds_are_local_and_no_wider_than_canonical_b1():
+    canonical_schema = CallMap.model_json_schema()
+    before = deepcopy(canonical_schema)
+    local = coaching_response_json_schema("coaching-v7")
+
+    def compare(wire, canonical):
+        if "$ref" in wire:
+            wire = local["$defs"][wire["$ref"].split("/")[-1]]
+        if "$ref" in canonical:
+            canonical = canonical_schema["$defs"][canonical["$ref"].split("/")[-1]]
+        for keyword in ("maxLength", "maxItems", "maximum"):
+            if keyword in canonical:
+                assert wire[keyword] <= canonical[keyword]
+        for key, child in canonical.get("properties", {}).items():
+            compare(wire["properties"][key], child)
+        if "items" in canonical:
+            compare(wire["items"], canonical["items"])
+        for wire_branch, canonical_branch in zip(
+            wire.get("anyOf", []), canonical.get("anyOf", []), strict=True
+        ):
+            compare(wire_branch, canonical_branch)
+
+    compare(local["properties"]["call_map"], canonical_schema)
+    assert CallMap.model_json_schema() == before
+
+    def bounded(node):
+        if isinstance(node, dict):
+            if node.get("type") == "string":
+                assert "maxLength" in node
+            if node.get("type") == "array":
+                assert "maxItems" in node
+            for child in node.values():
+                bounded(child)
+        elif isinstance(node, list):
+            for child in node:
+                bounded(child)
+
+    bounded(local)
+    generation = json.dumps(coaching_generation_json_schema("coaching-v7"))
+    assert all(
+        f'"{key}"' not in generation
+        for key in (
+            "maxLength",
+            "maxItems",
+            "maximum",
+            "minLength",
+            "minItems",
+            "minimum",
+            "pattern",
+        )
+    )
 
 
 @pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])

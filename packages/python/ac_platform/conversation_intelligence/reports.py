@@ -101,7 +101,7 @@ COACHING_PROMPT_V7_INSTRUCTION = (
     "HEU-03: judge only stages that happened. A dimension whose stage is absent is "
     "not_applicable, with one 'what to ask next time' line in observation. A first-meeting or "
     "discovery-only call has no close penalty. Do not infer poor performance from an absent stage. "
-    "Observed needs quotes from at least two distinct segments; partial needs one. "
+    "Observed needs quotes from exactly two distinct segments; partial needs one. "
     "Make atomic claims supported by their own 1-2 segment refs; never borrow a summary's "
     "aggregate 1-3 refs. Any future optional Tier 1 check sees only one claim and its cited "
     "segments, in the existing C5/current provider; no extra stage or call. All evidence_ref "
@@ -115,13 +115,14 @@ COACHING_PROMPT_V7_INSTRUCTION = (
     "the price means a budget gap plus affordability_gap. A misused business term is "
     "seller_error: term, never a vocabulary note. Every unverifiable claim appears in an ethics "
     "note with its own evidence. One sentence per Overview card, at most 20 words. "
-    "Call-map limits: verdict_line 12 words; signals <=8, text <=8 words; pitch_items <=8, "
-    "pains <=6, claims <=8, prospect_tasks <=4, seller_tasks <=6, objections <=6, text <=12 "
-    "words each; money <=8, label <=6 words, finite nonnegative ordered values, unit <=12 chars. "
+    "The v7 wire limits below tighten canonical B1; select the most material supported items. "
+    "Call-map word limits: verdict_line 12; signals text 8; pitch_items, pains, claims, "
+    "prospect_tasks, seller_tasks and objections text 12 each; money label 6, "
+    "finite nonnegative ordered values, unit <=12 chars. "
     "Speakers <=16, all C2 speaker ids; phases 1-8, increasing start_ms within call duration, "
     "no consecutive equal phases; pitch intervals within duration. time_promise is null unless "
     "stated, 60000-14400000 ms with one ref. Qualification gaps and confirmed partition all "
-    "five items. Ask for the prospect's own words in prospect_facts: <=6, industry/team_size/"
+    "five items. Ask for the prospect's own words in prospect_facts: industry/team_size/"
     "company/role, text <=8 words with one prospect ref. Evidence-backed call_purpose is "
     "sales/support/onboarding/internal/personal/unclear, 0-1 refs, unclear without support. "
     "outcome.next_step_when is literal <=6-word spoken wording or null; never convert a spoken "
@@ -135,7 +136,7 @@ COACHING_PROMPT_V7_INSTRUCTION = (
     "approved profile-match gate in the server resolver. No account profile name in this block. "
     "Display-only speakers[]: speaker_id from C2, spoken_name exact spoken spelling/honorific "
     "or null if no stated name; role you/salesperson/prospect/other from the frozen mapping; "
-    "evidence_segment_ids 1-5 C2 ids; confidence low/medium/high only. Names must occur "
+    "evidence_segment_ids exactly one C2 id; confidence low/medium/high only. Names must occur "
     "literally after normalization in a cited segment; never fabricate a name. This closed label "
     "is the only model confidence allowed; no numeric confidence, call type, score or ratio. "
     "sensitive_segments[]: segment_id from C2, category SENSITIVE_FINANCIAL/SENSITIVE_LEGAL, "
@@ -2354,6 +2355,9 @@ def build_report_groq_prompt(
 
     if coaching_prompt_revision == COACHING_PROMPT_V7:
         from ac_platform.conversation_intelligence.call_map import SIGNALS_PATH
+        from ac_platform.conversation_intelligence.coaching_schema import (
+            coaching_v7_bounds_instruction,
+        )
 
         if not detailed_overview:
             raise ReportError("report_v7_detailed_overview_required")
@@ -2374,13 +2378,40 @@ def build_report_groq_prompt(
         system = system.replace(COACHING_PROMPT_V6_MARKER, COACHING_PROMPT_V7_MARKER)
         system = system.replace("Use existing fields, not additional output sections.", "")
         system = system.replace(
+            "Evidence selectors are {segment_id} or {segment_id,quote_start,quote_end}. "
+            "Offsets are zero-based, end-exclusive Unicode code points within one native segment.",
+            "Evidence selectors are direct {segment_id} only.",
+        )
+        system = system.replace(
+            "SourceNotes contain 1–3 references; findings and dimensions allow at most 8; "
+            "each rewatch item contains exactly 1.",
+            "SourceNotes contain one reference, ethics notes 1–2; findings and dimensions "
+            "allow at most two, observed exactly two and partial one; "
+            "rewatch contains exactly one.",
+        )
+        system = system.replace(
+            "Do not impose a sentence-count or length target on assessment.",
+            "Use one sentence per assessment field within the v7 wire limits.",
+        )
+        system = system.replace(
             "Do not emit quotation text or timestamps in new selectors.",
             "Call-map refs include literal quote; report refs use selectors only.",
         )
         old_format = json.dumps(OVERVIEW_V6_FORMAT, ensure_ascii=False, separators=(",", ":"))
         new_format = {
             **OVERVIEW_V6_FORMAT,
-            "golden_moments": "[{evidence:[{segment_id}],why_effective}],at most 3",
+            "diagnosis": "SourceNote(text<=120 chars)|null",
+            "golden_moments": "[{evidence:[{segment_id}],why_effective}],at most one",
+            "prospect_interpretations": (
+                "[{source:SourceNote,possible_concern,interpretation_kind:inference}],at most one"
+            ),
+            "rewatch": (
+                "[SourceNote+{purpose:must_watch|watch|repeat}],at most one;one segment each"
+            ),
+            "ethics_notes": "[SourceNote],at most two;observations only",
+            "final_assessment": (
+                "{repeat,fix_first,next_focus,assessment:truthful strings,one sentence each}"
+            ),
         }
         system = system.replace(
             old_format, json.dumps(new_format, ensure_ascii=False, separators=(",", ":"))
@@ -2397,7 +2428,12 @@ def build_report_groq_prompt(
             + ". "
         )
         system = system.replace(
-            "Profile:\n", COACHING_PROMPT_V7_INSTRUCTION + signal_instruction + "\nProfile:\n", 1
+            "Profile:\n",
+            COACHING_PROMPT_V7_INSTRUCTION
+            + coaching_v7_bounds_instruction()
+            + signal_instruction
+            + "\nProfile:\n",
+            1,
         )
         source = json.loads(prompt["messages"][1]["content"].split("\n", 1)[1])
         source["source_context"] = coaching_source_context(transcript, speaker_roles=speaker_roles)

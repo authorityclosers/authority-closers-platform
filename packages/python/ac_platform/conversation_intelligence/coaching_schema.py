@@ -8,6 +8,8 @@ evidence are added after the response is validated.
 
 from __future__ import annotations
 
+from copy import deepcopy
+from sys import float_info
 from typing import Any
 
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_VERSION
@@ -171,7 +173,156 @@ def _coaching_v7_schema() -> dict[str, Any]:
     }
     schema["properties"].update(additions)
     schema["required"].extend(additions)
+    _bound_v7_schema(schema)
     return schema
+
+
+def _bound_v7_schema(schema: dict[str, Any]) -> None:
+    """Tighten only the fresh v7 wire tree; B1 and legacy revisions stay canonical."""
+    string_limits = {
+        "summary": 300,
+        "verdict": 300,
+        "title": 60,
+        "explanation": 240,
+        "observation": 240,
+        "segment_id": 16,
+        "speaker_id": 16,
+        "raised_by": 16,
+        "id": 16,
+        "addressed_by": 16,
+        "evidence_segment_ids": 16,
+        "spoken_name": 40,
+        "quote": 64,
+        "due_text": 60,
+        "next_step_when": 60,
+        "label": 60,
+        "unit": 12,
+    }
+
+    def bound(node: Any, field: str = "") -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "string":
+            maximum = (
+                max(map(len, node["enum"])) if "enum" in node else string_limits.get(field, 120)
+            )
+            node["maxLength"] = min(node.get("maxLength", maximum), maximum)
+        if node.get("type") == "array":
+            node["maxItems"] = max(node.get("minItems", 0), min(node.get("maxItems", 2), 2))
+            bound(node["items"], field)
+        if node.get("type") == "integer":
+            node["maximum"] = min(node.get("maximum", 2147483647), 2147483647)
+        if node.get("type") == "number":
+            node.update(minimum=0, maximum=float_info.max)
+        for key, child in node.get("properties", {}).items():
+            bound(child, key)
+        for child in node.get("anyOf", []):
+            bound(child, field)
+        for child in node.get("$defs", {}).values():
+            bound(child)
+
+    bound(schema)
+    defs = schema["$defs"]
+    # Direct IDs avoid repeating offset pairs throughout the completion.
+    defs["evidence_ref"] = defs["evidence_ref"]["anyOf"][0]
+    for name, text_limit in {
+        "PitchItem": 120,
+        "Pain": 120,
+        "Claim": 160,
+        "ProspectTask": 120,
+        "SellerTask": 120,
+        "Objection": 120,
+        "ProspectFact": 80,
+        "Signal": 80,
+    }.items():
+        defs["call_map_" + name]["properties"]["text"]["maxLength"] = text_limit
+    for key, maximum in {
+        "strengths": 1,
+        "improvements": 1,
+        "missed_opportunities": 1,
+        "objection_analysis": 1,
+        "closing_analysis": 1,
+        "speakers": 16,
+        "sensitive_segments": 12,
+    }.items():
+        schema["properties"][key]["maxItems"] = maximum
+    call_map = schema["properties"]["call_map"]["properties"]
+    for key, maximum in {
+        "speakers": 16,
+        "phases": 8,
+        "qualification_gaps": 5,
+        "qualification_confirmed": 5,
+        "prospect_facts": 2,
+        "pitch_items": 1,
+        "pains": 1,
+        "money": 1,
+        "prospect_tasks": 1,
+        "seller_tasks": 1,
+        "objections": 1,
+    }.items():
+        call_map[key]["maxItems"] = maximum
+    for name in (
+        "PitchItem",
+        "Pain",
+        "Money",
+        "ProspectTask",
+        "SellerTask",
+        "QualificationConfirmed",
+        "ProspectFact",
+    ):
+        defs["call_map_" + name]["properties"]["evidence"]["maxItems"] = 1
+    schema["properties"]["speakers"]["items"]["properties"]["evidence_segment_ids"]["maxItems"] = 1
+    defs["business_impact"]["properties"]["missing_inputs"]["maxItems"] = 1
+    defs["source_note"]["properties"]["evidence"]["maxItems"] = 1
+    defs["ethics_note"] = deepcopy(defs["source_note"])
+    defs["ethics_note"]["properties"]["evidence"]["maxItems"] = 2
+    overview = defs["overview"]["properties"]
+    overview["ethics_notes"].update(maxItems=2, items={"$ref": "#/$defs/ethics_note"})
+    for key in ("golden_moments", "prospect_interpretations", "rewatch"):
+        overview[key]["maxItems"] = 1
+    for key, findings in {
+        "strength_details": "strengths",
+        "improvement_details": "improvements",
+        "missed_details": "missed_opportunities",
+    }.items():
+        overview[key]["maxItems"] = schema["properties"][findings]["maxItems"]
+    for name in ("strength_detail", "improvement_detail", "missed_detail"):
+        defs[name]["properties"]["finding_index"]["maximum"] = 0
+    defs["call_map_TimePromise"]["properties"]["promised_ms"].update(
+        minimum=60000, maximum=14400000
+    )
+
+
+def coaching_v7_bounds_instruction() -> str:
+    """State every local wire limit in the prompt without changing provider schemas."""
+    groups: dict[tuple[str, int], set[str]] = {}
+
+    def visit(node: Any, path: str) -> None:
+        if not isinstance(node, dict):
+            return
+        for keyword, unit in (("maxLength", "characters"), ("maxItems", "items")):
+            if keyword in node:
+                groups.setdefault((unit, node[keyword]), set()).add(path)
+        for key, child in node.get("properties", {}).items():
+            visit(child, f"{path}.{key}")
+        if "items" in node:
+            visit(node["items"], path + "[]")
+        for index, child in enumerate(node.get("anyOf", [])):
+            visit(child, f"{path}.option{index}")
+
+    schema = coaching_response_json_schema(_COACHING_V7)
+    visit(schema, "report")
+    for key, node in schema["$defs"].items():
+        visit(node, key)
+    return (
+        "V7 WIRE LIMITS (bounds, not quotas): "
+        + " ".join(
+            f"At most {maximum} {unit}: {', '.join(sorted(paths))}."
+            for (unit, maximum), paths in sorted(groups.items())
+        )
+        + " Integers are at most 2147483647; monetary amounts are finite nonnegative "
+        "binary64 values. "
+    )
 
 
 def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:

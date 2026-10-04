@@ -34,7 +34,6 @@ from tests.unit.conversation_intelligence.test_broker_router import (
     _stage,
 )
 from tests.unit.conversation_intelligence.test_coaching_v7_prompt import (
-    v7_response,
     validate_schema,
 )
 from tests.unit.conversation_intelligence.test_mixed_script_prompt_budget import (
@@ -143,38 +142,55 @@ def test_v7_sixty_minute_complete_context_fits_unchanged_input_and_completion_ca
     require_long_coaching_cost_approval(body, **approval_fields())
 
 
-def oversized_v7_response():
-    response = v7_response()
-    # Retained finding limits: 3/3/10/8/8, explanation <=4000 chars,
-    # two direct refs each. This is not even a largest call-map output.
-    for name, count in [
-        ("strengths", 3),
-        ("improvements", 3),
-        ("missed_opportunities", 10),
-        ("objection_analysis", 8),
-        ("closing_analysis", 8),
-    ]:
-        response[name] = [
-            {
-                "title": f"Fictional finding {index}",
-                "explanation": (
-                    "Ask what the prospect needs and confirm which change they want. " * 65
-                )[:4000],
-                "evidence": [{"segment_id": "s1"}, {"segment_id": "s2"}],
-            }
-            for index in range(count)
-        ]
-    return response
+def largest_v7_value(schema, root=None):
+    """Maximize canonical JSON bytes under the CTO's escape-free ASCII convention."""
+    root = schema if root is None else root
+    if "$ref" in schema:
+        return largest_v7_value(root["$defs"][schema["$ref"].split("/")[-1]], root)
+    if "anyOf" in schema:
+        return max(
+            (largest_v7_value(branch, root) for branch in schema["anyOf"]),
+            key=lambda value: (len(canonical(value)), canonical(value)),
+        )
+    if "enum" in schema:
+        return max(schema["enum"], key=lambda value: (len(canonical(value)), canonical(value)))
+    kind = schema["type"]
+    if kind == "object":
+        # Include optional properties too: omission cannot increase the bound.
+        return {key: largest_v7_value(child, root) for key, child in schema["properties"].items()}
+    if kind == "array":
+        return [largest_v7_value(schema["items"], root) for _ in range(schema["maxItems"])]
+    if kind == "string":
+        maximum = schema["maxLength"]
+        pattern = schema.get("pattern", "")
+        if pattern.startswith("^"):
+            prefix = pattern[1:].split("[")[0]
+            return prefix + "1" * (maximum - len(prefix))
+        return "x" * maximum
+    if kind in {"integer", "number"}:
+        # JSON Schema numbers also admit integers. A finite binary64 maximum
+        # permits a 309-digit integer, larger than the float's exponent form.
+        candidates = [schema.get("minimum", 0), schema["maximum"], int(schema["maximum"])]
+        return max(candidates, key=lambda value: (len(canonical(value)), canonical(value)))
+    if kind == "null":
+        return None
+    raise AssertionError(f"Unbudgeted schema type: {kind}")
 
 
-def test_v7_largest_output_acceptance_is_blocked_by_retained_prose_bounds():
-    """A valid lower bound already exceeds the cap; never claim a small fixture proves it."""
-    response = oversized_v7_response()
-    validate_schema(response, coaching_response_json_schema("coaching-v7"))
-    assert len(canonical(response)) == 137948
-    # Conservative byte units, not measured provider usage. Even /3 is above
-    # the fixed 8000 total-output cap; schema strings have no length bounds.
-    assert (len(canonical(response)) + 2) // 3 > 8000
+def v7_output_section_bytes(response):
+    """Member bytes exclude the outer braces and separating commas."""
+    return {key: len(canonical({key: value})) - 2 for key, value in response.items()}
+
+
+def test_v7_largest_valid_output_fits_unchanged_completion_cap():
+    schema = coaching_response_json_schema("coaching-v7")
+    response = largest_v7_value(schema)
+    validate_schema(response, schema)
+    section_bytes = v7_output_section_bytes(response)
+    total = sum(section_bytes.values()) + len(section_bytes) - 1 + 2
+    assert total == len(canonical(response))
+    assert total <= 24000, section_bytes
+    assert (total + 2) // 3 <= 8000
 
 
 @pytest.mark.asyncio

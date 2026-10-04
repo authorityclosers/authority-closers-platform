@@ -26,43 +26,80 @@ this card. No provider was called, and all fixtures are fictional.
 ## Verification
 
 The focused suite covers the new candidate, existing v4–v6 prompt/schema pins,
-the pack, C5 adapters, plans, runtime gates, frozen attribution and the B1 call
-map. The first complete run passed 407 tests. Ruff format/check and mypy passed
-(397 source files). The final PR records the final test count.
+the pack, C5 adapters, plans, runtime gates, frozen attribution, the B1 call
+map and the report parser/source pin. **507 tests passed**. Ruff format/check
+and mypy passed (397 source files). New negative cases reject oversized prose,
+names, segment IDs, sensitive lists, offset selectors and excess dimension
+evidence. Positive cases cover observed two refs, partial one and conflicted
+one or two. Every string/array is bounded; wire call-map maxima are checked
+against canonical B1, and generation schemas still strip local bounds.
 
 The 60-minute fictional C2 fixture retains every source turn and fits the
 existing structured input envelope, including the larger v7 schema. The output
-cap remains 8,000, and the existing cost-admission checks still pass. This
-proves input admission, not the largest-output acceptance check.
+cap remains 8,000, and the existing cost-admission checks still pass. The
+separate output proof below also passes.
 
 Dev `https://salesxray-dev.authorityclosers.com` returned a Cloudflare sign-in
 redirect. No credential workaround or real-call check was attempted. The
 candidate is intentionally unavailable at runtime.
 
-## Unmet acceptance: largest valid completion
+## Bounded completion proof
 
-`test_v7_largest_output_acceptance_is_blocked_by_retained_prose_bounds` preserves
-a schema-valid lower-bound counterexample: 3 strengths, 3 improvements,
-10 missed opportunities, 8 objection findings and 8 closing findings, each
-within the retained 4,000-character explanation limit and with two direct
-segment references. This is not even a maximum call-map/speaker/sensitive
-output. It serializes to **137,948 bytes**, or **45,983 conservative /3 byte
-units**, against the fixed **8,000 total-output cap**. These are conservative
-planning units, not measured provider token usage. The provider schema also
-retains unbounded prose strings, so it does not define a finite largest output.
+The initial candidate at `22bd2e49` recorded a 137,948-byte counterexample
+with retained unbounded prose. The CTO's changes-requested decision on
+4 October selected Option A: bound v7 alone and keep acceptance check 4 and
+the fixed 8,000 cap. This section supersedes that unresolved acceptance.
 
-Passing a small or maximum-cardinality short fixture would not establish the
-card's largest-valid-output claim. No generation cap, quote requirement,
-contract cardinality, provider allowance or acceptance criterion was silently
-changed to make that assertion pass. Runtime refusal remains in place.
+`test_v7_largest_valid_output_fits_unchanged_completion_cap` recursively walks
+the entire local schema. It includes optional properties, every array at
+`maxItems`, every free string at `maxLength` using JSON-escape-free ASCII,
+the longest enum and the largest serialized `anyOf` branch. Numeric bounds
+are also included, including the 309-digit integer spelling of the finite
+binary64 monetary maximum. The resulting fictional fixture validates against
+the local schema. It is a conservative wire-shape maximum; transcript-bound
+and cross-field B1 rules can only narrow that envelope.
 
-CTO review must settle the bounded v7 generation envelope shared with B3:
-prefer compact evidence selectors plus explicit prose/aggregate bounds while
-preserving the canonical B1 storage contract and fixed provider cap. An
-alternative is to amend the largest-output criterion to test bounded accepted
-responses and explicit exhaustion refusal; that would change the card's
-acceptance rather than prove the current one. The draft PR must not merge
-as a completed AUT-347 until this acceptance is resolved.
+The CTO's ASCII `/3` planning convention gives **23,535 canonical bytes /
+7,845 units**, below **24,000 bytes / 8,000 units**, with 465 bytes of room.
+These are planning units, not measured provider tokens. Provider generation
+schemas still omit local bounds, as requested; this proof covers the bounded
+local acceptance schema rather than arbitrary provider output.
+
+| Section/member        | Maximum bytes |
+| --------------------- | ------------: |
+| summary               |           312 |
+| strengths             |           424 |
+| improvements          |           427 |
+| missed_opportunities  |           435 |
+| objection_analysis    |           433 |
+| closing_analysis      |           431 |
+| verdict               |           312 |
+| review_status         |            45 |
+| dimensions            |         3,398 |
+| overview              |         5,565 |
+| call_map              |         8,053 |
+| speakers              |         2,860 |
+| sensitive_segments    |           826 |
+| Outer braces + commas |            14 |
+| **Total**             |    **23,535** |
+
+Member sizes include the quoted property key, colon and complete value;
+separators and the root braces are counted once in the final row.
+
+The explicit v7 choices reduce counts before shortening prose: one item per
+finding category and corresponding detail, golden moment, interpretation and
+rewatch; two atomic claims, signals, prospect facts and ethics notes; one
+pitch item, pain, money item, prospect task, seller task and objection.
+The envelope retains eight dimensions, up to eight phases, all five
+qualification items, sixteen speakers in both blocks and twelve sensitive
+segments. Each display speaker cites one segment. All required fields remain.
+
+Summary/verdict allow 300 characters; finding explanations and dimension
+observations 240; one-sentence detail strings 120; call-map item text 120,
+claims 160 and facts/signals 80; names 40; literal quotes 64; dates 60; IDs 16. Existing word limits still apply. Report evidence is direct `{segment_id}`
+only; findings/dimensions allow at most two refs, observed exactly two, partial
+one and golden moments one or two. B1 is untouched. Every local string/list
+limit is stated in the v7 prompt from the fresh schema.
 
 ## Scope choice
 
@@ -74,10 +111,15 @@ revision and retained gate/pin checks. This evidence file is the additional
 implementation record. Validation/storage, runtime activation, rubrics,
 providers, routes, stages and screens remain outside this change.
 
+The CTO accepted the accumulated scope overrun. The second commit also
+refreshes the whole-file `reports.py` hash assertion in `test_reports.py`,
+which was the sole failed first-head CI test. Report validator semantics
+remain revision `/8`; only dormant v7 generation changed in that module.
+
 ## Offline dev check
 
 On `task/sales-xray/347-coaching-v7`, run the focused pytest command in the PR.
 Inspect the new prompt/schema tests, then the two v7 budget tests: full-hour
-input admission passes, and the counterexample records the unresolved output
-bound. Confirm `coaching_revision_runtime_block("coaching-v7")` returns the
+input admission and the maximum-size completion both pass. Confirm
+`coaching_revision_runtime_block("coaching-v7")` returns the
 Gate 2 refusal. No real report rerun is part of this check.
