@@ -38,6 +38,7 @@ MAX_APPROVAL_BUNDLE_BYTES = 512 * 1024
 MAX_ALLOWANCES = 64
 MAX_STAGES = 192
 MAX_INTERNAL_TESTER_ACCOUNTS = 8
+MAX_ORGANISATION_SEAT_EXEMPTIONS = 8
 MAX_STAGE_CALL_SUPPLEMENTS = 64
 MAX_ACQUISITION_C5_BENCHMARKS = 8
 ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"] = (
@@ -173,6 +174,17 @@ class InternalTesterApproval(_StrictFrozenModel):
         if tuple(sorted(self.scopes)) != self.scopes:
             raise ValueError("internal_tester_scopes_unordered")
         return self
+
+
+class OrganisationSeatExemption(_StrictFrozenModel):
+    """One exact organisation's release-approved seat-limit exemption."""
+
+    id: UUID
+    tenant_id: UUID
+    authorization_ref: str = Field(min_length=6, max_length=256)
+    reason: Literal["Owner organisation: no seat limit"]
+
+    _authorization_ref = field_validator("authorization_ref")(_validate_reference)
 
 
 class StageApproval(_StrictFrozenModel):
@@ -612,6 +624,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
     internal_tester_accounts: tuple[InternalTesterApproval, ...] = Field(
         default=(), max_length=MAX_INTERNAL_TESTER_ACCOUNTS
     )
+    organisation_seat_exemptions: tuple[OrganisationSeatExemption, ...] = Field(
+        default=(), max_length=MAX_ORGANISATION_SEAT_EXEMPTIONS
+    )
     acquisition_policy: AcquisitionProviderPolicy | None = None
     organisation_acquisition_policies: tuple[AcquisitionProviderPolicy, ...] = ()
     stage_call_supplements: tuple[StageCallSupplement, ...] = Field(
@@ -705,6 +720,16 @@ class HostedApprovalBundle(_StrictFrozenModel):
         policy_ids = [item.id for item in policies]
         if len(policy_ids) != len(set(policy_ids)):
             raise ValueError("duplicate_approval_id")
+        exemption_ids = [item.id for item in self.organisation_seat_exemptions]
+        if len(exemption_ids) != len(set(exemption_ids)) or set(exemption_ids) & set(
+            approval_ids + tester_ids + supplement_ids + benchmark_ids + policy_ids
+        ):
+            raise ValueError("duplicate_approval_id")
+        exempt_tenants = [item.tenant_id for item in self.organisation_seat_exemptions]
+        if len(exempt_tenants) != len(set(exempt_tenants)):
+            raise ValueError("duplicate_organisation_seat_exemption_tenant")
+        if self.provider_control_tenant_id in exempt_tenants:
+            raise ValueError("organisation_seat_exemption_tenant_invalid")
         paid_stages = [
             approval
             for approval in self.stages
@@ -888,6 +913,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
             # Existing /1 artifacts retain byte-for-byte canonical form until
             # an operator explicitly issues a tester exemption approval.
             value.pop("internal_tester_accounts", None)
+        if not self.organisation_seat_exemptions:
+            # Existing /1 bundles keep their exact canonical bytes and digest.
+            value.pop("organisation_seat_exemptions", None)
         if not self.stage_call_supplements:
             # Keep the canonical bytes and digest of historical /1 bundles.
             value.pop("stage_call_supplements", None)

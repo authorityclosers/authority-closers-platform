@@ -128,7 +128,7 @@ async def _source(engine, *, retention_days=None):
         database.add(usage)
         await database.flush()
         pipeline = ReportingPipeline(ConversationInference(application))
-        transcript = {"segments": deepcopy(SEGMENTS)}
+        transcript = {"revision": "fictional-metrics-revision", "segments": deepcopy(SEGMENTS)}
         binding = binding_for(recording)
         c0 = build_checkpoint(binding, "C0", "synthetic-source-v1", {}, (), "a" * 64)
         c1 = build_checkpoint(binding, "C1", "synthetic-timing-v1", {}, (c0,), "b" * 64)
@@ -216,7 +216,7 @@ async def _finish(database, source, monkeypatch, *, outcome="follow_up"):
             )
         ),
     )
-    transcript = {"segments": deepcopy(SEGMENTS)}
+    transcript = {"revision": "fictional-metrics-revision", "segments": deepcopy(SEGMENTS)}
     plan = SimpleNamespace(
         request=SimpleNamespace(transcript_checkpoint_id=transcript_id),
         profile={"revision": "synthetic-metrics-v1"},

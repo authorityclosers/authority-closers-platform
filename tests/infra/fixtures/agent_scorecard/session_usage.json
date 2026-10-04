@@ -1,7 +1,7 @@
 {
   "description": "Fictional independent per-run receipts; increasing values are not cumulative snapshots.",
   "issues": [
-    {"id": "done", "identifier": "DEMO-SESSION", "assigneeAgentId": "builder", "startedAt": "2026-09-20T00:00:00Z"},
+    {"id": "done", "identifier": "DEMO-SESSION", "assigneeAgentId": "builder", "startedAt": "2026-09-20T00:00:00Z", "description": "Task type: Platform change\nTier: non-routine"},
     {"id": "unfinished", "identifier": "DEMO-OTHER", "assigneeAgentId": "builder"}
   ],
   "agents": [{"id": "builder", "name": "Fictional Builder", "adapterType": "codex_local"}],

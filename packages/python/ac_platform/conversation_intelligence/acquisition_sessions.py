@@ -112,7 +112,7 @@ class AcquisitionSessions:
         self.policy_revision, self.lifetime, self.clock = policy_revision, lifetime, clock
         self.tester_policy, self.operations_tenant_id = tester_policy, operations_tenant_id
         self.trial_policy = trial_policy or TrialPolicy()
-        # Personal keeps the derived trial; an organisation workspace starts at 0 s.
+        # Personal keeps its trial; organisations draw only on the tenant pool.
         self.trial_enabled = trial_enabled
         self.ledger = BillingLedger(
             database,
@@ -259,6 +259,10 @@ class AcquisitionSessions:
         """The billing projection of the owner; ``mirror`` only under the admission lock."""
 
         if person_id is not None:
+            if not self.trial_enabled:
+                return await self.ledger.project_organisation(
+                    tenant_id=self.tenant_id, now=now, mirror=mirror
+                )
             return await self.ledger.project_person(
                 tenant_id=self.tenant_id, person_id=person_id, now=now, mirror=mirror
             )

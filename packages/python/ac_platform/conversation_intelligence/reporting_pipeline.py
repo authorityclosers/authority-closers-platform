@@ -671,9 +671,26 @@ class ReportingPipeline:
         transcription_task, transcription_receipt = await self.provider_task(
             recording, transcript_row
         )
+        from ac_platform.conversation_intelligence.sensitive_segments_store import (
+            SensitiveSegmentsStore,
+        )
+
+        assert transcript_row.payload is not None
+        await SensitiveSegmentsStore(self.database).mark_generation(
+            recording_id=recording.id, transcript_revision=transcript_row.payload["revision"]
+        )
         if plan.profile is None:
             raise ConversationConflict("A frozen coaching profile is required.")
         c5 = verified_checkpoint(row, binding_for(recording))
+        existing = await self.database.scalar(
+            select(ConversationReportDraft.id).where(
+                ConversationReportDraft.run_id == run.id,
+                ConversationReportDraft.report_sha256 == content_hash(normalized),
+                ConversationReportDraft.erased_at.is_(None),
+            )
+        )
+        if existing is not None:
+            return
         transcript_bundle = {
             "normalized": plan.transcript,
             "profile": plan.profile,

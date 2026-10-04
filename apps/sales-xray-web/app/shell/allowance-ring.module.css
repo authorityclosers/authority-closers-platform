@@ -51,18 +51,6 @@
   stop-color: var(--lx-danger);
 }
 
-/* A light travelling round the full ring for unlimited time. */
-.sweep {
-  fill: none;
-  stroke: var(--lx-surface);
-  stroke-width: 3.5;
-  stroke-linecap: round;
-  stroke-dasharray: 10 84.25;
-  opacity: 0.75;
-  transform-origin: 18px 18px;
-  animation: sweep 2.8s linear infinite;
-}
-
 .center {
   position: absolute;
   top: 50%;
@@ -75,12 +63,6 @@
   line-height: 1;
   text-align: center;
   letter-spacing: -0.02em;
-}
-
-.meter[data-level="unlimited"] .center {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lx-teal);
 }
 
 .text {
@@ -109,12 +91,6 @@
   white-space: nowrap;
 }
 
-@keyframes sweep {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (max-width: 1100px) {
   .text {
     display: none;
@@ -127,10 +103,6 @@
 @media (prefers-reduced-motion: reduce) {
   .value {
     transition: none;
-  }
-  .sweep {
-    animation: none;
-    opacity: 0;
   }
 }
 
@@ -167,13 +139,8 @@
 .value {
   stroke-width: 4;
 }
-.meter:not([data-level="unlimited"]) .center {
+.meter .center {
   display: none;
-}
-.meter[data-level="unlimited"] .center {
-  left: 4px;
-  width: 24px;
-  font-size: 12px;
 }
 .text {
   display: flex;
@@ -267,7 +234,7 @@
 .meter {
   padding-left: 2px;
 }
-.meter:not([data-level="unlimited"]) .center {
+.meter .center {
   display: block;
   left: 2px;
   width: 28px;

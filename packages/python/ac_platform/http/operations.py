@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
@@ -535,6 +535,7 @@ async def _minute_account_response(
     state: MinuteAccountState,
     operations_tenant_id: UUID,
     effective_unlimited: bool,
+    organisation_pool: bool = False,
 ) -> ConversationMinuteAccountResponse:
     account = state.account
     event_by_grant_id: dict[str, AuditEvent] = {}
@@ -572,13 +573,25 @@ async def _minute_account_response(
         for grant in account.grants
     ]
     committed_seconds = sum(item.committed_seconds for item in account.reservations)
-    shared_committed_seconds, additional_allowance_seconds = await shared_account_committed_seconds(
-        session,
-        tenant_id=UUID(account.tenant_id),
-        person_id=UUID(account.account_id),
-        operations_tenant_id=operations_tenant_id,
-    )
-    shared_allowance_seconds = ALLOWANCE_SECONDS + additional_allowance_seconds
+    if organisation_pool:
+        projected = await BillingLedger(
+            session, operations_tenant_id=operations_tenant_id
+        ).project_organisation(tenant_id=UUID(account.tenant_id), now=datetime.now(UTC))
+        shared_allowance_seconds = projected.granted_seconds
+        shared_committed_seconds = projected.committed_seconds
+        shared_available_seconds = projected.available_seconds
+    else:
+        (
+            shared_committed_seconds,
+            additional_allowance_seconds,
+        ) = await shared_account_committed_seconds(
+            session,
+            tenant_id=UUID(account.tenant_id),
+            person_id=UUID(account.account_id),
+            operations_tenant_id=operations_tenant_id,
+        )
+        shared_allowance_seconds = ALLOWANCE_SECONDS + additional_allowance_seconds
+        shared_available_seconds = max(0, shared_allowance_seconds - shared_committed_seconds)
     return ConversationMinuteAccountResponse(
         tenant_id=UUID(account.tenant_id),
         person_id=UUID(account.account_id),
@@ -591,7 +604,7 @@ async def _minute_account_response(
         available_minutes=account.available_seconds // 60,
         shared_upload_allowance_seconds=shared_allowance_seconds,
         shared_upload_committed_seconds=shared_committed_seconds,
-        shared_upload_available_seconds=max(0, shared_allowance_seconds - shared_committed_seconds),
+        shared_upload_available_seconds=shared_available_seconds,
         grants=grants,
     )
 
@@ -798,6 +811,10 @@ def install_operations_http(
                 state=state,
                 operations_tenant_id=operations_tenant_id,
                 effective_unlimited=effective_unlimited,
+                organisation_pool=(
+                    tenant_id in served_tenant_ids
+                    and tenant_id != settings.public_learner_tenant_id
+                ),
             )
         except EligibleLearnerUnavailable as error:
             raise MinuteAccountTargetUnavailable(
@@ -990,6 +1007,9 @@ def install_operations_http(
             state=state,
             operations_tenant_id=operations_tenant_id,
             effective_unlimited=effective_unlimited,
+            organisation_pool=(
+                tenant_id in served_tenant_ids and tenant_id != settings.public_learner_tenant_id
+            ),
         )
         _no_store(response)
         return ConversationMinuteGrantResponse(

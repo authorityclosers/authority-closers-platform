@@ -33,6 +33,64 @@ def session_source(adapter):
 
 
 @pytest.mark.parametrize(
+    "adapter,basis,total",
+    [
+        ("codex_local", "per_run", 285),
+        ("claude_local", "per_run", 445),
+        ("codex_local", "session_delta", 285),
+        ("claude_local", "session_delta", 445),
+    ],
+)
+def test_d1_views_share_all_known_figures(adapter, basis, total):
+    source = session_source(adapter)
+    for run in source["runs"]:
+        run["usageJson"]["usageSource"] = basis
+    result = report(source)
+    assert result["distributions"] == [("Platform change", "non-routine", 1, 1, 0, total, [total])]
+    dashboard = scorecard.render_fictional_d1(result)
+    weekly = scorecard.render_fictional_d1(result, "weekly-report")
+    assert dashboard.split("\n", 1)[1] == weekly.split("\n", 1)[1]
+    assert f"| 1 | 1 | 100.0% | 0 | 0 | {total:.2f} | {total:.2f} | {total:.2f} |" in dashboard
+    assert dashboard.count("## ") == 3 and "Fictional examples only" in dashboard
+    assert "| Codex | unknown | unknown | unknown |" in dashboard
+    assert "Independent Quality" in dashboard and "human Quality remain unknown" in weekly
+
+
+def test_d1_incomplete_unknown_and_no_run_tasks():
+    source = fixture_source(FIXTURE)
+    result = report(source)
+    assert result["distributions"] == [
+        ("Documentation", "routine", 1, 1, 0, 150, [150]),
+        ("unknown", "unknown", 1, 0, 2, 268, []),
+    ]
+    dashboard = scorecard.render_fictional_d1(result)
+    assert (
+        dashboard.split("\n", 1)[1]
+        == scorecard.render_fictional_d1(result, "weekly-report").split("\n", 1)[1]
+    )
+    assert "Accepted: 2; covered: 1; unknown tasks: 1; 2 runs unreported." in dashboard
+    assert "Reported tokens (subtotal): 418.00." in dashboard
+    assert "| 5.50d | 6.00d | 0 | 3 |" in dashboard
+    assert (
+        "| unknown | unknown | 1 | 0 | 0.0% | 1 | 2 | 268.00 | n/a (incomplete usage)" in dashboard
+    )
+    source["issues"][1]["description"] = source["issues"][0]["description"]
+    assert report(source)["distributions"] == [("Documentation", "routine", 2, 1, 2, 418, [])]
+    source["issues"][1].pop("description")
+    source["runs"] = []
+    source["issues"][0]["description"] = "Task type: Docs\nTask type: Tests\nTier: unsupported"
+    assert report(source)["distributions"] == [("unknown", "unknown", 2, 0, 0, 0, [])]
+    assert "covered: 0; unknown tasks: 2" in scorecard.render_fictional_d1(report(source))
+    source["activity"] = {}
+    assert report(source)["distributions"] == []
+    assert "Accepted: 0; covered: 0; unknown tasks: 0" in scorecard.render_fictional_d1(
+        report(source)
+    )
+    with pytest.raises(ValueError, match="view must"):
+        scorecard.render_fictional_d1(result, "invalid")
+
+
+@pytest.mark.parametrize(
     "adapter,first,second", [("codex_local", 110, 175), ("claude_local", 170, 275)]
 )
 def test_reused_sessions_and_cross_task_history(adapter, first, second):

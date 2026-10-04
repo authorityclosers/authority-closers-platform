@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
@@ -258,6 +259,19 @@ def install_organisation_http(
             **await organisation_seats(auth.database, auth.resolved.actor.tenant_id)
         )
 
+    def seat_exempt(tenant_id: UUID) -> bool:
+        try:
+            policy = getattr(application.state, "internal_tester_policy", None)
+            if not isinstance(policy, InternalTesterPolicy):
+                return False
+            bundle = policy.loader().current(
+                int(datetime.now(UTC).timestamp()), settings.environment
+            )
+            return any(item.tenant_id == tenant_id for item in bundle.organisation_seat_exemptions)
+        except Exception:
+            # An unavailable or stale pinned approval cannot waive paid seats.
+            return False
+
     def service(auth: AuthenticatedTransaction) -> OrganisationService:
         if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
             raise DomainError("Organisation tenant boundaries are not configured.")
@@ -265,6 +279,7 @@ def install_organisation_http(
             auth.database,
             operations_tenant_id=settings.operations_tenant_id,
             public_learner_tenant_id=settings.public_learner_tenant_id,
+            seat_exempt=seat_exempt,
         )
 
     @router.post("/members", response_model=MemberResponse)

@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it } from "vitest";
 
 import { SettingsMenu } from "./settings-menu";
+import type { Allowance } from "../acquisition-client";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -75,4 +76,57 @@ it("keeps the account menu inside the mobile viewport by the active trigger", as
   expect(menu.style.left).toBe("45px");
   expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
   expect(Number.parseFloat(menu.style.bottom)).toBeLessThan(800);
+});
+
+it.each<[Allowance, string | null]>([
+  [
+    {
+      allowance_seconds: 600000,
+      available_seconds: 600000,
+      committed_seconds: 0,
+    },
+    "166 h of 166 h left",
+  ],
+  [
+    {
+      allowance_seconds: 0,
+      available_seconds: 0,
+      committed_seconds: 0,
+      unlimited: true,
+    },
+    null,
+  ],
+])("does not invent a plan for %j", async (allowance, text) => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <SettingsMenu
+        open
+        anchorRef={{ current: document.createElement("button") }}
+        onClose={() => {}}
+        name="Fictional User"
+        email="fictional@example.test"
+        allowance={allowance}
+      />,
+    ),
+  );
+  const menu = document.querySelector(
+    '[role="dialog"][aria-label="Account menu"]',
+  )!;
+  if (text) expect(menu.textContent).toContain(text);
+  expect(menu.textContent).not.toMatch(/Unlimited|unavailable|Trial/i);
+  expect(menu.querySelector('a[href="/plans"]')?.textContent).toBe("Plans");
+  if (allowance.unlimited) {
+    expect(menu.querySelector('[aria-hidden="true"] i')).toBeNull();
+    const buttons = [...menu.querySelectorAll("button")];
+    expect(
+      buttons.some((button) => button.textContent?.includes("Analysis time")),
+    ).toBe(false);
+    expect(
+      buttons.find((button) => button.textContent?.startsWith("Usage"))
+        ?.textContent,
+    ).toBe("Usage");
+  }
 });
