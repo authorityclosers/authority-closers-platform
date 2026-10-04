@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import secrets
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -122,12 +123,14 @@ class OrganisationService:
         *,
         operations_tenant_id: UUID,
         public_learner_tenant_id: UUID,
+        seat_exempt: Callable[[UUID], bool] | None = None,
     ) -> None:
         if operations_tenant_id is None or public_learner_tenant_id is None:
             raise OrganisationCommandError(
                 "operations and public tenant IDs are required to protect those tenants"
             )
         self.session = session
+        self._seat_exempt = seat_exempt
         self._protected_tenant_ids = frozenset((operations_tenant_id, public_learner_tenant_id))
 
     async def create(
@@ -386,6 +389,8 @@ class OrganisationService:
         return MemberResult(tenant_id, person_id, person.email, role, "active")
 
     async def _ensure_seat_available(self, tenant_id: UUID, *, extra: int = 1) -> None:
+        if self._seat_exempt is not None and self._seat_exempt(tenant_id):
+            return
         # Every addition holds the registry lock, so competing commands cannot
         # both consume the last seat. Accepting an invite replaces its seat.
         seats = await organisation_seats(self.session, tenant_id)

@@ -234,6 +234,34 @@ async def test_unpaid_organisation_refuses_invites_and_direct_adds_without_write
 
 
 @pytest.mark.asyncio
+async def test_seat_predicate_is_optional_tenant_bound_and_rechecked(state):
+    exempt = await state.service.create("Exempt fixture", state.owner_id, uuid4(), "AUT-1080")
+    ordinary = await state.service.create("Ordinary fixture", state.owner_id, uuid4(), "AUT-1080")
+    enabled = True
+    service = OrganisationService(
+        state.adapter,
+        operations_tenant_id=state.operations_id,
+        public_learner_tenant_id=state.public_id,
+        seat_exempt=lambda tenant_id: enabled and tenant_id == exempt.tenant_id,
+    )
+    added = await service.add_member(exempt.tenant_id, state.worker_id, "admin", uuid4())
+    assert added.status == "active"
+    with pytest.raises(OrganisationSeatsFull):
+        await service.add_member(ordinary.tenant_id, state.worker_id, "member", uuid4())
+    enabled = False
+    with pytest.raises(OrganisationSeatsFull):
+        await service.request_member(
+            exempt.tenant_id,
+            "revoked@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    assert state.session.scalar(select(func.count()).select_from(BillingAccount)) == 0
+    assert state.session.scalar(select(func.count()).select_from(BillingLedgerEntry)) == 0
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["direct", "request"])
 async def test_operator_provisions_unpaid_org_but_self_service_still_needs_seats(state, method):
     org = await state.service.create("Operator fixture", state.owner_id, uuid4(), "AUT-881")
