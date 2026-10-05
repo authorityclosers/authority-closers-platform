@@ -29,6 +29,7 @@ def test_recovery_workflow_is_package_only_and_digest_bound() -> None:
         "actions": "write",
         "contents": "read",
         "packages": "read",
+        "pull-requests": "read",
     }
     steps = job["steps"]
     names = [step.get("name", "") for step in steps]
