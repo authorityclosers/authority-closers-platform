@@ -502,26 +502,30 @@ def test_checkout_derives_buyer_state_from_gstin_and_refuses_a_mismatch() -> Non
     assert len(commands.calls) == 2
 
 
+@pytest.mark.parametrize("resource", ["invoices", "credit-notes"])
 @pytest.mark.parametrize(
     "path",
     [
-        "/v1/invoices?debug=1",
-        "/v1/invoices?account=team",
-        "/v1/invoices?limit=0",
-        "/v1/invoices?limit=101",
-        "/v1/invoices?before=invalid",
-        f"/v1/invoices/{ORDER_ID}/download?debug=1",
-        "/v1/invoices/invalid/download",
+        "?debug=1",
+        "?account=team",
+        "?limit=0",
+        "?limit=101",
+        "?before=invalid",
+        f"/{ORDER_ID}/download?debug=1",
+        "/invalid/download",
     ],
 )
-def test_invoice_reads_reject_unknown_or_invalid_query_parameters(path: str) -> None:
+def test_document_reads_reject_unknown_or_invalid_query_parameters(
+    resource: str, path: str
+) -> None:
     client, _actor, _database = _client(_Commands())
-    assert client.get(path, headers={"Host": HOST}).status_code == 422
+    assert client.get(f"/v1/{resource}{path}", headers={"Host": HOST}).status_code == 422
 
 
-def test_invoice_routes_are_absent_when_billing_is_not_composed() -> None:
+@pytest.mark.parametrize("resource", ["invoices", "credit-notes"])
+def test_document_routes_are_absent_when_billing_is_not_composed(resource: str) -> None:
     client, _actor, _database = _client(None)
-    for path in ("/v1/invoices", f"/v1/invoices/{ORDER_ID}/download"):
+    for path in (f"/v1/{resource}", f"/v1/{resource}/{ORDER_ID}/download"):
         assert client.get(path, headers={"Host": HOST}).status_code == 404
 
 
