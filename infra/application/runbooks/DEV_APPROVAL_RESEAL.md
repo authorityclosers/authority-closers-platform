@@ -1,4 +1,4 @@
-# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117 / AUT-1158
+# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117 / AUT-1158 / AUT-1197
 
 Root Operator runs this tool from the **merged, released, root-owned application
 scripts directory**, after CTO review and CEO merge approval. Engineers do not
@@ -15,7 +15,7 @@ It never regenerates the candidate or uses `approval-candidate.json`.
 | Immutable input | Pin |
 | --- | --- |
 | Original default serving backend source | `b9f2f70e35c821f72d4f59184a8850977d696aad` |
-| Explicit serving source verified by Root on 4 October 2026, 15:33 UTC | `0accda891cb7bdd4f0b677c1cb8588730b745e95` |
+| Explicit serving source verified by Root on 4 October 2026, 23:02–23:08 UTC | `97f908fa557404ab88bdb494766473643a7dc601` |
 | Preserved existing template release | `1e784afa128f8d4629aeece5179486d423c0ec52` |
 | Existing approval SHA256 | `07ca6c4ea9587ff81b7bd97a891eb81f1195179ca4eb3ff8fa03205267225881` |
 | Canonical candidate SHA256 | `72343b19c3028c21dd16fd51d455b6dfdd1008e570f14778abbd8fd3aeb3d217` |
@@ -25,7 +25,7 @@ The tool intentionally keeps the serving source unchanged while adopting
 configuration from a newer reviewed tool release. If any input pin differs,
 Root reports the stable failure code on AUT-1083; do not edit the inputs or
 relax the tool's pins. The tool release SHA and checksums must be taken from
-[AUT-1158](/AUT/issues/AUT-1158)'s final merged/released handoff, rather than a moving `current-staging`
+[AUT-1197](/AUT/issues/AUT-1197)'s final merged/released handoff, rather than a moving `current-staging`
 symlink or an agent checkout.
 
 `--serving-release-id` accepts one lowercase 40-hex commit SHA. Omitting it keeps
@@ -45,7 +45,7 @@ checksums against that release's source-reviewed files before executing.
 
 ```bash
 RESEAL_TOOL_RELEASE=<merged-released-tool-sha>
-RESEAL_SERVING_RELEASE=0accda891cb7bdd4f0b677c1cb8588730b745e95
+RESEAL_SERVING_RELEASE=97f908fa557404ab88bdb494766473643a7dc601
 RESEAL_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}/scripts
 RESEAL_SCRIPT=${RESEAL_DIR}/reseal-dev-sales-xray-approval.py
 sha256sum "$RESEAL_SCRIPT" \
@@ -61,6 +61,68 @@ the current service and both canonical approvals in a network-isolated
 uid/gid-10001 transient unit. systemd opens root-only sources and delivers
 uid-private credentials to this unit. The application contract never runs as
 root. Dry-run does not write files or restart managed services.
+
+### Reviewed code delivery at uid10001
+
+The immutable release's scripts and directory are root:acops mode 0750.
+A read-only bind preserves those permissions; uid/gid10001 cannot execute or
+import the scripts there. The manager now delivers these exact source files
+as credentials named `reseal-dev-sales-xray-approval.py`,
+`refresh-dev-sales-xray-backend.py`, and
+`prepare-sales-xray-native-activation.py`. It never changes release permissions
+or runtime group membership.
+
+Before starting the transient unit, the tool requires trusted root-owned
+ancestors and regular, single-link, mode-0750 script files without xattrs.
+It compares its own bytes with the digest captured when loaded and both helper
+bytes with their fixed reviewed hashes. At uid/gid10001, a bootstrap checks
+the exact private credential directory, absence of extra groups, all three
+names, confidentiality through the serving contract's existing file/ACL
+checks, and all three hashes before executing/importing delivered code.
+Only hashes and fixed arguments go in argv. Code, approval and service
+credentials use the runtime-private systemd directory; the code directory
+is no longer bound into the sandbox.
+
+This delivery runs in dry-run/apply preflight, the apply recheck before backups,
+post-adoption verification, rollback preflight using saved inputs, and exact
+restoration verification. Memory/CPU/task limits, network isolation, suppressed
+output and every existing hold, source/approval pin and rollback guard remain
+in place. Missing, untrusted or tampered source/delivered code refuses before
+the preflight can admit durable-input or managed-service changes.
+
+### Root-only fictional runtime proof
+
+The normal engineer suite simulates systemd and skips one explicit Root test.
+Root must run that test from a root-owned copy of the exact reviewed commit,
+with pinned dependencies, before live adoption. The test creates only fictional
+private inputs and copies of the three reviewed scripts. It gives those copies
+root:acops0750 ownership/modes, then uses real systemd and the development
+backend's existing interpreter and contract at uid/gid10001. It proves the
+original copies remain unreadable, all delivered bytes validate successfully,
+missing/tampered credentials fail, and fixture bytes and source permissions
+remain unchanged. It never calls reseal, apply, rollback, any managed-service
+mutation, provider or database operation.
+
+Root supplies the exact backend from its verified unit metadata and uses a
+root-owned fixture directory under `/run`; do not substitute a live credential
+path. Before adoption, repeat against the released immutable script with the
+optional `AC_RESEAL_REVIEWED_SCRIPT` source override:
+
+```bash
+AC_RESEAL_RUNTIME_PROOF=1 \
+AC_RESEAL_PROOF_BACKEND=<verified-development-backend-directory> \
+AC_RESEAL_REVIEWED_SCRIPT="$RESEAL_SCRIPT" \
+uv run --frozen pytest tests/infra/test_reseal_dev_sales_xray_approval.py \
+  -k root_only_real_uid10001_code_delivery -q --tb=short \
+  --basetemp=<root-owned-proof-workspace>/fixtures
+```
+
+Record the source commit, installed path, three script hashes, actual uid/gid,
+zero additional groups, the test result and unchanged-source result on
+[AUT-1083](/AUT/issues/AUT-1083). A skipped test or mocked success does not satisfy
+this runtime proof. Reverify the serving source independently before the
+pinned dry-run/apply/rollback commands; the historical source above is not an
+automatic claim about the current deployment.
 
 Before any durable write, API and outbox file **and running-process** holds
 must be `true`; their environment must be `development`. The refresh timer
@@ -173,7 +235,7 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `ac376f4c0ca6dbcdebd78f39312b828e4ab8e309d87afa19cffc87228ac9d941` |
+| `reseal-dev-sales-xray-approval.py` | `d62b90bf57f0bec9a35d03ef20f1bee5f8f33e1038324c5cf5f349d1b71b8c25` |
 | `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
 | `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
 
@@ -216,3 +278,16 @@ output. Typed source admission still requires independent adopted-credential
 verification. Python format/lint and diff whitespace checks passed. Root's live
 verification, CTO review, CEO SHA-bound approval and immutable release handoff
 remain required; these fixture results do not claim adoption or intake success.
+
+AUT-1197 local result (5 October 2026): 408 re-seal tests and 59 unchanged helper
+regressions passed (467 total). The explicit real-systemd Root proof was skipped
+because the engineer runs at uid1002 and cannot operate host services.
+Source-file absence, tampering, symlink/hardlink and writable-mode failures
+refuse all four dry-run/apply/rollback modes before backups or service mutations.
+The bootstrap independently rejects missing/tampered/public/symlink/empty
+delivered code, wrong uid/gid, extra groups and wrong credential contexts before
+execution. The suite checks every sandbox property, exact three source names,
+digests and private credential delivery, plus the apply and restoration rechecks.
+Python format/lint and diff whitespace checks passed. Root's real uid10001 proof,
+CTO review, CEO SHA-bound approval, normal release and live adoption/endpoint
+verification remain outstanding; this result does not claim any of them.
