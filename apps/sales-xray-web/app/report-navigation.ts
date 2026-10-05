@@ -2,25 +2,15 @@ import { UUID } from "./acquisition-client";
 
 export const REPORT_SECTIONS = [
   "overview",
-  "transcript",
-  "moments",
-  "analysis",
-  "coaching",
-] as const;
-// Other report readers still use these sections; retain their bookmarks.
-const LEGACY_REPORT_SECTIONS = [
   "prospect",
+  "moments",
   "skills",
   "next-call-plan",
 ] as const;
-export type ReportSection =
-  | (typeof REPORT_SECTIONS)[number]
-  | (typeof LEGACY_REPORT_SECTIONS)[number];
+export type ReportSection = (typeof REPORT_SECTIONS)[number];
 
 function isSection(value: string): value is ReportSection {
-  return (
-    [...REPORT_SECTIONS, ...LEGACY_REPORT_SECTIONS] as readonly string[]
-  ).includes(value);
+  return (REPORT_SECTIONS as readonly string[]).includes(value);
 }
 
 /** A URL selects a panel of an already-authorized report, never job state. */
