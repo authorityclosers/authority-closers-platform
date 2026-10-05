@@ -79,6 +79,7 @@ async def organisation_seats(database: AsyncSession, tenant_id: UUID) -> dict[st
             .select_from(Membership)
             .where(
                 Membership.tenant_id == tenant_id,
+                Membership.role != "processing",
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
             )
@@ -177,6 +178,7 @@ async def member_rows(
         .join(Person, Person.id == Membership.person_id)
         .where(
             Membership.tenant_id == tenant_id,
+            Membership.role != "processing",
             Membership.status == "active",
             Membership.ended_at.is_(None),
         )

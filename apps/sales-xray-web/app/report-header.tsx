@@ -1,10 +1,10 @@
 "use client";
 
 import {
+  BookOpen,
   Clock3,
   Download,
   Ellipsis,
-  FileText,
   Link2,
   Pencil,
   Plus,
@@ -407,7 +407,7 @@ export function ReportHeader({
               aria-label="Open transcript reader"
               title="Open transcript reader"
             >
-              <FileText size={16} aria-hidden="true" />
+              <BookOpen size={16} aria-hidden="true" />
               <span>Transcript</span>
             </button>
           ) : null}
@@ -439,7 +439,7 @@ export function ReportHeader({
                     onOpenTranscript();
                   }}
                 >
-                  <FileText size={16} aria-hidden="true" />
+                  <BookOpen size={16} aria-hidden="true" />
                   Transcript
                 </button>
               ) : null}

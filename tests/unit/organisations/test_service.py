@@ -321,6 +321,92 @@ async def test_operator_provisions_unpaid_org_but_self_service_still_needs_seats
 
 
 @pytest.mark.asyncio
+async def test_processing_identity_does_not_consume_paid_seat_or_bypass_invite_limit(state):
+    from ac_platform.organisations.usage import organisation_seats
+
+    org = await state.service.create("Paid seat fixture", state.owner_id, uuid4(), "AUT-1177")
+    await seed_paid_seats(state.adapter, org.tenant_id, state.owner_id, seats=3)
+    processing_id = uuid4()
+    state.session.add(Person(id=processing_id, email="processing@example.test"))
+    state.session.flush()
+    state.session.add(
+        Membership(tenant_id=org.tenant_id, person_id=processing_id, role="processing")
+    )
+    state.session.flush()
+    assert await organisation_seats(state.adapter, org.tenant_id) == {
+        "paid_seats": 3,
+        "active_members": 1,
+        "pending_invites": 0,
+        "seats_available": 2,
+    }
+
+    added = await state.service.request_member(
+        org.tenant_id, "worker@example.test", "admin", uuid4(), actor_person_id=state.owner_id
+    )
+    assert added["status"] == "active"
+    invited = await state.service.request_member(
+        org.tenant_id, "last-seat@example.test", "member", uuid4(), actor_person_id=state.owner_id
+    )
+    assert invited["status"] == "invited"
+    assert await organisation_seats(state.adapter, org.tenant_id) == {
+        "paid_seats": 3,
+        "active_members": 2,
+        "pending_invites": 1,
+        "seats_available": 0,
+    }
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "over-limit@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+
+    # Accepting the last invite replaces its reserved seat with the real member.
+    member_id = uuid4()
+    state.session.add(
+        Person(
+            id=member_id,
+            email="last-seat@example.test",
+            email_verified_at=datetime.now(UTC),
+        )
+    )
+    state.session.flush()
+    accepted = await state.service.request_member(
+        org.tenant_id, "last-seat@example.test", "member", uuid4(), actor_person_id=state.owner_id
+    )
+    assert accepted["status"] == "active"
+    assert await organisation_seats(state.adapter, org.tenant_id) == {
+        "paid_seats": 3,
+        "active_members": 3,
+        "pending_invites": 0,
+        "seats_available": 0,
+    }
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "over-limit@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    members = list(
+        state.session.scalars(select(Membership).where(Membership.tenant_id == org.tenant_id))
+    )
+    assert {member.role for member in members} == {"owner", "admin", "member", "processing"}
+    assert all(member.status == "active" and member.ended_at is None for member in members)
+    assert (
+        state.session.scalar(
+            select(func.count())
+            .select_from(OrganisationInvite)
+            .where(OrganisationInvite.status == "pending")
+        )
+        == 0
+    )
+
+
+@pytest.mark.asyncio
 async def test_current_period_seats_are_not_extended_by_rollover_or_refunded_grants(state):
     from ac_platform.organisations.usage import paid_seats
 

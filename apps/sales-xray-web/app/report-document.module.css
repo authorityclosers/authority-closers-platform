@@ -37,7 +37,29 @@
   height: 18px;
 }
 .document > p {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 16px;
+}
+.retry,
+.document > p button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--lx-line, #cbd5e1);
+  border-radius: var(--lx-radius-sm, 8px);
+  background: var(--lx-surface, #ffffff);
+  color: var(--lx-ink-2, #334155);
+  font: 600 13px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.retry:hover,
+.document > p button:hover {
+  background: var(--lx-paper-2, #f1f5f9);
 }
 .scroll {
   overflow: auto;

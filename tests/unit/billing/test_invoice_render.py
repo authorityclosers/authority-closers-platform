@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.billing.invoice_models import BillingInvoice
-from ac_platform.billing.invoice_render import render_invoice
+from ac_platform.billing.invoice_models import BillingCreditNote, BillingInvoice
+from ac_platform.billing.invoice_render import render_credit_note, render_invoice
 
 
 def test_invoice_html_escapes_every_snapshot_field_and_uses_saved_money() -> None:
@@ -158,3 +158,45 @@ def test_invoice_total_wording_preserves_saved_amounts_and_tax_breakdown(
     assert html.count("<p>Total includes GST</p>") == 1 and "Price includes GST" not in html
     assert f"Service: Sales Xray — {plan_name}" in html and f"Seats: {seats}" in html
     assert f'<table aria-label="Invoice amounts"><tbody>{expected_rows}</tbody></table>' in html
+
+
+@pytest.mark.parametrize("interstate", [False, True])
+def test_credit_note_renders_saved_reference_money_and_escapes_all_text(interstate: bool) -> None:
+    hostile = '<script>alert("fictional")</script>&'
+    note = BillingCreditNote(
+        number=hostile,
+        invoice_id=uuid4(),
+        refund_ref=hostile,
+        financial_year=hostile,
+        created_at=datetime(2026, 10, 4, tzinfo=UTC),
+        taxable_minor=10000,
+        cgst_minor=0 if interstate else 900,
+        sgst_minor=0 if interstate else 900,
+        igst_minor=1800 if interstate else 0,
+        total_minor=11800,
+        place_of_supply=hostile,
+        details={
+            "seller": {key: hostile for key in ("name", "address", "gstin", "state_code", "sac")},
+            "buyer": {key: hostile for key in ("name", "address", "gstin", "state_code")},
+            **{
+                key: hostile
+                for key in ("plan_name", "seats", "period_start", "period_end", "invoice_number")
+            },
+        },
+    )
+    html = render_credit_note(note)
+    escaped = "&lt;script&gt;alert(&quot;fictional&quot;)&lt;/script&gt;&amp;"
+    assert html.startswith("<!doctype html>") and "@media print" in html
+    assert hostile not in html and "<script>" not in html
+    assert html.count(escaped) == 19
+    assert f"<h1>Credit note {escaped}</h1>" in html
+    assert f"Original invoice: {escaped}" in html and f"Refund reference: {escaped}" in html
+    assert "INR 100.00" in html and "INR 118.00" in html
+    assert '<table aria-label="Credit note amounts">' in html
+    assert "Total includes GST" in html
+    if interstate:
+        assert "IGST @ 18%" in html and "INR 18.00" in html and "CGST @" not in html
+    else:
+        assert "CGST @ 9%" in html and "SGST @ 9%" in html and "IGST @" not in html
+    note.details.pop("invoice_number")
+    assert f"Original invoice: {note.invoice_id}" in render_credit_note(note)

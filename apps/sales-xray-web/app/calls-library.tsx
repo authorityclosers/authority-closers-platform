@@ -5,15 +5,22 @@ import { callHref } from "./acquisition-client";
 import { callTone, submissionState, type CallTone } from "./call-status";
 import {
   ArrowRight,
+  ArrowUpDown,
   AudioLines,
+  Download,
+  Eye,
+  Handshake,
+  MessageCircleQuestion,
   FolderOpen,
   LoaderCircle,
   Plus,
   RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "./acquisition-shell";
 import { useUploadSession, useUploadSnapshot } from "./hooks/upload-session";
@@ -30,6 +37,9 @@ import { callTitle, type CallLabel } from "./call-label";
 import { readCallLabel, renameCall } from "./call-label-client";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
+import { CallsDrawer } from "./calls-drawer";
+import { useCallInsights, type CallInsight } from "./calls-insights";
+import { csvRows } from "./csv-export";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -69,6 +79,73 @@ function formatCreatedTime(createdAt: string) {
   );
 }
 
+type CallSort = "newest" | "oldest" | "longest";
+
+const SORTS: { id: CallSort; label: string }[] = [
+  { id: "newest", label: "Newest first" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "longest", label: "Longest first" },
+];
+
+function sortCalls(rows: LibrarySubmission[], sort: CallSort) {
+  if (sort === "newest") return rows;
+  const copy = [...rows];
+  if (sort === "oldest")
+    copy.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  else
+    copy.sort(
+      (a, b) =>
+        (hasDurationEstimate(b) ? b.durationSeconds : 0) -
+        (hasDurationEstimate(a) ? a.durationSeconds : 0),
+    );
+  return copy;
+}
+
+function dayGroup(createdAt: string, now = new Date()) {
+  const created = new Date(createdAt);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = 86_400_000;
+  const diff =
+    start.getTime() -
+    new Date(
+      created.getFullYear(),
+      created.getMonth(),
+      created.getDate(),
+    ).getTime();
+  if (diff <= 0) return "Today";
+  if (diff <= day) return "Yesterday";
+  if (diff < 7 * day) return "This week";
+  if (diff < 31 * day) return "This month";
+  return "Earlier";
+}
+
+function hoursLabel(totalMs: number) {
+  const minutes = Math.round(totalMs / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} h ${minutes % 60} min`;
+}
+
+function exportCsv(rows: string[][], filename: string) {
+  const blob = new Blob([csvRows(rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function excerpt(text: string | null, max = 96) {
+  if (!text) return null;
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
 const FILTERS: { id: "all" | CallTone; label: string }[] = [
   { id: "all", label: "All" },
   { id: "ready", label: "Report ready" },
@@ -96,11 +173,14 @@ export function CallsLibrary({
   variant = "standalone",
   studioHref = "/",
   preview = false,
+  insights = false,
 }: {
   variant?: "standalone" | "embedded";
   studioHref?: "/" | "/sales-xray";
   /** Compact account-backed home preview; hidden until saved rows exist. */
   preview?: boolean;
+  /** Calls workspace: per-call insights, preview drawer, stats, bulk export. */
+  insights?: boolean;
 }) {
   const access = useWorkspaceAccess();
   const identityKey =
@@ -120,6 +200,7 @@ export function CallsLibrary({
       variant={variant}
       studioHref={studioHref}
       preview={preview}
+      insights={insights}
     />
   );
 }
@@ -128,12 +209,14 @@ function CallsLibraryContent({
   variant = "standalone",
   studioHref = "/",
   preview = false,
+  insights = false,
   identityKey,
 }: {
   variant?: "standalone" | "embedded";
   studioHref?: "/" | "/sales-xray";
   /** Compact account-backed home preview; hidden until saved rows exist. */
   preview?: boolean;
+  insights?: boolean;
   identityKey: string;
 }) {
   const embedded = variant === "embedded";
@@ -171,6 +254,13 @@ function CallsLibraryContent({
     return "all";
   });
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<CallSort>("newest");
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  // One clock reading per page load keeps render pure (react-hooks/purity).
+  const [loadedAt] = useState(() => Date.now());
+  const searchInput = useRef<HTMLInputElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seenSubmissionIds = useRef(new Set<string>());
   const firstPageSubmissionIds = useRef(new Set<string>());
@@ -573,10 +663,107 @@ function CallsLibraryContent({
     },
     { ready: 0, active: 0, attention: 0, idle: 0 } as Record<CallTone, number>,
   );
-  const visibleSubmissions =
-    filter === "all"
-      ? submissions
-      : submissions.filter((submission) => callTone(submission) === filter);
+  const needle = query.trim().toLocaleLowerCase();
+  const visibleSubmissions = sortCalls(
+    submissions.filter(
+      (submission) =>
+        (filter === "all" || callTone(submission) === filter) &&
+        (!needle ||
+          callTitle(
+            submission.label,
+            `Sales call · ${formatCreatedDate(submission.createdAt)}`,
+          )
+            .toLocaleLowerCase()
+            .includes(needle)),
+    ),
+    sort,
+  );
+  const workspace = insights && !preview;
+  const {
+    insightOf,
+    statusOf,
+    retry: retryInsights,
+  } = useCallInsights(
+    visibleSubmissions
+      .filter((submission) => submission.hasReport)
+      .slice(0, 40)
+      .map((submission) => submission.id),
+    workspace && access?.authenticated === true,
+  );
+  useEffect(() => {
+    if (!workspace) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        event.key === "/" &&
+        !(target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        event.preventDefault();
+        searchInput.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspace]);
+  const titleOf = (submission: LibrarySubmission) =>
+    callTitle(
+      submission.label,
+      `Sales call · ${formatCreatedDate(submission.createdAt)}`,
+    );
+  const lengthOf = (
+    submission: LibrarySubmission,
+    insight: CallInsight | null,
+  ) =>
+    insight?.durationMs
+      ? formatClock(insight.durationMs)
+      : hasDurationEstimate(submission)
+        ? formatDuration(submission.durationSeconds)
+        : "—";
+  function togglePicked(id: string) {
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exportPicked() {
+    const rows = submissions.filter(
+      (submission) => picked.size === 0 || picked.has(submission.id),
+    );
+    exportCsv(
+      [
+        [
+          "Call",
+          "Date",
+          "Time",
+          "Length",
+          "Status",
+          "Assessment",
+          "Questions",
+          "Next steps and commitments",
+          "Business details",
+          "Link",
+        ],
+        ...rows.map((submission) => {
+          const insight = insightOf(submission.id);
+          return [
+            titleOf(submission),
+            formatCreatedDate(submission.createdAt),
+            formatCreatedTime(submission.createdAt),
+            lengthOf(submission, insight),
+            submissionState(submission),
+            insight?.assessment ?? "",
+            String(insight?.questions ?? ""),
+            String(insight?.signals.commitments ?? ""),
+            String(insight?.signals.business ?? ""),
+            `${window.location.origin}${callHref(submission.id, studioHref)}`,
+          ];
+        }),
+      ],
+      `sales-xray-calls-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+  }
   // Bars compare estimated lengths against the longest loaded estimate.
   const longestSeconds = Math.max(
     0,
@@ -616,6 +803,7 @@ function CallsLibraryContent({
     const isOpening = openingId === submission.id;
     const isSelected =
       submission.id === selectedId || selectedSubmission?.id === submission.id;
+    const insight = workspace ? insightOf(submission.id) : null;
     const title = callTitle(
       submission.label,
       `Sales call · ${formatCreatedDate(submission.createdAt)}`,
@@ -646,8 +834,22 @@ function CallsLibraryContent({
       <div
         className="calls-library-row"
         key={submission.id}
+        data-tone={tone}
         data-selected={isSelected ? "true" : undefined}
+        data-picked={
+          workspace && picked.has(submission.id) ? "true" : undefined
+        }
       >
+        {workspace ? (
+          <label className={styles.pick}>
+            <input
+              type="checkbox"
+              checked={picked.has(submission.id)}
+              onChange={() => togglePicked(submission.id)}
+              aria-label={`Select ${title}`}
+            />
+          </label>
+        ) : null}
         <button
           className="calls-library-item"
           data-submission-id={submission.id}
@@ -667,18 +869,72 @@ function CallsLibraryContent({
                 ? `${formatCreatedDate(submission.createdAt)} · ${formatCreatedTime(submission.createdAt)}`
                 : formatCreatedTime(submission.createdAt)}
             </small>
+            {workspace && submission.hasReport ? (
+              insight ? (
+                <span className={styles.rowInsight}>
+                  {insight.callType ? (
+                    <span className={styles.typeChip}>
+                      {insight.callType.replace(/_/g, " ")}
+                    </span>
+                  ) : null}
+                  {insight.assessment ? (
+                    <span className={styles.rowAssessment}>
+                      {excerpt(insight.assessment)}
+                    </span>
+                  ) : null}
+                  <span className={styles.rowSignals}>
+                    {insight.questions ? (
+                      <span title="Questions asked">
+                        <MessageCircleQuestion size={12} aria-hidden="true" />
+                        {insight.questions}
+                      </span>
+                    ) : null}
+                    {insight.signals.commitments ? (
+                      <span title="Next steps and commitments">
+                        <Handshake size={12} aria-hidden="true" />
+                        {insight.signals.commitments}
+                      </span>
+                    ) : null}
+                    {insight.signals.concerns ? (
+                      <span title="Concerns">
+                        <MessageCircleQuestion size={12} aria-hidden="true" />
+                        {insight.signals.concerns}
+                      </span>
+                    ) : null}
+                    {insight.signals.business ? (
+                      <span title="Business details">
+                        <FolderOpen size={12} aria-hidden="true" />
+                        {insight.signals.business}
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+              ) : (
+                <span className={styles.rowPending}>
+                  {statusOf(submission.id) === "error"
+                    ? "Report could not be read"
+                    : statusOf(submission.id) === "unavailable"
+                      ? "Report insights unavailable"
+                      : "Reading report…"}
+                </span>
+              )
+            ) : null}
           </span>
           <span
             className="calls-library-duration"
             aria-label={
-              estimated
-                ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
-                : "Length unavailable"
+              insight?.durationMs
+                ? `Measured call duration: ${formatClock(insight.durationMs)}`
+                : estimated
+                  ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
+                  : "Length unavailable"
             }
             title={
-              estimated
-                ? "Estimated length, compared with the longest call in this list"
-                : undefined
+              insight?.durationMs
+                ? "Measured call duration; bar compares estimated lengths"
+                : estimated
+                  ? "Estimated length, compared with the longest call in this list"
+                  : undefined
             }
           >
             <span className="calls-library-duration-track" aria-hidden="true">
@@ -692,7 +948,11 @@ function CallsLibraryContent({
               ) : null}
             </span>
             <span className="calls-library-duration-clock" aria-hidden="true">
-              {estimated ? formatDuration(submission.durationSeconds) : "—"}
+              {insight?.durationMs
+                ? formatClock(insight.durationMs)
+                : estimated
+                  ? formatDuration(submission.durationSeconds)
+                  : "—"}
             </span>
           </span>
           <span className="calls-library-state" data-tone={tone}>
@@ -710,6 +970,17 @@ function CallsLibraryContent({
             )}
           </span>
         </button>
+        {workspace ? (
+          <button
+            type="button"
+            className={styles.previewButton}
+            onClick={() => setPreviewId(submission.id)}
+            aria-label={`Preview ${title}`}
+            title="Preview"
+          >
+            <Eye size={15} aria-hidden="true" />
+          </button>
+        ) : null}
         {label && !preview ? (
           <RenameCallButton
             callTitle={title}
@@ -753,17 +1024,81 @@ function CallsLibraryContent({
     );
   }
 
+  const previewSubmission = previewId
+    ? (submissions.find((submission) => submission.id === previewId) ?? null)
+    : null;
+  const loadedInsights = workspace
+    ? submissions
+        .map((submission) => insightOf(submission.id))
+        .filter((insight): insight is CallInsight => insight !== null)
+    : [];
+  const weekAgo = loadedAt - 7 * 86_400_000;
+  const durations = loadedInsights.flatMap((insight) =>
+    insight.durationMs === null ? [] : [insight.durationMs],
+  );
+  const questions = loadedInsights.flatMap((insight) =>
+    insight.questions === null ? [] : [insight.questions],
+  );
+  const commitments = loadedInsights.flatMap((insight) =>
+    insight.signals.commitments === null ? [] : [insight.signals.commitments],
+  );
+  const stats = workspace
+    ? {
+        calls: `${submissions.length}${nextCursor ? "+" : ""}`,
+        thisWeek: submissions.filter(
+          (submission) => new Date(submission.createdAt).getTime() >= weekAgo,
+        ).length,
+        time: durations.length
+          ? hoursLabel(durations.reduce((sum, duration) => sum + duration, 0))
+          : null,
+        ready: counts.ready,
+        open: counts.active + counts.attention,
+        questions: questions.length
+          ? Math.round(
+              questions.reduce((sum, count) => sum + count, 0) /
+                questions.length,
+            )
+          : null,
+        commitments: commitments.length
+          ? commitments.reduce((sum, count) => sum + count, 0)
+          : null,
+      }
+    : null;
+  const renderRows = () => {
+    if (!workspace || sort === "longest")
+      return visibleSubmissions.map(submissionButton);
+    const out: ReactNode[] = [];
+    let current = "";
+    for (const submission of visibleSubmissions) {
+      const group = dayGroup(submission.createdAt, new Date(loadedAt));
+      if (group !== current) {
+        current = group;
+        out.push(
+          <div
+            className={styles.group}
+            key={`group-${group}`}
+            role="presentation"
+          >
+            {group}
+          </div>,
+        );
+      }
+      out.push(submissionButton(submission));
+    }
+    return out;
+  };
+
   const content = (
     <div
       className={`xray-app simple-app calls-library-app ${styles.root}`}
-      data-theme="light"
       data-variant={variant}
+      data-workspace={workspace ? "true" : undefined}
     >
       <Main className="studio-main calls-library-main">
         {/* One page heading; privacy is one quiet line, not a second title. */}
         <header className="calls-library-intro">
           <div>
-            <h1 id="calls-library-title" className="visually-hidden">
+            <h1 id="calls-library-title" className={styles.title}>
               Calls
             </h1>
             <p className="calls-library-summary">
@@ -827,208 +1162,307 @@ function CallsLibraryContent({
             </Link>
           </section>
         ) : (
-          <section
-            className="panel calls-library-list-panel"
-            aria-labelledby="calls-library-title"
-          >
-            {selectedSubmission && (
-              <div
-                className="calls-library-selected-card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  padding: "14px 18px",
-                  marginBottom: 16,
-                  borderRadius: 10,
-                  background: "var(--lx-sunken)",
-                  border: "1.5px solid var(--lx-teal)",
-                  boxShadow: "0 2px 8px rgba(13, 148, 136, 0.08)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
-                >
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 8px",
-                        borderRadius: 99,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: "rgba(13, 148, 136, 0.12)",
-                        color: "var(--lx-teal)",
-                      }}
-                    >
-                      Selected Call
-                    </span>
-                    <strong style={{ fontSize: 14.5, color: "var(--lx-ink)" }}>
-                      {callTitle(
-                        selectedSubmission.label,
-                        `Sales call · ${formatCreatedDate(selectedSubmission.createdAt)}`,
-                      )}
-                    </strong>
-                  </div>
-                  <span style={{ fontSize: 12, color: "var(--lx-muted)" }}>
-                    {submissionState(selectedSubmission)} ·{" "}
-                    {formatDuration(selectedSubmission.durationSeconds)} ·{" "}
-                    {formatCreatedDate(selectedSubmission.createdAt)}
-                  </span>
+          <>
+            {stats ? (
+              <section className={styles.stats} aria-label="Calls at a glance">
+                <div>
+                  <span>Calls</span>
+                  <strong>{stats.calls}</strong>
+                  <small>{stats.thisWeek} this week</small>
                 </div>
+                <div>
+                  <span>Measured call duration</span>
+                  <strong>{stats.time ?? "—"}</strong>
+                  <small>across {durations.length} measured calls</small>
+                </div>
+                <div>
+                  <span>Reports ready</span>
+                  <strong>{stats.ready}</strong>
+                  <small>{stats.open} still open</small>
+                </div>
+                <div>
+                  <span>Questions per call</span>
+                  <strong>{stats.questions ?? "—"}</strong>
+                  <small>across {questions.length} measured calls</small>
+                </div>
+                <div>
+                  <span>Next steps and commitments</span>
+                  <strong>{stats.commitments ?? "—"}</strong>
+                  <small>with recorded evidence</small>
+                </div>
+              </section>
+            ) : null}
+            <section
+              className="panel calls-library-list-panel"
+              aria-labelledby="calls-library-title"
+            >
+              {selectedSubmission && (
                 <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexShrink: 0,
-                  }}
+                  className={`calls-library-selected-card ${styles.selected}`}
                 >
+                  <div className={styles.selectedCopy}>
+                    <div className={styles.selectedTitle}>
+                      <span className={styles.selectedBadge}>
+                        Selected call
+                      </span>
+                      <strong>
+                        {callTitle(
+                          selectedSubmission.label,
+                          `Sales call · ${formatCreatedDate(selectedSubmission.createdAt)}`,
+                        )}
+                      </strong>
+                    </div>
+                    <span className={styles.selectedMeta}>
+                      {submissionState(selectedSubmission)} ·{" "}
+                      {formatDuration(selectedSubmission.durationSeconds)} ·{" "}
+                      {formatCreatedDate(selectedSubmission.createdAt)}
+                    </span>
+                  </div>
+                  <div className={styles.selectedActions}>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => openSubmission(selectedSubmission)}
+                    >
+                      {selectedSubmission.hasReport
+                        ? "Open report"
+                        : "View progress"}{" "}
+                      <ArrowRight size={15} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className={`text-button ${styles.clear}`}
+                      onClick={() => {
+                        try {
+                          const url = new URL(window.location.href);
+                          url.searchParams.delete("id");
+                          url.searchParams.delete("call");
+                          router.push(url.pathname + (url.search || ""));
+                        } catch {}
+                      }}
+                      title="Clear selection"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="calls-library-list-heading">
+                <div
+                  className="calls-library-filters"
+                  role="group"
+                  aria-label="Filter loaded calls by status"
+                >
+                  {FILTERS.map((option) => {
+                    const count =
+                      option.id === "all"
+                        ? submissions.length
+                        : counts[option.id];
+                    if (option.id !== "all" && count === 0) return null;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={filter === option.id}
+                        data-tone={option.id}
+                        onClick={() => setFilter(option.id)}
+                      >
+                        {option.label}
+                        <span className="calls-library-count">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="calls-library-tools">
+                  <label className={styles.search}>
+                    <Search size={15} aria-hidden="true" />
+                    <input
+                      ref={searchInput}
+                      type="search"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search calls"
+                      aria-label="Search loaded calls by name"
+                    />
+                    {query ? (
+                      <button
+                        type="button"
+                        className={styles.searchClear}
+                        onClick={() => setQuery("")}
+                        aria-label="Clear search"
+                      >
+                        <X size={13} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </label>
+                  <label className={styles.sort}>
+                    <ArrowUpDown size={14} aria-hidden="true" />
+                    <select
+                      value={sort}
+                      onChange={(event) =>
+                        setSort(event.target.value as CallSort)
+                      }
+                      aria-label="Sort calls"
+                    >
+                      {SORTS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {loading || refreshing ? (
+                    <span className="calls-library-inline-status" role="status">
+                      <LoaderCircle
+                        className="spin"
+                        size={15}
+                        aria-hidden="true"
+                      />{" "}
+                      Updating…
+                    </span>
+                  ) : null}
+                  {workspace ? (
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      onClick={exportPicked}
+                      title="Export the selected calls (or all loaded calls) as CSV"
+                    >
+                      <Download size={14} aria-hidden="true" />
+                      {picked.size ? `Export ${picked.size}` : "Export"}
+                    </button>
+                  ) : null}
+                  {workspace &&
+                  visibleSubmissions.some(
+                    (submission) => statusOf(submission.id) === "error",
+                  ) ? (
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      onClick={retryInsights}
+                    >
+                      Retry reports
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className="primary-button"
-                    onClick={() => openSubmission(selectedSubmission)}
+                    className="text-button calls-library-refresh"
+                    onClick={() => {
+                      refreshHandler.current(identityKey, true);
+                    }}
+                    disabled={loading || refreshing || opening}
                   >
-                    {selectedSubmission.hasReport
-                      ? "Open report"
-                      : "View progress"}{" "}
-                    <ArrowRight size={15} aria-hidden="true" />
+                    <RefreshCw size={14} aria-hidden="true" /> Refresh
+                  </button>
+                </div>
+              </div>
+              {workspace && picked.size > 0 ? (
+                <div
+                  className={styles.bulk}
+                  role="region"
+                  aria-label="Selected calls"
+                >
+                  <strong>{picked.size} selected</strong>
+                  <button type="button" onClick={exportPicked}>
+                    <Download size={14} aria-hidden="true" /> Export CSV
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      try {
-                        const url = new URL(window.location.href);
-                        url.searchParams.delete("id");
-                        url.searchParams.delete("call");
-                        router.push(url.pathname + (url.search || ""));
-                      } catch {}
-                    }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--lx-muted)",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                    }}
-                    title="Clear selection"
+                    onClick={() =>
+                      setPicked(
+                        new Set(visibleSubmissions.map((row) => row.id)),
+                      )
+                    }
                   >
+                    Select all {visibleSubmissions.length}
+                  </button>
+                  <button type="button" onClick={() => setPicked(new Set())}>
                     Clear
                   </button>
                 </div>
+              ) : null}
+              <div className="calls-library-columns" aria-hidden="true">
+                <span />
+                <span>Call</span>
+                <span>Length</span>
+                <span>Status</span>
+                <span />
               </div>
-            )}
-            <div className="calls-library-list-heading">
-              <div
-                className="calls-library-filters"
-                role="group"
-                aria-label="Filter loaded calls by status"
-              >
-                {FILTERS.map((option) => {
-                  const count =
-                    option.id === "all"
-                      ? submissions.length
-                      : counts[option.id];
-                  if (option.id !== "all" && count === 0) return null;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      aria-pressed={filter === option.id}
-                      data-tone={option.id}
-                      onClick={() => setFilter(option.id)}
-                    >
-                      {option.label}
-                      <span className="calls-library-count">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="calls-library-tools">
-                {loading || refreshing ? (
-                  <span className="calls-library-inline-status" role="status">
-                    <LoaderCircle
-                      className="spin"
-                      size={15}
-                      aria-hidden="true"
-                    />{" "}
-                    Updating…
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  className="text-button calls-library-refresh"
-                  onClick={() => {
-                    refreshHandler.current(identityKey, true);
-                  }}
-                  disabled={loading || refreshing || opening}
-                >
-                  <RefreshCw size={14} aria-hidden="true" /> Refresh
-                </button>
-              </div>
-            </div>
-            <div className="calls-library-columns" aria-hidden="true">
-              <span />
-              <span>Call</span>
-              <span>Est. length</span>
-              <span>Status</span>
-              <span />
-            </div>
-            <div className="calls-library-items">
-              {visibleSubmissions.map(submissionButton)}
-            </div>
-            {visibleSubmissions.length === 0 && submissions.length > 0 ? (
-              <p className="calls-library-filter-empty" role="status">
-                No loaded calls match this status.{" "}
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => setFilter("all")}
-                >
-                  Show all calls
-                </button>
-              </p>
-            ) : null}
-            {filter !== "all" && nextCursor ? (
-              <p className="calls-library-filter-note">
-                The filter covers loaded calls only. Load more to include older
-                calls.
-              </p>
-            ) : null}
-            {nextCursor ? (
-              <button
-                type="button"
-                className="secondary-button calls-library-more"
-                onClick={() => void loadMore()}
-                disabled={loading || refreshing || opening}
-              >
-                {loading ? "Loading…" : "Load more calls"}{" "}
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            ) : null}
-            {error ? (
-              <div className="calls-library-inline-error" role="alert">
-                <span>{error}</span>
-                {nextCursor ? (
+              <div className="calls-library-items">{renderRows()}</div>
+              {visibleSubmissions.length === 0 && submissions.length > 0 ? (
+                <p className="calls-library-filter-empty" role="status">
+                  {needle
+                    ? `No loaded calls match “${query.trim()}”.`
+                    : "No loaded calls match this status."}{" "}
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => void loadMore()}
-                    disabled={loading || refreshing || opening}
+                    onClick={() => {
+                      setFilter("all");
+                      setQuery("");
+                    }}
                   >
-                    Try again
+                    Show all calls
                   </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
+                </p>
+              ) : null}
+              {filter !== "all" && nextCursor ? (
+                <p className="calls-library-filter-note">
+                  The filter covers loaded calls only. Load more to include
+                  older calls.
+                </p>
+              ) : null}
+              {nextCursor ? (
+                <button
+                  type="button"
+                  className="secondary-button calls-library-more"
+                  onClick={() => void loadMore()}
+                  disabled={loading || refreshing || opening}
+                >
+                  {loading ? "Loading…" : "Load more calls"}{" "}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              ) : null}
+              {error ? (
+                <div className="calls-library-inline-error" role="alert">
+                  <span>{error}</span>
+                  {nextCursor ? (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => void loadMore()}
+                      disabled={loading || refreshing || opening}
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          </>
         )}
       </Main>
+      {workspace && previewSubmission ? (
+        <CallsDrawer
+          key={previewSubmission.id}
+          id={previewSubmission.id}
+          title={titleOf(previewSubmission)}
+          meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
+          status={submissionState(previewSubmission)}
+          tone={callTone(previewSubmission)}
+          insight={insightOf(previewSubmission.id)}
+          readState={statusOf(previewSubmission.id)}
+          onRetry={retryInsights}
+          hasReport={previewSubmission.hasReport}
+          canRename={Boolean(previewSubmission.label)}
+          onOpen={() => openSubmission(previewSubmission)}
+          onRename={() => {
+            setPreviewId(null);
+            setRenamingId(previewSubmission.id);
+          }}
+          onClose={() => setPreviewId(null)}
+        />
+      ) : null}
     </div>
   );
   if (embedded) return content;

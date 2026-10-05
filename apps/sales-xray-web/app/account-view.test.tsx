@@ -154,8 +154,8 @@ it("shows a confirmed empty subscription with the server plan and invoices", asy
   expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
   const cancel = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.textContent?.trim() === "Cancel renewal",
-  )!;
-  expect(cancel.disabled).toBe(true);
+  );
+  expect(cancel).toBeUndefined();
   expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
     true,
   );
@@ -233,28 +233,54 @@ it("shows the verified profile and real allowance as its own destination", async
   );
 });
 
-it("shows Unlimited without inventing a percentage", async () => {
+it.each([0, 2_700])(
+  "shows Unlimited with a finite ledger balance of %i seconds",
+  async (available) => {
+    respond({
+      "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+      "GET /v1/conversation/acquisition/session": () =>
+        json({
+          allowance: {
+            allowance_seconds: 0,
+            committed_seconds: 1_200,
+            available_seconds: available,
+            unlimited: true,
+          },
+        }),
+    });
+    await renderAccount();
+    const allowance = host.querySelector("[data-allowance]")!;
+    expect(allowance.getAttribute("data-allowance")).toBe("unlimited");
+    expect(allowance.textContent).toContain("Unlimited");
+    expect(allowance.textContent).toContain("20 min used or reserved");
+    expect(allowance.textContent).not.toMatch(
+      /No analysis time|Ask the AC team|available/,
+    );
+    expect(allowance.querySelector('[role="meter"]')).toBeNull();
+    expect(allowance.textContent).not.toMatch(/%/);
+  },
+);
+
+it("shows exhausted balance with 0 available minutes and empty meter", async () => {
   respond({
     "GET /v1/me/sales-xray-profile": () => json(PROFILE),
     "GET /v1/conversation/acquisition/session": () =>
       json({
         allowance: {
-          allowance_seconds: 0,
-          committed_seconds: 1_200,
+          allowance_seconds: 3_600,
+          committed_seconds: 3_600,
           available_seconds: 0,
-          unlimited: true,
+          unlimited: false,
         },
       }),
   });
   await renderAccount();
   const allowance = host.querySelector("[data-allowance]")!;
-  expect(allowance.getAttribute("data-allowance")).toBe("unlimited");
-  expect(allowance.textContent).toContain("Unlimited");
-  expect(allowance.textContent).toContain(
-    "20 min used or reserved by analyses.",
-  );
-  expect(allowance.querySelector('[role="meter"]')).toBeNull();
-  expect(allowance.textContent).not.toMatch(/%/);
+  expect(allowance.getAttribute("data-allowance")).toBe("finite");
+  expect(allowance.textContent).toContain("0 of 60 min available");
+  expect(
+    allowance.querySelector('[role="meter"]')?.getAttribute("aria-valuenow"),
+  ).toBe("0");
 });
 
 it("keeps the profile readable when the allowance read fails", async () => {
@@ -481,4 +507,23 @@ it("asks a signed-out visitor to sign in and reads nothing", async () => {
   expect(host.textContent).toContain("Sign in to see your account");
   expect(host.querySelector('a[href="/login"]')).not.toBeNull();
   expect(calls).toHaveLength(0);
+});
+
+it("shows the grant empty state only for a finite zero allowance", async () => {
+  respond({
+    "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+    "GET /v1/conversation/acquisition/session": () =>
+      json({
+        allowance: {
+          allowance_seconds: 0,
+          committed_seconds: 0,
+          available_seconds: 0,
+          unlimited: false,
+        },
+      }),
+  });
+  await renderAccount();
+  const allowance = host.querySelector('[data-allowance="none"]')!;
+  expect(allowance.textContent).toContain("No analysis time yet");
+  expect(allowance.textContent).toContain("Ask the AC team");
 });

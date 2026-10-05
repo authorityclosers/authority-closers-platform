@@ -152,10 +152,10 @@ export function SpeakerServerProfiles({
           }
         })
         .catch(() => {
-          if (!abort.signal.aborted)
-            setError(
-              "Speaker details are unavailable. Try loading them again.",
-            );
+          // Owner 5 Oct: a missing or not-yet-built speaker map must never
+          // cover the report with an error; the report renders without names
+          // and save failures still surface (AUT-1193 aligns the contract).
+          if (!abort.signal.aborted) setMap(null);
         });
     return () => abort.abort();
   }, [callId, transcriptRevision, validCall, retry]);

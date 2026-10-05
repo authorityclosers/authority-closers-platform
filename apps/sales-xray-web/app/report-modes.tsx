@@ -6,8 +6,6 @@ import {
   AudioLines,
   BookOpen,
   ChartNoAxesColumnIncreasing,
-  ChevronDown,
-  Ellipsis,
   FileText,
   Lightbulb,
   PanelsTopLeft,
@@ -79,125 +77,18 @@ const CHANGE = "ac:report-mode-change";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
   overview: FileText,
-  transcript: FileText,
-  moments: AudioLines,
-  analysis: ChartNoAxesColumnIncreasing,
-  coaching: Lightbulb,
   prospect: UserRound,
+  moments: AudioLines,
   signals: Radar,
   skills: ChartNoAxesColumnIncreasing,
   "next-call-plan": Lightbulb,
+  transcript: BookOpen,
   "raw-data": TableProperties,
 };
 
 function SectionIcon({ id }: { id: string }) {
   const Icon = sectionIcons[id] ?? FileText;
   return <Icon className={styles.sectionIcon} aria-hidden="true" />;
-}
-
-/** Native disclosures keep Tab navigation and work with touch or a mouse. */
-function ReportDropdown({
-  label,
-  icon,
-  hover = false,
-  children,
-}: {
-  label: string;
-  icon: ReactNode;
-  hover?: boolean;
-  children: ReactNode;
-}) {
-  const menu = useRef<HTMLDetailsElement>(null);
-  const hoverOpen = useRef(false);
-  useEffect(() => {
-    const closeOutside = (event: Event) => {
-      const current = menu.current;
-      if (
-        !(event.target instanceof Node) ||
-        !current?.open ||
-        current.contains(event.target)
-      )
-        return;
-      const restoreFocus =
-        event.type === "pointerdown" &&
-        current.contains(document.activeElement) &&
-        document.activeElement !== current.querySelector("summary");
-      current.open = false;
-      hoverOpen.current = false;
-      if (restoreFocus) {
-        // Wait for the pointer's native focus change before recovering focus.
-        window.requestAnimationFrame(() => {
-          if (
-            menu.current === current &&
-            !current.open &&
-            (document.activeElement === document.body ||
-              current.contains(document.activeElement))
-          )
-            current.querySelector("summary")?.focus();
-        });
-      }
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("focusin", closeOutside);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("focusin", closeOutside);
-    };
-  }, []);
-  return (
-    <details
-      ref={menu}
-      className={styles.dropdown}
-      onMouseEnter={(event) => {
-        if (
-          hover &&
-          window.matchMedia?.("(hover: hover)").matches &&
-          !event.currentTarget.open
-        ) {
-          event.currentTarget.open = true;
-          hoverOpen.current = true;
-        }
-      }}
-      onMouseLeave={(event) => {
-        if (
-          hoverOpen.current &&
-          !event.currentTarget.contains(document.activeElement)
-        )
-          event.currentTarget.open = false;
-        hoverOpen.current = false;
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || !event.currentTarget.open) return;
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.open = false;
-        hoverOpen.current = false;
-        event.currentTarget.querySelector("summary")?.focus();
-      }}
-    >
-      <summary
-        aria-label={label}
-        title={label}
-        className={styles.dropdownTrigger}
-        onClick={(event) => {
-          // A click pins a menu already shown by hover instead of closing it.
-          if (hoverOpen.current) event.preventDefault();
-          hoverOpen.current = false;
-        }}
-      >
-        {icon}
-      </summary>
-      <div className={styles.dropdownPanel}>{children}</div>
-    </details>
-  );
-}
-
-function closeReportDropdown(target: HTMLElement) {
-  const menu = target.closest("details");
-  if (menu) {
-    menu.open = false;
-    menu.querySelector("summary")?.focus();
-  }
 }
 
 function subscribe(notify: () => void) {
@@ -781,26 +672,13 @@ export function ReportModes({
         Math.min(180, window.innerHeight * 0.4),
         scrollportTop + offset + 2,
       );
-      // A short final chapter cannot reach the reading line once scrolling ends.
-      const atEnd =
-        scroller &&
-        scroller.scrollTop > 0 &&
-        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop < 2;
-      const visibleBottom = Math.min(
-        window.innerHeight,
-        scroller?.getBoundingClientRect().bottom || window.innerHeight,
-      );
       let current = activePanels[0]?.id ?? "";
       let foundHeading = false;
       for (const panel of activePanels) {
         const heading = document.getElementById(`${id}-heading-${panel.id}`);
         const bounds = heading?.getBoundingClientRect();
         if (bounds && bounds.height > 0) foundHeading = true;
-        if (
-          bounds &&
-          bounds.height > 0 &&
-          (bounds.top <= readingLine || (atEnd && bounds.top < visibleBottom))
-        )
+        if (bounds && bounds.height > 0 && bounds.top <= readingLine)
           current = panel.id;
       }
       if (!foundHeading) return;
@@ -1012,9 +890,6 @@ export function ReportModes({
       navigate(section, nextView, true, "replace");
   }
 
-  const ViewIcon =
-    view === "reading" ? BookOpen : view === "tabs" ? PanelsTopLeft : FileText;
-
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
@@ -1111,112 +986,64 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      <ReportDropdown
-        label="All report sections"
-        icon={<Ellipsis aria-hidden="true" />}
-        hover
-      >
-        <nav className={styles.sectionChoices} aria-label="Jump to section">
-          {activePanels.map((panel) => (
-            <button
-              key={panel.id}
-              type="button"
-              aria-current={
-                currentSection === panel.id ? "location" : undefined
-              }
-              onClick={(event) => {
-                closeReportDropdown(event.currentTarget);
-                navigate(panel.id, view, true);
-              }}
-            >
-              <SectionIcon id={panel.id} />
-              {panel.label}
-            </button>
-          ))}
-        </nav>
-      </ReportDropdown>
-      <ReportDropdown
-        label="Report view and text size"
-        icon={
-          <>
-            <ViewIcon aria-hidden="true" />
-            <ChevronDown aria-hidden="true" />
-          </>
-        }
-      >
-        <div
-          className={styles.viewChoices}
-          role="group"
-          aria-label={`${label} view`}
+      <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
+        <button
+          type="button"
+          title="Reading view"
+          aria-pressed={view === "reading"}
+          onClick={() => changeView("reading")}
         >
-          <button
-            type="button"
-            title="Reading view"
-            aria-pressed={view === "reading"}
-            onClick={(event) => {
-              closeReportDropdown(event.currentTarget);
-              changeView("reading");
-            }}
-          >
-            <BookOpen aria-hidden="true" />
-            <span>Reading view</span>
-          </button>
-          <button
-            type="button"
-            title="Tabbed view"
-            aria-pressed={view === "tabs"}
-            onClick={(event) => {
-              closeReportDropdown(event.currentTarget);
-              changeView("tabs");
-            }}
-          >
-            <PanelsTopLeft aria-hidden="true" />
-            <span>Tabbed view</span>
-          </button>
-          <button
-            type="button"
-            title="Document view"
-            aria-pressed={view === "document"}
-            onClick={(event) => {
-              closeReportDropdown(event.currentTarget);
-              changeView("document");
-            }}
-          >
-            <FileText aria-hidden="true" />
-            <span>Document view</span>
-          </button>
-        </div>
-        <p className={styles.sizeLabel}>Text size</p>
-        <div className={styles.sizeChoices} role="group" aria-label="Text size">
-          <button
-            type="button"
-            title="Default text size (100%)"
-            aria-label="Text size 100%"
-            aria-pressed={textSize === "100"}
-            onClick={() => changeTextSize("100")}
-          >
-            A−
-          </button>
-          <button
-            type="button"
-            title="Medium text size (112.5%)"
-            aria-label="Text size 112.5%"
-            aria-pressed={textSize === "112.5"}
-            onClick={() => changeTextSize("112.5")}
-          >
-            A
-          </button>
-          <button
-            type="button"
-            title="Large text size (125%)"
-            aria-label="Text size 125%"
-            aria-pressed={textSize === "125"}
-            onClick={() => changeTextSize("125")}
-          >
-            A+
-          </button>
-        </div>
-      </ReportDropdown>
+          <BookOpen aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Reading view</span>
+        </button>
+        <button
+          type="button"
+          title="Tabbed view"
+          aria-pressed={view === "tabs"}
+          onClick={() => changeView("tabs")}
+        >
+          <PanelsTopLeft aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Tabbed view</span>
+        </button>
+        <button
+          type="button"
+          title="Document view"
+          aria-pressed={view === "document"}
+          onClick={() => changeView("document")}
+        >
+          <FileText aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Document view</span>
+        </button>
+      </div>
+      <div className={styles.textSizeGroup} role="group" aria-label="Text size">
+        <button
+          type="button"
+          title="Default text size (100%)"
+          aria-label="Text size 100%"
+          aria-pressed={textSize === "100"}
+          onClick={() => changeTextSize("100")}
+        >
+          A−
+        </button>
+        <button
+          type="button"
+          title="Medium text size (112.5%)"
+          aria-label="Text size 112.5%"
+          aria-pressed={textSize === "112.5"}
+          onClick={() => changeTextSize("112.5")}
+        >
+          A
+        </button>
+        <button
+          type="button"
+          title="Large text size (125%)"
+          aria-label="Text size 125%"
+          aria-pressed={textSize === "125"}
+          onClick={() => changeTextSize("125")}
+        >
+          A+
+        </button>
+      </div>
     </div>
   );
 

@@ -241,7 +241,7 @@ function OrderReturnState({
               <dd>
                 {balance?.orderId === order.orderId
                   ? balance.allowance.unlimited
-                    ? "Unlimited analysis minutes"
+                    ? `Unlimited · ${count(minutes(balance.allowance.committedSeconds))} min used or reserved by analyses.`
                     : `${count(minutes(balance.allowance.availableSeconds))} analysis minutes`
                   : "Your updated minutes are being confirmed"}
               </dd>
