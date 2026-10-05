@@ -118,7 +118,7 @@ test("fictional plan purchase → server verification → balance → billing �
       lastPage = page;
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto(`${origin}/review-fixture/plans`, {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
       });
       await page.getByText("Current: Trial", { exact: false }).waitFor();
       if (width === 390)
@@ -128,7 +128,7 @@ test("fictional plan purchase → server verification → balance → billing �
         .click();
       await page
         .getByRole("button", {
-          name: "Review total with Razorpay",
+          name: "Review total",
           exact: true,
         })
         .click();
@@ -147,7 +147,6 @@ test("fictional plan purchase → server verification → balance → billing �
       await page
         .getByRole("heading", { name: "Fictional payment page" })
         .waitFor();
-      await page.waitForLoadState("networkidle");
       await page
         .getByRole("button", { name: "Payment confirmed", exact: true })
         .click();
@@ -161,12 +160,14 @@ test("fictional plan purchase → server verification → balance → billing �
         ),
         false,
       );
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await page.getByText("862 analysis minutes", { exact: true }).waitFor();
       await page
         .getByRole("button", { name: "Manage billing", exact: true })
         .click();
-      await page.getByText("862 min left", { exact: true }).waitFor();
+      await page
+        .getByText("862 min (14 h 22 min) left", { exact: true })
+        .waitFor();
       await page
         .getByRole("button", { name: "Cancel renewal", exact: true })
         .click();
@@ -174,9 +175,11 @@ test("fictional plan purchase → server verification → balance → billing �
         .getByRole("button", { name: "Yes, cancel renewal", exact: true })
         .click();
       await page.getByText("Cancels at period end", { exact: true }).waitFor();
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "domcontentloaded" });
       await page.getByText("Cancels at period end", { exact: true }).waitFor();
-      await page.getByText("862 min left", { exact: true }).waitFor();
+      await page
+        .getByText("862 min (14 h 22 min) left", { exact: true })
+        .waitFor();
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth,
@@ -187,13 +190,14 @@ test("fictional plan purchase → server verification → balance → billing �
         .getByRole("button", { name: "Start again", exact: true })
         .click();
       await page.goto(`${origin}/review-fixture/plans`, {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
       });
+      await page.getByText("Current: Trial", { exact: false }).waitFor();
       await page
         .getByRole("button", { name: "Get Organisation", exact: true })
         .click();
       const review = page.getByRole("button", {
-        name: "Review total with Razorpay",
+        name: "Review total",
         exact: true,
       });
       await review.click();
