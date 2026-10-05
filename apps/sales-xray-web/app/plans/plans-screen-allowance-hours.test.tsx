@@ -31,6 +31,14 @@ const FICTIONAL_PLANS: Plan[] = [
     includedMinutes: 800,
     seatMin: 1,
     seatMax: 1,
+    perSeat: false,
+    longestCallMinutes: 90,
+    retentionDays: null,
+    rolloverMonths: null,
+    featureKeys: [],
+    topUpPacks: [],
+    sortOrder: 1,
+    revision: 1,
   },
 ];
 const GST_RATE = 0.18;
@@ -54,6 +62,7 @@ const text = () => host.textContent ?? "";
 function fictionalMePlan(availableSeconds: number, unlimited = false): MePlan {
   return {
     plan: FICTIONAL_PLANS[0],
+    longestCallSeconds: 5_400,
     allowance: {
       allowanceSeconds: 48_000,
       committedSeconds: 1_200,
@@ -70,11 +79,17 @@ function fictionalPaidOrder(minutes = 800): Order {
     planKey: "personal",
     planName: "Personal",
     kind: "subscription",
+    account: "personal",
+    mode: "test",
     interval: "month",
     seats: 1,
-    amount: { minor: 249900, currency: "INR" },
+    amount: { minor: 249900, currency: "INR", gstInclusive: true },
     minutes,
+    packKey: null,
+    subscriptionId: "sub_fictional",
     createdAt: "2026-10-01T00:00:00Z",
+    paidAt: "2026-10-01T00:00:00Z",
+    refund: null,
   };
 }
 
@@ -125,9 +140,11 @@ it.each([
   [0, "0 analysis minutes available on your account."],
   [3_540, "59 analysis minutes available on your account."],
   [3_600, "60 analysis minutes available on your account."],
+  [3_659, "60 analysis minutes available on your account."],
   [3_660, "61 min (1 h 1 min) available on your account."],
   [7_200, "120 min (2 h) available on your account."],
   [48_000, "800 min (13 h 20 min) available on your account."],
+  [51_745, "862 min (14 h 22 min) available on your account."],
   [600_000, "10,000 min (166 h 40 min) available on your account."],
 ])(
   "formats payment-success balance hours strictly above 60 minutes (%i s)",
@@ -148,6 +165,9 @@ it.each([
       );
     });
     expect(text()).toContain(expected);
+    expect(host.querySelector('[role="status"]')?.textContent).toContain(
+      expected,
+    );
   },
 );
 
