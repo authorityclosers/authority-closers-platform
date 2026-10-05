@@ -1,4 +1,4 @@
-"""Fictional candidate-rule proofs; these fixtures do not confirm the rubric."""
+"""Fictional proofs of the prospect-evidence rule signed off on AUT-625."""
 
 from copy import deepcopy
 
@@ -64,6 +64,31 @@ def fixture(*, v7=True):
             "prospect_facts": [],
         }
     return transcript, profile, payload, snapshot
+
+
+@pytest.mark.parametrize(
+    "dimension_id", ["human_connection_trust", "discovery_deep_understanding", "qualification"]
+)
+@pytest.mark.parametrize("status", ["observed", "conflicted"])
+@pytest.mark.parametrize("origin", ["user_confirmed_roles", "channel_mapped_roles"])
+@pytest.mark.parametrize("segments", [["s1", "s5"], ["s1", "s2"]])
+def test_signed_off_dimensions_enforce_prospect_support(dimension_id, status, origin, segments):
+    transcript, profile, payload, roles = fixture()
+    roles["origin"] = origin
+    dimension = next(row for row in payload["dimensions"] if row["dimension_id"] == dimension_id)
+    dimension.update(status=status, evidence=[{"segment_id": segment} for segment in segments])
+    kwargs = dict(profile=profile, coaching_prompt_revision="coaching-v7", speaker_roles=roles)
+    if "s2" in segments:
+        draft = reports.parse_report_draft(payload, transcript, **kwargs)
+        assert next(row for row in draft.dimensions if row.dimension_id == dimension_id).status == (
+            status
+        )
+    else:
+        with pytest.raises(
+            reports.ReportError, match="^report_dimension_prospect_evidence_required$"
+        ) as error:
+            reports.parse_report_draft(payload, transcript, **kwargs)
+        assert error.value.dimension_ids == (dimension_id,)
 
 
 @pytest.mark.parametrize("dimension_id", sorted(reports.PROSPECT_DIMENSION_IDS))
@@ -171,10 +196,12 @@ def test_malformed_or_prospect_free_map_never_authorizes_the_rule(monkeypatch, c
 )
 def test_legacy_canonical_and_unconfirmed_paths_are_unchanged(monkeypatch, revision):
     transcript, profile, payload, roles = fixture(v7=revision == "coaching-v7")
-    payload["dimensions"][0].update(status="observed", evidence=[{"segment_id": "s1"}])
+    segments = ["s1", "s5"] if revision == "coaching-v7" else ["s1"]
+    payload["dimensions"][0].update(
+        status="observed", evidence=[{"segment_id": segment} for segment in segments]
+    )
     kwargs = dict(profile=profile, coaching_prompt_revision=revision)
-    # The empty confirmed subset is the shipping state until P-A is recorded.
-    assert not reports.CONFIRMED_PROSPECT_DIMENSIONS
+    monkeypatch.setattr(reports, "CONFIRMED_PROSPECT_DIMENSIONS", frozenset())
     reports.parse_report_draft(payload, transcript, speaker_roles=roles, **kwargs)
     monkeypatch.setattr(reports, "CONFIRMED_PROSPECT_DIMENSIONS", frozenset({"qualification"}))
     draft = reports.parse_report_draft(payload, transcript, speaker_roles=roles, **kwargs)
