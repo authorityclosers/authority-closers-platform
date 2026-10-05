@@ -49,6 +49,7 @@ from ac_platform.billing.order_models import (
 )
 from ac_platform.billing.periods import add_months, billing_year_end
 from ac_platform.billing.projection import REFUND_WINDOW, Lot, LotKind, LotPosition
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.billing.views import (
     CheckoutView,
     HostedView,
@@ -926,6 +927,47 @@ def test_cancel_is_refused_on_an_ended_subscription(postgres_harness, world: Wor
 
 
 # ---- 8. refunds ------------------------------------------------------------------
+
+
+def test_personal_v2_trial_usage_leaves_paid_lots_refundable(
+    postgres_harness, world: World, monkeypatch
+):
+    monkeypatch.setattr(world.app.service, "trial_policy", TrialPolicy("v2"))
+
+    async def exercise(lab: Lab) -> None:
+        learner = await lab.learner()
+        paid = await lab.subscribe_and_pay(learner)
+        top_up = await lab.top_up_and_pay(learner, "trial-refund")
+        lab.tick()
+        async with lab.sessions() as database, database.begin():
+            acquisition = AcquisitionSessions(
+                database,
+                tenant_id=learner.tenant_id,
+                operations_tenant_id=world.operations_tenant_id,
+                policy_revision="fictional-personal-v2-refund",
+                trial_policy=world.app.service.trial_policy,
+                clock=world.clock,
+            )
+            usage_id = await acquisition.reserve(source(600), actor=learner.actor)
+            await acquisition.settle(usage_id, charged_seconds=600, receipt_sha256="a" * 64)
+            ledger = lab.app.service.ledger(database, tenant_id=learner.tenant_id)
+            projected = await ledger.project_person(
+                tenant_id=learner.tenant_id, person_id=learner.person_id, now=lab.now
+            )
+            assert projected.trial is not None
+            positions = {p.lot.lot_id: p for p in projected.projection.positions}
+            assert positions["trial"].allocated == 600
+            assert all(p.allocated == 0 for key, p in positions.items() if key != "trial")
+
+        for payment, key in ((paid, "trial-period-refund"), (top_up, "trial-pack-refund")):
+            assert (await lab.refund(learner, payment.payment_ref, key=key)).state == "pending"
+            assert (await lab.read_order(learner, payment.order_id)).refund.state == "refunded"
+            assert [e.state for e in await lab.refund_events(payment.order_id)] == [
+                "pending",
+                "refunded",
+            ]
+
+    scenario(postgres_harness, world, exercise)
 
 
 def test_refund_of_an_unused_top_up_writes_hold_release_and_refund(postgres_harness, world: World):

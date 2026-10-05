@@ -186,7 +186,7 @@ async def readback(
         or order.minutes != PLAN.included_minutes
     ):
         raise ValueError("Fixture payment differs; refusing repair.")
-    ledger = service.ledger(database)
+    ledger = service.ledger(database, tenant_id=account.tenant_id)
     entries = await ledger.entries(account.id)
     lots = ledger.lots_from_entries(entries)
     sources = await Settlement._sources(database, order, payment)

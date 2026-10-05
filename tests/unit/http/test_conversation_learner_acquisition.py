@@ -477,6 +477,7 @@ async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unl
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
     ) -> dict[str, int]:
+        assert _self.ledger.trial_enabled is _self.trial_enabled
         services.append((_self.tenant_id, _self.trial_enabled, token))
         return {"allowance_seconds": 0, "committed_seconds": 0, "available_seconds": 0}
 
