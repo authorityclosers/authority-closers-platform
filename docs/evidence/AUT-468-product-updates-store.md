@@ -1,11 +1,14 @@
 # AUT-468: product updates store evidence
 
-Source pin: `d8da579226496c731f1a216ca72ce9bcc9233c61`.
+Initial source pin: `d8da579226496c731f1a216ca72ce9bcc9233c61`.
+Current validation base: `7511641c6249e731581532c4b38edacdb843f0f2`.
 Branch: `task/platform/468-product-updates-store`.
 Policy: AUT-423 plan revision 1; design: AUT-433 plan revision 3.
-ADR 0050 was taken; this slice uses ADR 0054 and migration `20261004_0074`
-after `20261003_0073`. Backup parity advances from v44 (128 tables) to v45
-(131 tables), preserving older contracts.
+ADR 0050 was taken; this slice uses ADR 0054. Main subsequently assigned
+migration `20261004_0074` and parity v45 to the prospect store. This unmerged
+slice now uses migration `20261004_0075` after `20261004_0074`, advancing
+backup parity from v45 (130 tables) to v46 (133 tables). Older contracts remain
+unchanged.
 
 ## Implementation
 
@@ -32,7 +35,7 @@ also adjusts the existing credit-ledger migration regression: it checks that
 following the established billing-ledger test pattern. This required test-only
 scope addition preserves its numeric, trigger and forward-only checks.
 
-## Verification
+## Verification before the main update
 
 Only fictional data and random isolated schemas in the lane's injected localhost
 test database are used. Each schema is removed by its test fixture.
@@ -63,10 +66,32 @@ test database are used. Each schema is removed by its test fixture.
   tests/database/test_credits_ledger_postgresql.py -q -x --tb=short`: **8 passed**,
   no skips. Repository format (998 files), lint and mypy (417 files) pass again.
 
+## Main update verification, 5 October 2026
+
+- Completed the interrupted merge from main and then merged the current main
+  pin `7511641c6249e731581532c4b38edacdb843f0f2`. All staged files outside this
+  card were verified to match the existing main merge target before committing.
+  The final diff against main contains only this store slice and its documented
+  credit-ledger test adjustment.
+- Renumbered the unmerged product-update migration to `20261004_0075`, following
+  the already merged prospect migration `20261004_0074`. All three helpers
+  preserve prospect parity v45 and add product updates at v46 (133 tables).
+  Updated the migration, contract tests and ADR references together.
+- Re-ran the selected store, PostgreSQL upgrade, capability, CLI, platform-access,
+  model-registry, credit-ledger, restore and release suites in one command:
+  **357 passed, 2 skipped**, in 127.67 seconds. The two skips remain the Docker
+  daemon and opt-in approved-dump restore integration checks listed above.
+- Repository Ruff format: **1,016 files passed**. Ruff lint passed, including
+  the renumbered migration and three changed helpers. Mypy passed for **421
+  source files**. `git diff --check` passed.
+- The original Root receipt is historical: its parity inputs differ from this
+  update. A new Root-owned full parity receipt at the pushed head is required
+  before CTO review. CI including `single-track` must also pass at that head.
+
 ## Dev check and handoff
 
 This store slice has no screen change. After merge/deployment, check that the
-deploy record reports migration `20261004_0074`. Do not run manual migrations,
+deploy record reports migration `20261004_0075`. Do not run manual migrations,
 change service settings or seed real accounts. Staging verification follows the
 standard release path. The PR requires green CI including `single-track`, Root's
 parity receipt, CTO review and CEO approval because migrations, capability checks
