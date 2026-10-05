@@ -70,6 +70,8 @@ API_ROOT = "https://api.github.com"
 ENVIRONMENTS = ("staging", "production")
 COMPONENTS = ("core", "web")
 CORE_WORKFLOW = "application.yml"
+CORE_RECOVERY_WORKFLOW = "application-recovery.yml"
+RECOVERY_PROOF_MAX_BYTES = 64 * 1024
 WEB_WORKFLOW = "sales-xray-web-image.yml"
 NATIVE_WORKFLOW = "sales-xray-native-image.yml"
 CORE_FILES = frozenset({"SHA256SUMS", "application-images.tar.gz", "release-images.env"})
@@ -385,6 +387,7 @@ class Build:
     artifact_id: int
     artifact_name: str
     artifact_digest: str
+    recovery: dict[str, Any] | None = None
 
 
 def find_push_run(github: Any, workflow: str, sha: str) -> dict[str, Any] | None:
@@ -447,11 +450,148 @@ def core_candidate(github: Any, sha: str) -> Candidate:
     name = f"ac-application-{sha}"
     artifact = find_artifact(github, run, name, sha)
     if artifact is None:
+        recovered = recovered_core_build(github, sha, run)
+        if recovered is not None:
+            return Candidate("ready", recovered)
         return Candidate("failed", detail=f"run {run['id']} has no usable {name} artifact")
     return Candidate(
         "ready",
         Build(sha, int(run["id"]), int(artifact["id"]), name, str(artifact["digest"])),
     )
+
+
+def recovered_core_build(github: Any, sha: str, validation: Mapping[str, Any]) -> Build | None:
+    """Admit CI repackaging only with a digest-bound proof of the original push."""
+
+    name = f"ac-application-recovered-{sha}"
+    proof_name = f"ac-application-recovery-proof-{sha}"
+    data = github.get_json(
+        f"/repos/{REPOSITORY}/actions/workflows/{CORE_RECOVERY_WORKFLOW}/runs",
+        {"branch": "main", "event": "workflow_dispatch", "per_page": "100"},
+    )
+    runs = sorted(
+        data.get("workflow_runs", []),
+        key=lambda run: (run.get("run_number", 0), run.get("run_attempt", 0)),
+        reverse=True,
+    )
+    for run in runs:
+        if not (
+            run.get("event") == "workflow_dispatch"
+            and run.get("head_branch") == "main"
+            and SHA_RE.fullmatch(str(run.get("head_sha", "")))
+            and run.get("path") == f".github/workflows/{CORE_RECOVERY_WORKFLOW}"
+            and run.get("repository", {}).get("full_name") == REPOSITORY
+            and run.get("status") == "completed"
+            and run.get("conclusion") == "success"
+        ):
+            continue
+        # A recovery run executes reviewed main code, while its bundle contains
+        # an older release. GitHub's workflow SHA must remain the real run SHA.
+        artifact = find_artifact(github, run, name, run["head_sha"])
+        proof_artifact = find_artifact(github, run, proof_name, run["head_sha"])
+        if artifact is None or proof_artifact is None:
+            continue
+        if proof_artifact["size_in_bytes"] > RECOVERY_PROOF_MAX_BYTES:
+            raise ReleaseError("core recovery proof exceeds its size ceiling")
+        with tempfile.TemporaryDirectory(prefix="ac-core-recovery-") as work:
+            path = Path(work) / "proof.zip"
+            github.download_artifact(proof_artifact["id"], path, proof_artifact["digest"])
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    entries = archive.infolist()
+                    if (
+                        len(entries) != 1
+                        or entries[0].filename != "recovery-proof.json"
+                        or entries[0].file_size > RECOVERY_PROOF_MAX_BYTES
+                        or entries[0].flag_bits & 1
+                    ):
+                        raise ReleaseError("core recovery proof archive is invalid")
+                    try:
+                        proof = json.loads(archive.read(entries[0]))
+                    except (ValueError, UnicodeError) as error:
+                        raise ReleaseError("core recovery proof is not valid JSON") from error
+            except (zipfile.BadZipFile, NotImplementedError) as error:
+                raise ReleaseError("core recovery proof archive is invalid") from error
+        fields = {
+            "schema",
+            "repository",
+            "release_sha",
+            "validation_run_id",
+            "recovery_run_id",
+            "recovery_head_sha",
+            "artifact_id",
+            "artifact_name",
+            "artifact_digest",
+            "manifest_sha256",
+            "registry_digests",
+            "original_package_job_id",
+            "publication_log_sha256",
+        }
+        if not isinstance(proof, dict) or set(proof) != fields:
+            raise ReleaseError("core recovery proof has unexpected fields")
+        expected = {
+            "schema": "ac.application-recovery/1",
+            "repository": REPOSITORY,
+            "release_sha": sha,
+            "validation_run_id": validation["id"],
+            "recovery_run_id": run["id"],
+            "recovery_head_sha": run["head_sha"],
+            "artifact_id": artifact["id"],
+            "artifact_name": name,
+            "artifact_digest": artifact["digest"],
+        }
+        if any(proof.get(key) != value for key, value in expected.items()) or any(
+            type(proof[key]) is not int or proof[key] <= 0
+            for key in (
+                "validation_run_id",
+                "recovery_run_id",
+                "artifact_id",
+                "original_package_job_id",
+            )
+        ):
+            raise ReleaseError(
+                "core recovery proof does not match validation/run/artifact identity"
+            )
+        digests = proof["registry_digests"]
+        repositories = dict(
+            zip(
+                ("api", "learner", "admin", "coach"),
+                (
+                    f"ghcr.io/authorityclosers/authority-closers-{image}"
+                    for image in ("api", "learner-web", "admin-web", "coach-web")
+                ),
+                strict=True,
+            )
+        )
+        if (
+            not DIGEST_RE.fullmatch(str(proof["manifest_sha256"]))
+            or not DIGEST_RE.fullmatch(str(proof["publication_log_sha256"]))
+            or not isinstance(digests, dict)
+            or set(digests) != set(repositories)
+            or any(
+                not re.fullmatch(re.escape(repository) + r"@sha256:[0-9a-f]{64}", str(digests[key]))
+                for key, repository in repositories.items()
+            )
+        ):
+            raise ReleaseError("core recovery proof manifest/image digests are invalid")
+        proof["proof_artifact_id"] = proof_artifact["id"]
+        proof["proof_artifact_digest"] = proof_artifact["digest"]
+        return Build(sha, run["id"], artifact["id"], name, artifact["digest"], proof)
+    return None
+
+
+def verify_recovery_manifest(build: Build, bundle: Path) -> None:
+    if build.recovery is None:
+        return
+    manifest = bundle / "release-images.env"
+    if f"sha256:{_sha256_file(manifest)}" != build.recovery["manifest_sha256"]:
+        raise ReleaseError("recovered core manifest does not match its CI proof")
+    values = read_env_file(manifest)
+    if values.get("AC_RELEASE_ID") != build.sha or any(
+        values.get(f"AC_{key.upper()}_REGISTRY_DIGEST") != digest
+        for key, digest in build.recovery["registry_digests"].items()
+    ):
+        raise ReleaseError("recovered core manifest does not match its release/image proof")
 
 
 def validated(github: Any, sha: str) -> bool:
@@ -1834,7 +1974,10 @@ class Engine:
         # Provenance sits beside the bundle: verifiers require exact file sets.
         provenance = self.paths.store / build.sha / f"{component}.provenance.json"
         if provenance.exists():
+            if build.recovery is not None and self.stored_build(build.sha, component) != build:
+                raise ReleaseError("stored core provenance differs from recovered artifact")
             verify_checksums(target, expected - {"SHA256SUMS"})
+            verify_recovery_manifest(build, target)
             return target
         if target.exists():
             # A crash can leave a partial copy without provenance; start over.
@@ -1849,6 +1992,7 @@ class Engine:
             unpacked = work_path / component
             unpacked.mkdir()
             extract_exact(zip_path, unpacked, expected)
+            verify_recovery_manifest(build, unpacked)
             record = work_path / "provenance.json"
             record.write_text(
                 json.dumps(
@@ -1859,6 +2003,7 @@ class Engine:
                         "artifact_name": build.artifact_name,
                         "artifact_digest": build.artifact_digest,
                         "stored_at": _now(),
+                        **({"recovery": build.recovery} if build.recovery is not None else {}),
                     },
                     sort_keys=True,
                 )
@@ -3230,6 +3375,7 @@ class Engine:
             int(data["artifact_id"]),
             str(data["artifact_name"]),
             str(data["artifact_digest"]),
+            data.get("recovery"),
         )
 
     # -- Admin snapshot (ADR 0034) -------------------------------------------

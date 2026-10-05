@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   package-release-images:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -96,6 +97,7 @@ jobs:
               exit 1
             }
             printf 'EXPECTED_%s_REGISTRY_DIGEST=%s\n' "${key^^}" "${expected[$key]}" >> "$GITHUB_ENV"
+            export "EXPECTED_${key^^}_REGISTRY_DIGEST=${expected[$key]}"
           done
           run_json="$RUNNER_TEMP/reuse-validation-run.json"
           jobs_json="$RUNNER_TEMP/reuse-validation-jobs.json"
@@ -105,9 +107,13 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/actions/runs/${REUSE_VALIDATION_RUN_ID}" > "$run_json"
           jq -e \
             --arg sha "$RELEASE_SHA" \
+            --arg repository "$GITHUB_REPOSITORY" \
             '.status == "completed"
+             and .conclusion == "success"
              and .head_sha == $sha
-             and .event == "workflow_dispatch"
+             and (.event == "push" or .event == "workflow_dispatch")
+             and .head_branch == "main"
+             and .repository.full_name == $repository
              and .path == ".github/workflows/application.yml"' \
             "$run_json" > /dev/null || {
               printf 'Recovery validation run is not the trusted workflow for the exact release SHA.\n' >&2
@@ -121,19 +127,49 @@ jobs:
           jq -e \
             --arg sha "$RELEASE_SHA" \
             '([.jobs[] | select(.name == "validate" and .head_sha == $sha and .conclusion == "success")] | length == 1)
-             and ([.jobs[] | select(.name == "academy-capacity-simulation" and .head_sha == $sha and .conclusion == "success")] | length == 1)' \
+             and ([.jobs[] | select(.name == "academy-capacity-simulation" and .head_sha == $sha and .conclusion == "success")] | length == 1)
+             and ([.jobs[] | select(.name == "package-release-images" and .head_sha == $sha and .conclusion == "success")] | length == 1)' \
             "$jobs_json" > /dev/null || {
-              printf 'Recovery validation run lacks both successful exact-SHA prerequisite jobs.\n' >&2
+              printf 'Recovery run lacks successful exact-SHA validation, simulation or packaging.\n' >&2
               exit 1
             }
+          original_job_id="$(jq --raw-output '.jobs[] | select(.name == "package-release-images") | .id' "$jobs_json")"
+          [[ "$original_job_id" =~ ^[0-9]+$ ]] || exit 1
+          publication_log="$RUNNER_TEMP/original-publication.log"
+          gh api --allow-escape-sequences \
+            "/repos/${GITHUB_REPOSITORY}/actions/jobs/${original_job_id}/logs" > "$publication_log"
+          # The original workflow publishes/pulls api, learner, admin, coach in
+          # this order. Refuse missing/ambiguous logs rather than guess digests.
+          python3 - "$publication_log" <<'PY'
+          import os, re, sys
+          from pathlib import Path
+          log = Path(sys.argv[1]).read_text()
+          digests = re.findall(r"(?m)^\S+Z Digest: (sha256:[0-9a-f]{64})\s*$", log)
+          names = ("API", "LEARNER", "ADMIN", "COACH")
+          if len(digests) != 4 or any(
+              digest != os.environ[f"EXPECTED_{name}_REGISTRY_DIGEST"]
+              for name, digest in zip(names, digests, strict=True)
+          ):
+              sys.exit("Recorded image digests do not match the original successful publication log.")
+          PY
+          printf 'ORIGINAL_PACKAGE_JOB_ID=%s\n' "$original_job_id" >> "$GITHUB_ENV"
+          printf 'ORIGINAL_PUBLICATION_LOG_SHA256=sha256:%s\n' \
+            "$(sha256sum "$publication_log" | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - name: Pull and verify published release images
         run: |
           set -euo pipefail
           verify_published_image() {
             image="$1"
             expected_digest="$2"
-            docker manifest inspect "$image" > /dev/null
-            docker pull "$image" > /dev/null
+            immutable_image="${image%:*}@$expected_digest"
+            docker manifest inspect "$immutable_image" > /dev/null
+            docker pull "$immutable_image" > /dev/null
+            docker tag "$immutable_image" "$image"
+            revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+            [ "$revision" = "$RELEASE_SHA" ] || {
+              printf 'Published image revision does not match the requested release SHA.\n' >&2
+              exit 1
+            }
             mapfile -t repo_digests < <(
               docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image"
             )
@@ -287,6 +323,8 @@ jobs:
           set -euo pipefail
           artifact_dir="$RUNNER_TEMP/ac-application-${RELEASE_SHA}"
           candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          # Include a conservative allowance for the small CI proof zip.
+          candidate_bytes=$((candidate_bytes + 65536))
           max_artifact_bytes=450000000
           max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
@@ -333,20 +371,70 @@ jobs:
         id: upload_release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ac-application-${{ inputs.release_sha }}
+          # Main packaging reclaims ac-application-<sha>. This bounded recovery
+          # name survives later main uploads until Root stores it (one day).
+          name: ac-application-recovered-${{ inputs.release_sha }}
           path: ${{ runner.temp }}/ac-application-${{ inputs.release_sha }}
           if-no-files-found: error
           # The transport bundle is copied into the immutable VPS artifact
           # store. Keep GitHub Actions storage below the Free-plan allowance.
           retention-days: 1
+      - name: Bind recovery bundle to original validation and image digests
+        env:
+          RECOVERED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
+          RECOVERED_ARTIFACT_DIGEST: ${{ steps.upload_release.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          proof_dir="$RUNNER_TEMP/ac-application-recovery-proof-${RELEASE_SHA}"
+          [[ "$RECOVERED_ARTIFACT_ID" =~ ^[0-9]+$ \
+             && "$RECOVERED_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]] || {
+            printf 'Recovery upload identity or digest is invalid.\n' >&2
+            exit 1
+          }
+          mkdir -p "$proof_dir"
+          manifest_digest="sha256:$(sha256sum "$RUNNER_TEMP/ac-application-${RELEASE_SHA}/release-images.env" | cut -d' ' -f1)"
+          jq --null-input \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg release_sha "$RELEASE_SHA" \
+            --argjson validation_run_id "$REUSE_VALIDATION_RUN_ID" \
+            --argjson recovery_run_id "$GITHUB_RUN_ID" \
+            --arg recovery_head_sha "$GITHUB_SHA" \
+            --argjson artifact_id "$RECOVERED_ARTIFACT_ID" \
+            --arg artifact_name "ac-application-recovered-${RELEASE_SHA}" \
+            --arg artifact_digest "sha256:$RECOVERED_ARTIFACT_DIGEST" \
+            --arg manifest_sha256 "$manifest_digest" \
+            --argjson original_package_job_id "$ORIGINAL_PACKAGE_JOB_ID" \
+            --arg publication_log_sha256 "$ORIGINAL_PUBLICATION_LOG_SHA256" \
+            --arg api "${API_IMAGE%:*}@$EXPECTED_API_REGISTRY_DIGEST" \
+            --arg learner "${LEARNER_IMAGE%:*}@$EXPECTED_LEARNER_REGISTRY_DIGEST" \
+            --arg admin "${ADMIN_IMAGE%:*}@$EXPECTED_ADMIN_REGISTRY_DIGEST" \
+            --arg coach "${COACH_IMAGE%:*}@$EXPECTED_COACH_REGISTRY_DIGEST" \
+            '{schema: "ac.application-recovery/1", repository: $repository,
+              release_sha: $release_sha, validation_run_id: $validation_run_id,
+              recovery_run_id: $recovery_run_id, recovery_head_sha: $recovery_head_sha,
+              artifact_id: $artifact_id, artifact_name: $artifact_name,
+              artifact_digest: $artifact_digest, manifest_sha256: $manifest_sha256,
+              original_package_job_id: $original_package_job_id,
+              publication_log_sha256: $publication_log_sha256,
+              registry_digests: {api: $api, learner: $learner, admin: $admin, coach: $coach}}' \
+            > "$proof_dir/recovery-proof.json"
+      - name: Upload CI recovery proof
+        id: upload_proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ac-application-recovery-proof-${{ inputs.release_sha }}
+          path: ${{ runner.temp }}/ac-application-recovery-proof-${{ inputs.release_sha }}/recovery-proof.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Reclaim superseded release artifacts after verified upload
         env:
           GH_TOKEN: ${{ github.token }}
           UPLOADED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
+          UPLOADED_PROOF_ARTIFACT_ID: ${{ steps.upload_proof.outputs.artifact-id }}
         run: |
           set -euo pipefail
           max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
-          current_name="ac-application-${RELEASE_SHA}"
+          current_name="ac-application-recovered-${RELEASE_SHA}"
           current_artifact_id="$UPLOADED_ARTIFACT_ID"
           [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {
             printf 'Uploaded release artifact identity is malformed.\n' >&2
@@ -388,6 +476,17 @@ jobs:
             printf 'Uploaded release artifact could not be proven for this workflow run.\n' >&2
             exit 1
           }
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${UPLOADED_PROOF_ARTIFACT_ID}" \
+            | jq --exit-status \
+              --arg name "ac-application-recovery-proof-${RELEASE_SHA}" \
+              --argjson run_id "$GITHUB_RUN_ID" \
+              '.name == $name and .workflow_run.id == $run_id
+               and .expired == false and .size_in_bytes > 0 and .size_in_bytes <= 65536' \
+            > /dev/null || {
+              printf 'CI recovery proof artifact could not be proven before cleanup.\n' >&2
+              exit 1
+            }
 
           artifacts_after_upload="$RUNNER_TEMP/repository-artifacts-after-upload.json"
           list_repository_artifacts > "$artifacts_after_upload"
