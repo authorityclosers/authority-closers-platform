@@ -18,6 +18,8 @@ export type GuideDefinition = Readonly<{
   version: string;
   label: string;
   steps: readonly GuideStep[];
+  /** Closing it keeps it closed for later versions too. */
+  rememberOff?: boolean;
 }>;
 
 export function eligibleGuideSteps(
@@ -37,6 +39,7 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
   id: "first-call",
   version: "1",
   label: "First call guide",
+  rememberOff: true,
   steps: [
     {
       id: "welcome",
