@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AppSession } from "./app-session";
 import PlansPage from "./plans/page";
+import ProspectsPage from "./prospects/page";
+import ProspectDetailPage from "./prospects/[prospectId]/page";
 import { useWorkspaceAccess } from "./workspace-access";
 
 let pathname = "/plans";
@@ -12,6 +14,23 @@ vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useRouter: () => ({ push }),
   useSearchParams: () => new URLSearchParams(),
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    children: ReactNode;
+  }) => (
+    <a {...props} href={href}>
+      {children}
+    </a>
+  ),
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -74,6 +93,8 @@ const json = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 const paths = () => fetchMock.mock.calls.map(([path]) => path);
+const prospectId = "aaaaaaaa-1111-4111-8111-111111111111";
+const prospectsApi = "/v1/conversation/prospects";
 const click = async (label: string) => {
   const button = [...host.querySelectorAll("button")].find(
     (node) => node.textContent?.trim() === label,
@@ -104,6 +125,16 @@ beforeEach(() => {
     if (path === "/v1/me/workspaces") return json(identity);
     if (path === "/v1/me/sales-xray-workspaces") return json(directory);
     if (path === "/v1/checkout") return json(checkout);
+    if (path === prospectsApi)
+      return json({
+        schema: "ac.sales-xray.prospects/1",
+        prospects: [],
+        total: 0,
+        stage_filters: [],
+        next_offset: null,
+      });
+    if (path === `${prospectsApi}/${prospectId}`)
+      return json({ detail: "This prospect is unavailable." }, 404);
     return json({}, 404);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -211,8 +242,110 @@ function AccountProbe() {
   const access = useWorkspaceAccess();
   return <output>{JSON.stringify(access?.context)}</output>;
 }
-it("keeps account routes inside the existing authenticated app boundary", async () => {
-  pathname = "/account/";
+const prospectsRoutes = [
+  "/prospects",
+  "/prospects/",
+  `/prospects/${prospectId}`,
+  `/prospects/${prospectId}/`,
+];
+it.each(prospectsRoutes)(
+  "bootstraps the real %s page and reads prospects through its workspace session",
+  async (route) => {
+    pathname = route;
+    const detail = route.includes(prospectId);
+    const page = detail ? (
+      await ProspectDetailPage({
+        params: Promise.resolve({ prospectId }),
+      })
+    ) : (
+      <ProspectsPage />
+    );
+    await mount(
+      <>
+        <AccountProbe />
+        {page}
+      </>,
+    );
+    expect(paths().slice(0, 2)).toEqual([
+      "/v1/me/workspaces",
+      "/v1/me/sales-xray-workspaces",
+    ]);
+    expect(JSON.parse(host.querySelector("output")!.textContent!)).toEqual({
+      personId: identity.person_id,
+      sessionId: identity.session_id,
+      tenantId: directory.selected_tenant_id,
+    });
+    const reads = fetchMock.mock.calls.filter(
+      ([path]) =>
+        path === (detail ? `${prospectsApi}/${prospectId}` : prospectsApi),
+    );
+    expect(reads).toHaveLength(1);
+    expect(reads[0][1]).toMatchObject({
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    expect(
+      host.querySelector('aside[aria-label="Sales Xray navigation"]'),
+    ).not.toBeNull();
+    expect(host.querySelector('a[href="/prospects"]')).not.toBeNull();
+    if (detail)
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "This prospect is unavailable.",
+      );
+    else
+      expect(
+        host.querySelector('[data-testid="empty-prospects"]'),
+      ).not.toBeNull();
+  },
+);
+it.each(["/prospects", `/prospects/${prospectId}`])(
+  "does not read prospects on signed-out %s",
+  async (route) => {
+    pathname = route;
+    fetchMock.mockResolvedValueOnce(json({}, 401));
+    await mount(
+      route === "/prospects" ? (
+        <ProspectsPage />
+      ) : (
+        await ProspectDetailPage({ params: Promise.resolve({ prospectId }) })
+      ),
+    );
+    expect(paths()).toEqual(["/v1/me/workspaces"]);
+  },
+);
+it.each([
+  "/prospects/not-a-uuid",
+  "/prospects/new/",
+  `/prospects/${prospectId.toUpperCase()}`,
+  `/prospects/${prospectId}/calls`,
+  "/prospects-extra",
+])("keeps unsupported %s outside the session boundary", async (route) => {
+  pathname = route;
+  await mount(<p>Unsupported route</p>);
+  expect(host.textContent).toBe("Unsupported route");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it("retains the real detail page's invalid UUID rejection", async () => {
+  await expect(
+    ProspectDetailPage({
+      params: Promise.resolve({ prospectId: "not-a-uuid" }),
+    }),
+  ).rejects.toThrow("NEXT_NOT_FOUND");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it.each([
+  "/",
+  "/dashboard",
+  "/calls",
+  "/account/",
+  "/organisation",
+  "/analysis",
+  "/analysis/new",
+  "/analysis/calls",
+  `/analysis/calls/${prospectId}/`,
+])("keeps %s inside the existing authenticated app boundary", async (route) => {
+  pathname = route;
   await mount(<AccountProbe />);
   expect(JSON.parse(host.querySelector("output")!.textContent!)).toEqual({
     personId: identity.person_id,
@@ -225,7 +358,7 @@ it("keeps account routes inside the existing authenticated app boundary", async 
   expect(host.querySelector("[data-purchase-shell]")).toBeNull();
 });
 it("keeps login and fixture routes outside both session boundaries", async () => {
-  for (const route of ["/login/", "/review-fixture/plans"]) {
+  for (const route of ["/login/", "/auth/callback", "/review-fixture/plans"]) {
     pathname = route;
     await mount(<p>Public route</p>);
     expect(host.textContent).toBe("Public route");

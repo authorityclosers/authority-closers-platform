@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { callIdFromPath } from "./analysis-routes";
+import { UUID_RE } from "./prospects-client";
 import { PurchaseShell } from "./plans/purchase-shell";
 import styles from "./plans/plans.module.css";
 import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
@@ -18,6 +19,7 @@ const SHELL_ROUTES = new Set([
   "/",
   "/dashboard",
   "/calls",
+  "/prospects",
   "/account",
   "/organisation",
   "/analysis",
@@ -29,7 +31,12 @@ function isShellRoute(pathname: string | null) {
   if (!pathname) return false;
   // Static exports use trailing slashes for the same application pages.
   const route = pathname.replace(/\/$/, "") || "/";
-  return SHELL_ROUTES.has(route) || callIdFromPath(route) !== null;
+  const prospectId = route.match(/^\/prospects\/([^/]+)$/)?.[1];
+  return (
+    SHELL_ROUTES.has(route) ||
+    callIdFromPath(route) !== null ||
+    (prospectId !== undefined && UUID_RE.test(prospectId))
+  );
 }
 
 /** Confirm the same AC identity/directory without mounting the app frame. */
