@@ -218,7 +218,9 @@ async def _finish(database, source, monkeypatch, *, outcome="follow_up"):
     )
     transcript = {"revision": "fictional-metrics-revision", "segments": deepcopy(SEGMENTS)}
     plan = SimpleNamespace(
-        request=SimpleNamespace(transcript_checkpoint_id=transcript_id),
+        request=SimpleNamespace(
+            transcript_checkpoint_id=transcript_id, coaching_prompt_revision="coaching-v6"
+        ),
         profile={"revision": "synthetic-metrics-v1"},
         transcript=transcript,
         native_transcript=transcript,

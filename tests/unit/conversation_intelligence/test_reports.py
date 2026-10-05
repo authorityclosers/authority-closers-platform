@@ -474,9 +474,10 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/8"
     # AUT-311 validator semantics remain /8; AUT-347 changes only dormant v7 generation.
     # AUT-553 changes only dormant v7 admission; bump when confirmed dimensions are enabled.
+    # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "06fe2bffdf5e3d9b217b214ce85d6851e590340ee4d22b971d2d6508c9af52dc"
+        "1b46b7cc686bb8572a2f3e57be2bac8590ccd90e80faf250a35766e40495964a"
     )
 
 

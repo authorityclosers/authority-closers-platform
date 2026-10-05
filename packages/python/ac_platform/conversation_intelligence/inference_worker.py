@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
+from ac_platform.conversation_intelligence.call_map import CALL_MAP_FAILURE_CODES
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
@@ -204,6 +205,7 @@ def _provider_returned_receipt(
 # provider errors can contain a response body, transcript or credential URL.
 _VALIDATION_FAILURES = frozenset(
     {
+        *CALL_MAP_FAILURE_CODES,
         "report_evidence_invalid",
         "report_evidence_quote_mismatch",
         "report_evidence_segment_invalid",
@@ -211,6 +213,7 @@ _VALIDATION_FAILURES = frozenset(
         "report_json_invalid",
         "report_findings_invalid",
         "report_dimension_status_invalid",
+        "report_dimension_evidence_required",
         "report_dimension_prospect_evidence_required",
         "report_overview_missing",
         "report_overview_invalid",

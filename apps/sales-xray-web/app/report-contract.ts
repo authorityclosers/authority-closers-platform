@@ -19,6 +19,7 @@ const REPORT_STATES = new Set([
 ]);
 const DIMENSION_STATES = new Set([
   "observed",
+  "partial",
   "insufficient_evidence",
   "not_applicable",
   "conflicted",
@@ -399,7 +400,9 @@ function parseDimensions(
           });
     if (
       evidence !== undefined &&
-      (status === "observed" || status === "conflicted") &&
+      (status === "observed" ||
+        status === "partial" ||
+        status === "conflicted") &&
       evidence.length === 0
     )
       throw new ReportContractError(
