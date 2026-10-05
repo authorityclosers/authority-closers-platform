@@ -53,6 +53,14 @@
 }
 
 @media (max-width: 760px) {
+  .filter {
+    flex-basis: 100%;
+  }
+
+  .filter select {
+    flex: 1;
+  }
+
   .desktopRep {
     display: none;
   }
