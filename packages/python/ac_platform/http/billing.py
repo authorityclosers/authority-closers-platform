@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Coroutine
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import exists, select, tuple_
 
@@ -24,7 +27,9 @@ from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.application import BillingApplication
 from ac_platform.billing.commands import BillingCommands, BuyerTaxDetails, Caller, CheckoutCommand
+from ac_platform.billing.credit_reads import CreditReads
 from ac_platform.billing.errors import (
+    BillingForbidden,
     BillingIdempotencyKeyRequired,
     BillingValidationFailed,
     BillingWebhookRejected,
@@ -49,8 +54,16 @@ from ac_platform.billing.views import (
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
+    identity_error_handler,
     require_admin_surface,
     require_safe_origin,
+)
+from ac_platform.http.problem import domain_error_handler
+from ac_platform.identity.services import (
+    AccountUnavailableError,
+    EmailVerificationRequiredError,
+    IdentityServiceError,
+    TenantScopeDeniedError,
 )
 from ac_platform.kernel.errors import DomainError
 from ac_platform.payments.ports import PaymentEventRejected
@@ -274,6 +287,70 @@ class InvoicesResponse(BaseModel):
     next_before: UUID | None
 
 
+class CreditQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    account: AccountName = "personal"
+
+
+class CreditHistoryQuery(CreditQuery):
+    limit: int = Field(default=50, ge=1, le=100)
+    before: UUID | None = None
+
+
+class CreditBalanceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, from_attributes=True)
+    account: AccountName
+    account_id: UUID | None
+    balance: StrictStr
+
+
+class CreditEntryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, from_attributes=True)
+    entry_id: UUID
+    quantity: StrictStr
+    created_at: datetime
+    corrected_entry_id: UUID | None
+
+
+class CreditHistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, from_attributes=True)
+    account: AccountName
+    account_id: UUID | None
+    entries: list[CreditEntryResponse]
+    next_before: UUID | None
+
+
+class _CreditReadRoute(APIRoute):
+    """Keep credit read errors private, including dependency and query failures."""
+
+    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+        handler = super().get_route_handler()
+
+        async def read(request: Request) -> Response:
+            try:
+                response = await handler(request)
+            except RequestValidationError:
+                response = await domain_error_handler(
+                    request, BillingValidationFailed("The credit read query is invalid.")
+                )
+            except (
+                AccountUnavailableError,
+                EmailVerificationRequiredError,
+                TenantScopeDeniedError,
+            ):
+                response = await domain_error_handler(
+                    request, BillingForbidden("This caller cannot read billing credits.")
+                )
+            except IdentityServiceError as error:
+                response = await identity_error_handler(request, error)
+            except DomainError as error:
+                response = await domain_error_handler(request, error)
+            _no_store(response)
+            return response
+
+        return read
+
+
 async def _invoice_account(
     auth: AuthenticatedTransaction, settings: Settings, account: AccountName
 ) -> UUID | None:
@@ -387,6 +464,39 @@ def install_billing_http(
     actor_dependency = Depends(require_actor, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
     read_actor_dependency = Depends(read_require_actor, scope="function")
+
+    credit_router = APIRouter(prefix="/billing/credits", route_class=_CreditReadRoute)
+
+    def credit_reads(auth: AuthenticatedTransaction) -> CreditReads:
+        return CreditReads(
+            auth.database,
+            public_learner_tenant_id=settings.public_learner_tenant_id,
+            operations_tenant_id=settings.operations_tenant_id,
+        )
+
+    @credit_router.get("", response_model=CreditBalanceResponse)
+    async def read_credits(
+        request: Request,
+        query: Annotated[CreditQuery, Query()],
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> CreditBalanceResponse:
+        return CreditBalanceResponse.model_validate(
+            await credit_reads(auth).balance(_caller(request, auth), query.account)
+        )
+
+    @credit_router.get("/history", response_model=CreditHistoryResponse)
+    async def read_credit_history(
+        request: Request,
+        query: Annotated[CreditHistoryQuery, Query()],
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> CreditHistoryResponse:
+        return CreditHistoryResponse.model_validate(
+            await credit_reads(auth).history(
+                _caller(request, auth), query.account, limit=query.limit, before=query.before
+            )
+        )
+
+    router.include_router(credit_router)
 
     @router.get("/invoices", response_model=InvoicesResponse)
     async def list_invoices(
