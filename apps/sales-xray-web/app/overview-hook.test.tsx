@@ -231,7 +231,7 @@ describe("OverviewHook phase cards", () => {
     expect(visuals.previousElementSibling?.textContent).toContain(
       report.summary,
     );
-    expect(visuals.textContent).toContain("Time used02:00");
+    expect(visuals.textContent).toContain("Call length02:00");
     expect(visuals.textContent).toContain("alex");
     expect(visuals.textContent).toContain("sam");
     expect(

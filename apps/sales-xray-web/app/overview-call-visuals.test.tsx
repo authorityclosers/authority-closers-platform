@@ -62,10 +62,16 @@ it("measures every speaker without roles, omits AI cards and seeks the longest m
     [...host.querySelectorAll("h4")].slice(0, 3).map((h) => h.textContent),
   ).toEqual(["alex", "sam", "lee"]);
   const alex = host.querySelector("h4")!.parentElement!;
-  expect(alex.textContent).toContain("Talk time: 00:20");
+  expect(alex.textContent).not.toContain("Talk time:");
   expect(alex.textContent).toContain("50% talk share");
   expect(alex.textContent).toContain("Questions: 2");
-  expect(host.textContent).toContain("Time used01:00");
+  expect(host.textContent).toContain("Call length01:00");
+  const details = host.querySelector("details")!;
+  expect(details.open).toBe(false);
+  expect(details.textContent).toContain("alexTalk time: 00:20");
+  expect(host.textContent).toContain("overlapping speakers count separately");
+  expect(host.textContent).toContain("Questions count question marks");
+  details.open = true;
   expect(
     host.querySelector('[aria-label="Call map AI visual readings"]'),
   ).toBeNull();
@@ -159,8 +165,36 @@ it("leaves silent minutes as chart gaps and keeps an unmeasured talk share unava
     ),
   );
   expect(host.textContent).toContain("unavailable talk share");
-  expect(host.textContent).not.toContain("%");
+  expect(host.textContent).toContain("Timed transcript spanUnavailable");
+  expect(host.querySelector("h4")!.parentElement!.textContent).not.toContain(
+    "%",
+  );
   expect(host.querySelectorAll("button")).toHaveLength(0);
+});
+
+it("labels a duration fallback as transcript span and retains all speaker values", async () => {
+  await act(async () =>
+    root.render(
+      <OverviewCallVisuals
+        transcript={{ ...transcript, duration_ms: 0 }}
+        onSeek={() => undefined}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("Timed transcript span00:43");
+  expect(host.textContent).not.toContain("Call length");
+  const times = [...host.querySelectorAll("details dl > div")].map(
+    (row) => row.textContent,
+  );
+  expect(times).toEqual([
+    "alexTalk time: 00:20",
+    "samTalk time: 00:10",
+    "leeTalk time: 00:10",
+  ]);
+  expect(host.textContent).toContain("Talk share by minute");
+  expect(host.textContent).toContain(
+    "transcript segments, which can include pauses",
+  );
 });
 
 it("computes overrun from the promise evidence time and preserves an unresolved measurement", async () => {
