@@ -273,14 +273,14 @@ def json_string(value: bytearray) -> bytearray:
 # TLS bridge to the loopback edge ---------------------------------------------
 
 
-def ephemeral_certificate(directory: Path) -> tuple[Path, Path, str]:
+def ephemeral_certificate(directory: Path, *, host: str = HOST) -> tuple[Path, Path, str]:
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
 
     key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, HOST)])
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, host)])
     now = datetime.datetime.now(datetime.UTC)
     certificate = (
         x509.CertificateBuilder()
@@ -290,7 +290,7 @@ def ephemeral_certificate(directory: Path) -> tuple[Path, Path, str]:
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=5))
         .not_valid_after(now + datetime.timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName(HOST)]), critical=False)
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName(host)]), critical=False)
         .sign(key, hashes.SHA256())
     )
     cert_path, key_path = directory / "bridge.crt", directory / "bridge.key"
@@ -312,7 +312,8 @@ def ephemeral_certificate(directory: Path) -> tuple[Path, Path, str]:
 class Bridge:
     """TLS listener on an ephemeral loopback port forwarding to the edge."""
 
-    def __init__(self, cert: Path, key: Path):
+    def __init__(self, cert: Path, key: Path, *, edge_port: int = EDGE_PORT):
+        self.edge_port = edge_port
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.context.load_cert_chain(cert, key)
         self.context.set_alpn_protocols(["http/1.1"])
@@ -338,7 +339,7 @@ class Bridge:
     def _serve(self, client: socket.socket) -> None:
         try:
             tls = self.context.wrap_socket(client, server_side=True)
-            upstream = socket.create_connection((EDGE_HOST, EDGE_PORT), timeout=30)
+            upstream = socket.create_connection((EDGE_HOST, self.edge_port), timeout=30)
         except OSError:
             client.close()
             return
