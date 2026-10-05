@@ -79,6 +79,30 @@ export type PlansScreenProps = {
  * - Top-ups removed from /plans (live in Settings → Plan & billing).
  * - Success: animated minute count-up, receipt link, and "Start an analysis".
  */
+function formatAllowanceHours(mins: number): string {
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0
+    ? `${count(hours)} h ${count(remMins)} min`
+    : `${count(hours)} h`;
+}
+
+function formatCurrentPlanAllowance(availableSeconds: number): string {
+  const mins = minutes(availableSeconds);
+  if (mins > 60) {
+    return `${count(mins)} min (${formatAllowanceHours(mins)}) left`;
+  }
+  return `${count(mins)} minutes left`;
+}
+
+function formatSuccessAllowance(availableSeconds: number): string {
+  const mins = minutes(availableSeconds);
+  if (mins > 60) {
+    return `${count(mins)} min (${formatAllowanceHours(mins)}) available on your account.`;
+  }
+  return `${count(mins)} analysis minutes available on your account.`;
+}
+
 export function PlansScreen({
   plans,
   gstRate,
@@ -208,7 +232,7 @@ export function PlansScreen({
               {allowance?.unlimited
                 ? `Unlimited · ${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                 : allowance
-                  ? `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
+                  ? formatSuccessAllowance(allowance.availableSeconds)
                   : "Your updated analysis minutes are being confirmed."}
             </p>
             <div className={styles.actions}>
@@ -241,7 +265,9 @@ export function PlansScreen({
                     <b>Current: {mePlan.plan.name}</b> ·{" "}
                     {mePlan.allowance.unlimited
                       ? `Unlimited · ${count(minutes(mePlan.allowance.committedSeconds))} min used or reserved by analyses.`
-                      : `${count(minutes(mePlan.allowance.availableSeconds))} minutes left`}
+                      : formatCurrentPlanAllowance(
+                          mePlan.allowance.availableSeconds,
+                        )}
                   </span>
                 </div>
               ) : null}
