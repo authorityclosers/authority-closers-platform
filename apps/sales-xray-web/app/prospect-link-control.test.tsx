@@ -121,6 +121,7 @@ it("shows both source quotes and writes only on explicit confirmation, including
     expected_membership_id: null,
   });
   expect(options.signal.aborted).toBe(false);
+  expect(options.redirect).toBe("error");
   expect(host.querySelector(`a[href="/prospects/${prospect}"]`)).not.toBeNull();
 });
 

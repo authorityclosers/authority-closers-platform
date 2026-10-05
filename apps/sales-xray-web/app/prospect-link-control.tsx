@@ -45,6 +45,7 @@ async function request(
     {
       method: body ? "POST" : "GET",
       credentials: "same-origin",
+      redirect: "error",
       cache: "no-store",
       signal,
       headers: {

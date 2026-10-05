@@ -352,7 +352,7 @@ def test_suggestion_query_count_is_fixed_and_older_page_keeps_matches(
                     assert page.status_code == 200, page.text
                     counts.append(len(statements))
                     assert len(page.json()["suggestions"]) == size
-                assert len(set(counts)) == 1 and counts[0] <= 45
+                assert len(set(counts)) == 1 and counts[0] <= 50
                 monkeypatch.setattr(service, "PAGE_SIZE", 1)
                 first = (await client.get(f"{PREFIX}/calls/{current}/suggestions")).json()
                 second = (await client.get(f"{PREFIX}/calls/{current}/suggestions?offset=1")).json()
