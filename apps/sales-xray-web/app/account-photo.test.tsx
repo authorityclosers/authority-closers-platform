@@ -10,6 +10,7 @@ import {
 } from "./account-profile-client";
 import { AccountSettings } from "./account-settings";
 import { ProfileMenu } from "./profile-menu";
+import { SettingsMenu } from "./shell/settings-menu";
 import {
   invalidateShellProfile,
   PROFILE_UPDATED_EVENT,
@@ -70,11 +71,24 @@ async function render(node: ReactNode, authenticated = true) {
   );
 }
 
-const surfaces = ["header", "rail", "account", "you"] as const;
+const surfaces = ["header", "rail", "account", "menu", "you"] as const;
 type Surface = (typeof surfaces)[number];
-function surfaceNode(surface: Surface) {
+function surfaceNode(
+  surface: Surface,
+  photoUrl: string | null = ACCOUNT_PROFILE_PHOTO_PATH,
+) {
   return surface === "account" ? (
     <AccountSettings billing={{ status: "ready" }} />
+  ) : surface === "menu" ? (
+    <SettingsMenu
+      open
+      anchorRef={{ current: document.createElement("button") }}
+      onClose={() => {}}
+      name={profile.name}
+      email={profile.email}
+      photoUrl={photoUrl}
+      allowance={null}
+    />
   ) : surface === "you" ? (
     <SpeakerAvatar
       voice={0}
@@ -94,20 +108,29 @@ async function show(surface: Surface, photo_url: string | null) {
         : new Response(null, { status: 503 }),
     ),
   );
-  await render(surfaceNode(surface));
+  await render(surfaceNode(surface, photo_url));
   if (surface === "header" || surface === "rail")
     await act(async () =>
       host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
     );
   return surface === "account"
-    ? [host.querySelector("aside header > span")!]
-    : surface === "you"
-      ? [host.querySelector('[data-you="true"]')!]
-      : [
-          ...host.querySelectorAll(
-            'button[aria-expanded] > span[aria-hidden="true"], [aria-label="Profile actions"] > div > span[aria-hidden="true"]',
-          ),
-        ];
+    ? [
+        host.querySelector("aside header > span")!,
+        host.querySelector('#account-pane-profile span[aria-hidden="true"]')!,
+      ]
+    : surface === "menu"
+      ? [
+          document.querySelector(
+            '[aria-label="Account menu"] [aria-hidden="true"]',
+          )!,
+        ]
+      : surface === "you"
+        ? [host.querySelector('[data-you="true"]')!]
+        : [
+            ...host.querySelectorAll(
+              'button[aria-expanded] > span[aria-hidden="true"], [aria-label="Profile actions"] > div > span[aria-hidden="true"]',
+            ),
+          ];
 }
 
 it.each(surfaces)(
@@ -115,7 +138,9 @@ it.each(surfaces)(
   async (surface) => {
     const avatars = await show(surface, ACCOUNT_PROFILE_PHOTO_PATH);
     expect(avatars).toHaveLength(
-      surface === "header" || surface === "rail" ? 2 : 1,
+      surface === "header" || surface === "rail" || surface === "account"
+        ? 2
+        : 1,
     );
     for (const avatar of avatars) {
       const image = avatar.querySelector("img")!;
@@ -192,6 +217,27 @@ it("allows a new account's photo after the previous account's photo failed", asy
   expect(host.querySelector("img")?.getAttribute("src")).toBe(
     ACCOUNT_PROFILE_PHOTO_PATH,
   );
+});
+
+it("resets the account pop-up photo fallback when the account changes", async () => {
+  const [avatar] = await show("menu", ACCOUNT_PROFILE_PHOTO_PATH);
+  await act(async () =>
+    avatar.querySelector("img")!.dispatchEvent(new Event("error")),
+  );
+  expect(avatar.textContent).toBe("ML");
+  await render(
+    <SettingsMenu
+      open
+      anchorRef={{ current: document.createElement("button") }}
+      onClose={() => {}}
+      name="Alex Rivera"
+      email="alex@example.test"
+      photoUrl={ACCOUNT_PROFILE_PHOTO_PATH}
+      allowance={null}
+    />,
+  );
+  const image = document.querySelector('[aria-label="Account menu"] img');
+  expect(image?.getAttribute("src")).toBe(ACCOUNT_PROFILE_PHOTO_PATH);
 });
 
 it("keeps provider image hosts out of the app source", () => {

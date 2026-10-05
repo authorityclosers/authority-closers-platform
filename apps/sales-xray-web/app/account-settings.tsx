@@ -320,6 +320,12 @@ export function AccountSettings({
         <Pane id="general" title="General" active={section} onBack={back}>
           <ThemeRow />
           <Row
+            label="App language"
+            hint="Sales Xray is available in English. Choose the report language when you start an analysis."
+          >
+            <span>English</span>
+          </Row>
+          <Row
             label="Calls library"
             hint="Calls and reports stay private to your account and selected workspace."
           >
@@ -628,6 +634,13 @@ function ThemeRow() {
 function ProfileSummary({ profile }: { profile: AccountProfileRecord }) {
   return (
     <>
+      <Row label="Profile photo">
+        <span className={styles.profilePhoto} aria-hidden="true">
+          <AccountAvatarImage key={profile.email} photoUrl={profile.photo_url}>
+            {initials(profile.name) || <CircleUserRound size={28} />}
+          </AccountAvatarImage>
+        </span>
+      </Row>
       <dl className={styles.facts}>
         <div className={styles.row}>
           <dt className={styles.rowLabel}>Name</dt>
