@@ -19,11 +19,6 @@ import {
 import { WorkspaceAccessContext } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
 import { PlansPurchase } from "./plans-purchase";
-import { PlansScreen } from "./plans-screen";
-import {
-  PLANS_CATALOGUE_FIXTURE,
-  PLANS_GST_RATE,
-} from "./plans-catalogue-fixture";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -400,7 +395,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });
 
-it("renders authoritative renewal date and amount when quote exists on live PlansPurchase, or confirms at checkout", async () => {
+it("renders authoritative renewal date and amount when quote exists on live PlansPurchase", async () => {
   const quote = {
     selection: { planKey: "personal", interval: "month" as const, seats: 1 },
     subtotalPaise: 249900,
@@ -414,11 +409,18 @@ it("renders authoritative renewal date and amount when quote exists on live Plan
   expect(host.textContent).not.toContain(
     "Date and amount confirmed at checkout",
   );
+});
 
-  await click("Close checkout");
+it("confirms renewal at checkout when no server quote exists", async () => {
   await render(<PlansPurchase client={fixtureBilling} />);
   await click("Get Personal");
-  expect(host.textContent).toContain("Date and amount confirmed at checkout");
+  const row = [...host.querySelectorAll("dt")].find(
+    (node) => node.textContent === "Next renewal",
+  )!.parentElement!;
+  expect(row.textContent).toBe(
+    "Next renewalDate and amount confirmed at checkout",
+  );
+  expect(row.textContent).not.toContain("₹0");
 });
 
 it("Settings treats subscription and invoice 404 as billing-off when canonical reads succeed", async () => {

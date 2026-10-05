@@ -365,10 +365,18 @@ export function OrganisationView() {
                   <div className={styles.stat}>
                     <span>Your minutes</span>
                     <b>
-                      {allowance
-                        ? `${Math.floor(allowance.available_seconds / 60)} left`
-                        : "—"}
+                      {allowance?.unlimited
+                        ? "Unlimited"
+                        : allowance
+                          ? `${Math.floor(allowance.available_seconds / 60)} left`
+                          : "—"}
                     </b>
+                    {allowance?.unlimited ? (
+                      <span>
+                        {Math.floor(allowance.committed_seconds / 60)} min used
+                        or reserved by analyses.
+                      </span>
+                    ) : null}
                     {allowance && !allowance.unlimited ? (
                       <span className={styles.bar} aria-hidden="true">
                         <i

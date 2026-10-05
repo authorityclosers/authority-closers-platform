@@ -230,21 +230,27 @@ export function BillingView({
             </div>
 
             <div className={styles.ringRow}>
-              <UsageRing allowance={allowance ?? null} />
+              {!allowance?.unlimited ? (
+                <UsageRing allowance={allowance ?? null} />
+              ) : null}
               <div className={styles.ringDetails}>
                 <b>
-                  {allowance
-                    ? ringHoursText
-                      ? `${count(ringAvailMins)} min (${ringHoursText}) left`
-                      : `${count(ringAvailMins)} min left`
-                    : "Minutes unavailable"}
+                  {allowance?.unlimited
+                    ? "Unlimited"
+                    : allowance
+                      ? ringHoursText
+                        ? `${count(ringAvailMins)} min (${ringHoursText}) left`
+                        : `${count(ringAvailMins)} min left`
+                      : "Minutes unavailable"}
                 </b>
                 <span>
-                  {allowance
-                    ? allowance.allowanceSeconds > 0
-                      ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
-                      : "available analysis time"
-                    : ""}
+                  {allowance?.unlimited
+                    ? `${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
+                    : allowance
+                      ? allowance.allowanceSeconds > 0
+                        ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
+                        : "available analysis time"
+                      : ""}
                 </span>
               </div>
             </div>

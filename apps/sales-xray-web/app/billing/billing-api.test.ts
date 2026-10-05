@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   BillingError,
   invoiceDownloadPath,
-  isBillingDisabledOrNotFound,
+  notOnSale,
   liveBilling,
 } from "./billing-api";
 
@@ -162,44 +162,63 @@ it("treats a missing organisation billing account as empty, retaining personal 4
   });
 });
 
-it("distinguishes 404 and billing-disabled states from real server and network failures", () => {
-  expect(
-    isBillingDisabledOrNotFound(new BillingError(404, null, "Not found")),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(
-      new BillingError(405, null, "Method not allowed"),
+it.each([
+  [404, null, true],
+  [405, null, true],
+  [501, null, true],
+  [409, "not_on_sale", true],
+  [404, "not_found", false],
+  [403, "forbidden", false],
+  [500, null, false],
+  [503, null, false],
+  [400, "billing_disabled", false],
+  [400, "not_on_sale", false],
+] as const)(
+  "classifies C1 not-on-sale status %i/code %s",
+  (status, code, expected) => {
+    expect(
+      notOnSale(new BillingError(status, code, "billing is disabled")),
+    ).toBe(expected);
+  },
+);
+
+it.each(["personal", "organisation"] as const)(
+  "retains problem-body invoice 404 for %s",
+  async (account) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            type: "about:blank",
+            title: "Not found",
+            status: 404,
+            code: "not_found",
+            detail: "Missing invoice account",
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+    await expect(liveBilling.readInvoices(account)).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+    });
+  },
+);
+
+it("does not read unvalidated error codes or match detail strings", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        { code: "billing_disabled", detail: "billing is disabled" },
+        { status: 403 },
+      ),
     ),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(
-      new BillingError(400, "billing_disabled", null),
-    ),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(new BillingError(400, "billing_off", null)),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(new BillingError(400, "not_on_sale", null)),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(
-      new BillingError(400, null, "billing is disabled"),
-    ),
-  ).toBe(true);
-  expect(
-    isBillingDisabledOrNotFound(
-      new BillingError(500, null, "Internal server error"),
-    ),
-  ).toBe(false);
-  expect(
-    isBillingDisabledOrNotFound(new BillingError(501, null, "Not implemented")),
-  ).toBe(false);
-  expect(
-    isBillingDisabledOrNotFound(
-      new BillingError(503, null, "Service unavailable"),
-    ),
-  ).toBe(false);
-  expect(isBillingDisabledOrNotFound(new Error("Network failure"))).toBe(false);
-  expect(isBillingDisabledOrNotFound(null)).toBe(false);
+  );
+  await expect(liveBilling.readSubscriptions("personal")).rejects.toMatchObject(
+    { status: 403, code: null, detail: null },
+  );
+  expect(notOnSale(new Error("network"))).toBe(false);
 });

@@ -6,7 +6,7 @@ import {
   BillingError,
   idempotencyKey,
   invoiceDownloadPath,
-  isBillingDisabledOrNotFound,
+  notOnSale,
   liveBilling,
   type BillingClient,
 } from "./billing-api";
@@ -65,7 +65,7 @@ export function useBillingAccount(
       client.readMePlan(controller.signal),
       client.readUsage(controller.signal),
       client.readSubscriptions(account, controller.signal).catch((error) => {
-        if (isBillingDisabledOrNotFound(error)) {
+        if (notOnSale(error)) {
           return { current: null, past: [] };
         }
         throw error;
@@ -103,7 +103,7 @@ export function useBillingAccount(
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
-          if (isBillingDisabledOrNotFound(error)) {
+          if (notOnSale(error)) {
             setInvoiceSnapshot({
               key,
               client,

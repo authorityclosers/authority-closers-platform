@@ -200,9 +200,11 @@ export function PlansScreen({
               <AnimatedCountUp targetMinutes={paid.minutes} />
             ) : null}
             <p className={styles.successAllowance}>
-              {allowance
-                ? `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
-                : "Your updated analysis minutes are being confirmed."}
+              {allowance?.unlimited
+                ? `Unlimited · ${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
+                : allowance
+                  ? `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
+                  : "Your updated analysis minutes are being confirmed."}
             </p>
             <div className={styles.actions}>
               <Link className={styles.primary} href="/analysis/new">
@@ -232,7 +234,9 @@ export function PlansScreen({
                 <div className={styles.trial}>
                   <span>
                     <b>Current: {mePlan.plan.name}</b> ·{" "}
-                    {`${count(minutes(mePlan.allowance.availableSeconds))} minutes left`}
+                    {mePlan.allowance.unlimited
+                      ? `Unlimited · ${count(minutes(mePlan.allowance.committedSeconds))} min used or reserved by analyses.`
+                      : `${count(minutes(mePlan.allowance.availableSeconds))} minutes left`}
                   </span>
                 </div>
               ) : null}

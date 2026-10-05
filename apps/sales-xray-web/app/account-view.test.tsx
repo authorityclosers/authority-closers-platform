@@ -233,27 +233,33 @@ it("shows the verified profile and real allowance as its own destination", async
   );
 });
 
-it("shows real analysis time without Unlimited when flag is set", async () => {
-  respond({
-    "GET /v1/me/sales-xray-profile": () => json(PROFILE),
-    "GET /v1/conversation/acquisition/session": () =>
-      json({
-        allowance: {
-          allowance_seconds: 0,
-          committed_seconds: 1_200,
-          available_seconds: 0,
-          unlimited: true,
-        },
-      }),
-  });
-  await renderAccount();
-  const allowance = host.querySelector("[data-allowance]")!;
-  expect(allowance.getAttribute("data-allowance")).toBe("none");
-  expect(allowance.textContent).toContain("No analysis time yet");
-  expect(allowance.textContent).not.toContain("Unlimited");
-  expect(allowance.querySelector('[role="meter"]')).toBeNull();
-  expect(allowance.textContent).not.toMatch(/%/);
-});
+it.each([0, 2_700])(
+  "shows Unlimited with a finite ledger balance of %i seconds",
+  async (available) => {
+    respond({
+      "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+      "GET /v1/conversation/acquisition/session": () =>
+        json({
+          allowance: {
+            allowance_seconds: 0,
+            committed_seconds: 1_200,
+            available_seconds: available,
+            unlimited: true,
+          },
+        }),
+    });
+    await renderAccount();
+    const allowance = host.querySelector("[data-allowance]")!;
+    expect(allowance.getAttribute("data-allowance")).toBe("unlimited");
+    expect(allowance.textContent).toContain("Unlimited");
+    expect(allowance.textContent).toContain("20 min used or reserved");
+    expect(allowance.textContent).not.toMatch(
+      /No analysis time|Ask the AC team|available/,
+    );
+    expect(allowance.querySelector('[role="meter"]')).toBeNull();
+    expect(allowance.textContent).not.toMatch(/%/);
+  },
+);
 
 it("shows exhausted balance with 0 available minutes and empty meter", async () => {
   respond({
@@ -501,4 +507,23 @@ it("asks a signed-out visitor to sign in and reads nothing", async () => {
   expect(host.textContent).toContain("Sign in to see your account");
   expect(host.querySelector('a[href="/login"]')).not.toBeNull();
   expect(calls).toHaveLength(0);
+});
+
+it("shows the grant empty state only for a finite zero allowance", async () => {
+  respond({
+    "GET /v1/me/sales-xray-profile": () => json(PROFILE),
+    "GET /v1/conversation/acquisition/session": () =>
+      json({
+        allowance: {
+          allowance_seconds: 0,
+          committed_seconds: 0,
+          available_seconds: 0,
+          unlimited: false,
+        },
+      }),
+  });
+  await renderAccount();
+  const allowance = host.querySelector('[data-allowance="none"]')!;
+  expect(allowance.textContent).toContain("No analysis time yet");
+  expect(allowance.textContent).toContain("Ask the AC team");
 });
