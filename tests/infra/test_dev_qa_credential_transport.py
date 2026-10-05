@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +33,7 @@ def load(name: str, relative: str):
 
 broker = load("dev_qa_credential", "infra/application/scripts/dev-qa-credential.py")
 launcher = load("qa_admin_browser", "infra/application/development/qa-admin-browser.py")
+qa_runner = load("dev_billing_qa", "infra/application/scripts/dev-billing-qa.py")
 
 MERGE = "1daeb17431a83a1330e9ec5f2362c29d3bb39c30"
 ORG_MERGE = "61e6b240cd16c35ca87c19518aefcba1f3d3d555"
@@ -633,3 +635,172 @@ def test_broker_zeroes_selected_buffer_after_emission_or_error(monkeypatch, fail
     else:
         assert broker.main(["billing-staff"]) == 0
     assert buffer == bytearray(len(FICTIONAL))
+
+
+# Released operator runner: no Docker, root, secrets or database execution. -----
+
+
+def operator_inputs():
+    return {
+        **{name: f"fictional-{name}" for name in qa_runner.INPUTS},
+        "AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@172.27.0.2:5432/ac_platform",
+        "AC_INFISICAL_ENVIRONMENT": "dev",
+        "AC_INFISICAL_PATH": "/application",
+        "AC_ENVIRONMENT": "development",
+        "INFISICAL_TOKEN": "fictional-bootstrap-excluded",
+        "AC_DATABASE_MIGRATOR_URL": "fictional-migrator-excluded",
+        "AC_OTHER_APPLICATION_VALUE": "fictional-unrelated-excluded",
+    }
+
+
+def test_operator_injection_keeps_only_named_dev_inputs_and_maps_the_same_database():
+    result = qa_runner.injected_environment(operator_inputs())
+    assert result["AC_DATABASE_URL"] == (
+        "postgresql+psycopg://ac_runtime:fictional@acdev-postgres:5432/ac_platform"
+    )
+    assert set(result) == {
+        "PATH",
+        *qa_runner.INPUTS,
+        "AC_ENVIRONMENT",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
+        "AC_BILLING_ALLOW_LIVE",
+    }
+    assert result["AC_EXTERNAL_SIDE_EFFECTS_HOLD"] == "true"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"AC_INFISICAL_ENVIRONMENT": "prod"},
+        {"AC_INFISICAL_PATH": "/"},
+        {"AC_ENVIRONMENT": "staging"},
+        {"AC_BILLING_ALLOW_LIVE": "true"},
+        {"PGHOST": "fictional"},
+        {"AC_RAZORPAY_KEY_SECRET": "fictional"},
+        {"AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@prod:5432/ac_platform"},
+        {
+            "AC_DATABASE_URL": "postgresql+psycopg://ac_owner:fictional@acdev-postgres:5432/ac_platform"
+        },
+        {
+            "AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@acdev-postgres:5432/ac_platform?host=prod"
+        },
+        {"AC_SESSION_TOKEN_PEPPER": ""},
+    ],
+)
+def test_operator_injection_refuses_target_changes_or_missing_inputs(change):
+    with pytest.raises(qa_runner.RunnerRefused):
+        qa_runner.injected_environment({**operator_inputs(), **change})
+
+
+@pytest.mark.parametrize("failure", [None, "owner", "checksum", "source", "endpoint", "driver"])
+def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_dev_bridge(
+    tmp_path, failure
+):
+    image = "sha256:" + "a" * 64
+    (tmp_path / "release-images.env").write_text(
+        f"AC_RELEASE_ID={qa_runner.RELEASE}\nAC_API_IMAGE={image}\n"
+    )
+
+    class Release:
+        def is_dir(self):
+            return True
+
+        def is_symlink(self):
+            return False
+
+        def stat(self):
+            return SimpleNamespace(st_uid=1002 if failure == "owner" else 0, st_mode=0o755)
+
+        def __truediv__(self, name):
+            return tmp_path / name
+
+    outputs = iter(
+        (
+            b"",
+            f"sha256:{'b' * 64}|{'wrong' if failure == 'source' else qa_runner.RELEASE}".encode(),
+            json.dumps(
+                {
+                    "verified-dev-bridge": {
+                        "IPAddress": "172.27.0.3" if failure == "endpoint" else "172.27.0.2"
+                    }
+                }
+            ).encode(),
+            b"host" if failure == "driver" else b"bridge",
+        )
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        code = 1 if failure == "checksum" and argv[0] == "sha256sum" else 0
+        return subprocess.CompletedProcess(argv, code, next(outputs), b"")
+
+    if failure:
+        with pytest.raises(qa_runner.RunnerRefused):
+            qa_runner.runtime(Release(), runner=runner)
+        return
+    argv = qa_runner.runtime(Release(), runner=runner)
+    assert argv[-1] == image
+    assert argv[argv.index("--network") + 1] == "verified-dev-bridge"
+    for flag in (
+        "--pull=never",
+        "--read-only",
+        "--user=10001:10001",
+        "--cap-drop=ALL",
+        "--memory=256m",
+        "--memory-swap=256m",
+        "--cpus=0.25",
+        "--log-driver=none",
+    ):
+        assert flag in argv
+    assert not any(flag.startswith(("--volume", "--publish", "--privileged")) for flag in argv)
+    assert calls[0][0] == ["sha256sum", "--check", "--strict", "--quiet", "RELEASE-FILES.sha256"]
+    assert all(kwargs["env"] == qa_runner.SAFE_ENV for _, kwargs in calls)
+
+
+@pytest.mark.parametrize("tool", ["fixture", "inventory"])
+def test_operator_probe_has_no_injected_inputs_and_credentials_never_enter_argv(monkeypatch, tool):
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 0)
+    for name, value in operator_inputs().items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        qa_runner,
+        "runtime",
+        lambda **kw: [
+            "docker",
+            "run",
+            "--network",
+            "verified-dev-bridge",
+            "--entrypoint=python",
+            "sha256:" + "a" * 64,
+        ],
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        compile(argv[-1], "operator-child", "exec")
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    assert qa_runner.main([tool], runner=runner) == 0
+    assert calls[0][1]["env"] == qa_runner.SAFE_ENV
+    assert "INFISICAL_TOKEN" not in calls[1][1]["env"]
+    for name in qa_runner.INPUTS:
+        assert operator_inputs()[name] not in " ".join(calls[1][0])
+    assert "--apply" not in calls[1][0][-1]
+    if tool == "inventory":
+        assert "postgresql_readonly=True" in calls[1][0][-1]
+
+
+def test_operator_refuses_non_root_and_billing_or_real_owner_bootstrap(monkeypatch, capsys):
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 1002)
+    assert qa_runner.main(["preflight"]) == 2
+    assert "refused" in capsys.readouterr().err
+    for email in (
+        billing_qa_fixture.EMAILS["staff"],
+        billing_qa_fixture.EMAILS["customer"],
+        "owner@authorityclosers.com",
+    ):
+        for tool, flag in (("owner", "--email"), ("first-manager", "--expected-email")):
+            with pytest.raises(qa_runner.RunnerRefused):
+                qa_runner.command(tool, [flag, email])

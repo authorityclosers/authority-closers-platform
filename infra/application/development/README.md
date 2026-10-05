@@ -48,19 +48,19 @@ owned by root:root, mode 0440 with an ACL that grants read to uid 10001 only (th
 group bits are the ACL mask); the confidential readers verify that exact ACL.
 In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 
-| Source relative to development/ | Unit / delivery | In-process path |
-| --- | --- | --- |
-| `api.env` | API / EnvironmentFile | process environment only |
-| `outbox.env` | outbox worker / EnvironmentFile | process environment only |
-| `migrator.env` | refresh only (root) | none |
-| `challenge-secret` | API / LoadCredential | `C/challenge-secret` |
-| `qa-password` | API / LoadCredential | `C/qa-password` |
-| `approval.json` | both / LoadCredential | each unit's `C/approval.json` |
-| `database-url` | worker / LoadCredential | `C/database-url` |
-| `service.json` | worker / LoadCredential | `C/service.json` |
-| `service.operator-template.json` | root-only input for the refresh renderer | none |
-| `identities/elevenlabs/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/elevenlabs/token` |
-| `identities/gemini/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/gemini/token` |
+| Source relative to development/  | Unit / delivery                          | In-process path                                  |
+| -------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| `api.env`                        | API / EnvironmentFile                    | process environment only                         |
+| `outbox.env`                     | outbox worker / EnvironmentFile          | process environment only                         |
+| `migrator.env`                   | refresh only (root)                      | none                                             |
+| `challenge-secret`               | API / LoadCredential                     | `C/challenge-secret`                             |
+| `qa-password`                    | API / LoadCredential                     | `C/qa-password`                                  |
+| `approval.json`                  | both / LoadCredential                    | each unit's `C/approval.json`                    |
+| `database-url`                   | worker / LoadCredential                  | `C/database-url`                                 |
+| `service.json`                   | worker / LoadCredential                  | `C/service.json`                                 |
+| `service.operator-template.json` | root-only input for the refresh renderer | none                                             |
+| `identities/elevenlabs/token`    | worker / read-only directory bind        | `/run/ac-sales-xray/identities/elevenlabs/token` |
+| `identities/gemini/token`        | worker / read-only directory bind        | `/run/ac-sales-xray/identities/gemini/token`     |
 
 Each provider directory is root:10001 0550 with exactly one uid-10001 0400 token
 file, no symlinks or hard links. The root-only ancestor prevents agent access;
@@ -254,22 +254,22 @@ password. Declared references (names only; a separately reviewed fixture task
 creates each account, platform grant and secret, not this code; until then the
 broker refuses with `broker_secret_unavailable`):
 
-| Identity | Account | Infisical `dev` folder | Secret name | Required Admin merge |
-| --- | --- | --- | --- | --- |
-| `billing-staff` | `qa-billing-staff-aut969@example.test` | `/application` | `AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF` | `1daeb174…` (AUT-890) |
-| `organisation-operator` | `qa-org-operator-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR` | `61e6b240…` (AUT-447) |
-| `organisation-reader` | `qa-org-reader-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER` | `61e6b240…` (AUT-447) |
-| `organisation-denied` | `qa-org-denied-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED` | `61e6b240…` (AUT-447) |
+| Identity                | Account                                | Infisical `dev` folder             | Secret name                             | Required Admin merge  |
+| ----------------------- | -------------------------------------- | ---------------------------------- | --------------------------------------- | --------------------- |
+| `billing-staff`         | `qa-billing-staff-aut969@example.test` | `/application`                     | `AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF` | `1daeb174…` (AUT-890) |
+| `organisation-operator` | `qa-org-operator-aut961@example.test`  | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR`  | `61e6b240…` (AUT-447) |
+| `organisation-reader`   | `qa-org-reader-aut961@example.test`    | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER`    | `61e6b240…` (AUT-447) |
+| `organisation-denied`   | `qa-org-denied-aut961@example.test`    | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED`    | `61e6b240…` (AUT-447) |
 
 Organisation identities also need this capability matrix from the real API
 after sign-in (platform grants only; organisation membership roles never
 establish them):
 
-| Identity | `platform_tenants_read` | `platform_organisations_manage` | `GET /v1/platform/organisations` |
-| --- | --- | --- | --- |
-| `organisation-operator` | required | required | 200 list |
-| `organisation-reader` | required | must be absent | 200 list |
-| `organisation-denied` | must be absent | must be absent | 403 `authorization_denied` |
+| Identity                | `platform_tenants_read` | `platform_organisations_manage` | `GET /v1/platform/organisations` |
+| ----------------------- | ----------------------- | ------------------------------- | -------------------------------- |
+| `organisation-operator` | required                | required                        | 200 list                         |
+| `organisation-reader`   | required                | must be absent                  | 200 list                         |
+| `organisation-denied`   | must be absent          | must be absent                  | 403 `authorization_denied`       |
 
 Billing staff must hold `platform_billing_manage` from the same normal
 `GET /v1/me/platform-access` API. It does not need an Organisations permission
@@ -357,3 +357,8 @@ Output is JSON lines with no value. The `handoff` line gives `devtools`
 (`http://127.0.0.1:<port>`) for Playwright `chromium.connectOverCDP`; the browser
 stays up for `--hold-seconds` (default 3600) or until Ctrl-C/SIGTERM, then the
 profile is deleted. A `refused` line names the failed check.
+
+The [AUT-1156 released-runner runbook](../../../docs/evidence/20261005_AUT1156_BILLING_QA_TRANSPORT.md#operator-runbook)
+specifies Root installation, the immutable API executable, dev network and
+input boundaries, access-manager prerequisites, preview/apply and rollback.
+Actual fixture application stays on [AUT-959](/AUT/issues/AUT-959).
