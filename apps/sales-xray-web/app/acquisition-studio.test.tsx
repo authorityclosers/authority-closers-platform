@@ -1149,9 +1149,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(
-    container.querySelector('[data-analysis-card="verdict"]')?.textContent,
-  ).toContain(envelope.report.content.verdict);
+  expect(container.textContent).toContain("The coach’s verdict");
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
@@ -1189,7 +1187,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   ).toBe("reading");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(4);
+  ).toHaveLength(7);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -3097,7 +3095,15 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
-  const reportSections = ["Overview", "Moments", "Analysis", "Coaching"];
+  const reportSections = [
+    "Overview",
+    "Moments",
+    "Prospect",
+    "Next-call plan",
+    "Sales skills",
+    "Call signals",
+    "Raw data",
+  ];
   expect(
     [
       ...container.querySelectorAll<HTMLAnchorElement>(
@@ -3108,19 +3114,12 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
-  await clickReportSection("Analysis");
+  await clickReportSection("Prospect");
   expect(
     container
-      .querySelector('[data-report-mode-section="analysis"]')
+      .querySelector('[data-report-mode-section="prospect"]')
       ?.hasAttribute("hidden"),
   ).toBe(false);
-  const analysis = container.querySelector(
-    '[data-report-mode-section="analysis"]',
-  )!;
-  expect(analysis.textContent).toContain("Which voice is the salesperson?");
-  expect(
-    analysis.querySelector('input[aria-label="Search the raw data"]'),
-  ).not.toBeNull();
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
@@ -3141,8 +3140,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
-  await clickReportSection("Coaching");
-  await click("Coach me on this call");
+  await clickReportSection("Next-call plan");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).toBe(savedAudio);
