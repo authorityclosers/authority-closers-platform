@@ -149,3 +149,45 @@ No authorised deployed session or serving revision was examined in this run.
 If those inputs are unavailable, record the exact gap and reuse its concrete
 existing operator/release task. The separate handle/profile runtime receipt is
 not a build prerequisite.
+
+## Round-one review correction (5 October 2026)
+
+Reviewed head: `ee1a1a341181fad2d7b6a307de938e258713064f`.
+Card revision 6 (`dd634abb-ce58-440e-b3c7-817fcdfb0ef5`) records the pod lead's
+bounded learner URL-fixture exception. The clean sx-org checkout, current gate
+and read-only statuses across lane checkouts permit continuation. Open PR #346
+has no overlapping files, including the newly allowed learner test.
+
+The learner journey mock now accepts the explicit full-list suffix
+`/submissions?include_owners=true` as well as its existing `/submissions` suffix.
+All assertions, compact-preview requests and production files are unchanged by
+this correction. No timeouts or test behavior checks were weakened.
+
+Before the change, the isolated reviewed case reproduced the CI failure at
+line 423: the rejected list read prevented `Report ready` from rendering.
+After the change, the full learner journey suite passes all 10 cases, including
+report navigation and the assertion that no processing mutations occur.
+
+| Exact command | Result |
+| --- | --- |
+| `pnpm --filter @ac/learner-web exec vitest run app/sales-xray/acquisition-journey.test.tsx -t 'opens an account library result in the learner report route without processing it' --no-file-parallelism --maxWorkers=1` | Expected pre-fix failure: 1 failed, 9 skipped; same line 423 assertion as CI. |
+| `pnpm exec prettier --write apps/learner-web/app/sales-xray/acquisition-journey.test.tsx` | PASS; no further formatting edits. |
+| `pnpm --filter @ac/learner-web exec vitest run app/sales-xray/acquisition-journey.test.tsx --no-file-parallelism --maxWorkers=1` | PASS: 1 file, 10 tests. |
+| `pnpm --filter @ac/sales-xray-web exec vitest run app/acquisition-library.test.ts app/acquisition-library-owners.test.ts app/calls-library.test.tsx app/calls-library-reps.test.tsx app/calls-drawer.test.tsx app/owner-surfaces.test.tsx --no-file-parallelism --maxWorkers=1` | PASS: 6 files, 83 tests. Uses the previously verified single-worker setting; no timeout changes. |
+| `pnpm --filter @ac/sales-xray-web typecheck` | PASS. |
+| `pnpm --filter @ac/learner-web exec eslint app/sales-xray/acquisition-journey.test.tsx --max-warnings 0` | PASS. |
+| `pnpm --filter @ac/sales-xray-web exec eslint app/acquisition-client.ts app/calls-library.tsx app/calls-library.test.tsx app/acquisition-library-owners.test.ts app/calls-library-reps.test.tsx app/owner-surfaces.test.tsx --max-warnings 0` | PASS. |
+| `pnpm exec prettier --check apps/sales-xray-web/app/acquisition-client.ts apps/sales-xray-web/app/calls-library.tsx apps/sales-xray-web/app/calls-reps.module.css apps/sales-xray-web/app/calls-library.test.tsx apps/sales-xray-web/app/acquisition-library-owners.test.ts apps/sales-xray-web/app/calls-library-reps.test.tsx apps/sales-xray-web/app/owner-surfaces.test.tsx apps/learner-web/app/sales-xray/acquisition-journey.test.tsx` | PASS. |
+| `uv run ruff format --check packages/python tests` | PASS: 1,008 files. |
+| `uv run ruff check packages/python tests` | PASS. |
+| `uv run mypy packages/python` | PASS: 419 source files. |
+| `uv run pytest tests/unit/conversation_intelligence/test_organisation_call_reads.py tests/unit/http/test_conversation_learner_acquisition.py -q` | PASS: 28 tests. |
+| `ac-gate check` | PASS: this existing task may be worked on. |
+| `git diff --check` | PASS. |
+
+The earlier local browser receipts remain valid for the unchanged production
+files. Their documented 390px duration/status gap still belongs to
+[AUT-1205](/AUT/issues/AUT-1205). Final browser acceptance on dev and staging
+remains open after governed merge. This test-fixture correction introduces no
+new browser or deployed-acceptance claim; frontend CI is checked for the pushed
+head through the existing watchdog event path.
