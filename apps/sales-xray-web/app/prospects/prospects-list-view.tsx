@@ -241,7 +241,6 @@ export function ProspectsListView() {
                 >
                   <Link
                     href={`/prospects/${prospect.prospect_id}`}
-                    prefetch={false}
                     className={styles.prospectLeft}
                     aria-label={`Open prospect ${prospect.name}`}
                   >

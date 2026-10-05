@@ -617,7 +617,6 @@ function LightboxShellFrame({
             <Link
               className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
-              prefetch={false}
               aria-label="Prospects"
               aria-current={active === "prospects" ? "page" : undefined}
             >

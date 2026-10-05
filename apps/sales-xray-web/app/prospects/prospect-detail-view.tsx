@@ -128,7 +128,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
       active="prospects"
     >
       <div className={styles.root}>
-        <Link href="/prospects" prefetch={false} className={styles.backLink}>
+        <Link href="/prospects" className={styles.backLink}>
           <ArrowLeft size={16} aria-hidden="true" />
           Back to Prospects
         </Link>
@@ -225,13 +225,6 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                 </div>
 
                 <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Buyer readiness</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.buyer_intent ? "Available" : "Not scored"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
                   <div className={styles.missingItemLabel}>Next step</div>
                   <div className={styles.missingItemValue}>
                     {prospect.next_step ? prospect.next_step : "None recorded"}
@@ -303,8 +296,6 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                             <span className={styles.badge}>
                               State: {call.state}
                             </span>
-                            <span>•</span>
-                            <span className={styles.badge}>Score: —</span>
                           </div>
                         </div>
 
