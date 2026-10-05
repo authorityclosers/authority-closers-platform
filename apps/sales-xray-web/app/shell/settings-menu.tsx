@@ -29,6 +29,7 @@ import type { Allowance } from "../acquisition-client";
 import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { openSettings } from "../settings-open";
+import { AccountAvatarImage } from "../speaker-avatar";
 import { CHANGELOG } from "./changelog";
 import styles from "./settings-menu.module.css";
 
@@ -155,6 +156,7 @@ export function SettingsMenu({
   onClose,
   name,
   email,
+  photoUrl,
   allowance,
 }: {
   open: boolean;
@@ -162,6 +164,7 @@ export function SettingsMenu({
   onClose: () => void;
   name: string | null;
   email: string | null;
+  photoUrl?: string | null;
   allowance: Allowance | null;
 }) {
   const [view, setView] = useState<View>("main");
@@ -273,7 +276,9 @@ export function SettingsMenu({
           <>
             <div className={styles.who}>
               <span className={styles.avatar} aria-hidden="true">
-                {initials(name, email)}
+                <AccountAvatarImage key={email} photoUrl={photoUrl}>
+                  {initials(name, email)}
+                </AccountAvatarImage>
               </span>
               <span className={styles.whoText}>
                 <b>{name || "Your account"}</b>

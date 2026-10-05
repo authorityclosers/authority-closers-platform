@@ -267,7 +267,13 @@ it("shows the verified profile and real allowance as its own destination", async
   expect(
     page.querySelector('[role="meter"]')?.getAttribute("aria-valuenow"),
   ).toBe("2700");
-  // No profile-photo contract exists: no upload control is offered.
+  expect(page.querySelector("#account-pane-general")?.textContent).toContain(
+    "App language",
+  );
+  expect(page.querySelector("#account-pane-general")?.textContent).toContain(
+    "Choose the report language when you start an analysis.",
+  );
+  // The profile photo read exists; photo uploads have no write contract yet.
   expect(page.querySelector('input[type="file"]')).toBeNull();
   expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
     true,

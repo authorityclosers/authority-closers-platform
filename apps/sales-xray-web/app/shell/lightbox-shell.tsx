@@ -886,6 +886,7 @@ function LightboxShellFrame({
           onClose={closeAccountCard}
           name={profileName}
           email={profile?.email ?? null}
+          photoUrl={profile?.photo_url}
           allowance={shownAllowance}
         />
       ) : null}
