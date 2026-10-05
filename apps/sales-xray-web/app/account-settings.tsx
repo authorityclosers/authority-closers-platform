@@ -57,6 +57,7 @@ import { useTheme } from "./lightbox/theme-provider";
 import { parseThemePreference } from "./lightbox/theme";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
+import { AccountAvatarImage } from "./speaker-avatar";
 import styles from "./account-view.module.css";
 
 type Loaded<T> =
@@ -262,7 +263,9 @@ export function AccountSettings({
       <aside className={styles.nav}>
         <header className={styles.navHead}>
           <span className={styles.navMark} aria-hidden="true">
-            {who ? initials(who.name) || <CircleUserRound size={18} /> : null}
+            <AccountAvatarImage key={who?.email} photoUrl={who?.photo_url}>
+              {who ? initials(who.name) || <CircleUserRound size={18} /> : null}
+            </AccountAvatarImage>
           </span>
           <div className={styles.navWho}>
             {variant === "dialog" ? <h2>Settings</h2> : <h1>Account</h1>}

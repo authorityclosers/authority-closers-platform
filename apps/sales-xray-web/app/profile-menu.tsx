@@ -29,6 +29,7 @@ import { parseThemePreference } from "./lightbox/theme";
 import { useTheme } from "./lightbox/theme-provider";
 import { openSettings, opensInPlace } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
+import { AccountAvatarImage } from "./speaker-avatar";
 import styles from "./profile-menu.module.css";
 
 const SIGN_OUT_UPLOAD_WARNING =
@@ -230,7 +231,12 @@ export function ProfileMenu({
           onClick={() => setOpen((value) => !value)}
         >
           <span className={styles.avatarInitials} aria-hidden="true">
-            {userInitials}
+            <AccountAvatarImage
+              key={profileEmail}
+              photoUrl={profile?.photo_url}
+            >
+              {userInitials}
+            </AccountAvatarImage>
           </span>
           <span className={styles.headerName}>{firstName}</span>
           <ChevronDown
@@ -251,7 +257,12 @@ export function ProfileMenu({
           onClick={() => setOpen((value) => !value)}
         >
           <span className={styles.avatarInitials} aria-hidden="true">
-            {userInitials}
+            <AccountAvatarImage
+              key={profileEmail}
+              photoUrl={profile?.photo_url}
+            >
+              {userInitials}
+            </AccountAvatarImage>
           </span>
           <span className={styles.triggerCopy}>
             <strong title={displayName}>{displayName}</strong>
@@ -273,7 +284,12 @@ export function ProfileMenu({
         >
           <div className={styles.menuHeader}>
             <span className={styles.summaryAvatar} aria-hidden="true">
-              {userInitials}
+              <AccountAvatarImage
+                key={profileEmail}
+                photoUrl={profile?.photo_url}
+              >
+                {userInitials}
+              </AccountAvatarImage>
             </span>
             <div className={styles.menuHeaderCopy}>
               <strong className={styles.headerFullName}>
