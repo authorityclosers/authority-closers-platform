@@ -112,18 +112,40 @@ const hostedFor = (provider: "fake" | "razorpay"): Checkout["hosted"] => ({
   expiresAt: null,
 });
 
-it.each(["fake", "razorpay"] as const)(
-  "plans reviews %s checkout before handing off the server response",
-  async (provider) => {
+it.each([
+  ["fake", false],
+  ["razorpay", false],
+  ["fake", true],
+  ["razorpay", true],
+] as const)(
+  "plans reviews %s checkout (quoted: %s) before handing off the server response",
+  async (provider, quoted) => {
     const checkout = vi.fn(async (request: CheckoutRequest, key: string) => ({
       ...(await fixtureBilling.checkout(request, key)),
       hosted: hostedFor(provider),
     }));
-    await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+    const quote = quoted
+      ? {
+          selection: {
+            planKey: "personal",
+            interval: "month" as const,
+            seats: 1,
+          },
+          subtotalPaise: 249900,
+          gstPaise: 0,
+          totalPaise: 249900,
+          renewsAt: "2026-11-04T00:00:00.000Z",
+        }
+      : null;
+    await render(
+      <PlansPurchase client={{ ...fixtureBilling, checkout }} quote={quote} />,
+    );
     await click("Get Personal");
     expect(host.textContent).not.toContain(testBanner);
     expect(button("Review total")).toBeDefined();
     expect(button("Review total with Razorpay")).toBeUndefined();
+    expect(button("Pay ₹2,499 with Razorpay")).toBeUndefined();
+    if (quoted) expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
     expect(checkout).not.toHaveBeenCalled();
     expect(openHostedCheckout).not.toHaveBeenCalled();
     await click("Review total");
