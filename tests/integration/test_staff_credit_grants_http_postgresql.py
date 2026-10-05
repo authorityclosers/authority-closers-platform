@@ -282,6 +282,7 @@ def test_http_target_refusals_create_no_account_entry_or_audit(postgres_harness,
     [
         BODY | {"quantity": "0"},
         BODY | {"quantity": "NaN"},
+        BODY | {"quantity": "1E+2"},
         BODY | {"quantity": 1.25},
         BODY | {"reason": " "},
         BODY | {"actor": str(uuid4())},

@@ -130,7 +130,7 @@ class StaffBillingResponse(_Strict):
 
 
 class CreditGrantRequest(_Strict):
-    quantity: StrictStr
+    quantity: StrictStr = Field(pattern=r"^[0-9]+(\.[0-9]+)?$")
     reason: StrictStr = Field(min_length=1, max_length=500)
 
     @field_validator("quantity")
