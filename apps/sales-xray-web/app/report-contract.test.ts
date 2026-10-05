@@ -72,6 +72,47 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it.each(["summary_evidence", "verdict_evidence"] as const)(
+    "accepts 1–3 source-bound %s refs and leaves legacy reports unchanged",
+    (field) => {
+      const evidence = {
+        segment_id: "s1",
+        quote: "agree on the next step",
+        start_ms: 1000,
+        end_ms: 2200,
+      };
+      const source = {
+        ...binding,
+        transcript: parseTranscript(transcript, sourceSha256),
+      };
+      for (const count of [1, 2, 3]) {
+        const report = {
+          ...validReport(),
+          [field]: Array(count).fill(evidence),
+        };
+        expect(parseJobResponse(job(report), source).report?.[field]).toEqual(
+          report[field],
+        );
+      }
+      expect(parseJobResponse(job(validReport()), source).report).toEqual(
+        validReport(),
+      );
+      for (const refs of [
+        [],
+        Array(4).fill(evidence),
+        null,
+        [{ ...evidence, start_ms: -1 }],
+        [{ ...evidence, end_ms: binding.durationMs + 1 }],
+        [{ ...evidence, segment_id: "missing" }],
+        [{ ...evidence, quote: "Invented quote." }],
+      ]) {
+        expect(() =>
+          parseJobResponse(job({ ...validReport(), [field]: refs }), source),
+        ).toThrow(ReportContractError);
+      }
+    },
+  );
+
   it("accepts a source-bound partial dimension without changing legacy reports", () => {
     const report = validReport();
     report.dimensions[0] = {

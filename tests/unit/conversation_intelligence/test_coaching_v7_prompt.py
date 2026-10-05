@@ -75,6 +75,9 @@ def validate_schema(value, schema, root=None):
 
 def v7_response():
     response = _valid_response()
+    response["summary_evidence"] = [{"segment_id": "s1"}]
+    response["verdict_evidence"] = [{"segment_id": "s2"}]
+    response["overview"]["final_assessment"]["evidence"] = [{"segment_id": "s2"}]
     response["call_map"] = _call_map()
     for key in ("pitch_items", "pains", "seller_tasks"):
         response["call_map"][key] = response["call_map"][key][:1]
@@ -186,6 +189,8 @@ def test_v7_prompt_contains_honest_report_and_owner_amendments():
         "what to ask next time",
         "atomic claims",
         "own 1-2 segment refs",
+        "Cite the 1–3 segments that the summary, the verdict and the final assessment",
+        "summary_evidence, verdict_evidence and final_assessment.evidence",
         "partial needs one",
         "Every qualification item is a gap",
         "budget gap plus affordability_gap",

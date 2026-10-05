@@ -61,12 +61,14 @@ export type SalesReport = {
   preview?: GuestReportPreview;
   overview?: DetailedOverview;
   summary: string;
+  summary_evidence?: ReportEvidence[];
   strengths: Finding[];
   missed_opportunities: Finding[];
   improvements: Finding[];
   objection_analysis: Finding[];
   closing_analysis: Finding[];
   verdict: string;
+  verdict_evidence?: ReportEvidence[];
   review_status: typeof REPORT_REVIEW_STATUS;
   source_label: string;
   source_sha256: string;
@@ -526,12 +528,14 @@ function parseReport(
     report,
     [
       "summary",
+      "summary_evidence",
       "strengths",
       "missed_opportunities",
       "improvements",
       "objection_analysis",
       "closing_analysis",
       "verdict",
+      "verdict_evidence",
       "review_status",
       "source_label",
       "source_sha256",
@@ -640,6 +644,19 @@ function parseReport(
     ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
+  for (const field of ["summary_evidence", "verdict_evidence"] as const) {
+    if (Object.hasOwn(report, field)) {
+      parsed[field] = array(report[field], `report_${field}`, 1, 3).map(
+        (entry, index) =>
+          parseEvidence(
+            entry,
+            `report_${field}_${index}`,
+            binding.durationMs,
+            binding.transcript,
+          ),
+      );
+    }
+  }
   if (report.overview !== undefined && report.overview !== null) {
     try {
       parsed.overview = parseDetailedOverview(
