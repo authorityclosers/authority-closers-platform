@@ -369,7 +369,11 @@ class ReportError(ValueError):
 PROSPECT_DIMENSION_IDS = frozenset(
     {"human_connection_trust", "discovery_deep_understanding", "qualification"}
 )
-CONFIRMED_PROSPECT_DIMENSIONS: frozenset[str] = frozenset()
+# AUT-625 P-A sign-off: /AUT/issues/AUT-625#document-pa-record,
+# revision 9b51cf38-e968-4d29-8425-436775cf801c (owner answer, CEO recorded).
+CONFIRMED_PROSPECT_DIMENSIONS: frozenset[str] = frozenset(
+    {"human_connection_trust", "discovery_deep_understanding", "qualification"}
+)
 
 
 class _StrictModel(BaseModel):
@@ -1792,7 +1796,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/8"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/9"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
