@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import fcntl
+import grp
 import importlib.util
 import json
 import os
+import runpy
+import stat
 import subprocess
 import sys
 from dataclasses import replace
@@ -20,11 +23,13 @@ SCRIPT = (
     Path(__file__).resolve().parents[2]
     / "infra/application/scripts/reseal-dev-sales-xray-approval.py"
 )
+SCRIPT = Path(os.environ.get("AC_RESEAL_REVIEWED_SCRIPT", str(SCRIPT)))
 SPEC = importlib.util.spec_from_file_location("dev_reseal", SCRIPT)
 assert SPEC and SPEC.loader
 tool = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = tool
 SPEC.loader.exec_module(tool)
+REAL_RUNTIME_IDENTITY = tool.refresh.runtime_identity
 SECRET = "fictional-test-secret-do-not-print"  # noqa: S105 - fictional redaction sentinel
 EMAIL = "fictional-tester@example.invalid"
 LATER_RELEASE = "0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20"
@@ -171,6 +176,13 @@ class Host:
             assert not any("EnvironmentFile=" in arg for arg in argv)
             assert SECRET not in " ".join(argv) and EMAIL not in " ".join(argv)
             assert argv[argv.index("--validate-credentials") + 1] == self.pins.release
+            assert not any("/opt/ac-dev-approval-reseal" in arg for arg in argv)
+            manifest = json.loads(argv[argv.index(tool.CODE_BOOTSTRAP) + 1])
+            for name in (tool.CODE_NAME, *tool.HELPER_SHA256):
+                source = Path(tool.__file__).with_name(name)
+                assert f"LoadCredential={name}:{source}" in argv
+                assert manifest[name] == tool.sha(source.read_bytes())
+            assert all(prop in argv for prop in tool.refresh.SANDBOX_PROPERTIES)
         return subprocess.CompletedProcess(argv, code, result, SECRET.encode())
 
     def process_environment(self, _commands, unit):
@@ -292,6 +304,12 @@ def fixture(tmp_path, monkeypatch):
     for directory in tmp_path.rglob("*"):
         if directory.is_dir():
             directory.chmod(0o700)
+    scripts = tmp_path / "released/scripts"
+    for name in (tool.CODE_NAME, *tool.HELPER_SHA256):
+        put(scripts / name, SCRIPT.with_name(name).read_bytes(), 0o750)
+    scripts.parent.chmod(0o700)
+    scripts.chmod(0o750)
+    monkeypatch.setattr(tool, "__file__", str(scripts / tool.CODE_NAME))
     host = Host(paths, pins)
     monkeypatch.setattr(tool.refresh, "runtime_identity", lambda: None)
     monkeypatch.setattr(tool, "process_environment", host.process_environment)
@@ -976,3 +994,199 @@ def test_runtime_credentials_use_real_serving_contract_and_expiry(fixture, monke
     arguments[2] = tool.sha(raw)
     with pytest.raises(Exception, match="replacement approval is not current"):
         tool.validate_credentials(arguments)
+
+
+@pytest.mark.parametrize("mode", ["dry-run", "apply", "rollback-dry-run", "rollback-apply"])
+@pytest.mark.parametrize("name", [tool.CODE_NAME, *tool.HELPER_SHA256])
+@pytest.mark.parametrize("bad", ["missing", "tampered", "symlink", "hardlink", "writable"])
+def test_untrusted_code_refuses_before_backups_or_service_changes(
+    fixture, monkeypatch, mode, name, bad
+):
+    paths, pins, host = fixture
+    run_id = run(fixture, apply=True)["run_id"] if mode.startswith("rollback") else None
+    source = Path(tool.__file__).with_name(name)
+    if bad == "missing":
+        source.unlink()
+    elif bad == "tampered":
+        source.write_bytes((SECRET + EMAIL).encode())
+    elif bad == "symlink":
+        other = source.with_suffix(".other")
+        source.rename(other)
+        source.symlink_to(other)
+    elif bad == "hardlink":
+        os.link(source, source.with_suffix(".other"))
+    else:
+        source.chmod(0o770)
+    before = tree(paths.trusted_root)
+    states = host.states.copy()
+    host.calls.clear()
+
+    def refuse_write(*_):
+        pytest.fail("untrusted code must refuse before every durable write")
+
+    monkeypatch.setattr(tool, "write", refuse_write)
+    with pytest.raises(tool.ResealError):
+        if run_id:
+            tool.rollback(
+                paths, run_id, runner=host, pins=pins, uid=0, apply=mode.endswith("apply")
+            )
+        else:
+            run(fixture, apply=mode == "apply")
+    assert tree(paths.trusted_root) == before and host.states == states
+    assert not any(call[0] == "systemd-run" for call in host.calls)
+    assert not any(
+        call[:2]
+        in (["systemctl", "stop"], ["systemctl", "restart"], ["systemctl", "daemon-reload"])
+        for call in host.calls
+    )
+
+
+@pytest.mark.parametrize("bad", [None, "missing", "tampered", "public", "symlink", "empty"])
+@pytest.mark.parametrize("name", [tool.CODE_NAME, *tool.HELPER_SHA256])
+def test_bootstrap_checks_all_private_code_bytes_before_execution(fixture, monkeypatch, bad, name):
+    paths, _, _ = fixture
+    import ac_platform.conversation_intelligence.service_config as config
+
+    credentials = paths.trusted_root / "runtime-credentials"
+    manifest = {}
+    for script in (tool.CODE_NAME, *tool.HELPER_SHA256):
+        raw = Path(tool.__file__).with_name(script).read_bytes()
+        put(credentials / script, raw, 0o400)
+        manifest[script] = tool.sha(raw)
+    target = credentials / name
+    if bad == "missing":
+        target.unlink()
+    elif bad in ("tampered", "empty"):
+        target.chmod(0o600)
+        target.write_bytes((SECRET + EMAIL).encode() if bad == "tampered" else b"")
+        target.chmod(0o400)
+    elif bad == "public":
+        target.chmod(0o444)
+    elif bad == "symlink":
+        other = target.with_suffix(".other")
+        target.rename(other)
+        target.symlink_to(other)
+    original = config.read_private_file
+    monkeypatch.setattr(
+        config, "read_private_file", lambda path, **kw: original(credentials / path.name, **kw)
+    )
+    monkeypatch.setattr(os, "geteuid", lambda: 10001)
+    monkeypatch.setattr(os, "getegid", lambda: 10001)
+    monkeypatch.setattr(os, "getgroups", lambda: [10001])
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", f"/run/credentials/{tool.VALIDATION_UNIT}")
+    monkeypatch.setattr(sys, "argv", ["-c", json.dumps(manifest), "--validate-credentials", "pin"])
+    executed = []
+    monkeypatch.setattr(runpy, "run_path", lambda path, **kw: executed.append((path, kw)))
+    if bad:
+        with pytest.raises((ValueError, SystemExit)) as error:
+            exec(tool.CODE_BOOTSTRAP, {})  # noqa: S102 - exact reviewed bootstrap under test
+        assert SECRET not in str(error.value) and EMAIL not in str(error.value)
+        assert executed == []
+    else:
+        exec(tool.CODE_BOOTSTRAP, {})  # noqa: S102 - exact reviewed bootstrap under test
+        assert executed == [
+            (f"/run/credentials/{tool.VALIDATION_UNIT}/{tool.CODE_NAME}", {"run_name": "__main__"})
+        ]
+        assert sys.argv[1:] == ["--validate-credentials", "pin"]
+
+
+def test_code_delivery_rechecks_apply_and_restoration(fixture):
+    paths, pins, host = fixture
+    report = run(fixture, apply=True)
+    assert len([call for call in host.calls if call[0] == "systemd-run"]) == 3
+    host.calls.clear()
+    tool.rollback(paths, report["run_id"], pins=pins, runner=host, uid=0, apply=True)
+    assert len([call for call in host.calls if call[0] == "systemd-run"]) == 2
+
+
+@pytest.mark.parametrize("bad", ["uid", "gid", "groups", "directory", "manifest"])
+def test_bootstrap_refuses_wrong_identity_or_delivery_context(monkeypatch, bad):
+    monkeypatch.setattr(os, "geteuid", lambda: 0 if bad == "uid" else 10001)
+    monkeypatch.setattr(os, "getegid", lambda: 1002 if bad == "gid" else 10001)
+    monkeypatch.setattr(os, "getgroups", lambda: [10001, 1002] if bad == "groups" else [10001])
+    monkeypatch.setenv(
+        "CREDENTIALS_DIRECTORY",
+        "/fictional/wrong-directory"
+        if bad == "directory"
+        else f"/run/credentials/{tool.VALIDATION_UNIT}",
+    )
+    monkeypatch.setattr(sys, "argv", ["-c", "{}", "--validate-credentials"])
+    with pytest.raises(SystemExit, match="runtime_code_"):
+        exec(tool.CODE_BOOTSTRAP, {})  # noqa: S102 - exact reviewed bootstrap under test
+
+
+@pytest.mark.skipif(
+    os.environ.get("AC_RESEAL_RUNTIME_PROOF") != "1",
+    reason="Root Operator runs the isolated fictional systemd proof explicitly",
+)
+def test_root_only_real_uid10001_code_delivery(fixture, monkeypatch):
+    """Real systemd, real uid10001, fictional inputs; never call reseal/adoption."""
+    assert os.geteuid() == 0
+    paths, pins, _ = fixture
+    backend = Path(os.environ["AC_RESEAL_PROOF_BACKEND"])
+    assert backend.is_absolute() and (backend / ".venv/bin/python").is_file()
+    release = (backend / ".ac-release-id").read_text().strip()
+    pins = replace(pins, release=release)
+    tool.validate_release(pins)
+    paths = replace(paths, backend=backend)
+    service = paths.targets()["service"]
+    value = tool.decoded(service.read_bytes())
+    value["release_id"] = release
+    put(service, tool.encoded(value))
+    scripts = Path(tool.__file__).parent
+    group = grp.getgrnam("acops").gr_gid
+    assert group != 10001
+    for path in [scripts, *(scripts / name for name in (tool.CODE_NAME, *tool.HELPER_SHA256))]:
+        os.chown(path, 0, group)
+        assert (path.stat().st_uid, path.stat().st_gid, stat.S_IMODE(path.stat().st_mode)) == (
+            0,
+            group,
+            0o750,
+        )
+    monkeypatch.setattr(tool.refresh, "runtime_identity", REAL_RUNTIME_IDENTITY)
+    before = tree(paths.trusted_root)
+    metadata = {path: path.stat() for path in scripts.iterdir()}
+    calls = []
+
+    def isolated_only(argv, **kw):
+        assert argv[0] == "systemd-run"
+        calls.append(argv)
+        return tool.refresh.command(argv, **kw)
+
+    files, _ = tool.snapshot(replace(paths, backend=fixture[0].backend))
+    tool.runtime_validation(paths, tool.Commands(isolated_only), pins, files)
+    validation = calls[0]
+    position = validation.index("--") + 1
+    denial = """import json, os, sys
+assert (os.geteuid(), os.getegid()) == (10001, 10001)
+assert not set(os.getgroups()) - {10001}
+for source in json.loads(sys.argv[1]):
+    try:
+        with open(source, "rb"):
+            pass
+    except PermissionError:
+        continue
+    raise SystemExit("installed_source_unexpectedly_readable")
+"""
+    probe = [
+        *validation[:position],
+        str(backend / ".venv/bin/python"),
+        "-c",
+        denial,
+        json.dumps([str(path) for path in metadata]),
+    ]
+    tool.Commands(isolated_only).run("uid10001_source_denial", probe, timeout=90)
+    # Real delivery failures and tampered bytes must fail the same bootstrap.
+    for bad in ("missing", "tampered"):
+        target = paths.trusted_root / (bad + ".py")
+        if bad == "tampered":
+            put(target, (SECRET + EMAIL).encode())
+        negative = validation.copy()
+        index = negative.index(f"LoadCredential={tool.CODE_NAME}:{scripts / tool.CODE_NAME}")
+        negative[index] = f"LoadCredential={tool.CODE_NAME}:{target}"
+        with pytest.raises(tool.ResealError, match="command_failed"):
+            tool.Commands(isolated_only).run("uid10001_bad_code", negative, timeout=90)
+        if target.exists():
+            target.unlink()
+    assert tree(paths.trusted_root) == before
+    assert {path: path.stat() for path in scripts.iterdir()} == metadata

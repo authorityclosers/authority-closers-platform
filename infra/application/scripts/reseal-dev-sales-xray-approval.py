@@ -28,6 +28,31 @@ HELPER_SHA256 = {
     "refresh-dev-sales-xray-backend.py": "1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc",  # noqa: E501 - immutable helper pin
     "prepare-sales-xray-native-activation.py": "0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35",  # noqa: E501 - immutable helper pin
 }
+CODE_NAME = "reseal-dev-sales-xray-approval.py"
+CODE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+VALIDATION_UNIT = "ac-dev-approval-reseal-check.service"
+# Runs at uid10001 using the pinned serving interpreter, before importing any
+# delivered script. The existing contract admits uid-private systemd ACLs too.
+CODE_BOOTSTRAP = """import hashlib, json, os, runpy, sys
+from pathlib import Path
+if (os.geteuid(), os.getegid()) != (10001, 10001) or set(os.getgroups()) - {10001}:
+    raise SystemExit("runtime_code_identity_invalid")
+from ac_platform.conversation_intelligence.service_config import read_private_file
+root = Path(os.environ["CREDENTIALS_DIRECTORY"])
+if root != Path("/run/credentials/ac-dev-approval-reseal-check.service"):
+    raise SystemExit("runtime_code_directory_invalid")
+expected = json.loads(sys.argv.pop(1))
+names = {"reseal-dev-sales-xray-approval.py", "refresh-dev-sales-xray-backend.py",
+         "prepare-sales-xray-native-activation.py"}
+if set(expected) != names:
+    raise SystemExit("runtime_code_manifest_invalid")
+for name, digest in expected.items():
+    raw = read_private_file(root / name, limit=524288, confidential=True)
+    if hashlib.sha256(raw).hexdigest() != digest:
+        raise SystemExit("runtime_code_digest_mismatch")
+sys.argv[0] = str(root / "reseal-dev-sales-xray-approval.py")
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
 
 
 def sibling(name: str):
@@ -172,7 +197,7 @@ def ancestors(path: Path, paths: Paths) -> None:
             break
 
 
-def read(path: Path, paths: Paths, *, private: bool = True) -> File:
+def read(path: Path, paths: Paths, *, private: bool = True, code: bool = False) -> File:
     ancestors(path, paths)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -181,11 +206,12 @@ def read(path: Path, paths: Paths, *, private: bool = True) -> File:
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         mode = stat.S_IMODE(info.st_mode)
+        modes = (0o750,) if code else ((0o600,) if private else (0o600, 0o640, 0o644))
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1
             or info.st_uid != paths.owner_uid
-            or (mode != 0o600 if private else mode not in (0o600, 0o640, 0o644))
+            or mode not in modes
             or not 0 < info.st_size <= MAX_BYTES
             or os.listxattr(stream.fileno())
         ):
@@ -532,15 +558,25 @@ def runtime_validation(
     backup: Path | None = None,
 ) -> None:
     refresh.runtime_identity()
-    helpers = Path(__file__).resolve().parent
+    helpers = Path(__file__).parent
+    code_files = {
+        name: read(helpers / name, paths, code=True) for name in (CODE_NAME, *HELPER_SHA256)
+    }
+    digests = {name: sha(value.raw) for name, value in code_files.items()}
+    if digests[CODE_NAME] != CODE_SHA256:
+        raise ResealError("reviewed_code_digest_mismatch")
+    if any(digests[name] != digest for name, digest in HELPER_SHA256.items()):
+        raise ResealError("reviewed_helper_digest_mismatch")
     # The manager opens root-only sources. Runtime sees only its private credentials,
-    # the serving backend, and the reviewed read-only script directory. No network.
+    # including exact reviewed code bytes, and the serving backend. No network.
     argv = refresh.sandboxed(
         refresh.Paths(backend=paths.backend),
-        "ac-dev-approval-reseal-check.service",
+        VALIDATION_UNIT,
         [
             str(paths.backend / ".venv/bin/python"),
-            "/opt/ac-dev-approval-reseal/reseal-dev-sales-xray-approval.py",
+            "-c",
+            CODE_BOOTSTRAP,
+            encoded(digests).decode(),
             "--validate-credentials",
             pins.release,
             pins.before,
@@ -558,8 +594,8 @@ def runtime_validation(
     properties = [
         "PrivateNetwork=yes",
         "StandardError=null",
-        f"BindReadOnlyPaths={helpers}:/opt/ac-dev-approval-reseal",
         f"BindReadOnlyPaths={paths.backend / '.ac-release-id'}:/app/.ac-release-id",
+        *(f"LoadCredential={name}:{helpers / name}" for name in code_files),
         f"LoadCredential=current.json:{sources['approval']}",
         f"LoadCredential=candidate.json:{paths.candidate}",
         f"LoadCredential=service.json:{sources['service']}",
@@ -732,7 +768,7 @@ def receipt_base(pins: Pins, commands: Commands) -> dict:
         "release": pins.release,
         "approval_before_sha256": pins.before,
         "approval_after_sha256": pins.after,
-        "tool_sha256": sha(Path(__file__).read_bytes()),
+        "tool_sha256": CODE_SHA256,
         "helper_sha256": HELPER_SHA256,
         "masked_diff": MASKED_DIFF,
         "command_exits": commands.exits.copy(),
@@ -806,6 +842,7 @@ def restore(
         current, _ = snapshot(paths)
         if current != files or controls(paths, commands, pins) != states:
             return False
+        runtime_validation(paths, commands, pins, files)
         adopted_credentials(paths, commands, files, states)
         healthy(paths, commands, pins, states)
         return True
@@ -844,6 +881,7 @@ def reseal(
         unchanged(paths, files, guards)
         if controls(paths, commands, pins) != states:
             raise ResealError("unit_state_changed")
+        runtime_validation(paths, commands, pins, files)
         run_id, directory = save(paths, pins, files, after, guards, states, commands)
         report["run_id"] = run_id
         try:
@@ -855,6 +893,7 @@ def reseal(
             unchanged(paths, after, guards)
             if controls(paths, commands, pins) != states:
                 raise ResealError("controls_changed")
+            runtime_validation(paths, commands, pins, after)
             adopted_credentials(paths, commands, after, states)
             healthy(paths, commands, pins, states)
             report["command_exits"] = commands.exits.copy()
