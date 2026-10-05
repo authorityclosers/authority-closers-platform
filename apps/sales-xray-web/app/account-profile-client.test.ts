@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   ACCOUNT_PROFILE_ELIGIBILITY_PATH,
   ACCOUNT_PROFILE_PATH,
+  ACCOUNT_PROFILE_PHOTO_PATH,
   AccountProfileRequestError,
   readAccountProfile,
   readAccountProfileEligibility,
@@ -15,6 +16,7 @@ afterEach(() => vi.unstubAllGlobals());
 const profile = {
   name: "Morgan Lee",
   email: "morgan@example.test",
+  photo_url: null,
   phone_number_e164: "+14155550123",
   phone_verified: false,
   profile_complete: false,
@@ -35,6 +37,28 @@ it("reads only the same-origin canonical account profile without caching", async
     }),
   );
 });
+
+it.each([
+  [ACCOUNT_PROFILE_PHOTO_PATH, ACCOUNT_PROFILE_PHOTO_PATH],
+  [null, null],
+  [undefined, null],
+  ["https://example.test/photo", null],
+  ["//example.test/photo", null],
+  [`${ACCOUNT_PROFILE_PHOTO_PATH}?source=remote`, null],
+  [42, null],
+])(
+  "normalizes the optional photo URL %s to %s",
+  async (photo_url, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ...profile, photo_url })),
+    );
+    await expect(readAccountProfile()).resolves.toEqual({
+      ...profile,
+      photo_url: expected,
+    });
+  },
+);
 
 it("saves a full-name/mobile revision and requires an exact 204 eligibility response", async () => {
   const fetcher = vi

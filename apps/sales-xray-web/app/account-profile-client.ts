@@ -1,10 +1,12 @@
 export const ACCOUNT_PROFILE_PATH = "/v1/me/sales-xray-profile";
+export const ACCOUNT_PROFILE_PHOTO_PATH = "/v1/me/sales-xray-profile/photo";
 export const ACCOUNT_PROFILE_ELIGIBILITY_PATH =
   "/v1/me/sales-xray-profile/write-eligibility";
 
 export type AccountProfileRecord = Readonly<{
   name: string | null;
   email: string;
+  photo_url?: string | null;
   phone_number_e164: string | null;
   phone_verified: boolean;
   profile_complete: boolean;
@@ -52,7 +54,13 @@ function parseProfile(value: unknown): AccountProfileRecord {
   ) {
     throw new Error("invalid_profile_response");
   }
-  return value as AccountProfileRecord;
+  return {
+    ...(value as AccountProfileRecord),
+    photo_url:
+      value.photo_url === ACCOUNT_PROFILE_PHOTO_PATH
+        ? ACCOUNT_PROFILE_PHOTO_PATH
+        : null,
+  };
 }
 
 export async function readAccountProfile(

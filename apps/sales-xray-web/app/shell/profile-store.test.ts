@@ -4,6 +4,7 @@ import { invalidateShellProfile, readShellProfile } from "./profile-store";
 const profile = {
   name: "Morgan Lee",
   email: "morgan@example.test",
+  photo_url: "/v1/me/sales-xray-profile/photo",
   phone_number_e164: null,
   phone_verified: false,
   profile_complete: false,
@@ -13,7 +14,7 @@ afterEach(() => {
   invalidateShellProfile();
   vi.unstubAllGlobals();
 });
-it("shares one unabortable request and caches the canonical name across consumers", async () => {
+it("shares one unabortable request and caches the canonical name and photo across consumers", async () => {
   let resolve!: (response: Response) => void;
   const fetcher = vi.fn<(path: string, init: RequestInit) => Promise<Response>>(
     () =>

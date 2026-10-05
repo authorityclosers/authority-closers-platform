@@ -1,6 +1,14 @@
 /* AC's existing Clarity Grid geometry, cobalt/academy tokens and editorial
    headings, scoped to this standalone app. No remote font or media request. */
 
+.account-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 /* lightbox-embed-tokens:start
    Light Lightbox tokens for documents that embed Sales Xray without its root
    layout (learner-web). The standalone <html data-lx-root> skips this block, so
