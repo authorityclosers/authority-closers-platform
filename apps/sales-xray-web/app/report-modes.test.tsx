@@ -128,22 +128,21 @@ it("shows report sections in one continuous reading layout without transcript se
   ).toContain("Reading");
 });
 
-it("keeps transcript as the last appendix in document view", async () => {
+it("lists the document sections in page order without a transcript appendix", async () => {
   await render(call);
   const viewButtons = container.querySelectorAll<HTMLButtonElement>(
     '[role="group"] button',
   );
   await act(async () => viewButtons[2].click());
   expect(mode().dataset.view).toBe("document");
-  expect(
-    container.querySelector("[data-report-mode-section='transcript']"),
-  ).not.toBeNull();
-  const allSections = sections();
-  expect(
-    allSections[allSections.length - 1].getAttribute(
-      "data-report-mode-section",
+  // The compact DOCX (AUT-983 redo) leaves the transcript in the app.
+  const exported = [
+    ...container.querySelectorAll(
+      "[data-document-export] [data-report-mode-section]",
     ),
-  ).toBe("transcript");
+  ].map((section) => section.getAttribute("data-report-mode-section"));
+  expect(exported).not.toContain("transcript");
+  expect(exported).toEqual(DOCUMENT_CHAPTERS.map((chapter) => chapter.id));
 });
 
 it("bookmarks a selected section without hiding other report content", async () => {
@@ -1179,14 +1178,14 @@ it("preserves the current Reading section when moving through Document and Secti
   expect(mode().dataset.reportSection).toBe("moments");
 });
 
-// Reading has no transcript section (AUT-785); Document keeps it as the last appendix.
+// A section shared by Sections and Document keeps its place across the switch.
 it.each(["document"])(
-  "positions the selected Transcript heading after rendering %s from Sections",
+  "positions the selected Moments heading after rendering %s from Sections",
   async (nextView) => {
     window.history.replaceState(
       null,
       "",
-      `/?call=${call}&view=tabs&section=transcript`,
+      `/?call=${call}&view=tabs&section=moments`,
     );
     const destinations: HTMLElement[] = [];
     const restore = replacePrototype(
@@ -1208,7 +1207,7 @@ it.each(["document"])(
       );
       await settle();
       const heading = container.querySelector<HTMLElement>(
-        '[data-document-export] [data-report-mode-section="transcript"] h2',
+        '[data-document-export] [data-report-mode-section="moments"] h2',
       )!;
       expect(mode().dataset.view).toBe(nextView);
       expect(destinations).toEqual([heading]);
