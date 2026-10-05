@@ -182,8 +182,8 @@ class CheckoutService:
         self.invoice_settings = invoice_settings
         self.fake_checkout_base_url = fake_checkout_base_url
 
-    def ledger(self, database: AsyncSession, *, tenant_id: UUID | None = None) -> BillingLedger:
-        """Compose for a tenant; entry-only settlement calls need no derived trial."""
+    def ledger(self, database: AsyncSession, *, tenant_id: UUID | None) -> BillingLedger:
+        """Compose using the account tenant, including refund eligibility projections."""
         return BillingLedger(
             database,
             clock=self.clock,

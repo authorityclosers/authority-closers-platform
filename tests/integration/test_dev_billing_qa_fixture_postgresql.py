@@ -317,7 +317,7 @@ def test_preview_apply_replay_refusals_sign_in_and_canonical_staff_refund(
                         public_learner_tenant_id=public,
                         operations_tenant_id=operations,
                         return_url_base="https://example.test",
-                    ).ledger(database)
+                    ).ledger(database, tenant_id=public)
                     lot = (await ledger.entries(order.account_id))[0]
                     await ledger.write_closing(
                         lot=lot,

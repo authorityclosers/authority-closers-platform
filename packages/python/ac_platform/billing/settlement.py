@@ -346,7 +346,7 @@ class Settlement:
                     )
                     await durable.flush()
                     if state != "pending":
-                        ledger = self.service.ledger(durable)
+                        ledger = self.service.ledger(durable, tenant_id=account.tenant_id)
                         sources = await self._sources(durable, order, payment)
                         lots = [
                             e
@@ -439,7 +439,7 @@ class Settlement:
         verified_at = _utc(payment.verified_at)
         if now > verified_at + REFUND_WINDOW:
             raise RefundWindowClosed("Refunds are possible within 7 days of payment.")
-        ledger = self.service.ledger(database)
+        ledger = self.service.ledger(database, tenant_id=account.tenant_id)
         entries = await ledger.entries(account.id)
         sources = await self._sources(database, order, payment)
         payment_lots = [
@@ -865,7 +865,7 @@ class Settlement:
         plan_key: str,
         stored: BillingPaymentEvent,
     ) -> None:
-        ledger = self.service.ledger(database)
+        ledger = self.service.ledger(database, tenant_id=account.tenant_id)
         for planned in lots:
             await ledger.write_lot(
                 account=account,
@@ -1013,7 +1013,9 @@ class Settlement:
         )
         await database.flush()
         sources = await self._sources(database, order, payment)
-        ledger = self.service.ledger(database)
+        account = await database.get(BillingAccount, order.account_id)
+        assert account is not None
+        ledger = self.service.ledger(database, tenant_id=account.tenant_id)
         lots = [e for e in await ledger.entries(order.account_id) if e.source_ref in sources]
         await self._settle_refund(
             database, ledger, order, lots, confirmed=confirmed, payment=payment, now=now

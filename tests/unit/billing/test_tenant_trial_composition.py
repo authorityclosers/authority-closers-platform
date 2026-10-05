@@ -49,7 +49,7 @@ async def test_checkout_projection_keeps_grants_and_tenant_trial(
 
     monkeypatch.setattr(state.async_db, "get", get, raising=False)
 
-    def capture(database, *, tenant_id=None):
+    def capture(database, *, tenant_id):
         ledger = original(database, tenant_id=tenant_id)
         composed.append(ledger)
         return ledger
@@ -79,7 +79,8 @@ async def test_checkout_projection_keeps_grants_and_tenant_trial(
     projected = await ledger.project_person(tenant_id=state.tenant, person_id=state.person, now=T0)
     assert projected.available_seconds == 600 + (trial_seconds if personal else 0)
     assert (projected.trial is not None) is personal
-    assert service.ledger(state.async_db).trial_enabled is False
+    with pytest.raises(TypeError, match="tenant_id"):
+        service.ledger(state.async_db)
     assert service.ledger(state.async_db, tenant_id=state.operations).trial_enabled is False
 
 
