@@ -184,6 +184,26 @@ it.each(["submission", "revision", "etag"])(
   },
 );
 
+it.each(['"call-label-1-gzip"', '"call-label-1-zstd"', 'W/"call-label-1"'])(
+  "loads a populated map whose ETag the edge proxy rewrote (%s) and saves with the strong tag",
+  async (etag) => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(data), { headers: { etag } }),
+    );
+    await render();
+    expect(host.querySelector("output")!.textContent).toContain(
+      "Fictional Buyer",
+    );
+    expect(host.querySelector("output")!.dataset.canSave).toBe("true");
+    await edit();
+    await type("Proxy Buyer");
+    await act(async () => button("Save").click());
+    expect(puts()[0][1]!.headers).toMatchObject({
+      "If-Match": '"call-label-1"',
+    });
+  },
+);
+
 it("writes once on Save, waits for confirmation and reads the result in a fresh session", async () => {
   await render();
   await edit();
