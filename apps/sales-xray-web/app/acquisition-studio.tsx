@@ -50,6 +50,7 @@ import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
 import { ProspectSnapshot } from "./prospect-snapshot";
+import { ProspectLinkControl } from "./prospect-link-control";
 import {
   ReportTranscript,
   formatTranscriptTime as time,
@@ -3404,6 +3405,9 @@ export function AcquisitionStudio({
                   onDownload={() => void downloadReport()}
                   onRequestDeletion={() => setDeleteConfirm(true)}
                 />
+                {submission && !embedded && (
+                  <ProspectLinkControl submissionId={submission.id} />
+                )}
                 {submission && deleteConfirm && (
                   <div className={styles.reportDeleteConfirm} role="alert">
                     <p>

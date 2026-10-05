@@ -212,7 +212,9 @@ class ProspectLibrary:
             "buyer_intent_history": [],
         }
 
-    async def _snapshots(self, recordings: list[ConversationRecording]) -> dict[UUID, Any]:
+    async def _snapshots(
+        self, recordings: list[ConversationRecording], *, include_facts: bool = False
+    ) -> dict[UUID, Any]:
         """Three batch reads, independent of call count; never invoke a provider.
 
         Use retained recovery versions or source-verified C5 checkpoints, rather
@@ -363,19 +365,43 @@ class ProspectLibrary:
                     for g in grams(texts.get(m.transcript_revision, {}).get(m.segment_id, ""))
                 },
             )
-            result[recording.id] = withhold(
-                {
-                    "snapshot_id": str(source.id),
-                    "snapshot_kind": "retained_c5" if recovery is not None else "c5_checkpoint",
-                    "source_revision": recording.source_revision,
-                    "source_sha256": recording.source_sha256,
-                    "run_id": str(recovery.run_id) if recovery is not None else None,
-                    "transcript_revision": report.transcript_revision,
-                    "review_status": report.review_status,
-                    "interpretations": notes,
-                },
-                plan,
-            )
+            projected: dict[str, Any] = {
+                "snapshot_id": str(source.id),
+                "snapshot_kind": "retained_c5" if recovery is not None else "c5_checkpoint",
+                "source_revision": recording.source_revision,
+                "source_sha256": recording.source_sha256,
+                "run_id": str(recovery.run_id) if recovery is not None else None,
+                "transcript_revision": report.transcript_revision,
+                "review_status": report.review_status,
+                "interpretations": notes,
+            }
+            if include_facts:
+                facts = []
+                if report.call_map is not None:
+                    roles = {s.speaker_id: s.role for s in report.call_map.speakers}
+                    for fact in report.call_map.prospect_facts:
+                        refs = []
+                        for ref in fact.evidence:
+                            segment = segments.get(ref.segment_id)
+                            if (
+                                segment is not None
+                                and roles.get(str(segment.get("speaker_id"))) == "prospect"
+                                and ref.quote
+                                and ref.quote in segment.get("text", "")
+                                and fact.text.strip().casefold() in ref.quote.casefold()
+                            ):
+                                refs.append(
+                                    {
+                                        "segment_id": ref.segment_id,
+                                        "quote": ref.quote,
+                                        "start_ms": segment["start_ms"],
+                                        "end_ms": segment["end_ms"],
+                                    }
+                                )
+                        if refs:
+                            facts.append({"key": fact.key, "text": fact.text, "evidence": refs})
+                projected["facts"] = facts
+            result[recording.id] = withhold(projected, plan)
         return result
 
 
