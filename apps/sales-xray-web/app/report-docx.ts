@@ -464,7 +464,7 @@ const OUTCOME: Record<string, [string, string, string]> = {
 };
 
 const DIMENSION: Record<string, [string, string]> = {
-  observed: ["Observed", C.teal],
+  observed: ["Observed", C.ink],
   insufficient_evidence: ["Not enough evidence", C.faint],
   not_applicable: ["Not applicable", C.faint],
   conflicted: ["Mixed signals", C.amber],
@@ -1349,12 +1349,7 @@ function skillsTable(report: SalesReport) {
     ];
   const widths = [2700, 1700, W - 4400];
   return [
-    ...sectionTitle(
-      "Skills checked",
-      `${list.filter((d) => d.status === "observed").length} of ${list.length} observed in this call`,
-      false,
-      "skills",
-    ),
+    ...sectionTitle("Skills checked", undefined, false, "skills"),
     table(
       widths,
       list.map((dimension) => {

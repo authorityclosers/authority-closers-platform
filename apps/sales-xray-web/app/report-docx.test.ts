@@ -168,6 +168,18 @@ describe("report DOCX", () => {
     expect(xml.cs).toEqual(["Nirmala UI"]);
   });
 
+  it("lists evidence statuses without an observed coverage score", async () => {
+    const blob = await createReportDocx({
+      title: "Fictional evidence statuses",
+      report: syntheticReport,
+    });
+    const xml = inspect(Buffer.from(await blob.arrayBuffer()));
+    for (const status of ["Observed", "Not enough evidence", "Unknown"])
+      expect(xml.text).toContain(status);
+    expect(xml.text).toContain(syntheticReport.dimensions[1].observation);
+    expect(xml.text).not.toMatch(/\bof\s+\d+\s+observed\b/i);
+  });
+
   it("still makes a complete document for an older report with no overview or numbers", async () => {
     const { overview: _overview, ...older } = syntheticReport;
     void _overview;
