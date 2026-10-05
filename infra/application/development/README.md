@@ -358,6 +358,53 @@ Output is JSON lines with no value. The `handoff` line gives `devtools`
 stays up for `--hold-seconds` (default 3600) or until Ctrl-C/SIGTERM, then the
 profile is deleted. A `refused` line names the failed check.
 
+## Sales Xray: protected saved-report QA (AUT-1232)
+
+Use the existing dev studio and AUT-1116 protected credential handoff to read
+only its approved fictional report `dadaed4c-2f24-4299-b2fa-c0c47f9b374a`:
+
+```sh
+# From the devenv lane checkout, as acdev; no arguments or credential output.
+.venv/bin/python infra/application/development/qa-sales-xray-report.py
+```
+
+The launcher serves the browser an ephemeral, loopback-only TLS connection to
+the existing edge on `127.0.0.1:3016`, using
+`https://salesxray-dev.authorityclosers.com` as its actual browser origin.
+Chromium trusts only that run's certificate SPKI. It supplies Host and Origin
+normally and stores the normal Secure, HttpOnly, host-only session cookie.
+Do not substitute `http://localhost:3016` with an overridden Origin: that
+invocation failed sign-in 403 and workspace 401 in the recorded reproduction.
+
+The upstream remains the existing staging studio route authorized by AUT-154;
+this invocation does not provide an independent dev database or copy the report.
+Its exact Origin exception and normal account authorization remain enforced by
+staging. No host/service install, Caddy edit, account/grant change or security
+setting is needed. The Admin launcher's origin, edge and credential rules retain
+their existing defaults; only its TLS utility accepts explicit internal host
+and edge arguments for reuse.
+
+A fictional sentinel must receive 401 before the credential is read. The real
+password is read into memory from the existing AUT-1116 file and submitted
+through the current UI's password form. Chromium receives only PATH, HOME and
+the host's shared-library path in its environment. The report is read at
+1440x900 and 390x844; JSON stdout contains statuses, binding and visibility
+flags only. Other reports, external requests, encoded API paths and background
+writes are blocked. The browser, profile and temporary TLS files are removed
+when the run ends. No screenshot, transcript or report text is exported.
+
+Use the source-owned invocation from a reviewed main release after merge; the
+normal release train carries the script. When running a released copy, use the
+lane's existing Python/browser environment:
+
+```sh
+.venv/bin/python /srv/authority-closers/application/current-staging/development/qa-sales-xray-report.py
+```
+
+Both launcher files must come from that same release tree. Rollback is to stop
+using this QA command; it changes no persistent runtime configuration. Do not
+fall back to the failing HTTP/header-override invocation or injected cookies.
+
 The [AUT-1156 released-runner runbook](../../../docs/evidence/20261005_AUT1156_BILLING_QA_TRANSPORT.md#operator-runbook)
 specifies Root installation, the immutable API executable, dev network and
 input boundaries, access-manager prerequisites, preview/apply and rollback.
