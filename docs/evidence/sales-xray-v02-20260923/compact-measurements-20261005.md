@@ -20,7 +20,7 @@ Cards sit alongside each other when space permits; phone padding stays compact.
 Plain-language copy states the transcript basis, excluded gaps, separately
 counted overlaps, question-mark counting, included pauses and existing quiet/
 recovery thresholds. Call length is distinguished from the last timed-segment
-fallback; no positive duration shows “Unavailable”. Formulas, fields, source
+fallback; an empty timing span shows “Unavailable”. Formulas, fields, source
 identity, seeks and backend contracts are unchanged.
 
 `owner-surfaces.json` is currently reserved by open PR #334 and absent from this
