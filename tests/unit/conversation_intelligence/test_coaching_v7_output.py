@@ -93,6 +93,9 @@ def case():
         qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v7").sha256,
     )
     payload = _valid_response()
+    payload["summary_evidence"] = [{"segment_id": "s1"}]
+    payload["verdict_evidence"] = [{"segment_id": "s2"}]
+    payload["overview"]["final_assessment"]["evidence"] = [{"segment_id": "s2"}]
     payload["call_map"] = _call_map()
     payload["call_map"]["prospect_facts"] = [
         {"key": "role", "text": "Prospect", "evidence": [{"segment_id": "s2", "quote": "Yes."}]}

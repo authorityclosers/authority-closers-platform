@@ -504,12 +504,18 @@ class ReportDraft(_StrictModel):
     """A qualitative draft. It carries no grade, score or official adjudication."""
 
     summary: str = Field(min_length=1, max_length=4_000)
+    summary_evidence: list[ReportEvidence] | None = Field(
+        default=None, min_length=1, max_length=3, exclude_if=lambda value: value is None
+    )
     strengths: list[ReportFinding] = Field(max_length=3)
     missed_opportunities: list[ReportFinding] = Field(max_length=10)
     improvements: list[ReportFinding] = Field(max_length=3)
     objection_analysis: list[ReportFinding] = Field(max_length=8)
     closing_analysis: list[ReportFinding] = Field(max_length=8)
     verdict: str = Field(min_length=1, max_length=4_000)
+    verdict_evidence: list[ReportEvidence] | None = Field(
+        default=None, min_length=1, max_length=3, exclude_if=lambda value: value is None
+    )
     review_status: Literal["draft_not_dipak_adjudicated"]
     source_label: str = Field(min_length=1, max_length=256)
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -2458,7 +2464,8 @@ def build_report_groq_prompt(
             ),
             "ethics_notes": "[SourceNote],at most two;observations only",
             "final_assessment": (
-                "{repeat,fix_first,next_focus,assessment:truthful strings,one sentence each}"
+                "{repeat,fix_first,next_focus,assessment:truthful strings,one sentence each,"
+                "evidence:[{segment_id}]:1-3}"
             ),
         }
         system = system.replace(
@@ -2478,6 +2485,10 @@ def build_report_groq_prompt(
         system = system.replace(
             "Profile:\n",
             COACHING_PROMPT_V7_INSTRUCTION
+            + "Cite the 1–3 segments that the summary, the verdict and the final assessment "
+            "are each built from. A claim about the prospect cites the prospect's own words. "
+            "Return summary_evidence, verdict_evidence and final_assessment.evidence "
+            "as arrays of 1–3 direct {segment_id} selectors. "
             + coaching_v7_bounds_instruction()
             + signal_instruction
             + "\nProfile:\n",
@@ -2896,6 +2907,21 @@ def parse_report_draft(
         consumed_provider_keys.update(overview_keys)
     # Scalar adapters need the same canonical envelope regardless of where
     # the provider put overview fields. Normalize it before joining evidence.
+    if v7:
+        for field in ("summary_evidence", "verdict_evidence"):
+            refs = payload.get(field)
+            if not isinstance(refs, list) or not 1 <= len(refs) <= 3:
+                raise ReportError("report_payload_missing_field")
+        overview_payload = payload.get("overview")
+        final = (
+            overview_payload.get("final_assessment")
+            if isinstance(overview_payload, Mapping)
+            else None
+        )
+        refs = final.get("evidence") if isinstance(final, Mapping) else None
+        if not isinstance(refs, list) or not 1 <= len(refs) <= 3:
+            raise ReportError("report_overview_invalid")
+        consumed_provider_keys.update({"summary_evidence", "verdict_evidence"})
     salvaged: dict[str, int] = {}
     truncated: dict[str, int] = {}
     payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript, salvaged)
@@ -2903,6 +2929,11 @@ def parse_report_draft(
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
     normalized = dict(payload)
+    if v7:
+        for field in ("summary_evidence", "verdict_evidence"):
+            normalized[field] = [
+                _normalise_c5_evidence(item, validated_transcript) for item in payload[field]
+            ]
     for field in (
         "strengths",
         "missed_opportunities",
@@ -2983,7 +3014,7 @@ def parse_report_draft(
     # are available under the bounded, explicitly named extras field instead.
     for key in tuple(normalized):
         if key not in _CANONICAL_REPORT_ROOT_FIELDS and not (
-            v7 and key in {"call_map", "sensitive_segments"}
+            v7 and key in {"call_map", "sensitive_segments", "summary_evidence", "verdict_evidence"}
         ):
             normalized.pop(key, None)
     if provider_extras:

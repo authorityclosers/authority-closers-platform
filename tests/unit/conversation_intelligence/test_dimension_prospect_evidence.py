@@ -6,6 +6,7 @@ import pytest
 
 from ac_platform.conversation_intelligence import reports
 from ac_platform.conversation_intelligence.call_map import QUALIFICATION_ITEMS
+from tests.conversation_overview_fixtures import overview_for
 from tests.unit.conversation_intelligence.test_coaching_v5_depth import _payload, _transcript
 
 
@@ -34,6 +35,10 @@ def fixture(*, v7=True):
         ],
     }
     if v7:
+        payload["summary_evidence"] = [{"segment_id": "s2"}]
+        payload["verdict_evidence"] = [{"segment_id": "s2"}]
+        payload["overview"] = overview_for(payload)
+        payload["overview"]["final_assessment"]["evidence"] = [{"segment_id": "s2"}]
         payload["call_map"] = {
             "version": "call-map/1",
             "verdict_line": "Evidence remains bounded.",

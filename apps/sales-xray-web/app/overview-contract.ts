@@ -233,17 +233,19 @@ export function parseDetailedOverview(
     }),
     progress: item.progress === null ? null : fail(),
     final_assessment: (() => {
-      const data = object(item.final_assessment, [
-        "repeat",
-        "fix_first",
-        "next_focus",
-        "assessment",
-      ]);
+      const data = object(
+        item.final_assessment,
+        ["repeat", "fix_first", "next_focus", "assessment"],
+        ["evidence"],
+      );
       return {
         repeat: text(data.repeat, 500),
         fix_first: text(data.fix_first, 500),
         next_focus: text(data.next_focus, 500),
         assessment: text(data.assessment, 1200),
+        ...(Object.hasOwn(data, "evidence")
+          ? { evidence: list(data.evidence, 3, parseEvidence, 1) }
+          : {}),
       };
     })(),
   };

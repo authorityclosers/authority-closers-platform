@@ -133,6 +133,9 @@ class FinalAssessment(_Strict):
     fix_first: str = Field(min_length=1, max_length=500)
     next_focus: str = Field(min_length=1, max_length=500)
     assessment: str = Field(min_length=1, max_length=1_200)
+    evidence: list[OverviewEvidence] | None = Field(
+        default=None, min_length=1, max_length=3, exclude_if=lambda value: value is None
+    )
 
 
 class DetailedOverview(_Strict):
