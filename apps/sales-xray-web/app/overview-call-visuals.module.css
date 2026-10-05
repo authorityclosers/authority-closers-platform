@@ -67,12 +67,13 @@
 /* Speaker cards grid */
 .speakerCardsGrid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 10px;
 }
 
 .speakerCard {
   display: grid;
+  min-width: 0;
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--lx-line-soft, var(--lx-line));
@@ -96,6 +97,49 @@
   color: var(--lx-ink);
   font-size: 15px;
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.measurementMeaning {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.timingDetails {
+  border-top: 1px solid var(--lx-line);
+  padding-top: 10px;
+  font-size: 13px;
+}
+
+.timingDetails > summary {
+  cursor: pointer;
+  color: var(--lx-ink);
+  font-weight: 600;
+}
+
+.timingBody {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.talkTimes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.talkTimes dt {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.talkTimes dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .speakerMetricsGroup {
@@ -206,7 +250,7 @@
 /* Monologues */
 .monologuesGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 10px;
 }
 
@@ -675,7 +719,12 @@
 /* Responsiveness & accessibility */
 @media (max-width: 600px) {
   .section {
-    padding: 14px 14px;
+    padding: 12px 10px;
+  }
+  .speakerCard,
+  .chartContainer,
+  .monologueCard {
+    padding: 10px 8px;
   }
   .speakerHeader {
     flex-direction: column;
