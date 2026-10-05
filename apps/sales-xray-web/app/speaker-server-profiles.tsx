@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ActionButton } from "@ac/ui";
 
 import { ACQUISITION, UUID, record } from "./acquisition-client";
 import {
@@ -10,13 +11,22 @@ import {
   type SpeakerProfiles,
   type SpeakerRole,
 } from "./speaker-profiles";
+import styles from "./speaker.module.css";
 
 type SpeakerMap = {
   etag: string;
+  available: boolean;
   profiles: SpeakerProfiles;
   drafts: SpeakerProfiles;
 };
 const ROLES = new Set(["you", "salesperson", "prospect", "other"]);
+const STATUSES = new Set([
+  "unavailable",
+  "predicted",
+  "confirmed",
+  "channel",
+  "model_named",
+]);
 const SAVE_ERROR =
   "Couldn’t save speaker details. Check your connection and try again.";
 const CONFLICT =
@@ -66,18 +76,25 @@ async function requestMap(
   if (
     data.schema !== "ac.sales-xray.speaker-map/1" ||
     data.submission_id !== callId ||
-    data.transcript_revision !== transcriptRevision ||
+    !STATUSES.has(data.status as string) ||
     !Number.isInteger(data.user_revision) ||
     (data.user_revision as number) < 0 ||
     etag !== `"call-label-${data.user_revision}"` ||
     !Array.isArray(data.speakers) ||
-    !data.speakers.length ||
     data.speakers.length > 32
+  )
+    throw new Error("speaker_map_response");
+  const available = data.status !== "unavailable" && data.speakers.length > 0;
+  // A missing retained transcript has a null revision and no speaker map.
+  // Populated maps must still belong to the transcript shown by this report.
+  if (
+    data.transcript_revision !== transcriptRevision &&
+    (available || data.transcript_revision !== null)
   )
     throw new Error("speaker_map_response");
   const drafts: Record<string, SpeakerProfiles[string]> = Object.create(null);
   const profiles: Record<string, SpeakerProfiles[string]> = Object.create(null);
-  for (const value of data.speakers) {
+  for (const value of available ? data.speakers : []) {
     const row = record(value);
     if (
       typeof row.speaker_id !== "string" ||
@@ -109,14 +126,15 @@ async function requestMap(
   }
   if (
     changes &&
-    (data.status !== "confirmed" ||
+    (!available ||
+      data.status !== "confirmed" ||
       Object.keys(drafts).length !== Object.keys(changes).length ||
       Object.entries(changes).some(
         ([id, profile]) => !drafts[id] || drafts[id].role !== profile.role,
       ))
   )
     throw new Error("speaker_map_unconfirmed");
-  return { etag, profiles, drafts };
+  return { etag: etag!, available, profiles, drafts };
 }
 
 /** Key this provider by call, transcript and authenticated session. No shared cache. */
@@ -174,7 +192,13 @@ export function SpeakerServerProfiles({
 
   async function save(changes: SpeakerProfiles) {
     const signal = controller.current?.signal;
-    if (!validCall || !map || !signal || signal.aborted || inFlight.current)
+    if (
+      !validCall ||
+      !map?.available ||
+      !signal ||
+      signal.aborted ||
+      inFlight.current
+    )
       return false;
     const next = { ...map.drafts, ...changes };
     if (
@@ -236,7 +260,7 @@ export function SpeakerServerProfiles({
         profiles: validCall ? (map?.profiles ?? {}) : {},
         drafts,
         save,
-        canSave: validCall && map !== null && !saving,
+        canSave: validCall && map?.available === true && !saving,
         error,
         server: true,
       }}
@@ -247,12 +271,23 @@ export function SpeakerServerProfiles({
           {!map && validCall && (
             <>
               {" "}
-              <button type="button" onClick={() => setRetry((n) => n + 1)}>
+              <ActionButton
+                variant="quiet"
+                onClick={() => setRetry((n) => n + 1)}
+              >
                 Reload speaker details
-              </button>
+              </ActionButton>
             </>
           )}
         </p>
+      )}
+      {validCall && map && !map.available && (
+        <div className={styles.mapNotice}>
+          <span>Speaker names not set yet.</span>
+          <ActionButton variant="quiet" onClick={() => setRetry((n) => n + 1)}>
+            Reload speaker details
+          </ActionButton>
+        </div>
       )}
       {children}
     </SpeakerProfilesContext.Provider>

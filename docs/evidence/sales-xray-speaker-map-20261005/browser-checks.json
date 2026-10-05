@@ -1,0 +1,65 @@
+{
+  "source": "actual branch components; fictional mocked responses; temporary local harness",
+  "checks": [
+    {
+      "width": 390,
+      "mode": "unavailable",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": false,
+      "confirmedTalkShare": false
+    },
+    {
+      "width": 390,
+      "mode": "predicted",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": true,
+      "confirmedTalkShare": false
+    },
+    {
+      "width": 390,
+      "mode": "confirmed",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": true,
+      "confirmedTalkShare": true
+    },
+    {
+      "width": 1440,
+      "mode": "unavailable",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": false,
+      "confirmedTalkShare": false
+    },
+    {
+      "width": 1440,
+      "mode": "predicted",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": true,
+      "confirmedTalkShare": false
+    },
+    {
+      "width": 1440,
+      "mode": "confirmed",
+      "callMap": true,
+      "errorBanner": false,
+      "overflow": false,
+      "pageErrors": 0,
+      "editor": true,
+      "confirmedTalkShare": true
+    }
+  ]
+}
