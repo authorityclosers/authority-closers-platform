@@ -29,12 +29,14 @@ def logo_key(tenant_id: UUID, logo_id: UUID) -> str:
     return f"tenants/{tenant_id}/media/avatar/{tenant_id}/{logo_id}/original/avatar/512"
 
 
-def branding(tenant: Tenant, organisation: Organisation) -> dict[str, object]:
+def branding(tenant: Tenant, organisation: Organisation | None) -> dict[str, object]:
     return {
         "tenant_id": str(tenant.id),
         "name": tenant.name,
         "logo_url": (
-            f"/v1/organisation/logo/{organisation.logo_id}" if organisation.logo_id else None
+            f"/v1/organisation/logo/{organisation.logo_id}"
+            if organisation is not None and organisation.logo_id
+            else None
         ),
     }
 

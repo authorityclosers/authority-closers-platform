@@ -142,6 +142,33 @@ async def test_name_normalization_and_empty_optional_details(state):  # noqa: F8
     assert response.json()["city"] == "" and response.json()["team_size"] == ""
 
 
+@pytest.mark.parametrize("role", ["owner", "admin", "member", "learner"])
+async def test_personal_workspace_branding_and_organisation_only_reads(state, role):  # noqa: F811
+    from ac_platform.identity.models import Session as IdentitySession
+
+    personal = uuid4()
+    with Session(state.engine) as db, db.begin():
+        db.add(Tenant(id=personal, name="Fictional Personal", slug=f"personal-{personal.hex}"))
+        db.flush()
+        db.add(Membership(tenant_id=personal, person_id=state.person, role=role))
+        db.get(IdentitySession, state.session).selected_tenant_id = personal
+        assert db.get(Organisation, personal) is None
+
+    response = await call(state, path="/branding")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "tenant_id": str(personal),
+        "name": "Fictional Personal",
+        "logo_url": None,
+    }
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["vary"] == "Cookie"
+    for path in ("/settings", f"/logo/{uuid4()}"):
+        response = await call(state, path=path)
+        assert response.status_code == 404, response.text
+        assert response.json()["detail"] == "No organisation selected."
+
+
 @pytest.mark.parametrize("token", [None, "invalid"])
 async def test_anonymous_settings_branding_and_logo_requests_fail(state, avatar, token):  # noqa: F811
     for path in ("/settings", "/branding", f"/logo/{uuid4()}"):

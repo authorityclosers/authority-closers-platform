@@ -36,6 +36,7 @@ def install_organisation_settings_routes(
     application: FastAPI,
     *,
     settings: Settings,
+    actor_dependency: Depends,
     selected_dependency: Depends,
     command_dependency: Depends,
 ) -> None:
@@ -48,11 +49,12 @@ def install_organisation_settings_routes(
             public_learner_tenant_id=settings.public_learner_tenant_id,
         )
 
-    async def rows(auth: AuthenticatedTransaction) -> tuple[Tenant, Organisation]:
+    async def rows(auth: AuthenticatedTransaction) -> tuple[Tenant, Organisation | None]:
         tenant_id = auth.resolved.actor.tenant_id
         tenant = await auth.database.get(Tenant, tenant_id)
         organisation = await auth.database.get(Organisation, tenant_id)
-        assert tenant is not None and organisation is not None
+        if tenant is None:
+            raise ResourceNotFound("No organisation selected.")
         return tenant, organisation
 
     def avatar() -> LocalAvatarRuntime:
@@ -65,14 +67,21 @@ def install_organisation_settings_routes(
     async def read_settings(
         auth: Annotated[AuthenticatedTransaction, selected_dependency],
     ) -> OrganisationSettingsResponse:
+        tenant, organisation = await rows(auth)
+        if organisation is None:
+            raise ResourceNotFound("No organisation selected.")
         if auth.resolved.membership_role not in {"owner", "admin"}:
             raise AuthorizationDenied("Only owners and admins can read organisation settings.")
-        return OrganisationSettingsResponse.model_validate(settings_result(*await rows(auth)))
+        return OrganisationSettingsResponse.model_validate(settings_result(tenant, organisation))
 
     @router.get("/branding")
     async def read_branding(
-        auth: Annotated[AuthenticatedTransaction, selected_dependency],
+        response: Response,
+        auth: Annotated[AuthenticatedTransaction, actor_dependency],
     ) -> dict[str, object]:
+        # Switchers also request branding for authenticated personal workspaces.
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["vary"] = "Cookie"
         return branding(*await rows(auth))
 
     @router.put("/settings", response_model=OrganisationSettingsResponse)
@@ -140,6 +149,8 @@ def install_organisation_settings_routes(
         logo_id: UUID, auth: Annotated[AuthenticatedTransaction, selected_dependency]
     ) -> Response:
         tenant, organisation = await rows(auth)
+        if organisation is None:
+            raise ResourceNotFound("No organisation selected.")
         if organisation.logo_id != logo_id:
             raise ResourceNotFound("Organisation logo is unavailable.")
         body = await run_in_threadpool(avatar().storage.read, logo_key(tenant.id, logo_id))

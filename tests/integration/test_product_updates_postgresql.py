@@ -1,4 +1,4 @@
-"""0074→0075 upgrade preserves capability history and seeds the frozen changelog."""
+"""0074→head upgrade preserves capability history and seeds the frozen changelog."""
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
@@ -66,10 +68,9 @@ def updates_engine() -> Iterator[Engine]:
             database.commit()
             grant_id, revocation_id = row.id, revocation.id
         migrate("head")
+        head = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini"))).get_current_head()
         with Session(engine) as database:
-            assert (
-                database.scalar(text("SELECT version_num FROM alembic_version")) == "20261004_0075"
-            )
+            assert database.scalar(text("SELECT version_num FROM alembic_version")) == head
             assert database.get(CapabilityGrant, grant_id).permission == "catalog_read"
             assert database.get(CapabilityRevocation, revocation_id).grant_id == grant_id
         yield engine

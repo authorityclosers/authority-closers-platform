@@ -405,6 +405,7 @@ def install_organisation_http(
         router,
         application,
         settings=settings,
+        actor_dependency=actor_dependency,
         selected_dependency=selected_dependency,
         command_dependency=command_dependency,
     )
