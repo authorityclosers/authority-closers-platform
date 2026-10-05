@@ -1,0 +1,59 @@
+name: Sales Xray Android
+
+# Builds the Sales Xray Android test APK (AUT-1210) on GitHub-hosted runners,
+# which already carry the Android SDK and JDK 21. Task branches build too, so
+# a test APK exists before merge. The APK is a workflow artifact only.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "task/**"
+    paths:
+      - apps/sales-xray-android/**
+      - .github/workflows/sales-xray-android.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sales-xray-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/sales-xray-android
+    steps:
+      - name: Check out
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+      - name: Use the runner's JDK 21
+        run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - name: Install Capacitor
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Sync the web shell into Android
+        run: npx cap sync android
+      - name: Build the test APK
+        working-directory: apps/sales-xray-android/android
+        env:
+          SX_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+      - name: Name the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/sales-xray-android-0.1.${{ github.run_number }}-test.apk"
+          sha256sum dist/*.apk
+      - name: Keep the APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sales-xray-android-test-${{ github.run_number }}
+          path: apps/sales-xray-android/dist/*.apk
+          retention-days: 30
+          if-no-files-found: error

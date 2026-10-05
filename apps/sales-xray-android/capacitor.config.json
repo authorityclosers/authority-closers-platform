@@ -1,0 +1,14 @@
+{
+  "appId": "com.authorityclosers.salesxray",
+  "appName": "Sales Xray",
+  "webDir": "www",
+  "server": {
+    "url": "https://salesxray.authorityclosers.com",
+    "cleartext": false,
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0b1220"
+  }
+}
