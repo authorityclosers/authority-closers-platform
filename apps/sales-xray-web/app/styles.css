@@ -177,6 +177,40 @@ html:has(> body.sales-xray-document) {
   overscroll-behavior-y: none;
   background: var(--lx-paper);
 }
+
+/* Standalone pages and panels use the app's thin scroller. Keep specificity
+   low so the report rail and intentionally hidden horizontal bars still win.
+   The learner-web document is outside this boundary. */
+:where(html:has(> body.sales-xray-document), .sales-xray-document *) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lx-line-strong) transparent;
+}
+
+@supports not (scrollbar-width: thin) {
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar-thumb {
+    border-radius: 99px;
+    background: var(--lx-line-strong);
+  }
+
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 .sales-xray-document {
   margin: 0;
   --font-sans: var(--lx-font-ui);
