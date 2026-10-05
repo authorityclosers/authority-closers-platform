@@ -574,6 +574,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       actions: write
+      pull-requests: read
       contents: read
       packages: write
     env:
@@ -833,6 +834,12 @@ jobs:
             exit 1
           }
           projected_artifact_pool_bytes=$((retained_bytes - superseded_release_bytes + candidate_bytes))
+          if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            projected_artifact_pool_bytes="$(python infra/release/reclaim-artifact-pool.py \
+              --candidate-bytes "$candidate_bytes" \
+              --pool-bytes "$max_artifact_pool_bytes" \
+              --replacement-prefix ac-application)"
+          fi
           if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
             printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
               "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2

@@ -86,12 +86,24 @@ if "DELETE" in args:
     state["artifacts"] = [a for a in state["artifacts"] if a["id"] != artifact_id]
     path.write_text(json.dumps(state))
 elif "--paginate" in args:
+    if "/pulls?" in args[-1]:
+        if state.get("pulls_fail"):
+            sys.exit(1)
+        pulls = state.get("pulls", [])
+        if "state=open" in args[-1]:
+            pulls = [p for p in pulls if p["state"] == "open"]
+        print(json.dumps([pulls]))
+        sys.exit(0)
     if state.get("list_fails"):
         sys.exit(1)
     artifacts = state["artifacts"]
     # Emit multiple API pages so the real jq aggregation is exercised.
-    print(json.dumps({"artifacts": artifacts[:1]}))
-    print(json.dumps({"artifacts": artifacts[1:]}))
+    pages = [{"artifacts": artifacts[:1]}, {"artifacts": artifacts[1:]}]
+    if "--slurp" in args:
+        print(json.dumps(pages))
+    else:
+        for page in pages:
+            print(json.dumps(page))
 else:
     artifact_id = int(args[-1].rsplit("/", 1)[-1])
     matches = [a for a in state["artifacts"] if a["id"] == artifact_id]
@@ -245,7 +257,11 @@ def test_failed_delete_keeps_replacement_and_fails_cleanup(harness: _Harness) ->
 
 
 def test_workflow_keeps_retention_serialization_and_upload_order() -> None:
-    assert JOB["permissions"] == {"actions": "write", "contents": "read"}
+    assert JOB["permissions"] == {
+        "actions": "write",
+        "contents": "read",
+        "pull-requests": "read",
+    }
     assert JOB["concurrency"] == {
         "group": "application-release-packaging",
         "cancel-in-progress": False,
