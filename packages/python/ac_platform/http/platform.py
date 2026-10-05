@@ -25,6 +25,7 @@ PlatformPermission = Literal[
     "platform_release_manage",
     "platform_billing_manage",
     "platform_content_safety_manage",
+    "platform_updates_manage",
 ]
 
 

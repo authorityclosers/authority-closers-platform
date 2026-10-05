@@ -367,8 +367,11 @@ def test_racing_source_reuse_in_different_tenants_preserves_only_winning_audit(
 
 def test_fresh_migration_and_registered_unscaled_numeric(postgres_harness):
     config = Config(str(ROOT / "alembic.ini"))
-    head = ScriptDirectory.from_config(config).get_current_head()
-    assert head is not None
+    scripts = ScriptDirectory.from_config(config)
+    head = scripts.get_current_head()
+    assert "20261003_0073" in {
+        revision.revision for revision in scripts.iterate_revisions(head, "base")
+    }
     table = model_metadata().tables["billing_credit_entries"]
     assert table.c.quantity.type.precision is None and table.c.quantity.type.scale is None
     with postgres_harness.connect() as connection:
