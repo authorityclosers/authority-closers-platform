@@ -256,9 +256,9 @@ def test_notification_checks_refuse_unknown_kind_and_external_links(
 
 def test_migration_is_forward_only_and_grant_cli_accepts_the_capability() -> None:
     migration = runpy.run_path(
-        str(Path(__file__).parents[2] / "db/migrations/versions/20261004_0074_product_updates.py")
+        str(Path(__file__).parents[2] / "db/migrations/versions/20261004_0075_product_updates.py")
     )
-    assert migration["down_revision"] == "20261003_0073"
+    assert migration["down_revision"] == "20261004_0074"
     with pytest.raises(RuntimeError, match="forward-only"):
         migration["downgrade"]()
     args = _parser().parse_args(

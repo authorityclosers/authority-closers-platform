@@ -31,8 +31,8 @@ ADR 0050 is already taken, so this uses the next available number, 0054.
    `(person_id, dedupe_key)` is unique. Only `read_at` may change, once from
    null to a timestamp. Deletes are refused. Person and tenant references use
    foreign keys. `platform_updates_manage` is explicit platform authority,
-   not a membership role. Migration 0074 seeds the six original notes as
-   published version-1 rows and advances backup parity to v45 (131 tables).
+   not a membership role. Migration 0075 seeds the six original notes as
+   published version-1 rows and advances backup parity to v46 (133 tables).
 2. **Visibility (D2).** Staging and production select the highest published
    version per lineage; development selects the latest version and labels
    unpublished versions as drafts. Organisation admins must be active owners
@@ -95,7 +95,7 @@ slice introduces no deletion path or retention duration.
 
 ## Reversal cost
 
-Migration 0074 is forward-only. Reversing storage requires a later migration or
+Migration 0075 is forward-only. Reversing storage requires a later migration or
 the verified restore path, preserving audit-critical history. Routes and writers
 can change independently in their assigned slices.
 

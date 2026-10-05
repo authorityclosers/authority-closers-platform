@@ -263,6 +263,82 @@ class Commands:
             .strip()
         )
 
+    def credential_sources(self, unit: str) -> dict[str, str]:
+        # Read the loaded manager property, never systemctl's printable rendering
+        # or static unit text. These are identifiers/source paths, not secret bytes.
+        bus = ["busctl", "--system", "--json=short", "--no-pager"]
+        destination = "org.freedesktop.systemd1"
+        objects = bus_data(
+            self.run(
+                unit + ":GetUnit",
+                bus
+                + [
+                    "call",
+                    destination,
+                    "/org/freedesktop/systemd1",
+                    destination + ".Manager",
+                    "GetUnit",
+                    "s",
+                    unit,
+                ],
+            ),
+            "o",
+        )
+        if (
+            len(objects) != 1
+            or not isinstance(objects[0], str)
+            or not re.fullmatch(r"/org/freedesktop/systemd1/unit/[A-Za-z0-9_]+", objects[0])
+        ):
+            raise ResealError("unit_credential_mismatch")
+        entries = bus_data(
+            self.run(
+                unit + ":LoadCredential",
+                bus
+                + [
+                    "get-property",
+                    destination,
+                    objects[0],
+                    destination + ".Service",
+                    "LoadCredential",
+                ],
+            ),
+            "a(ss)",
+        )
+        sources = {}
+        for entry in entries:
+            if not isinstance(entry, list) or len(entry) != 2:
+                raise ResealError("unit_credential_mismatch")
+            name, path = entry
+            if (
+                not isinstance(name, str)
+                or not re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", name)
+                or name in (".", "..")
+                or name in sources
+                or not isinstance(path, str)
+                or not path.startswith("/")
+                or not path.isprintable()
+                or ".." in Path(path).parts
+            ):
+                raise ResealError("unit_credential_mismatch")
+            sources[name] = path
+        return sources
+
+
+def bus_data(raw: bytes, signature: str) -> list:
+    try:
+        if not 0 < len(raw) <= MAX_BYTES:
+            raise ValueError
+        value = decoded(raw)
+        if (
+            set(value) != {"type", "data"}
+            or value["type"] != signature
+            or not isinstance(value["data"], list)
+        ):
+            raise ValueError
+        return value["data"]
+    except (ValueError, ResealError):
+        raise ResealError("unit_credential_mismatch") from None
+
 
 def assignments(raw: bytes) -> dict[str, str]:
     result = {}
@@ -424,12 +500,7 @@ def controls(paths: Paths, commands: Commands, pins: Pins, *, worker_pins=None) 
         if commands.value(unit, "WorkingDirectory") != str(paths.backend):
             raise ResealError("unit_backend_mismatch")
     for unit in UNITS:
-        credentials = {}
-        for item in commands.value(unit, "LoadCredential").split():
-            name, sep, path = item.partition(":")
-            if not sep or name in credentials:
-                raise ResealError("unit_credential_mismatch")
-            credentials[name] = path
+        credentials = commands.credential_sources(unit)
         if credentials.get("approval.json") != str(paths.development / "approval.json"):
             raise ResealError("unit_credential_mismatch")
         if unit == refresh.WORKER_UNIT and credentials.get("service.json") != str(

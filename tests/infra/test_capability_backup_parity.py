@@ -72,7 +72,8 @@ SPEAKER_MAPS = "20261003_0070"
 CALL_METRICS = "20261003_0071"
 SPEAKER_ROLES_FREEZE = "20261003_0072"
 BILLING_CREDITS = "20261003_0073"
-PRODUCT_UPDATES = "20261004_0074"
+PROSPECTS = "20261004_0074"
+PRODUCT_UPDATES = "20261004_0075"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -125,6 +126,7 @@ HEADS = (
     CALL_METRICS,
     SPEAKER_ROLES_FREEZE,
     BILLING_CREDITS,
+    PROSPECTS,
     PRODUCT_UPDATES,
 )
 VERSIONED_HEADS = HEADS[1:]
@@ -253,6 +255,7 @@ NEW_TABLES = {
     SPEAKER_MAPS: ("conversation_speaker_map_revisions",),
     CALL_METRICS: ("conversation_call_metrics",),
     BILLING_CREDITS: ("billing_credit_entries",),
+    PROSPECTS: ("conversation_prospects", "conversation_prospect_memberships"),
     PRODUCT_UPDATES: ("product_updates", "update_seen", "notifications"),
 }
 PARITY_NEW_TABLES = NEW_TABLES
@@ -396,11 +399,16 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         )
         assert len(module.parity_tables_for_head(SPEAKER_ROLES_FREEZE)) == 127
         assert len(module.parity_tables_for_head(BILLING_CREDITS)) == 128
-        assert module.VERSIONED_PARITY_CONTRACTS[PRODUCT_UPDATES] == (
+        assert module.VERSIONED_PARITY_CONTRACTS[PROSPECTS] == (
             "ac-postgres-parity-v45",
-            module.BILLING_CREDITS_PARITY_TABLES + NEW_TABLES[PRODUCT_UPDATES],
+            module.BILLING_CREDITS_PARITY_TABLES + NEW_TABLES[PROSPECTS],
         )
-        assert len(module.parity_tables_for_head(PRODUCT_UPDATES)) == 131
+        assert len(module.parity_tables_for_head(PROSPECTS)) == 130
+        assert module.VERSIONED_PARITY_CONTRACTS[PRODUCT_UPDATES] == (
+            "ac-postgres-parity-v46",
+            module.PROSPECTS_PARITY_TABLES + NEW_TABLES[PRODUCT_UPDATES],
+        )
+        assert len(module.parity_tables_for_head(PRODUCT_UPDATES)) == 133
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
             module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
@@ -798,7 +806,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         127,
         127,
         128,
-        131,
+        130,
+        133,
     )
     expected_contracts = (
         None,
@@ -853,6 +862,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v43",
         "ac-postgres-parity-v44",
         "ac-postgres-parity-v45",
+        "ac-postgres-parity-v46",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS
@@ -1028,8 +1038,8 @@ def test_new_restore_evidence_requires_exact_migration_and_contract(
         proof._verify_row_count_parity(evidence, source["row_counts"], expected_migration_head=head)
 
 
-@pytest.mark.parametrize("head", [BILLING_CREDITS, PRODUCT_UPDATES])
-def test_new_parity_rejects_extra_tables_at_each_boundary(
+@pytest.mark.parametrize("head", [BILLING_CREDITS, PROSPECTS, PRODUCT_UPDATES])
+def test_latest_parity_rejects_extra_tables_at_each_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, head: str
 ) -> None:
     dump, metadata, payload = _metadata(tmp_path, head)

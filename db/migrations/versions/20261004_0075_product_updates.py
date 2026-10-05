@@ -6,8 +6,8 @@ from uuid import NAMESPACE_URL, uuid5
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261004_0074"
-down_revision = "20261003_0073"
+revision = "20261004_0075"
+down_revision = "20261004_0074"
 branch_labels = None
 depends_on = None
 

@@ -1,4 +1,4 @@
-"""0073→0074 upgrade preserves capability history and seeds the frozen changelog."""
+"""0074→0075 upgrade preserves capability history and seeds the frozen changelog."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def updates_engine() -> Iterator[Engine]:
             if result.returncode != 0:
                 pytest.fail(f"isolated product update upgrade to {target} failed")
 
-        migrate("20261003_0073")
+        migrate("20261004_0074")
         with Session(engine) as database:
             scope = seed_scope(database)
             row = grant(database, scope)
@@ -68,7 +68,7 @@ def updates_engine() -> Iterator[Engine]:
         migrate("head")
         with Session(engine) as database:
             assert (
-                database.scalar(text("SELECT version_num FROM alembic_version")) == "20261004_0074"
+                database.scalar(text("SELECT version_num FROM alembic_version")) == "20261004_0075"
             )
             assert database.get(CapabilityGrant, grant_id).permission == "catalog_read"
             assert database.get(CapabilityRevocation, revocation_id).grant_id == grant_id
