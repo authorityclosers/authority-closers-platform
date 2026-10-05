@@ -55,6 +55,7 @@ import {
 } from "./account-profile-client";
 import { useTheme } from "./lightbox/theme-provider";
 import { parseThemePreference } from "./lightbox/theme";
+import { useFirstCallGuideSwitch } from "./guide-toggle";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { AccountAvatarImage } from "./speaker-avatar";
@@ -493,6 +494,7 @@ export function AccountSettings({
         </Pane>
 
         <Pane id="help" title="Help & support" active={section} onBack={back}>
+          <FirstCallGuideRow onStart={onClose} />
           <Row
             label="Contact support"
             hint="Questions about a call, a report or your account? Write to the Authority Closers team."
@@ -604,6 +606,31 @@ function Row({
       </div>
       {children ? <div className={styles.rowControl}>{children}</div> : null}
     </div>
+  );
+}
+
+function FirstCallGuideRow({ onStart }: { onStart?: () => void }) {
+  const guide = useFirstCallGuideSwitch();
+  if (!guide) return null;
+  return (
+    <Row
+      label="First call guide"
+      hint="Turn it on to restart the guide. Your choice is kept in this browser."
+    >
+      <button
+        type="button"
+        role="switch"
+        aria-label="First call guide"
+        aria-checked={guide.on}
+        className={styles.secondary}
+        onClick={() => {
+          guide.set(!guide.on);
+          if (!guide.on) onStart?.();
+        }}
+      >
+        {guide.on ? "On" : "Off"}
+      </button>
+    </Row>
   );
 }
 
