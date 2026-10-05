@@ -68,6 +68,11 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
       'a[aria-label="Calls"][href="/analysis/calls"][data-next-client-link="true"]',
     ),
   ).not.toBeNull();
+  expect(
+    desktopNav?.querySelector(
+      'a[aria-label="Prospects"][href="/prospects"][data-next-client-link="true"]',
+    ),
+  ).not.toBeNull();
   const mobileCalls = Array.from(
     mobileNav?.querySelectorAll<HTMLAnchorElement>(
       'a[data-next-client-link="true"]',
