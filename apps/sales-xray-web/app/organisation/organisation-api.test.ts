@@ -11,6 +11,10 @@ import {
   readOrganisation,
   OrgApiError,
   noOrganisationSelected,
+  organisationDetailFields,
+  parseOrganisationSettings,
+  readOrganisationSettings,
+  saveOrganisationSettings,
 } from "./organisation-api";
 
 const person = "00000000-0000-4000-8000-000000000001";
@@ -224,4 +228,137 @@ it("only treats the exact Personal response as no organisation", () => {
   expect(
     noOrganisationSelected(new OrgApiError(403, "No organisation selected.")),
   ).toBe(false);
+});
+
+const settings = {
+  tenant_id: person,
+  name: "Fictional Studio",
+  legal_name: "Fictional Limited",
+  gstin: "FICTIONAL",
+  address: "123 Example Street",
+  industry: "Training",
+  team_size: "3-10",
+  website: "https://example.test",
+  city: "Example City",
+  logo_url: null,
+};
+const details = Object.fromEntries(
+  organisationDetailFields.map((field) => [field, settings[field]]),
+);
+const key = "11111111-1111-4111-8111-111111111111";
+
+it("parses the exact settings contract and editable empty optional strings", () => {
+  expect(parseOrganisationSettings(settings, person)).toEqual(settings);
+  const empty = {
+    ...settings,
+    ...Object.fromEntries(
+      organisationDetailFields.slice(1).map((field) => [field, ""]),
+    ),
+  };
+  expect(parseOrganisationSettings(empty, person)).toEqual(empty);
+  expect(
+    parseOrganisationSettings(
+      { ...settings, logo_url: "/v1/organisation/logo/fictional" },
+      person,
+    ).logo_url,
+  ).toBe("/v1/organisation/logo/fictional");
+});
+
+it.each(organisationDetailFields)(
+  "rejects missing and non-string %s",
+  (field) => {
+    const missing = { ...settings } as Record<string, unknown>;
+    delete missing[field];
+    expect(() => parseOrganisationSettings(missing, person)).toThrow();
+    expect(() =>
+      parseOrganisationSettings({ ...settings, [field]: 3 }, person),
+    ).toThrow();
+  },
+);
+it.each([
+  null,
+  [],
+  {},
+  { ...settings, extra: true },
+  { ...settings, tenant_id: invite },
+  { ...settings, tenant_id: "bad" },
+  { ...settings, logo_url: 1 },
+  { ...settings, logo_url: undefined },
+])("rejects invalid settings or a different tenant: %j", (payload) => {
+  expect(() => parseOrganisationSettings(payload, person)).toThrow(
+    "Invalid organisation settings response.",
+  );
+});
+
+it("reads with a signal and saves exactly eight fields using the caller's retry key", async () => {
+  const fetchMock = vi.fn(async () => json(settings));
+  vi.stubGlobal("fetch", fetchMock);
+  const controller = new AbortController();
+  expect(await readOrganisationSettings(person, controller.signal)).toEqual(
+    settings,
+  );
+  await saveOrganisationSettings(person, settings, key, controller.signal);
+  await saveOrganisationSettings(person, settings, key, controller.signal);
+  const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+  for (const [path, init] of calls) {
+    expect(path).toBe("/v1/organisation/settings");
+    expect(init).toMatchObject({
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal: controller.signal,
+    });
+    expect(new Headers(init.headers).get("Accept")).toBe("application/json");
+  }
+  expect(new Headers(calls[0][1].headers).has("Idempotency-Key")).toBe(false);
+  for (const [, init] of calls.slice(1)) {
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual(details);
+    expect(new Headers(init.headers).get("Content-Type")).toBe(
+      "application/json",
+    );
+    expect(new Headers(init.headers).get("Idempotency-Key")).toBe(key);
+  }
+});
+
+it.each([
+  "",
+  key.toUpperCase().replace("11111111", "ABCDEFAB"),
+  key.replace("4111", "5111"),
+  key.replace("8111", "7111"),
+])(
+  "rejects a non-canonical UUIDv4 key before calling the server",
+  async (badKey) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      saveOrganisationSettings(person, settings, badKey),
+    ).rejects.toThrow("UUIDv4");
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+it.each([401, 403, 404, 409, 422, 500])(
+  "preserves settings HTTP %i for reads and writes",
+  async (status) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ detail: "Fictional error" }, status)),
+    );
+    for (const action of [
+      () => readOrganisationSettings(person),
+      () => saveOrganisationSettings(person, settings, key),
+    ])
+      await expect(action()).rejects.toMatchObject({
+        status,
+        message: "Fictional error",
+      });
+  },
+);
+it("preserves network errors for the settings consumer", async () => {
+  const error = new TypeError("Network unavailable");
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+  await expect(readOrganisationSettings(person)).rejects.toBe(error);
+  await expect(saveOrganisationSettings(person, settings, key)).rejects.toBe(
+    error,
+  );
 });
