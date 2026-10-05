@@ -1,6 +1,7 @@
 """Admin credit grant boundary with real cookie/capability reads and fictional targets."""
 
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -105,12 +106,16 @@ async def send(
         return await client.post(path + query, json=BODY if body is None else body, headers=headers)
 
 
+@pytest.mark.parametrize("quantity", ["1", "1.25", "100", "0.0001", "001.2500"])
 async def test_authorised_http_call_uses_server_actor_exact_quantity_and_original_receipt(
     credit_http_state,
+    quantity,
 ):
     state = credit_http_state
     await grant(state, "platform_access_manage")
-    response = await send(state)
+    state.receipt = replace(state.receipt, quantity=Decimal(quantity))
+    state.command.return_value = state.receipt
+    response = await send(state, body=BODY | {"quantity": quantity})
     assert response.status_code == 200, response.text
     assert response.json() == state.receipt.to_dict()
     assert response.headers["cache-control"] == "private, no-store"
@@ -119,7 +124,7 @@ async def test_authorised_http_call_uses_server_actor_exact_quantity_and_origina
     assert kwargs["actor"].session_id == state.session
     assert kwargs["tenant_id"] == state.tenants["Beta"]
     assert kwargs["account_id"] == state.account
-    assert kwargs["quantity"] == Decimal("1.25")
+    assert kwargs["quantity"] == Decimal(quantity)
     assert kwargs["operation_id"] == "fictional-operation"
     assert kwargs["reason"] == BODY["reason"]
 
@@ -173,10 +178,18 @@ async def test_admin_surface_and_write_origin_are_required(credit_http_state, ch
         "sNaN",
         "Infinity",
         "-Infinity",
+        "1E+2",
+        "1e2",
+        "1e-2",
         "1E+131072",
         "1E-16384",
+        "+1",
+        ".5",
+        "1.",
         " 1",
+        "1\n",
         "1_0",
+        "١",
     ],
 )
 async def test_only_positive_finite_exact_strings_enter_service(credit_http_state, quantity):
