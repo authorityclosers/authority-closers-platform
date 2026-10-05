@@ -196,6 +196,65 @@ it("reuses a failed checkout key, shows server tax before payment and handles SD
   expect(text()).not.toContain("Payment successful");
 });
 
+it.each([null, 1, 2, 3])(
+  "keeps the Organisation floor in the stepper and checkout with catalogue minimum %s",
+  async (seatMin) => {
+    const onSelectionChange = vi.fn();
+    await render(
+      <PlansScreen
+        plans={PLANS_CATALOGUE_FIXTURE.map((plan) =>
+          plan.key === "organisation" ? { ...plan, seatMin } : plan,
+        )}
+        gstRate={PLANS_GST_RATE}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+    const minimum = Math.max(2, seatMin ?? 2);
+    const output = host.querySelector(
+      '[aria-label="Seats for Organisation"] output',
+    )!;
+    const decrease = button("Decrease seats for Organisation");
+    expect(output.textContent).toBe(String(minimum));
+    expect(decrease.disabled).toBe(true);
+    await click("Decrease seats for Organisation");
+    expect(output.textContent).toBe(String(minimum));
+    await click("Increase seats for Organisation");
+    expect(output.textContent).toBe(String(minimum + 1));
+    expect(decrease.disabled).toBe(false);
+    await click("Decrease seats for Organisation");
+    await click("Get Organisation");
+    expect(onSelectionChange).toHaveBeenLastCalledWith({
+      planKey: "organisation",
+      interval: "month",
+      seats: minimum,
+    });
+    expect(text()).toContain(`Subtotal (${minimum} seats)`);
+    expect(text()).not.toMatch(/\b1 seats\b|\b[2-9] seat\b/);
+  },
+);
+
+it("stops Organisation at 49 seats and retains the Personal singular and Enterprise floor", async () => {
+  await render(
+    <PlansScreen plans={PLANS_CATALOGUE_FIXTURE} gstRate={PLANS_GST_RATE} />,
+  );
+  const output = host.querySelector(
+    '[aria-label="Seats for Organisation"] output',
+  )!;
+  for (let seat = 2; seat < 49; seat++)
+    await click("Increase seats for Organisation");
+  expect(output.textContent).toBe("49");
+  expect(button("Increase seats for Organisation").disabled).toBe(true);
+  await click("Increase seats for Organisation");
+  expect(output.textContent).toBe("49");
+  await click("Get Personal");
+  expect(text()).toContain("Subtotal (1 seat)");
+  expect(text()).not.toContain("1 seats");
+  await click("Close checkout");
+  await click("Get Enterprise");
+  expect(text()).toContain("Subtotal (50 seats)");
+  expect(button("Decrease seats for Enterprise").disabled).toBe(true);
+});
+
 it("prices two team seats yearly, accepts the server total and warns about renewal approval", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
   await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
