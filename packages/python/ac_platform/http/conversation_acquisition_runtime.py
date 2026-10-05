@@ -17,7 +17,7 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
-from ac_platform.billing.trial import TrialPolicy
+from ac_platform.billing.trial import TrialPolicy, trial_enabled_for_tenant
 from ac_platform.conversation_intelligence.acquisition_challenge import (
     UPLOAD_ACTION,
     UploadChallenge,
@@ -233,7 +233,7 @@ def install_acquisition_runtime(
             operations_tenant_id=operations_tenant_id,
             trial_policy=trial_policy,
             # Organisations get no automatic trial minutes (AUT-436).
-            trial_enabled=tenant_id == public,
+            trial_enabled=trial_enabled_for_tenant(tenant_id, public),
         )
 
     install_acquisition_http(

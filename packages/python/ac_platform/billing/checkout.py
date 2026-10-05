@@ -55,7 +55,7 @@ from ac_platform.billing.order_models import (
 from ac_platform.billing.periods import has_valid_period_grant
 from ac_platform.billing.projection import REFUND_WINDOW
 from ac_platform.billing.tax import calculate_tax
-from ac_platform.billing.trial import TrialPolicy
+from ac_platform.billing.trial import TrialPolicy, trial_enabled_for_tenant
 from ac_platform.billing.views import (
     AccountName,
     CheckoutView,
@@ -182,12 +182,14 @@ class CheckoutService:
         self.invoice_settings = invoice_settings
         self.fake_checkout_base_url = fake_checkout_base_url
 
-    def ledger(self, database: AsyncSession) -> BillingLedger:
+    def ledger(self, database: AsyncSession, *, tenant_id: UUID | None = None) -> BillingLedger:
+        """Compose for a tenant; entry-only settlement calls need no derived trial."""
         return BillingLedger(
             database,
             clock=self.clock,
             trial_policy=self.trial_policy,
             operations_tenant_id=self.operations_tenant_id,
+            trial_enabled=trial_enabled_for_tenant(tenant_id, self.public_learner_tenant_id),
         )
 
     # ---- accounts ---------------------------------------------------------
@@ -199,7 +201,8 @@ class CheckoutService:
 
         if caller.tenant_id == self.operations_tenant_id:
             raise BillingForbidden("Staff accounts have no billing account.")
-        ledger = self.ledger(database)
+        tenant_id = self.public_learner_tenant_id if name == "personal" else caller.tenant_id
+        ledger = self.ledger(database, tenant_id=tenant_id)
         if name == "personal":
             tenant_id = self.public_learner_tenant_id
             try:
@@ -598,9 +601,8 @@ class CheckoutService:
             raise PackNotFound("That top-up pack does not exist.")
         if pack.price_paise is None:
             raise NotOnSale("This top-up pack is not on sale yet.")
-        lots = self.ledger(database).lots_from_entries(
-            await self.ledger(database).entries(resolved.account.id)
-        )
+        ledger = self.ledger(database, tenant_id=resolved.tenant_id)
+        lots = ledger.lots_from_entries(await ledger.entries(resolved.account.id))
         if not has_valid_period_grant(lots, now):
             raise TopUpNeedsPeriod("Top-ups need an active subscription period.")
         gst_inclusive = await database.scalar(

@@ -28,6 +28,7 @@ from ac_platform.audit.service import AuditRepository, build_audit_tenant_lock_s
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, BillingLedger
+from ac_platform.billing.trial import trial_enabled_for_tenant
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
     shared_account_committed_seconds,
@@ -976,7 +977,13 @@ def install_operations_http(
             # The ledger lot is written with its audit event (ADR 0052): the
             # same source reference the legacy mirror uses, so neither path
             # can count this grant twice.
-            ledger = BillingLedger(auth.database, operations_tenant_id=operations_tenant_id)
+            ledger = BillingLedger(
+                auth.database,
+                operations_tenant_id=operations_tenant_id,
+                trial_enabled=trial_enabled_for_tenant(
+                    tenant_id, settings.public_learner_tenant_id
+                ),
+            )
             billing_account = await ledger.personal_account(
                 tenant_id=tenant_id, person_id=person_id, create=True
             )
