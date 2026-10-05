@@ -32,8 +32,9 @@ Implements P2 of [AUT-433](/AUT/issues/AUT-433#document-plan), under the accepte
 
 Scope adaptation: current main discovers route installers, so the small new
 `http/routes/product_updates.py` adapter installs beside the existing
-app-updates module instead of editing `http/app.py`. The existing optional
-PostgreSQL integration file was extended. Production changes are 373 lines,
+app-updates module instead of editing `http/app.py`. The optional P2 PostgreSQL tests use their own
+`test_product_updates_reading_postgresql.py` file to avoid the P1 test file
+owned by open PR #350. Production changes are 373 lines,
 including the installer; the additional scope is tests and required evidence.
 
 ## Verification
@@ -42,7 +43,8 @@ including the installer; the additional scope is tests and required evidence.
   tests/unit/http/test_app_composition.py tests/unit/http/test_route_registry.py
   tests/unit/product_updates tests/unit/http/test_product_updates_http.py
   tests/database/test_product_updates.py -q`: **209 passed**.
-- `uv run --frozen pytest tests/integration/test_product_updates_postgresql.py -q`:
+- `uv run --frozen pytest tests/integration/test_product_updates_postgresql.py
+  tests/integration/test_product_updates_reading_postgresql.py -q`:
   **4 passed**, using the lane's disposable PostgreSQL database and isolated
   schemas. The real migration seeds all six notes; a new fictional person reads
   them in order through HTTP and acknowledges their release. Concurrent posts
