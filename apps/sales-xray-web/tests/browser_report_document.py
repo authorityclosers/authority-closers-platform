@@ -54,11 +54,12 @@ def main() -> None:
             assert fonts and all("Calibri" in font and "Arial" in font for font in fonts)
             headings = preview.locator("[data-report-mode-section]")
             assert headings.all_text_contents() == [
-                "Overview",
-                "Moments",
-                "Analysis",
+                "Fictional seller — sample call report",
                 "Coaching",
-                "Transcript appendix",
+                "Moments to replay",
+                "Missed chances",
+                "Skills checked",
+                "Facts heard on the call",
             ]
             link = page.get_by_role("link", name="Download .docx", exact=True)
             url = link.get_attribute("href")

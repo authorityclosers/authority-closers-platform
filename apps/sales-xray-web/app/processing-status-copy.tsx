@@ -8,6 +8,35 @@ import { projectProcessing } from "./processing-state";
 // Foreground observation only, never a provider timeout or predicted finish.
 const UPDATE_WAIT_MS = 60_000;
 
+const REPORT_FAILURE_COPY: Record<string, string> = {
+  conversation_call_map_invalid:
+    "The call overview needs a valid structured draft.",
+  conversation_call_map_evidence_unresolved:
+    "The call overview needs quotes from this transcript.",
+  conversation_call_map_time_out_of_range:
+    "The call overview needs times within this recording.",
+  conversation_call_map_phase_order_invalid:
+    "The call overview needs its stages in time order.",
+  conversation_call_map_reference_unknown:
+    "The call overview needs valid speaker and item references.",
+  conversation_call_map_role_mismatch:
+    "The call overview needs evidence from the correct speaker role.",
+  conversation_call_map_qualification_invalid:
+    "The call overview needs a complete qualification check.",
+  conversation_call_map_word_cap_exceeded:
+    "The call overview needs shorter text and quotes.",
+  conversation_call_map_signal_kind_unknown:
+    "The call overview needs supported signal categories.",
+  conversation_call_map_money_invalid:
+    "The call overview needs valid amounts and units.",
+  conversation_report_speaker_label_leak:
+    "The report needs clear coaching language without provider speaker labels.",
+  conversation_ethics_unverifiable_claim_missing:
+    "The report needs a cited ethics note for an unverifiable claim.",
+  conversation_report_dimension_evidence_required:
+    "The report needs source evidence for its dimension assessments.",
+};
+
 function ObservedStatus({
   title,
   description,
@@ -76,7 +105,8 @@ export function ProcessingStatusCopy({
   const description = progress?.has_report
     ? "Checking the saved report and its source moments before opening it."
     : needsAttention
-      ? "This stage needs checking before analysis can continue."
+      ? (REPORT_FAILURE_COPY[progress?.failure_code ?? ""] ??
+        "This stage needs checking before analysis can continue.")
       : waitingForApproval
         ? "Your recording is saved. Start analysis to generate your report."
         : projection.unknown

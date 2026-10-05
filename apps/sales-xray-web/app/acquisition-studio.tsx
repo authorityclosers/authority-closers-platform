@@ -3437,6 +3437,7 @@ export function AcquisitionStudio({
                   documentData={{
                     report,
                     transcript: result.transcript,
+                    callRecord: result.callRecord,
                     title: callTitle(
                       result.label,
                       file?.name ?? "Sales Xray call report",

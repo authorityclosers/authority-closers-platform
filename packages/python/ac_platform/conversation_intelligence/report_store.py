@@ -179,6 +179,9 @@ class ConversationReports:
                 source_label=report.source_label,
                 profile=profile,
                 canonical_read=True,
+                coaching_prompt_revision="coaching-v7"
+                if report.call_map is not None
+                else "coaching-v4",
             )
             if content_hash(checked.model_dump(mode="json")) != draft.report_sha256:
                 raise ValueError("unbound report")

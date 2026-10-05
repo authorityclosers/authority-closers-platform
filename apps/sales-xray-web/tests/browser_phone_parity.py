@@ -133,10 +133,11 @@ def main() -> None:
             assert preview.evaluate("e => e.scrollWidth <= e.clientWidth + 1")
             for section, label in [
                 ("overview", "Overview"),
-                ("moments", "Moments"),
-                ("analysis", "Analysis"),
                 ("coaching", "Coaching"),
-                ("transcript", "Transcript appendix"),
+                ("moments", "Moments"),
+                ("missed", "Missed chances"),
+                ("skills", "Skills"),
+                ("facts", "Facts"),
             ]:
                 page.locator(f'[data-report-sections] a[title="{label}"]').click()
                 heading = preview.locator(f'[id$="-heading-{section}"]')
