@@ -83,41 +83,62 @@ export function ProspectSnapshot({
                 index={index}
                 className={styles.card}
               >
-                <div data-prospect-index={index} className={styles.parts}>
-                  <p className={styles.observation} data-prospect-part="source">
-                    <small>What the report noticed</small>
-                    <span>
-                      <RichText text={item.source.text} />
+                <ol
+                  data-prospect-index={index}
+                  className={styles.parts}
+                  role="list"
+                  aria-label={`Prospect signal ${index + 1}: source and interpretation`}
+                >
+                  <li data-prospect-part="verbatim" className={styles.step}>
+                    <span className={styles.stepIcon} aria-hidden="true">
+                      <Quote size={15} />
                     </span>
-                  </p>
-                  <div data-prospect-part="verbatim" className={styles.words}>
-                    {item.source.evidence.map((evidence) => (
-                      <Clip
-                        key={`${evidence.segment_id}-${evidence.start_ms}`}
-                        evidence={evidence}
-                        title={`Prospect signal ${index + 1}`}
-                        onPlay={onSelectEvidence}
-                        person={people.speakerOf(evidence)}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    className={styles.meaning}
-                    data-prospect-part="hypothesis"
-                    aria-label={`Possible concern hypothesis ${index + 1}`}
-                  >
-                    <Tag tone="hypothesis" icon={CircleHelp}>
-                      A guess, not a fact
-                    </Tag>
-                    <p>
-                      <b>It may mean:</b>{" "}
-                      <span>
-                        <RichText text={item.possible_concern} />
-                      </span>
+                    <h3 className={styles.stepLabel}>What they said</h3>
+                    <div className={styles.words}>
+                      {item.source.evidence.map((evidence) => (
+                        <Clip
+                          key={`${evidence.segment_id}-${evidence.start_ms}`}
+                          evidence={evidence}
+                          title={`Prospect signal ${index + 1}`}
+                          onPlay={onSelectEvidence}
+                          person={people.speakerOf(evidence)}
+                        />
+                      ))}
+                    </div>
+                  </li>
+                  <li data-prospect-part="source" className={styles.step}>
+                    <span className={styles.stepIcon} aria-hidden="true">
+                      <ScanSearch size={15} />
+                    </span>
+                    <h3 className={styles.stepLabel}>
+                      What the report noticed
+                    </h3>
+                    <p className={styles.observation}>
+                      <RichText text={item.source.text} />
                     </p>
-                    <small>Ask on the next call rather than assume.</small>
-                  </div>
-                </div>
+                  </li>
+                  <li className={styles.step} data-prospect-part="hypothesis">
+                    <span className={styles.stepIcon} aria-hidden="true">
+                      <CircleHelp size={15} />
+                    </span>
+                    <h3 className={styles.stepLabel}>What it may mean</h3>
+                    <div
+                      className={styles.meaning}
+                      aria-label={`Possible concern hypothesis ${index + 1}`}
+                    >
+                      <Tag tone="hypothesis" icon={CircleHelp}>
+                        A guess, not a fact
+                      </Tag>
+                      <p>
+                        <b>It may mean:</b>{" "}
+                        <span>
+                          <RichText text={item.possible_concern} />
+                        </span>
+                      </p>
+                      <small>Ask on the next call rather than assume.</small>
+                    </div>
+                  </li>
+                </ol>
               </Card>
             ))}
           </div>

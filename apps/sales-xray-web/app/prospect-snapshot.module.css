@@ -12,8 +12,59 @@
 }
 
 .parts {
+  position: relative;
   display: grid;
-  gap: 10px;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.parts::before {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 14px;
+  border-left: 1px solid var(--lx-line);
+  content: "";
+}
+
+.step {
+  position: relative;
+  min-width: 0;
+  padding-left: 40px;
+  overflow-wrap: anywhere;
+}
+
+.stepIcon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border: 1px solid var(--lx-line);
+  border-radius: 50%;
+  background: var(--lx-surface);
+  color: var(--lx-muted);
+}
+
+[data-prospect-part="verbatim"] .stepIcon {
+  color: var(--lx-info);
+}
+
+[data-prospect-part="hypothesis"] .stepIcon {
+  border-style: dashed;
+  color: var(--lx-hypothesis);
+}
+
+.stepLabel {
+  margin: 5px 0 8px;
+  color: var(--lx-muted);
+  font: 700 11.5px/1.4 var(--lx-font-ui, inherit);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .observation {
@@ -23,15 +74,6 @@
   font-size: 14.5px;
   font-weight: 550;
   line-height: 1.55;
-}
-
-.observation small {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--lx-muted);
-  font: 700 11.5px/1.3 var(--lx-font-ui, inherit);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 .words {
