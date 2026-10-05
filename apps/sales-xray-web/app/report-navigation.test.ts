@@ -8,16 +8,16 @@ const call = "c2793fdf-4948-47e4-a4bc-973f2b7720bc";
 const other = "7b6443d3-9b2d-4f97-9e70-5e82e54f8738";
 
 it("selects only a supported section of the bound call", () => {
-  expect(reportSectionFromSearch(`?call=${call}&section=analysis`, call)).toBe(
-    "analysis",
+  expect(reportSectionFromSearch(`?call=${call}&section=prospect`, call)).toBe(
+    "prospect",
   );
   for (const search of [
-    `?call=${other}&section=analysis`,
-    `?call=${call}&call=${call}&section=analysis`,
-    `?call=${call}&section=analysis&section=coaching`,
+    `?call=${other}&section=prospect`,
+    `?call=${call}&call=${call}&section=prospect`,
+    `?call=${call}&section=prospect&section=skills`,
     `?call=${call}&section=processing`,
     `?call=${call}&stage=C5&approved=true`,
-    "?section=analysis",
+    "?section=prospect",
   ])
     expect(reportSectionFromSearch(search, call)).toBe("overview");
 });
@@ -36,9 +36,9 @@ it("creates a bookmark for a validated new report without changing the route", (
         `https://learner.authorityclosers.com/sales-xray?call=${call}&section=overview#report`,
       ),
       call,
-      "analysis",
+      "skills",
     ),
-  ).toBe(`/sales-xray?call=${call}&section=analysis#report`);
+  ).toBe(`/sales-xray?call=${call}&section=skills#report`);
 });
 
 it("refuses stale call navigation and invalid section identities", () => {
@@ -46,14 +46,14 @@ it("refuses stale call navigation and invalid section identities", () => {
     reportSectionAddress(
       new URL(`https://example.com/?call=${other}`),
       call,
-      "analysis",
+      "skills",
     ),
   ).toBeNull();
   expect(
     reportSectionAddress(
       new URL(`https://example.com/?call=${call}&call=${call}`),
       call,
-      "analysis",
+      "skills",
     ),
   ).toBeNull();
   expect(

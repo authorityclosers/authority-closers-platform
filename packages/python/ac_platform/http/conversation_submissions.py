@@ -1224,3 +1224,9 @@ def install_submission_http(
         )
 
     application.include_router(router)
+
+    from ac_platform.http.conversation_prospects import install_prospect_http
+
+    install_prospect_http(
+        application, settings=settings, require_actor=require_actor, factory=factory, served=served
+    )

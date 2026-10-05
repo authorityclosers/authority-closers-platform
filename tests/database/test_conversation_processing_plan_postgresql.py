@@ -1242,6 +1242,7 @@ def test_prospect_dimension_repairs_returned_invalid_c5_once(
 ) -> None:
     from ac_platform.conversation_intelligence import processing_plan, reports
     from ac_platform.conversation_intelligence.analysis_settings import DEFAULT_ANALYSIS_SETTINGS
+    from ac_platform.conversation_intelligence.call_map import QUALIFICATION_ITEMS
     from tests.database.test_conversation_reporting_pipeline_postgresql import (
         ChunkedReportingBroker,
     )
@@ -1309,6 +1310,39 @@ def test_prospect_dimension_repairs_returned_invalid_c5_once(
                 ]
                 repaired = "SERVER_REPAIR" in body["systemInstruction"]["parts"][0]["text"]
                 report = json.loads(result.data["candidates"][0]["content"]["parts"][0]["text"])
+                report["call_map"] = {
+                    "version": "call-map/1",
+                    "verdict_line": "Evidence remains bounded.",
+                    "call_purpose": {"kind": "unclear", "evidence": []},
+                    "speakers": [
+                        {
+                            "speaker_id": segment["speaker_id"],
+                            "role": "prospect"
+                            if segment["speaker_id"] == "speaker_1"
+                            else "seller",
+                        }
+                        for segment in segments
+                    ],
+                    "phases": [{"name": "opening", "start_ms": 0}],
+                    "time_promise": None,
+                    "outcome": {
+                        "kind": "none",
+                        "next_step_rung": "none",
+                        "next_step_when": None,
+                        "evidence": [],
+                    },
+                    "signals": [],
+                    "pitch_items": [],
+                    "pains": [],
+                    "money": [],
+                    "claims": [],
+                    "qualification_gaps": list(QUALIFICATION_ITEMS),
+                    "qualification_confirmed": [],
+                    "prospect_tasks": [],
+                    "seller_tasks": [],
+                    "objections": [],
+                    "prospect_facts": [],
+                }
                 report["dimensions"] = [
                     {
                         "dimension_id": row["id"],
@@ -1321,11 +1355,9 @@ def test_prospect_dimension_repairs_returned_invalid_c5_once(
                 report["dimensions"][0].update(
                     status="unknown" if repaired and repair_result == "unknown" else "observed",
                     evidence=[
-                        {
-                            "segment_id": segments[
-                                1 if repaired and repair_result == "evidence" else 0
-                            ]["id"]
-                        }
+                        {"segment_id": segments[index]["id"]}
+                        # Two distinct refs keep D8 from masking the prospect predicate.
+                        for index in (1 if repaired and repair_result == "evidence" else 0, 2)
                     ],
                 )
                 live["swapped"] = True  # Later confirmation cannot replace the plan's frozen map.

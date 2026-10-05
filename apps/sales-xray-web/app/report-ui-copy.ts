@@ -29,6 +29,7 @@ const EN_COPY: ReportUiCopy = {
     "Open a factor to read the draft observation. Evidence found does not mean a positive or negative score.",
   factorStatus: {
     observed: "Evidence found",
+    partial: "Partly seen",
     insufficient_evidence: "Need more evidence",
     not_applicable: "Not relevant here",
     conflicted: "Mixed evidence",
@@ -60,6 +61,7 @@ const HI_COPY: ReportUiCopy = {
     "ड्राफ्ट निरीक्षण पढ़ने के लिए कोई आयाम खोलें। साक्ष्य मिलना सकारात्मक या नकारात्मक परिणाम नहीं बताता।",
   factorStatus: {
     observed: "साक्ष्य मिला",
+    partial: "आंशिक रूप से दिखा",
     insufficient_evidence: "और साक्ष्य चाहिए",
     not_applicable: "यहाँ लागू नहीं",
     conflicted: "मिश्रित साक्ष्य",
@@ -90,6 +92,7 @@ const MR_COPY: ReportUiCopy = {
     "ड्राफ्ट निरीक्षण वाचण्यासाठी आयाम उघडा. पुरावा मिळाला म्हणजे सकारात्मक किंवा नकारात्मक परिणाम ठरत नाही.",
   factorStatus: {
     observed: "पुरावा मिळाला",
+    partial: "अंशतः दिसले",
     insufficient_evidence: "अधिक पुरावा हवा",
     not_applicable: "इथे लागू नाही",
     conflicted: "मिश्र पुरावा",
@@ -121,6 +124,7 @@ const MIXED_COPY: ReportUiCopy = {
     "Open a factor to read the draft observation · ड्राफ्ट निरीक्षण पढ़ें। Evidence found does not mean a positive or negative result · साक्ष्य मिलना सकारात्मक या नकारात्मक परिणाम नहीं बताता।",
   factorStatus: {
     observed: "Evidence found · साक्ष्य मिला",
+    partial: "Partly seen · आंशिक रूप से दिखा",
     insufficient_evidence: "Need more evidence · और साक्ष्य चाहिए",
     not_applicable: "Not relevant here · यहाँ लागू नहीं",
     conflicted: "Mixed evidence · मिश्रित साक्ष्य",

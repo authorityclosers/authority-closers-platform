@@ -1,3 +1,4 @@
+import type { CallRecord } from "./call-record-contract";
 import type { SalesReport, Transcript } from "./report-contract";
 
 export type DocumentReportData = {
@@ -16,12 +17,18 @@ export type DocumentReportData = {
   };
   report?: SalesReport;
   transcript?: Transcript;
+  /** Measured numbers and facts; older calls have none. */
+  callRecord?: CallRecord | null;
+  /** Confirmed speaker names by transcript speaker id. */
+  speakerNames?: Record<string, string>;
 };
 
+/** Document sections in page order; each is a Word bookmark in the DOCX. */
 export const DOCUMENT_CHAPTERS = [
   { id: "overview", label: "Overview" },
-  { id: "moments", label: "Moments" },
-  { id: "analysis", label: "Analysis" },
   { id: "coaching", label: "Coaching" },
-  { id: "transcript", label: "Transcript appendix" },
+  { id: "moments", label: "Moments" },
+  { id: "missed", label: "Missed chances" },
+  { id: "skills", label: "Skills" },
+  { id: "facts", label: "Facts" },
 ];

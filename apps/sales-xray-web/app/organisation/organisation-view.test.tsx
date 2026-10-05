@@ -387,3 +387,26 @@ it("rejects expanded directory responses without the old workspace list", async 
     fetchMock.mock.calls.some(([path]) => path === "/v1/me/workspaces"),
   ).toBe(false);
 });
+
+it.each([0, 2_700])(
+  "shows Unlimited organisation usage with %i available seconds",
+  async (available) => {
+    routes["/v1/conversation/acquisition/session"] = {
+      allowance: {
+        allowance_seconds: 3_600,
+        committed_seconds: 1_200,
+        available_seconds: available,
+        unlimited: true,
+      },
+    };
+    await render();
+    await click("Usage & credits");
+    const stat = [...host.querySelectorAll("span")].find(
+      (node) => node.textContent === "Your minutes",
+    )!.parentElement!;
+    expect(stat.textContent).toContain("Unlimited");
+    expect(stat.textContent).toContain("20 min used or reserved");
+    expect(stat.textContent).not.toContain("left");
+    expect(stat.querySelector("i")).toBeNull();
+  },
+);

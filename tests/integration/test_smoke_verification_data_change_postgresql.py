@@ -114,8 +114,18 @@ def snapshot(state):
         }
 
 
+def record_prior_consent(state, version):
+    if version is not None:
+        with Session(state.harness.engine) as db, db.begin():
+            db.get(Person, state.person).consent_version = version
+
+
 @pytest.mark.asyncio
-async def test_default_preview_is_read_only_with_no_writes(state, capsys, monkeypatch):
+@pytest.mark.parametrize("named_version", [None, tool.APPROVED_PRIOR_CONSENT_VERSION])
+async def test_default_preview_is_read_only_with_no_writes(
+    state, capsys, monkeypatch, named_version
+):
+    record_prior_consent(state, named_version)
     before = snapshot(state)
     original = tool._change
 
@@ -126,7 +136,7 @@ async def test_default_preview_is_read_only_with_no_writes(state, capsys, monkey
         return await original(session, *args)
 
     monkeypatch.setattr(tool, "_change", checked)
-    assert await tool._run(arguments(state.person)) == 0
+    assert await tool._run(arguments(state.person, consent_version=named_version)) == 0
     output = capsys.readouterr().out
     report = json.loads(output)
     assert report["mode"] == "dry_run"
@@ -141,20 +151,30 @@ async def test_default_preview_is_read_only_with_no_writes(state, capsys, monkey
         "learner_membership": "planned",
     }
     assert report["audit_tenant_id"] == str(state.operations)
+    assert report["consent"] == {
+        "recorded_version": named_version or "fictional-v1",
+        "configured_version": "fictional-v1",
+        "named_prior_version": named_version,
+    }
     assert state.email not in output
     assert snapshot(state) == before
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("existing_membership", [False, True])
+@pytest.mark.parametrize("named_version", [None, tool.APPROVED_PRIOR_CONSENT_VERSION])
 async def test_first_apply_audits_once_and_replay_preserves_timestamp(
-    state, capsys, existing_membership
+    state, capsys, existing_membership, named_version
 ):
+    record_prior_consent(state, named_version)
     if existing_membership:
         with Session(state.harness.engine) as db, db.begin():
             db.add(Membership(person_id=state.person, tenant_id=state.public, role="learner"))
     before = snapshot(state)
-    args = arguments(state.person, apply=True)
+    with Session(state.harness.engine) as db:
+        person = db.get(Person, state.person)
+        recorded_consent = (person.consent_version, person.consented_at)
+    args = arguments(state.person, apply=True, consent_version=named_version)
     assert await tool._run(args) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "applied"
@@ -174,18 +194,34 @@ async def test_first_apply_audits_once_and_replay_preserves_timestamp(
             "active",
         )
         person = db.get(Person, state.person)
+        assert (person.consent_version, person.consented_at) == recorded_consent
         timestamp = person.email_verified_at
         assert timestamp is not None and person.revision == 1
         assert db.get(Person, state.other).email_verified_at is None
         audit = db.scalar(select(AuditEvent).where(AuditEvent.request_id == str(args.command_id)))
         assert audit.actor_type == "operator" and audit.actor_person_id is None
-        assert audit.payload["intent"] == {
+        expected_intent = {
             "person_id": str(state.person),
             "email_verified": True,
             "learner_tenant_id": str(state.public),
-            "required_consent_version": "fictional-v1",
+            "required_consent_version": named_version or "fictional-v1",
             **report["attribution"],
         }
+        if named_version is not None:
+            expected_intent.update(
+                named_prior_consent_version=named_version,
+                configured_consent_version="fictional-v1",
+            )
+        assert audit.payload["intent"] == expected_intent
+        assert (
+            audit.payload["consent"]
+            == report["consent"]
+            == {
+                "recorded_version": named_version or "fictional-v1",
+                "configured_version": "fictional-v1",
+                "named_prior_version": named_version,
+            }
+        )
         assert audit.payload["before"] == {
             "email_verified": False,
             "revision": 0,
@@ -200,7 +236,7 @@ async def test_first_apply_audits_once_and_replay_preserves_timestamp(
     assert await tool._run(args) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "replayed"
     assert snapshot(state) == applied
-    assert await tool._run(arguments(state.person, apply=True)) == 0
+    assert await tool._run(arguments(state.person, apply=True, consent_version=named_version)) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "already_verified"
     assert snapshot(state) == applied
 
@@ -236,19 +272,37 @@ async def test_verified_fixture_missing_membership_preserves_timestamp(state, ca
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("apply", [False, True])
-async def test_consent_version_mismatch_refused_without_writes(state, capsys, apply):
+@pytest.mark.parametrize(
+    "recorded_version,named_version",
+    [
+        ("fictional-v1", None),
+        (tool.APPROVED_PRIOR_CONSENT_VERSION, None),
+        ("fictional-other-prior", tool.APPROVED_PRIOR_CONSENT_VERSION),
+        ("fictional-v1", tool.APPROVED_PRIOR_CONSENT_VERSION),
+        ("fictional-v2", tool.APPROVED_PRIOR_CONSENT_VERSION),
+        (tool.APPROVED_PRIOR_CONSENT_VERSION, "fictional-other-prior"),
+    ],
+)
+async def test_consent_version_mismatch_refused_without_writes(
+    state, capsys, apply, recorded_version, named_version
+):
+    record_prior_consent(state, recorded_version)
     state.settings.learner_consent_version = "fictional-v2"
+    args = arguments(state.person, apply=apply)
+    args.recorded_consent_version = named_version
     before = snapshot(state)
-    with pytest.raises(tool.SmokeVerificationError, match="exact configured learner consent"):
-        await tool._run(arguments(state.person, apply=apply))
+    with pytest.raises(tool.SmokeVerificationError, match="exact configured or explicitly named"):
+        await tool._run(args)
     assert snapshot(state) == before
     assert capsys.readouterr().out == ""
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("named_version", [None, tool.APPROVED_PRIOR_CONSENT_VERSION])
 async def test_provisioning_failure_rolls_back_verification_and_membership(
-    state, monkeypatch, capsys
+    state, monkeypatch, capsys, named_version
 ):
+    record_prior_consent(state, named_version)
     before = snapshot(state)
     original = AsyncLearnerProvisioningApplication.ensure
 
@@ -258,13 +312,17 @@ async def test_provisioning_failure_rolls_back_verification_and_membership(
 
     monkeypatch.setattr(AsyncLearnerProvisioningApplication, "ensure", fail)
     with pytest.raises(LearnerProvisioningError):
-        await tool._run(arguments(state.person, apply=True))
+        await tool._run(arguments(state.person, apply=True, consent_version=named_version))
     assert snapshot(state) == before
     assert capsys.readouterr().out == ""
 
 
 @pytest.mark.asyncio
-async def test_audit_failure_rolls_back_verification_and_chain(state, monkeypatch, capsys):
+@pytest.mark.parametrize("named_version", [None, tool.APPROVED_PRIOR_CONSENT_VERSION])
+async def test_audit_failure_rolls_back_verification_and_chain(
+    state, monkeypatch, capsys, named_version
+):
+    record_prior_consent(state, named_version)
     before = snapshot(state)
     original = AuditRepository.append
 
@@ -274,7 +332,7 @@ async def test_audit_failure_rolls_back_verification_and_chain(state, monkeypatc
 
     monkeypatch.setattr(AuditRepository, "append", fail)
     with pytest.raises(tool.SmokeVerificationError):
-        await tool._run(arguments(state.person, apply=True))
+        await tool._run(arguments(state.person, apply=True, consent_version=named_version))
     assert snapshot(state) == before
     assert capsys.readouterr().out == ""
 
@@ -347,8 +405,10 @@ async def test_command_conflicts_fail_closed(state, field, capsys):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_apply_serializes_one_update_and_one_audit(state, capsys):
-    args = arguments(state.person, apply=True)
+@pytest.mark.parametrize("named_version", [None, tool.APPROVED_PRIOR_CONSENT_VERSION])
+async def test_concurrent_apply_serializes_one_update_and_one_audit(state, capsys, named_version):
+    record_prior_consent(state, named_version)
+    args = arguments(state.person, apply=True, consent_version=named_version)
     await asyncio.wait_for(asyncio.gather(tool._run(args), tool._run(args)), timeout=15)
     reports = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert sorted(row["status"] for row in reports) == ["applied", "replayed"]
@@ -373,3 +433,22 @@ async def test_concurrent_apply_serializes_one_update_and_one_audit(state, capsy
             "learner",
             "active",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", ["configured_version", "named_version"])
+async def test_named_prior_command_conflicts_preserve_audit_history(state, capsys, changed):
+    record_prior_consent(state, tool.APPROVED_PRIOR_CONSENT_VERSION)
+    args = arguments(state.person, apply=True, consent_version=tool.APPROVED_PRIOR_CONSENT_VERSION)
+    await tool._run(args)
+    capsys.readouterr()
+    if changed == "configured_version":
+        state.settings.learner_consent_version = "fictional-v2"
+    else:
+        state.settings.learner_consent_version = tool.APPROVED_PRIOR_CONSENT_VERSION
+        args.recorded_consent_version = None
+    before = snapshot(state)
+    with pytest.raises(tool.SmokeVerificationError, match="conflicting intent"):
+        await tool._run(args)
+    assert snapshot(state) == before
+    assert capsys.readouterr().out == ""

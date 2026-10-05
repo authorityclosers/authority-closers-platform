@@ -21,7 +21,15 @@ const frame = (id, route, ready, group, tab) => ({
 });
 export const frames = [
   frame("shell", shell, "[data-full-shell-fixture]", "shell"),
-  ...["Moments", "Transcript", "Analysis", "Coaching"].map((tab) =>
+  ...[
+    "Moments",
+    "Prospect",
+    "Next-call plan",
+    "Sales skills",
+    "Call signals",
+    "Transcript",
+    "Raw data",
+  ].map((tab) =>
     frame(
       `report-${tab.toLowerCase().replaceAll(" ", "-")}`,
       shell,

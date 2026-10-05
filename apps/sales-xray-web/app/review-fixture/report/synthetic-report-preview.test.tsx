@@ -122,7 +122,7 @@ it("adds a parsed call-map fixture and resolves every source control to its own 
   for (const confirmed of fixture.call_map.qualification_confirmed)
     expect(panel.textContent).toContain(confirmed.item);
   expect(panel.textContent).toContain("Time promised10:00");
-  expect(panel.textContent).toContain("Time used00:43");
+  expect(panel.textContent).toContain("Call length00:43");
   expect(panel.textContent).toContain("No overrun");
   const source = panel.querySelector('[aria-label="Call-map fixture source"]')!;
   const visited = new Set<string>();

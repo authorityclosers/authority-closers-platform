@@ -19,6 +19,15 @@ from typing import Any, Literal, Self, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
+from ac_platform.conversation_intelligence.call_map import (
+    CallMap,
+    CallMapContractError,
+    check_call_map,
+    dimension_state_ceiling,
+    parse_call_map,
+    speaker_label_leaks,
+    unverifiable_claims_cited,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, prepare_gemini_body
@@ -360,7 +369,11 @@ class ReportError(ValueError):
 PROSPECT_DIMENSION_IDS = frozenset(
     {"human_connection_trust", "discovery_deep_understanding", "qualification"}
 )
-CONFIRMED_PROSPECT_DIMENSIONS: frozenset[str] = frozenset()
+# AUT-625 P-A sign-off: /AUT/issues/AUT-625#document-pa-record,
+# revision 9b51cf38-e968-4d29-8425-436775cf801c (owner answer, CEO recorded).
+CONFIRMED_PROSPECT_DIMENSIONS: frozenset[str] = frozenset(
+    {"human_connection_trust", "discovery_deep_understanding", "qualification"}
+)
 
 
 class _StrictModel(BaseModel):
@@ -392,6 +405,7 @@ class ReportDimension(_StrictModel):
     label: str = Field(min_length=1, max_length=160)
     status: Literal[
         "observed",
+        "partial",
         "insufficient_evidence",
         "not_applicable",
         "conflicted",
@@ -481,6 +495,11 @@ class AggregateFactPacket(_StrictModel):
         return self.uncertainties
 
 
+class SensitiveSegment(_StrictModel):
+    segment_id: str
+    category: Literal["SENSITIVE_FINANCIAL", "SENSITIVE_LEGAL"]
+
+
 class ReportDraft(_StrictModel):
     """A qualitative draft. It carries no grade, score or official adjudication."""
 
@@ -498,6 +517,10 @@ class ReportDraft(_StrictModel):
     dimensions: list[ReportDimension] = Field(min_length=8, max_length=8)
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
     overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
+    call_map: CallMap | None = Field(default=None, exclude_if=lambda value: value is None)
+    sensitive_segments: list[SensitiveSegment] | None = Field(
+        default=None, max_length=12, exclude_if=lambda value: value is None
+    )
     # Provider-specific, non-canonical sections are retained for review and
     # future adapters. They never participate in the canonical report contract
     # or evidence validation, and the parser applies strict size/depth bounds.
@@ -1355,9 +1378,11 @@ def _normalise_dimensions(
         isinstance(item, Mapping) and _LEGACY_DIMENSION_MARKERS.intersection(item)
         for item in raw_items
     ):
-        if coaching_prompt_revision in {COACHING_PROMPT_V5, COACHING_PROMPT_V6}:
+        if coaching_prompt_revision in {COACHING_PROMPT_V5, COACHING_PROMPT_V6, COACHING_PROMPT_V7}:
             code = (
-                "report_v6_dimensions_invalid"
+                "report_payload_invalid"
+                if coaching_prompt_revision == COACHING_PROMPT_V7
+                else "report_v6_dimensions_invalid"
                 if coaching_prompt_revision == COACHING_PROMPT_V6
                 else "report_v5_dimensions_invalid"
             )
@@ -1366,7 +1391,12 @@ def _normalise_dimensions(
             raw_items, profile=profile, transcript=transcript, salvaged=salvaged
         )
     supplied: dict[str, dict[str, Any]] = {}
-    evidence_required = coaching_prompt_revision in {COACHING_PROMPT_V5, COACHING_PROMPT_V6}
+    v7 = coaching_prompt_revision == COACHING_PROMPT_V7
+    evidence_required = coaching_prompt_revision in {
+        COACHING_PROMPT_V5,
+        COACHING_PROMPT_V6,
+        COACHING_PROMPT_V7,
+    }
     for item in raw_items:
         if not isinstance(item, Mapping):
             raise ReportError("report_dimension_invalid")
@@ -1387,7 +1417,7 @@ def _normalise_dimensions(
         if label != expected["label"]:
             raise ReportError("report_dimension_label_mismatch")
         status = item.get("status", "unknown")
-        if status not in _ALLOWED_DIMENSION_STATES:
+        if status not in _ALLOWED_DIMENSION_STATES and not (v7 and status == "partial"):
             raise ReportError("report_dimension_status_invalid")
         observation = item.get(
             "observation", "No qualitative assessment was returned for this dimension."
@@ -1410,8 +1440,14 @@ def _normalise_dimensions(
             ]
         elif evidence_required:
             raise ReportError("report_dimension_evidence_required")
-        if status in {"observed", "conflicted"} and evidence_required and not evidence:
+        if (
+            evidence_required
+            and not evidence
+            and (status == "conflicted" or (status == "observed" and not v7))
+        ):
             raise ReportError("report_dimension_evidence_required")
+        if v7:
+            status = dimension_state_ceiling(status, evidence)
         supplied_citations = item.get("citations")
         citations: list[Mapping[str, Any]]
         if supplied_citations is None:
@@ -1760,7 +1796,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/8"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/9"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2736,6 +2772,64 @@ def _require_dimension_prospect_evidence(
         raise error
 
 
+def _prose_texts(value: Any) -> Iterable[str]:
+    """Model prose only: native quotes and structural/source IDs may contain labels."""
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if key not in {
+                "evidence",
+                "citations",
+                "speaker_id",
+                "raised_by",
+                "segment_id",
+                "quote",
+                "source_label",
+                "source_sha256",
+                "transcript_revision",
+                "dimension_id",
+                "evidence_segment_ids",
+                "sensitive_segments",
+            }:
+                yield from _prose_texts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _prose_texts(child)
+    elif isinstance(value, str):
+        yield value
+
+
+def _v7_call_map(payload: Mapping[str, Any], transcript: dict[str, Any]) -> CallMap:
+    try:
+        call_map = parse_call_map(payload.get("call_map"))
+    except CallMapContractError as exc:
+        raise ReportError(exc.code) from None
+    codes = check_call_map(call_map, transcript["segments"], transcript["duration_ms"])
+    if codes:
+        raise ReportError(codes[0])
+    if speaker_label_leaks(_prose_texts(payload)):
+        raise ReportError("report_speaker_label_leak")
+    return call_map
+
+
+def _v7_sensitive_segments(
+    value: Any, transcript: dict[str, Any]
+) -> tuple[list[dict[str, str]], int]:
+    known = {segment["id"] for segment in transcript["segments"]}
+    valid: list[dict[str, str]] = []
+    dropped = 0
+    for entry in value if isinstance(value, list) else [value]:
+        try:
+            mark = SensitiveSegment.model_validate(entry)
+        except ValidationError:
+            dropped += 1
+            continue
+        if mark.segment_id not in known or len(valid) >= 12:
+            dropped += 1
+        elif mark.model_dump() not in valid:
+            valid.append(mark.model_dump())
+    return valid, dropped
+
+
 def parse_report_draft(
     payload: Mapping[str, Any],
     transcript: Mapping[str, Any],
@@ -2751,6 +2845,14 @@ def parse_report_draft(
     validated_transcript = _validated_transcript(transcript)
     if not isinstance(payload, Mapping):
         raise ReportError("report_payload_invalid")
+    v7 = coaching_prompt_revision == COACHING_PROMPT_V7
+    sensitive_drops = 0
+    if v7:
+        payload = dict(payload)
+        payload["sensitive_segments"], sensitive_drops = _v7_sensitive_segments(
+            payload.get("sensitive_segments", []), validated_transcript
+        )
+    call_map = _v7_call_map(payload, validated_transcript) if v7 else None
     _reject_numeric_fields(payload)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
     _validate_profile_shape(resolved_profile)
@@ -2836,6 +2938,15 @@ def parse_report_draft(
             }:
                 raise ReportError("report_overview_reference_invalid") from None
             raise ReportError("report_overview_invalid") from None
+    if call_map is not None:
+        if not unverifiable_claims_cited(
+            call_map, normalized.get("overview", {}).get("ethics_notes", [])
+        ):
+            raise ReportError("ethics_unverifiable_claim_missing")
+        normalized["call_map"] = call_map.model_dump(mode="json")
+        if sensitive_drops:
+            compatibility_extras["sensitive_segments_dropped"] = sensitive_drops
+        consumed_provider_keys.update({"call_map", "sensitive_segments"})
     if "dimensions" in payload and "dimension_assessments" in payload:
         raise ReportError("report_dimensions_ambiguous")
     dimensions = payload.get("dimensions")
@@ -2871,7 +2982,9 @@ def parse_report_draft(
     # every non-canonical root key before strict model validation; those keys
     # are available under the bounded, explicitly named extras field instead.
     for key in tuple(normalized):
-        if key not in _CANONICAL_REPORT_ROOT_FIELDS:
+        if key not in _CANONICAL_REPORT_ROOT_FIELDS and not (
+            v7 and key in {"call_map", "sensitive_segments"}
+        ):
             normalized.pop(key, None)
     if provider_extras:
         normalized["provider_extras"] = provider_extras

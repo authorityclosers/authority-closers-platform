@@ -3,7 +3,11 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountSettings, PlanAndBillingPane } from "../account-settings";
-import { liveBilling, type CheckoutRequest } from "../billing/billing-api";
+import {
+  BillingError,
+  liveBilling,
+  type CheckoutRequest,
+} from "../billing/billing-api";
 import { BillingView } from "../billing/billing-view";
 import { useBillingAccount } from "../billing/use-billing-account";
 import type { Checkout } from "../billing/contract";
@@ -108,18 +112,40 @@ const hostedFor = (provider: "fake" | "razorpay"): Checkout["hosted"] => ({
   expiresAt: null,
 });
 
-it.each(["fake", "razorpay"] as const)(
-  "plans reviews %s checkout before handing off the server response",
-  async (provider) => {
+it.each([
+  ["fake", false],
+  ["razorpay", false],
+  ["fake", true],
+  ["razorpay", true],
+] as const)(
+  "plans reviews %s checkout (quoted: %s) before handing off the server response",
+  async (provider, quoted) => {
     const checkout = vi.fn(async (request: CheckoutRequest, key: string) => ({
       ...(await fixtureBilling.checkout(request, key)),
       hosted: hostedFor(provider),
     }));
-    await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+    const quote = quoted
+      ? {
+          selection: {
+            planKey: "personal",
+            interval: "month" as const,
+            seats: 1,
+          },
+          subtotalPaise: 249900,
+          gstPaise: 0,
+          totalPaise: 249900,
+          renewsAt: "2026-11-04T00:00:00.000Z",
+        }
+      : null;
+    await render(
+      <PlansPurchase client={{ ...fixtureBilling, checkout }} quote={quote} />,
+    );
     await click("Get Personal");
     expect(host.textContent).not.toContain(testBanner);
     expect(button("Review total")).toBeDefined();
     expect(button("Review total with Razorpay")).toBeUndefined();
+    expect(button("Pay ₹2,499 with Razorpay")).toBeUndefined();
+    if (quoted) expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
     expect(checkout).not.toHaveBeenCalled();
     expect(openHostedCheckout).not.toHaveBeenCalled();
     await click("Review total");
@@ -437,4 +463,84 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
     "Invoices and receipts could not be loaded",
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
+});
+
+it("renders authoritative renewal date and amount when quote exists on live PlansPurchase", async () => {
+  const quote = {
+    selection: { planKey: "personal", interval: "month" as const, seats: 1 },
+    subtotalPaise: 249900,
+    gstPaise: 0,
+    totalPaise: 249900,
+    renewsAt: "2026-11-04T00:00:00.000Z",
+  };
+  await render(<PlansPurchase client={fixtureBilling} quote={quote} />);
+  await click("Get Personal");
+  expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
+  expect(host.textContent).not.toContain(
+    "Date and amount confirmed at checkout",
+  );
+});
+
+it("confirms renewal at checkout when no server quote exists", async () => {
+  await render(<PlansPurchase client={fixtureBilling} />);
+  await click("Get Personal");
+  const row = [...host.querySelectorAll("dt")].find(
+    (node) => node.textContent === "Next renewal",
+  )!.parentElement!;
+  expect(row.textContent).toBe(
+    "Next renewalDate and amount confirmed at checkout",
+  );
+  expect(row.textContent).not.toContain("₹0");
+});
+
+it("Settings treats subscription and invoice 404 as billing-off when canonical reads succeed", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readSubscriptions: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+        readInvoices: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).not.toContain("Billing details could not be loaded");
+  expect(host.textContent).toContain("Choose a plan");
+  expect(host.textContent).not.toContain("Cancel renewal");
+});
+
+it("Settings retains error state when canonical plan or usage reads return 404", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readMePlan: async () => {
+          throw new BillingError(404, null, "Not found");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).toContain("Billing details could not be loaded");
+  expect(button("Try again")).toBeDefined();
+});
+
+it("Settings retains error state on subscription 5xx server failure", async () => {
+  await render(
+    <SettingsBilling
+      client={{
+        ...fixtureBilling,
+        readSubscriptions: async () => {
+          throw new BillingError(500, null, "Server error");
+        },
+      }}
+    />,
+  );
+  await click("Plan & billing");
+  expect(host.textContent).toContain("Billing details could not be loaded");
+  expect(button("Try again")).toBeDefined();
 });

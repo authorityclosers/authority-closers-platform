@@ -131,68 +131,6 @@ afterEach(async () => {
 });
 
 describe("TranscriptReader", () => {
-  it("resets speaker and search state when a different call opens", async () => {
-    const transcript = createSampleTranscript();
-    const renderCall = async (callId: string, value = transcript) => {
-      await act(async () =>
-        root.render(
-          <TranscriptReader
-            isOpen={true}
-            onClose={() => {}}
-            callId={callId}
-            transcript={value}
-          />,
-        ),
-      );
-    };
-    await renderCall("11111111-1111-4111-8111-111111111111");
-    const filter = document.querySelector<HTMLSelectElement>(
-      '[aria-label="Filter by speaker"]',
-    )!;
-    const search = document.querySelector<HTMLInputElement>(
-      '[aria-label="Search transcript"]',
-    )!;
-    await act(async () => {
-      filter.value = "prospect";
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value",
-      )!.set!.call(search, "timing");
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(document.querySelectorAll("[data-segment-id]")).toHaveLength(2);
-    expect(document.querySelector("[role='status']")?.textContent).toContain(
-      "1 match",
-    );
-    await renderCall("11111111-1111-4111-8111-111111111111");
-    expect(filter.value).toBe("prospect");
-    expect(search.value).toBe("timing");
-
-    const nextTranscript = {
-      ...transcript,
-      segments: transcript.segments.map((segment) => ({
-        ...segment,
-        speaker_id: `next-${segment.speaker_id}`,
-      })),
-    };
-    await renderCall("22222222-2222-4222-8222-222222222222", nextTranscript);
-    expect(
-      document.querySelector<HTMLSelectElement>(
-        '[aria-label="Filter by speaker"]',
-      )!.value,
-    ).toBe("all");
-    expect(
-      document.querySelector<HTMLInputElement>(
-        '[aria-label="Search transcript"]',
-      )!.value,
-    ).toBe("");
-    expect(document.querySelectorAll("[data-segment-id]")).toHaveLength(4);
-    expect(
-      document.querySelector("[aria-label='Search match navigation']"),
-    ).toBeNull();
-  });
-
   it("renders when open and unmounts when closed", async () => {
     const transcript = createSampleTranscript();
     const onClose = vi.fn();

@@ -22,6 +22,11 @@ import { openHostedCheckout } from "./hosted-checkout";
 import { AnimatedCountUp } from "./animated-count-up";
 import { OrderReturn } from "./order-return";
 import { PlansPurchase } from "./plans-purchase";
+import { PlansScreen } from "./plans-screen";
+import {
+  PLANS_CATALOGUE_FIXTURE,
+  PLANS_GST_RATE,
+} from "./plans-catalogue-fixture";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -333,7 +338,7 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
     .mockRejectedValueOnce(new BillingError(503, "unavailable", "Try again"));
   const client = { ...fixtureBilling, cancelSubscription };
   await render(<AccountBilling client={client} />);
-  await until(() => text().includes("862 min left"));
+  await until(() => text().includes("862 min (14 h 22 min) left"));
   expect(text()).toContain("Invoices & Receipts");
   expect(text()).toContain("FIXTURE-1");
   expect(host.querySelector("a[download]")?.getAttribute("href")).toMatch(
@@ -357,7 +362,7 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
     true,
     "different-workspace",
   );
-  expect(text()).not.toContain("862 min left");
+  expect(text()).not.toContain("862 min (14 h 22 min) left");
   expect(text()).not.toContain("FIXTURE-1");
 });
 
@@ -428,7 +433,9 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
     </>,
   );
   await until(
-    () => text().includes("Current: Trial") && text().includes("62 min left"),
+    () =>
+      text().includes("Current: Trial") &&
+      text().includes("62 min (1 h 2 min) left"),
   );
   expect(text()).toContain("No renewal scheduled");
   expect(text()).toContain("Loading invoices");
@@ -443,7 +450,7 @@ it("keeps plan, usage, subscription facts and checkout usable while invoices loa
     text().includes("Invoices and receipts are currently unavailable"),
   );
   expect(text()).toContain("Current: Trial");
-  expect(text()).toContain("62 min left");
+  expect(text()).toContain("62 min (1 h 2 min) left");
   expect(text()).toContain("No renewal scheduled");
   expect(text()).not.toContain("Billing details could not be loaded");
   await click("Pay ₹2,499 with Razorpay");
@@ -467,7 +474,7 @@ it("shows an empty invoice section on the first organisation visit when the API 
     await until(
       () =>
         text().includes("No invoices or receipts yet") &&
-        text().includes("62 min left"),
+        text().includes("62 min (1 h 2 min) left"),
     );
     expect(fetch).toHaveBeenCalledWith(
       "/v1/invoices?account=organisation",
@@ -481,3 +488,137 @@ it("shows an empty invoice section on the first organisation visit when the API 
     fetch.mockRestore();
   }
 });
+
+it.each([0, 2_700])(
+  "keeps Unlimited across plans, billing and paid return with %i available seconds",
+  async (availableSeconds) => {
+    const allowance = {
+      allowanceSeconds: 3_600,
+      committedSeconds: 1_200,
+      availableSeconds,
+      unlimited: true,
+    };
+    const client: BillingClient = {
+      ...fixtureBilling,
+      readMePlan: async () => ({
+        ...(await fixtureBilling.readMePlan()),
+        allowance,
+      }),
+      readUsage: async () => ({
+        ...(await fixtureBilling.readUsage()),
+        allowance,
+      }),
+    };
+    await render(<PlansPurchase client={client} />);
+    await until(() => text().includes("Unlimited"));
+    expect(text()).toContain("20 min used or reserved");
+    expect(text()).not.toContain("minutes left");
+    await render(<AccountBilling client={client} />);
+    await until(() => text().includes("Unlimited"));
+    expect(text()).toContain("20 min used or reserved");
+    expect(text()).not.toMatch(/min left|monthly allowance/);
+    const usageCard = [...host.querySelectorAll("h2")]
+      .find((node) => node.textContent === "Analysis time")!
+      .closest("section")!;
+    expect(usageCard.querySelector("svg circle")).toBeNull();
+    const checkout = await fixtureBilling.checkout(
+      {
+        kind: "subscription",
+        account: "personal",
+        planKey: "personal",
+        interval: "month",
+        seats: 1,
+      },
+      "unlimited",
+    );
+    fixtureProviderReports(checkout.order.orderId, "paid");
+    await render(
+      <OrderReturn orderId={checkout.order.orderId} client={client} />,
+    );
+    await until(() => text().includes("Unlimited"));
+    expect(text()).toContain("20 min used or reserved");
+    const balanceRow = [...host.querySelectorAll("dt")].find(
+      (node) => node.textContent === "New balance",
+    )!.parentElement!;
+    expect(balanceRow.querySelector("dd")?.textContent).toBe(
+      "Unlimited · 20 min used or reserved by analyses.",
+    );
+    await render(
+      <PlansScreen
+        plans={PLANS_CATALOGUE_FIXTURE}
+        gstRate={PLANS_GST_RATE}
+        paidOrder={await client.readOrder(checkout.order.orderId)}
+        allowance={allowance}
+      />,
+    );
+    expect(text()).toContain("Unlimited · 20 min used or reserved");
+    expect(text()).not.toContain("available on your account");
+  },
+);
+
+it.each([
+  [404, null, true],
+  [405, null, true],
+  [501, null, true],
+  [409, "not_on_sale", true],
+  [404, "not_found", false],
+  [403, "forbidden", false],
+  [500, null, false],
+  [503, null, false],
+] as const)(
+  "keeps subscription/invoice status %i/code %s honest and retryable",
+  async (status, code, empty) => {
+    const error = new BillingError(status, code, "billing is disabled");
+    const readSubscriptions = vi
+      .fn(fixtureBilling.readSubscriptions)
+      .mockRejectedValueOnce(error);
+    const readInvoices = vi
+      .fn(fixtureBilling.readInvoices)
+      .mockRejectedValueOnce(error);
+    await render(
+      <AccountBilling
+        client={{ ...fixtureBilling, readSubscriptions, readInvoices }}
+      />,
+    );
+    if (empty) {
+      await until(
+        () =>
+          text().includes("No invoices or receipts yet") &&
+          text().includes("No renewal scheduled"),
+      );
+      expect(text()).not.toContain("could not be loaded");
+      expect(text()).toContain("No renewal scheduled");
+    } else {
+      await until(() => text().includes("Billing details could not be loaded"));
+      expect(text()).not.toContain("No invoices or receipts yet");
+      await click("Refresh status");
+      await until(() => text().includes("62 min (1 h 2 min) left"));
+      expect(readSubscriptions).toHaveBeenCalledTimes(2);
+      expect(readInvoices).toHaveBeenCalledTimes(2);
+    }
+  },
+);
+
+it.each([404, 403, 503])(
+  "retains invoice-only problem status %i and retries without losing plan facts",
+  async (status) => {
+    const readInvoices = vi
+      .fn(fixtureBilling.readInvoices)
+      .mockRejectedValueOnce(
+        new BillingError(status, "unavailable", "billing is disabled"),
+      );
+    await render(
+      <AccountBilling client={{ ...fixtureBilling, readInvoices }} />,
+    );
+    await until(
+      () =>
+        text().includes("Invoices and receipts are currently unavailable") &&
+        text().includes("62 min (1 h 2 min) left"),
+    );
+    expect(text()).not.toContain("No invoices or receipts yet");
+    expect(text()).not.toContain("Billing details could not be loaded");
+    await click("Refresh status");
+    await until(() => text().includes("No invoices or receipts yet"));
+    expect(readInvoices).toHaveBeenCalledTimes(2);
+  },
+);

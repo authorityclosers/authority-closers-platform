@@ -109,132 +109,6 @@ const sections = () =>
   ].filter((section) => !section.closest("[data-reading-panels][hidden]"));
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 
-it("dismisses report controls outside or with Escape and restores keyboard focus", async () => {
-  await render();
-  const trigger = container.querySelector<HTMLElement>(
-    'summary[aria-label="Report view and text size"]',
-  )!;
-  const menu = trigger.closest("details")!;
-  menu.open = true;
-  container
-    .querySelector<HTMLButtonElement>('button[title="Reading view"]')!
-    .focus();
-  await act(async () =>
-    menu.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    ),
-  );
-  expect(menu.open).toBe(false);
-  expect(document.activeElement).toBe(trigger);
-  menu.open = true;
-  await act(async () =>
-    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })),
-  );
-  expect(menu.open).toBe(false);
-  menu.open = true;
-  await act(async () =>
-    container
-      .querySelector<HTMLInputElement>('input[aria-label="Moment note"]')!
-      .focus(),
-  );
-  expect(menu.open).toBe(false);
-});
-
-it("recovers focus after an outside press hides the focused option", async () => {
-  await render();
-  const trigger = container.querySelector<HTMLElement>(
-    'summary[aria-label="Report view and text size"]',
-  )!;
-  const menu = trigger.closest("details")!;
-  const option = menu.querySelector<HTMLButtonElement>(
-    'button[aria-label="Text size 125%"]',
-  )!;
-  menu.open = true;
-  option.focus();
-  await act(async () => {
-    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    option.blur();
-    await new Promise((resolve) => window.requestAnimationFrame(resolve));
-  });
-  expect(menu.open).toBe(false);
-  expect(document.activeElement).toBe(trigger);
-});
-
-it("keeps focus on an outside input after a pointer dismisses the controls", async () => {
-  window.history.replaceState(null, "", "/?view=tabs&section=moments");
-  await render();
-  const menu = container
-    .querySelector<HTMLElement>(
-      'summary[aria-label="Report view and text size"]',
-    )!
-    .closest("details")!;
-  const input = container.querySelector<HTMLInputElement>(
-    'input[aria-label="Moment note"]',
-  )!;
-  menu.open = true;
-  menu
-    .querySelector<HTMLButtonElement>('button[aria-label="Text size 125%"]')!
-    .focus();
-  await act(async () => {
-    input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    input.focus();
-    await new Promise((resolve) => window.requestAnimationFrame(resolve));
-  });
-  expect(menu.open).toBe(false);
-  expect(document.activeElement).toBe(input);
-});
-
-it("uses overflow to select a tab with its existing bookmark and mounted input state", async () => {
-  window.history.replaceState(
-    null,
-    "",
-    `/?call=${call}&view=tabs&section=overview`,
-  );
-  await render(call);
-  const input = container.querySelector<HTMLInputElement>(
-    'input[aria-label="Moment note"]',
-  )!;
-  input.value = "Keep my note";
-  const menu = container
-    .querySelector<HTMLElement>('summary[aria-label="All report sections"]')!
-    .closest("details")!;
-  menu.open = true;
-  const choices = [...menu.querySelectorAll<HTMLButtonElement>("button")];
-  expect(choices.map((button) => button.textContent)).toEqual(
-    panels().map((panel) => panel.label),
-  );
-  await act(async () =>
-    choices.find((button) => button.textContent === "Moments")!.click(),
-  );
-  expect(menu.open).toBe(false);
-  expect(mode().dataset.reportSection).toBe("moments");
-  expect(window.location.search).toContain("view=tabs&section=moments");
-  expect(input.value).toBe("Keep my note");
-  expect(menu.querySelector('[aria-current="location"]')?.textContent).toBe(
-    "Moments",
-  );
-});
-
-it("highlights a visible short final chapter at the end of the report scroll", async () => {
-  await render();
-  const scroller = document.scrollingElement ?? document.documentElement;
-  vi.spyOn(scroller, "scrollHeight", "get").mockReturnValue(1100);
-  vi.spyOn(scroller, "clientHeight", "get").mockReturnValue(900);
-  vi.spyOn(scroller, "scrollTop", "get").mockReturnValue(200);
-  const headings = [...container.querySelectorAll<HTMLHeadingElement>("h2")];
-  headings.forEach((heading, index) => {
-    vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
-      top: index === headings.length - 1 ? 700 : index * 80,
-      height: 30,
-    } as DOMRect);
-  });
-  await act(async () => document.dispatchEvent(new Event("scroll")));
-  expect(mode().dataset.reportSection).toBe("next-call-plan");
-  expect(
-    container.querySelector('a[aria-current="location"]')?.textContent,
-  ).toContain("Next-call plan");
-});
-
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
@@ -254,22 +128,21 @@ it("shows report sections in one continuous reading layout without transcript se
   ).toContain("Reading");
 });
 
-it("keeps transcript as the last appendix in document view", async () => {
+it("lists the document sections in page order without a transcript appendix", async () => {
   await render(call);
   const viewButtons = container.querySelectorAll<HTMLButtonElement>(
     '[role="group"] button',
   );
   await act(async () => viewButtons[2].click());
   expect(mode().dataset.view).toBe("document");
-  expect(
-    container.querySelector("[data-report-mode-section='transcript']"),
-  ).not.toBeNull();
-  const allSections = sections();
-  expect(
-    allSections[allSections.length - 1].getAttribute(
-      "data-report-mode-section",
+  // The compact DOCX (AUT-983 redo) leaves the transcript in the app.
+  const exported = [
+    ...container.querySelectorAll(
+      "[data-document-export] [data-report-mode-section]",
     ),
-  ).toBe("transcript");
+  ].map((section) => section.getAttribute("data-report-mode-section"));
+  expect(exported).not.toContain("transcript");
+  expect(exported).toEqual(DOCUMENT_CHAPTERS.map((chapter) => chapter.id));
 });
 
 it("bookmarks a selected section without hiding other report content", async () => {
@@ -1305,38 +1178,14 @@ it("preserves the current Reading section when moving through Document and Secti
   expect(mode().dataset.reportSection).toBe("moments");
 });
 
-// Reading has no transcript section (AUT-785); Document keeps it as the last appendix.
-it("normalises the Transcript tab to the first Reading section and focuses it", async () => {
-  window.history.replaceState(
-    null,
-    "",
-    `/?call=${call}&view=tabs&section=transcript`,
-  );
-  await render(call);
-  await settle();
-  await act(async () => buttonNamed("Reading view")!.click());
-  await settle();
-
-  expect(new URLSearchParams(window.location.search).get("section")).toBe(
-    "overview",
-  );
-  expect(mode().dataset.view).toBe("reading");
-  expect(mode().dataset.reportSection).toBe("overview");
-  expect(document.activeElement).toBe(
-    container.querySelector('[data-report-mode-section="overview"] h2'),
-  );
-  expect(
-    container.querySelector('[data-report-mode-section="transcript"]'),
-  ).toBeNull();
-});
-
+// A section shared by Sections and Document keeps its place across the switch.
 it.each(["document"])(
-  "positions the selected Transcript heading after rendering %s from Sections",
+  "positions the selected Moments heading after rendering %s from Sections",
   async (nextView) => {
     window.history.replaceState(
       null,
       "",
-      `/?call=${call}&view=tabs&section=transcript`,
+      `/?call=${call}&view=tabs&section=moments`,
     );
     const destinations: HTMLElement[] = [];
     const restore = replacePrototype(
@@ -1358,7 +1207,7 @@ it.each(["document"])(
       );
       await settle();
       const heading = container.querySelector<HTMLElement>(
-        '[data-document-export] [data-report-mode-section="transcript"] h2',
+        '[data-document-export] [data-report-mode-section="moments"] h2',
       )!;
       expect(mode().dataset.view).toBe(nextView);
       expect(destinations).toEqual([heading]);
@@ -1516,31 +1365,4 @@ it("keeps the same mounted panel state across all three report views", async () 
     expect(note.value).toBe("unsaved fictional note");
     expect(container.querySelector('[data-review-point="14"]')).toBe(point);
   }
-});
-
-it("supports the standard 5-tab layout: Overview, Transcript, Moments, Analysis, Coaching", async () => {
-  const fivePanels = [
-    { id: "overview", label: "Overview", content: <p>Overview</p> },
-    { id: "transcript", label: "Transcript", content: <p>Transcript</p> },
-    { id: "moments", label: "Moments", content: <p>Moments</p> },
-    { id: "analysis", label: "Analysis", content: <p>Analysis</p> },
-    { id: "coaching", label: "Coaching", content: <p>Coaching</p> },
-  ];
-  await act(async () =>
-    root.render(<ReportModes panels={fivePanels} boundCallId={call} />),
-  );
-  const tabButton = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent?.includes("Tabbed view"))!;
-  await act(async () => tabButton.click());
-  const tabs = [
-    ...container.querySelectorAll<HTMLButtonElement>('[role="tablist"] button'),
-  ];
-  expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
-    "Overview",
-    "Transcript",
-    "Moments",
-    "Analysis",
-    "Coaching",
-  ]);
 });

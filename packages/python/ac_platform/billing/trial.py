@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
+from uuid import UUID
 
 from ac_platform.billing.projection import Lot, LotKind
 
@@ -21,6 +22,11 @@ TRIAL_LOT_ID = "trial"
 _SECONDS = {"v1": 3600, "v2": 6000}
 _PER_CALL = {"v1": 6000, "v2": 3600}
 _DURATION: dict[str, timedelta | None] = {"v1": None, "v2": timedelta(days=14)}
+
+
+def trial_enabled_for_tenant(tenant_id: UUID | None, public_learner_tenant_id: UUID | None) -> bool:
+    """Only the public learner tenant receives a derived trial (ADR 0052)."""
+    return tenant_id is not None and tenant_id == public_learner_tenant_id
 
 
 def _aware(moment: datetime, name: str) -> datetime:
@@ -80,4 +86,4 @@ class TrialPolicy:
         )
 
 
-__all__ = ["TRIAL_LOT_ID", "TrialPolicy", "TrialVersion"]
+__all__ = ["TRIAL_LOT_ID", "TrialPolicy", "TrialVersion", "trial_enabled_for_tenant"]

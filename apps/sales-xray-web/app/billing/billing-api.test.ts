@@ -1,5 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { BillingError, invoiceDownloadPath, liveBilling } from "./billing-api";
+import {
+  BillingError,
+  invoiceDownloadPath,
+  notOnSale,
+  liveBilling,
+} from "./billing-api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -155,4 +160,65 @@ it("treats a missing organisation billing account as empty, retaining personal 4
   await expect(liveBilling.readInvoices("personal")).rejects.toMatchObject({
     status: 404,
   });
+});
+
+it.each([
+  [404, null, true],
+  [405, null, true],
+  [501, null, true],
+  [409, "not_on_sale", true],
+  [404, "not_found", false],
+  [403, "forbidden", false],
+  [500, null, false],
+  [503, null, false],
+  [400, "billing_disabled", false],
+  [400, "not_on_sale", false],
+] as const)(
+  "classifies C1 not-on-sale status %i/code %s",
+  (status, code, expected) => {
+    expect(
+      notOnSale(new BillingError(status, code, "billing is disabled")),
+    ).toBe(expected);
+  },
+);
+
+it.each(["personal", "organisation"] as const)(
+  "retains problem-body invoice 404 for %s",
+  async (account) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            type: "about:blank",
+            title: "Not found",
+            status: 404,
+            code: "not_found",
+            detail: "Missing invoice account",
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+    await expect(liveBilling.readInvoices(account)).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+    });
+  },
+);
+
+it("does not read unvalidated error codes or match detail strings", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        { code: "billing_disabled", detail: "billing is disabled" },
+        { status: 403 },
+      ),
+    ),
+  );
+  await expect(liveBilling.readSubscriptions("personal")).rejects.toMatchObject(
+    { status: 403, code: null, detail: null },
+  );
+  expect(notOnSale(new Error("network"))).toBe(false);
 });

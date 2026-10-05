@@ -37,6 +37,10 @@ from ac_platform.conversation_intelligence.storage import StorageError
         ),
         (
             InferenceTaskError("report_dimension_evidence_required"),
+            "conversation_report_dimension_evidence_required",
+        ),
+        (
+            InferenceTaskError("report_dimension_observation_invalid"),
             "conversation_provider_result_validation_failed",
         ),
         (

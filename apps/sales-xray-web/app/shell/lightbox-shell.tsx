@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Settings,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -66,7 +67,13 @@ export type LightboxShellProps = {
   /** The session is still being confirmed: show placeholders, never guest labels. */
   loading?: boolean;
   homeHref?: string;
-  active?: "dashboard" | "analyse" | "calls" | "account" | "organisation";
+  active?:
+    | "dashboard"
+    | "analyse"
+    | "calls"
+    | "account"
+    | "organisation"
+    | "prospects";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -110,6 +117,7 @@ function resolvePageTitle(
   if (active === "dashboard") return "Dashboard";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
+  if (active === "prospects") return "Prospects";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
   return null;
@@ -605,6 +613,15 @@ function LightboxShellFrame({
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.tooltip}>Calls</span>
+            </Link>
+            <Link
+              className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/prospects"
+              aria-label="Prospects"
+              aria-current={active === "prospects" ? "page" : undefined}
+            >
+              <Users size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.tooltip}>Prospects</span>
             </Link>
             {inOrganisation || active === "organisation" ? (
               <Link

@@ -5,14 +5,22 @@
   align-content: start;
   gap: 16px;
   width: 100%;
-  max-width: 1040px;
+  max-width: 1140px;
   animation: page-in 260ms var(--lx-ease-move, ease) both;
+}
+
+.page[data-plans-screen] {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -1437,9 +1445,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 12px 16px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 1-Viewport Ladder Container at 1440 and 390 px */
@@ -1609,6 +1618,34 @@
   color: var(--lx-muted);
 }
 
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-sm, 10px);
+  background: var(--lx-surface);
+  color: var(--lx-ink-2);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  background: var(--lx-paper-2);
+  border-color: var(--lx-line-strong);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .ladderFooter {
   display: flex;
   align-items: center;
@@ -1626,9 +1663,10 @@
 .drawerBackdrop {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100dvh;
   background: color-mix(in srgb, var(--lx-film, #0a1220) 45%, transparent);
   z-index: 90;
-  backdrop-filter: blur(2px);
   animation: fade 180ms ease both;
 }
 
@@ -1644,7 +1682,7 @@
   border-radius: 0;
   border: none;
   border-left: 1px solid var(--lx-line);
-  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.12);
+  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.16);
   background: var(--lx-surface);
   overflow-y: auto;
   display: flex;

@@ -1,10 +1,12 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { callIdFromPath } from "./analysis-routes";
 import { PurchaseShell } from "./plans/purchase-shell";
+import styles from "./plans/plans.module.css";
 import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
 import { parseWorkspaceChoices, StandaloneStudio } from "./standalone-studio";
 import {
@@ -105,7 +107,8 @@ function PurchaseSession({ children }: { children: ReactNode }) {
             : "Checking your account…"}
         </p>
         {access && (
-          <button type="button" onClick={retry}>
+          <button type="button" className={styles.secondaryBtn} onClick={retry}>
+            <RefreshCw size={13} aria-hidden="true" />
             Try again
           </button>
         )}
