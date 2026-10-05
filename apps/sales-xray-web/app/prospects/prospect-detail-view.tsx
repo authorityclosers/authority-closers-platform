@@ -128,7 +128,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
       active="prospects"
     >
       <div className={styles.root}>
-        <Link href="/prospects" className={styles.backLink}>
+        <Link href="/prospects" prefetch={false} className={styles.backLink}>
           <ArrowLeft size={16} aria-hidden="true" />
           Back to Prospects
         </Link>
