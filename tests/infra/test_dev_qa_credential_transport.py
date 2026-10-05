@@ -13,8 +13,11 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from ac_platform.development import billing_qa_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -30,6 +33,7 @@ def load(name: str, relative: str):
 
 broker = load("dev_qa_credential", "infra/application/scripts/dev-qa-credential.py")
 launcher = load("qa_admin_browser", "infra/application/development/qa-admin-browser.py")
+qa_runner = load("dev_billing_qa", "infra/application/scripts/dev-billing-qa.py")
 
 MERGE = "1daeb17431a83a1330e9ec5f2362c29d3bb39c30"
 ORG_MERGE = "61e6b240cd16c35ca87c19518aefcba1f3d3d555"
@@ -46,7 +50,7 @@ def test_identity_tables_agree_and_are_fictional_dev_references():
         mirror = launcher.IDENTITIES[name]
         assert (ref.email, ref.folder, ref.secret) == (mirror.email, mirror.folder, mirror.secret)
         assert ref.email.endswith("@example.test")
-        assert ref.secret.startswith("AC_DEV_FIXTURE_PASSWORD_")
+        assert ref.secret.startswith("AC_DEV_")
     assert broker.INFISICAL_ENVIRONMENT == "dev"
     assert launcher.IDENTITIES["billing-staff"].required_merges == (MERGE,)
     assert broker.LAUNCHER.endswith("/qa-admin-browser.py")
@@ -68,7 +72,9 @@ def test_allowlist_is_exactly_billing_staff_and_the_three_organisation_identitie
             "AC_DEV_FIXTURE_PASSWORD_ORG_DENIED",
         ),
     }
-    assert launcher.IDENTITIES["billing-staff"].access is None  # AUT-970 behaviour kept
+    assert launcher.IDENTITIES["billing-staff"].access == launcher.AccessCheck(
+        ("platform_billing_manage",), (), None
+    )
     for name in ORGS:
         assert launcher.IDENTITIES[name].required_merges == (ORG_MERGE,)
     matrix = {n: launcher.IDENTITIES[n].access for n in ORGS}
@@ -76,6 +82,18 @@ def test_allowlist_is_exactly_billing_staff_and_the_three_organisation_identitie
     assert matrix["organisation-operator"] == launcher.AccessCheck((read, manage), (), "read")
     assert matrix["organisation-reader"] == launcher.AccessCheck((read,), (manage,), "read")
     assert matrix["organisation-denied"] == launcher.AccessCheck((), (read, manage), "denied")
+
+
+def test_billing_transport_matches_the_released_fixture_contract():
+    for table in (broker.IDENTITIES, launcher.IDENTITIES):
+        staff = table["billing-staff"]
+        assert staff.email == billing_qa_fixture.EMAILS["staff"]
+        assert staff.secret == billing_qa_fixture.PASSWORD_VARIABLES["staff"]
+        assert staff.folder == "/application"
+        assert billing_qa_fixture.EMAILS["customer"] not in {i.email for i in table.values()}
+        assert billing_qa_fixture.PASSWORD_VARIABLES["customer"] not in {
+            i.secret for i in table.values()
+        }
 
 
 def readme_block(marker: str) -> str:
@@ -111,18 +129,28 @@ def test_readme_publishes_one_invocation_per_identity_and_the_receipt_pin():
 # Broker ----------------------------------------------------------------------
 
 
-def test_inner_emits_only_the_named_value_to_a_pipe():
+@pytest.mark.parametrize("identity", broker.IDENTITIES.values())
+def test_inner_emits_only_the_named_value_to_a_pipe(identity):
     env = {
         "PATH": "/usr/bin:/bin",
-        "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF": FICTIONAL.decode(),
+        identity.secret: FICTIONAL.decode(),
         "INFISICAL_TOKEN": "fictional-token-sentinel",
         "AC_DATABASE_URL": "postgresql://fictional",
+        "AC_DEV_BILLING_FIXTURE_PASSWORD_CUSTOMER": "fictional-customer-sentinel",
+        "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF": "fictional-obsolete-sentinel",
+        "AC_DEV_FIXTURE_PASSWORD_UNDECLARED": "fictional-undeclared-sentinel",
     }
     script = str(ROOT / "infra/application/scripts/dev-qa-credential.py")
-    argv = [sys.executable, "-I", script, "--inner", "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF"]
+    argv = [sys.executable, "-I", script, "--inner", identity.secret]
     result = subprocess.run(argv, env=env, capture_output=True, check=False)  # noqa: S603
     assert (result.returncode, result.stdout, result.stderr) == (0, FICTIONAL, b"")
-    for name in ("INFISICAL_TOKEN", "AC_DATABASE_URL"):
+    for name in (
+        "INFISICAL_TOKEN",
+        "AC_DATABASE_URL",
+        "AC_DEV_BILLING_FIXTURE_PASSWORD_CUSTOMER",
+        "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF",
+        "AC_DEV_FIXTURE_PASSWORD_UNDECLARED",
+    ):
         refused = subprocess.run(  # noqa: S603 - fixed test argv
             argv[:-1] + [name], env=env, capture_output=True, check=False
         )
@@ -134,8 +162,8 @@ def test_inner_refuses_a_terminal_or_file(tmp_path):
     target = tmp_path / "out"
     with target.open("wb") as handle:
         code = subprocess.call(  # noqa: S603 - fixed test argv
-            [sys.executable, "-I", script, "--inner", "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF"],
-            env={"AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF": FICTIONAL.decode()},
+            [sys.executable, "-I", script, "--inner", "AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF"],
+            env={"AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF": FICTIONAL.decode()},
             stdout=handle,
         )
     assert code == 2 and target.read_bytes() == b""
@@ -168,9 +196,9 @@ def test_fetch_uses_existing_root_route_without_value_in_argv():
     value = broker.fetch(broker.IDENTITIES["billing-staff"], runner)
     assert bytes(value) == FICTIONAL
     assert seen["argv"][:2] == ["/usr/local/sbin/ac-infisical-run", "--"]
-    assert seen["argv"][-2:] == ["--inner", "AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF"]
+    assert seen["argv"][-2:] == ["--inner", "AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF"]
     assert seen["env"]["AC_INFISICAL_ENVIRONMENT"] == "dev"
-    assert seen["env"]["AC_INFISICAL_PATH"] == "/sales-xray/dev-fixture-accounts"
+    assert seen["env"]["AC_INFISICAL_PATH"] == "/application"
     assert not any(k.startswith("INFISICAL") for k in seen["env"])
 
 
@@ -264,6 +292,7 @@ def edge(routes):
 READY = {
     ("/login", 3017): (200, b""),
     ("/v1/me", 3017): (401, b""),
+    ("/v1/me/platform-access", 3017): (401, b""),
     ("/health/ready", 8100): (200, b'{"status":"ready","release_id":"local-unreleased"}'),
 }
 RECEIPT = {"host": launcher.HOST, "revision": REVISION, "contains": [MERGE]}
@@ -342,6 +371,13 @@ def test_preflight_passes_with_pinned_source_and_live_edge(nonroot):
             RECEIPT,
             {**READY, ("/v1/me", 3017): (200, b"")},
             "admin_dev_api_route_unavailable",
+        ),
+        (
+            "billing-staff",
+            launcher.ORIGIN,
+            RECEIPT,
+            {**READY, ("/v1/me/platform-access", 3017): (404, b"")},
+            "platform_access_route_absent",
         ),
         (
             "billing-staff",
@@ -472,6 +508,7 @@ def granted(*permissions, status=200):
 @pytest.mark.parametrize(
     ("name", "permissions", "organisations"),
     [
+        ("billing-staff", ("platform_billing_manage",), None),
         ("organisation-operator", (MANAGE, READ), LISTED),
         ("organisation-operator", (READ, MANAGE, "platform_catalog_read"), LISTED),
         ("organisation-reader", (READ,), LISTED),
@@ -494,6 +531,10 @@ def test_access_matrix_passes_and_prints_only_person_and_permission_names(
 @pytest.mark.parametrize(
     ("name", "access_result", "organisations", "error"),
     [
+        ("billing-staff", granted(), None, "permission_matrix_mismatch"),
+        ("billing-staff", granted(READ, MANAGE), None, "permission_matrix_mismatch"),
+        ("billing-staff", {"status": 404}, None, "platform_access_route_absent"),
+        ("billing-staff", {"status": 401}, None, "platform_access_unavailable"),
         ("organisation-operator", granted(READ), LISTED, "permission_matrix_mismatch"),
         ("organisation-operator", granted(MANAGE), LISTED, "permission_matrix_mismatch"),
         ("organisation-reader", granted(READ, MANAGE), LISTED, "permission_matrix_mismatch"),
@@ -559,3 +600,249 @@ def test_page_scripts_never_return_session_or_organisation_contents():
     )
     for script in (launcher.ACCESS_JS, launcher.ORGANISATIONS_JS):
         assert "cookie" not in script.lower() and "token" not in script.lower()
+
+
+def test_billing_verification_reads_the_normal_access_api_only():
+    calls = []
+
+    class Browser:
+        def evaluate(self, script):
+            calls.append(script)
+            return granted("platform_billing_manage")
+
+    result = launcher.verify_access(Browser(), launcher.IDENTITIES["billing-staff"].access)
+    assert calls == [launcher.ACCESS_JS]
+    assert result["platform_permissions"] == ["platform_billing_manage"]
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_broker_zeroes_selected_buffer_after_emission_or_error(monkeypatch, fails):
+    buffer = bytearray(FICTIONAL)
+    monkeypatch.setattr(broker, "fetch", lambda identity, runner: buffer)
+
+    def emit(value):
+        if fails:
+            raise OSError("fictional pipe failure")
+
+    monkeypatch.setattr(broker, "emit", emit)
+    monkeypatch.setattr(broker.os, "geteuid", lambda: 0)
+    monkeypatch.setenv("SUDO_UID", "1002")
+    monkeypatch.setattr(broker, "stdout_is_pipe", lambda: True)
+    monkeypatch.setattr(broker, "called_by_launcher", lambda pid: True)
+    if fails:
+        with pytest.raises(OSError):
+            broker.main(["billing-staff"])
+    else:
+        assert broker.main(["billing-staff"]) == 0
+    assert buffer == bytearray(len(FICTIONAL))
+
+
+# Released operator runner: no Docker, root, secrets or database execution. -----
+
+
+def operator_inputs():
+    return {
+        **{name: f"fictional-{name}" for name in qa_runner.INPUTS},
+        "AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@172.27.0.2:5432/ac_platform",
+        "AC_INFISICAL_ENVIRONMENT": "dev",
+        "AC_INFISICAL_PATH": "/application",
+        "AC_ENVIRONMENT": "development",
+        "INFISICAL_TOKEN": "fictional-bootstrap-excluded",
+        "AC_DATABASE_MIGRATOR_URL": "fictional-migrator-excluded",
+        "AC_OTHER_APPLICATION_VALUE": "fictional-unrelated-excluded",
+    }
+
+
+def test_operator_injection_keeps_only_named_dev_inputs_and_maps_the_same_database():
+    result = qa_runner.injected_environment(operator_inputs())
+    assert result["AC_DATABASE_URL"] == (
+        "postgresql+psycopg://ac_runtime:fictional@acdev-postgres:5432/ac_platform"
+    )
+    assert set(result) == {
+        "PATH",
+        *qa_runner.INPUTS,
+        "AC_ENVIRONMENT",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
+        "AC_BILLING_ALLOW_LIVE",
+    }
+    assert result["AC_EXTERNAL_SIDE_EFFECTS_HOLD"] == "true"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"AC_INFISICAL_ENVIRONMENT": "prod"},
+        {"AC_INFISICAL_PATH": "/"},
+        {"AC_ENVIRONMENT": "staging"},
+        {"AC_BILLING_ALLOW_LIVE": "true"},
+        {"PGHOST": "fictional"},
+        {"AC_RAZORPAY_KEY_SECRET": "fictional"},
+        {"AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@prod:5432/ac_platform"},
+        {
+            "AC_DATABASE_URL": "postgresql+psycopg://ac_owner:fictional@acdev-postgres:5432/ac_platform"
+        },
+        {
+            "AC_DATABASE_URL": "postgresql+psycopg://ac_runtime:fictional@acdev-postgres:5432/ac_platform?host=prod"
+        },
+        {"AC_SESSION_TOKEN_PEPPER": ""},
+    ],
+)
+def test_operator_injection_refuses_target_changes_or_missing_inputs(change):
+    with pytest.raises(qa_runner.RunnerRefused):
+        qa_runner.injected_environment({**operator_inputs(), **change})
+
+
+@pytest.mark.parametrize("failure", [None, "owner", "checksum", "source", "endpoint", "driver"])
+def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_dev_bridge(
+    tmp_path, failure
+):
+    image = "sha256:" + "a" * 64
+    (tmp_path / "release-images.env").write_text(
+        f"AC_RELEASE_ID={qa_runner.RELEASE}\nAC_API_IMAGE={image}\n"
+    )
+
+    class Release:
+        def is_dir(self):
+            return True
+
+        def is_symlink(self):
+            return False
+
+        def stat(self):
+            return SimpleNamespace(st_uid=1002 if failure == "owner" else 0, st_mode=0o755)
+
+        def __truediv__(self, name):
+            return tmp_path / name
+
+    outputs = iter(
+        (
+            b"",
+            f"sha256:{'b' * 64}|{'wrong' if failure == 'source' else qa_runner.RELEASE}".encode(),
+            json.dumps(
+                {
+                    "verified-dev-bridge": {
+                        "IPAddress": "172.27.0.3" if failure == "endpoint" else "172.27.0.2"
+                    }
+                }
+            ).encode(),
+            b"host" if failure == "driver" else b"bridge",
+        )
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        code = 1 if failure == "checksum" and argv[0] == "sha256sum" else 0
+        return subprocess.CompletedProcess(argv, code, next(outputs), b"")
+
+    if failure:
+        with pytest.raises(qa_runner.RunnerRefused):
+            qa_runner.runtime(Release(), runner=runner)
+        return
+    argv = qa_runner.runtime(Release(), runner=runner)
+    assert argv[-1] == image
+    assert argv[argv.index("--network") + 1] == "verified-dev-bridge"
+    for flag in (
+        "--pull=never",
+        "--read-only",
+        "--user=10001:10001",
+        "--cap-drop=ALL",
+        "--memory=256m",
+        "--memory-swap=256m",
+        "--cpus=0.25",
+        "--log-driver=none",
+    ):
+        assert flag in argv
+    assert not any(flag.startswith(("--volume", "--publish", "--privileged")) for flag in argv)
+    assert calls[0][0] == ["sha256sum", "--check", "--strict", "--quiet", "RELEASE-FILES.sha256"]
+    assert all(kwargs["env"] == qa_runner.SAFE_ENV for _, kwargs in calls)
+
+
+@pytest.mark.parametrize("tool", ["fixture", "inventory"])
+def test_operator_probe_has_no_injected_inputs_and_credentials_never_enter_argv(monkeypatch, tool):
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 0)
+    for name, value in operator_inputs().items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        qa_runner,
+        "runtime",
+        lambda **kw: [
+            "docker",
+            "run",
+            "--network",
+            "verified-dev-bridge",
+            "--entrypoint=python",
+            "sha256:" + "a" * 64,
+        ],
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        compile(argv[-1], "operator-child", "exec")
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    assert qa_runner.main([tool], runner=runner) == 0
+    assert calls[0][1]["env"] == qa_runner.SAFE_ENV
+    name = f"ac-dev-billing-qa-{tool}-{os.getpid()}"
+    assert all(argv[argv.index("--name") + 1] == name for argv, _ in calls)
+    assert "INFISICAL_TOKEN" not in calls[1][1]["env"]
+    for name in qa_runner.INPUTS:
+        assert operator_inputs()[name] not in " ".join(calls[1][0])
+    assert "--apply" not in calls[1][0][-1]
+    if tool == "inventory":
+        assert "postgresql_readonly=True" in calls[1][0][-1]
+
+
+def test_operator_refuses_non_root_and_billing_or_real_owner_bootstrap(monkeypatch, capsys):
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 1002)
+    assert qa_runner.main(["preflight"]) == 2
+    assert "refused" in capsys.readouterr().err
+    for email in (
+        billing_qa_fixture.EMAILS["staff"],
+        billing_qa_fixture.EMAILS["customer"],
+        "owner@authorityclosers.com",
+    ):
+        for tool, flag in (("owner", "--email"), ("first-manager", "--expected-email")):
+            with pytest.raises(qa_runner.RunnerRefused):
+                qa_runner.command(tool, [flag, email])
+
+
+@pytest.mark.parametrize(
+    ("tool", "flag"), [("owner", "--email"), ("first-manager", "--expected-email")]
+)
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["{flag}"],
+        ["{flag}={email}"],
+        ["{flag}", "{email}", "{flag}=owner@authorityclosers.com"],
+        ["{flag}", "{email}", "{flag}={email}"],
+        ["{flag}", "{email}", "{flag}", "owner@authorityclosers.com"],
+        ["{flag}", "{email}", "{flag}"],
+        ["{flag}", "{email}", "{flag}-alias", "owner@authorityclosers.com"],
+    ],
+)
+def test_operator_refuses_ambiguous_or_missing_identity_before_runtime(
+    monkeypatch, tool, flag, arguments
+):
+    args = [arg.format(flag=flag, email=qa_runner.OPERATIONS_EMAIL) for arg in arguments]
+    with pytest.raises(qa_runner.RunnerRefused):
+        qa_runner.command(tool, args)
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 0)
+
+    def runtime(**kwargs):
+        pytest.fail("Invalid identity arguments must be refused before Docker or secret injection")
+
+    monkeypatch.setattr(qa_runner, "runtime", runtime)
+    assert qa_runner.main([tool, *args]) == 2
+
+
+@pytest.mark.parametrize(
+    ("tool", "flag"), [("owner", "--email"), ("first-manager", "--expected-email")]
+)
+def test_operator_accepts_only_the_single_bare_flag_with_the_pinned_identity(tool, flag):
+    args = ["--environment", "development", flag, qa_runner.OPERATIONS_EMAIL]
+    action = "add-operations-owner" if tool == "owner" else tool
+    assert qa_runner.command(tool, args) == [action, *args]

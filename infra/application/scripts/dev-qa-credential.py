@@ -38,9 +38,9 @@ class Identity:
 # secret; this table only names them. Keep it equal to the launcher's table.
 IDENTITIES = {
     "billing-staff": Identity(
-        email="qa-billing-staff-aut959@example.test",
-        folder="/sales-xray/dev-fixture-accounts",
-        secret="AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF",  # noqa: S106 - a name, not a value
+        email="qa-billing-staff-aut969@example.test",
+        folder="/application",
+        secret="AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF",  # noqa: S106 - a name, not a value
     ),
     # AUT-984: Admin Organisations operator, read-only and denied (AUT-961).
     "organisation-operator": Identity(
@@ -144,7 +144,7 @@ def fetch(identity: Identity, runner=subprocess.run) -> bytearray:
 def inner(name: str) -> int:
     """Inside ``infisical run``: emit only the one named value, nothing else."""
 
-    if not stdout_is_pipe() or not re.fullmatch(r"AC_DEV_FIXTURE_PASSWORD_[A-Z_]+", name):
+    if not stdout_is_pipe() or name not in {identity.secret for identity in IDENTITIES.values()}:
         return 2
     value = os.environ.get(name, "")
     if not value:
