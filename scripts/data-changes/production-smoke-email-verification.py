@@ -29,6 +29,7 @@ from ac_platform.tenancy.models import Membership, Tenant
 OWNER = "ZyTZxLQfn8zFPFVZ5OjwisIX96Xmo4j0"
 APPROVAL = "a64d5f9b-5c52-40d3-bee9-56e4e82527ff"
 ACTION = "identity.production_smoke_email_verified"
+APPROVED_PRIOR_CONSENT_VERSION = "ac-learner-terms-privacy-2026-09-13-v1"
 
 
 class SmokeVerificationError(RuntimeError):
@@ -49,6 +50,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--issue-reference", choices=("AUT-398",), required=True)
     for name in ("operator-reference", "run-reference", "command-id"):
         parser.add_argument(f"--{name}", type=UUID, required=True)
+    parser.add_argument(
+        "--recorded-consent-version",
+        choices=(APPROVED_PRIOR_CONSENT_VERSION,),
+        help="explicitly name the approved prior consent; must match the person's record",
+    )
     parser.add_argument("--apply", action="store_true")
     return parser
 
@@ -122,9 +128,24 @@ async def _change(
         or not person.consent_version
     ):
         raise SmokeVerificationError("pinned active internal fixture required")
-    consent_version = (settings.learner_consent_version or "").strip()
-    if not consent_version or person.consent_version != consent_version:
-        raise SmokeVerificationError("exact configured learner consent required")
+    configured_version = (settings.learner_consent_version or "").strip()
+    named_version = args.recorded_consent_version
+    if not configured_version or (
+        named_version is not None
+        and (
+            named_version != APPROVED_PRIOR_CONSENT_VERSION
+            or named_version != person.consent_version
+        )
+    ):
+        raise SmokeVerificationError("exact configured or explicitly named prior consent required")
+    consent_version = named_version or configured_version
+    if person.consent_version != consent_version:
+        raise SmokeVerificationError("exact configured or explicitly named prior consent required")
+    consent = {
+        "recorded_version": person.consent_version,
+        "configured_version": configured_version,
+        "named_prior_version": named_version,
+    }
     # Select only the credential ID, never its password verifier.
     if (
         await session.scalar(
@@ -164,6 +185,9 @@ async def _change(
         "required_consent_version": consent_version,
         **attribution,
     }
+    if named_version is not None:
+        intent["named_prior_consent_version"] = named_version
+        intent["configured_consent_version"] = configured_version
     prior = list(
         await session.scalars(
             select(AuditEvent).where(AuditEvent.request_id == str(args.command_id)).limit(2)
@@ -212,6 +236,7 @@ async def _change(
             reason="AUT-398: owner-approved internal production smoke verification",
             payload={
                 "intent": intent,
+                "consent": consent,
                 "before": {
                     **before,
                     "email_verified_at": before_timestamp.isoformat() if before_timestamp else None,
@@ -229,6 +254,7 @@ async def _change(
         "audit_tenant_id": str(audit_tenant_id),
         "command_id": str(args.command_id),
         "attribution": attribution,
+        "consent": consent,
         "status": status,
         "before": before,
         "after": after,
