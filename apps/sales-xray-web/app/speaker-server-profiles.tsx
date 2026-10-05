@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActionButton } from "@ac/ui";
 
 import { ACQUISITION, UUID, record } from "./acquisition-client";
+import { callLabelEtag } from "./call-label";
 import {
   SpeakerProfilesContext,
   clearSpeakerProfiles,
@@ -72,14 +73,19 @@ async function requestMap(
   );
   if (!response.ok) throw response.status;
   const data = record(await response.json());
-  const etag = response.headers.get("etag");
+  // The edge proxy compresses larger replies and marks the tag (`"…-gzip"`,
+  // `W/"…"`), so a populated map arrived "wrong" and naming broke (AUT-1276).
+  // The body's revision decides; If-Match always sends the strong tag.
+  const header = (response.headers.get("etag") ?? "")
+    .replace(/^W\//, "")
+    .replace(/-(?:gzip|zstd|br|deflate)"$/, '"');
   if (
     data.schema !== "ac.sales-xray.speaker-map/1" ||
     data.submission_id !== callId ||
     !STATUSES.has(data.status as string) ||
     !Number.isInteger(data.user_revision) ||
     (data.user_revision as number) < 0 ||
-    etag !== `"call-label-${data.user_revision}"` ||
+    (header !== "" && header !== callLabelEtag(data.user_revision as number)) ||
     !Array.isArray(data.speakers) ||
     data.speakers.length > 32
   )
@@ -134,7 +140,12 @@ async function requestMap(
       ))
   )
     throw new Error("speaker_map_unconfirmed");
-  return { etag: etag!, available, profiles, drafts };
+  return {
+    etag: callLabelEtag(data.user_revision as number),
+    available,
+    profiles,
+    drafts,
+  };
 }
 
 /** Key this provider by call, transcript and authenticated session. No shared cache. */
