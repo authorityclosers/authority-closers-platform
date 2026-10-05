@@ -11,6 +11,12 @@ class BillingForbidden(DomainError):
     status = 403
 
 
+class CreditEntryNotFound(DomainError):
+    code = "credit_entry_not_found"
+    title = "The credit entry does not exist"
+    status = 404
+
+
 class PlanNotFound(DomainError):
     code = "plan_not_found"
     title = "The plan does not exist"
@@ -132,6 +138,7 @@ __all__ = [
     "BillingRateLimited",
     "BillingValidationFailed",
     "BillingWebhookRejected",
+    "CreditEntryNotFound",
     "IntervalNotOffered",
     "NotOnSale",
     "OrderNotFound",
