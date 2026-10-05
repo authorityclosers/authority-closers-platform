@@ -1,6 +1,5 @@
 "use client";
 
-import { Compass } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
@@ -12,7 +11,6 @@ import {
   type GuideDefinition,
 } from "./guide-registry";
 import { useWorkspaceAccess } from "./workspace-access";
-import styles from "./guide.module.css";
 
 function visibleTarget(selector: string) {
   return (
@@ -72,7 +70,6 @@ function GuideSession({
     steps.findIndex((step) => step.id === progress?.stepId),
   );
   const step = steps[index];
-  const [open, setOpen] = useState(true);
   const [target, setTarget] = useState<CoachTarget | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const active = progress?.status === "active";
@@ -140,42 +137,25 @@ function GuideSession({
     // The registry is immutable. Eligibility is recalculated on workspace changes.
   }, [active, step, store, steps]);
 
-  if (!progress || !step) return null;
+  // Owner, 5 Oct 2026: no floating launcher, and closing is not "for now".
+  // A closed or finished guide stays away until the account menu turns it on.
+  if (!progress || !step || !active || modalOpen) return null;
   const move = (nextIndex: number) =>
     store.update({ stepId: steps[nextIndex].id, status: "active" });
   const skip = () => store.update({ stepId: step.id, status: "skipped" });
   const finish = () => store.update({ stepId: step.id, status: "completed" });
   return (
-    <>
-      <button
-        type="button"
-        className={styles.launcher}
-        data-guide-launcher
-        aria-label={`${active ? "Resume" : "Restart"} ${guide.label.toLowerCase()}`}
-        onClick={() => {
-          if (!active) move(0);
-          setOpen(true);
-        }}
-      >
-        <Compass size={16} aria-hidden="true" />
-        <span>{guide.label}</span>
-      </button>
-      {active && open && !modalOpen ? (
-        <GuideOverlay
-          step={step}
-          label={guide.label}
-          index={index}
-          count={steps.length}
-          target={target}
-          onNext={() =>
-            index === steps.length - 1 ? finish() : move(index + 1)
-          }
-          onBack={() => move(index - 1)}
-          onSkip={skip}
-          onHide={() => setOpen(false)}
-        />
-      ) : null}
-    </>
+    <GuideOverlay
+      step={step}
+      label={guide.label}
+      index={index}
+      count={steps.length}
+      target={target}
+      onNext={() => (index === steps.length - 1 ? finish() : move(index + 1))}
+      onBack={() => move(index - 1)}
+      onSkip={skip}
+      onClose={skip}
+    />
   );
 }
 

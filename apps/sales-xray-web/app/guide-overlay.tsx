@@ -38,7 +38,7 @@ export function GuideOverlay({
   onNext,
   onBack,
   onSkip,
-  onHide,
+  onClose,
 }: {
   step: GuideStep;
   label: string;
@@ -48,19 +48,18 @@ export function GuideOverlay({
   onNext: () => void;
   onBack: () => void;
   onSkip: () => void;
-  onHide: () => void;
+  /** Closes for good; the account menu turns it back on. */
+  onClose: () => void;
 }) {
   const heading = useId();
   const card = useRef<HTMLElement>(null);
   const skipRef = useRef(onSkip);
-  // Auto-open never moves focus. Explicit dismissal returns focus only when
+  // Auto-open never moves focus. Explicit dismissal releases focus only when
   // the removed card owns it, without disturbing someone using the page.
   const leave = useCallback((action: () => void) => {
-    if (card.current?.contains(document.activeElement)) {
-      document
-        .querySelector<HTMLButtonElement>("[data-guide-launcher]")
-        ?.focus({ preventScroll: true });
-    }
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && card.current?.contains(focused))
+      focused.blur();
     action();
   }, []);
   useEffect(() => {
@@ -119,8 +118,9 @@ export function GuideOverlay({
           </span>
           <button
             type="button"
-            onClick={() => leave(onHide)}
-            aria-label="Hide guide for now"
+            onClick={() => leave(onClose)}
+            aria-label="Close guide"
+            title="Close guide. Turn it back on from the account menu."
           >
             <X size={16} />
           </button>
