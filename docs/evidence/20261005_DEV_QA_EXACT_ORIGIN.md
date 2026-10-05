@@ -1,6 +1,7 @@
 # AUT-1232: exact HTTPS dev QA transport
 
-The protected saved-report invocation now passes through the existing dev UI.
+The protected saved-report invocation passed through the existing dev UI at
+17:21 UTC. The latest verification is recorded separately below.
 The candidate uses the Admin QA launcher's existing ephemeral loopback TLS
 transport with the fixed Sales Xray dev host and edge port. Chromium supplies
 its actual HTTPS Origin and stores the normal Secure host-only cookie. No
@@ -61,7 +62,7 @@ dev-database provisioning or a staging release repair.
 ## Validation and delivery
 
 Ruff lint and formatting pass for both launchers and the new tests. The focused
-test command passed **219 tests**:
+test command passed **221 tests**:
 
 ```sh
 .venv/bin/pytest -q tests/infra/test_dev_sales_xray_qa_transport.py tests/infra/test_dev_qa_credential_transport.py tests/unit/http/test_sales_xray_auth.py
@@ -84,3 +85,18 @@ observed bracket/@ encodings under `/_next/static/`; API encoding stays denied.
 approval, CI and released-main read-back remain required before this task is
 done. Dev Environment Lead owns that final read-back. The runbook publishes the
 same source-owned command and rollback; no persistent runtime rollout is needed.
+
+## Latest verification (supersedes current-availability claim)
+
+At 17:27 UTC, a repeat of the final candidate with the added debug-log refusal
+reached the correct dev origin, but the fictional sentinel received HTTP 503.
+The launcher stopped before reading any credential or attempting a real login.
+This is a new observed upstream/runtime failure; its cause is not inferred.
+The 17:21 successful report proof above is retained, not reclassified. Current
+runtime availability and final released-source acceptance remain incomplete.
+
+The final code also refuses `DEBUG`/`PWDEBUG` before starting Playwright, whose
+API logs can include filled password text. Both negative tests pass. The final
+221-test result and PR lane/file gate are green locally. Sensitive review and
+CI continue; final acceptance must use a fresh successful released-main receipt,
+not the earlier candidate receipt or the latest failed one.

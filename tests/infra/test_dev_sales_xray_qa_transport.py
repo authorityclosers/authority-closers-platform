@@ -29,6 +29,15 @@ def load():
 qa = load()
 
 
+@pytest.mark.parametrize("variable", ["DEBUG", "PWDEBUG"])
+def test_debug_logging_is_refused_before_driver_or_credentials(monkeypatch, variable):
+    monkeypatch.setenv(variable, "fictional-debug-setting")
+    monkeypatch.setattr(qa, "load_transport", lambda: pytest.fail("must not start transport"))
+    monkeypatch.setattr(qa, "read_credential", lambda: pytest.fail("must not read credentials"))
+    with pytest.raises(qa.Refused, match="^browser_debug_refused$"):
+        qa.run({})
+
+
 def test_browser_inherits_libraries_without_agent_secrets(monkeypatch):
     monkeypatch.setenv("LD_LIBRARY_PATH", "/fictional/browser-libraries")
     monkeypatch.setenv("PAPERCLIP_API_KEY", "fictional-agent-secret")

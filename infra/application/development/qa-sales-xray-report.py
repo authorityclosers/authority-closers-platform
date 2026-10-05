@@ -157,6 +157,12 @@ def browser_environment() -> dict[str, str]:
     return {k: os.environ[k] for k in ("PATH", "HOME", "LD_LIBRARY_PATH") if k in os.environ}
 
 
+def require_private_logging() -> None:
+    # Playwright API debug logs can print the text passed to fill(). Refuse
+    # before starting its driver or reading a credential, rather than redact.
+    require(not any(os.environ.get(k) for k in ("DEBUG", "PWDEBUG")), "browser_debug_refused")
+
+
 def verify_report(page, receipt: dict) -> None:
     for width, height in ((1440, 900), (390, 844)):
         page.set_viewport_size({"width": width, "height": height})
@@ -187,6 +193,7 @@ def verify_report(page, receipt: dict) -> None:
 
 
 def run(receipt: dict) -> None:
+    require_private_logging()
     from playwright.sync_api import sync_playwright
 
     require(os.geteuid() != 0, "run_as_non_root")
