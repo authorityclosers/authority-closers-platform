@@ -144,12 +144,19 @@ test("fictional plan purchase → server verification → balance → billing �
       await page
         .getByRole("button", { name: "Pay ₹2,499 with Razorpay", exact: true })
         .click();
+      // The hosted redirect renders its heading before the fixture scripts load.
+      await page.waitForURL("**/review-fixture/plans/pay?order=*", {
+        waitUntil: "load",
+      });
       await page
         .getByRole("heading", { name: "Fictional payment page" })
         .waitFor();
       await page
         .getByRole("button", { name: "Payment confirmed", exact: true })
         .click();
+      await page.waitForURL("**/review-fixture/plans/return?order=*", {
+        waitUntil: "domcontentloaded",
+      });
       await page
         .getByRole("heading", { name: "Payment confirmed", exact: true })
         .waitFor();
@@ -228,12 +235,18 @@ test("fictional plan purchase → server verification → balance → billing �
       await page
         .getByRole("button", { name: "Pay ₹23,600 with Razorpay", exact: true })
         .click();
+      await page.waitForURL("**/review-fixture/plans/pay?order=*", {
+        waitUntil: "load",
+      });
       await page
         .getByRole("heading", { name: "Fictional payment page" })
         .waitFor();
       await page
         .getByRole("button", { name: "Payment confirmed", exact: true })
         .click();
+      await page.waitForURL("**/review-fixture/plans/return?order=*", {
+        waitUntil: "domcontentloaded",
+      });
       await page
         .getByRole("heading", { name: "Payment confirmed", exact: true })
         .waitFor();
