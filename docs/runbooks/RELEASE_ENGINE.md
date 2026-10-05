@@ -48,7 +48,9 @@ Logs for each deploy are in `/var/log/ac-release/`.
 
 ## Safety rules
 
-- Only `push` builds of `main` from this repository count. Artifact digests are
+- Normal builds require successful `push` validation of `main` from this repository.
+  The bounded recovery path below can repackage those already-published images.
+  Artifact digests are
   checked against GitHub, and bundle checksums against `SHA256SUMS`. The GitHub
   token is sent only to `api.github.com`, never to the storage redirect.
 - A failed **core** deploy pauses staging and is not retried automatically.
@@ -140,6 +142,62 @@ refuses (exit 2) when there is no earlier release, the current release is
 already a rollback, production runs another pair, a build is no longer stored,
 or the database changed; a failed step exits 1. `rollback staging` still needs
 `--component core|web`.
+
+## Recover a missing core transport bundle
+
+Use this path only after its release-path change has CTO review and CEO merge
+approval. Root operates the host steps. A missing or superseded GitHub bundle
+does not authorize rebuilding images, changing the requested release SHA,
+creating provenance manually, or invoking the application installer directly.
+
+1. Find the original successful `application.yml` push run on `main` for the
+   exact release SHA. Its validation, capacity simulation and image packaging
+   jobs must have succeeded. Read the original packaging job log and record the
+   four `Digest:` values in publication order: API, learner, admin, coach.
+2. Dispatch `application-recovery.yml` from reviewed `main`, passing that
+   release SHA, validation run ID and four registry digests. Recovery verifies
+   the inputs against the original publication log, pulls by immutable digest,
+   verifies each image's source revision and the API marker, and packages the
+   images without rebuilding or publishing them.
+3. The run must complete successfully with both
+   `ac-application-recovered-<release-sha>` and
+   `ac-application-recovery-proof-<release-sha>`. The proof binds the original
+   validation run and packaging job/log digest, the recovery workflow's actual
+   main SHA/run ID, the bundle's GitHub ID/digest, the manifest hash and all four
+   registry digests. The engine downloads the small proof first, checks both
+   artifacts' actual workflow identities, and checks the bundle manifest
+   against the proof before storing provenance. Normal main packaging cannot
+   reclaim these recovery names. Both expire after one day; Root must use the
+   governed engine to store the bundle before then. Pool and size ceilings still
+   apply, including a 64 KiB allowance for the proof.
+4. Verify that the installed engine includes the reviewed recovery change, then
+   run the exact core staging dry run. A successful packaging run alone proves
+   neither admission nor a staging receipt. The engine keeps the proof identities
+   in its immutable stored provenance for later promotion or offline reuse.
+
+For [AUT-1216](/AUT/issues/AUT-1216), the original release remains
+`fa079c696c024ea46faa98c36c5a8ed741de7894`, validation run `37248476568`, packaging
+job `111576281101`. These registry digests were read from that job's successful
+publication log:
+
+```text
+api=sha256:42d7a5772318f986b2cb2ee4664d6cac42cc05f9587115d47f2cc977ccc3bff2
+learner=sha256:1a3e045a23dbfaf2e470ac3ada6c3f1e270aa43925960325da82888aacf07d33
+admin=sha256:7b48917af083fbecbb268a38b0742b386405f15b6bdcdafeea2145c3819f293e
+coach=sha256:e11480ea65a3bc0e680a10458264827056b9f0286ef618ac1db32b5e38ba3034
+```
+
+After reviewed main is installed and the recovery run succeeds, Root's admission
+command is:
+
+```bash
+ac-release deploy staging fa079c696c024ea46faa98c36c5a8ed741de7894 --component core --dry-run
+```
+
+Record the admitted Build, stored provenance and dry-run result on the child.
+The actual governed staging core deployment and resulting success receipt belong
+to [AUT-1065](/AUT/issues/AUT-1065); this recovery card authorizes no production
+deployment, organisation writes, activation changes or new canary.
 
 ## Sales Xray activation
 

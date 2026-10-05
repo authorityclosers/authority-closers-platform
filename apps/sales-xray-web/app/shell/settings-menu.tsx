@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  Compass,
   CreditCard,
   Gem,
   Globe,
@@ -26,6 +27,7 @@ import Link from "next/link";
 
 import type { Allowance } from "../acquisition-client";
 import { formatAnalysisTime } from "../analysis-time";
+import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { openSettings } from "../settings-open";
 import { CHANGELOG } from "./changelog";
 import styles from "./settings-menu.module.css";
@@ -100,6 +102,7 @@ function Row({
   value,
   badge,
   next,
+  checked,
   onClick,
 }: {
   icon: ReactNode;
@@ -107,10 +110,19 @@ function Row({
   value?: string;
   badge?: string;
   next?: boolean;
+  /** Renders the row as an on/off switch. */
+  checked?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className={styles.row} onClick={onClick}>
+    <button
+      type="button"
+      className={styles.row}
+      onClick={onClick}
+      {...(checked === undefined
+        ? {}
+        : { role: "switch", "aria-checked": checked })}
+    >
       <span className={styles.rowIcon} aria-hidden="true">
         {icon}
       </span>
@@ -159,6 +171,7 @@ export function SettingsMenu({
   const card = useRef<HTMLDivElement>(null);
   const unseen = useUnseenNews();
   const minutes = minutesLine(allowance);
+  const guide = useFirstCallGuideSwitch();
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -341,6 +354,19 @@ export function SettingsMenu({
                 label="Help & support"
                 onClick={() => settings("help")}
               />
+              {guide ? (
+                <Row
+                  icon={<Compass size={16} />}
+                  label="First call guide"
+                  value={guide.on ? "On" : "Off"}
+                  checked={guide.on}
+                  onClick={() => {
+                    guide.set(!guide.on);
+                    // Turning it on closes the menu so the guide is in view.
+                    if (!guide.on) onClose();
+                  }}
+                />
+              ) : null}
             </div>
           </>
         )}

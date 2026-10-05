@@ -174,6 +174,17 @@ def _coaching_v7_schema() -> dict[str, Any]:
     schema["properties"].update(additions)
     schema["required"].extend(additions)
     _bound_v7_schema(schema)
+    claim_evidence = {
+        "type": "array",
+        "items": {"$ref": "#/$defs/evidence_ref"},
+        "minItems": 1,
+        "maxItems": 3,
+    }
+    for field in ("summary_evidence", "verdict_evidence"):
+        schema["properties"][field] = deepcopy(claim_evidence)
+        schema["required"].append(field)
+    defs["final_assessment"]["properties"]["evidence"] = deepcopy(claim_evidence)
+    defs["final_assessment"]["required"].append("evidence")
     return schema
 
 

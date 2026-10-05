@@ -244,7 +244,13 @@ def test_overview_defs_match_canonical_model_fields_and_bounds(
     schema_name: str, model: type[Any]
 ) -> None:
     schema = coaching_response_json_schema()["$defs"][schema_name]
-    fields = model.model_fields
+    # The optional stored evidence field is generated only by v7; legacy wire
+    # schemas remain pinned even though the shared storage model grows.
+    fields = {
+        name: field
+        for name, field in model.model_fields.items()
+        if not (schema_name == "final_assessment" and name == "evidence")
+    }
     assert set(schema["properties"]) == set(fields)
     assert set(schema["required"]) == {
         name for name, field in fields.items() if field.is_required()

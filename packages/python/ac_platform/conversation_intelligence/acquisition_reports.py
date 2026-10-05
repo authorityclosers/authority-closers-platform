@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationNotFound,
 )
+from ac_platform.conversation_intelligence.call_map import CALL_MAP_FAILURE_CODES
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
 from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
@@ -59,12 +60,14 @@ from ac_platform.outbox.models import Job
 # so an arbitrary provider/DB message can never cross the HTTP boundary.
 _VALIDATION_FAILURE_CODES = frozenset(
     {
+        *CALL_MAP_FAILURE_CODES,
         "report_evidence_quote_mismatch",
         "report_evidence_segment_invalid",
         "fact_evidence_outside_chunk",
         "report_json_invalid",
         "report_findings_invalid",
         "report_dimension_status_invalid",
+        "report_dimension_evidence_required",
         "report_overview_missing",
         "report_overview_invalid",
         "report_overview_schema_invalid",

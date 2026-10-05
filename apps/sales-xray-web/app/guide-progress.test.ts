@@ -11,7 +11,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-it("resumes one user's step without sharing dismissal with another user or version", () => {
+it("resumes one user's step without sharing dismissal with another user; a closed first-call guide stays closed in later versions", () => {
   const store = new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE);
   store.update({ stepId: "upload", status: "active" });
   expect(
@@ -26,6 +26,22 @@ it("resumes one user's step without sharing dismissal with another user or versi
   expect(
     new GuideProgressStore("fictional-b", FIRST_CALL_GUIDE).getSnapshot(),
   ).toEqual({ stepId: "welcome", status: "active" });
+  expect(
+    new GuideProgressStore("fictional-a", {
+      ...FIRST_CALL_GUIDE,
+      version: "2",
+    }).getSnapshot().status,
+  ).toBe("skipped");
+  // Guides that do not remember "off" (What's new) start fresh per version.
+  expect(
+    new GuideProgressStore("fictional-a", {
+      ...FIRST_CALL_GUIDE,
+      rememberOff: false,
+      version: "2",
+    }).getSnapshot().status,
+  ).toBe("active");
+  // Turning it back on clears the mark for every version.
+  store.update({ stepId: "welcome", status: "active" });
   expect(
     new GuideProgressStore("fictional-a", {
       ...FIRST_CALL_GUIDE,

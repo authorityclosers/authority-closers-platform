@@ -6,6 +6,7 @@ import styles from "../report/synthetic-report-preview.module.css";
 
 const callId = "00000000-0000-4000-8000-000000000002";
 const quotes = Object.values(syntheticEvidence);
+const VOICES = ["fictional-seller", "fictional-buyer"];
 
 export function DocumentPreview() {
   return (
@@ -30,13 +31,49 @@ export function DocumentPreview() {
               revision: syntheticReport.transcript_revision,
               timebase_id: "synthetic",
               duration_ms: 35000,
-              segments: quotes.map((e) => ({
+              segments: quotes.map((e, i) => ({
                 id: e.segment_id,
-                speaker_id: null,
+                speaker_id: VOICES[i % 2],
                 start_ms: e.start_ms,
                 end_ms: e.end_ms,
                 text: e.quote,
               })),
+            },
+            callRecord: {
+              version: "call-record/1",
+              numbers: {
+                duration_ms: 35000,
+                overlaps: 1,
+                speakers: [
+                  {
+                    speaker_id: VOICES[0],
+                    talk_ms: 14000,
+                    talk_share: 0.45,
+                    questions: 2,
+                    longest_monologue_ms: 6000,
+                  },
+                  {
+                    speaker_id: VOICES[1],
+                    talk_ms: 17000,
+                    talk_share: 0.55,
+                    questions: 0,
+                    longest_monologue_ms: 8000,
+                  },
+                ],
+              },
+              facts: [
+                {
+                  statement: "The fictional buyer asked not to be followed up.",
+                  evidence: [syntheticEvidence.boundary],
+                  tag: "next_step",
+                },
+              ],
+              tags: null,
+              call_type: "first_meeting",
+            },
+            speakerNames: {
+              [VOICES[0]]: "Fictional seller",
+              [VOICES[1]]: "Fictional buyer",
             },
             title: "Fictional seller — sample call report",
             workspaceName: "Synthetic display only",

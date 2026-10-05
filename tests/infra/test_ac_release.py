@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -217,6 +218,213 @@ def test_duplicate_artifacts_are_ambiguous() -> None:
     name = f"ac-application-{HEAD}"
     github.artifacts[100] = [artifact(HEAD, name), artifact(HEAD, name, id=8)]
     assert MODULE.find_artifact(github, run(HEAD), name, HEAD) is None
+
+
+class RecoveryGitHub(FakeGitHub):
+    def __init__(self, tmp_path: Path) -> None:
+        super().__init__()
+        self.recovery_runs = [
+            run(OLD, MODULE.CORE_RECOVERY_WORKFLOW, id=200, event="workflow_dispatch")
+        ]
+        self.runs[(MODULE.CORE_WORKFLOW, HEAD)] = [run(HEAD)]
+        self.artifacts[200] = [
+            artifact(OLD, f"ac-application-recovered-{HEAD}", run_id=200, id=8),
+            artifact(OLD, f"ac-application-recovery-proof-{HEAD}", run_id=200, id=9),
+        ]
+        self.digests = {
+            key: f"ghcr.io/authorityclosers/authority-closers-{image}@{DIGEST}"
+            for key, image in zip(
+                ("api", "learner", "admin", "coach"),
+                ("api", "learner-web", "admin-web", "coach-web"),
+                strict=True,
+            )
+        }
+        self.manifest = (
+            f"AC_RELEASE_ID={HEAD}\n"
+            + "".join(f"AC_{key.upper()}_REGISTRY_DIGEST={d}\n" for key, d in self.digests.items())
+        ).encode()
+        self.proof = {
+            "schema": "ac.application-recovery/1",
+            "repository": REPO,
+            "release_sha": HEAD,
+            "validation_run_id": 100,
+            "recovery_run_id": 200,
+            "recovery_head_sha": OLD,
+            "artifact_id": 8,
+            "artifact_name": f"ac-application-recovered-{HEAD}",
+            "artifact_digest": DIGEST,
+            "manifest_sha256": "sha256:" + hashlib.sha256(self.manifest).hexdigest(),
+            "registry_digests": self.digests,
+            "original_package_job_id": 300,
+            "publication_log_sha256": DIGEST,
+        }
+        self.bundle = tmp_path / "bundle.zip"
+        self.downloads: list[int] = []
+
+    def get_json(self, path: str, params: dict[str, str] | None = None) -> Any:
+        if f"/workflows/{MODULE.CORE_RECOVERY_WORKFLOW}/runs" in path:
+            return {"workflow_runs": self.recovery_runs}
+        return super().get_json(path, params)
+
+    def download_artifact(self, artifact_id: int, destination: Path, digest: str) -> None:
+        assert digest == DIGEST
+        self.downloads.append(artifact_id)
+        if artifact_id == 9:
+            with zipfile.ZipFile(destination, "w") as archive:
+                archive.writestr("recovery-proof.json", json.dumps(self.proof))
+        else:
+            assert artifact_id == 8
+            shutil.copyfile(self.bundle, destination)
+
+
+@pytest.mark.parametrize("original", [[], [artifact(HEAD, f"ac-application-{HEAD}", expired=True)]])
+def test_missing_or_expired_core_uses_ci_recovery_bound_to_original_push(
+    tmp_path, original
+) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[100] = original
+    candidate = MODULE.core_candidate(github, HEAD)
+    assert candidate.state == "ready"
+    assert candidate.build.sha == HEAD
+    assert candidate.build.run_id == 200
+    assert candidate.build.recovery["validation_run_id"] == 100
+    assert candidate.build.recovery["recovery_head_sha"] == OLD
+    assert candidate.build.recovery["proof_artifact_digest"] == DIGEST
+    assert github.downloads == [9]
+
+
+def test_original_bundle_remains_preferred_over_recovery(tmp_path) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[100] = [artifact(HEAD, f"ac-application-{HEAD}")]
+    assert MODULE.core_candidate(github, HEAD).build.run_id == 100
+    assert github.downloads == []
+
+
+@pytest.mark.parametrize("status", ["failure", "cancelled", None])
+def test_recovery_cannot_replace_unsuccessful_original_validation(tmp_path, status) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.runs[(MODULE.CORE_WORKFLOW, HEAD)] = [run(HEAD, conclusion=status)]
+    assert MODULE.core_candidate(github, HEAD).build is None
+    assert github.downloads == []
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"head_branch": "task/devenv/x"},
+        {"event": "push"},
+        {"repository": {"full_name": "fork/repo"}},
+        {"path": ".github/workflows/other.yml"},
+        {"head_sha": "invalid"},
+        {"status": "in_progress"},
+        {"conclusion": "failure"},
+    ],
+)
+def test_recovery_ignores_untrusted_or_unfinished_workflow_runs(tmp_path, bad) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.recovery_runs[0].update(bad)
+    assert MODULE.core_candidate(github, HEAD).build is None
+    assert github.downloads == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("release_sha", OLD),
+        ("validation_run_id", 101),
+        ("recovery_run_id", 201),
+        ("recovery_head_sha", HEAD),
+        ("artifact_id", 99),
+        ("artifact_digest", "sha256:" + "e" * 64),
+        ("repository", "fork/repo"),
+        ("manifest_sha256", "sha1:abc"),
+        ("publication_log_sha256", "sha1:abc"),
+        ("original_package_job_id", 0),
+        ("registry_digests", {"api": DIGEST}),
+    ],
+)
+def test_recovery_refuses_cross_run_cross_sha_or_unbound_proofs(tmp_path, field, value) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.proof[field] = value
+    with pytest.raises(MODULE.ReleaseError, match="core recovery proof"):
+        MODULE.core_candidate(github, HEAD)
+
+
+@pytest.mark.parametrize("missing", [8, 9])
+def test_recovery_requires_both_live_unique_artifacts(tmp_path, missing) -> None:
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[200] = [a for a in github.artifacts[200] if a["id"] != missing]
+    assert MODULE.core_candidate(github, HEAD).state == "failed"
+
+
+@pytest.mark.parametrize("bad", [{"expired": True}, {"workflow_run": {"id": 999, "head_sha": OLD}}])
+def test_recovery_does_not_admit_superseded_or_cross_run_proof_artifact(tmp_path, bad):
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[200][1].update(bad)
+    assert MODULE.core_candidate(github, HEAD).build is None
+
+
+def test_recovery_refuses_ambiguous_duplicate_artifacts(tmp_path):
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[200].append({**github.artifacts[200][1], "id": 10})
+    assert MODULE.core_candidate(github, HEAD).build is None
+
+
+@pytest.mark.parametrize("proof", [[], {"schema": "ac.application-recovery/1"}])
+def test_recovery_refuses_unstructured_proof(tmp_path, proof):
+    github = RecoveryGitHub(tmp_path)
+    github.proof = proof
+    with pytest.raises(MODULE.ReleaseError, match="unexpected fields"):
+        MODULE.core_candidate(github, HEAD)
+
+
+def test_recovery_bounds_proof_download_and_expansion(tmp_path):
+    github = RecoveryGitHub(tmp_path)
+    github.artifacts[200][1]["size_in_bytes"] = MODULE.RECOVERY_PROOF_MAX_BYTES + 1
+    with pytest.raises(MODULE.ReleaseError, match="size ceiling"):
+        MODULE.core_candidate(github, HEAD)
+    assert github.downloads == []
+    github.artifacts[200][1]["size_in_bytes"] = 1000
+    github.proof["padding"] = "x" * MODULE.RECOVERY_PROOF_MAX_BYTES
+    with pytest.raises(MODULE.ReleaseError, match="archive is invalid"):
+        MODULE.core_candidate(github, HEAD)
+
+
+def test_recovery_turns_corrupt_zip_into_a_clear_refusal(tmp_path):
+    github = RecoveryGitHub(tmp_path)
+    github.download_artifact = lambda _id, path, _digest: path.write_bytes(b"broken")
+    with pytest.raises(MODULE.ReleaseError, match="archive is invalid"):
+        MODULE.core_candidate(github, HEAD)
+
+
+def test_recovery_store_checks_manifest_and_preserves_ci_provenance(tmp_path) -> None:
+    github = RecoveryGitHub(tmp_path)
+    bundle_zip(github.bundle, {**CORE, "release-images.env": github.manifest})
+    build = MODULE.core_candidate(github, HEAD).build
+    engine = make_engine(tmp_path, github=github)
+    engine.store_bundle(build, "core", MODULE.CORE_FILES)
+    assert engine.stored_build(HEAD, "core") == build
+    github.recovery_runs = []
+    assert engine.store_bundle(engine.stored_build(HEAD, "core"), "core", MODULE.CORE_FILES)
+    assert github.downloads == [9, 8]
+    different = MODULE.Build(HEAD, 201, 10, build.artifact_name, DIGEST, build.recovery)
+    with pytest.raises(MODULE.ReleaseError, match="stored core provenance differs"):
+        engine.store_bundle(different, "core", MODULE.CORE_FILES)
+    assert engine.stored_build(HEAD, "core") == build
+
+
+@pytest.mark.parametrize("change_proof", [False, True])
+def test_recovery_refuses_manifest_changed_even_with_valid_bundle_checksums(tmp_path, change_proof):
+    github = RecoveryGitHub(tmp_path)
+    manifest = github.manifest.replace(DIGEST.encode(), ("sha256:" + "e" * 64).encode())
+    if change_proof:
+        github.proof["manifest_sha256"] = "sha256:" + hashlib.sha256(manifest).hexdigest()
+    bundle_zip(github.bundle, {**CORE, "release-images.env": manifest})
+    build = MODULE.core_candidate(github, HEAD).build
+    engine = make_engine(tmp_path, github=github)
+    with pytest.raises(MODULE.ReleaseError, match="recovered core manifest"):
+        engine.store_bundle(build, "core", MODULE.CORE_FILES)
+    assert not (engine.paths.store / HEAD / "core.provenance.json").exists()
 
 
 # -- download and extraction --------------------------------------------------

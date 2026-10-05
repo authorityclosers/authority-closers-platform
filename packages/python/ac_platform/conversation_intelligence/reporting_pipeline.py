@@ -720,7 +720,14 @@ class ReportingPipeline:
 
         assert transcript_row.payload is not None
         await SensitiveSegmentsStore(self.database).mark_generation(
-            recording_id=recording.id, transcript_revision=transcript_row.payload["revision"]
+            recording_id=recording.id,
+            transcript_revision=transcript_row.payload["revision"],
+            model_segments=tuple(
+                (mark["segment_id"], mark["category"])
+                for mark in normalized.get("sensitive_segments", [])
+            )
+            if plan.request.coaching_prompt_revision == "coaching-v7"
+            else (),
         )
         if plan.profile is None:
             raise ConversationConflict("A frozen coaching profile is required.")

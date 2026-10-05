@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FirstCallGuide, GuideEngine } from "./guide-host";
 import { GuideProgressStore } from "./guide-progress";
 import { FIRST_CALL_GUIDE } from "./guide-registry";
+import { useFirstCallGuideSwitch } from "./guide-toggle";
 import {
   WorkspaceAccessContext,
   type WorkspaceAccessValue,
@@ -80,13 +81,18 @@ it("shows one frame at a time, preserves page focus and lets Escape skip and res
     new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
       .status,
   ).toBe("skipped");
+  // The account menu switch restarts it; there is no floating launcher.
+  expect(document.querySelector("[data-guide-launcher]")).toBeNull();
   await act(async () =>
-    document.querySelector<HTMLButtonElement>("[data-guide-launcher]")!.click(),
+    new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).update({
+      stepId: "welcome",
+      status: "active",
+    }),
   );
   expect(step()).toBe("welcome");
 });
 
-it("returns focus to the launcher when Escape dismisses a focused guide", async () => {
+it("releases focus from the closed card when Escape dismisses a focused guide", async () => {
   await show();
   const skip = button("Skip guide");
   skip.focus();
@@ -97,9 +103,7 @@ it("returns focus to the launcher when Escape dismisses a focused guide", async 
     ),
   );
   expect(step()).toBeUndefined();
-  expect(document.activeElement).toBe(
-    document.querySelector("[data-guide-launcher]"),
-  );
+  expect(document.activeElement).toBe(document.body);
   expect(
     new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
       .status,
@@ -204,14 +208,82 @@ it("hides for an existing modal, lets its Escape pass, and restores after close"
   expect(step()).toBe("welcome");
   await act(async () =>
     document
-      .querySelector<HTMLButtonElement>('[aria-label="Hide guide for now"]')!
+      .querySelector<HTMLButtonElement>('[aria-label="Close guide"]')!
       .click(),
   );
   expect(step()).toBeUndefined();
   expect(
     new GuideProgressStore("fictional-a", FIRST_CALL_GUIDE).getSnapshot()
       .status,
-  ).toBe("active");
+  ).toBe("skipped");
+});
+
+function GuideSwitch() {
+  const guide = useFirstCallGuideSwitch();
+  return guide ? (
+    <button type="button" data-switch onClick={() => guide.set(!guide.on)}>
+      {guide.on ? "On" : "Off"}
+    </button>
+  ) : null;
+}
+
+it("closing keeps the guide off after reloads and new versions until the switch turns it on", async () => {
+  const access: WorkspaceAccessValue = {
+    status: "ready",
+    authenticated: true,
+    context: {
+      personId: "fictional-a",
+      sessionId: "session",
+      tenantId: "workspace",
+    },
+    retry: () => {},
+    workspaces: [
+      {
+        tenant_id: "workspace",
+        kind: "personal",
+        name: "Personal",
+        role: null,
+        sales_xray_enabled: true,
+      },
+    ],
+  };
+  const app = () => (
+    <WorkspaceAccessContext.Provider value={access}>
+      <FirstCallGuide />
+      <GuideSwitch />
+    </WorkspaceAccessContext.Provider>
+  );
+  const toggle = () =>
+    document.querySelector<HTMLButtonElement>("[data-switch]")!;
+  await act(async () => root.render(app()));
+  expect(step()).toBe("welcome");
+  expect(toggle().textContent).toBe("On");
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Close guide"]')!
+      .click(),
+  );
+  expect(step()).toBeUndefined();
+  expect(document.querySelector("[data-guide-launcher]")).toBeNull();
+  expect(toggle().textContent).toBe("Off");
+  // A reload and a later guide version both keep it closed.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => root.render(app()));
+  expect(step()).toBeUndefined();
+  await act(async () =>
+    root.render(
+      <GuideEngine
+        userId="fictional-a"
+        guide={{ ...FIRST_CALL_GUIDE, version: "2" }}
+      />,
+    ),
+  );
+  expect(step()).toBeUndefined();
+  await act(async () => root.render(app()));
+  await act(async () => toggle().click());
+  expect(toggle().textContent).toBe("On");
+  expect(step()).toBe("welcome");
 });
 
 it("does not auto-start for unknown, guest, or disabled workspace access", async () => {

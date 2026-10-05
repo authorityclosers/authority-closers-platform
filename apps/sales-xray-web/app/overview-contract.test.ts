@@ -14,6 +14,33 @@ function parse(report: unknown) {
   ).report!;
 }
 
+it("accepts 1–3 final assessment refs with the existing evidence parser", () => {
+  const evidence = fixture.report.overview.diagnosis.evidence[0];
+  for (const count of [1, 2, 3]) {
+    const report = structuredClone(fixture.report);
+    Object.assign(report.overview.final_assessment, {
+      evidence: Array(count).fill(evidence),
+    });
+    expect(parse(report).overview?.final_assessment.evidence).toEqual(
+      Array(count).fill(evidence),
+    );
+  }
+  expect(parse(fixture.report)).toEqual(fixture.report);
+  for (const refs of [
+    [],
+    Array(4).fill(evidence),
+    null,
+    [{ ...evidence, start_ms: -1 }],
+    [{ ...evidence, end_ms: binding.durationMs + 1 }],
+    [{ ...evidence, segment_id: "missing" }],
+    [{ ...evidence, quote: "Invented quote." }],
+  ]) {
+    const report = structuredClone(fixture.report);
+    Object.assign(report.overview.final_assessment, { evidence: refs });
+    expect(() => parse(report)).toThrow(ReportContractError);
+  }
+});
+
 it("reads the same complete synthetic overview validated by the Python parser", () => {
   const parsed = parse(fixture.report);
   expect(parsed.overview).toEqual(fixture.report.overview);

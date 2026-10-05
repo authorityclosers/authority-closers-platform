@@ -471,12 +471,14 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/8"
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/9"
     # AUT-311 validator semantics remain /8; AUT-347 changes only dormant v7 generation.
-    # AUT-553 changes only dormant v7 admission; bump when confirmed dimensions are enabled.
+    # AUT-553 enables the three P-A-confirmed dimensions and bumps the validator to /9.
+    # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
+    # AUT-504 adds dormant v7 claim evidence; legacy version/hash contracts remain pinned.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "06fe2bffdf5e3d9b217b214ce85d6851e590340ee4d22b971d2d6508c9af52dc"
+        "3cdc3575a0b343b897c426a24364af05260c6204b832d911869050a9638ff469"
     )
 
 

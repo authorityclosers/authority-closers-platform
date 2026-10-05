@@ -1,7 +1,7 @@
 # AUT-468: product updates store evidence
 
 Initial source pin: `d8da579226496c731f1a216ca72ce9bcc9233c61`.
-Current validation base: `7511641c6249e731581532c4b38edacdb843f0f2`.
+Current validation base: `869a79e5993ee67fd940d80e09f29541eade13a7`.
 Branch: `task/platform/468-product-updates-store`.
 Policy: AUT-423 plan revision 1; design: AUT-433 plan revision 3.
 ADR 0050 was taken; this slice uses ADR 0054. Main subsequently assigned
@@ -87,6 +87,30 @@ test database are used. Each schema is removed by its test fixture.
 - The original Root receipt is historical: its parity inputs differ from this
   update. A new Root-owned full parity receipt at the pushed head is required
   before CTO review. CI including `single-track` must also pass at that head.
+
+## Reopening verification, 5 October 2026
+
+- PR #336 merged at 08:42:25 UTC and PR #331 is closed. The CEO's
+  `#336 → #314 → #331` order now permits this PR to reopen.
+- Merged current main at `869a79e5993ee67fd940d80e09f29541eade13a7` without
+  conflicts. The task diff remains the same 20 store/evidence files; unrelated
+  merged work is preserved exactly as it appears on main.
+- Selected store, PostgreSQL upgrade, capability, CLI, platform-access,
+  registry, credit-ledger, restore and release tests: **393 passed, 2 skipped**,
+  in 144.32 seconds. Skips remain the unavailable Docker daemon and approved-dump
+  restore integration opt-in. Fictional data and isolated lane test schemas only.
+- Repository Ruff format: **1,019 files passed**. Ruff lint and mypy (**421
+  source files**) passed. The owning-branch gate and staged diff check passed.
+- [Root's completed receipt](/AUT/issues/AUT-1215#comment-92834bb3-58c0-4d40-a546-763bfab60d0a)
+  records **3,866 passed, zero failures/errors/skips** at
+  `fdd0ca371656dd69290ffc458148fcfb7fd8df45`. Compared the reconciled tree
+  against that pin: all migrations, backup/restore scripts, parity tests and
+  their imported fixtures, pytest configuration, lockfile, model registration
+  and product-update/capability code are unchanged. That receipt covers the
+  unchanged parity inputs; no new Root run is claimed or required.
+- Migration `20261004_0075` and parity v46 remain unchanged. Reopening starts
+  fresh CI, including `single-track`; green admission is required before CTO
+  review and CEO approval. No merge or deployed verification is claimed.
 
 ## Dev check and handoff
 

@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     append_minute_grant,
 )
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
+from ac_platform.http import operations as operations_module
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.operations import install_operations_http
@@ -442,6 +443,80 @@ def test_session_usage_and_admin_share_pool_and_keep_personal_call_history(
             finally:
                 event.remove(engine.sync_engine, "before_cursor_execute", capture)
             assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.fixture
+def grant_postgres_harness():
+    # Platform capability bootstrap is once-only within each disposable schema.
+    yield from _postgres_harness.__wrapped__()
+
+
+@pytest.mark.parametrize("personal", [True, False])
+def test_admin_grant_composes_trial_for_target_tenant(
+    grant_postgres_harness, monkeypatch, record_property, personal
+):
+    async def exercise():
+        engine = create_async_engine(grant_postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            first, _, operations = await fixtures(engine)
+            public = await seed(engine)
+            target = public if personal else first
+            ops = Operations(operations.tenant_id, operations.person_id, operations.session_id)
+            await bootstrap_operations(sessions, ops)
+            settings = Settings(
+                _env_file=None,
+                environment="test",
+                admin_app_url="https://admin.example.test",
+                operations_tenant_id=operations.tenant_id,
+                public_learner_tenant_id=public.tenant_id,
+            )
+
+            async def require_actor(request: Request):
+                async with sessions() as db, db.begin():
+                    yield AuthenticatedTransaction(
+                        db, None, SimpleNamespace(actor=ops.manager), "fictional-session"
+                    )
+
+            composed = []
+            original = operations_module.BillingLedger
+
+            def capture(*args, **kwargs):
+                ledger = original(*args, **kwargs)
+                composed.append(ledger)
+                return ledger
+
+            monkeypatch.setattr(operations_module, "BillingLedger", capture)
+            app = FastAPI()
+            register_problem_handlers(app)
+            install_operations_http(
+                app,
+                settings=settings,
+                sessions=sessions,
+                require_actor=require_actor,
+                intake=SimpleNamespace(policy=SimpleNamespace(tenant_ids={first.tenant_id})),
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="https://admin.example.test"
+            ) as client:
+                response = await client.post(
+                    f"/v1/admin/conversation-minute-accounts/{target.tenant_id}/{target.person_id}/grants",
+                    headers={
+                        "Origin": "https://admin.example.test",
+                        "Idempotency-Key": "fictional-trial-grant",
+                    },
+                    json={"minutes": 10, "reason": "Fictional tenant trial regression"},
+                )
+            assert response.status_code == 200, response.text
+            assert composed[0].trial_enabled is personal
+            assert response.json()["account"]["shared_upload_available_seconds"] == (
+                4200 if personal else 600
+            )
+            record_property("grant_response", json.dumps(response.json()))
         finally:
             await engine.dispose()
 

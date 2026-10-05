@@ -1,0 +1,40 @@
+{
+  "about": "Screens the owner approved (5 Oct 2026, AUT-1223). owner-surfaces.test.tsx fails when any item below disappears. Changing this file needs the owner's approval: the watchdog holds the PR until the owner says yes.",
+  "reportOverview": [
+    "Call measurements",
+    "Listen to these",
+    "Missed chances",
+    "Signals from the call",
+    "Next call: one thing",
+    "The coach’s verdict",
+    "Explore the call"
+  ],
+  "reportSections": [
+    "Moments",
+    "Prospect",
+    "Key facts",
+    "Next-call plan",
+    "Sales skills",
+    "Call signals",
+    "Raw data"
+  ],
+  "documentSections": [
+    "overview",
+    "coaching",
+    "moments",
+    "missed",
+    "skills",
+    "facts"
+  ],
+  "callsWorkspace": {
+    "title": "Calls",
+    "labels": [
+      "Calls at a glance",
+      "Search loaded calls by name",
+      "Sort calls",
+      "Filter loaded calls by status"
+    ],
+    "rowLabels": ["Select ", "Preview "],
+    "buttons": ["Export"]
+  }
+}

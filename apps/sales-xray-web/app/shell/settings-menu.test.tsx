@@ -1,9 +1,15 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { SettingsMenu } from "./settings-menu";
 import type { Allowance } from "../acquisition-client";
+import { guideOffKey } from "../guide-progress";
+import { FIRST_CALL_GUIDE } from "../guide-registry";
+import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "../workspace-access";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -129,4 +135,67 @@ it.each<[Allowance, string | null]>([
         ?.textContent,
     ).toBe("Usage");
   }
+});
+
+it("switches the first-call guide off and back on from the account menu", async () => {
+  localStorage.clear();
+  const access: WorkspaceAccessValue = {
+    status: "ready",
+    authenticated: true,
+    context: { personId: "fictional-a", sessionId: "s", tenantId: "t" },
+    retry: () => {},
+  };
+  const onClose = vi.fn();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <SettingsMenu
+          open
+          anchorRef={{ current: document.createElement("button") }}
+          onClose={onClose}
+          name="Fictional User"
+          email="fictional@example.test"
+          allowance={null}
+        />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const toggle = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  expect(toggle.textContent).toContain("First call guide");
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(toggle.textContent).toContain("Off");
+  expect(
+    localStorage.getItem(guideOffKey("fictional-a", FIRST_CALL_GUIDE)),
+  ).toBe("1");
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(
+    localStorage.getItem(guideOffKey("fictional-a", FIRST_CALL_GUIDE)),
+  ).toBeNull();
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it("has no guide switch without a signed-in person", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <SettingsMenu
+        open
+        anchorRef={{ current: document.createElement("button") }}
+        onClose={() => {}}
+        name={null}
+        email={null}
+        allowance={null}
+      />,
+    ),
+  );
+  expect(document.querySelector('[role="switch"]')).toBeNull();
 });

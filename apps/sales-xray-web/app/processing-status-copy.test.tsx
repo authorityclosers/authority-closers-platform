@@ -55,6 +55,31 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
+it.each([
+  "call_map_invalid",
+  "call_map_evidence_unresolved",
+  "call_map_time_out_of_range",
+  "call_map_phase_order_invalid",
+  "call_map_reference_unknown",
+  "call_map_role_mismatch",
+  "call_map_qualification_invalid",
+  "call_map_word_cap_exceeded",
+  "call_map_signal_kind_unknown",
+  "call_map_money_invalid",
+  "report_speaker_label_leak",
+  "ethics_unverifiable_claim_missing",
+  "report_dimension_evidence_required",
+])("shows safe report guidance for %s", async (code) => {
+  await render({
+    needsAttention: true,
+    progress: { ...running, failure_code: `conversation_${code}` },
+  });
+  expect(container.textContent).toMatch(
+    /The call overview needs|The report needs/,
+  );
+  expect(container.textContent).not.toContain(code);
+});
+
 it("waits one minute, preserving the real stage title without a failure or percentage", async () => {
   await render();
   await advance(59_999);

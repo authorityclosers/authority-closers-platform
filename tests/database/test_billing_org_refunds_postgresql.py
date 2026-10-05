@@ -13,6 +13,7 @@ from ac_platform.billing.commands import CheckoutCommand
 from ac_platform.billing.errors import PaymentUsed
 from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX
 from ac_platform.billing.periods import add_months
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.payments.ports import Money, PaymentEventKind
 from ac_platform.tenancy.models import Organisation
@@ -39,6 +40,7 @@ def test_organisation_pack_refund_accounts_for_member_use(
     postgres_harness, world: World, monkeypatch, use: str
 ):
     async def exercise(lab: Lab) -> None:
+        monkeypatch.setattr(lab.app.service, "trial_policy", TrialPolicy("v2"))
         plan = replace(
             ORGANISATION,
             included_minutes=10,
@@ -63,6 +65,7 @@ def test_organisation_pack_refund_accounts_for_member_use(
                 tenant_id=member.tenant_id,
                 operations_tenant_id=world.operations_tenant_id,
                 policy_revision="fictional-org-refund-v1",
+                trial_policy=world.app.service.trial_policy,
                 trial_enabled=False,
                 clock=world.clock,
             )
@@ -152,7 +155,8 @@ def test_organisation_pack_refund_accounts_for_member_use(
             assert await lab.refund(owner, payment_ref, key="org-refund") == accepted
             assert provider_calls == [Money(pack.order.amount.minor, "INR")]
         async with lab.sessions() as database, database.begin():
-            ledger = lab.app.service.ledger(database)
+            ledger = lab.app.service.ledger(database, tenant_id=owner.tenant_id)
+            assert ledger.trial_enabled is False
             entries = await ledger.organisation_entries(tenant_id=owner.tenant_id)
             (lot,) = [entry for entry in entries if entry.source_ref == f"order:{order_id}"]
             holds = [entry for entry in entries if entry.kind == "refund_hold"]
@@ -160,6 +164,11 @@ def test_organisation_pack_refund_accounts_for_member_use(
                 [] if use in {"reserved", "settled"} else [(lot.id, -600)]
             )
             pool = await ledger.project_organisation(tenant_id=owner.tenant_id, now=lab.now)
+            positions = {p.lot.lot_id: p for p in pool.projection.positions}
+            assert "trial" not in positions
+            assert positions[str(lot.id)].allocated == (
+                600 if use in {"reserved", "settled"} else 0
+            )
             assert pool.projection.balance == (600 if use == "legacy" else 0)
             if audit_id is not None:
                 assert (

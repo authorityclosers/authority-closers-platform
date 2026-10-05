@@ -210,19 +210,17 @@ try {
     await card.getByRole("button", { name: "Finish", exact: true }).click();
     await card.waitFor({ state: "hidden" });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.locator("[data-guide-launcher]").waitFor();
+    await page.waitForLoadState("networkidle");
+    // Owner, 5 Oct 2026: a finished or closed guide stays off, with no
+    // floating launcher; the account menu switch turns it back on.
     assert.equal(await card.count(), 0);
-    await page.locator("[data-guide-launcher]").click();
-    await step("welcome").waitFor();
-    await page.keyboard.press("Escape");
-    await card.waitFor({ state: "hidden" });
+    assert.equal(await page.locator("[data-guide-launcher]").count(), 0);
     assert.deepEqual(writes, []);
     assert.deepEqual(errors, []);
     results.push({
       width,
       finishSurvivesReload: true,
-      restart: true,
-      escape: true,
+      noLauncher: true,
       apiWrites: 0,
       browserErrors: 0,
     });

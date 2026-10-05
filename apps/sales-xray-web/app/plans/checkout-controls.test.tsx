@@ -112,18 +112,40 @@ const hostedFor = (provider: "fake" | "razorpay"): Checkout["hosted"] => ({
   expiresAt: null,
 });
 
-it.each(["fake", "razorpay"] as const)(
-  "plans reviews %s checkout before handing off the server response",
-  async (provider) => {
+it.each([
+  ["fake", false],
+  ["razorpay", false],
+  ["fake", true],
+  ["razorpay", true],
+] as const)(
+  "plans reviews %s checkout (quoted: %s) before handing off the server response",
+  async (provider, quoted) => {
     const checkout = vi.fn(async (request: CheckoutRequest, key: string) => ({
       ...(await fixtureBilling.checkout(request, key)),
       hosted: hostedFor(provider),
     }));
-    await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+    const quote = quoted
+      ? {
+          selection: {
+            planKey: "personal",
+            interval: "month" as const,
+            seats: 1,
+          },
+          subtotalPaise: 249900,
+          gstPaise: 0,
+          totalPaise: 249900,
+          renewsAt: "2026-11-04T00:00:00.000Z",
+        }
+      : null;
+    await render(
+      <PlansPurchase client={{ ...fixtureBilling, checkout }} quote={quote} />,
+    );
     await click("Get Personal");
     expect(host.textContent).not.toContain(testBanner);
     expect(button("Review total")).toBeDefined();
     expect(button("Review total with Razorpay")).toBeUndefined();
+    expect(button("Pay ₹2,499 with Razorpay")).toBeUndefined();
+    if (quoted) expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
     expect(checkout).not.toHaveBeenCalled();
     expect(openHostedCheckout).not.toHaveBeenCalled();
     await click("Review total");
@@ -368,6 +390,54 @@ function SettingsBilling({ client }: { client: typeof fixtureBilling }) {
   return <AccountSettings billing={useBillingAccount(true, client)} />;
 }
 
+it.each([false, true])(
+  "shows a dash for missing renewal and document values (cancelled: %s)",
+  async (cancelAtPeriodEnd) => {
+    await activeSubscription();
+    const subs = await fixtureBilling.readSubscriptions("personal");
+    subs.current = {
+      ...subs.current!,
+      cancelAtPeriodEnd,
+      renewsAt: null,
+      currentPeriod: null,
+    };
+    await render(
+      <PlanAndBillingPane
+        subs={subs}
+        status="ready"
+        allowance={{
+          state: "ready",
+          value: {
+            allowance_seconds: 3600,
+            committed_seconds: 0,
+            available_seconds: 3600,
+          },
+        }}
+        onRetry={() => {}}
+        documents={[
+          {
+            id: "fictional-document",
+            createdAt: "2026-10-04T00:00:00Z",
+            description: "Fictional invoice",
+            amount: subs.current.amount,
+            status: "Issued",
+            invoiceHref: null,
+            receiptHref: null,
+          },
+        ]}
+      />,
+    );
+    const renewal = [...host.querySelectorAll("dt")].find(
+      (label) =>
+        label.textContent ===
+        (cancelAtPeriodEnd ? "Access through" : "Next renewal"),
+    )!;
+    expect(renewal.nextElementSibling?.textContent).toBe("—");
+    expect(host.querySelector("tbody tr td:last-child")?.textContent).toBe("—");
+    expect(host.textContent).not.toMatch(/unavailable/i);
+  },
+);
+
 it("Settings keeps a paid subscription usable when only invoice reads fail", async () => {
   await activeSubscription();
   await render(
@@ -390,7 +460,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
   expect(host.textContent).toContain(
-    "Invoices and receipts are currently unavailable",
+    "Invoices and receipts could not be loaded",
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });

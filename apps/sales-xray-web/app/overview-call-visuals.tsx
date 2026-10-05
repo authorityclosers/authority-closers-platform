@@ -120,10 +120,23 @@ export function OverviewCallVisuals({
         {/* Time used */}
         <div className={styles.summaryRow}>
           <div className={styles.summaryPill}>
-            <span>Time used</span>
-            <b>{formatClock(metrics.time_used_ms)}</b>
+            <span>
+              {transcript.duration_ms && transcript.duration_ms > 0
+                ? "Call length"
+                : "Timed transcript span"}
+            </span>
+            <b>
+              {metrics.time_used_ms > 0
+                ? formatClock(metrics.time_used_ms)
+                : "Unavailable"}
+            </b>
           </div>
         </div>
+        <p className={styles.measurementMeaning}>
+          Talk share compares each speaker’s timed transcript segments. Gaps
+          between segments are excluded; overlapping speakers count separately.
+          Questions count question marks in the transcript. Listen to confirm.
+        </p>
 
         {/* Talk time, talk share, 60s engagement curve, and questions for every speaker */}
         <div className={styles.speakerCardsGrid}>
@@ -146,10 +159,6 @@ export function OverviewCallVisuals({
                 <div className={styles.speakerHeader}>
                   <h4 className={styles.speakerLabel}>{speakerId}</h4>
                   <div className={styles.speakerMetricsGroup}>
-                    <span className={styles.metricBadge}>
-                      Talk time:{" "}
-                      <strong>{formatClock(sMetrics.talk_ms)}</strong>
-                    </span>
                     <span className={styles.metricBadge}>
                       <strong>
                         {sMetrics.talk_share !== null &&
@@ -175,7 +184,7 @@ export function OverviewCallVisuals({
                 <div className={styles.chartContainer}>
                   <div className={styles.chartMeta}>
                     <span className={styles.chartMetaTitle}>
-                      60-second engagement curve
+                      Talk share by minute
                     </span>
                     {quiet !== null && quietMinute !== null ? (
                       <span
@@ -266,7 +275,7 @@ export function OverviewCallVisuals({
                     </svg>
 
                     <div className={styles.srOnly}>
-                      Engagement curve for speaker {speakerId} across{" "}
+                      Talk-share curve for speaker {speakerId} across{" "}
                       {series.length} minutes.
                       {quiet !== null && quietMinute !== null
                         ? ` Quiet run starts at minute ${quietMinute}, ${
@@ -283,43 +292,62 @@ export function OverviewCallVisuals({
           })}
         </div>
 
-        {/* Longest monologues */}
-        {metrics.monologues.length > 0 ? (
-          <div>
-            <header
-              className={styles.sectionHeader}
-              style={{ marginBottom: 8 }}
-            >
-              <h4 className={styles.detailTitle}>Longest monologues</h4>
-            </header>
-            <div className={styles.monologuesGrid}>
-              {metrics.monologues.map((m: Monologue, idx: number) => {
-                const durationMs = m.end_ms - m.start_ms;
-                return (
-                  <div
-                    key={`${m.speaker_id}-${m.start_ms}-${idx}`}
-                    className={styles.monologueCard}
-                  >
-                    <div className={styles.monologueInfo}>
-                      <span className={styles.monologueSpeaker}>
-                        {m.speaker_id}
-                      </span>
-                      <span className={styles.monologueTimes}>
-                        {formatClock(m.start_ms)} – {formatClock(m.end_ms)} (
-                        {formatClock(durationMs)})
-                      </span>
-                    </div>
-                    <PlayControl
-                      startMs={m.start_ms}
-                      onSeek={onSeek}
-                      label={`Play ${formatClock(m.start_ms)}`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+        <details className={styles.timingDetails}>
+          <summary>Talk time and longest monologues</summary>
+          <div className={styles.timingBody}>
+            <dl className={styles.talkTimes}>
+              {speakerEntries.map(([speakerId, speaker]) => (
+                <div key={speakerId}>
+                  <dt>{speakerId}</dt>
+                  <dd>Talk time: {formatClock(speaker.talk_ms)}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className={styles.measurementMeaning}>
+              Times come from transcript segments, which can include pauses.
+              Longest monologues join the same speaker’s turns across gaps of up
+              to 2 seconds when no other speaker starts between them. Quiet
+              markers mean under 10% talk share for 3 minutes; recovered means a
+              later minute reaches 25%.
+            </p>
+            {metrics.monologues.length > 0 ? (
+              <div>
+                <header
+                  className={styles.sectionHeader}
+                  style={{ marginBottom: 8 }}
+                >
+                  <h4 className={styles.detailTitle}>Longest monologues</h4>
+                </header>
+                <div className={styles.monologuesGrid}>
+                  {metrics.monologues.map((m: Monologue, idx: number) => {
+                    const durationMs = m.end_ms - m.start_ms;
+                    return (
+                      <div
+                        key={`${m.speaker_id}-${m.start_ms}-${idx}`}
+                        className={styles.monologueCard}
+                      >
+                        <div className={styles.monologueInfo}>
+                          <span className={styles.monologueSpeaker}>
+                            {m.speaker_id}
+                          </span>
+                          <span className={styles.monologueTimes}>
+                            {formatClock(m.start_ms)} – {formatClock(m.end_ms)}{" "}
+                            ({formatClock(durationMs)})
+                          </span>
+                        </div>
+                        <PlayControl
+                          startMs={m.start_ms}
+                          onSeek={onSeek}
+                          label={`Play ${formatClock(m.start_ms)}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </details>
       </section>
 
       {/* When callMap is non-null */}
