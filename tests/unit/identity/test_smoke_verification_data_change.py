@@ -24,7 +24,7 @@ tool = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tool)
 
 
-def arguments(person_id=None, *, apply=False):
+def arguments(person_id=None, *, apply=False, consent_version=None):
     argv = [
         "--environment",
         "production",
@@ -39,6 +39,8 @@ def arguments(person_id=None, *, apply=False):
     ]
     for name in ("operator-reference", "run-reference", "command-id"):
         argv += [f"--{name}", str(uuid4())]
+    if consent_version is not None:
+        argv += ["--recorded-consent-version", consent_version]
     return tool._parser().parse_args(argv + (["--apply"] if apply else []))
 
 
@@ -47,6 +49,20 @@ def test_preview_default_and_confidential_single_input(monkeypatch):
     email = "fictional+ac-qa-production@authorityclosers.com"
     monkeypatch.setattr(tool.sys, "stdin", StringIO(f"'{email}'\n"))
     assert tool._email_from_stdin() == email
+
+
+def test_only_approved_prior_consent_can_be_named():
+    assert arguments().recorded_consent_version is None
+    assert (
+        arguments(consent_version=tool.APPROVED_PRIOR_CONSENT_VERSION).recorded_consent_version
+        == tool.APPROVED_PRIOR_CONSENT_VERSION
+    )
+
+
+@pytest.mark.parametrize("version", ["", "fictional-v1", "ac-learner-terms-privacy-2026-09-14-v1"])
+def test_other_named_versions_are_refused(version):
+    with pytest.raises(tool.SmokeVerificationError, match="invalid arguments"):
+        arguments(consent_version=version)
 
 
 @pytest.mark.parametrize(
@@ -111,6 +127,7 @@ def test_blank_learner_consent_configuration_refused(monkeypatch, version):
         ("--approval-reference", "wrong-approval"),
         ("--environment", "staging"),
         ("--email", "private@example.test"),
+        ("--recorded-consent-version", "private-consent-marker"),
     ],
 )
 def test_parse_failures_do_not_echo_confidential_inputs(capsys, flag, value):
