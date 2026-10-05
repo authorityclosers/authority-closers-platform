@@ -82,3 +82,20 @@ hosted loader requires; the shell's inherited 0002 mask makes those fixtures
 group-writable. Both hosted-runtime/organisation files passed all 56 checks with
 the private mask. No host configuration or production permission check changed.
 The final complete-directory run passed 2,367 tests in 134.38 seconds (exit 0).
+
+PostgreSQL shard-0 fixture repair (5 Oct): the fictional prospect-repair
+candidate now includes the complete amended v7 call map and two distinct
+dimension refs. Initial and invalid-repair candidates cite only sellers;
+the evidence repair includes the frozen prospect, while the unknown repair
+retains its lower status. Existing assertions still require one repair and
+budget-rejected holds. Production code and the validator source pin are unchanged.
+
+Local verification: the prospect-evidence and v7-output suites passed 145 tests;
+Ruff format/check passed across 997 files and mypy passed across 417 sources.
+Executing the exact candidate function extracted from this PostgreSQL test
+against the real v7 validator passed seven fictional initial/repair controls:
+initial and invalid repair fail `report_dimension_prospect_evidence_required`,
+evidence repair remains `observed`, and unknown repair remains `unknown`.
+The four parametrised database cases collect successfully; local candidate
+validation is not PostgreSQL execution. The full database worker/scheduler proof
+and all four Python shards must pass CI on the new pushed head before re-review.
