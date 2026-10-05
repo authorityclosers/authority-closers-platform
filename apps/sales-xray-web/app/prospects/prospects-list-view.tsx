@@ -284,7 +284,6 @@ export function ProspectsListView() {
 
                     <Link
                       href={`/prospects/${prospect.prospect_id}`}
-                      prefetch={false}
                       className={styles.hoverTrigger}
                       aria-label={`View ${prospect.name}`}
                     >

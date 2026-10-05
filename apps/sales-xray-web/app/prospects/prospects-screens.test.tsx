@@ -289,11 +289,12 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("No confirmed profile fields");
     expect(host.textContent).toContain("Unassigned");
     expect(host.textContent).toContain("No tags");
-    expect(host.textContent).toContain("Not scored");
+    expect(host.textContent).not.toContain("Buyer readiness");
+    expect(host.textContent).not.toContain("Score");
     expect(host.textContent).toContain("None recorded");
   });
 
-  it("renders authorized calls with status, duration, call links, and null score", async () => {
+  it("renders authorized calls with status, duration and call links without score or readiness slots", async () => {
     vi.spyOn(prospectsClient, "fetchProspectDetail").mockResolvedValueOnce(
       detailData,
     );
@@ -310,7 +311,8 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
     expect(host.textContent).toContain("State: report_ready");
-    expect(host.textContent).toContain("Score: —");
+    expect(host.textContent).not.toContain("Score");
+    expect(host.textContent).not.toContain("Buyer readiness");
 
     const callLink = host.querySelector<HTMLAnchorElement>(
       'a[aria-label="View call 33333333-3333-4333-8333-333333333333"]',
