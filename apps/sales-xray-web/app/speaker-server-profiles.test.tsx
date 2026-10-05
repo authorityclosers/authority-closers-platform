@@ -26,7 +26,10 @@ function initial() {
   return {
     schema: "ac.sales-xray.speaker-map/1",
     submission_id: CALL,
-    transcript_revision: transcript.revision,
+    transcript_revision: transcript.revision as string | null,
+    unavailable_reason: null as string | null,
+    map_revision: null as string | null,
+    report_basis: null,
     user_revision: 1,
     status: "confirmed",
     speakers: ids.map((speaker_id, index) => ({
@@ -44,8 +47,8 @@ function response() {
   });
 }
 function Probe() {
-  const { profiles } = useSpeakerProfiles(CALL);
-  return <output>{JSON.stringify(profiles)}</output>;
+  const { profiles, canSave } = useSpeakerProfiles(CALL);
+  return <output data-can-save={canSave}>{JSON.stringify(profiles)}</output>;
 }
 async function render(scope = "first", enabled = true, source = transcript) {
   await act(async () =>
@@ -128,6 +131,58 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   localStorage.clear();
 });
+
+it.each(["unavailable", "empty predicted"])(
+  "keeps an older call with an %s map quiet and retries when details become ready",
+  async (state) => {
+    data.status = state === "unavailable" ? "unavailable" : "predicted";
+    data.transcript_revision =
+      state === "unavailable" ? null : transcript.revision;
+    data.unavailable_reason =
+      state === "unavailable" ? "transcript_not_ready" : null;
+    data.user_revision = 0;
+    data.speakers = [];
+    await render();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.textContent).toContain("Speaker names not set yet");
+    expect(host.querySelector("output")!.dataset.canSave).toBe("false");
+    expect(host.querySelector("output")!.textContent).toBe("{}");
+    expect(host.querySelector('[aria-label="Speakers"]')).not.toBeNull();
+    await edit();
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(puts()).toHaveLength(0);
+    data = initial();
+    await act(async () => button("Reload speaker details").click());
+    expect(host.textContent).not.toContain("Speaker names not set yet");
+    expect(host.querySelector("output")!.dataset.canSave).toBe("true");
+    expect(host.querySelector("output")!.textContent).toContain(
+      "Fictional Buyer",
+    );
+    await edit();
+    expect(input().value).toBe("Fictional Buyer");
+  },
+);
+
+it.each(["submission", "revision", "etag"])(
+  "keeps a populated map fenced by its %s binding",
+  async (field) => {
+    const malformed = { ...data };
+    if (field === "submission") malformed.submission_id = "another-call";
+    if (field === "revision")
+      malformed.transcript_revision = "another-revision";
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(malformed), {
+        headers: {
+          etag: field === "etag" ? '"call-label-0"' : '"call-label-1"',
+        },
+      }),
+    );
+    await render();
+    expect(host.querySelector("output")!.textContent).toBe("{}");
+    expect(host.querySelector("output")!.dataset.canSave).toBe("false");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  },
+);
 
 it("writes once on Save, waits for confirmation and reads the result in a fresh session", async () => {
   await render();

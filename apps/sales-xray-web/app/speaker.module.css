@@ -26,6 +26,16 @@
 }
 
 /* ---------- Editor ---------- */
+.mapNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+  color: var(--lx-muted);
+  font: 500 12.5px/1.4 var(--lx-font-ui);
+}
+
 /* Shown in the top layer (popover), placed beside its chip by script. */
 .editor {
   position: fixed;
