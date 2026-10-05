@@ -88,6 +88,11 @@ def test_confirmation_reconciles_only_matching_bound_roles(change):
         "stale_report",
         "missing_c1",
         "undeclared",
+        "report_conflict",
+        "lookup_conflict",
+        "bad_run",
+        "short_messages",
+        "missing_newline",
     ],
 )
 async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
@@ -127,6 +132,8 @@ async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
     if case == "undeclared":
         monkeypatch.setattr(reports, "SPEAKER_ROLE_PROMPT_REVISIONS", frozenset())
     database = SimpleNamespace(scalar=AsyncMock(return_value=task))
+    if case == "lookup_conflict":
+        database.scalar.side_effect = ConversationConflict("Private contents")
     envelope = {
         "run_id": str(uuid4()),
         "transcript_revision": "older-c2" if case == "stale_report" else transcript["revision"],
@@ -138,6 +145,18 @@ async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
     )
     if case == "no_report":
         reader.render_report.side_effect = ConversationNotFound("No report")
+    if case == "report_conflict":
+        reader.render_report.side_effect = ConversationConflict("Private contents")
+    if case == "bad_run":
+        envelope["run_id"] = "malformed"
+    if case in {"short_messages", "missing_newline"}:
+        monkeypatch.setattr(
+            speaker_report_basis,
+            "_text_prompt_view",
+            lambda *args, **kwargs: {
+                "messages": [] if case == "short_messages" else [{}, {"content": "no newline"}]
+            },
+        )
     checkpoint = AsyncMock(
         side_effect=lambda _, __, stage: (
             SimpleNamespace(
@@ -165,8 +184,13 @@ async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
     else:
         assert result is None
         assert caplog.messages == (
-            [] if case in {"fallback", "no_report"} else ["speaker_report_basis_unavailable"]
+            []
+            if case in {"fallback", "no_report", "undeclared"}
+            else ["speaker_report_basis_unavailable"]
         )
+    if case == "undeclared":
+        reader.render_report.assert_not_awaited()
+        database.scalar.assert_not_awaited()
     if case in {"fallback", "no_report"}:
         checkpoint.assert_not_awaited()
     assert (intent, transcript, packet) == before

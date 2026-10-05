@@ -6,9 +6,13 @@ belong to later slices. Nothing here establishes identity or enforces report sco
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata as unicode
+from collections.abc import Mapping
 from typing import Any, Literal, NotRequired, TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .checkpoints import content_hash
 
@@ -33,6 +37,72 @@ class SpeakerMapRevision(TypedDict):
 
 class SavedChannelMap(SpeakerMapRevision):
     saved_you_side: Literal[0, 1]
+
+
+class _ModelSpeaker(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    speaker_id: str
+    spoken_name: str | None = Field(min_length=1, max_length=80)
+    role: Role
+    evidence_segment_ids: list[str] = Field(min_length=1, max_length=5)
+    confidence: Literal["low", "medium", "high"]
+
+
+def validate_model_speakers(
+    value: object, transcript: Mapping[str, Any]
+) -> SpeakerMapRevision | None:
+    """Fresh-output boundary only; invalid display attribution never fails a report."""
+    if value is None:
+        return None
+    logger = logging.getLogger(__name__)
+    if not isinstance(value, list) or len(value) > 32:
+        logger.warning("speaker_model_block_invalid")
+        return None
+    segments = {row["id"]: row for row in transcript["segments"]}
+    known = {row["speaker_id"] for row in segments.values()} - {None, "unattributed"}
+    entries: list[SpeakerDecision] = []
+    for candidate in value:
+        try:
+            entry = _ModelSpeaker.model_validate(candidate)
+            name = entry.spoken_name
+            evidence = entry.evidence_segment_ids
+            if (
+                entry.speaker_id not in known
+                or not set(evidence) <= segments.keys()
+                or len(set(evidence)) != len(evidence)
+                or (
+                    name is not None
+                    and (
+                        not name.strip()
+                        or any(unicode.category(char).startswith("C") for char in name)
+                        or not any(
+                            " ".join(unicode.normalize("NFC", name).casefold().split())
+                            in " ".join(
+                                unicode.normalize("NFC", segments[key]["text"]).casefold().split()
+                            )
+                            for key in evidence
+                        )
+                    )
+                )
+            ):
+                raise ValueError
+        except (ValidationError, ValueError):
+            logger.warning("speaker_model_entry_invalid")
+            continue
+        entries.append(
+            SpeakerDecision(
+                speaker_id=entry.speaker_id,
+                spoken_name=name,
+                role=entry.role,
+                evidence_segment_ids=evidence,
+                confidence=entry.confidence,
+            )
+        )
+    ids = [entry["speaker_id"] for entry in entries]
+    if len(set(ids)) != len(ids) or sum(entry["role"] == "you" for entry in entries) > 1:
+        logger.warning("speaker_model_block_ambiguous")
+        return None
+    return {"transcript_revision": transcript["revision"], "speakers": entries} if entries else None
 
 
 _STOP_WORDS = (

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.conversation_intelligence import reports as report_contract
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.alignment import project_transcript_for_playback
 from ac_platform.conversation_intelligence.application import (
@@ -64,26 +65,25 @@ async def read_report_basis(
     submission_id: UUID,
     current: dict[str, Any],
 ) -> dict[str, Any] | None:
+    if not report_contract.SPEAKER_ROLE_PROMPT_REVISIONS:
+        return None
     try:
         # Select exactly the report served by the existing boundary, including
         # retained recovery. Ownership/retention was checked by the caller.
         envelope = await reports.render_report(
             recording, submission_id=submission_id, access=ReportAccess.ACCOUNT
         )
-    except ConversationNotFound:
-        return None
-    task = await reports.database.scalar(
-        select(ConversationInferenceTask).where(
-            ConversationInferenceTask.run_id == UUID(envelope["run_id"]),
-            ConversationInferenceTask.recording_id == recording.id,
-            ConversationInferenceTask.tenant_id == recording.tenant_id,
-            ConversationInferenceTask.person_id == recording.person_id,
-            ConversationInferenceTask.generation == recording.generation,
-            ConversationInferenceTask.stage == "C5",
-            ConversationInferenceTask.erased_at.is_(None),
+        task = await reports.database.scalar(
+            select(ConversationInferenceTask).where(
+                ConversationInferenceTask.run_id == UUID(envelope["run_id"]),
+                ConversationInferenceTask.recording_id == recording.id,
+                ConversationInferenceTask.tenant_id == recording.tenant_id,
+                ConversationInferenceTask.person_id == recording.person_id,
+                ConversationInferenceTask.generation == recording.generation,
+                ConversationInferenceTask.stage == "C5",
+                ConversationInferenceTask.erased_at.is_(None),
+            )
         )
-    )
-    try:
         if task is None or task.intent is None or content_hash(task.intent) != task.intent_sha256:
             raise ValueError
         request = StageRequest.model_validate(task.intent["request"])
@@ -128,7 +128,9 @@ async def read_report_basis(
         ):
             raise ValueError
         return project_report_basis(snapshot, current)
-    except (KeyError, TypeError, ValueError, ConversationError):
+    except ConversationNotFound:
+        return None
+    except (IndexError, KeyError, TypeError, ValueError, ConversationError):
         # Optional attribution cannot hold a report or leak its contents.
         _LOGGER.warning("speaker_report_basis_unavailable")
         return None
