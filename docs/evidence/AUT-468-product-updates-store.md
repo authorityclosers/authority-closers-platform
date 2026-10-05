@@ -47,7 +47,7 @@ test database are used. Each schema is removed by its test fixture.
   tests/integration/test_product_updates_postgresql.py tests/unit/product_updates
   tests/database/test_model_registry.py tests/database/test_capability_grants.py
   tests/unit/http/test_platform_access.py -q -x --tb=short`: **169 passed**, no skips.
-  Covers the incremental 0073→0074 upgrade with preserved grant/revocation history,
+  Covers the incremental 0074→0075 upgrade with preserved grant/revocation history,
   schema comparison, six seed rows, both engines' CHECKs and ORM guards,
   PostgreSQL bulk UPDATE/DELETE, read-once events and grant CLI acceptance.
 - `uv run --frozen pytest tests/infra/test_restore_drill.py

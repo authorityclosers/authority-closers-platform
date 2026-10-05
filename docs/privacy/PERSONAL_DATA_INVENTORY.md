@@ -49,15 +49,15 @@ v41. Buyer names, GSTINs and state codes must not appear in audit payloads,
 logs, task comments or provider payloads. No new external processing or
 activation is authorised by storing these snapshots.
 
-## Product update seen state and notifications (ADR 0054, migration 0074)
+## Product update seen state and notifications (ADR 0054, migration 0075)
 
 | Field | Storage | Source | Purpose | Where shown | Retention | Erasure path |
 | --- | --- | --- | --- | --- | --- | --- |
-| Account id, note lineage and seen time | `update_seen.person_id`, `note_key`, `seen_at` in Postgres | Future authenticated What's new acknowledgement | Keep seen state consistent across devices | No routes in this slice; future per-account update reads | Append-only; no new retention duration | No deletion path in this slice; foreign keys preserve history. Retention and erasure must be resolved before activation |
-| Recipient, optional tenant, event reference and read time | `notifications.person_id`, `tenant_id`, `kind`, `dedupe_key`, `read_at` | Future product events and authenticated read command | Deduplicate per-account events and record one read transition | No routes in this slice; future recipient-only feed | Immutable except one `read_at` transition; no new retention duration | Deletes are refused; no purge or cascade is introduced |
-| Event title, body and relative link | `notifications.title`, `body`, `href` | Future internal event writer | Explain report-ready, paused-analysis and invitation events | Future recipient-only feed | With the event row | No deletion path in this slice; writers must avoid third-party personal data and secrets |
+| Account id, note lineage and seen time | `update_seen.person_id`, `note_key`, `seen_at` in Postgres | Authenticated What's new acknowledgement | Keep seen state consistent across devices | Account-owned `GET /v1/updates` and release entries in `GET /v1/notifications` | For as long as the person exists; no time-based purge | Approved person deletion removes the person's rows in the same transaction. The first erasure task must add a narrow trigger bypass using a transaction-local setting naming the deletion approval; normal UPDATE/DELETE stays refused. P2 adds no deletion path or migration |
+| Recipient, optional tenant, event reference and read time | `notifications.person_id`, `tenant_id`, `kind`, `dedupe_key`, `read_at` | Future product events and authenticated read command | Deduplicate per-account events and record one read transition | Recipient-only `GET /v1/notifications` | For as long as the person exists; no time-based purge | Approved person deletion removes the person's rows in the same transaction, using the same future approval-scoped trigger bypass; normal UPDATE/DELETE stays refused except the existing one-time read transition. P2 adds no deletion path or migration |
+| Event title, body and relative link | `notifications.title`, `body`, `href` | Future internal event writer | Explain report-ready, paused-analysis and invitation events | Recipient-only `GET /v1/notifications` | With the event row, for as long as the person exists; no time-based purge | Same approved person-deletion transaction and future approval-scoped trigger bypass; writers must avoid third-party personal data and secrets |
 
-These tables are included in migration-bound backup/restore parity v45.
+These tables are included in migration-bound backup/restore parity v46.
 `product_updates.created_by_person_id` is an optional attributable staff id;
-published note text and history are append-only. This slice activates no event
-writer, external sender or real customer processing.
+published note text and history are append-only. The read routes store account
+seen/read markers; event writers and external senders remain outside this slice.

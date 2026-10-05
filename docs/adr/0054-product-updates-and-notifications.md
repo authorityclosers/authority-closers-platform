@@ -90,8 +90,7 @@ count CHECK and model item validation let SQLite
 build and exercise the store. Notification history has one allowed transition.
 The first slice introduces no routes, grants, writers or screen changes.
 Backup contracts retain historical heads while adding all three tables.
-Retention and erasure must be resolved before future event activation; this
-slice introduces no deletion path or retention duration.
+Seen and notification rows remain for as long as the person exists, with no time-based purge; approved person deletion must erase both in the same transaction through a future narrow trigger bypass scoped to a transaction-local setting naming the deletion approval, while normal mutation remains refused (CTO decision, 5 October 2026); P2 adds no deletion path or migration.
 
 ## Reversal cost
 
