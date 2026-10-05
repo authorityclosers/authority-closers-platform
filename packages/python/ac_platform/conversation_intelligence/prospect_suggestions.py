@@ -46,6 +46,7 @@ def _reference(snapshot: dict[str, Any], submission: UUID, fact: dict[str, Any])
                 "snapshot_kind",
                 "source_revision",
                 "source_sha256",
+                "run_id",
                 "transcript_revision",
             )
         },

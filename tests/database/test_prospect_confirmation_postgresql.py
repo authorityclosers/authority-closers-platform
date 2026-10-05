@@ -23,8 +23,7 @@ from ac_platform.conversation_intelligence.prospect_models import (
 )
 from ac_platform.conversation_intelligence.reports import parse_report_draft
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
-from ac_platform.organisations.models import Organisation
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
