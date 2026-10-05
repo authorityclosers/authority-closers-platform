@@ -1310,6 +1310,11 @@ def test_prospect_dimension_repairs_returned_invalid_c5_once(
                 ]
                 repaired = "SERVER_REPAIR" in body["systemInstruction"]["parts"][0]["text"]
                 report = json.loads(result.data["candidates"][0]["content"]["parts"][0]["text"])
+                report["summary_evidence"] = [{"segment_id": segments[1]["id"]}]
+                report["verdict_evidence"] = [{"segment_id": segments[1]["id"]}]
+                report["overview"]["final_assessment"]["evidence"] = [
+                    {"segment_id": segments[1]["id"]}
+                ]
                 report["call_map"] = {
                     "version": "call-map/1",
                     "verdict_line": "Evidence remains bounded.",

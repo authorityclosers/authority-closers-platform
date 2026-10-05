@@ -475,9 +475,10 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-311 validator semantics remain /8; AUT-347 changes only dormant v7 generation.
     # AUT-553 enables the three P-A-confirmed dimensions and bumps the validator to /9.
     # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
+    # AUT-504 adds dormant v7 claim evidence; legacy version/hash contracts remain pinned.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "6e5d5809a432eae6bf1cb2a3b4adb410b033798988903d798826218854fff33d"
+        "3cdc3575a0b343b897c426a24364af05260c6204b832d911869050a9638ff469"
     )
 
 
