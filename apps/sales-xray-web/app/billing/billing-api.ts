@@ -121,7 +121,9 @@ async function call(
   let problem = null;
   try {
     const type = response.headers.get("content-type") ?? "";
-    if (/json/.test(type)) problem = parseProblem(await response.json());
+    if (/json/.test(type)) {
+      problem = parseProblem(await response.json());
+    }
   } catch {
     problem = null;
   }
@@ -160,7 +162,8 @@ export const liveBilling: BillingClient = {
           account === "organisation" &&
           before === null &&
           error instanceof BillingError &&
-          error.status === 404
+          error.status === 404 &&
+          notOnSale(error)
         )
           return [];
         throw error;

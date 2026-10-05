@@ -204,6 +204,14 @@ export function CheckoutDrawer({
         : (plan.prices?.yearlyPaise ?? null)
       : null;
 
+  const renewalDate = quoted?.renewsAt ? day(quoted.renewsAt) : null;
+  const renewalAmount =
+    quoted?.totalPaise != null
+      ? money(quoted.totalPaise)
+      : total != null
+        ? money(total)
+        : null;
+
   return (
     <>
       <div
@@ -335,8 +343,8 @@ export function CheckoutDrawer({
             <div>
               <dt>Next renewal</dt>
               <dd>
-                {quoted
-                  ? `${day(quoted.renewsAt)} · ${money(total ?? 0)}`
+                {renewalDate && renewalAmount
+                  ? `${renewalDate} · ${renewalAmount}`
                   : "Date and amount confirmed at checkout"}
               </dd>
             </div>

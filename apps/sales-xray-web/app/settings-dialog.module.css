@@ -61,3 +61,16 @@
     animation: none;
   }
 }
+
+.dialog:has([data-purchase-shell]) {
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  max-width: none;
+  max-height: none;
+  animation: none;
+}
+
+.dialog:has([data-purchase-shell])::backdrop {
+  display: none;
+}

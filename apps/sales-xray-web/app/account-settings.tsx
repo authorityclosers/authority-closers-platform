@@ -43,6 +43,7 @@ import {
   type DisplayTopUpPack,
 } from "./plans/plans-catalogue-fixture";
 import { CheckoutDrawer } from "./plans/checkout-drawer";
+import { PurchaseShell } from "./plans/purchase-shell";
 import { usePurchaseCheckout } from "./plans/use-purchase-checkout";
 import {
   AccountProfileRequestError,
@@ -497,30 +498,42 @@ export function AccountSettings({
           </Row>
         </Pane>
       </div>
-      <CheckoutDrawer
-        open={Boolean(selectedTopUp)}
-        onClose={() => {
-          topUp.select();
-          setSelectedTopUp(null);
-        }}
-        item={selectedTopUp ? { type: "top_up", pack: selectedTopUp } : null}
-        gstRate={PLANS_GST_RATE}
-        busy={topUp.busy}
-        confirmedOrder={topUp.prepared?.order}
-        checkoutProvider={topUp.prepared?.hosted.provider}
-        onPay={() => {
-          if (selectedTopUp)
-            void topUp.buy({
-              kind: "top_up",
-              account:
-                selectedTopUp.planKey === "personal"
-                  ? "personal"
-                  : "organisation",
-              planKey: selectedTopUp.planKey,
-              packKey: selectedTopUp.key,
-            });
-        }}
-      />
+      {selectedTopUp ? (
+        <div className={styles.purchaseShellOverlay}>
+          <PurchaseShell
+            backHref="/account#billing"
+            onClose={() => {
+              topUp.select();
+              setSelectedTopUp(null);
+            }}
+          >
+            <CheckoutDrawer
+              open={Boolean(selectedTopUp)}
+              onClose={() => {
+                topUp.select();
+                setSelectedTopUp(null);
+              }}
+              item={{ type: "top_up", pack: selectedTopUp }}
+              gstRate={PLANS_GST_RATE}
+              busy={topUp.busy}
+              confirmedOrder={topUp.prepared?.order}
+              checkoutProvider={topUp.prepared?.hosted.provider}
+              onPay={() => {
+                if (selectedTopUp)
+                  void topUp.buy({
+                    kind: "top_up",
+                    account:
+                      selectedTopUp.planKey === "personal"
+                        ? "personal"
+                        : "organisation",
+                    planKey: selectedTopUp.planKey,
+                    packKey: selectedTopUp.key,
+                  });
+              }}
+            />
+          </PurchaseShell>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -864,40 +877,65 @@ function AllowanceSummary({
     );
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
-  if (allowance.value.unlimited)
+
+  const formatAnalysisTime = (availMins: number, totalMins?: number) => {
+    const hours = Math.floor(availMins / 60);
+    const remMins = availMins % 60;
+    const hoursText =
+      availMins >= 60
+        ? remMins > 0
+          ? `${hours} h ${remMins} min`
+          : `${hours} h`
+        : null;
+    if (totalMins !== undefined && totalMins > 0) {
+      return hoursText
+        ? `${count(availMins)} of ${count(totalMins)} min (${hoursText}) available`
+        : `${count(availMins)} of ${count(totalMins)} min available`;
+    }
+    return hoursText
+      ? `${count(availMins)} min (${hoursText}) available`
+      : `${count(availMins)} min available`;
+  };
+
+  if (allowance.value.unlimited) {
     return (
       <div className={styles.allowance} data-allowance="unlimited">
         <p className={styles.big}>Unlimited</p>
         <p className={styles.muted}>
-          No minute limit applies to this account. {minutes(committed_seconds)}{" "}
-          min used or reserved by analyses.
+          {minutes(committed_seconds)} min used or reserved by analyses.
         </p>
       </div>
     );
-  if (allowance_seconds <= 0)
+  }
+  if (allowance_seconds <= 0 && available_seconds <= 0)
     return (
       <div className={styles.allowance} data-allowance="none">
         <p className={styles.big}>No analysis time yet</p>
         <p className={styles.muted}>Ask the AC team to allot minutes.</p>
       </div>
     );
-  const share = Math.min(1, available_seconds / allowance_seconds);
+  const share =
+    allowance_seconds > 0
+      ? Math.min(1, available_seconds / allowance_seconds)
+      : 1;
+  const availMins = minutes(available_seconds);
+  const totalMins =
+    allowance_seconds > 0 ? minutes(allowance_seconds) : undefined;
   return (
     <div className={styles.allowance} data-allowance="finite">
-      <p className={styles.big}>
-        {minutes(available_seconds)} of {minutes(allowance_seconds)} min
-        available
-      </p>
-      <span
-        className={styles.meter}
-        role="meter"
-        aria-label="Analysis time available"
-        aria-valuemin={0}
-        aria-valuemax={allowance_seconds}
-        aria-valuenow={available_seconds}
-      >
-        <span style={{ width: `${share * 100}%` }} />
-      </span>
+      <p className={styles.big}>{formatAnalysisTime(availMins, totalMins)}</p>
+      {allowance_seconds > 0 ? (
+        <span
+          className={styles.meter}
+          role="meter"
+          aria-label="Analysis time available"
+          aria-valuemin={0}
+          aria-valuemax={allowance_seconds}
+          aria-valuenow={available_seconds}
+        >
+          <span style={{ width: `${share * 100}%` }} />
+        </span>
+      ) : null}
       <p className={styles.muted}>
         {minutes(committed_seconds)} min used or reserved by analyses.
       </p>
@@ -1071,10 +1109,11 @@ export function PlanAndBillingPane({
             href="/plans"
             replace={variant === "dialog"}
           >
-            Change or upgrade plan
+            {current ? "Change or upgrade plan" : "Choose a plan"}
           </Link>
-          {!isCancelled &&
-            (cancelAsk && current ? (
+          {current &&
+            !isCancelled &&
+            (cancelAsk ? (
               <div className={styles.confirmCancelBox}>
                 <p className={styles.muted}>
                   Renewal stops; access continues to the end of the period.

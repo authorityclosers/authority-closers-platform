@@ -123,6 +123,7 @@ export function ReportDocument({
         {failed && (
           <button
             type="button"
+            className={styles.retry}
             onClick={() => {
               setResult(undefined);
               setAttempt((value) => value + 1);

@@ -14,25 +14,35 @@ import {
 import {
   PlansScreen,
   type PlanSelection,
+  type PurchaseQuote,
   type TopUpPack,
 } from "./plans-screen";
 
 /** Remount on account/workspace changes so an old order cannot cross identities. */
 export function PlansPurchase({
   client = liveBilling,
+  quote,
 }: {
   client?: BillingClient;
+  quote?: PurchaseQuote | null;
 }) {
   const access = useWorkspaceAccess();
   return (
     <Purchase
       key={JSON.stringify([access?.authenticated, access?.context])}
       client={client}
+      quote={quote}
     />
   );
 }
 
-function Purchase({ client }: { client: BillingClient }) {
+function Purchase({
+  client,
+  quote,
+}: {
+  client: BillingClient;
+  quote?: PurchaseQuote | null;
+}) {
   const billing = useBillingAccount(true, client);
   const [catalogue, setCatalogue] = useState<Plan[] | null>(null);
   const { prepared, busy, error, select, buy } = usePurchaseCheckout(client);
@@ -69,6 +79,7 @@ function Purchase({ client }: { client: BillingClient }) {
       plans={catalogue ?? PLANS_CATALOGUE_FIXTURE}
       gstRate={PLANS_GST_RATE}
       mePlan={billing.mePlan}
+      quote={quote}
       onSelectionChange={select}
       onBuy={buyPlan}
       onBuyTopUp={buyTopUp}
