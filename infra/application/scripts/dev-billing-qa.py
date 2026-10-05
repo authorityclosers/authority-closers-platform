@@ -213,15 +213,15 @@ def injected_environment(environ: dict[str, str]) -> dict[str, str]:
 def command(tool: str, args: list[str]) -> list[str]:
     require(tool != "preflight" or not args)
     require(tool != "inventory" or not args)
-    if tool == "owner":
-        require(args.count("--email") == 1 and args[args.index("--email") + 1] == OPERATIONS_EMAIL)
-        args = ["add-operations-owner", *args]
-    elif tool == "first-manager":
+    if tool in {"owner", "first-manager"}:
+        flag = "--email" if tool == "owner" else "--expected-email"
         require(
-            args.count("--expected-email") == 1
-            and args[args.index("--expected-email") + 1] == OPERATIONS_EMAIL
+            all(not arg.startswith(("--email", "--expected-email")) or arg == flag for arg in args)
         )
-        args = ["first-manager", *args]
+        require(args.count(flag) == 1)
+        value_index = args.index(flag) + 1
+        require(value_index < len(args) and args[value_index] == OPERATIONS_EMAIL)
+        args = ["add-operations-owner" if tool == "owner" else tool, *args]
     return args
 
 
@@ -236,6 +236,7 @@ def main(argv: list[str] | None = None, *, runner=subprocess.run) -> int:
         parsed = parser.parse_args(argv)
         args = command(parsed.tool, parsed.args)
         base = runtime(runner=runner)
+        base[2:2] = ["--name", f"ac-dev-billing-qa-{parsed.tool}-{os.getpid()}"]
         # No injected values are given to the artifact/DNS/UID probe.
         probe = runner(
             [*base, "-c", PROBE],

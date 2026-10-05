@@ -13,7 +13,7 @@ Billing staff requires `platform_billing_manage` through the normal access API,
 without acquiring Organisations permissions. The browser retains its origin,
 receipt, readiness, real login, sentinel, leak, buffer and cleanup boundaries.
 
-Implementation validation uses fictional values and simulated infrastructure
+Initial implementation validation uses fictional values and simulated infrastructure
 only. `uv run pytest tests/infra/test_dev_qa_credential_transport.py -q`:
 **108 passed in 33.79 seconds**, no skips. Focused Ruff check passed. Tests bind
 the transport to the fixture declarations, exercise pipe-only selection and
@@ -25,6 +25,16 @@ container arguments; and compile both released child execution paths. No
 Docker, Infisical or database execution is part of these tests. Final
 `ac-gate check` and `git diff --check` passed. Markdown was formatted with
 Prettier; the changed Python files passed Ruff check and format.
+
+CTO review of `a51f8430ca98b3c2081466b67c6249b14e8186b8` found that a later
+`--email=...` or `--expected-email=...` could override the pinned operations
+identity. The corrected runner accepts one exact bare identity flag and its
+pinned following value; repeated flags, equals forms, extended flag names and
+missing values refuse before runtime inspection or secret injection. The
+canonical released parsers already disable abbreviated options. Regression
+coverage exercises both commands, the reproduced override and valid pinned
+arguments. The corrected focused suite: **126 passed in 8.87 seconds**, no
+skips. Ruff check and format passed. No live execution was required.
 
 No live credential was read, fixture applied, refund requested or host/service
 changed. Root install and non-root dev sentinel proof require reviewed, merged,
@@ -78,7 +88,9 @@ inputs refuse. There is no hosts-file edit or target-guard exception.
 Each temporary container is non-root, read-only, has no host mounts/ports,
 drops all capabilities and new privileges, and is limited to **256 MB, 0.25 CPU
 and 64 PIDs**. `--pull=never`, `--rm`, `--log-driver=none` and a 16 MB tmpfs
-keep it bounded. The root injector receives dev `/application`; only the nine
+keep it bounded. Both sequential phases use the name
+`ac-dev-billing-qa-<tool>-<launcher-pid>` so an interrupted Docker client leaves
+an identifiable container. The root injector receives dev `/application`; only the nine
 declared `INPUTS` and fixed dev/hold settings reach the executable. Token,
 bootstrap, migrator URL and other folder values stay outside that process.
 Values never enter argv or a credential file. The browser broker remains a
@@ -216,4 +228,13 @@ new root-only runner if absent before. No service/configuration changes are
 part of this install. Previews/refused transactions roll back automatically.
 A committed data change has no delete/reset rollback: preserve history and use
 a separately reviewed, authorized superseding change. On timeout/unknown
-outcome, retain command IDs and inspect before a same-intent replay.
+outcome, retain command IDs and inspect before a same-intent replay. Find the
+named temporary container with the metadata-only command:
+
+```sh
+docker ps --filter 'name=^/ac-dev-billing-qa-' --format '{{.Names}} {{.Status}}'
+```
+
+Read only its state with `docker inspect --format '{{json .State}}' <exact-name>`;
+do not dump its environment. A killed Docker client can leave the bounded
+container running. Establish its outcome before retrying or stopping it.

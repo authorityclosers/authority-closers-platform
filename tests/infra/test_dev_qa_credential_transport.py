@@ -784,6 +784,8 @@ def test_operator_probe_has_no_injected_inputs_and_credentials_never_enter_argv(
 
     assert qa_runner.main([tool], runner=runner) == 0
     assert calls[0][1]["env"] == qa_runner.SAFE_ENV
+    name = f"ac-dev-billing-qa-{tool}-{os.getpid()}"
+    assert all(argv[argv.index("--name") + 1] == name for argv, _ in calls)
     assert "INFISICAL_TOKEN" not in calls[1][1]["env"]
     for name in qa_runner.INPUTS:
         assert operator_inputs()[name] not in " ".join(calls[1][0])
@@ -804,3 +806,43 @@ def test_operator_refuses_non_root_and_billing_or_real_owner_bootstrap(monkeypat
         for tool, flag in (("owner", "--email"), ("first-manager", "--expected-email")):
             with pytest.raises(qa_runner.RunnerRefused):
                 qa_runner.command(tool, [flag, email])
+
+
+@pytest.mark.parametrize(
+    ("tool", "flag"), [("owner", "--email"), ("first-manager", "--expected-email")]
+)
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["{flag}"],
+        ["{flag}={email}"],
+        ["{flag}", "{email}", "{flag}=owner@authorityclosers.com"],
+        ["{flag}", "{email}", "{flag}={email}"],
+        ["{flag}", "{email}", "{flag}", "owner@authorityclosers.com"],
+        ["{flag}", "{email}", "{flag}"],
+        ["{flag}", "{email}", "{flag}-alias", "owner@authorityclosers.com"],
+    ],
+)
+def test_operator_refuses_ambiguous_or_missing_identity_before_runtime(
+    monkeypatch, tool, flag, arguments
+):
+    args = [arg.format(flag=flag, email=qa_runner.OPERATIONS_EMAIL) for arg in arguments]
+    with pytest.raises(qa_runner.RunnerRefused):
+        qa_runner.command(tool, args)
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 0)
+
+    def runtime(**kwargs):
+        pytest.fail("Invalid identity arguments must be refused before Docker or secret injection")
+
+    monkeypatch.setattr(qa_runner, "runtime", runtime)
+    assert qa_runner.main([tool, *args]) == 2
+
+
+@pytest.mark.parametrize(
+    ("tool", "flag"), [("owner", "--email"), ("first-manager", "--expected-email")]
+)
+def test_operator_accepts_only_the_single_bare_flag_with_the_pinned_identity(tool, flag):
+    args = ["--environment", "development", flag, qa_runner.OPERATIONS_EMAIL]
+    action = "add-operations-owner" if tool == "owner" else tool
+    assert qa_runner.command(tool, args) == [action, *args]
