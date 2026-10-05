@@ -37,6 +37,7 @@ import { callTitle, type CallLabel } from "./call-label";
 import { readCallLabel, renameCall } from "./call-label-client";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
+import reps from "./calls-reps.module.css";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { csvRows } from "./csv-export";
@@ -255,6 +256,7 @@ function CallsLibraryContent({
   });
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedRep, setSelectedRep] = useState("");
   const [sort, setSort] = useState<CallSort>("newest");
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -283,6 +285,22 @@ function CallsLibraryContent({
   const requestGeneration = useRef(0);
   const mounted = useRef(true);
 
+  // A later authorised read can remove rep visibility. Drop the old scope,
+  // including pages that were not part of this read, rather than keeping it.
+  function ownersWithdrawn(rows: LibrarySubmission[]) {
+    return (
+      submissionsRef.current.some((row) => row.owner) &&
+      (rows.length === 0 || rows.some((row) => !row.owner))
+    );
+  }
+
+  function clearRepScope() {
+    setSelectedRep("");
+    setPicked(new Set());
+    setPreviewId(null);
+    setRenamingId(null);
+  }
+
   function refreshFirstPage(identityKey: string, forceReset: boolean) {
     if (!mounted.current || access?.authenticated !== true) return;
     if (activeRequest.current) {
@@ -309,7 +327,10 @@ function CallsLibraryContent({
     activeRequestKind.current = "refresh";
     const generation = ++requestGeneration.current;
     setRefreshing(true);
-    void acquisition("/submissions", { signal: controller.signal })
+    void acquisition(
+      preview ? "/submissions" : "/submissions?include_owners=true",
+      { signal: controller.signal },
+    )
       .then((value) => {
         const page = parseSubmissionLibraryPage(value);
         if (
@@ -332,8 +353,13 @@ function CallsLibraryContent({
         const hasNewSubmission = page.submissions.some(
           (submission) => !currentIds.has(submission.id),
         );
+        const withdrawn = ownersWithdrawn(page.submissions);
+        if (withdrawn) clearRepScope();
         const resetPage =
-          forceReset || firstPageMembershipChanged || hasNewSubmission;
+          withdrawn ||
+          forceReset ||
+          firstPageMembershipChanged ||
+          hasNewSubmission;
         const refreshedById = new Map(
           page.submissions.map((submission) => [submission.id, submission]),
         );
@@ -343,6 +369,11 @@ function CallsLibraryContent({
               (submission) => refreshedById.get(submission.id) ?? submission,
             );
         submissionsRef.current = nextRows;
+        setSelectedRep((selected) =>
+          nextRows.some((row) => row.owner?.personId === selected)
+            ? selected
+            : "",
+        );
         setSubmissions(nextRows);
         firstPageSubmissionIds.current = refreshedFirstPageIds;
         if (resetPage) {
@@ -408,7 +439,10 @@ function CallsLibraryContent({
     activeRequestKind.current = "initial";
     const generation = ++requestGeneration.current;
     mounted.current = true;
-    void acquisition("/submissions", { signal: controller.signal })
+    void acquisition(
+      preview ? "/submissions" : "/submissions?include_owners=true",
+      { signal: controller.signal },
+    )
       .then((value) => {
         const page = parseSubmissionLibraryPage(value);
         if (
@@ -460,7 +494,7 @@ function CallsLibraryContent({
       if (requestGeneration.current === generation)
         requestGeneration.current += 1;
     };
-  }, [access?.authenticated, attempt, identityKey]);
+  }, [access?.authenticated, attempt, identityKey, preview]);
 
   useEffect(() => {
     if (
@@ -561,9 +595,12 @@ function CallsLibraryContent({
     const generation = ++requestGeneration.current;
     try {
       const page = parseSubmissionLibraryPage(
-        await acquisition(`/submissions?before=${encodeURIComponent(before)}`, {
-          signal: controller.signal,
-        }),
+        await acquisition(
+          `/submissions?${preview ? "" : "include_owners=true&"}before=${encodeURIComponent(before)}`,
+          {
+            signal: controller.signal,
+          },
+        ),
       );
       if (
         controller.signal.aborted ||
@@ -578,7 +615,18 @@ function CallsLibraryContent({
         )
       )
         throw new Error("library_duplicate_submission");
-      const appended = [...submissionsRef.current, ...page.submissions];
+      const withdrawn = ownersWithdrawn(page.submissions);
+      if (withdrawn) {
+        clearRepScope();
+        seenSubmissionIds.current = new Set();
+        firstPageSubmissionIds.current = new Set(
+          page.submissions.map((row) => row.id),
+        );
+        loadedCursors.current = new Set(["", before]);
+      }
+      const appended = withdrawn
+        ? page.submissions
+        : [...submissionsRef.current, ...page.submissions];
       submissionsRef.current = appended;
       for (const submission of page.submissions)
         seenSubmissionIds.current.add(submission.id);
@@ -632,6 +680,7 @@ function CallsLibraryContent({
     seenSubmissionIds.current = new Set();
     loadedCursors.current = new Set([""]);
     setSubmissions([]);
+    clearRepScope();
     setNextCursor(null);
     setError("");
     setLoading(true);
@@ -664,10 +713,30 @@ function CallsLibraryContent({
     { ready: 0, active: 0, attention: 0, idle: 0 } as Record<CallTone, number>,
   );
   const needle = query.trim().toLocaleLowerCase();
+  const repOptions = [
+    ...new Map(
+      submissions.flatMap((row) =>
+        row.owner ? [[row.owner.personId, row.owner] as const] : [],
+      ),
+    ).values(),
+  ].sort(
+    (a, b) =>
+      a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
+  );
+  const showReps = !preview && repOptions.length > 0;
+  // Number same-name options in UUID order; expose no additional account data.
+  const repLabel = (personId: string) => {
+    const owner = repOptions.find((rep) => rep.personId === personId)!;
+    const sameName = repOptions.filter((rep) => rep.name === owner.name);
+    return sameName.length > 1
+      ? `${owner.name} (${sameName.findIndex((rep) => rep.personId === personId) + 1})`
+      : owner.name;
+  };
   const visibleSubmissions = sortCalls(
     submissions.filter(
       (submission) =>
         (filter === "all" || callTone(submission) === filter) &&
+        (!selectedRep || submission.owner?.personId === selectedRep) &&
         (!needle ||
           callTitle(
             submission.label,
@@ -869,6 +938,11 @@ function CallsLibraryContent({
                 ? `${formatCreatedDate(submission.createdAt)} · ${formatCreatedTime(submission.createdAt)}`
                 : formatCreatedTime(submission.createdAt)}
             </small>
+            {showReps && submission.owner ? (
+              <span className={reps.phoneRep}>
+                Rep: {repLabel(submission.owner.personId)}
+              </span>
+            ) : null}
             {workspace && submission.hasReport ? (
               insight ? (
                 <span className={styles.rowInsight}>
@@ -920,6 +994,18 @@ function CallsLibraryContent({
               )
             ) : null}
           </span>
+          {showReps ? (
+            <span
+              className={reps.desktopRep}
+              aria-label={
+                submission.owner
+                  ? `Rep: ${repLabel(submission.owner.personId)}`
+                  : undefined
+              }
+            >
+              {submission.owner ? repLabel(submission.owner.personId) : "—"}
+            </span>
+          ) : null}
           <span
             className="calls-library-duration"
             aria-label={
@@ -1090,7 +1176,7 @@ function CallsLibraryContent({
 
   const content = (
     <div
-      className={`xray-app simple-app calls-library-app ${styles.root}`}
+      className={`xray-app simple-app calls-library-app ${styles.root} ${showReps ? reps.root : ""}`}
       data-variant={variant}
       data-workspace={workspace ? "true" : undefined}
     >
@@ -1274,6 +1360,22 @@ function CallsLibraryContent({
                   })}
                 </div>
                 <div className="calls-library-tools">
+                  {showReps ? (
+                    <label className={reps.filter}>
+                      <span>Rep (loaded calls)</span>
+                      <select
+                        value={selectedRep}
+                        onChange={(event) => setSelectedRep(event.target.value)}
+                      >
+                        <option value="">All reps</option>
+                        {repOptions.map((rep) => (
+                          <option key={rep.personId} value={rep.personId}>
+                            {repLabel(rep.personId)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label className={styles.search}>
                     <Search size={15} aria-hidden="true" />
                     <input
@@ -1384,6 +1486,7 @@ function CallsLibraryContent({
               <div className="calls-library-columns" aria-hidden="true">
                 <span />
                 <span>Call</span>
+                {showReps ? <span>Rep</span> : null}
                 <span>Length</span>
                 <span>Status</span>
                 <span />
@@ -1393,20 +1496,23 @@ function CallsLibraryContent({
                 <p className="calls-library-filter-empty" role="status">
                   {needle
                     ? `No loaded calls match “${query.trim()}”.`
-                    : "No loaded calls match this status."}{" "}
+                    : selectedRep
+                      ? "No loaded calls match these filters."
+                      : "No loaded calls match this status."}{" "}
                   <button
                     type="button"
                     className="text-button"
                     onClick={() => {
                       setFilter("all");
                       setQuery("");
+                      setSelectedRep("");
                     }}
                   >
                     Show all calls
                   </button>
                 </p>
               ) : null}
-              {filter !== "all" && nextCursor ? (
+              {(filter !== "all" || selectedRep) && nextCursor ? (
                 <p className="calls-library-filter-note">
                   The filter covers loaded calls only. Load more to include
                   older calls.

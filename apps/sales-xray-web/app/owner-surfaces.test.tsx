@@ -87,7 +87,8 @@ it("keeps the Calls workspace controls", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo) =>
-      String(input) === "/v1/conversation/acquisition/submissions"
+      String(input) ===
+      "/v1/conversation/acquisition/submissions?include_owners=true"
         ? new Response(
             JSON.stringify({
               submissions: [

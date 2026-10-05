@@ -196,7 +196,10 @@ beforeEach(() => {
           state: accepted ? "report_ready" : "ready",
         });
       }
-      if (path.endsWith("/submissions"))
+      if (
+        path.endsWith("/submissions") ||
+        path.endsWith("/submissions?include_owners=true")
+      )
         return json({
           submissions: [
             {
