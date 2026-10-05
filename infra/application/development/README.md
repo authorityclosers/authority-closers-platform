@@ -247,7 +247,7 @@ sudo python3 "$S" status --require-ancestor "$M"          # expect contains[M]=t
 sudo python3 "$S" rollback                                # plan; add --apply to restore
 ```
 
-## Admin dev QA browser credential (AUT-970, AUT-984)
+## Admin dev QA browser credential (AUT-970, AUT-984, AUT-1156)
 
 Browser QA signs a fictional identity into Admin dev without seeing its
 password. Declared references (names only; a separately reviewed fixture task
@@ -256,7 +256,7 @@ broker refuses with `broker_secret_unavailable`):
 
 | Identity | Account | Infisical `dev` folder | Secret name | Required Admin merge |
 | --- | --- | --- | --- | --- |
-| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` | `1daeb174…` (AUT-890) |
+| `billing-staff` | `qa-billing-staff-aut969@example.test` | `/application` | `AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF` | `1daeb174…` (AUT-890) |
 | `organisation-operator` | `qa-org-operator-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR` | `61e6b240…` (AUT-447) |
 | `organisation-reader` | `qa-org-reader-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER` | `61e6b240…` (AUT-447) |
 | `organisation-denied` | `qa-org-denied-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED` | `61e6b240…` (AUT-447) |
@@ -271,10 +271,18 @@ establish them):
 | `organisation-reader` | required | must be absent | 200 list |
 | `organisation-denied` | must be absent | must be absent | 403 `authorization_denied` |
 
+Billing staff must hold `platform_billing_manage` from the same normal
+`GET /v1/me/platform-access` API. It does not need an Organisations permission
+or request. Missing access routes, failed readback or a missing grant refuse
+the browser handoff. The fixture customer is not a broker identity.
+
 - `scripts/dev-qa-credential.py`, installed root:root 0750 as
   `/usr/local/sbin/ac-dev-qa-credential`, is the only root step. It reuses
   `/usr/local/sbin/ac-infisical-run` with `dev` and the identity's folder; a root
-  inner process writes only the one named value to a pipe. It refuses unless
+  inner process writes only the selected value from the exact declared
+  secret-name allowlist to a pipe, including when the folder is `/application`.
+  The old billing name, the customer password and undeclared names are refused.
+  It refuses unless
   called through sudo by a non-root user, from the installed launcher, with
   stdout a pipe and an allowlisted identity. The bootstrap, `INFISICAL_TOKEN`,
   the folder's other secrets and every API/DB credential stay in root.
@@ -291,7 +299,8 @@ establish them):
   and require `/v1/me` to return the named account. The browser reaches the
   https origin through an in-process TLS bridge to the edge, trusted by the
   ephemeral key's SPKI pin, so the real Host, Origin and `__Host-` cookies
-  apply. Organisation identities additionally need, before any credential,
+  apply. All identities need, before any credential,
+  `/v1/me/platform-access` signed out → 401. Organisation identities also need
   `/v1/platform/organisations` signed out → 401 (404 means the API route is not
   deployed: `organisations_route_absent`), and after sign-in the matrix above
   from `/v1/me/platform-access` and the list route; any difference refuses with

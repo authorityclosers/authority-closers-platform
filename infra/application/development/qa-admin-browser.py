@@ -21,8 +21,9 @@ Order:
 3. Credential: the broker sends the real password over a pipe into this
    process's memory; it is typed into the real form over the DevTools pipe and
    the buffer is zeroed. The run passes only when ``/v1/me`` returns the named
-   identity. No API, session or capability is mocked or bypassed. Organisation
-   identities then need ``/v1/me/platform-access`` to grant exactly their
+   identity. No API, session or capability is mocked or bypassed. Billing staff
+   needs ``platform_billing_manage`` from ``/v1/me/platform-access``. Organisation
+   identities need the same API to grant their
    capability matrix and ``/v1/platform/organisations`` to read or deny to match;
    only the person id and permission names are printed.
 4. Hand-off: prints the loopback DevTools URL for Browser QA (Playwright
@@ -69,7 +70,7 @@ class AccessCheck:
 
     required: tuple[str, ...]
     absent: tuple[str, ...]
-    organisations: str  # GET /v1/platform/organisations: "read" or "denied"
+    organisations: str | None  # GET /v1/platform/organisations: "read", "denied" or unused
 
 
 @dataclass(frozen=True)
@@ -91,11 +92,12 @@ ORGANISATIONS_UI_MERGE = "61e6b240cd16c35ca87c19518aefcba1f3d3d555"
 # Keep names, emails and secret references equal to the broker's table.
 IDENTITIES = {
     "billing-staff": Identity(
-        email="qa-billing-staff-aut959@example.test",
-        folder="/sales-xray/dev-fixture-accounts",
-        secret="AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF",  # noqa: S106 - a name, not a value
+        email="qa-billing-staff-aut969@example.test",
+        folder="/application",
+        secret="AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF",  # noqa: S106 - a name, not a value
         # AUT-890: Admin Billing uses the staff refund route.
         required_merges=("1daeb17431a83a1330e9ec5f2362c29d3bb39c30",),
+        access=AccessCheck(("platform_billing_manage",), (), None),
     ),
     # AUT-984: capabilities come only from platform grants; organisation
     # membership roles cannot establish them (AUT-961).
@@ -217,8 +219,11 @@ def preflight(
     require(status == 401, "admin_dev_api_route_unavailable")
     if identity.access is not None:
         # Signed out, a present route answers 401; an absent one 404.
-        status, _ = edge(ORGANISATIONS_ROUTE)
-        require(status == 401, "organisations_route_absent")
+        status, _ = edge("/v1/me/platform-access")
+        require(status == 401, "platform_access_route_absent")
+        if identity.access.organisations is not None:
+            status, _ = edge(ORGANISATIONS_ROUTE)
+            require(status == 401, "organisations_route_absent")
     status, body = edge("/health/ready", API_PORT)
     try:
         ready = json.loads(body or b"{}").get("status") == "ready"
@@ -629,15 +634,18 @@ def check_access(access: AccessCheck, granted: Any, organisations: Any) -> dict[
         "permission_matrix_mismatch",
     )
     organisations = organisations if isinstance(organisations, dict) else {}
-    status = organisations.get("status")
-    require(status != 404, "organisations_route_absent")
-    if access.organisations == "read":
-        require(status == 200 and organisations.get("listed") is True, "organisations_read_refused")
-    else:
-        require(
-            status == 403 and organisations.get("code") == "authorization_denied",
-            "organisations_not_capability_denied",
-        )
+    if access.organisations is not None:
+        status = organisations.get("status")
+        require(status != 404, "organisations_route_absent")
+        if access.organisations == "read":
+            require(
+                status == 200 and organisations.get("listed") is True, "organisations_read_refused"
+            )
+        else:
+            require(
+                status == 403 and organisations.get("code") == "authorization_denied",
+                "organisations_not_capability_denied",
+            )
     return {
         "person_id": person_id,
         "platform_permissions": sorted(held),
@@ -646,7 +654,9 @@ def check_access(access: AccessCheck, granted: Any, organisations: Any) -> dict[
 
 
 def verify_access(browser: Browser, access: AccessCheck) -> dict[str, Any]:
-    return check_access(access, browser.evaluate(ACCESS_JS), browser.evaluate(ORGANISATIONS_JS))
+    granted = browser.evaluate(ACCESS_JS)
+    organisations = browser.evaluate(ORGANISATIONS_JS) if access.organisations is not None else None
+    return check_access(access, granted, organisations)
 
 
 # Leak checks -----------------------------------------------------------------
