@@ -123,8 +123,7 @@
 
 .skip,
 .next,
-.link,
-.launcher {
+.link {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -155,8 +154,7 @@
 }
 
 .card button:focus-visible,
-.card a:focus-visible,
-.launcher:focus-visible {
+.card a:focus-visible {
   outline: 3px solid var(--lx-teal);
   outline-offset: 3px;
 }
@@ -179,17 +177,6 @@
   background: var(--lx-teal);
   color: var(--lx-on-teal);
   font: 600 11px/1.4 var(--lx-font-ui);
-}
-
-.launcher {
-  position: fixed;
-  right: max(20px, env(safe-area-inset-right));
-  bottom: max(20px, env(safe-area-inset-bottom));
-  z-index: 330;
-  border: 1px solid var(--lx-line-strong);
-  background: var(--lx-surface);
-  box-shadow: var(--lx-shadow-1);
-  color: var(--lx-ink-3);
 }
 
 @keyframes arrive {
@@ -234,10 +221,6 @@
   .content h2 {
     font-size: 19px;
   }
-  .launcher {
-    right: 16px;
-    bottom: max(76px, calc(64px + env(safe-area-inset-bottom)));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -251,8 +234,7 @@
 
 @media print {
   .card,
-  .coach,
-  .launcher {
+  .coach {
     display: none;
   }
 }
