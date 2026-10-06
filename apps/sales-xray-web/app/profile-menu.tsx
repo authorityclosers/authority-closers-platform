@@ -3,6 +3,7 @@
 import {
   ArrowUpRight,
   ChevronDown,
+  CircleUserRound,
   FileText,
   FolderOpen,
   LogOut,
@@ -302,6 +303,27 @@ export function ProfileMenu({
           </div>
           <div className={styles.separator} role="separator" />
           <div className={styles.actions}>
+            {authenticated ? (
+              <Link
+                href="/account#profile"
+                className={styles.item}
+                onClick={(event) => {
+                  setOpen(false);
+                  if (
+                    window.location.pathname !== "/account" &&
+                    opensInPlace(event)
+                  ) {
+                    event.preventDefault();
+                    // Closing Settings must return focus to a mounted control.
+                    trigger.current?.focus();
+                    openSettings("profile");
+                  }
+                }}
+              >
+                <CircleUserRound size={16} aria-hidden="true" />
+                <span>Profile</span>
+              </Link>
+            ) : null}
             {authenticated ? (
               <Link
                 href={accountHref}
