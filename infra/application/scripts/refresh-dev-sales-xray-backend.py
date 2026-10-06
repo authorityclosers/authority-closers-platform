@@ -809,9 +809,7 @@ def failure_report(
     }
 
 
-def refresh(
-    paths: Paths, runner=command, *, uid: int | None = None, preserve_studio: bool = False
-) -> dict[str, Any]:
+def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str, Any]:
     if (os.geteuid() if uid is None else uid) != 0:
         raise RefreshError("root_required")
     target = select_target(paths, runner)
@@ -977,19 +975,6 @@ def refresh(
         print(json.dumps(report, sort_keys=True))
         code = failure.code if restored["ok"] else "rollback_failed"
         raise RefreshError(code, failure.exit_status) from None
-    if preserve_studio:
-        # Reviewed backend repairs must leave the owner's active UI checkout intact.
-        result = {
-            "target": target,
-            "previous": previous,
-            "migrated": "yes",
-            "restarted": list(DEV_UNITS),
-            "health": checked,
-            "studio": "preserved",
-            "smoke": "skipped",
-        }
-        print(json.dumps(result, sort_keys=True))
-        return result
     ui_head = ""
     try:
         ui_head = studio_step(paths, runner, target)
@@ -1023,14 +1008,9 @@ def refresh(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--preserve-studio",
-        action="store_true",
-        help="Refresh only the staging-selected backend; leave the active UI checkout intact.",
-    )
-    args = parser.parse_args(argv)
+    parser.parse_args(argv)
     try:
-        result = refresh(Paths(), preserve_studio=args.preserve_studio)
+        result = refresh(Paths())
         if result.get("noop"):
             print(json.dumps(result, sort_keys=True))
         return 0

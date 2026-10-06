@@ -126,6 +126,7 @@ def test_private_root_refuses_missing_permissions_and_links(tmp_path):
     with pytest.raises(MediaStorageUnavailable):
         module.require_private_root(root)
     root.mkdir(mode=0o755)
+    root.chmod(0o755)  # Keep the unsafe fixture independent of the runner's umask.
     with pytest.raises(MediaStorageUnavailable, match="unsafe"):
         module.require_private_root(root)
     root.chmod(0o700)

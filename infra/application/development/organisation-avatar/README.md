@@ -53,8 +53,7 @@ contents. Ensure host available memory is at least 3 GiB and free disk is at
 least 2 GiB. Keep the refresh timer paused through both steps and rollback; if
 its service is already running, let that invocation finish before any change.
 Refuse links in every target path. Verify the existing dev data
-parent is 10001:10001, 0700 and the protected configuration parent is root:root,
-0700. Refuse any existing avatar directory with different ownership/mode or
+parent is 10001:10001, 0700 and the protected configuration parent is root:root, 0700. Refuse any existing avatar directory with different ownership/mode or
 an unexpected marker; preserve it rather than adopting it. Refuse a different
 installed scanner profile instead of overwriting it. An exact matching install
 can be reused. Never print environment files, sessions or credentials.
@@ -88,22 +87,28 @@ failure inside these limits; do not raise limits or reuse the production scanner
 
 ## Root step 2: compose and prove the API
 
-After step 1, use the reviewed refresh entry point if the dev backend does not
-yet contain the merged code. The consumer on AUT-1285 must not refresh it.
-Root records this dedicated invocation on its implementation child:
+After step 1, check the serving dev core for the approved merge. If a backend
+refresh is necessary, Root records the one-shot refresh grant, this dedicated
+invocation and its receipt on the API implementation child. The consumer on
+AUT-1285 must not refresh it. Verify the sibling script and helper hashes against
+the recorded release before running either; the helper must remain at SHA-256
+`1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc`:
 
 ```sh
-python3 "$AC_AVATAR_SOURCE/scripts/refresh-dev-sales-xray-backend.py" --preserve-studio
+python3 "$AC_AVATAR_SOURCE/scripts/refresh-dev-sales-xray-backend-only.py"
 ```
 
-This opt-in uses the same staging-selected core, identity/native guards,
-migration sandbox, manifest renderer, health check and automatic rollback as
-the scheduled refresh. It skips studio sync/merge and the UI smoke that relies
-on that merge. The scheduled timer's behavior is unchanged. Record the returned
-core and verify it contains the approved merge before proceeding. Record any
-completed migration and automatic rollback receipt. Confirm the active UI
-branch/head and dirty-file names still match the preflight. No alternate core
-pin, raw Git deployment or code rebuild is permitted.
+This sibling loads the scheduled helper behind the same immutable digest pin as
+the approval reseal tool. It reuses the staging-selected core, identity/native
+guards, migration sandbox, manifest renderer, health check and automatic
+rollback, then returns without studio sync/merge or the dependent UI smoke.
+It does not modify the helper or its guards. The scheduled helper and reseal
+tool remain byte-for-byte unchanged. Record the returned core and verify it
+contains the approved merge before proceeding. Record any completed migration
+and automatic rollback receipt. Confirm the active UI branch/head and dirty-file
+names still match the preflight. No alternate core pin, raw Git deployment or
+code rebuild is permitted. A no-op receipt does not prove health; use the ready
+probe below even when dev already runs the selected core.
 
 As Root, read `api.env` without printing it. Require `AC_ENVIRONMENT=development`
 and refuse any key beginning `AC_MEDIA_DEVELOPMENT_ORGANISATION_AVATAR_` there:
