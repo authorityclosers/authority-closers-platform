@@ -1,6 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Operational reads need the scheduled backup's actual socket restriction.
+# AC_IPV4_ONLY alone does not establish it. Probe before loading credentials;
+# already-restricted children stay in place, retaining environment and lock FDs.
+address_family_status=0
+python3 - <<'PY' || address_family_status=$?
+import errno
+import socket
+import sys
+
+try:
+    probe = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+except OSError as error:
+    sys.exit(0 if error.errno == errno.EAFNOSUPPORT else 11)
+else:
+    probe.close()
+    sys.exit(10)
+PY
+case "$address_family_status" in
+  0) export AC_IPV4_ONLY=1 ;;
+  10)
+    exec systemd-run --quiet --wait --collect --pipe \
+      --setenv=AC_IPV4_ONLY=1 \
+      -p 'NoNewPrivileges=true' \
+      -p 'RestrictAddressFamilies=AF_INET AF_UNIX' \
+      "$0" "$@"
+    ;;
+  *) printf 'Backup address-family check failed safely.\n' >&2; exit 1 ;;
+esac
+
 env_file='/etc/authority-closers/secrets/infisical-bootstrap.env'
 [[ -r "$env_file" ]] || { printf 'Infisical bootstrap is not readable: %s\n' "$env_file" >&2; exit 1; }
 
