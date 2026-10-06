@@ -1,10 +1,10 @@
 "use client";
 
 import {
+  ChartNoAxesCombined,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
-  Clock3,
   CreditCard,
   LifeBuoy,
   LogOut,
@@ -59,6 +59,13 @@ import { useFirstCallGuideSwitch } from "./guide-toggle";
 import { notify, dismissNotice } from "./notice-center";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { AccountAvatarImage } from "./speaker-avatar";
+import {
+  analysedTrend,
+  readCallActivity,
+  readCallSummary,
+  type CallActivity,
+  type CallSummary,
+} from "./dashboard/dashboard-data";
 import styles from "./account-view.module.css";
 
 type Loaded<T> =
@@ -97,7 +104,7 @@ const SECTIONS: ReadonlyArray<{
 }> = [
   { id: "general", label: "General", icon: Settings2 },
   { id: "profile", label: "Profile", icon: CircleUserRound },
-  { id: "usage", label: "Analysis time", icon: Clock3 },
+  { id: "usage", label: "Usage & activity", icon: ChartNoAxesCombined },
   { id: "billing", label: "Plan & billing", icon: CreditCard },
   { id: "security", label: "Security", icon: ShieldCheck },
   { id: "help", label: "Help & support", icon: LifeBuoy },
@@ -405,7 +412,15 @@ export function AccountSettings({
           )}
         </Pane>
 
-        <Pane id="usage" title="Analysis time" active={section} onBack={back}>
+        <Pane
+          id="usage"
+          title="Usage & activity"
+          active={section}
+          onBack={back}
+        >
+          {section === "usage" ? (
+            <CallActivitySummary variant={variant} />
+          ) : null}
           <AllowanceSummary allowance={allowance} onRetry={retry} />
           <div className={styles.row}>
             <div className={styles.rowText}>
@@ -605,6 +620,134 @@ function Row({
         {hint ? <span className={styles.rowHint}>{hint}</span> : null}
       </div>
       {children ? <div className={styles.rowControl}>{children}</div> : null}
+    </div>
+  );
+}
+
+function CallActivitySummary({ variant }: { variant: "page" | "dialog" }) {
+  const [summary, setSummary] = useState<Loaded<CallSummary | null>>({
+    state: "loading",
+  });
+  const [activity, setActivity] = useState<Loaded<CallActivity | null>>({
+    state: "loading",
+  });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void readCallSummary(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setSummary({ state: "ready", value });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSummary({ state: "error" });
+      });
+    void readCallActivity(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setActivity({ state: "ready", value });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setActivity({ state: "error" });
+      });
+    return () => controller.abort();
+  }, [attempt]);
+
+  const retry = () => {
+    setSummary({ state: "loading" });
+    setActivity({ state: "loading" });
+    setAttempt((value) => value + 1);
+  };
+  const trend =
+    activity.state === "ready" && activity.value
+      ? analysedTrend(activity.value)
+      : null;
+
+  return (
+    <>
+      <Row
+        label="Call activity"
+        hint="Saved calls and analysis activity in your selected workspace."
+      >
+        <Link
+          className={styles.secondary}
+          href="/dashboard"
+          replace={variant === "dialog"}
+        >
+          Open Dashboard
+        </Link>
+      </Row>
+      <section aria-label="Saved call counts">
+        {summary.state === "ready" && summary.value ? (
+          <>
+            <Row label="Saved calls">
+              <span>{summary.value.total}</span>
+            </Row>
+            <Row label="Completed calls">
+              <span>{summary.value.completed}</span>
+            </Row>
+            <Row label="Processing calls">
+              <span>{summary.value.processing}</span>
+            </Row>
+            <Row label="Needs attention">
+              <span>{summary.value.needsAttention}</span>
+            </Row>
+          </>
+        ) : (
+          <ActivityReadStatus
+            value={summary}
+            label="Saved call counts"
+            onRetry={retry}
+          />
+        )}
+      </section>
+      <section aria-label="Recent analysis activity">
+        {activity.state === "ready" && activity.value ? (
+          <>
+            <Row
+              label="Calls analysed in the last 30 days"
+              hint={`India time${trend ? ` · ${trend.text}` : ""}`}
+            >
+              <span>{activity.value.analysedLast30Days}</span>
+            </Row>
+            <Row label="Calls analysed in the previous 30 days">
+              <span>{activity.value.analysedPrevious30Days}</span>
+            </Row>
+          </>
+        ) : (
+          <ActivityReadStatus
+            value={activity}
+            label="Recent analysis activity"
+            onRetry={retry}
+          />
+        )}
+      </section>
+    </>
+  );
+}
+
+function ActivityReadStatus({
+  value,
+  label,
+  onRetry,
+}: {
+  value: Loaded<unknown>;
+  label: string;
+  onRetry: () => void;
+}) {
+  if (value.state === "loading")
+    return (
+      <p className={styles.muted} role="status" aria-busy="true">
+        Loading {label.toLowerCase()}…
+      </p>
+    );
+  if (value.state === "ready")
+    return <p className={styles.muted}>{label}: not available yet.</p>;
+  return (
+    <div className={styles.error} role="alert">
+      <p>{label} could not be loaded.</p>
+      <button type="button" className={styles.secondary} onClick={onRetry}>
+        <RefreshCw size={15} aria-hidden="true" /> Reload activity
+      </button>
     </div>
   );
 }
