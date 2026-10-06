@@ -342,7 +342,7 @@ it("return verification shows minutes and the canonical new balance, with no dup
   expect(text()).toContain("Order minutes800");
   expect(text()).not.toMatch(/credits/i);
   expect(host.querySelector('span[aria-live="polite"]')?.textContent).toBe(
-    "+800 analysis minutes",
+    "+800 analysis minutes (13 h 20 min)",
   );
   expect(verifyOrder).toHaveBeenCalled();
   fixtureProviderReports(checkout.order.orderId, "paid");
@@ -364,12 +364,16 @@ it("keeps the final announcement stable while the visible minutes animate", asyn
     await render(<AnimatedCountUp targetMinutes={800} />);
     const announcement = host.querySelector('[aria-live="polite"]')!;
     const animated = host.querySelector('[aria-hidden="true"]')!;
-    expect(announcement.textContent).toBe("+800 analysis minutes");
+    expect(announcement.textContent).toBe(
+      "+800 analysis minutes (13 h 20 min)",
+    );
     await act(async () => frame(100));
     expect(animated.textContent).toContain("+0");
     await act(async () => frame(700));
     expect(animated.textContent).toContain("+700");
-    expect(announcement.textContent).toBe("+800 analysis minutes");
+    expect(announcement.textContent).toBe(
+      "+800 analysis minutes (13 h 20 min)",
+    );
   } finally {
     await act(async () => root.render(null));
     animation.mockRestore();
