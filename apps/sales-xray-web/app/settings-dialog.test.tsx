@@ -13,12 +13,14 @@ vi.mock("next/link", () => ({
   default: ({
     href,
     replace,
+    onClick,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { replace?: boolean }) => (
     <a
       {...props}
       href={href}
       onClick={(event) => {
+        onClick?.(event);
         const navigate =
           !event.defaultPrevented &&
           event.button === 0 &&
@@ -42,6 +44,8 @@ vi.mock("next/link", () => ({
 }));
 
 import { SettingsDialogHost } from "./settings-dialog";
+import { ProfileMenu } from "./profile-menu";
+import { invalidateShellProfile } from "./shell/profile-store";
 import { closeSettings, openSettings } from "./settings-open";
 import { GuideProgressStore } from "./guide-progress";
 import { FIRST_CALL_GUIDE } from "./guide-registry";
@@ -80,7 +84,11 @@ async function flush() {
   });
 }
 
-async function render(authenticated: boolean, personId: string | null = "p") {
+async function render(
+  authenticated: boolean,
+  personId: string | null = "p",
+  withProfileMenu = false,
+) {
   await act(async () =>
     root.render(
       <UploadSessionProvider>
@@ -95,6 +103,9 @@ async function render(authenticated: boolean, personId: string | null = "p") {
             retry: () => {},
           }}
         >
+          {withProfileMenu ? (
+            <ProfileMenu authenticated={authenticated} accountHref="/account" />
+          ) : null}
           <SettingsDialogHost />
         </WorkspaceAccessProvider>
       </UploadSessionProvider>,
@@ -260,3 +271,40 @@ it.each(["ctrl", "meta", "shift", "blank", "download"])(
     expect(host.querySelector("dialog")).not.toBeNull();
   },
 );
+
+it("opens Profile from the pop-up without leaving the current call and returns focus", async () => {
+  invalidateShellProfile();
+  window.history.replaceState(
+    null,
+    "",
+    "/analysis/calls/fictional-call?view=report",
+  );
+  await render(true, "p", true);
+  const trigger = host.querySelector<HTMLButtonElement>(
+    "button[aria-expanded]",
+  )!;
+  await act(async () => trigger.click());
+  const profileLink = host.querySelector<HTMLAnchorElement>(
+    '[aria-label="Profile actions"] a[href="/account#profile"]',
+  )!;
+  profileLink.focus();
+  await act(async () => profileLink.click());
+  await flush();
+  expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+  expect(window.location.pathname + window.location.search).toBe(
+    "/analysis/calls/fictional-call?view=report",
+  );
+  expect(window.location.hash).toBe("#settings/profile");
+  const dialog = host.querySelector("dialog")!;
+  expect(
+    dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain("Profile");
+  expect(dialog.querySelector("#account-pane-profile")?.textContent).toContain(
+    "asha@example.invalid",
+  );
+  await act(async () => closeSettings("replace"));
+  await flush();
+  expect(host.querySelector("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  invalidateShellProfile();
+});

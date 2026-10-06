@@ -5,6 +5,7 @@ import { invalidateShellProfile } from "./shell/profile-store";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
 import { WorkspaceAccessProvider } from "./workspace-access";
+import { SETTINGS_CHANGE_EVENT } from "./settings-open";
 
 vi.mock("./live-data-banner", () => ({ LocalSettingsButton: () => null }));
 (
@@ -21,6 +22,7 @@ const profile = (name: string | null) => ({
 });
 beforeEach(() => {
   invalidateShellProfile();
+  window.history.replaceState(null, "", "/dashboard");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -172,6 +174,7 @@ it("does not fetch an account profile for a guest", async () => {
     host.querySelector('[aria-label="Profile actions"] a[href="/login"]')
       ?.textContent,
   ).toBe("Sign in");
+  expect(host.querySelector('a[href="/account#profile"]')).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
 });
 it("starts inline account sign-in so a staged file can stay mounted", async () => {
@@ -270,3 +273,79 @@ it("keeps the current session when sign out cannot be confirmed", async () => {
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).not.toBeNull();
 });
+
+it.each(["header", "rail"] as const)(
+  "opens Profile in place from the %s pop-up and keeps Settings available",
+  async (variant) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+    );
+    window.history.replaceState(null, "", "/dashboard?view=activity");
+    await act(async () =>
+      root.render(
+        <ProfileMenu authenticated accountHref="/account" variant={variant} />,
+      ),
+    );
+    const trigger = host.querySelector<HTMLButtonElement>(
+      "button[aria-expanded]",
+    )!;
+    await act(async () => trigger.click());
+    const link = host.querySelector<HTMLAnchorElement>(
+      'a[href="/account#profile"]',
+    )!;
+    expect(link.textContent).toBe("Profile");
+    expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/account"]')?.textContent).toBe(
+      "Settings",
+    );
+    await act(async () => link.click());
+    expect(window.location.pathname + window.location.search).toBe(
+      "/dashboard?view=activity",
+    );
+    expect(window.location.hash).toBe("#settings/profile");
+    expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  },
+);
+
+it.each([
+  ["account page", "/account#general", {}],
+  ["Control click", "/dashboard", { ctrlKey: true }],
+  ["Command click", "/dashboard", { metaKey: true }],
+  ["Shift click", "/dashboard", { shiftKey: true }],
+] as const)(
+  "keeps normal Profile link navigation for %s",
+  async (_case, path, modifiers) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+    );
+    window.history.replaceState(null, "", path);
+    await act(async () =>
+      root.render(<ProfileMenu authenticated accountHref="/account" />),
+    );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+    );
+    const link = host.querySelector<HTMLAnchorElement>(
+      'a[href="/account#profile"]',
+    )!;
+    const changed = vi.fn();
+    window.addEventListener(SETTINGS_CHANGE_EVENT, changed);
+    try {
+      const event = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        ...modifiers,
+      });
+      await act(async () => link.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(false);
+      expect(changed).not.toHaveBeenCalled();
+      expect(window.location.hash).not.toBe("#settings/profile");
+      expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+    } finally {
+      window.removeEventListener(SETTINGS_CHANGE_EVENT, changed);
+    }
+  },
+);
