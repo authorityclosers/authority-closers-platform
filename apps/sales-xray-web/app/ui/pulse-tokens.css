@@ -1,0 +1,86 @@
+/*
+ * Scoped Pulse-role to Sales Xray teal adapter and operational density tokens.
+ * Source: docs/research/r6-pulse-latest-design.md (AUT-1451 / Card 2).
+ *
+ * Maps Pulse's 20 semantic roles (--theme-*) to Sales Xray's authoritative
+ * Lightbox tokens (--lx-*) so Pulse operational components can be reused
+ * without brand drift, circular aliases, or focus regressions.
+ *
+ * Scoped to adapted component boundaries ([data-pulse-theme], [data-pulse-adapted],
+ * .pulse-adapted, [data-pulse-scope], [data-theme-adapter="pulse"], .pulse-scope)
+ * so global Sales Xray tokens remain authoritative:
+ * - Keyboard focus remains teal (--lx-teal / --lx-ring-focus).
+ * - Coaching focus remains orange (--lx-focus).
+ * - Primary actions remain teal (--lx-teal), never Pulse iris.
+ * - All 20 roles resolve in both light and dark themes via var(--lx-*).
+ */
+
+:where(
+  [data-pulse-theme],
+  [data-pulse-adapted],
+  .pulse-adapted,
+  [data-pulse-scope],
+  [data-theme-adapter="pulse"],
+  .pulse-scope
+) {
+  /* ---------- Canvas & Surfaces ---------- */
+  --theme-canvas: var(--lx-paper);
+  --theme-surface: var(--lx-surface);
+  --theme-surface-subtle: var(--lx-sunken);
+
+  /* ---------- Typography & Text ---------- */
+  --theme-text: var(--lx-ink);
+  --theme-text-muted: var(--lx-muted);
+
+  /* ---------- Borders ---------- */
+  --theme-border: var(--lx-line);
+  --theme-border-strong: var(--lx-line-strong);
+
+  /* ---------- Brand & Actions (Teal, never Iris) ---------- */
+  --theme-action: var(--lx-teal);
+  --theme-action-hover: var(--lx-teal-hover);
+  --theme-action-text: var(--lx-on-teal);
+  --theme-brand-2: var(--lx-teal-2);
+
+  /* ---------- Focus (Teal outline, never --lx-focus coaching orange) ---------- */
+  --theme-focus: var(--lx-teal);
+
+  /* ---------- Semantic Status ---------- */
+  --theme-info: var(--lx-info);
+  --theme-success: var(--lx-success);
+  --theme-warning: var(--lx-warning);
+  --theme-danger: var(--lx-danger);
+
+  /* ---------- Disabled States ---------- */
+  --theme-disabled-surface: var(--lx-sunken);
+  --theme-disabled-text: var(--lx-muted);
+
+  /* ---------- Elevation & Motion ---------- */
+  --theme-shadow: var(--lx-shadow-1);
+  --theme-transition-duration: var(--lx-dur-quick);
+
+  /* ---------- Operational Density & Proportions (study 2.4 / card 2) ---------- */
+  --theme-control-compact-h: var(--lx-control-compact-h, 32px);
+  --theme-control-h: var(--lx-control-h, 36px);
+  --theme-table-head-h: var(--lx-table-head-h, 36px);
+  --theme-row-min-h: var(--lx-row-min-h, 44px);
+  --theme-panel-head-min-h: var(--lx-panel-head-min-h, 48px);
+  --theme-tile-min-h: var(--lx-tile-min-h, 96px);
+  --theme-radius-panel: var(--lx-radius-md, 14px);
+  --theme-radius-control: var(--lx-radius-sm, 10px);
+  --theme-font-ui: var(--lx-font-ui);
+}
+
+/* Reduced motion honors instant transition */
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    [data-pulse-theme],
+    [data-pulse-adapted],
+    .pulse-adapted,
+    [data-pulse-scope],
+    [data-theme-adapter="pulse"],
+    .pulse-scope
+  ) {
+    --theme-transition-duration: 0ms;
+  }
+}

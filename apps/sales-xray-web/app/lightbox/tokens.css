@@ -21,6 +21,10 @@
  *   --lx-hypothesis so status and inference text keep 4.5:1 in dark.
  * - Added the [data-script="deva"] rule: Devanagari source quotes carry an unknown-language
  *   script tag, so :lang(hi|mr) alone cannot keep them upright.
+ * - Added operational density tokens (AUT-1451 / study section 2.4 card 2):
+ *   --lx-control-compact-h (32px), --lx-control-h (36px), --lx-table-head-h (36px),
+ *   --lx-row-min-h (44px), --lx-panel-head-min-h (48px), --lx-tile-min-h (96px),
+ *   and corresponding --lx-density-* aliases.
  */
 
 :root {
@@ -181,6 +185,20 @@
     #6366f1 100%
   );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
+
+  /* ---------- Operational density (study section 2.4, card 2) ---------- */
+  --lx-control-compact-h: 32px;
+  --lx-control-h: 36px;
+  --lx-table-head-h: 36px;
+  --lx-row-min-h: 44px;
+  --lx-panel-head-min-h: 48px;
+  --lx-tile-min-h: 96px;
+  --lx-density-control-compact: 32px;
+  --lx-density-control: 36px;
+  --lx-density-table-head: 36px;
+  --lx-density-row-min: 44px;
+  --lx-density-panel-head: 48px;
+  --lx-density-tile-min: 96px;
 }
 
 /* Devanagari: never synthesise italics, always give it more leading. */
