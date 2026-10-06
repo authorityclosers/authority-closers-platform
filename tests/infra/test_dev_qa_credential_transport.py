@@ -6,10 +6,12 @@ deployed receipt are faked. The live sentinel run is recorded in the PR evidence
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -692,7 +694,10 @@ def test_operator_injection_refuses_target_changes_or_missing_inputs(change):
         qa_runner.injected_environment({**operator_inputs(), **change})
 
 
-@pytest.mark.parametrize("failure", [None, "owner", "checksum", "source", "endpoint", "driver"])
+@pytest.mark.parametrize(
+    "failure",
+    [None, "owner", "checksum", "source", "image-id", "missing-image", "endpoint", "driver"],
+)
 def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_dev_bridge(
     tmp_path, failure
 ):
@@ -717,12 +722,14 @@ def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_de
     outputs = iter(
         (
             b"",
-            f"sha256:{'b' * 64}|{'wrong' if failure == 'source' else qa_runner.RELEASE}".encode(),
+            f"{image if failure != 'image-id' else 'sha256:' + 'b' * 64}|"
+            f"{'wrong' if failure == 'source' else qa_runner.RELEASE}".encode(),
             json.dumps(
                 {
-                    "verified-dev-bridge": {
+                    qa_runner.DATABASE_NETWORK: {
                         "IPAddress": "172.27.0.3" if failure == "endpoint" else "172.27.0.2"
-                    }
+                    },
+                    "bridge": {"IPAddress": "172.17.0.2"},
                 }
             ).encode(),
             b"host" if failure == "driver" else b"bridge",
@@ -732,16 +739,24 @@ def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_de
 
     def runner(argv, **kwargs):
         calls.append((argv, kwargs))
-        code = 1 if failure == "checksum" and argv[0] == "sha256sum" else 0
+        code = int(
+            (failure == "checksum" and argv[0] == "sha256sum")
+            or (failure == "missing-image" and argv[:3] == ["docker", "image", "inspect"])
+        )
         return subprocess.CompletedProcess(argv, code, next(outputs), b"")
 
     if failure:
         with pytest.raises(qa_runner.RunnerRefused):
             qa_runner.runtime(Release(), runner=runner)
+        assert all(
+            argv[0] == "sha256sum"
+            or argv[1:3] in (["image", "inspect"], ["inspect", "--format"], ["network", "inspect"])
+            for argv, _ in calls
+        )
         return
     argv = qa_runner.runtime(Release(), runner=runner)
     assert argv[-1] == image
-    assert argv[argv.index("--network") + 1] == "verified-dev-bridge"
+    assert argv[argv.index("--network") + 1] == qa_runner.DATABASE_NETWORK
     for flag in (
         "--pull=never",
         "--read-only",
@@ -756,6 +771,172 @@ def test_operator_runtime_is_digest_pinned_bounded_and_uses_only_the_verified_de
     assert not any(flag.startswith(("--volume", "--publish", "--privileged")) for flag in argv)
     assert calls[0][0] == ["sha256sum", "--check", "--strict", "--quiet", "RELEASE-FILES.sha256"]
     assert all(kwargs["env"] == qa_runner.SAFE_ENV for _, kwargs in calls)
+
+
+@pytest.mark.parametrize(
+    ("networks", "accepted"),
+    [
+        ({"acdev-xray": {"IPAddress": "172.27.0.2"}}, True),
+        ({"bridge": {"IPAddress": "172.17.0.2"}, "acdev-xray": {"IPAddress": "172.27.0.2"}}, True),
+        ({"bridge": {"IPAddress": "172.27.0.2"}}, False),
+        ({"acdev-xray": {"IPAddress": "172.27.0.3"}}, False),
+        ({"acdev-xray": {}}, False),
+        ({"acdev-xray": None}, False),
+        ({"acdev-xray": {"IPAddress": "172.27.0.2"}, "bridge": None}, False),
+        (
+            {"acdev-xray": {"IPAddress": "172.27.0.2"}, "bridge": {"IPAddress": "172.27.0.2"}},
+            False,
+        ),
+        ({}, False),
+        ([], False),
+    ],
+)
+def test_operator_selects_exact_network_and_refuses_missing_wrong_or_ambiguous_endpoints(
+    tmp_path, networks, accepted
+):
+    image = "sha256:" + "a" * 64
+    (tmp_path / "release-images.env").write_text(
+        f"AC_RELEASE_ID={qa_runner.RELEASE}\nAC_API_IMAGE={image}\n"
+    )
+    release = SimpleNamespace(
+        is_dir=lambda: True,
+        is_symlink=lambda: False,
+        stat=lambda: SimpleNamespace(st_uid=0, st_mode=0o755),
+    )
+
+    class Release:
+        def __getattr__(self, name):
+            return getattr(release, name)
+
+        def __truediv__(self, name):
+            return tmp_path / name
+
+    outputs = iter(
+        (b"", f"{image}|{qa_runner.RELEASE}".encode(), json.dumps(networks).encode(), b"bridge")
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, next(outputs), b"")
+
+    if not accepted:
+        with pytest.raises(qa_runner.RunnerRefused):
+            qa_runner.runtime(Release(), runner=runner)
+        assert len(calls) == 3
+    else:
+        argv = qa_runner.runtime(Release(), runner=runner)
+        assert argv[argv.index("--network") + 1] == "acdev-xray"
+        assert calls[-1] == [
+            "docker",
+            "network",
+            "inspect",
+            "--format",
+            "{{.Driver}}",
+            "acdev-xray",
+        ]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        "release",
+        "uid",
+        "dns-wrong",
+        "dns-ambiguous",
+        "dns-empty",
+        "dns-ipv6",
+        "module-missing",
+        *qa_runner.MODULE_SHA256,
+    ],
+)
+def test_operator_executable_probe_verifies_source_uid_modules_and_all_dns_answers(
+    monkeypatch, tmp_path, failure, capsys
+):
+    # Replace only the expected source digests with hashes of fictional modules;
+    # execute the same probe logic without a released container or live network.
+    expected = {}
+    specs = {}
+    for name in qa_runner.MODULE_SHA256:
+        path = tmp_path / f"{name}.py"
+        content = f"# fictional module {name}\n".encode()
+        expected[name] = hashlib.sha256(content).hexdigest()
+        path.write_bytes(content if failure != name else b"# wrong executable\n")
+        specs[name] = SimpleNamespace(origin=str(path))
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: None if failure == "module-missing" else specs[name],
+    )
+    original_read_text = Path.read_text
+
+    def read_text(path, *args, **kwargs):
+        if str(path) == "/app/.ac-release-id":
+            return "wrong" if failure == "release" else qa_runner.RELEASE
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(os, "getuid", lambda: 0 if failure == "uid" else 10001)
+    addresses = ["172.17.0.2"] if failure == "dns-wrong" else ["172.27.0.2"]
+    if failure == "dns-ambiguous":
+        addresses.append("172.17.0.2")
+    if failure == "dns-empty":
+        addresses = []
+    if failure == "dns-ipv6":
+        addresses.append("::1")
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args: [(None, None, None, None, (ip, 5432)) for ip in addresses],
+    )
+    probe = qa_runner.PROBE.replace(repr(qa_runner.MODULE_SHA256), repr(expected))
+    if failure:
+        with pytest.raises((AssertionError, AttributeError)):
+            exec(probe, {})  # noqa: S102 - repository-owned probe with fictional modules
+    else:
+        exec(probe, {})  # noqa: S102 - repository-owned probe with fictional modules
+        assert capsys.readouterr().out.strip() == "released_dev_qa_contract_ok"
+
+
+def test_operator_preflight_receipt_requires_successful_probe_without_injected_inputs(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(qa_runner.os, "geteuid", lambda: 0)
+    image = "sha256:" + "a" * 64
+    monkeypatch.setattr(
+        qa_runner,
+        "runtime",
+        lambda **kw: ["docker", "run", "--network", "acdev-xray", "--entrypoint=python", image],
+    )
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0, b"released_dev_qa_contract_ok\n", b"")
+
+    assert qa_runner.main(["preflight"], runner=runner) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt == {
+        "ok": True,
+        "release": qa_runner.RELEASE,
+        "image": image,
+        "network": "acdev-xray",
+        "database_container": "acdev-postgres",
+        "database_ip": "172.27.0.2",
+        "module_sha256": qa_runner.MODULE_SHA256,
+        "uid": 10001,
+    }
+    assert len(calls) == 1
+    assert calls[0][1]["env"] == qa_runner.SAFE_ENV
+
+    def refused(argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 2, b"", b"fictional-private-diagnostic")
+
+    assert qa_runner.main(["preflight"], runner=refused) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "refused" in captured.err and "fictional-private-diagnostic" not in captured.err
 
 
 @pytest.mark.parametrize("tool", ["fixture", "inventory"])
