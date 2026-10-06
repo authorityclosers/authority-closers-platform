@@ -166,6 +166,18 @@ describe("Lightbox token derivative", () => {
       "glow-ink",
       "film-lens-outline",
       "film-lens-fill",
+      "control-compact-h",
+      "control-h",
+      "table-head-h",
+      "row-min-h",
+      "panel-head-min-h",
+      "tile-min-h",
+      "density-control-compact",
+      "density-control",
+      "density-table-head",
+      "density-row-min",
+      "density-panel-head",
+      "density-tile-min",
     ]);
     const addedDark = new Set([
       "on-teal",
@@ -304,5 +316,99 @@ describe("Lightbox token derivative", () => {
       )
       .map((path) => relative(appDir, path));
     expect(offenders).toEqual([]);
+  });
+
+  describe("Scoped Pulse-role to Sales Xray teal adapter (AUT-1451 card 2)", () => {
+    const pulseTokensPath = join(appDir, "ui", "pulse-tokens.css");
+    const pulseTokensCss = readFileSync(pulseTokensPath, "utf8");
+
+    it("declares all 20 Pulse semantic roles in ui/pulse-tokens.css", () => {
+      const pulseRoles = [
+        "canvas",
+        "surface",
+        "surface-subtle",
+        "text",
+        "text-muted",
+        "border",
+        "border-strong",
+        "action",
+        "action-hover",
+        "action-text",
+        "focus",
+        "brand-2",
+        "info",
+        "success",
+        "warning",
+        "danger",
+        "disabled-surface",
+        "disabled-text",
+        "shadow",
+        "transition-duration",
+      ];
+
+      const clean = withoutComments(pulseTokensCss);
+      for (const role of pulseRoles) {
+        expect(clean).toMatch(new RegExp(`--theme-${role}:`));
+      }
+      expect(pulseRoles).toHaveLength(20);
+    });
+
+    it("maps Pulse roles strictly to Sales Xray teal/neutral tokens without iris or circular aliases", () => {
+      const clean = withoutComments(pulseTokensCss);
+
+      // No Iris action or brand colors
+      expect(clean).not.toMatch(
+        /#(5b45d6|4a35c0|7a68e6|a99cff|bdb3ff|b8adff)/i,
+      );
+
+      // No circular aliases (--lx-* mapping back to --theme-*)
+      expect(clean).not.toMatch(/--lx-[a-z0-9-]+:\s*var\(--theme-/);
+
+      // Action and brand map to teal
+      expect(clean).toMatch(/--theme-action:\s*var\(--lx-teal\);/);
+      expect(clean).toMatch(/--theme-action-hover:\s*var\(--lx-teal-hover\);/);
+      expect(clean).toMatch(/--theme-action-text:\s*var\(--lx-on-teal\);/);
+      expect(clean).toMatch(/--theme-brand-2:\s*var\(--lx-teal-2\);/);
+
+      // Focus outline is teal, NEVER coaching orange --lx-focus
+      expect(clean).toMatch(/--theme-focus:\s*var\(--lx-teal\);/);
+      expect(clean).not.toMatch(/--theme-focus:\s*var\(--lx-focus\);/);
+
+      // Coaching focus token --lx-focus in tokens.css remains orange (#b45309 in light, #f59e0b in dark)
+      expect(appLight.get("focus")).toBe("#b45309");
+      expect(appDarkOverrides.get("focus")).toBe("#f59e0b");
+    });
+
+    it("scopes the adapter so global :root is not polluted", () => {
+      const clean = withoutComments(pulseTokensCss);
+      // Must not declare --theme-* at global :root, html or body
+      expect(clean).not.toMatch(
+        /(?:^|\n)\s*(:root|html|body)\b[^{]*\{[^}]*--theme-/,
+      );
+      // Must declare under adapted component scope
+      expect(clean).toMatch(
+        /data-pulse-theme|data-pulse-adapted|\.pulse-adapted/,
+      );
+    });
+
+    it("is imported in styles.css via scoped import", () => {
+      expect(styles).toMatch(/@import\s+["']\.\/ui\/pulse-tokens\.css["'];/);
+    });
+
+    it("resolves operational density tokens on adapted components and in root", () => {
+      expect(appLight.get("control-compact-h")).toBe("32px");
+      expect(appLight.get("control-h")).toBe("36px");
+      expect(appLight.get("table-head-h")).toBe("36px");
+      expect(appLight.get("row-min-h")).toBe("44px");
+      expect(appLight.get("panel-head-min-h")).toBe("48px");
+      expect(appLight.get("tile-min-h")).toBe("96px");
+
+      const clean = withoutComments(pulseTokensCss);
+      expect(clean).toContain("--theme-control-compact-h");
+      expect(clean).toContain("--theme-control-h");
+      expect(clean).toContain("--theme-row-min-h");
+      expect(clean).toContain("--theme-panel-head-min-h");
+      expect(clean).toContain("--theme-tile-min-h");
+    });
   });
 });
