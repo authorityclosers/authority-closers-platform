@@ -159,6 +159,13 @@ target contains `scripts/ops/ac_smoke.py`, the script runs the development smoke
 against that core and the merged UI checkout; otherwise it reports `skipped`.
 Smoke failures are reported without rolling back the backend.
 
+An explicitly reviewed backend repair can use `--preserve-studio` to retain
+the owner's active UI checkout. Backend admission, migration, health and rollback
+stay in force; studio sync/merge and its dependent UI smoke are skipped. The
+scheduled timer supplies no flag and keeps its usual behavior. The isolated
+organisation logo profile has its own [Root installation and rollback steps](organisation-avatar/README.md)
+and never activates the broader filesystem media profile.
+
 ## Fixture accounts
 
 `python -m ac_platform.development.sales_xray_fixture_accounts` creates three

@@ -1,0 +1,46 @@
+name: ac-dev-organisation-avatar
+services:
+  scanner:
+    image: clamav/clamav@sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f
+    container_name: ac-dev-organisation-avatar-scanner
+    user: "100:100"
+    entrypoint: ["/bin/sh", "/opt/ac-dev-avatar/entrypoint.sh"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    pids_limit: 32
+    environment:
+      TZ: Etc/UTC
+      CLAMAV_NO_MILTERD: "true"
+      FRESHCLAM_CHECKS: "12"
+    volumes:
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
+      - ./freshclam.conf:/etc/clamav/freshclam.conf:ro
+      - ./entrypoint.sh:/opt/ac-dev-avatar/entrypoint.sh:ro
+      - type: bind
+        source: /var/lib/ac-dev-organisation-avatar/signatures
+        target: /var/lib/clamav
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /run/ac-dev-organisation-avatar
+        target: /run/ac-dev-organisation-avatar
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=100,gid=100,mode=0700
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=1:1", "--config-file=/etc/clamav/clamd.conf"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 6m
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"

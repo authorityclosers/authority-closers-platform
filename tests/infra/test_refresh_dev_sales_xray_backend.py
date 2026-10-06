@@ -557,6 +557,20 @@ def test_main_branch_uses_ff_only_and_smoke_failure_keeps_backend(tree, capsys):
     )
 
 
+def test_explicit_backend_repair_preserves_studio_and_keeps_health_and_rollback(tree, capsys):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.studio_conflict = True
+    value = refresh.refresh(paths, fake, uid=0, preserve_studio=True)
+    assert value["studio"] == "preserved" and value["smoke"] == "skipped"
+    assert value["health"]["ok"] and value["target"] == sha
+    assert restarts(fake) == list(UNIT_ORDER)
+    assert sandbox_steps(fake)[0][-2:] == ["upgrade", "head"]
+    assert not any(args[0] == "runuser" for args, _ in fake.calls)
+    assert not paths.studio_lock.exists()
+    assert json.loads(capsys.readouterr().out)["studio"] == "preserved"
+
+
 def test_studio_conflict_aborts_and_alerts_without_backend_rollback(tree, capsys):
     paths, sha, _, _ = tree
     fake = FakeCommands(sha)
@@ -763,13 +777,14 @@ def test_first_install_failure_before_migration_restores_absent_state(
     assert fake.units == dict.fromkeys(fake.units, "inactive")
 
 
-def test_first_install_restart_failure_with_no_previous_stops_units(tree, capsys):
+@pytest.mark.parametrize("preserve_studio", [False, True])
+def test_first_install_restart_failure_with_no_previous_stops_units(tree, capsys, preserve_studio):
     paths, sha, _, _ = tree
     fake = FakeCommands(sha)
     fake.fail_api_restart = True
     fake.restart_status = 217
     with pytest.raises(refresh.RefreshError, match="api_restart_failed"):
-        refresh.refresh(paths, fake, uid=0)
+        refresh.refresh(paths, fake, uid=0, preserve_studio=preserve_studio)
     result = failure_report(capsys)
     assert (result["phase"], result["exit_status"], result["migrated"]) == ("restart", 217, "yes")
     assert result["previous"] is None and result["rollback"]["ok"]

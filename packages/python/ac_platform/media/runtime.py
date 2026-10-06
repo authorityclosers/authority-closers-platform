@@ -62,6 +62,7 @@ class MediaRuntime:
     telemetry: TelemetryRecorder
     local_avatar_runtime: LocalAvatarRuntime | None = None
     filesystem_avatar_runtime: LocalAvatarRuntime | None = None
+    organisation_avatar_runtime: LocalAvatarRuntime | None = None
     environment: str = "local"
     media_config: MediaProviderConfig | None = None
     activation_verifier: MediaProviderActivationVerifier | None = None
@@ -273,6 +274,15 @@ def create_media_runtime(
 
 def create_default_media_runtime(settings: Settings) -> MediaRuntime:
     """Build the application runtime with its fail-closed composition defaults."""
+
+    if settings.media_development_organisation_avatar_enabled:
+        from ac_platform.media.development_organisation_avatar_runtime import (
+            compose_development_organisation_avatar_runtime,
+        )
+
+        return compose_development_organisation_avatar_runtime(
+            settings, create_media_runtime(settings)
+        )
 
     if settings.media_filesystem_enabled:
         from ac_platform.db.session import session_factory
