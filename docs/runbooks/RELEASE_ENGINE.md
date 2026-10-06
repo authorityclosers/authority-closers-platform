@@ -6,12 +6,12 @@ never builds anything. It downloads the exact bundles CI produced, keeps an
 immutable copy in `/srv/authority-closers/release-store/<sha>/`, and runs the
 same source-owned installers the laptop script used to run over SSH.
 
-| Piece | Source | Installed by the engine with |
-|---|---|---|
-| Core app (API, worker, learner, admin, coach) | `ac-application-<sha>` from `application.yml` | `infra/application/scripts/install-application-release.sh` |
-| Sales Xray web | `ac-sales-xray-web-<sha>` from `sales-xray-web-image.yml` (built only when web inputs change) | `verify-artifact.py`, `docker load`, compose `up --wait` |
-| Sales Xray activation | the running release's `/etc/authority-closers/sales-xray/<env>/activation-<sha>.json` | carried forward with `prepare-sales-xray-native-activation.py` (see [Sales Xray activation](#sales-xray-activation)) |
-| Sales Xray native | `ac-sales-xray-native-<sha>` from `sales-xray-native-image.yml` (built only when native inputs change) | stored for good in `release-store/native/<sha>/`; a new native image is still installed separately with `install-sales-xray-native.py` |
+| Piece                                         | Source                                                                                                 | Installed by the engine with                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core app (API, worker, learner, admin, coach) | `ac-application-<sha>` from `application.yml`                                                          | `infra/application/scripts/install-application-release.sh`                                                                                                      |
+| Sales Xray web                                | `ac-sales-xray-web-<sha>` from `sales-xray-web-image.yml` (built only when web inputs change)          | `verify-artifact.py`, `docker load`, compose `up --wait`                                                                                                        |
+| Sales Xray activation                         | the running release's `/etc/authority-closers/sales-xray/<env>/activation-<sha>.json`                  | carried forward with `prepare-sales-xray-native-activation.py` (see [Sales Xray activation](#sales-xray-activation))                                            |
+| Sales Xray native                             | `ac-sales-xray-native-<sha>` from `sales-xray-native-image.yml` (built only when native inputs change) | retained in `release-store/native/<sha>/`; `prepare-native` admits a staging transition and the automatic core path invokes the artifact-bound native installer |
 
 ## One-time setup (owner)
 
@@ -34,15 +34,16 @@ already installed. `ac-release status` shows the installed engine commit.
 
 ## Commands
 
-| Command | Does |
-|---|---|
-| `ac-release status` | What runs where, pause state, failures |
-| `ac-release deploy staging [SHA] [--component core\|web\|all] [--dry-run]` | Deploy a commit on `main` (default: latest) |
-| `ac-release pause staging` / `resume staging` | Stop or restart automatic deploys; `resume` also clears failure marks |
-| `ac-release rollback staging --component web` | Restore the previous Sales Xray web image |
-| `ac-release history -n 20` | Recent deploy records (`/var/lib/ac-release/history.jsonl`) |
-| `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]` | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space)) |
-| `ac-release store-native SHA [--from ZIP]` | Keep a Sales Xray native build for good. Downloads it while GitHub still has it; `--from` adopts a saved copy only if it matches the digest and size GitHub recorded |
+| Command                                                                                                              | Does                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ac-release status`                                                                                                  | What runs where, pause state, failures                                                                                                                                                                                            |
+| `ac-release deploy staging [SHA] [--component core\|web\|all] [--dry-run]`                                           | Deploy a commit on `main` (default: latest)                                                                                                                                                                                       |
+| `ac-release pause staging` / `resume staging`                                                                        | Stop or restart automatic deploys; `resume` also clears failure marks                                                                                                                                                             |
+| `ac-release rollback staging --component web`                                                                        | Restore the previous Sales Xray web image                                                                                                                                                                                         |
+| `ac-release history -n 20`                                                                                           | Recent deploy records (`/var/lib/ac-release/history.jsonl`)                                                                                                                                                                       |
+| `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]`                                      | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space))                                                                                                               |
+| `ac-release store-native SHA [--from ZIP]`                                                                           | Keep a Sales Xray native build for good. Downloads it while GitHub still has it; `--from` adopts a saved copy only if it matches the digest and size GitHub recorded                                                              |
+| `ac-release prepare-native staging SHA --previous-native-units PATH --previous-native-units-sha256 HASH [--dry-run]` | Verify an exact native transition and both rollback directions. Without `--dry-run`, save an engine preparation receipt. Both modes leave units, current links, activation publication, approvals and containment flags unchanged |
 
 Logs for each deploy are in `/var/log/ac-release/`.
 
@@ -201,6 +202,125 @@ deployment, organisation writes, activation changes or new canary.
 
 ## Sales Xray activation
 
+### Governed native transition (staging)
+
+Unchanged native inputs continue through the strict existing compatibility proof.
+An input change, including a native workflow change, still refuses carry-forward.
+It requires the target's own stored ordinary CI artifact and an engine preparation
+receipt. `store-native` alone does not install or activate anything.
+
+`prepare-native` validates the original successful main push, first run attempt,
+repository/run/artifact identities, artifact expiry, the retained ZIP digest and
+size, all bundle checksums, committed source tree/recipes/helper bytes, the OCI
+index/manifest/config/layers, and the image environment bindings. It refuses an
+expired or incomplete target record. It also checks target/predecessor ancestry,
+approval lifetime (at least one day), exact approval bytes, the predecessor's
+immutable helper/image, rendered unit descriptor and installed unit bytes,
+active/enabled units and socket/mount readback. The prior renderer, core bundle,
+healthy core identity, backup support and equal migration heads must be available
+for the canonical application-only rollback. Missing rollback pins refuse before
+Docker load, unit replacement or activation publication.
+
+The predecessor descriptor must come from the existing root-owned staging
+operator inputs and be pinned by its recorded SHA-256. Read that path/hash from
+the successful native installation receipt; do not generate a substitute unit
+descriptor or provenance record. The engine's reviewed native installer permits
+the verified current core release renderer to supervise a target helper before
+the target core source is installed. This override is an internal engine API;
+there is no new standalone native-install CLI option.
+
+Each core deploy with a preparation receipt reruns these checks, checks the
+receipt's artifact/controller/approval/predecessor pins, prepares the matching
+activation without approval replacement, and rehearses the target units. A dry
+run uses disposable stages and publishes no activation or preparation receipt.
+It does not load an image or start/stop units, and does not clear pause/failure
+marks. Existing immutable store admission and mirror/log activity are separate
+from runtime changes.
+
+On automatic deployment the engine retains both immutable artifacts, saves the
+predecessor descriptor beside the candidate, and records `native-transition:
+armed` before loading the target image and invoking the existing artifact-bound
+installer. It then publishes the activation using permanent operator-input
+paths and invokes the core installer. Failure in native install/start/readback,
+activation publication, core installation or subsequent core readiness restores
+the pinned predecessor helper and units first, then uses the installed reviewed
+controller's `AC_CORE_ROLLBACK_ONLY` path to restore the prior core without
+database migration/restore. Recovery verifies the old activation hash and healthy
+core. Created target publication is removed after restoration; its immutable
+operator bundle and all receipts remain. Staging stays paused with the failed
+target recorded. Unverifiable recovery records `recovery-failed` and keeps
+containment. Transition receipts retain their core rollback bundles/images from
+normal pruning. The operation is staging-only and does not change production
+holds or provider authority.
+
+### Pause-preserving engine bootstrap and exact recovery handoff
+
+Root operates these commands only after sensitive CTO review and CEO SHA-bound
+merge approval. This source card authorizes no host execution. The installed
+engine's paused tick returns before self-update; keep staging contained and
+install the reviewed source through the existing engine installer instead.
+
+1. Record the merged repair SHA and successful ordinary CI run, and the prior
+   installed engine SHA/hash. Use Root's existing clean source checkout at the
+   exact reviewed merged commit. Verify `git rev-parse HEAD` and a clean status;
+   no edited installed engine file or application/native installer invocation
+   is an acceptable bootstrap.
+2. Record hashes/bytes of `staging.paused`, `staging.core.failed`, every unrelated
+   production pause/failure/inflight flag and production enablement. Verify the
+   existing tick/train/watch timers already exist and are active/enabled, so
+   this route adds no timer or timer enablement. Refuse this route if that
+   prerequisite differs; record the concrete host repair on the Root parent.
+   Review the installer and its installed unit/module file list against the
+   source pin before running it.
+3. From that exact clean checkout, under the engine's canonical lock, run:
+
+   ```bash
+   sudo flock --exclusive /run/ac-release.lock bash infra/release/install-release-engine.sh
+   sudo ac-release status --json
+   sudo ac-release prepare-native --help
+   ```
+
+   The supported installer switches `/opt/ac-release/current` to the immutable
+   source release. On an existing installation it leaves state/hold flags
+   untouched. Read back the installed SHA and `ac_release.py` hash against the
+   reviewed checkout, all preserved flags byte-for-byte, and the unchanged
+   running core/web identities. If installation fails or readback differs,
+   reinstall the recorded previous exact clean source through the **same**
+   locked installer, and verify those same flags/identities; do not repoint the
+   engine link by hand or clear staging containment. Root retains this host
+   installation and rollback evidence on its existing recovery parent.
+
+4. For the already built recovery target, use the recorded predecessor unit
+   path/hash. These are operators' receipt pins, not values to invent:
+
+   ```bash
+   target_sha=386f28ba6f046fd2dda1727ca6736f9260f79709
+   sudo ac-release prepare-native staging "$target_sha" \
+     --previous-native-units "$previous_units_path" \
+     --previous-native-units-sha256 "$previous_units_sha256" --dry-run
+   sudo ac-release prepare-native staging "$target_sha" \
+     --previous-native-units "$previous_units_path" \
+     --previous-native-units-sha256 "$previous_units_sha256"
+   sudo ac-release deploy staging "$target_sha" --component core --dry-run
+   ```
+
+   Preserve the preparation receipt and exact native/activation/core dry-run
+   evidence on the Root parent. The recorded bundle/run is reused; no CI rerun,
+   rebuild or manual native installation is authorized. If any check refuses,
+   keep containment and report the exact missing or changed binding.
+
+5. After Root verifies all checks and the parent's authorized recovery guards,
+   Root may run `sudo ac-release resume staging`. Let the **existing timer**
+   perform the automatic deployment; do not invoke deploy apply or manual tick.
+   Record resulting core/native/activation identities, unchanged approval hash,
+   automatic success receipt and health, or containment/rollback evidence.
+
+The source handoff must replace the merge SHA placeholder in Root's receipt with
+the exact reviewed merged commit and its CI identity before host installation.
+The source issue is not complete on PR approval: it needs merged green source,
+this reviewed bootstrap route and exact invocation evidence. Root owns the
+installed capability and ultimate live staging proof on the recovery parent.
+
 A core release that runs hosted Sales Xray needs its own activation
 descriptor. The installer refuses a release without one. For each core deploy
 (real or dry run), the engine does the following:
@@ -224,8 +344,8 @@ The engine never creates, renews or widens an approval. A new approval (new
 limits, testers or providers) is still prepared by a person against a new
 release. The engine also pauses staging, with a message, in two cases:
 
-- the release changes the native image inputs (install the new native build
-  first);
+- the release changes the native image inputs (use `prepare-native` with the
+  target's stored ordinary CI bundle and recorded predecessor pins first);
 - the running native build is not stored and GitHub has already dropped it
   (adopt the saved copy with `store-native --from`).
 
@@ -233,15 +353,15 @@ release. The engine also pauses staging, with a message, in two cases:
 
 Two stores keep core release bundles on the server:
 
-| Store | Holds | Cleaned by |
-|---|---|---|
-| `/srv/authority-closers/release-store/<sha>/` | The engine's downloads | The engine, after each successful deploy: what runs plus the last 10 successful deploys |
-| `/srv/authority-closers/application/artifacts/<sha>/` | The installer's immutable copy of every core bundle it installed (about 390 MB each), plus the four images it loaded into Docker | `ac-release prune-artifacts`, run by the owner |
+| Store                                                 | Holds                                                                                                                            | Cleaned by                                                                              |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `/srv/authority-closers/release-store/<sha>/`         | The engine's downloads                                                                                                           | The engine, after each successful deploy: what runs plus the last 10 successful deploys |
+| `/srv/authority-closers/application/artifacts/<sha>/` | The installer's immutable copy of every core bundle it installed (about 390 MB each), plus the four images it loaded into Docker | `ac-release prune-artifacts`, run by the owner                                          |
 
 GitHub keeps each bundle for one day, so these copies are the only local way
 to reinstall an older release. Once a copy is removed, reinstalling that
 release needs its bundle from the release store, or a new package from the
-*Application release package recovery* workflow.
+_Application release package recovery_ workflow.
 
 ### What `prune-artifacts` keeps
 
@@ -257,6 +377,8 @@ A core artifact stays if any of these is true. The report prints the reasons.
    names `artifacts/<sha>`. Files over 1 MB are not scanned.
 4. It is one of the newest N (`--keep-recent`, default 10), by the time it was
    written.
+5. A governed native preparation/transition receipt pins it as the target or
+   prior core rollback source.
 
 A core image (`authority-closers-api`, `-learner-web`, `-admin-web`,
 `-coach-web`) stays if any container uses it, or if it belongs to a kept

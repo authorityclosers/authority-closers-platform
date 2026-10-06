@@ -2213,7 +2213,7 @@ class Engine:
                             "provider_calls": 0,
                         }
                     )
-            except Exception as error:
+            except BaseException as error:
                 if native_plan is not None and native_plan.get("armed"):
                     # Persist containment first. A failed recovery cannot restart the train.
                     self.set_paused("staging", True, "native/core transition failed")
@@ -2222,7 +2222,7 @@ class Engine:
                     )
                     try:
                         self.restore_native_transition(build.sha, native_plan, log)
-                    except Exception as recovery_error:
+                    except BaseException as recovery_error:
                         self.record(
                             {
                                 "at": _now(),
@@ -2470,6 +2470,11 @@ class Engine:
                 and run["head_branch"] == "main"
                 and run["event"] == "push"
                 and run["run_attempt"] == 1
+                and type(run["run_attempt"]) is int
+                and type(run["id"]) is int
+                and run["id"] > 0
+                and type(run["repository"]["id"]) is int
+                and run["repository"]["id"] > 0
                 and run["status"] == "completed"
                 and run["conclusion"] == "success"
                 and record["name"] == f"ac-sales-xray-native-{sha}"
@@ -2565,7 +2570,7 @@ class Engine:
             }.items():
                 if env.get(key) != value:
                     raise ReleaseError("native environment binding mismatch")
-            self.verify_native_transport(target / "native-image.tar.gz", binding)
+            self.verify_native_transport(target / "native-image.tar.gz", binding, verifier)
             return target
         except ReleaseError:
             raise
@@ -2581,7 +2586,7 @@ class Engine:
             raise ReleaseError("native target admission failed") from error
 
     @staticmethod
-    def verify_native_transport(archive: Path, binding: Any) -> None:
+    def verify_native_transport(archive: Path, binding: Any, verifier: Any) -> None:
         """Check the offline OCI manifest/config pair before any docker load."""
         with tarfile.open(archive, "r:gz") as image:
             members = image.getmembers()
@@ -2607,12 +2612,39 @@ class Engine:
                     raw = stream.read(limit + 1)
                 if "sha256:" + hashlib.sha256(raw).hexdigest() != identity:
                     raise ReleaseError("native OCI digest mismatch")
-                return json.loads(raw)
+                return verifier.parse(raw)
+
+            index_member = image.getmember("index.json")
+            if not index_member.isfile() or not 0 < index_member.size <= 512_000:
+                raise ReleaseError("native OCI index invalid")
+            stream = image.extractfile(index_member)
+            assert stream is not None
+            with stream:
+                index = verifier.parse(stream.read(512_001))
+            tagged = [
+                entry
+                for entry in index["manifests"]
+                if entry.get("annotations", {}).get("io.containerd.image.name")
+                == "ghcr.io/authorityclosers/ac-sales-xray-native:" + binding.helper_source_sha
+            ]
+            if (
+                index["schemaVersion"] != 2
+                or len(tagged) != 1
+                or tagged[0]["digest"] != binding.image_ref
+            ):
+                raise ReleaseError("native OCI index source/manifest mismatch")
 
             manifest = blob(binding.image_ref, 1_000_000)
             if manifest["config"]["digest"] != binding.image_config_id:
                 raise ReleaseError("native OCI config mismatch")
             config = blob(binding.image_config_id, 8_000_000)
+            if (
+                manifest["config"]["size"]
+                != image.getmember(
+                    "blobs/sha256/" + binding.image_config_id.removeprefix("sha256:")
+                ).size
+            ):
+                raise ReleaseError("native OCI config size mismatch")
             runtime = config["config"]
             if (
                 config["os"] != "linux"
@@ -2624,6 +2656,25 @@ class Engine:
                 or runtime["Cmd"] != ["doctor"]
             ):
                 raise ReleaseError("native OCI runtime config mismatch")
+            layers = manifest["layers"]
+            if not isinstance(layers, list) or len(layers) > 128:
+                raise ReleaseError("native OCI layers invalid")
+            for layer in layers:
+                digest = layer["digest"]
+                if not DIGEST_RE.fullmatch(digest):
+                    raise ReleaseError("native OCI layer identity invalid")
+                member = image.getmember("blobs/sha256/" + digest.removeprefix("sha256:"))
+                if (
+                    not member.isfile()
+                    or member.size != layer["size"]
+                    or not 0 <= member.size <= 1_100_000_000
+                ):
+                    raise ReleaseError("native OCI layer size invalid")
+                stream = image.extractfile(member)
+                assert stream is not None
+                with stream:
+                    if "sha256:" + verifier.stream_sha(stream) != digest:
+                        raise ReleaseError("native OCI layer digest mismatch")
 
     def native_preparation_path(self, sha: str) -> Path:
         return self.paths.state / "native-preparations" / f"staging-{sha}.json"
@@ -2676,8 +2727,16 @@ class Engine:
                 return receipt
 
     def native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any]:
+        try:
+            return self._native_deployment_plan(sha, source, stage)
+        except ReleaseError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ReleaseError("native preparation is incomplete; runtime unchanged") from error
+
+    def _native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any]:
         path = self.native_preparation_path(sha)
-        if path.is_symlink():
+        if path.is_symlink() or not path.is_file():
             raise ReleaseError("native preparation must be a regular engine-owned receipt")
         prepared = json.loads(path.read_text(encoding="utf-8"))
         if (
@@ -2747,6 +2806,16 @@ class Engine:
         if (
             self.current_core("staging") != plan["previous_core"]
             or _sha256_file(plan["source_activation"]) != plan["source_activation_sha256"]
+            or _sha256_file(previous) != plan["previous_digest"]
+            or _sha256_file(plan["previous_manifest"]) != plan["previous_manifest_sha256"]
+            or _sha256_file(
+                Path(
+                    json.loads(plan["source_activation"].read_text(encoding="utf-8"))[
+                        "approval_file"
+                    ]
+                )
+            )
+            != plan["approval_sha256"]
         ):
             raise ReleaseError("native transition predecessor changed before install")
         # Record durable rollback pins before a Docker load or supervisor change.
@@ -2760,6 +2829,7 @@ class Engine:
                 "previous_native": plan["previous_native"],
                 "previous_native_units": str(previous),
                 "previous_native_units_sha256": plan["previous_digest"],
+                "previous_native_manifest_sha256": plan["previous_manifest_sha256"],
                 "source_activation_sha256": plan["source_activation_sha256"],
                 "approval_sha256": plan["approval_sha256"],
                 "provider_calls": 0,
@@ -2856,7 +2926,7 @@ class Engine:
             / f"native-restore-{sha}-{secrets.token_hex(8)}.json",
             start=True,
             native_artifact_manifest=plan["previous_manifest"],
-            native_artifact_sha256=_sha256_file(plan["previous_manifest"]),
+            native_artifact_sha256=plan["previous_manifest_sha256"],
             previous_native_units=plan["installed_units"],
             previous_native_units_sha256=_sha256_file(plan["installed_units"]),
             previous_supervisor_source=plan["supervisor"],
@@ -2904,6 +2974,18 @@ class Engine:
         )
 
     def prepare_native_transition(
+        self, sha: str, previous_units: Path, previous_digest: str, source: Path, stage: Path
+    ) -> dict[str, Any]:
+        try:
+            return self._prepare_native_transition(
+                sha, previous_units, previous_digest, source, stage
+            )
+        except ReleaseError:
+            raise
+        except Exception as error:
+            raise ReleaseError("native transition preflight failed; runtime unchanged") from error
+
+    def _prepare_native_transition(
         self, sha: str, previous_units: Path, previous_digest: str, source: Path, stage: Path
     ) -> dict[str, Any]:
         """Prove both directions and prepare policy before the first runtime mutation."""
@@ -3072,6 +3154,7 @@ class Engine:
             "binding": binding,
             "previous_binding": old_binding,
             "previous_manifest": old_manifest,
+            "previous_manifest_sha256": _sha256_file(old_manifest),
             "previous_units": previous_units,
             "previous_digest": previous_digest,
             "units": rendered,
@@ -3149,8 +3232,8 @@ class Engine:
             detail = lines[-1][:300] if lines else f"exit {completed.returncode}"
             if "native_inputs_changed" in detail:
                 raise ReleaseError(
-                    f"{sha[:12]} changes the Sales Xray native image; install its native "
-                    f"build before deploying it ({detail})"
+                    f"{sha[:12]} changes the Sales Xray native image; use ac-release "
+                    f"prepare-native staging {sha} with the recorded predecessor pins ({detail})"
                 )
             raise ReleaseError(f"Sales Xray activation could not be prepared: {detail}")
         result = json.loads(completed.stdout)
@@ -3593,6 +3676,7 @@ class Engine:
                 if len(recent) >= KEEP_RECENT_BUILDS:
                     break
         keep.update(recent)
+        keep.update(self.native_rollback_pins())
         for release in production_releases:
             if release is not None:
                 keep.update((release["core_sha"], release["web_sha"]))
@@ -3617,6 +3701,8 @@ class Engine:
         """
 
         keep: dict[str, list[str]] = {}
+        for sha in self.native_rollback_pins():
+            _add_reason(keep, sha, "governed native transition rollback pin")
         for environment in ENVIRONMENTS:
             current = self._current_release(environment)
             if current:
@@ -3626,6 +3712,19 @@ class Engine:
         for sha, reason in self._artifact_references():
             _add_reason(keep, sha, reason)
         return keep
+
+    def native_rollback_pins(self) -> set[str]:
+        """Transition receipts retain their core bundles/images as well as helpers."""
+        pins: set[str] = set()
+        for entry in self.history(10_000):
+            if entry.get("action") not in ("native-transition", "native-prepare"):
+                continue
+            for key in ("previous_core", "target"):
+                sha = entry.get(key)
+                if not isinstance(sha, str) or not SHA_RE.fullmatch(sha):
+                    raise ReleaseError("native transition rollback receipt is invalid")
+                pins.add(sha)
+        return pins
 
     def _current_release(self, environment: str) -> str | None:
         link = self.paths.application / f"current-{environment}"
