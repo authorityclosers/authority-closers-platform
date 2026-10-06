@@ -652,7 +652,9 @@ it("opens account access on guest file selection and keeps Analyze gated without
   workspaceUnauthorized = true;
   await mountWithAppSession();
   await select();
-  expect(container.textContent).toContain("Sales call.wav");
+  await act(async () =>
+    vi.waitFor(() => expect(container.textContent).toContain("Sales call.wav")),
+  );
   expect(
     container.querySelector('[aria-label="Back to your call"]'),
   ).not.toBeNull();

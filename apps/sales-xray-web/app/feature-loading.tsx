@@ -1,7 +1,7 @@
-export function FeatureLoading({ label }: { label: string }) {
+export function FeatureLoading() {
   return (
     <p role="status" aria-live="polite" aria-busy="true">
-      {label}
+      Loading…
     </p>
   );
 }

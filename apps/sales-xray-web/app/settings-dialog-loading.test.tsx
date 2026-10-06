@@ -50,8 +50,11 @@ it("loads settings only on open, announces the wait, and can close before it res
     );
     expect(load.requested).not.toHaveBeenCalled();
     await act(async () => openSettings("profile"));
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="status"]')).not.toBeNull(),
+    );
     const status = host.querySelector('[role="status"]');
-    expect(status?.textContent).toBe("Loading settings…");
+    expect(status?.textContent).toBe("Loading…");
     expect(status?.getAttribute("aria-live")).toBe("polite");
     expect(status?.getAttribute("aria-busy")).toBe("true");
     await act(async () => closeSettings("replace"));

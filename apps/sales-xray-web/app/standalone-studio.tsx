@@ -38,22 +38,22 @@ import { FirstCallGuide } from "./guide-host";
 
 const CallStudio = dynamic(
   () => import("./call-studio").then((module) => module.CallStudio),
-  { loading: () => <FeatureLoading label="Loading your call…" /> },
+  { loading: FeatureLoading },
 );
 const AccountAuth = dynamic(
   () => import("./account-auth").then((module) => module.AccountAuth),
-  { loading: () => <FeatureLoading label="Loading sign in…" /> },
+  { loading: FeatureLoading },
 );
 const AccountProfile = dynamic(
   () => import("./account-profile").then((module) => module.AccountProfile),
-  { loading: () => <FeatureLoading label="Loading your profile…" /> },
+  { loading: FeatureLoading },
 );
 const SalesXrayFixturePreview = dynamic(
   () =>
     import("./sales-xray-fixture-preview").then(
       (module) => module.SalesXrayFixturePreview,
     ),
-  { loading: () => <FeatureLoading label="Loading preview…" /> },
+  { loading: FeatureLoading },
 );
 
 type Workspace = Readonly<{

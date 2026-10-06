@@ -17,7 +17,7 @@ import styles from "./settings-dialog.module.css";
 
 const AccountSettings = dynamic(
   () => import("./account-settings").then((module) => module.AccountSettings),
-  { loading: () => <FeatureLoading label="Loading settings…" /> },
+  { loading: FeatureLoading },
 );
 
 /**

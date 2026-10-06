@@ -519,7 +519,13 @@ it("requires account access before analysis and carries the original File throug
       ?.click(),
   );
   await flush();
-  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  await act(async () =>
+    vi.waitFor(() =>
+      expect(
+        container.querySelector("#account-profile-heading"),
+      ).not.toBeNull(),
+    ),
+  );
   expect(container.textContent).toContain(file.name);
   expect(container.querySelector('[data-testid="studio-probe"]')).toBeNull();
   expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
