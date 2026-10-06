@@ -1,10 +1,12 @@
 """P2 API and receipt concurrency on the isolated, migrated product-updates store."""
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
+import pytest
 from fastapi import FastAPI
 from sqlalchemy import Engine, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -13,7 +15,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.http.product_updates import install_product_updates_http
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.product_updates.models import ProductUpdate, UpdateSeen
+from ac_platform.product_updates.models import Notification, ProductUpdate, UpdateSeen
 from ac_platform.product_updates.reading import ProductUpdatesReading
 from tests.integration.test_product_updates_postgresql import (
     updates_engine as updates_engine,  # noqa: F401
@@ -126,5 +128,102 @@ async def test_http_seed_response_and_release_acknowledgement(updates_engine: En
             )
             assert response.status_code == 200 and response.json() == {"unread_count": 0}
             assert (await client.get("/v1/updates")).json()["unseen_count"] == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_read_all_is_atomic_idempotent_and_covers_older_account_events(
+    updates_engine: Engine,
+) -> None:
+    engine = create_async_engine(updates_engine.url)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    actor = ActorContext(uuid4(), uuid4(), None)
+    neighbor = ActorContext(uuid4(), uuid4(), None)
+    now = datetime.now(UTC)
+    prior_read_at = now - timedelta(days=1)
+    try:
+        async with sessions() as database, database.begin():
+            database.add_all(
+                Person(
+                    id=recipient.person_id, email=f"fictional-{recipient.person_id}@example.test"
+                )
+                for recipient in (actor, neighbor)
+            )
+            await database.flush()
+            database.add_all(
+                Notification(
+                    person_id=recipient.person_id,
+                    kind="report_ready",
+                    dedupe_key=f"fictional-report-{index}",
+                    title="Fictional report",
+                    body="Ready to read.",
+                    href="/analysis/calls/fictional",
+                    created_at=now - timedelta(hours=index),
+                    read_at=prior_read_at if index == 0 else None,
+                )
+                for recipient in (actor, neighbor)
+                for index in range(55)
+            )
+
+        with pytest.raises(RuntimeError, match="fictional rollback"):
+            async with sessions() as database, database.begin():
+                service = ProductUpdatesReading(database, actor, environment="staging")
+                before = await service.notifications()
+                assert len(before["notifications"]) == 50 and before["unread_count"] == 55
+                assert await service.mark_all_read() == {"unread_count": 0}
+                raise RuntimeError("fictional rollback")
+
+        async def require_actor():
+            async with sessions() as database, database.begin():
+                yield SimpleNamespace(database=database, resolved=SimpleNamespace(actor=actor))
+
+        origin = "https://sales.authorityclosers.test"
+        app = FastAPI()
+        install_product_updates_http(
+            app,
+            settings=Settings(_env_file=None, environment="test", sales_xray_app_url=origin),
+            require_actor=require_actor,
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url=origin
+        ) as client:
+            assert (await client.get("/v1/notifications")).json()["unread_count"] == 55
+            for _ in range(2):
+                response = await client.post(
+                    "/v1/notifications/read-all", json={}, headers={"Origin": origin}
+                )
+                assert response.status_code == 200 and response.json() == {"unread_count": 0}
+                assert response.headers["cache-control"] == "private, no-store"
+
+        async with sessions() as database, database.begin():
+            other_device = ActorContext(actor.person_id, uuid4(), None)
+            assert (
+                await ProductUpdatesReading(database, other_device, environment="staging").updates()
+            )["unseen_count"] == 0
+            assert (
+                await ProductUpdatesReading(
+                    database, neighbor, environment="staging"
+                ).notifications()
+            )["unread_count"] == 55
+            rows = (
+                await database.scalars(
+                    select(Notification).where(
+                        Notification.person_id.in_([actor.person_id, neighbor.person_id])
+                    )
+                )
+            ).all()
+            for row in rows:
+                if row.dedupe_key == "fictional-report-0":
+                    assert row.read_at == prior_read_at
+                elif row.person_id == actor.person_id:
+                    assert row.read_at is not None
+                elif row.person_id == neighbor.person_id:
+                    assert row.read_at is None
+            receipts = (
+                await database.scalars(
+                    select(UpdateSeen).where(UpdateSeen.person_id == actor.person_id)
+                )
+            ).all()
+            assert len(receipts) == 6
     finally:
         await engine.dispose()
