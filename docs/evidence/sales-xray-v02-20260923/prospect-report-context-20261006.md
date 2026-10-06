@@ -2,7 +2,7 @@
 
 Source pin: `555f52bf8f9562647a2f48e9945a109c46bbe7b5`; branch `task/sx-prospects/1070-prior-call-context`. Card 2 is merged in PR #364 (`afc8a70`). AUT-1375's live receipt remains separate; AUT-1373's post-verification queue order is unchanged.
 
-Scope: `conversation_intelligence/prospect_report_context.py`, `prospect_library.py`, `acquisition_reports.py`, `tests/database/test_prospect_report_context_postgresql.py`, `tests/unit/conversation_intelligence/test_prospect_report_context.py`, and this evidence. Open PR file reservations were checked before editing; no overlapping files. The fictional HTTP/privacy fixtures exceed the approximate 300-line target within this single feature. No screen files or migrations changed.
+Initial implementation scope: `conversation_intelligence/prospect_report_context.py`, `prospect_library.py`, `acquisition_reports.py`, `tests/database/test_prospect_report_context_postgresql.py`, `tests/unit/conversation_intelligence/test_prospect_report_context.py`, and this evidence. Open PR file reservations were checked before editing; no overlapping files. The fictional HTTP/privacy fixtures exceed the approximate 300-line target within this single feature. At `a865ed4`, no screen files or migrations changed. The review revision below adds web parser compatibility in the same PR.
 
 ## Composition and generation boundary
 
@@ -90,3 +90,15 @@ UI Maker handoff: display the source quotations and link each to `report_url`; k
 - The requested Windows `ac-orchestra` skill and prior Pro-chat artifacts were unavailable in this Linux environment. No cloud claim is used as evidence.
 
 After governed delivery, use a fictional signed-in account on dev, then staging: create a prospect from call A; explicitly confirm call B against that prospect; request B's report and check `previous_call_context` cites A's report, transcript revision and original quote. Without B's confirmation the array is empty. Revoke/unlink/erase A through an authorized app path and check its context disappears. Use another fictional account/workspace to verify A's source details are absent. UI presentation wiring belongs to the UI Maker; this card supplies the cited response contract.
+
+## CTO compatibility revision
+
+The CTO's review of `a865ed4` found that the strict web envelope parser rejected the new top-level field on every signed-in report. This revision changes only `apps/sales-xray-web/app/report-contract.ts`, its existing test file, and this evidence. The checkout was clean before editing, the current gate permits the owning task, and no other open PR reserved either parser file.
+
+The parser now allows and ignores `previous_call_context`, as permitted by the review. It does not expose prior-call content as current-call findings. Presentation and strict parsing of that separate context remain with its UI consumer; the API contract and fictional example above are unchanged. The API and web compatibility change travel together in PR #383.
+
+Four regression cases cover the empty/null-ID context and the exact published fictional example, rejection of unrelated envelope fields, and rejection of current-call source/evidence mismatches with context present. All 42 report-contract tests passed. A separate local comparison confirmed the fixture equals the published example.
+
+Web lint, typecheck, Prettier, diff check and the current lane gate passed for this revision. Python source is unchanged since the original verified head. The full web run initially reported three acquisition navigation failures. An isolated default-timeout rerun passed two cases and timed out on the third at five seconds; all three passed with a command-line 15-second timeout (no test/config changes). The full-suite final receipt belongs in the review handoff; these diagnostic passes do not establish a green default suite.
+
+The prior CI head's required acquisition browser test failed because the report did not become visible within 90 seconds. This is consistent with the envelope rejection, but a passing browser result on the corrected head is still required evidence. The dev baseline on this run returned HTTP 403 for `/analysis/calls`; no authenticated live acceptance is claimed.
