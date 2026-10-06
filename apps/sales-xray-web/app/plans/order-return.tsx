@@ -16,6 +16,7 @@ import { count, day, formatMoney, minutes } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
+import { formatPurchaseMinutes } from "./purchase-time";
 
 const POLL_MS = 3_000;
 const POLL_FOR_MS = 60_000;
@@ -209,7 +210,7 @@ function OrderReturnState({
     const { order } = state;
     const what =
       order.kind === "top_up"
-        ? `${count(order.minutes)} top-up minutes`
+        ? formatPurchaseMinutes(order.minutes, "top-up minutes")
         : `${order.planName}${order.interval ? `, ${order.interval === "month" ? "monthly" : "yearly"}` : ""}`;
     if (order.status === "paid") {
       body = (
@@ -234,7 +235,7 @@ function OrderReturnState({
             ) : null}
             <div>
               <dt>Order minutes</dt>
-              <dd>{count(order.minutes)}</dd>
+              <dd>{formatPurchaseMinutes(order.minutes)}</dd>
             </div>
             <div>
               <dt>New balance</dt>
@@ -242,7 +243,10 @@ function OrderReturnState({
                 {balance?.orderId === order.orderId
                   ? balance.allowance.unlimited
                     ? `Unlimited · ${count(minutes(balance.allowance.committedSeconds))} min used or reserved by analyses.`
-                    : `${count(minutes(balance.allowance.availableSeconds))} analysis minutes`
+                    : formatPurchaseMinutes(
+                        minutes(balance.allowance.availableSeconds),
+                        "analysis minutes",
+                      )
                   : "Your updated minutes are being confirmed"}
               </dd>
             </div>

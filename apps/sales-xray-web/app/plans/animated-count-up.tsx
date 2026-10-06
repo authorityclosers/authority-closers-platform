@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { count } from "../billing/money";
 import styles from "./plans.module.css";
+import { formatPurchaseMinutes, purchaseHours } from "./purchase-time";
 
 export function AnimatedCountUp({
   targetMinutes,
@@ -15,6 +16,7 @@ export function AnimatedCountUp({
 }) {
   const [currentMinutes, setCurrentMinutes] = useState(0);
   const [currentCredits, setCurrentCredits] = useState(0);
+  const currentHours = purchaseHours(currentMinutes);
 
   useEffect(() => {
     let startTimestamp: number | null = null;
@@ -46,7 +48,7 @@ export function AnimatedCountUp({
         aria-live="polite"
         aria-atomic="true"
       >
-        +{count(targetMinutes)} analysis minutes
+        +{formatPurchaseMinutes(targetMinutes, "analysis minutes")}
         {targetCredits !== undefined
           ? `, +${count(targetCredits)} credits`
           : ""}
@@ -54,7 +56,9 @@ export function AnimatedCountUp({
       <div className={styles.counterRow} aria-hidden="true">
         <div className={styles.counterItem}>
           <span className={styles.counterValue}>+{count(currentMinutes)}</span>
-          <span className={styles.counterLabel}>Analysis minutes</span>
+          <span className={styles.counterLabel}>
+            Analysis minutes{currentHours ? ` (${currentHours})` : ""}
+          </span>
         </div>
         {targetCredits !== undefined ? (
           <>
