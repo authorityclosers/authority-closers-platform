@@ -4,7 +4,7 @@ import {
   submissionPath,
   type Submission,
 } from "./acquisition-client";
-import { parseProcessingPlan } from "./call-studio";
+import { parseProcessingPlan } from "./processing-plan-contract";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
 
 // Bound a status read, not provider execution. A timeout leaves the last saved

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import dynamic from "next/dynamic";
 
-import { AccountSettings } from "./account-settings";
+import { FeatureLoading } from "./feature-loading";
 import {
   SETTINGS_CHANGE_EVENT,
   SETTINGS_HASH_PREFIX,
@@ -13,6 +14,11 @@ import {
 } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./settings-dialog.module.css";
+
+const AccountSettings = dynamic(
+  () => import("./account-settings").then((module) => module.AccountSettings),
+  { loading: FeatureLoading },
+);
 
 /**
  * Floats account settings over whatever screen is open: a centred window on

@@ -10,12 +10,11 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
-import { CallStudio } from "./call-studio";
+import { FeatureLoading } from "./feature-loading";
 import { AccountNavigation } from "./account-navigation";
-import { AccountAuth } from "./account-auth";
-import { AccountProfile } from "./account-profile";
 import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
@@ -30,13 +29,34 @@ import {
   usePendingAnalysis,
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
-import { SalesXrayFixturePreview } from "./sales-xray-fixture-preview";
 import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
 import { WorkspaceNoAccess } from "./workspace-no-access";
 import { FirstCallGuide } from "./guide-host";
+
+const loadingOptions = { loading: FeatureLoading };
+
+const CallStudio = dynamic(
+  () => import("./call-studio").then((module) => module.CallStudio),
+  { ...loadingOptions },
+);
+const AccountAuth = dynamic(
+  () => import("./account-auth").then((module) => module.AccountAuth),
+  { ...loadingOptions },
+);
+const AccountProfile = dynamic(
+  () => import("./account-profile").then((module) => module.AccountProfile),
+  { ...loadingOptions },
+);
+const SalesXrayFixturePreview = dynamic(
+  () =>
+    import("./sales-xray-fixture-preview").then(
+      (module) => module.SalesXrayFixturePreview,
+    ),
+  { ...loadingOptions },
+);
 
 type Workspace = Readonly<{
   tenant_id: string;
