@@ -2,6 +2,7 @@
 
 Source main: `fb42844f9214748dd26847788f696a64702e2dd2`.
 Contract: AUT-1391 plan revision `e3cf7141-bf97-435a-9755-341d847e3c4d` and CTO comment `30e3181a-2f20-4b91-a514-66b9cafb7d36`.
+Implementation/test commit: `aca854fd4901966483632c942f63531d222bc076`.
 Branch: `task/api/1392-organisation-activity`. Final PR/head and CI state are recorded on AUT-1392; no merged or released SHA exists yet.
 
 `GET /v1/conversation/acquisition/organisation/activity` reuses read-only sign-in, the session-selected served workspace, account admission with shared identity locks, and the existing live owner/admin boundary. One grouped settlement/usage/tenant-bound claim/person query returns IST current/previous 30-day receipt totals. Counts survive recording deletion, exclude canaries and unattributed guests, use charged seconds, and preserve former owners. Names follow display-name/masked-email policy and name/ID ordering. Personal activity and retained-call `/v1/organisation/activity` are separate, unchanged contracts.
