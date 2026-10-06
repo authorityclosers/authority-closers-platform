@@ -247,7 +247,7 @@ exec 9>>"$synthetic_lock"
                 expected_calls = ["guard-under-lock"]
                 if guard_status == 0:
                     expected_calls.append(
-                        "restic snapshots --tag authority-closers-foundation --latest 1 --json"
+                        "restic snapshots --tag authority-closers-foundation --json latest"
                     )
                 self.assertEqual(calls.read_text(encoding="utf-8").splitlines(), expected_calls)
 
