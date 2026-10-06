@@ -11,6 +11,7 @@ import runpy
 import stat
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 
@@ -35,6 +36,17 @@ EMAIL = "fictional-tester@example.invalid"
 LATER_RELEASE = "0e7b7fa6b99c2f2e46e4df02e012f1fe68f09c20"
 TEMPLATE_RELEASE = "1e784afa128f8d4629aeece5179486d423c0ec52"
 SYSTEMD_255_SENTINEL = b"LoadCredential=[unprintable]\n"
+UID10001_SOURCE_DENIAL = """import json, os, sys
+assert (os.geteuid(), os.getegid()) == (10001, 10001)
+assert not set(os.getgroups()) - {10001}
+for source in json.loads(sys.argv[1]):
+    try:
+        with open(source, "rb"):
+            pass
+    except (PermissionError, FileNotFoundError):
+        continue
+    raise SystemExit("installed_source_unexpectedly_readable")
+"""
 UNIT_OBJECTS = {
     tool.refresh.API_UNIT: "/org/freedesktop/systemd1/unit/ac_2ddev_2dapi_2eservice",
     tool.refresh.WORKER_UNIT: (
@@ -1115,6 +1127,60 @@ def test_bootstrap_refuses_wrong_identity_or_delivery_context(monkeypatch, bad):
         exec(tool.CODE_BOOTSTRAP, {})  # noqa: S102 - exact reviewed bootstrap under test
 
 
+@pytest.fixture
+def source_denial_identity(monkeypatch):
+    sources = [f"/fictional/scripts/{name}" for name in (tool.CODE_NAME, *tool.HELPER_SHA256)]
+    monkeypatch.setattr(os, "geteuid", lambda: 10001)
+    monkeypatch.setattr(os, "getegid", lambda: 10001)
+    monkeypatch.setattr(os, "getgroups", lambda: [10001])
+    monkeypatch.setattr(sys, "argv", ["-c", json.dumps(sources)])
+    return sources
+
+
+@pytest.mark.parametrize("denial", [PermissionError, FileNotFoundError])
+def test_source_denial_accepts_inaccessible_sources(source_denial_identity, denial):
+    attempted = []
+
+    def inaccessible(source, mode):
+        assert mode == "rb"
+        attempted.append(source)
+        raise denial
+
+    exec(UID10001_SOURCE_DENIAL, {"open": inaccessible})  # noqa: S102 - exact proof probe
+    assert attempted == source_denial_identity
+
+
+@pytest.mark.parametrize("index", range(3))
+@pytest.mark.parametrize("outcome", ["readable", NotADirectoryError, IsADirectoryError, OSError])
+def test_source_denial_refuses_readable_sources_and_other_io_errors(
+    source_denial_identity, index, outcome
+):
+    def open_source(source, mode):
+        assert mode == "rb"
+        if source != source_denial_identity[index]:
+            raise PermissionError
+        if outcome == "readable":
+            return nullcontext()
+        raise outcome
+
+    expected = SystemExit if outcome == "readable" else outcome
+    with pytest.raises(expected):
+        exec(UID10001_SOURCE_DENIAL, {"open": open_source})  # noqa: S102 - exact proof probe
+
+
+@pytest.mark.parametrize("bad", ["uid", "gid", "groups"])
+def test_source_denial_refuses_wrong_identity(source_denial_identity, monkeypatch, bad):
+    monkeypatch.setattr(os, "geteuid", lambda: 0 if bad == "uid" else 10001)
+    monkeypatch.setattr(os, "getegid", lambda: 1002 if bad == "gid" else 10001)
+    monkeypatch.setattr(os, "getgroups", lambda: [10001, 1002] if bad == "groups" else [10001])
+
+    def unexpected_open(*_):
+        pytest.fail("wrong identity must refuse before reading any source")
+
+    with pytest.raises(AssertionError):
+        exec(UID10001_SOURCE_DENIAL, {"open": unexpected_open})  # noqa: S102 - exact proof probe
+
+
 @pytest.mark.skipif(
     os.environ.get("AC_RESEAL_RUNTIME_PROOF") != "1",
     reason="Root Operator runs the isolated fictional systemd proof explicitly",
@@ -1134,11 +1200,15 @@ def test_root_only_real_uid10001_code_delivery(fixture, monkeypatch):
     value["release_id"] = release
     put(service, tool.encoded(value))
     scripts = Path(tool.__file__).parent
+    reviewed_hashes = {tool.CODE_NAME: tool.CODE_SHA256, **tool.HELPER_SHA256}
+    sources = [scripts / name for name in reviewed_hashes]
     group = grp.getgrnam("acops").gr_gid
     assert group != 10001
-    for path in [scripts, *(scripts / name for name in (tool.CODE_NAME, *tool.HELPER_SHA256))]:
+    for path in [scripts, *sources]:
         os.chown(path, 0, group)
-        assert (path.stat().st_uid, path.stat().st_gid, stat.S_IMODE(path.stat().st_mode)) == (
+        info = path.lstat()
+        assert stat.S_ISDIR(info.st_mode) if path == scripts else stat.S_ISREG(info.st_mode)
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (
             0,
             group,
             0o750,
@@ -1146,6 +1216,8 @@ def test_root_only_real_uid10001_code_delivery(fixture, monkeypatch):
     monkeypatch.setattr(tool.refresh, "runtime_identity", REAL_RUNTIME_IDENTITY)
     before = tree(paths.trusted_root)
     metadata = {path: path.stat() for path in scripts.iterdir()}
+    assert set(metadata) == set(sources)
+    assert {path.name: tool.sha(path.read_bytes()) for path in sources} == reviewed_hashes
     calls = []
 
     def isolated_only(argv, **kw):
@@ -1157,23 +1229,14 @@ def test_root_only_real_uid10001_code_delivery(fixture, monkeypatch):
     tool.runtime_validation(paths, tool.Commands(isolated_only), pins, files)
     validation = calls[0]
     position = validation.index("--") + 1
-    denial = """import json, os, sys
-assert (os.geteuid(), os.getegid()) == (10001, 10001)
-assert not set(os.getgroups()) - {10001}
-for source in json.loads(sys.argv[1]):
-    try:
-        with open(source, "rb"):
-            pass
-    except PermissionError:
-        continue
-    raise SystemExit("installed_source_unexpectedly_readable")
-"""
+    # Bind denial to existing, unchanged host sources before entering private /tmp.
+    assert {path: path.lstat() for path in sources} == metadata
     probe = [
         *validation[:position],
         str(backend / ".venv/bin/python"),
         "-c",
-        denial,
-        json.dumps([str(path) for path in metadata]),
+        UID10001_SOURCE_DENIAL,
+        json.dumps([str(path) for path in sources]),
     ]
     tool.Commands(isolated_only).run("uid10001_source_denial", probe, timeout=90)
     # Real delivery failures and tampered bytes must fail the same bootstrap.
