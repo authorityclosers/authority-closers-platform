@@ -3273,8 +3273,9 @@ class Engine:
             detail = lines[-1][:300] if lines else f"exit {completed.returncode}"
             if "native_inputs_changed" in detail:
                 raise ReleaseError(
-                    f"{sha[:12]} changes the Sales Xray native image; use ac-release "
-                    f"prepare-native staging {sha} with the recorded predecessor pins ({detail})"
+                    f"{sha[:12]} changes the Sales Xray native image; prepare the stored native "
+                    f"build with matching inputs using ac-release prepare-native and the "
+                    f"recorded predecessor pins ({detail})"
                 )
             raise ReleaseError(f"Sales Xray activation could not be prepared: {detail}")
         result = json.loads(completed.stdout)
