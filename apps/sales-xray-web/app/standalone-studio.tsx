@@ -36,24 +36,26 @@ import {
 import { WorkspaceNoAccess } from "./workspace-no-access";
 import { FirstCallGuide } from "./guide-host";
 
+const loadingOptions = { loading: FeatureLoading };
+
 const CallStudio = dynamic(
   () => import("./call-studio").then((module) => module.CallStudio),
-  { loading: FeatureLoading },
+  { ...loadingOptions },
 );
 const AccountAuth = dynamic(
   () => import("./account-auth").then((module) => module.AccountAuth),
-  { loading: FeatureLoading },
+  { ...loadingOptions },
 );
 const AccountProfile = dynamic(
   () => import("./account-profile").then((module) => module.AccountProfile),
-  { loading: FeatureLoading },
+  { ...loadingOptions },
 );
 const SalesXrayFixturePreview = dynamic(
   () =>
     import("./sales-xray-fixture-preview").then(
       (module) => module.SalesXrayFixturePreview,
     ),
-  { loading: FeatureLoading },
+  { ...loadingOptions },
 );
 
 type Workspace = Readonly<{
