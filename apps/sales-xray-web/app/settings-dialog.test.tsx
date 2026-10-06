@@ -43,6 +43,8 @@ vi.mock("next/link", () => ({
 
 import { SettingsDialogHost } from "./settings-dialog";
 import { closeSettings, openSettings } from "./settings-open";
+import { GuideProgressStore } from "./guide-progress";
+import { FIRST_CALL_GUIDE } from "./guide-registry";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
@@ -66,7 +68,7 @@ async function flush() {
   });
 }
 
-async function render(authenticated: boolean) {
+async function render(authenticated: boolean, personId: string | null = "p") {
   await act(async () =>
     root.render(
       <UploadSessionProvider>
@@ -74,9 +76,10 @@ async function render(authenticated: boolean) {
           value={{
             status: authenticated ? "ready" : "unauthenticated",
             authenticated,
-            context: authenticated
-              ? { personId: "p", sessionId: "s", tenantId: "t" }
-              : null,
+            context:
+              authenticated && personId
+                ? { personId, sessionId: "s", tenantId: "t" }
+                : null,
             retry: () => {},
           }}
         >
@@ -89,6 +92,7 @@ async function render(authenticated: boolean) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   window.history.replaceState(null, "", "/dashboard");
   host = document.createElement("div");
   document.body.append(host);
@@ -142,6 +146,62 @@ it("never opens account settings for a signed-out visitor", async () => {
   await flush();
   expect(host.querySelector("dialog")).toBeNull();
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it("restarts the dismissed guide from Help and closes Settings so it can be seen", async () => {
+  new GuideProgressStore("p", FIRST_CALL_GUIDE).update({
+    stepId: "moments",
+    status: "skipped",
+  });
+  await render(true);
+  await act(async () => openSettings("help"));
+  await flush();
+  const toggle = host.querySelector<HTMLButtonElement>(
+    '[role="switch"][aria-label="First call guide"]',
+  )!;
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  await act(async () => toggle.click());
+  await flush();
+  expect(host.querySelector("dialog")).toBeNull();
+  expect(window.location.hash).toBe("");
+  expect(new GuideProgressStore("p", FIRST_CALL_GUIDE).getSnapshot()).toEqual({
+    stepId: "welcome",
+    status: "active",
+  });
+});
+
+it("keeps Help open when switching the guide off, remembers it, and isolates accounts", async () => {
+  await render(true);
+  await act(async () => openSettings("help"));
+  await flush();
+  const getToggle = () =>
+    host.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="First call guide"]',
+    )!;
+  expect(getToggle().getAttribute("aria-checked")).toBe("true");
+  await act(async () => getToggle().click());
+  await flush();
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+  expect(host.querySelector("dialog")).not.toBeNull();
+  await act(async () => closeSettings("replace"));
+  await act(async () => openSettings("help"));
+  await flush();
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+  await render(true, "q");
+  expect(getToggle().getAttribute("aria-checked")).toBe("true");
+  await render(true, "p");
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+});
+
+it("hides the guide switch until the signed-in account identity is known", async () => {
+  await render(true, null);
+  await act(async () => openSettings("help"));
+  await flush();
+  expect(host.querySelector("dialog")).not.toBeNull();
+  expect(host.querySelector('[aria-label="First call guide"]')).toBeNull();
+  expect(
+    host.querySelector('#account-pane-help a[href^="mailto:"]'),
+  ).not.toBeNull();
 });
 
 it("replaces the settings entry with an internal destination", async () => {

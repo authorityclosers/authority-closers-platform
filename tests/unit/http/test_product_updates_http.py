@@ -1,4 +1,4 @@
-"""Host, session, CSRF, validation and private-header contracts for all four routes."""
+"""Host, session, CSRF, validation and private-header contracts for product routes."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -14,7 +14,13 @@ from ac_platform.http.product_updates import install_product_updates_http
 from ac_platform.kernel.authz import ActorContext
 
 ORIGIN = "https://sales.authorityclosers.test"
-PATHS = ["/v1/updates", "/v1/notifications", "/v1/updates/seen", "/v1/notifications/read"]
+PATHS = [
+    "/v1/updates",
+    "/v1/notifications",
+    "/v1/updates/seen",
+    "/v1/notifications/read",
+    "/v1/notifications/read-all",
+]
 
 
 class FakeReading:
@@ -37,6 +43,10 @@ class FakeReading:
 
     async def mark_read(self, ids):
         self.calls.append(("read", ids))
+        return {"unread_count": 0}
+
+    async def mark_all_read(self):
+        self.calls.append(("read-all",))
         return {"unread_count": 0}
 
 
@@ -65,7 +75,13 @@ def client(monkeypatch, *, host=ORIGIN, signed_in=True, selected_workspace=True,
 def request(test_client, path, **options):
     if path in PATHS[:2]:
         return test_client.get(path, **options)
-    payload = {"keys": ["note"]} if path.endswith("seen") else {"ids": ["updates:release"]}
+    payload = (
+        {}
+        if path.endswith("read-all")
+        else {"keys": ["note"]}
+        if path.endswith("seen")
+        else {"ids": ["updates:release"]}
+    )
     return test_client.post(path, json=payload, **options)
 
 
@@ -157,6 +173,28 @@ def test_post_limits_are_422_and_private(monkeypatch, path, field, values):
 def test_csrf_guard_runs_before_body_validation(monkeypatch):
     test_client, _, _ = client(monkeypatch)
     assert test_client.post(PATHS[2], json={"keys": []}).status_code == 403
+
+
+def test_read_all_is_an_explicit_empty_account_command(monkeypatch):
+    test_client, _, _ = client(monkeypatch, selected_workspace=False)
+    response = test_client.post(PATHS[4], json={}, headers={"Origin": ORIGIN})
+    assert response.status_code == 200 and response.json() == {"unread_count": 0}
+    assert FakeReading.calls[-1] == ("read-all",)
+
+
+@pytest.mark.parametrize("body", [None, [], {"person_id": "neighbor"}, {"ids": []}])
+def test_read_all_rejects_missing_body_and_recipient_or_id_overrides(monkeypatch, body):
+    test_client, _, _ = client(monkeypatch)
+    response = test_client.post(PATHS[4], json=body, headers={"Origin": ORIGIN})
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "private, no-store"
+    assert not FakeReading.calls
+
+
+def test_read_all_checks_origin_before_body_validation(monkeypatch):
+    test_client, _, _ = client(monkeypatch)
+    assert test_client.post(PATHS[4], json={"person_id": "neighbor"}).status_code == 403
+    assert not FakeReading.calls
 
 
 def test_application_discovers_the_product_routes():

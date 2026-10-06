@@ -7,7 +7,7 @@ import re
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager, suppress
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import urlencode
@@ -19,7 +19,9 @@ from sqlalchemy import and_, column, func, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.asyncio_runtime import run_async
-from ac_platform.application.settings import get_settings
+from ac_platform.application.settings import Settings, get_settings
+from ac_platform.billing.expiry_jobs import ExpirySignal, MinuteExpiryWorker
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationReviewInvitation,
     ConversationReviewInvitationAcceptance,
@@ -1173,6 +1175,32 @@ async def run() -> None:
         await asyncio.gather(durable_task, media_task, return_exceptions=True)
 
 
+def create_minute_expiry_worker(
+    *,
+    settings: Settings,
+    session_factory: SessionFactory,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    signal: ExpirySignal | None = None,
+) -> MinuteExpiryWorker:
+    """Explicit dormant composition; normal email/media startup never calls it."""
+    if (
+        settings.billing_enabled is not True
+        or settings.public_learner_tenant_id is None
+        or settings.operations_tenant_id is None
+    ):
+        raise ValueError("expiry_composition_refused")
+    return MinuteExpiryWorker(
+        session_factory=session_factory,
+        public_learner_tenant_id=settings.public_learner_tenant_id,
+        operations_tenant_id=settings.operations_tenant_id,
+        trial_policy=TrialPolicy(
+            settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+        ),
+        clock=clock,
+        signal=signal,
+    )
+
+
 def main() -> None:
     run_async(run())
 
@@ -1207,6 +1235,7 @@ __all__ = [
     "WorkerNotReadyError",
     "WorkerRunResult",
     "build_default_dispatcher",
+    "create_minute_expiry_worker",
     "main",
     "run",
 ]
