@@ -23,6 +23,8 @@ Commands (``ac-release <command>``):
                                     artifacts and core images nothing needs
     store-native SHA [--from ZIP]   keep a Sales Xray native build for good
                                     (GitHub deletes it after one day)
+    prepare-native staging SHA --previous-native-units PATH --previous-native-units-sha256 HASH
+                                    pin an exact native transition, without starting it
 
 Production deploys are refused unless ``/etc/ac-release/production.enabled``
 exists and the same commit already passed staging.
@@ -92,6 +94,16 @@ CORE_IMAGE_KEYS = ("AC_API_IMAGE", "AC_LEARNER_IMAGE", "AC_ADMIN_IMAGE", "AC_COA
 # zip for one day, so the store keeps these for good (never pruned).
 NATIVE_STORE_FILES = frozenset(
     {"native-artifact.zip", "artifact-metadata.json", "workflow-run.json"}
+)
+NATIVE_FILES = frozenset(
+    {
+        "SHA256SUMS",
+        "native-image.json",
+        "native-image.env",
+        "native-image.tar.gz",
+        "native-helper.tar.gz",
+        "native-helper-files.sha256",
+    }
 )
 # The hosted worker cannot start once its approval lapses, so an approval with
 # less than this left is never carried into a new release.
@@ -2063,6 +2075,7 @@ class Engine:
         blockers: list[str] = []
         planned: dict[str, str] = {}
         previous = self.current_core(environment)
+        native_plan: dict[str, Any] | None = None
         with self.stage(build.sha) as stage:
             try:
                 try:
@@ -2144,9 +2157,21 @@ class Engine:
                 # Forward carry-over must never create or widen an older worker's scope.
                 try:
                     self.keep_native_build(build.sha)
-                    activation = self.prepare_activation(
-                        environment, build.sha, source, stage, dry_run=dry_run, log=log
-                    )
+                    if (
+                        environment == "staging"
+                        and self.native_preparation_path(build.sha).exists()
+                    ):
+                        native_plan = self.native_deployment_plan(build.sha, source, stage)
+                        activation = {
+                            "sales_xray_activation": "prepared native transition",
+                            "sales_xray_native": build.sha,
+                            "sales_xray_previous_native": native_plan["previous_native"],
+                            "sales_xray_approval_sha256": native_plan["approval_sha256"],
+                        }
+                    else:
+                        activation = self.prepare_activation(
+                            environment, build.sha, source, stage, dry_run=dry_run, log=log
+                        )
                 except ReleaseError as error:
                     if not dry_run:
                         raise
@@ -2162,17 +2187,58 @@ class Engine:
                     **planned,
                     **activation,
                 }
-            completed = self.run(
-                ["bash", str(installer)], env=env, log=log, check=False, timeout=3600
-            )
-            status = re.findall(r"^AC_STATUS=([A-Z_]+)$", completed.stdout, flags=re.MULTILINE)
-            if completed.returncode != 0:
-                raise ReleaseError(
-                    f"installer exited with {completed.returncode}"
-                    + (f" ({status[-1]})" if status else "")
-                    + f"; see {log}"
+            try:
+                if native_plan is not None:
+                    self.install_native_transition(build.sha, native_plan, source, log)
+                completed = self.run(
+                    ["bash", str(installer)], env=env, log=log, check=False, timeout=3600
                 )
-        self.check_core(environment, build.sha, log)
+                status = re.findall(r"^AC_STATUS=([A-Z_]+)$", completed.stdout, flags=re.MULTILINE)
+                if completed.returncode != 0:
+                    raise ReleaseError(
+                        f"installer exited with {completed.returncode}"
+                        + (f" ({status[-1]})" if status else "")
+                        + f"; see {log}"
+                    )
+                self.check_core(environment, build.sha, log)
+                if native_plan is not None:
+                    self.record(
+                        {
+                            "at": _now(),
+                            "action": "native-transition",
+                            "target": build.sha,
+                            "previous_core": previous,
+                            "result": "success",
+                            "approval_sha256": native_plan["approval_sha256"],
+                            "provider_calls": 0,
+                        }
+                    )
+            except Exception as error:
+                if native_plan is not None and native_plan.get("armed"):
+                    # Persist containment first. A failed recovery cannot restart the train.
+                    self.set_paused("staging", True, "native/core transition failed")
+                    self.paths.failed_flag("staging", "core").write_text(
+                        build.sha + "\n", encoding="utf-8"
+                    )
+                    try:
+                        self.restore_native_transition(build.sha, native_plan, log)
+                    except Exception as recovery_error:
+                        self.record(
+                            {
+                                "at": _now(),
+                                "action": "native-transition",
+                                "target": build.sha,
+                                "previous_core": previous,
+                                "result": "recovery-failed",
+                            }
+                        )
+                        raise ReleaseError(
+                            "native/core recovery could not be verified; containment retained"
+                        ) from recovery_error
+                    raise ReleaseError(
+                        "native/core transition failed; pinned predecessor restored"
+                    ) from error
+                raise
         return {"previous": previous, "log": str(log), **activation}
 
     @staticmethod
@@ -2368,6 +2434,657 @@ class Engine:
         if len(matches) != 1:
             raise ReleaseError(f"no single loaded native artifact provides {image_ref[:19]}")
         return matches[0]
+
+    def native_controller(self, stage: Path) -> tuple[Any, Any]:
+        """Load only the installed, reviewed engine's native operators."""
+        sha = self.installed_engine()
+        if sha is None:
+            raise ReleaseError("native transition controller provenance is missing")
+        archive, _ = self.source_archive(sha, stage, "infra/application")
+        root = stage / "native-controller"
+        self.extract_source(archive, root, "infra/application")
+        modules = []
+        for name in ("install-sales-xray-native", "native_artifact_compatibility"):
+            spec = importlib.util.spec_from_file_location(
+                "ac_release_" + name.replace("-", "_"),
+                root / "infra/application/scripts" / (name + ".py"),
+            )
+            if spec is None or spec.loader is None:
+                raise ReleaseError("native transition controller unavailable")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            modules.append(module)
+        return modules[0], modules[1]
+
+    def verify_native_target(self, sha: str, stage: Path, verifier: Any, installer: Any) -> Path:
+        """Admit an ordinary exact-source CI bundle without loading its image."""
+        stored = self.paths.native_store / sha
+        try:
+            record = verifier.parse(verifier.read(stored / "artifact-metadata.json"))
+            run = verifier.parse(verifier.read(stored / "workflow-run.json"))
+            expires = dt.datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
+            if not (
+                run["repository"]["full_name"] == REPOSITORY
+                and run["path"] == f".github/workflows/{NATIVE_WORKFLOW}"
+                and run["head_sha"] == sha
+                and run["head_branch"] == "main"
+                and run["event"] == "push"
+                and run["run_attempt"] == 1
+                and run["status"] == "completed"
+                and run["conclusion"] == "success"
+                and record["name"] == f"ac-sales-xray-native-{sha}"
+                and record["workflow_run"]["id"] == run["id"]
+                and record["workflow_run"]["head_sha"] == sha
+                and record["workflow_run"]["repository_id"] == run["repository"]["id"]
+                and record["workflow_run"]["head_repository_id"] == run["repository"]["id"]
+                and record["expired"] is False
+                and expires.tzinfo is not None
+                and expires.timestamp() > self.clock()
+                and type(record["id"]) is int
+                and record["id"] > 0
+            ):
+                raise ReleaseError("native target CI provenance is invalid or expired")
+            archive = stored / "native-artifact.zip"
+            if (
+                archive.is_symlink()
+                or not archive.is_file()
+                or not 0 < archive.stat().st_size == record["size_in_bytes"] <= MAX_ARTIFACT_BYTES
+                or record["digest"] != "sha256:" + _sha256_file(archive)
+            ):
+                raise ReleaseError("native target archive identity mismatch")
+            with zipfile.ZipFile(archive) as bundle:
+                if sum(m.file_size for m in bundle.infolist()) > MAX_ARTIFACT_BYTES:
+                    raise ReleaseError("native target expanded archive exceeds ceiling")
+            target = stage / "native-target"
+            target.mkdir()
+            extract_exact(archive, target, NATIVE_FILES)
+            manifest = verifier.parse(verifier.read(target / "native-image.json"))
+            tree, inputs = verifier.source_inputs(self.paths.mirror, sha)
+            blobs = {name: raw.split(b"\x00", 1)[1] for name, raw in inputs.items()}
+            if (
+                manifest["source_commit"] != sha
+                or manifest["context"] != "."
+                or manifest["context_tree_id"] != tree
+                or manifest["dockerfile_sha256"] != verifier.RECIPE_SHA256
+                or verifier.sha(blobs[verifier.DOCKERFILE]) != verifier.RECIPE_SHA256
+                or manifest["native_source_sha256"]
+                != verifier.sha(blobs["native/audioatlas/atlas_dsp.cpp"])
+                or any(
+                    verifier.sha(blobs[name]) != digest
+                    for name, digest in verifier.HELPER_RECIPES.items()
+                )
+            ):
+                raise ReleaseError("native target source binding mismatch")
+            helper_sums = verifier._checksums(
+                verifier.read(target / "native-helper-files.sha256"), set(verifier.HELPER_FILES)
+            )
+            with tarfile.open(target / "native-helper.tar.gz", "r:gz") as helper:
+                members = helper.getmembers()
+                if len(members) != len(verifier.HELPER_FILES) or {m.name for m in members} != set(
+                    verifier.HELPER_FILES
+                ):
+                    raise ReleaseError("native helper inventory mismatch")
+                for member in members:
+                    if not member.isfile() or not 0 <= member.size <= 2_000_000:
+                        raise ReleaseError("native helper entry invalid")
+                    stream = helper.extractfile(member)
+                    assert stream is not None
+                    with stream:
+                        raw = stream.read(2_000_001)
+                    if raw != blobs[member.name] or verifier.sha(raw) != helper_sums[member.name]:
+                        raise ReleaseError("native helper source mismatch")
+                    path = target / "helper" / member.name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(raw)
+            binding = installer._artifact_binding(
+                target / "native-image.json",
+                _sha256_file(target / "native-image.json"),
+                require_root=False,
+                canonical_paths=False,
+            )
+            for section, name in (
+                (manifest["transport"], "native-image.tar.gz"),
+                (manifest["helper_source"], "native-helper.tar.gz"),
+            ):
+                if (
+                    section["filename"] != name
+                    or section["bytes"] != (target / name).stat().st_size
+                    or section["sha256"] != _sha256_file(target / name)
+                ):
+                    raise ReleaseError("native transport binding mismatch")
+            env = read_env_file(target / "native-image.env")
+            for key, value in {
+                "AC_NATIVE_IMAGE": binding.image_ref,
+                "AC_NATIVE_IMAGE_ID": binding.image_config_id,
+                "AC_NATIVE_SOURCE_COMMIT": sha,
+                "AC_NATIVE_IMAGE_TYPE": "oci_transport_manifest",
+                "AC_NATIVE_TRANSPORT_MANIFEST_DIGEST": binding.image_ref,
+                "AC_NATIVE_TRANSPORT_CONFIG_DIGEST": binding.image_config_id,
+                "AC_NATIVE_TRANSPORT_SHA256": manifest["transport"]["sha256"],
+                "AC_NATIVE_HELPER_SHA256": manifest["helper_source"]["sha256"],
+            }.items():
+                if env.get(key) != value:
+                    raise ReleaseError("native environment binding mismatch")
+            self.verify_native_transport(target / "native-image.tar.gz", binding)
+            return target
+        except ReleaseError:
+            raise
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            TypeError,
+            tarfile.TarError,
+            zipfile.BadZipFile,
+            installer.InstallerError,
+        ) as error:
+            raise ReleaseError("native target admission failed") from error
+
+    @staticmethod
+    def verify_native_transport(archive: Path, binding: Any) -> None:
+        """Check the offline OCI manifest/config pair before any docker load."""
+        with tarfile.open(archive, "r:gz") as image:
+            members = image.getmembers()
+            if len(members) > 512 or len({m.name for m in members}) != len(members):
+                raise ReleaseError("native OCI inventory invalid")
+            if any(
+                m.name.startswith("/")
+                or ".." in Path(m.name).parts
+                or not (m.isfile() or m.isdir())
+                for m in members
+            ):
+                raise ReleaseError("native OCI member invalid")
+            if sum(m.size for m in members) > 2_000_000_000:
+                raise ReleaseError("native OCI expanded size invalid")
+
+            def blob(identity: str, limit: int) -> dict[str, Any]:
+                member = image.getmember("blobs/sha256/" + identity.removeprefix("sha256:"))
+                if not member.isfile() or not 0 < member.size <= limit:
+                    raise ReleaseError("native OCI metadata size invalid")
+                stream = image.extractfile(member)
+                assert stream is not None
+                with stream:
+                    raw = stream.read(limit + 1)
+                if "sha256:" + hashlib.sha256(raw).hexdigest() != identity:
+                    raise ReleaseError("native OCI digest mismatch")
+                return json.loads(raw)
+
+            manifest = blob(binding.image_ref, 1_000_000)
+            if manifest["config"]["digest"] != binding.image_config_id:
+                raise ReleaseError("native OCI config mismatch")
+            config = blob(binding.image_config_id, 8_000_000)
+            runtime = config["config"]
+            if (
+                config["os"] != "linux"
+                or config["architecture"] != "amd64"
+                or runtime["User"] != "10001:10001"
+                or runtime["WorkingDir"] != "/app"
+                or runtime["Entrypoint"]
+                != ["python", "-m", "ac_platform.conversation_intelligence"]
+                or runtime["Cmd"] != ["doctor"]
+            ):
+                raise ReleaseError("native OCI runtime config mismatch")
+
+    def native_preparation_path(self, sha: str) -> Path:
+        return self.paths.state / "native-preparations" / f"staging-{sha}.json"
+
+    def prepare_native(
+        self, sha: str, previous_units: Path, previous_digest: str, *, dry_run: bool
+    ) -> dict[str, Any]:
+        """Prepare an exact staging transition; this operation never starts a helper."""
+        with self.locked(wait=True):
+            head = self.main_head()
+            if not SHA_RE.fullmatch(sha) or not self.is_ancestor(sha, head):
+                raise ReleaseError("native transition target must be on main")
+            build = self.stored_build(sha, "core")
+            if build is None:
+                raise ReleaseError("native transition needs the admitted core build")
+            with self.stage(sha) as stage:
+                archive, _ = self.source_archive(sha, stage, "infra/application")
+                source = stage / "source"
+                self.extract_source(archive, source, "infra/application")
+                plan = self.prepare_native_transition(
+                    sha, previous_units, previous_digest, source, stage
+                )
+                receipt = {
+                    "schema": "ac.release.native-preparation/1",
+                    "target": sha,
+                    "previous_core": plan["previous_core"],
+                    "previous_native_units": str(previous_units),
+                    "previous_native_units_sha256": previous_digest,
+                    "approval_sha256": plan["approval_sha256"],
+                    "source_activation_sha256": plan["source_activation_sha256"],
+                    "controller": self.installed_engine(),
+                    "artifact_pins": {
+                        name: _sha256_file(self.paths.native_store / sha / name)
+                        for name in NATIVE_STORE_FILES
+                    },
+                    "provider_calls": 0,
+                    "runtime_mutation": False,
+                    "dry_run": dry_run,
+                }
+                if not dry_run:
+                    path = self.native_preparation_path(sha)
+                    path.parent.mkdir(mode=0o700, exist_ok=True)
+                    temporary = path.with_suffix(".next")
+                    temporary.write_text(
+                        json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8"
+                    )
+                    temporary.chmod(0o400)
+                    os.replace(temporary, path)
+                    self.record({"at": _now(), "action": "native-prepare", **receipt})
+                return receipt
+
+    def native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any]:
+        path = self.native_preparation_path(sha)
+        if path.is_symlink():
+            raise ReleaseError("native preparation must be a regular engine-owned receipt")
+        prepared = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            prepared.get("schema") != "ac.release.native-preparation/1"
+            or prepared.get("target") != sha
+            or prepared.get("previous_core") != self.current_core("staging")
+            or prepared.get("controller") != self.installed_engine()
+            or prepared.get("dry_run") is not False
+            or prepared.get("runtime_mutation") is not False
+            or prepared.get("provider_calls") != 0
+            or prepared.get("artifact_pins")
+            != {
+                name: _sha256_file(self.paths.native_store / sha / name)
+                for name in NATIVE_STORE_FILES
+            }
+        ):
+            raise ReleaseError("native preparation identities changed; prepare again")
+        plan = self.prepare_native_transition(
+            sha,
+            Path(prepared["previous_native_units"]),
+            prepared["previous_native_units_sha256"],
+            source,
+            stage,
+        )
+        if any(
+            prepared.get(key) != plan[key]
+            for key in ("approval_sha256", "source_activation_sha256")
+        ):
+            raise ReleaseError("native preparation authority changed; prepare again")
+        return plan
+
+    def install_native_transition(
+        self, sha: str, plan: dict[str, Any], source: Path, log: Path
+    ) -> None:
+        """Switch the admitted helper under engine control, retaining both directions."""
+        installer = plan["installer"]
+        target = self.paths.application / "artifacts" / f"sales-xray-native-{sha}"
+        if target.exists():
+            for name in NATIVE_FILES:
+                if (target / name).is_symlink() or _sha256_file(target / name) != _sha256_file(
+                    plan["target"] / name
+                ):
+                    raise ReleaseError("loaded native target differs from admitted CI artifact")
+            installer._artifact_binding(
+                target / "native-image.json",
+                _sha256_file(target / "native-image.json"),
+                require_root=True,
+                canonical_paths=True,
+            )
+        else:
+            os.replace(plan["target"], target)
+            self.seal_native_tree(target)
+        home = (
+            self.paths.application
+            / "operator-inputs/staging"
+            / (f"native-{sha}-" + secrets.token_hex(8))
+        )
+        home.mkdir(mode=0o750)
+        inputs = home / "inputs"
+        inputs.mkdir()
+        previous = inputs / "previous-native-units.json"
+        shutil.copyfile(plan["previous_units"], previous)
+        units = inputs / "native-units.json"
+        units.write_text(json.dumps(plan["units"], sort_keys=True) + "\n", encoding="utf-8")
+        self.seal_native_tree(home)
+        plan.update({"home": home, "installed_units": units, "saved_previous_units": previous})
+        if (
+            self.current_core("staging") != plan["previous_core"]
+            or _sha256_file(plan["source_activation"]) != plan["source_activation_sha256"]
+        ):
+            raise ReleaseError("native transition predecessor changed before install")
+        # Record durable rollback pins before a Docker load or supervisor change.
+        self.record(
+            {
+                "at": _now(),
+                "action": "native-transition",
+                "target": sha,
+                "previous_core": plan["previous_core"],
+                "result": "armed",
+                "previous_native": plan["previous_native"],
+                "previous_native_units": str(previous),
+                "previous_native_units_sha256": plan["previous_digest"],
+                "source_activation_sha256": plan["source_activation_sha256"],
+                "approval_sha256": plan["approval_sha256"],
+                "provider_calls": 0,
+            }
+        )
+        plan["armed"] = True
+        self.run(
+            ["docker", "load", "--input", str(target / "native-image.tar.gz")], log=log, timeout=900
+        )
+        result = installer.install(
+            environment="staging",
+            native_units=units,
+            native_units_sha256=_sha256_file(units),
+            renderer=plan["renderer"],
+            renderer_python=Path("/usr/bin/python3"),
+            native_image_config_id=plan["binding"].image_config_id,
+            receipt=self.paths.application
+            / "deployments/staging"
+            / f"native-{sha}-{home.name[-16:]}.json",
+            start=True,
+            native_artifact_manifest=target / "native-image.json",
+            native_artifact_sha256=_sha256_file(target / "native-image.json"),
+            previous_native_units=previous,
+            previous_native_units_sha256=plan["previous_digest"],
+            supervisor_source=plan["supervisor"],
+            previous_supervisor_source=json.loads(previous.read_text(encoding="utf-8"))[
+                "supervisor_source"
+            ],
+        )
+        if (
+            result.get("status") != "installed"
+            or result.get("provider_calls") != 0
+            or result.get("database_writes") != 0
+        ):
+            raise ReleaseError("native installer did not prove the requested transition")
+        # Re-prepare into the permanent directory: activation references must not
+        # retain paths inside the engine's disposable source stage.
+        output = home / "activation-bundle"
+        self.run(
+            [
+                "python3",
+                str(source / "infra/application/scripts/prepare-sales-xray-native-activation.py"),
+                "--source-activation",
+                str(plan["source_activation"]),
+                "--target-release-id",
+                sha,
+                "--native-artifact-manifest",
+                str(target / "native-image.json"),
+                "--native-artifact-sha256",
+                _sha256_file(target / "native-image.json"),
+                "--output-dir",
+                str(output),
+            ],
+            log=log,
+            timeout=900,
+        )
+        prepared = json.loads((output / f"activation-{sha}.json").read_text(encoding="utf-8"))
+        if (
+            prepared["approval_sha256"] != plan["approval_sha256"]
+            or _sha256_file(Path(prepared["approval_file"])) != plan["approval_sha256"]
+            or prepared["native_image_ref"] != plan["binding"].image_ref
+            or prepared["native_image_config_id"] != plan["binding"].image_config_id
+        ):
+            raise ReleaseError("native activation changed after preflight")
+        self._seal_activation(home, output)
+        self._publish_activation("staging", sha, output)
+
+    def seal_native_tree(self, root: Path) -> None:
+        import grp
+
+        group = grp.getgrnam(self.operator_group).gr_gid
+        for path in [root, *root.rglob("*")]:
+            if path.is_symlink():
+                raise ReleaseError("native admission contains a symlink")
+            if os.geteuid() == 0:
+                os.chown(path, 0, group)
+            path.chmod(0o750 if path.is_dir() else 0o440)
+
+    def restore_native_transition(self, sha: str, plan: dict[str, Any], log: Path) -> None:
+        """Restore the pinned helper first, then the healthy application source."""
+        installer = plan["installer"]
+        previous = plan["saved_previous_units"]
+        old = json.loads(previous.read_text(encoding="utf-8"))
+        renderer = Path(old["supervisor_source"])
+        result = installer.install(
+            environment="staging",
+            native_units=previous,
+            native_units_sha256=plan["previous_digest"],
+            renderer=renderer,
+            renderer_python=Path("/usr/bin/python3"),
+            native_image_config_id=plan["previous_binding"].image_config_id,
+            receipt=self.paths.application
+            / "deployments/staging"
+            / f"native-restore-{sha}-{secrets.token_hex(8)}.json",
+            start=True,
+            native_artifact_manifest=plan["previous_manifest"],
+            native_artifact_sha256=_sha256_file(plan["previous_manifest"]),
+            previous_native_units=plan["installed_units"],
+            previous_native_units_sha256=_sha256_file(plan["installed_units"]),
+            previous_supervisor_source=plan["supervisor"],
+            supervisor_source=old["supervisor_source"],
+        )
+        if (
+            result.get("status") != "installed"
+            or result.get("native_image_ref") != plan["previous_binding"].image_ref
+        ):
+            raise ReleaseError("native rollback readback failed")
+        if _sha256_file(plan["source_activation"]) != plan["source_activation_sha256"]:
+            raise ReleaseError("native rollback activation pin changed")
+        # The canonical application-only installer also repairs a partial install
+        # which left the current link on the predecessor but changed its services.
+        self.deploy_core("staging", plan["rollback_build"], rollback_only=True)
+        self.check_core("staging", plan["previous_core"], log)
+        self.record(
+            {
+                "at": _now(),
+                "environment": "staging",
+                "component": "core",
+                "action": "rollback",
+                "sha": plan["previous_core"],
+                "previous": sha,
+                "result": "success",
+                "trigger": "native-transition",
+            }
+        )
+        for path in (
+            self.activation_path("staging", sha),
+            self.activation_path("staging", sha).with_suffix(".json.sha256"),
+        ):
+            if path.exists():
+                path.unlink()
+        self.record(
+            {
+                "at": _now(),
+                "action": "native-transition",
+                "target": sha,
+                "previous_core": plan["previous_core"],
+                "result": "restored",
+                "previous_native": plan["previous_native"],
+                "provider_calls": 0,
+            }
+        )
+
+    def prepare_native_transition(
+        self, sha: str, previous_units: Path, previous_digest: str, source: Path, stage: Path
+    ) -> dict[str, Any]:
+        """Prove both directions and prepare policy before the first runtime mutation."""
+        installer, verifier = self.native_controller(stage)
+        current = self.current_core("staging")
+        if current is None or not self.is_ancestor(current, sha):
+            raise ReleaseError("native transition predecessor is not an ancestor")
+        activation = self.activation_path("staging", current)
+        descriptor = verifier.parse(verifier.read(activation))
+        if self.approval_expiry(descriptor) - self.clock() < APPROVAL_MIN_REMAINING_SECONDS:
+            raise ReleaseError("native transition approval expires within one day")
+        approval = Path(descriptor["approval_file"])
+        approval_hash = _sha256_file(approval)
+        if descriptor["approval_sha256"] != approval_hash:
+            raise ReleaseError("native transition approval digest mismatch")
+        old_sha, old_manifest = self.native_for_image(descriptor["native_image_ref"])
+        old_binding = installer._artifact_binding(
+            old_manifest, _sha256_file(old_manifest), require_root=True, canonical_paths=True
+        )
+        if descriptor["native_image_config_id"] != old_binding.image_config_id:
+            raise ReleaseError("native transition predecessor config mismatch")
+        if previous_units.is_symlink() or not previous_units.is_relative_to(
+            self.paths.application / "operator-inputs/staging"
+        ):
+            raise ReleaseError("native transition predecessor pin path invalid")
+        installer._ensure_existing_parents(
+            previous_units, "native_previous_parent_invalid", require_root=True
+        )
+        installer._ensure_owner(previous_units, group="acops", code="native_previous_owner_invalid")
+        previous, raw = installer._safe_json(previous_units)
+        old_supervisor = previous["supervisor_source"]
+        installer._validate_descriptor(
+            previous,
+            raw,
+            environment="staging",
+            supplied_sha256=previous_digest,
+            binding=old_binding,
+            supervisor_source=old_supervisor,
+        )
+        renderer = (
+            self.paths.application / "releases" / current / "scripts/render-sales-xray-native.py"
+        )
+        supervisor = str(renderer)
+        installer._validate_renderer_binding(
+            previous,
+            renderer=renderer,
+            renderer_python=Path("/usr/bin/python3"),
+            environment="staging",
+            canonical_paths=True,
+            binding=old_binding,
+            enforce_path_binding=False,
+            supervisor_source=old_supervisor,
+        )
+        old_renderer = Path(old_supervisor)
+        old_renderer_hash = _sha256_file(old_renderer)
+        if "staging" not in installer.REVIEWED_RENDERERS.get(old_renderer_hash, ()):
+            raise ReleaseError("native rollback renderer is not reviewed")
+        installer._verify_reference_renderer(old_renderer, old_renderer_hash, trusted_owner=True)
+        names = tuple(previous["units"])
+        systemd = installer.SubprocessSystemd()
+        unit_root = installer.SYSTEMD_UNIT_ROOT
+        installer._reject_existing_drift(
+            unit_root=unit_root, units=previous["units"], require_root=True
+        )
+        if any(
+            installer._safe_existing_unit(installer._unit_path(unit_root, name), require_root=True)
+            != text.encode("utf-8")
+            for name, text in previous["units"].items()
+        ):
+            raise ReleaseError("native transition predecessor units are missing or changed")
+        states = installer._capture_states(systemd, names)
+        if not all(state["active"] and state["enabled"] for state in states.values()):
+            raise ReleaseError("native transition predecessor units are not healthy and enabled")
+        installer._readback(systemd, names, unit_root, "staging")
+        if installer.SubprocessGroup().ensure(dry_run=True)["status"] != "present":
+            raise ReleaseError("native transition rollback group is missing")
+        if installer.SubprocessDocker(old_binding).inspect_identity() not in old_binding.identities:
+            raise ReleaseError("native transition rollback image is missing")
+        rollback = self.stored_build(current, "core")
+        if rollback is None:
+            raise ReleaseError("native transition rollback core build is missing")
+        old_bundle = self.store_bundle(rollback, "core", CORE_FILES)
+        self.require_backup_support(old_bundle)
+        build = self.stored_build(sha, "core")
+        if build is None or self.bundle_migration_head(
+            self.store_bundle(build, "core", CORE_FILES)
+        ) != self.bundle_migration_head(old_bundle):
+            raise ReleaseError("native transition cannot prove application-only core rollback")
+        self.check_core("staging", current, self.new_log("staging", "native-preflight", sha))
+        controller = (
+            stage / "native-controller/infra/application/scripts/install-application-release.sh"
+        )
+        if "AC_CORE_ROLLBACK_ONLY" not in controller.read_text(encoding="utf-8"):
+            raise ReleaseError(
+                "native transition controller cannot restore the core without database writes"
+            )
+        target = self.verify_native_target(sha, stage, verifier, installer)
+        if self.activation_path("staging", sha).exists():
+            raise ReleaseError(
+                "native transition target activation already exists; do not overwrite"
+            )
+        manifest = target / "native-image.json"
+        binding = installer._artifact_binding(
+            manifest, _sha256_file(manifest), require_root=False, canonical_paths=False
+        )
+        rendered, _ = installer._rendered_descriptor(
+            renderer=renderer,
+            renderer_python=Path("/usr/bin/python3"),
+            environment="staging",
+            canonical_paths=True,
+            binding=binding,
+            supervisor_source=supervisor,
+        )
+        installer._validate_descriptor(
+            rendered,
+            json.dumps(rendered).encode(),
+            environment="staging",
+            supplied_sha256=hashlib.sha256(json.dumps(rendered).encode()).hexdigest(),
+            binding=binding,
+            supervisor_source=supervisor,
+        )
+        staged, units = installer._stage_units(
+            unit_root=unit_root, units=rendered["units"], require_root=True
+        )
+        try:
+            systemd.verify(tuple(units.values()))
+        finally:
+            installer._remove_tree(staged)
+        output = stage / "native-activation"
+        completed = self.run(
+            [
+                "python3",
+                str(source / "infra/application/scripts/prepare-sales-xray-native-activation.py"),
+                "--source-activation",
+                str(activation),
+                "--target-release-id",
+                sha,
+                "--native-artifact-manifest",
+                str(manifest),
+                "--native-artifact-sha256",
+                _sha256_file(manifest),
+                "--output-dir",
+                str(output),
+            ],
+            check=False,
+            timeout=900,
+        )
+        if completed.returncode != 0:
+            raise ReleaseError("native transition activation preparation failed")
+        result = json.loads(completed.stdout)
+        prepared = json.loads((output / f"activation-{sha}.json").read_text(encoding="utf-8"))
+        if (
+            result.get("provider_calls") != 0
+            or result.get("approval_replaced") is not False
+            or result.get("release_id") != sha
+            or prepared["approval_file"] != str(approval)
+            or prepared["approval_sha256"] != approval_hash
+            or prepared["native_image_ref"] != binding.image_ref
+            or prepared["native_image_config_id"] != binding.image_config_id
+            or _sha256_file(approval) != approval_hash
+        ):
+            raise ReleaseError("native transition changed authority or identity")
+        return {
+            "installer": installer,
+            "target": target,
+            "binding": binding,
+            "previous_binding": old_binding,
+            "previous_manifest": old_manifest,
+            "previous_units": previous_units,
+            "previous_digest": previous_digest,
+            "units": rendered,
+            "renderer": renderer,
+            "supervisor": supervisor,
+            "activation": output,
+            "source_activation": activation,
+            "source_activation_sha256": _sha256_file(activation),
+            "approval_sha256": approval_hash,
+            "previous_core": current,
+            "rollback_build": rollback,
+            "previous_native": old_sha,
+        }
 
     def prepare_activation(
         self, environment: str, sha: str, source: Path, stage: Path, *, dry_run: bool, log: Path
@@ -3732,6 +4449,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     native = sub.add_parser("store-native")
     native.add_argument("sha")
     native.add_argument("--from", dest="local_zip", type=Path, metavar="ZIP")
+    preparation = sub.add_parser("prepare-native")
+    preparation.add_argument("environment", choices=("staging",))
+    preparation.add_argument("sha")
+    preparation.add_argument("--previous-native-units", type=Path, required=True)
+    preparation.add_argument("--previous-native-units-sha256", required=True)
+    preparation.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
     paths = Paths()
@@ -3809,6 +4532,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             engine.github = _load_github(paths, required=True)
             with engine.locked(wait=True):
                 print(engine.store_native(args.sha, local_zip=args.local_zip))
+        elif args.command == "prepare-native":
+            _print(
+                engine.prepare_native(
+                    args.sha,
+                    args.previous_native_units,
+                    args.previous_native_units_sha256,
+                    dry_run=args.dry_run,
+                ),
+                True,
+            )
         else:
             engine.github = _load_github(paths, required=args.command == "tick")
             results = (
