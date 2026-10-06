@@ -18,9 +18,10 @@ import textwrap
 from pathlib import Path
 from urllib.parse import urlsplit
 
-RELEASE = "d5af14fc105a1e3539e3e9ba7fc058fc10eb8c44"
+RELEASE = "b5e240d29d7a24e7c81d3183665fd88a9e144899"
 RELEASE_DIR = Path("/srv/authority-closers/application/releases") / RELEASE
 DATABASE_CONTAINER = "acdev-postgres"
+DATABASE_NETWORK = "acdev-xray"
 DATABASE_IP = "172.27.0.2"
 OPERATIONS_EMAIL = "qa-dev-operations-owner-aut959@example.test"
 SAFE_ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
@@ -40,12 +41,26 @@ MODULES = {
     "owner": "ac_platform.authorization.operator_data_change",
     "first-manager": "ac_platform.authorization",
 }
+MODULE_SHA256 = {
+    "ac_platform.development.billing_qa_fixture": (
+        "8328ff61345b094be96acc8eaae685eeb3caa0e4a530fc97df3b1a63b7cb4a74"
+    ),
+    "ac_platform.authorization.operator_data_change": (
+        "96f585fb7a1489388835f71e56930870aa2666bdbc4918ae52e2829256e254d3"
+    ),
+    "ac_platform.authorization.__main__": (
+        "4e264d8135dadcc2d00eabbc91e7e091335f778875261ed3e3e6516f9248eeb1"
+    ),
+}
 PROBE = (
-    "import os,socket; from pathlib import Path; "
+    "import hashlib,importlib.util,os,socket; from pathlib import Path; "
     "from ac_platform.development.billing_qa_fixture import EMAILS,PASSWORD_VARIABLES; "
     f"assert Path('/app/.ac-release-id').read_text().strip()=={RELEASE!r}; "
     "assert os.getuid()==10001; "
-    f"assert socket.gethostbyname('acdev-postgres')=={DATABASE_IP!r}; "
+    f"assert {{r[4][0] for r in socket.getaddrinfo({DATABASE_CONTAINER!r},5432,"
+    f"socket.AF_UNSPEC,socket.SOCK_STREAM)}}=={{{DATABASE_IP!r}}}; "
+    f"assert all(hashlib.sha256(Path(importlib.util.find_spec(m).origin).read_bytes())"
+    f".hexdigest()==h for m,h in {MODULE_SHA256!r}.items()); "
     "assert EMAILS['staff']=='qa-billing-staff-aut969@example.test'; "
     "assert PASSWORD_VARIABLES['staff']=='AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF'; "
     "print('released_dev_qa_contract_ok')"
@@ -123,7 +138,7 @@ def runtime(release_dir: Path = RELEASE_DIR, *, runner=subprocess.run) -> list[s
     config_id, label = metadata(
         ["docker", "image", "inspect", "--format", fmt, image], runner=runner
     ).split("|", 1)
-    require(re.fullmatch(r"sha256:[0-9a-f]{64}", config_id) is not None and label == RELEASE)
+    require(config_id == image and label == RELEASE)
     networks = json.loads(
         metadata(
             [
@@ -136,12 +151,17 @@ def runtime(release_dir: Path = RELEASE_DIR, *, runner=subprocess.run) -> list[s
             runner=runner,
         )
     )
-    require(len(networks) == 1)
-    network, endpoint = next(iter(networks.items()))
-    require(endpoint.get("IPAddress") == DATABASE_IP)
+    require(isinstance(networks, dict))
+    endpoint = networks.get(DATABASE_NETWORK)
+    require(isinstance(endpoint, dict) and endpoint.get("IPAddress") == DATABASE_IP)
+    # Other attachments are allowed only when they cannot also identify the
+    # approved endpoint. Selection is by the reviewed network name, never order.
+    require(all(isinstance(value, dict) for value in networks.values()))
+    require(sum(value.get("IPAddress") == DATABASE_IP for value in networks.values()) == 1)
     require(
         metadata(
-            ["docker", "network", "inspect", "--format", "{{.Driver}}", network], runner=runner
+            ["docker", "network", "inspect", "--format", "{{.Driver}}", DATABASE_NETWORK],
+            runner=runner,
         )
         == "bridge"
     )
@@ -161,7 +181,7 @@ def runtime(release_dir: Path = RELEASE_DIR, *, runner=subprocess.run) -> list[s
         "--log-driver=none",
         "--tmpfs=/tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001",
         "--network",
-        network,
+        DATABASE_NETWORK,
         "--entrypoint=/app/.venv/bin/python",
         image,
     ]
@@ -255,6 +275,9 @@ def main(argv: list[str] | None = None, *, runner=subprocess.run) -> int:
                         "release": RELEASE,
                         "image": base[-1],
                         "network": base[-3],
+                        "database_container": DATABASE_CONTAINER,
+                        "database_ip": DATABASE_IP,
+                        "module_sha256": MODULE_SHA256,
                         "uid": 10001,
                     },
                     sort_keys=True,
