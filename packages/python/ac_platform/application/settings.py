@@ -15,6 +15,11 @@ from sqlalchemy.engine import make_url
 from ac_platform.application.release_identity import require_baked_release_id
 from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
 
+DEVELOPMENT_ORGANISATION_AVATAR_ROOT = (
+    "/srv/authority-closers/sales-xray/development/avatar-objects"
+)
+DEVELOPMENT_ORGANISATION_AVATAR_SOCKET = "/run/ac-dev-organisation-avatar/clamd.sock"
+
 _DEPLOYMENT_ORIGINS = {
     "staging": {
         "public_app_url": "https://staging.authorityclosers.com",
@@ -158,6 +163,10 @@ class Settings(BaseSettings):
     media_public_films_root: str | None = None
     media_local_avatar_enabled: bool = False
     media_local_avatar_storage_root: str | None = None
+    # Independent dev-only logo profile; never activates uploads, videos or providers.
+    media_development_organisation_avatar_enabled: bool = False
+    media_development_organisation_avatar_root: str | None = None
+    media_development_organisation_avatar_scanner_socket: str | None = None
     practice_arcade_preview_enabled: bool = False
     # Separately reviewed deployment opt-in, never inferred from a local flag.
     practice_pilot_enabled: bool = False
@@ -337,6 +346,7 @@ class Settings(BaseSettings):
         self._validate_public_films()
         self._validate_media_provider()
         self._validate_filesystem_media()
+        self._validate_development_organisation_avatar()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
             self._validate_email_provider()
@@ -549,6 +559,35 @@ class Settings(BaseSettings):
             raise ValueError("AC_MEDIA_SCANNER_PORT must be a valid TCP port")
         if not 0 < self.media_scanner_total_timeout_seconds <= 3600:
             raise ValueError("AC_MEDIA_SCANNER_TOTAL_TIMEOUT_SECONDS must be bounded")
+
+    def _validate_development_organisation_avatar(self) -> None:
+        paths = (
+            self.media_development_organisation_avatar_root,
+            self.media_development_organisation_avatar_scanner_socket,
+        )
+        if not self.media_development_organisation_avatar_enabled:
+            if any(value is not None for value in paths):
+                raise ValueError(
+                    "development organisation avatar paths require explicit activation"
+                )
+            return
+        if self.environment != "development":
+            raise ValueError("development organisation avatars require environment=development")
+        if paths != (
+            DEVELOPMENT_ORGANISATION_AVATAR_ROOT,
+            DEVELOPMENT_ORGANISATION_AVATAR_SOCKET,
+        ):
+            raise ValueError("development organisation avatars require the exact private dev paths")
+        if (
+            self.media_provider_enabled
+            or self.media_filesystem_enabled
+            or self.media_local_avatar_enabled
+            or self.media_stress_fixtures_enabled
+            or self.media_public_films_delivery_enabled
+            or self.media_staging_public_films_delivery_enabled
+            or self.media_local_public_films_delivery_enabled
+        ):
+            raise ValueError("development organisation avatars cannot share media activation")
 
     def _validate_trial_policy(self) -> None:
         switch_at = self.sales_xray_trial_policy_switch_at

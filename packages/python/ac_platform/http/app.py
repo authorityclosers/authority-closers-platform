@@ -240,7 +240,8 @@ def create_app(
     install_routes(application, ctx, routes, start=1500, stop=1700)
     resolved_media_runtime = media_runtime or create_default_media_runtime(settings)
     application.state.organisation_avatar_runtime = (
-        resolved_media_runtime.filesystem_avatar_runtime
+        resolved_media_runtime.organisation_avatar_runtime
+        or resolved_media_runtime.filesystem_avatar_runtime
         or resolved_media_runtime.local_avatar_runtime
     )
     install_learning_http(

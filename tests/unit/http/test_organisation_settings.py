@@ -21,6 +21,7 @@ from ac_platform.media.local_avatar_processing import (
 )
 from ac_platform.media.local_avatar_runtime import LocalAvatarMediaService, LocalAvatarRuntime
 from ac_platform.media.local_avatar_storage import LocalAvatarStorage
+from ac_platform.media.runtime import create_default_media_runtime
 from ac_platform.media.scanner import FailClosedScanner
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import InMemoryPrivateObjectStorage
@@ -29,6 +30,8 @@ from ac_platform.organisations.settings import logo_key
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from tests.unit.http.test_organisation import call, state  # noqa: F401
 from tests.unit.http.test_workspaces import TOKEN, workspace_state  # noqa: F401
+from tests.unit.media.test_clamav_scanner import FakeSocket
+from tests.unit.media.test_development_organisation_avatar_runtime import dev_store  # noqa: F401
 
 DETAILS = {
     "name": "Fictional Studio",
@@ -49,8 +52,15 @@ def picture(format="PNG", size=(90, 60), **options):
         return output.getvalue()
 
 
-@pytest.fixture
-def avatar(state, tmp_path):  # noqa: F811
+@pytest.fixture(params=["local", "development"])
+def avatar(state, tmp_path, request, monkeypatch, dev_store):  # noqa: F811
+    if request.param == "development":
+        from ac_platform.media import clamav_scanner
+
+        monkeypatch.setattr(clamav_scanner, "_connect", lambda *args: FakeSocket())
+        runtime = create_default_media_runtime(dev_store).organisation_avatar_runtime
+        state.app.state.organisation_avatar_runtime = runtime
+        return runtime
     signer = MediaSigner(b"fictional-organisation-images-123456789")
     fallback = InMemoryPrivateObjectStorage(signer)
     storage = LocalAvatarStorage(root=tmp_path / "avatar-objects", signer=signer, fallback=fallback)
@@ -202,7 +212,7 @@ async def test_member_cannot_read_edit_or_replay_private_settings_but_can_read_b
 @pytest.mark.parametrize("format,mime", [("PNG", "image/png"), ("JPEG", "image/jpeg")])
 @pytest.mark.parametrize("role", ["owner", "admin"])
 async def test_logo_uses_existing_store_strips_metadata_and_persists_reference(
-    state, avatar, format, mime, role
+    state, avatar, format, mime, role, dev_store
 ):  # noqa: F811
     with Session(state.engine) as db, db.begin():
         db.get(Membership, (state.tenant, state.person)).role = role
@@ -218,9 +228,12 @@ async def test_logo_uses_existing_store_strips_metadata_and_persists_reference(
     assert (await upload(state, source, content_type=mime, key=key)).json() == response.json()
     assert len(snapshot(state)[3]) == 1
     # Reopening the existing store proves that delivery is not an in-memory image cache.
-    reopened = LocalAvatarStorage(
-        root=avatar.storage.root, signer=avatar.storage.signer, fallback=avatar.storage.fallback
-    )
+    if (avatar.storage.root / ".development-organisation-avatar-store").exists():
+        reopened = create_default_media_runtime(dev_store).organisation_avatar_runtime.storage
+    else:
+        reopened = LocalAvatarStorage(
+            root=avatar.storage.root, signer=avatar.storage.signer, fallback=avatar.storage.fallback
+        )
     stored = reopened.read(logo_key(state.tenant, key))
     with Image.open(io.BytesIO(stored)) as image:
         assert image.size == (512, 512) and image.format == "WEBP"
@@ -284,6 +297,7 @@ async def test_scanner_and_audit_failure_keep_the_previous_logo_and_details(
     key = uuid4()
     assert (await upload(state, picture(), key=key)).status_code == 200
     prior = snapshot(state)
+    original_scanner = avatar.service.scanner
     avatar.service.scanner = FailClosedScanner()
     rejected = uuid4()
     assert (await upload(state, picture(), key=rejected)).status_code == 400
@@ -291,7 +305,7 @@ async def test_scanner_and_audit_failure_keep_the_previous_logo_and_details(
     current = snapshot(state)
     assert current[:3] == prior[:3]
     assert [(a.id, a.payload) for a in current[3]] == [(a.id, a.payload) for a in prior[3]]
-    avatar.service.scanner = LocalAvatarScanner()
+    avatar.service.scanner = original_scanner
 
     async def fail_audit(*args, **kwargs):
         raise DomainError("Fictional audit failure.")
@@ -335,3 +349,24 @@ async def test_selected_context_never_accepts_another_tenants_logo_id(state, ava
 async def test_missing_image_storage_fails_closed(state):  # noqa: F811
     assert (await upload(state, picture())).status_code == 503
     assert snapshot(state) == ("Alpha", {}, None, [])
+
+
+@pytest.mark.parametrize("reply", [b"stream: Eicar-Test-Signature FOUND\0", b"stream: ERROR\0"])
+async def test_dev_scanner_rejection_preserves_logo_details_and_audit(
+    state, dev_store, monkeypatch, reply
+):  # noqa: F811
+    from ac_platform.media import clamav_scanner
+
+    monkeypatch.setattr(clamav_scanner, "_connect", lambda *args: FakeSocket())
+    runtime = create_default_media_runtime(dev_store).organisation_avatar_runtime
+    state.app.state.organisation_avatar_runtime = runtime
+    assert (await upload(state, picture())).status_code == 200
+    prior = snapshot(state)
+    monkeypatch.setattr(clamav_scanner, "_connect", lambda *args: FakeSocket([reply]))
+    rejected = uuid4()
+    response = await upload(state, picture(), key=rejected)
+    assert response.status_code in {400, 503}
+    current = snapshot(state)
+    assert current[:3] == prior[:3]
+    assert [(a.id, a.payload) for a in current[3]] == [(a.id, a.payload) for a in prior[3]]
+    assert (await call(state, path=f"/logo/{rejected}")).status_code == 404
