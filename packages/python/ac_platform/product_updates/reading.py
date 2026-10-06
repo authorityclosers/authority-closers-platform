@@ -249,3 +249,15 @@ class ProductUpdatesReading:
                 .values(read_at=datetime.now(UTC))
             )
         return {"unread_count": (await self.notifications())["unread_count"]}
+
+    async def mark_all_read(self) -> dict[str, int]:
+        """Acknowledge the account's full visible feed, beyond the response limit."""
+        await self._mark_seen(
+            [item.note.note_key for item in await self.visible() if not item.seen]
+        )
+        await self.database.execute(
+            update(Notification)
+            .where(Notification.person_id == self.actor.person_id, Notification.read_at.is_(None))
+            .values(read_at=datetime.now(UTC))
+        )
+        return {"unread_count": (await self.notifications())["unread_count"]}

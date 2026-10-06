@@ -29,6 +29,10 @@ class ReadRequest(BaseModel):
     )
 
 
+class ReadAllRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProductUpdatesPrivateResponses:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -107,6 +111,12 @@ def install_product_updates_http(
         body: ReadRequest, auth: AuthenticatedTransaction = write_actor
     ) -> dict[str, int]:
         return await reading(auth).mark_read(body.ids)
+
+    @router.post("/notifications/read-all", dependencies=[Depends(write_surface)])
+    async def read_all(
+        _body: ReadAllRequest, auth: AuthenticatedTransaction = write_actor
+    ) -> dict[str, int]:
+        return await reading(auth).mark_all_read()
 
     application.include_router(router)
     application.add_middleware(ProductUpdatesPrivateResponses)

@@ -293,3 +293,78 @@ async def test_feed_limits_do_not_truncate_badge_counts_or_release_acknowledgeme
     assert len(result["notifications"]) == 50 and result["unread_count"] == 56
     assert await service.mark_read(["updates:bulk"]) == {"unread_count": 55}
     assert len(database.scalars(select(UpdateSeen)).all()) == 105
+
+
+@pytest.mark.parametrize("environment", ["staging", "development"])
+async def test_read_all_covers_full_history_and_preserves_other_accounts(database, environment):
+    actor, neighbor = person(database), person(database)
+    for index in range(105):
+        note(database, f"bulk-{index}", release_id=f"release-{index}")
+    note(database, "hidden-feature", feature_key="unknown")
+    note(database, "hidden-audience", audience="org_admins")
+    note(database, "hidden-tester", audience="testers")
+    note(database, "draft", status="draft", published_at=None)
+    prior_read_at = NOW - timedelta(hours=2)
+    events = [
+        Notification(
+            person_id=recipient.person_id,
+            kind="invite_received",
+            dedupe_key=str(index),
+            title="Fictional invitation",
+            body="An invitation.",
+            href="/organisation",
+            created_at=NOW + timedelta(hours=index + 1),
+            read_at=prior_read_at if index == 0 else None,
+        )
+        for recipient in (actor, neighbor)
+        for index in range(55)
+    ]
+    database.add_all(events)
+    database.flush()
+    service = reader(database, actor, environment=environment)
+    await service.mark_seen(["bulk-0"])
+    original_seen_at = database.scalar(
+        select(UpdateSeen.seen_at).where(UpdateSeen.note_key == "bulk-0")
+    )
+    before = await service.notifications()
+    assert len(before["notifications"]) == 50
+    assert before["unread_count"] == (159 if environment == "development" else 158)
+
+    assert await service.mark_all_read() == {"unread_count": 0}
+    database.commit()
+    second_session = ActorContext(actor.person_id, uuid4(), None)
+    with Session(database.get_bind()) as another_database:
+        assert (
+            await reader(another_database, second_session, environment=environment).notifications()
+        )["unread_count"] == 0
+        assert (await reader(another_database, neighbor, environment=environment).notifications())[
+            "unread_count"
+        ] == (160 if environment == "development" else 159)
+    timestamps = database.execute(select(Notification.id, Notification.read_at)).all()
+    assert await service.mark_all_read() == {"unread_count": 0}
+    assert database.execute(select(Notification.id, Notification.read_at)).all() == timestamps
+    assert (
+        database.scalar(select(UpdateSeen.seen_at).where(UpdateSeen.note_key == "bulk-0"))
+        == original_seen_at
+    )
+    receipts = database.scalars(select(UpdateSeen.note_key)).all()
+    assert len(receipts) == (106 if environment == "development" else 105)
+    assert not {"hidden-feature", "hidden-audience", "hidden-tester"}.intersection(receipts)
+    database.refresh(events[0])
+    assert events[0].read_at == prior_read_at.replace(tzinfo=None)
+
+    # A later event and release remain unread; the command creates no future preference.
+    note(database, "later", release_id="later-release", published_at=NOW + timedelta(days=1))
+    database.add(
+        Notification(
+            person_id=actor.person_id,
+            kind="report_ready",
+            dedupe_key="later",
+            title="Fictional later report",
+            body="Ready to read.",
+            href="/analysis/calls/fictional",
+            created_at=NOW + timedelta(days=1),
+        )
+    )
+    database.flush()
+    assert (await service.notifications())["unread_count"] == 2
