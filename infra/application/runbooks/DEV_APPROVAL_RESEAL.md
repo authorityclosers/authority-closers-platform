@@ -103,18 +103,32 @@ missing/tampered credentials fail, and fixture bytes and source permissions
 remain unchanged. It never calls reseal, apply, rollback, any managed-service
 mutation, provider or database operation.
 
-Root supplies the exact backend from its verified unit metadata and uses a
-root-owned fixture directory under `/run`; do not substitute a live credential
-path. Before adoption, repeat against the released immutable script with the
-optional `AC_RESEAL_REVIEWED_SCRIPT` source override:
+Root supplies the exact backend from its verified unit metadata and uses the
+run-owned `PAPERCLIP_RUN_SCRATCH_DIR` under `/tmp`. Keep the archive, dependency
+environment and fixture directory root-owned and private mode 0700; do not
+substitute a live credential path. The test verifies the exact three original
+script files exist as regular root:acops0750 files with the reviewed hashes and
+unchanged metadata before probing their unreadability at uid/gid10001. The
+unchanged private-/tmp sandbox can hide these existing host paths, so either
+`PermissionError` or `FileNotFoundError` proves they cannot be opened there.
+Readable sources and all other I/O failures still fail; absence on the host
+never qualifies as sandbox denial. No bind, permission or group change is needed.
+
+Before adoption, repeat from the exact approved test archive against the
+explicitly nominated immutable tool release, with the optional
+`AC_RESEAL_REVIEWED_SCRIPT` source override. A newer release must be reviewed as
+containing all three identical approved runtime scripts; never resolve a moving
+release symlink. Root uses the existing audited wrapper and both release and
+application locks, and the archive's frozen dependency environment:
 
 ```bash
 AC_RESEAL_RUNTIME_PROOF=1 \
 AC_RESEAL_PROOF_BACKEND=<verified-development-backend-directory> \
 AC_RESEAL_REVIEWED_SCRIPT="$RESEAL_SCRIPT" \
-uv run --frozen pytest tests/infra/test_reseal_dev_sales_xray_approval.py \
+"$PAPERCLIP_RUN_SCRATCH_DIR/proof/.venv/bin/python" -m pytest \
+  "$PAPERCLIP_RUN_SCRATCH_DIR/proof/tests/infra/test_reseal_dev_sales_xray_approval.py" \
   -k root_only_real_uid10001_code_delivery -q --tb=short \
-  --basetemp=<root-owned-proof-workspace>/fixtures
+  --basetemp="$PAPERCLIP_RUN_SCRATCH_DIR/proof/fixtures"
 ```
 
 Record the source commit, installed path, three script hashes, actual uid/gid,
@@ -291,3 +305,18 @@ digests and private credential delivery, plus the apply and restoration rechecks
 Python format/lint and diff whitespace checks passed. Root's real uid10001 proof,
 CTO review, CEO SHA-bound approval, normal release and live adoption/endpoint
 verification remain outstanding; this result does not claim any of them.
+
+AUT-1319 local result (6 October 2026): 425 re-seal tests and the same 59 helper
+regressions passed (484 total, 68.66 seconds). The explicit real-systemd Root
+proof was skipped in the engineer suite. Seventeen new cases execute the exact
+denial probe: both sandbox denial outcomes pass for all three source names;
+readable sources and unrelated I/O failures at each position, wrong uid/gid and
+extra groups fail. The Root test additionally binds denial to exact existing,
+regular root:acops0750 sources with all three reviewed hashes and unchanged
+metadata. Missing/tampered private-code negatives and final fixture/source
+preservation assertions remain in place. All three runtime script checksums
+above are unchanged. Python format/lint, diff whitespace and the task gate
+passed. The reviewed test archive and explicitly nominated immutable release
+must be pinned in the handoff; Root independently repeats the corrected proof
+on [AUT-1313](/AUT/issues/AUT-1313). This local result does not satisfy that proof
+or claim any live adoption.
