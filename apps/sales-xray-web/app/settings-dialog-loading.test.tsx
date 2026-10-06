@@ -28,7 +28,7 @@ vi.mock("./account-settings", async () => {
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-it("loads settings only on open, announces the wait, and can close before it resolves", async () => {
+it("loads settings only on open, announces the wait, and closes before and after it resolves", async () => {
   window.history.replaceState(null, "", "/dashboard");
   const host = document.createElement("div");
   document.body.append(host);
@@ -65,6 +65,11 @@ it("loads settings only on open, announces the wait, and can close before it res
     await vi.waitFor(() =>
       expect(host.textContent).toContain("Close loaded settings"),
     );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("button")!.click(),
+    );
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(window.location.hash).toBe("");
   } finally {
     load.resolve();
     await act(async () => root.unmount());

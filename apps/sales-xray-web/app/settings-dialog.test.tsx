@@ -63,11 +63,6 @@ function json(body: unknown, status = 200) {
 async function flush() {
   await act(async () => {
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    const dialog = host.querySelector("dialog");
-    if (dialog)
-      await vi.waitFor(() =>
-        expect(dialog.querySelector('[role="tab"]')).not.toBeNull(),
-      );
   });
 }
 
