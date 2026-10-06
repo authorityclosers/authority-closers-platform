@@ -2157,14 +2157,12 @@ class Engine:
                 # Forward carry-over must never create or widen an older worker's scope.
                 try:
                     self.keep_native_build(build.sha)
-                    if (
-                        environment == "staging"
-                        and self.native_preparation_path(build.sha).exists()
-                    ):
+                    if environment == "staging":
                         native_plan = self.native_deployment_plan(build.sha, source, stage)
+                    if native_plan is not None:
                         activation = {
                             "sales_xray_activation": "prepared native transition",
-                            "sales_xray_native": build.sha,
+                            "sales_xray_native": native_plan.get("native_source", build.sha),
                             "sales_xray_previous_native": native_plan["previous_native"],
                             "sales_xray_approval_sha256": native_plan["approval_sha256"],
                         }
@@ -2462,7 +2460,6 @@ class Engine:
         try:
             record = verifier.parse(verifier.read(stored / "artifact-metadata.json"))
             run = verifier.parse(verifier.read(stored / "workflow-run.json"))
-            expires = dt.datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
             if not (
                 run["repository"]["full_name"] == REPOSITORY
                 and run["path"] == f".github/workflows/{NATIVE_WORKFLOW}"
@@ -2483,12 +2480,10 @@ class Engine:
                 and record["workflow_run"]["repository_id"] == run["repository"]["id"]
                 and record["workflow_run"]["head_repository_id"] == run["repository"]["id"]
                 and record["expired"] is False
-                and expires.tzinfo is not None
-                and expires.timestamp() > self.clock()
                 and type(record["id"]) is int
                 and record["id"] > 0
             ):
-                raise ReleaseError("native target CI provenance is invalid or expired")
+                raise ReleaseError("native target stored CI provenance is invalid")
             archive = stored / "native-artifact.zip"
             if (
                 archive.is_symlink()
@@ -2726,7 +2721,7 @@ class Engine:
                     self.record({"at": _now(), "action": "native-prepare", **receipt})
                 return receipt
 
-    def native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any]:
+    def native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any] | None:
         try:
             return self._native_deployment_plan(sha, source, stage)
         except ReleaseError:
@@ -2734,32 +2729,59 @@ class Engine:
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise ReleaseError("native preparation is incomplete; runtime unchanged") from error
 
-    def _native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any]:
-        path = self.native_preparation_path(sha)
-        if path.is_symlink() or not path.is_file():
-            raise ReleaseError("native preparation must be a regular engine-owned receipt")
-        prepared = json.loads(path.read_text(encoding="utf-8"))
+    def _native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any] | None:
+        # The timer delivers current main, while native CI only builds on input
+        # changes. Select a preparation by its native source, not the core SHA.
+        candidates = []
+        for path in sorted((self.paths.state / "native-preparations").glob("staging-*.json")):
+            if path.is_symlink() or not path.is_file():
+                raise ReleaseError("native preparation must be a regular engine-owned receipt")
+            prepared = json.loads(path.read_text(encoding="utf-8"))
+            native_sha = prepared.get("target")
+            if (
+                prepared.get("schema") != "ac.release.native-preparation/1"
+                or not isinstance(native_sha, str)
+                or not SHA_RE.fullmatch(native_sha)
+                or path != self.native_preparation_path(native_sha)
+            ):
+                raise ReleaseError("native preparation identity is invalid")
+            # Completed preparations cannot govern a new predecessor. Normal
+            # strict carry-forward takes over after a successful transition.
+            if prepared.get("previous_core") != self.current_core("staging"):
+                continue
+            if self.is_ancestor(native_sha, sha):
+                candidates.append(prepared)
+        if not candidates:
+            return None
+        if len(candidates) != 1:
+            raise ReleaseError("native preparation is ambiguous; prepare one exact native source")
+        prepared = candidates[0]
+        native_sha = prepared["target"]
         if (
-            prepared.get("schema") != "ac.release.native-preparation/1"
-            or prepared.get("target") != sha
-            or prepared.get("previous_core") != self.current_core("staging")
-            or prepared.get("controller") != self.installed_engine()
+            prepared.get("controller") != self.installed_engine()
             or prepared.get("dry_run") is not False
             or prepared.get("runtime_mutation") is not False
             or prepared.get("provider_calls") != 0
             or prepared.get("artifact_pins")
             != {
-                name: _sha256_file(self.paths.native_store / sha / name)
+                name: _sha256_file(self.paths.native_store / native_sha / name)
                 for name in NATIVE_STORE_FILES
             }
         ):
             raise ReleaseError("native preparation identities changed; prepare again")
+        _, verifier = self.native_controller(stage)
+        if (
+            verifier.source_inputs(self.paths.mirror, native_sha)[1]
+            != verifier.source_inputs(self.paths.mirror, sha)[1]
+        ):
+            raise ReleaseError("native_inputs_changed: prepared native source does not cover core")
         plan = self.prepare_native_transition(
-            sha,
+            native_sha,
             Path(prepared["previous_native_units"]),
             prepared["previous_native_units_sha256"],
             source,
             stage,
+            sha,
         )
         if any(
             prepared.get(key) != plan[key]
@@ -2773,7 +2795,8 @@ class Engine:
     ) -> None:
         """Switch the admitted helper under engine control, retaining both directions."""
         installer = plan["installer"]
-        target = self.paths.application / "artifacts" / f"sales-xray-native-{sha}"
+        native_sha = plan.get("native_source", sha)
+        target = self.paths.application / "artifacts" / f"sales-xray-native-{native_sha}"
         if target.exists():
             for name in NATIVE_FILES:
                 if (target / name).is_symlink() or _sha256_file(target / name) != _sha256_file(
@@ -2824,6 +2847,7 @@ class Engine:
                 "at": _now(),
                 "action": "native-transition",
                 "target": sha,
+                "native_source": native_sha,
                 "previous_core": plan["previous_core"],
                 "result": "armed",
                 "previous_native": plan["previous_native"],
@@ -2882,7 +2906,8 @@ class Engine:
                 _sha256_file(target / "native-image.json"),
                 "--output-dir",
                 str(output),
-            ],
+            ]
+            + self.native_reuse_arguments(native_sha, sha, home / "inputs"),
             log=log,
             timeout=900,
         )
@@ -2974,11 +2999,17 @@ class Engine:
         )
 
     def prepare_native_transition(
-        self, sha: str, previous_units: Path, previous_digest: str, source: Path, stage: Path
+        self,
+        sha: str,
+        previous_units: Path,
+        previous_digest: str,
+        source: Path,
+        stage: Path,
+        core_sha: str | None = None,
     ) -> dict[str, Any]:
         try:
             return self._prepare_native_transition(
-                sha, previous_units, previous_digest, source, stage
+                sha, previous_units, previous_digest, source, stage, core_sha
             )
         except ReleaseError:
             raise
@@ -2986,12 +3017,19 @@ class Engine:
             raise ReleaseError("native transition preflight failed; runtime unchanged") from error
 
     def _prepare_native_transition(
-        self, sha: str, previous_units: Path, previous_digest: str, source: Path, stage: Path
+        self,
+        sha: str,
+        previous_units: Path,
+        previous_digest: str,
+        source: Path,
+        stage: Path,
+        core_sha: str | None = None,
     ) -> dict[str, Any]:
         """Prove both directions and prepare policy before the first runtime mutation."""
         installer, verifier = self.native_controller(stage)
+        core_sha = core_sha or sha
         current = self.current_core("staging")
-        if current is None or not self.is_ancestor(current, sha):
+        if current is None or not self.is_ancestor(current, core_sha):
             raise ReleaseError("native transition predecessor is not an ancestor")
         activation = self.activation_path("staging", current)
         descriptor = verifier.parse(verifier.read(activation))
@@ -3069,7 +3107,7 @@ class Engine:
             raise ReleaseError("native transition rollback core build is missing")
         old_bundle = self.store_bundle(rollback, "core", CORE_FILES)
         self.require_backup_support(old_bundle)
-        build = self.stored_build(sha, "core")
+        build = self.stored_build(core_sha, "core")
         if build is None or self.bundle_migration_head(
             self.store_bundle(build, "core", CORE_FILES)
         ) != self.bundle_migration_head(old_bundle):
@@ -3083,7 +3121,7 @@ class Engine:
                 "native transition controller cannot restore the core without database writes"
             )
         target = self.verify_native_target(sha, stage, verifier, installer)
-        if self.activation_path("staging", sha).exists():
+        if self.activation_path("staging", core_sha).exists():
             raise ReleaseError(
                 "native transition target activation already exists; do not overwrite"
             )
@@ -3122,25 +3160,26 @@ class Engine:
                 "--source-activation",
                 str(activation),
                 "--target-release-id",
-                sha,
+                core_sha,
                 "--native-artifact-manifest",
                 str(manifest),
                 "--native-artifact-sha256",
                 _sha256_file(manifest),
                 "--output-dir",
                 str(output),
-            ],
+            ]
+            + self.native_reuse_arguments(sha, core_sha, stage / "native-reuse-inputs"),
             check=False,
             timeout=900,
         )
         if completed.returncode != 0:
             raise ReleaseError("native transition activation preparation failed")
         result = json.loads(completed.stdout)
-        prepared = json.loads((output / f"activation-{sha}.json").read_text(encoding="utf-8"))
+        prepared = json.loads((output / f"activation-{core_sha}.json").read_text(encoding="utf-8"))
         if (
             result.get("provider_calls") != 0
             or result.get("approval_replaced") is not False
-            or result.get("release_id") != sha
+            or result.get("release_id") != core_sha
             or prepared["approval_file"] != str(approval)
             or prepared["approval_sha256"] != approval_hash
             or prepared["native_image_ref"] != binding.image_ref
@@ -3149,6 +3188,8 @@ class Engine:
         ):
             raise ReleaseError("native transition changed authority or identity")
         return {
+            "native_source": sha,
+            "core_target": core_sha,
             "installer": installer,
             "target": target,
             "binding": binding,
@@ -3280,6 +3321,21 @@ class Engine:
             encoding="utf-8",
         )
         return proof
+
+    def native_reuse_arguments(self, native_sha: str, sha: str, directory: Path) -> list[str]:
+        """Use the existing preparer's strict retained-bundle proof for later core heads."""
+        if native_sha == sha:
+            return []
+        directory.mkdir(parents=True, exist_ok=True)
+        proof = self.native_reuse_proof(native_sha, sha, directory)
+        return [
+            "--native-reuse-proof",
+            str(proof),
+            "--native-reuse-proof-sha256",
+            _sha256_file(proof),
+            "--source-repository",
+            str(self.paths.mirror),
+        ]
 
     def _seal_activation(self, home: Path, output: Path) -> None:
         """Give prepared files the reviewed layout: root-owned and read-only."""

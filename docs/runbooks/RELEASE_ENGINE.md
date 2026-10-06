@@ -210,10 +210,13 @@ It requires the target's own stored ordinary CI artifact and an engine preparati
 receipt. `store-native` alone does not install or activate anything.
 
 `prepare-native` validates the original successful main push, first run attempt,
-repository/run/artifact identities, artifact expiry, the retained ZIP digest and
+repository/run/artifact identities, the retained ZIP digest and
 size, all bundle checksums, committed source tree/recipes/helper bytes, the OCI
 index/manifest/config/layers, and the image environment bindings. It refuses an
-expired or incomplete target record. It also checks target/predecessor ancestry,
+incomplete target record or one recorded as expired at store admission. GitHub's
+retention deadline does not invalidate a retained ZIP whose recorded digest,
+size and ordinary run/source identities still verify. Approval expiry remains
+a live guard. It also checks target/predecessor ancestry,
 approval lifetime (at least one day), exact approval bytes, the predecessor's
 immutable helper/image, rendered unit descriptor and installed unit bytes,
 active/enabled units and socket/mount readback. The prior renderer, core bundle,
@@ -229,7 +232,16 @@ the verified current core release renderer to supervise a target helper before
 the target core source is installed. This override is an internal engine API;
 there is no new standalone native-install CLI option.
 
-Each core deploy with a preparation receipt reruns these checks, checks the
+Preparation is keyed to the stored native build **N**, rather than a core SHA.
+The existing timer deploys the latest validated main core **T**. It consumes N's
+receipt only while its predecessor pins still match, N is an ancestor of T,
+and `native_artifact_compatibility.source_inputs(T)` equals N's inputs using the
+unchanged strict comparison, including the native workflow. T's activation uses
+N's immutable manifest/helper. A further native input change refuses before
+runtime mutation. Completed receipts do not govern a new predecessor; ordinary
+strict carry-forward takes over after successful delivery.
+
+Each eligible core deploy reruns these checks, checks the
 receipt's artifact/controller/approval/predecessor pins, prepares the matching
 activation without approval replacement, and rehearses the target units. A dry
 run uses disposable stages and publishes no activation or preparation receipt.
@@ -294,18 +306,20 @@ install the reviewed source through the existing engine installer instead.
    path/hash. These are operators' receipt pins, not values to invent:
 
    ```bash
-   target_sha=386f28ba6f046fd2dda1727ca6736f9260f79709
-   sudo ac-release prepare-native staging "$target_sha" \
+   native_sha=386f28ba6f046fd2dda1727ca6736f9260f79709
+   sudo ac-release prepare-native staging "$native_sha" \
      --previous-native-units "$previous_units_path" \
      --previous-native-units-sha256 "$previous_units_sha256" --dry-run
-   sudo ac-release prepare-native staging "$target_sha" \
+   sudo ac-release prepare-native staging "$native_sha" \
      --previous-native-units "$previous_units_path" \
      --previous-native-units-sha256 "$previous_units_sha256"
-   sudo ac-release deploy staging "$target_sha" --component core --dry-run
+   sudo ac-release deploy staging --component core --dry-run
    ```
 
    Preserve the preparation receipt and exact native/activation/core dry-run
-   evidence on the Root parent. The recorded bundle/run is reused; no CI rerun,
+   evidence on the Root parent, including the current-main core SHA T and native
+   source N printed by core dry-run. Do not supply N as the core deployment SHA:
+   the timer advances main. The recorded native bundle/run is reused; no CI rerun,
    rebuild or manual native installation is authorized. If any check refuses,
    keep containment and report the exact missing or changed binding.
 
