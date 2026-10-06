@@ -272,8 +272,7 @@ def _supervisor_source(release: str = NATIVE_RELEASE) -> str:
     ``NATIVE_RELEASE`` remains the default for legacy callers and fixtures.
     """
     return (
-        f"/srv/authority-closers/application/releases/{release}/"
-        "scripts/render-sales-xray-native.py"
+        f"/srv/authority-closers/application/releases/{release}/scripts/render-sales-xray-native.py"
     )
 
 
@@ -567,7 +566,7 @@ def _validate_renderer_binding(
     if (
         canonical_paths
         and enforce_path_binding
-        and renderer != Path(_supervisor_source_for_binding(binding))
+        and renderer != Path(supervisor_source or _supervisor_source_for_binding(binding))
     ):
         raise _fail("renderer_path_not_release_bound")
     if canonical_paths:
@@ -1233,6 +1232,8 @@ def install(
     native_artifact_sha256: str | None = None,
     previous_native_units: Path | None = None,
     previous_native_units_sha256: str | None = None,
+    supervisor_source: str | None = None,
+    previous_supervisor_source: str | None = None,
 ) -> dict[str, Any]:
     if environment not in ENVIRONMENTS:
         raise _fail("environment_invalid")
@@ -1286,6 +1287,7 @@ def install(
         environment=environment,
         supplied_sha256=native_units_sha256,
         binding=binding,
+        supervisor_source=supervisor_source,
     )
     renderer_sha256 = _validate_renderer_binding(
         descriptor,
@@ -1294,6 +1296,7 @@ def install(
         environment=environment,
         canonical_paths=canonical_paths,
         binding=binding,
+        supervisor_source=supervisor_source,
     )
     if (previous_native_units is None) != (previous_native_units_sha256 is None):
         raise _fail("native_previous_arguments_incomplete")
@@ -1317,7 +1320,7 @@ def install(
             raise _fail("native_previous_binding_invalid")
         previous_binding = NativeBinding(helper_sha, image_ref, image_ref)
         exact = _exact_predecessor(previous, environment=environment)
-        previous_supervisor = (
+        previous_supervisor = previous_supervisor_source or (
             exact.supervisor_source
             if exact is not None
             else _supervisor_source_for_binding(previous_binding)

@@ -10,9 +10,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.error
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1653,3 +1655,658 @@ def test_status_shows_when_the_sales_xray_approval_lapses(
     assert staging["sales_xray_approval_days_left"] == 40
     MODULE._print(engine.status(), False)
     assert "Sales Xray approval until" in capsys.readouterr().out
+
+
+def native_admission_fixture(tmp_path: Path):
+    from tests.infra.test_sales_xray_native_installer import installer
+    from tests.unit.test_native_artifact_compatibility import MODULE as verifier
+    from tests.unit.test_native_artifact_compatibility import Bundle, git
+
+    bundle = Bundle(tmp_path)
+    previous = bundle.source
+    workflow = bundle.repo / verifier.WORKFLOW
+    workflow.write_bytes(workflow.read_bytes() + b"changed workflow input\n")
+    git(bundle.repo, "add", ".")
+    git(bundle.repo, "commit", "--quiet", "-m", "Changed reviewed native workflow input")
+    bundle.source = git(bundle.repo, "rev-parse", "HEAD")
+    bundle.native.update(
+        source_commit=bundle.source, context_tree_id=git(bundle.repo, "rev-parse", "HEAD^{tree}")
+    )
+    config = json.dumps(
+        {
+            "os": "linux",
+            "architecture": "amd64",
+            "config": {
+                "User": "10001:10001",
+                "WorkingDir": "/app",
+                "Entrypoint": ["python", "-m", "ac_platform.conversation_intelligence"],
+                "Cmd": ["doctor"],
+            },
+        }
+    ).encode()
+    config_id = "sha256:" + hashlib.sha256(config).hexdigest()
+    manifest = json.dumps(
+        {"schemaVersion": 2, "config": {"digest": config_id, "size": len(config)}, "layers": []}
+    ).encode()
+    image_ref = "sha256:" + hashlib.sha256(manifest).hexdigest()
+    buffer = io.BytesIO()
+    native_tag = "ghcr.io/authorityclosers/ac-sales-xray-native:" + bundle.source
+    with tarfile.open(fileobj=buffer, mode="w:gz") as image:
+        index = json.dumps(
+            {
+                "schemaVersion": 2,
+                "manifests": [
+                    {
+                        "digest": image_ref,
+                        "annotations": {"io.containerd.image.name": native_tag},
+                    }
+                ],
+            }
+        ).encode()
+        entry = tarfile.TarInfo("index.json")
+        entry.size = len(index)
+        image.addfile(entry, io.BytesIO(index))
+        for identity, raw in ((config_id, config), (image_ref, manifest)):
+            member = tarfile.TarInfo("blobs/sha256/" + identity.removeprefix("sha256:"))
+            member.size = len(raw)
+            image.addfile(member, io.BytesIO(raw))
+    transport = buffer.getvalue()
+    bundle.native["image"].update(expected_runtime_ref=image_ref, image_id=config_id)
+    bundle.native["transport"].update(
+        bytes=len(transport),
+        sha256=hashlib.sha256(transport).hexdigest(),
+        manifest_digest=image_ref,
+        config_digest=config_id,
+    )
+    bundle.payload["native-image.tar.gz"] = transport
+    bundle.payload["native-image.env"] = (
+        "\n".join(
+            f"{key}={value}"
+            for key, value in {
+                "AC_NATIVE_IMAGE": image_ref,
+                "AC_NATIVE_IMAGE_ID": config_id,
+                "AC_NATIVE_SOURCE_COMMIT": bundle.source,
+                "AC_NATIVE_IMAGE_TYPE": "oci_transport_manifest",
+                "AC_NATIVE_TRANSPORT_MANIFEST_DIGEST": image_ref,
+                "AC_NATIVE_TRANSPORT_CONFIG_DIGEST": config_id,
+                "AC_NATIVE_TRANSPORT_SHA256": bundle.native["transport"]["sha256"],
+                "AC_NATIVE_HELPER_SHA256": bundle.native["helper_source"]["sha256"],
+            }.items()
+        ).encode()
+        + b"\n"
+    )
+    bundle.run.update(head_sha=bundle.source, event="push", head_branch="main", run_attempt=1)
+    bundle.artifact.update(
+        name="ac-sales-xray-native-" + bundle.source,
+        expired=False,
+        expires_at=MODULE.dt.datetime.fromtimestamp(NOW + DAY, MODULE.dt.UTC).isoformat(),
+    )
+    bundle.artifact["workflow_run"]["head_sha"] = bundle.source
+    bundle.refresh()
+    engine = make_engine(tmp_path / "engine")
+    engine.clock = lambda: NOW
+    # source_inputs accepts a working Git repository as well as the real bare mirror.
+    engine.paths = SimpleNamespace(
+        **engine.paths.__dict__, mirror=bundle.repo, native_store=engine.paths.native_store
+    )
+    return engine, bundle, verifier, installer, previous
+
+
+def store_native_fixture(engine, bundle) -> Path:
+    stored = engine.paths.native_store / bundle.source
+    stored.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(bundle.archive, stored / "native-artifact.zip")
+    (stored / "artifact-metadata.json").write_text(json.dumps(bundle.artifact))
+    (stored / "workflow-run.json").write_text(json.dumps(bundle.run))
+    return stored
+
+
+def test_changed_input_native_target_admission_checks_ci_source_and_transport(
+    tmp_path: Path,
+) -> None:
+    engine, bundle, verifier, installer, previous = native_admission_fixture(tmp_path)
+    assert (
+        verifier.source_inputs(bundle.repo, previous)[1]
+        != verifier.source_inputs(bundle.repo, bundle.source)[1]
+    )
+    store_native_fixture(engine, bundle)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    target = engine.verify_native_target(bundle.source, stage, verifier, installer)
+    assert (target / "native-image.json").read_bytes() == bundle.payload["native-image.json"]
+    assert (target / "helper/scripts/native_runtime_helper.py").read_bytes() == bundle.files[
+        "scripts/native_runtime_helper.py"
+    ]
+    assert not engine.run.calls  # no Docker load, systemd or provider runtime calls
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "run",
+        "rerun",
+        "dispatch",
+        "branch",
+        "expired",
+        "missing",
+        "zip",
+        "source",
+        "config",
+    ],
+)
+def test_native_target_admission_refuses_incomplete_mismatched_or_expired_provenance(
+    tmp_path: Path, defect: str
+) -> None:
+    engine, bundle, verifier, installer, _ = native_admission_fixture(tmp_path)
+    if defect == "run":
+        bundle.run["head_sha"] = OLD
+    elif defect == "rerun":
+        bundle.run["run_attempt"] = 2
+    elif defect == "dispatch":
+        bundle.run["event"] = "workflow_dispatch"
+    elif defect == "branch":
+        bundle.run["head_branch"] = "feature"
+    elif defect == "expired":
+        bundle.artifact["expired"] = True
+    elif defect == "source":
+        bundle.native["source_commit"] = OLD
+    elif defect == "config":
+        bundle.native["transport"]["config_digest"] = IMAGE
+    bundle.refresh()
+    stored = store_native_fixture(engine, bundle)
+    if defect == "missing":
+        (stored / "workflow-run.json").unlink()
+    if defect == "zip":
+        (stored / "native-artifact.zip").write_bytes(b"corrupt")
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    with pytest.raises(MODULE.ReleaseError):
+        engine.verify_native_target(bundle.source, stage, verifier, installer)
+    assert not engine.run.calls
+
+
+def native_delivery_fixture(tmp_path: Path, failure: str = "", *, core_sha: str = HEAD):
+    """A verified plan plus fictional systemd/Docker/application delivery adapters."""
+    import grp
+
+    from tests.infra.test_ac_release_foundation_install import MIGRATION, running_core, setup
+
+    engine, base_runner, build = setup(tmp_path)
+    build = MODULE.Build(
+        core_sha, build.run_id, build.artifact_id, "ac-application-" + core_sha, DIGEST
+    )
+    engine.operator_group = grp.getgrgid(os.getgid()).gr_name
+    engine.installed_engine = lambda: OUTSIDE
+    foundation_backup_tool(engine, MIGRATION)
+    running_core(engine, "staging", OLD, MIGRATION)
+    config = engine.paths.sales_xray / "staging"
+    config.mkdir(parents=True)
+    operator = engine.paths.application / "operator-inputs/staging"
+    operator.mkdir(parents=True)
+    approval = operator / "approval.json"
+    approval.write_bytes(b'{"testers":["fictional"],"limits":7,"guards":["bounded"]}\n')
+    approval_hash = MODULE._sha256_file(approval)
+    previous_activation = engine.activation_path("staging", OLD)
+    previous_activation.write_text(
+        json.dumps(
+            {
+                "release_id": OLD,
+                "approval_file": str(approval),
+                "approval_sha256": approval_hash,
+                "native_image_ref": IMAGE,
+                "native_image_config_id": IMAGE,
+            }
+        )
+    )
+    previous_units = operator / "native-units.json"
+    previous_units.write_text(
+        json.dumps(
+            {
+                "supervisor_source": "/srv/authority-closers/application/releases/"
+                + OLD
+                + "/scripts/render-sales-xray-native.py",
+                "units": {"native.service": "old helper", "native.mount": "old mount"},
+            }
+        )
+    )
+    old_manifest = operator / "native-image.json"
+    old_manifest.write_text(json.dumps({"image": {"expected_runtime_ref": IMAGE}}))
+    new_image = "sha256:" + "1" * 64
+    target = tmp_path / "native-target"
+    target.mkdir()
+    (engine.paths.application / "artifacts").mkdir()
+    for name in MODULE.NATIVE_FILES:
+        (target / name).write_bytes(b"verified fictional artifact\n")
+    (target / "native-image.json").write_text(
+        json.dumps({"image": {"expected_runtime_ref": new_image}})
+    )
+    runtime = {"helper": IMAGE, "units": previous_units.read_bytes()}
+    events = []
+
+    class NativeOperator:
+        def install(self, **kwargs):
+            image = json.loads(kwargs["native_artifact_manifest"].read_text())["image"][
+                "expected_runtime_ref"
+            ]
+            events.append("native.restore" if image == IMAGE else "native.install")
+            runtime.update(helper=image, units=kwargs["native_units"].read_bytes())
+            if (failure == "native" and image == new_image) or (
+                failure == "restore" and image == IMAGE
+            ):
+                raise MODULE.ReleaseError("fictional native installer failure")
+            return {
+                "status": "installed",
+                "native_image_ref": image,
+                "provider_calls": 0,
+                "database_writes": 0,
+            }
+
+    plan = {
+        "installer": NativeOperator(),
+        "target": target,
+        "binding": SimpleNamespace(image_ref=new_image, image_config_id=new_image),
+        "previous_binding": SimpleNamespace(image_ref=IMAGE, image_config_id=IMAGE),
+        "previous_manifest": old_manifest,
+        "previous_manifest_sha256": MODULE._sha256_file(old_manifest),
+        "previous_units": previous_units,
+        "previous_digest": MODULE._sha256_file(previous_units),
+        "units": {
+            "supervisor_source": json.loads(previous_units.read_text())["supervisor_source"],
+            "units": {"native.service": "new helper", "native.mount": "old mount"},
+        },
+        "renderer": Path("/fictional/renderer"),
+        "supervisor": json.loads(previous_units.read_text())["supervisor_source"],
+        "source_activation": previous_activation,
+        "source_activation_sha256": MODULE._sha256_file(previous_activation),
+        "approval_sha256": approval_hash,
+        "previous_core": OLD,
+        "previous_native": NATIVE,
+        "rollback_build": MODULE.Build(OLD, 100, 7, "ac-application-" + OLD, DIGEST),
+    }
+    pointer = engine.native_preparation_path(core_sha)
+    pointer.parent.mkdir(parents=True)
+    pointer.write_text("verified plan pin")
+    engine.native_deployment_plan = lambda *args: plan
+
+    def delivery(argv, **kwargs):
+        argv = list(argv)
+        if argv[:2] == ["docker", "load"]:
+            events.append("docker.load")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        if argv[0] == "python3" and argv[1].endswith("prepare-sales-xray-native-activation.py"):
+            events.append("activation.prepare")
+            if plan.get("native_source", core_sha) != core_sha:
+                proof = Path(argv[argv.index("--native-reuse-proof") + 1])
+                assert (
+                    MODULE._sha256_file(proof)
+                    == argv[argv.index("--native-reuse-proof-sha256") + 1]
+                )
+                pinned = json.loads(proof.read_text())
+                assert pinned["native_source_commit"] == plan["native_source"]
+                assert pinned["target_release_id"] == core_sha
+            if failure == "activation":
+                raise MODULE.ReleaseError("fictional activation publication failure")
+            output = Path(argv[argv.index("--output-dir") + 1])
+            output.mkdir()
+            prepared = output / f"activation-{core_sha}.json"
+            data = json.loads(previous_activation.read_text())
+            data.update(
+                release_id=core_sha, native_image_ref=new_image, native_image_config_id=new_image
+            )
+            prepared.write_text(json.dumps(data))
+            prepared.with_suffix(".json.sha256").write_text(MODULE._sha256_file(prepared) + "\n")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        if argv[0] == "bash" and argv[1].endswith("install-application-release.sh"):
+            rollback = kwargs["env"].get("AC_CORE_ROLLBACK_ONLY") == "1"
+            events.append("core.restore" if rollback else "core.install")
+            assert runtime["helper"] == (IMAGE if rollback else new_image)
+            target_sha = OLD if rollback else core_sha
+            link = engine.paths.application / "current-staging"
+            if rollback or failure not in ("core-before",):
+                release = engine.paths.application / "releases" / target_sha
+                release.mkdir(exist_ok=True)
+                link.unlink()
+                link.symlink_to(release)
+            return subprocess.CompletedProcess(
+                argv,
+                9 if not rollback and failure.startswith("core-") else 0,
+                "AC_STATUS=COMMITTED\n",
+                "",
+            )
+        return base_runner(argv, **kwargs)
+
+    engine.run = delivery
+
+    def check(environment, sha, log):
+        assert engine.current_core(environment) == sha
+        assert runtime["helper"] == (IMAGE if sha == OLD else new_image)
+        if failure in ("readiness", "restore") and sha == core_sha:
+            raise MODULE.ReleaseError("fictional core readiness failure")
+
+    engine.check_core = check
+    return engine, build, runtime, plan, events, approval
+
+
+@pytest.mark.parametrize(
+    "failure", ["native", "activation", "core-before", "core-after", "readiness"]
+)
+def test_native_transition_failure_restores_native_core_and_activation_and_keeps_containment(
+    tmp_path: Path, failure: str
+) -> None:
+    engine, build, runtime, plan, events, approval = native_delivery_fixture(tmp_path, failure)
+    old_units = runtime["units"]
+    old_activation = plan["source_activation"].read_bytes()
+    old_approval = approval.read_bytes()
+    result = engine.attempt("staging", "core", build, dry_run=False, trigger="auto")
+    assert result["result"] == "failed"
+    assert "pinned predecessor restored" in result["error"]
+    assert runtime == {"helper": IMAGE, "units": old_units}
+    assert engine.current_core("staging") == OLD
+    assert plan["source_activation"].read_bytes() == old_activation
+    assert approval.read_bytes() == old_approval
+    assert not engine.activation_path("staging", HEAD).exists()
+    assert events.index("native.restore") < events.index("core.restore")
+    assert engine.is_paused("staging") and engine.failed_sha("staging", "core") == HEAD
+    assert any(entry.get("result") == "restored" for entry in engine.history())
+
+
+def test_native_transition_success_publishes_exact_binding_and_unchanged_approval(
+    tmp_path: Path,
+) -> None:
+    engine, build, runtime, plan, events, approval = native_delivery_fixture(tmp_path)
+    old_approval = approval.read_bytes()
+    result = engine.attempt("staging", "core", build, dry_run=False, trigger="auto")
+    assert result["result"] == "success"
+    assert runtime["helper"] == plan["binding"].image_ref
+    assert engine.current_core("staging") == HEAD
+    published = json.loads(engine.activation_path("staging", HEAD).read_text())
+    assert published["native_image_ref"] == runtime["helper"]
+    assert published["approval_sha256"] == MODULE._sha256_file(approval)
+    assert approval.read_bytes() == old_approval
+    assert events.index("native.install") < events.index("core.install")
+    assert "native.restore" not in events
+
+
+def test_native_core_dry_run_preserves_runtime_publication_flags_and_approvals(
+    tmp_path: Path,
+) -> None:
+    engine, build, runtime, plan, events, approval = native_delivery_fixture(tmp_path)
+    engine.set_paused("staging", True, "existing containment")
+    engine.paths.failed_flag("staging", "core").write_text(HEAD + "\n")
+    before = {
+        path: path.read_bytes()
+        for path in [
+            engine.paths.paused_flag("staging"),
+            engine.paths.failed_flag("staging", "core"),
+            plan["source_activation"],
+            approval,
+        ]
+    }
+    old_units = runtime["units"]
+    result = engine.attempt("staging", "core", build, dry_run=True, trigger="manual")
+    assert result["result"] == "dry-run"
+    assert not events and not engine.history()
+    assert runtime == {"helper": IMAGE, "units": old_units}
+    assert engine.current_core("staging") == OLD
+    assert not engine.activation_path("staging", HEAD).exists()
+    assert {path: path.read_bytes() for path in before} == before
+
+
+def test_unverifiable_native_restore_stays_failed_and_paused(tmp_path: Path) -> None:
+    engine, build, _, _, events, _ = native_delivery_fixture(tmp_path, "restore")
+    result = engine.attempt("staging", "core", build, dry_run=False, trigger="auto")
+    assert result["result"] == "failed"
+    assert "could not be verified" in result["error"]
+    assert engine.is_paused("staging") and engine.failed_sha("staging", "core") == HEAD
+    assert "core.restore" not in events
+    assert any(entry.get("result") == "recovery-failed" for entry in engine.history())
+
+
+def test_missing_rollback_pin_refuses_before_native_or_core_mutation(tmp_path: Path) -> None:
+    engine, build, runtime, _, events, _ = native_delivery_fixture(tmp_path)
+
+    def refuse(*args):
+        raise MODULE.ReleaseError("native previous unit pin is missing")
+
+    engine.native_deployment_plan = refuse
+    result = engine.attempt("staging", "core", build, dry_run=True, trigger="manual")
+    assert result["result"] == "failed"
+    assert not events and runtime["helper"] == IMAGE
+    assert engine.current_core("staging") == OLD
+
+
+def test_native_transition_receipts_keep_both_core_bundles_and_installer_artifacts(
+    tmp_path: Path,
+) -> None:
+    engine = retention_fixture(tmp_path)
+    engine.record(
+        {"action": "native-prepare", "target": HEAD, "previous_core": OLD, "result": "prepared"}
+    )
+    for sha in (HEAD, OLD, OUTSIDE):
+        (engine.paths.store / sha / "core").mkdir(parents=True)
+    assert engine.prune_store() == [OUTSIDE]
+    assert engine.native_rollback_pins() == {HEAD, OLD}
+    report = engine.prune_artifacts(1, images=False)
+    decisions = {entry["sha"]: entry["keep"] for entry in report["artifacts"]}
+    assert "governed native transition rollback pin" in decisions[OLD]
+
+
+def test_invalid_native_rollback_receipt_refuses_pruning(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    (engine.paths.store / OLD / "core").mkdir(parents=True)
+    engine.record({"action": "native-transition", "target": HEAD, "result": "armed"})
+    with pytest.raises(MODULE.ReleaseError, match="rollback receipt is invalid"):
+        engine.prune_store()
+    assert (engine.paths.store / OLD / "core").is_dir()
+
+
+@pytest.mark.parametrize("contents", ["{", '{"schema":"ac.release.native-preparation/1"}'])
+def test_incomplete_native_preparation_receipt_refuses_before_runtime_mutation(
+    tmp_path: Path, contents: str
+) -> None:
+    engine = make_engine(tmp_path)
+    pointer = engine.native_preparation_path(HEAD)
+    pointer.parent.mkdir(parents=True)
+    pointer.write_text(contents)
+    with pytest.raises(MODULE.ReleaseError, match="native preparation"):
+        engine.native_deployment_plan(HEAD, tmp_path / "source", tmp_path / "stage")
+    assert not engine.run.calls
+    assert not engine.is_paused("staging")
+    assert engine.failed_sha("staging", "core") is None
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_prepare_native_is_distinct_from_installation_and_preserves_containment(
+    tmp_path: Path, dry_run: bool
+) -> None:
+    engine, build, runtime, plan, events, approval = native_delivery_fixture(tmp_path)
+    engine.stored_build = lambda *args: build
+    engine.prepare_native_transition = lambda *args: plan
+    stored = engine.paths.native_store / HEAD
+    stored.mkdir(parents=True)
+    for name in MODULE.NATIVE_STORE_FILES:
+        (stored / name).write_bytes(b"fictional already admitted provenance\n")
+    engine.set_paused("staging", True, "existing containment")
+    engine.paths.failed_flag("staging", "core").write_text(HEAD + "\n")
+    pointer = engine.native_preparation_path(HEAD)
+    paths = [
+        engine.paths.paused_flag("staging"),
+        engine.paths.failed_flag("staging", "core"),
+        plan["source_activation"],
+        approval,
+    ]
+    before = {path: path.read_bytes() for path in paths}
+    old_pointer = pointer.read_bytes()
+    old_runtime = runtime.copy()
+    receipt = engine.prepare_native(
+        HEAD, plan["previous_units"], plan["previous_digest"], dry_run=dry_run
+    )
+    assert receipt["dry_run"] is dry_run and receipt["runtime_mutation"] is False
+    assert not events and runtime == old_runtime
+    assert engine.current_core("staging") == OLD
+    assert not engine.activation_path("staging", HEAD).exists()
+    assert {path: path.read_bytes() for path in paths} == before
+    if dry_run:
+        assert pointer.read_bytes() == old_pointer and not engine.history()
+    else:
+        assert json.loads(pointer.read_text()) == receipt
+        assert engine.history()[0]["action"] == "native-prepare"
+        # An offline record or ZIP change after preparation invalidates admission.
+        (stored / "native-artifact.zip").write_bytes(b"changed archive")
+        with pytest.raises(MODULE.ReleaseError, match="identities changed"):
+            MODULE.Engine.native_deployment_plan(engine, HEAD, tmp_path / "source", tmp_path)
+        assert runtime == old_runtime and not events
+
+
+def test_retained_native_bundle_remains_admissible_after_github_retention_deadline(
+    tmp_path: Path,
+) -> None:
+    engine, bundle, verifier, installer, _ = native_admission_fixture(tmp_path)
+    bundle.artifact["expires_at"] = "2020-01-01T00:00:00Z"
+    bundle.refresh()
+    store_native_fixture(engine, bundle)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    target = engine.verify_native_target(bundle.source, stage, verifier, installer)
+    assert (target / "native-image.json").read_bytes() == bundle.payload["native-image.json"]
+    assert not engine.run.calls
+
+
+@pytest.mark.parametrize(
+    ("changed_inputs", "failure"), [(False, ""), (False, "core-after"), (True, "")]
+)
+def test_timer_uses_prepared_native_ancestor_for_later_main_and_refuses_changed_inputs(
+    tmp_path: Path, changed_inputs: bool, failure: str
+) -> None:
+    from tests.unit.test_native_artifact_compatibility import git
+
+    native_root = tmp_path / "native"
+    native_root.mkdir()
+    _, bundle, verifier, _, _ = native_admission_fixture(native_root)
+    native_sha = bundle.source
+    path = bundle.repo / (verifier.WORKFLOW if changed_inputs else "core-only.txt")
+    path.write_bytes(
+        path.read_bytes() + b"next native input\n" if changed_inputs else b"new core\n"
+    )
+    git(bundle.repo, "add", ".")
+    git(bundle.repo, "commit", "--quiet", "-m", "Later main core")
+    core_sha = git(bundle.repo, "rev-parse", "HEAD")
+    engine, build, runtime, plan, events, approval = native_delivery_fixture(
+        tmp_path / "delivery", failure, core_sha=core_sha
+    )
+    engine.native_preparation_path(core_sha).unlink()
+    plan.update(native_source=native_sha, core_target=core_sha)
+    engine.main_head = lambda: core_sha
+    engine.update_engine = lambda *args: None
+    engine.publish_status = lambda **kwargs: ""
+    engine.web_target = lambda *args: None
+    engine.is_ancestor = lambda older, newer: bool(
+        git(bundle.repo, "merge-base", "--is-ancestor", older, newer) == ""
+    )
+    engine.stored_build = lambda sha, component: MODULE.Build(
+        sha, build.run_id, build.artifact_id, "ac-application-" + sha, DIGEST
+    )
+    sources = []
+
+    def preflight(native, previous, digest, source, stage, target=None):
+        sources.append((native, target))
+        return plan
+
+    engine.prepare_native_transition = preflight
+    engine.native_controller = lambda stage: (
+        plan["installer"],
+        SimpleNamespace(source_inputs=lambda root, sha: verifier.source_inputs(bundle.repo, sha)),
+    )
+    store_native_fixture(engine, bundle)
+    engine.prepare_native(
+        native_sha, plan["previous_units"], plan["previous_digest"], dry_run=False
+    )
+    engine.native_deployment_plan = MODULE.Engine.native_deployment_plan.__get__(engine)
+    ready_core(engine.github, core_sha)
+    old_approval = approval.read_bytes()
+    results = engine.tick()
+    assert results[0]["sha"] == core_sha
+    assert approval.read_bytes() == old_approval
+    assert not (engine.paths.native_store / core_sha).exists()
+    if changed_inputs:
+        assert results[0]["result"] == "failed"
+        assert "native_inputs_changed" in results[0]["error"]
+        assert engine.current_core("staging") == OLD and runtime["helper"] == IMAGE
+        assert not events and engine.is_paused("staging")
+    elif failure:
+        assert results[0]["result"] == "failed"
+        assert "pinned predecessor restored" in results[0]["error"]
+        assert sources == [(native_sha, None), (native_sha, core_sha)]
+        assert engine.current_core("staging") == OLD and runtime["helper"] == IMAGE
+        assert not engine.activation_path("staging", core_sha).exists()
+        assert events.index("native.restore") < events.index("core.restore")
+        assert engine.is_paused("staging") and engine.failed_sha("staging", "core") == core_sha
+    else:
+        assert results[0]["result"] == "success"
+        assert sources == [(native_sha, None), (native_sha, core_sha)]
+        assert results[0]["sales_xray_native"] == native_sha
+        assert engine.current_core("staging") == core_sha
+        assert runtime["helper"] == plan["binding"].image_ref
+        activation = json.loads(engine.activation_path("staging", core_sha).read_text())
+        assert activation["release_id"] == core_sha
+        assert activation["native_image_ref"] == runtime["helper"]
+        assert (
+            engine.paths.application / "artifacts" / ("sales-xray-native-" + native_sha)
+        ).is_dir()
+        assert not (
+            engine.paths.application / "artifacts" / ("sales-xray-native-" + core_sha)
+        ).exists()
+        # Old preparation receipts stop governing after their predecessor advances.
+        assert engine.native_deployment_plan(core_sha, tmp_path / "source", tmp_path) is None
+
+
+@pytest.mark.parametrize("changed_inputs", [False, True])
+def test_engine_native_reuse_proof_is_accepted_by_real_activation_preparer(
+    tmp_path: Path, changed_inputs: bool
+) -> None:
+    from tests.unit.test_native_artifact_compatibility import git
+    from tests.unit.test_prepare_sales_xray_native_activation import (
+        _MODULE as preparer,
+    )
+    from tests.unit.test_prepare_sales_xray_native_activation import (
+        _write_source_activation,
+    )
+
+    native_root = tmp_path / "native"
+    native_root.mkdir()
+    engine, bundle, verifier, installer, _ = native_admission_fixture(native_root)
+    store_native_fixture(engine, bundle)
+    path = bundle.repo / (verifier.WORKFLOW if changed_inputs else "core-only.txt")
+    path.write_bytes(path.read_bytes() + b"new workflow\n" if changed_inputs else b"new core\n")
+    git(bundle.repo, "add", ".")
+    git(bundle.repo, "commit", "--quiet", "-m", "Next core target")
+    target = git(bundle.repo, "rev-parse", "HEAD")
+    source_root = tmp_path / "activation"
+    source_root.mkdir()
+    source, source_bytes = _write_source_activation(source_root)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    admitted = engine.verify_native_target(bundle.source, stage, verifier, installer)
+    args = engine.native_reuse_arguments(bundle.source, target, tmp_path / "proof-inputs")
+    arguments = dict(
+        source_activation=source,
+        target_release_id=target,
+        native_artifact_manifest=admitted / "native-image.json",
+        native_artifact_sha256=MODULE._sha256_file(admitted / "native-image.json"),
+        output_dir=tmp_path / "prepared",
+        native_reuse_proof=Path(args[1]),
+        native_reuse_proof_sha256=args[3],
+        source_repository=Path(args[5]),
+    )
+    if changed_inputs:
+        with pytest.raises(preparer.PrepareError, match="native_inputs_changed"):
+            preparer.prepare(**arguments)
+        assert not (tmp_path / "prepared").exists()
+    else:
+        result = preparer.prepare(**arguments)
+        assert result["release_id"] == target
+        assert result["native_source_commit"] == bundle.source
+        assert result["approval_replaced"] is False and result["provider_calls"] == 0
+        activation = json.loads(Path(result["activation"]).read_text())
+        assert activation["native_image_ref"] == bundle.native["image"]["expected_runtime_ref"]
+    assert all(Path(path).read_bytes() == raw for path, raw in source_bytes.items())

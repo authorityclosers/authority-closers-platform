@@ -1040,3 +1040,55 @@ def test_unknown_renderer_hash_is_refused(tmp_path: Path, monkeypatch: pytest.Mo
     args = {**_install_args(tmp_path, descriptor, digest), "renderer": renderer}
     with pytest.raises(installer.InstallerError, match="^renderer_sha256_mismatch$"):
         installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+
+
+def test_engine_transition_uses_reviewed_predecessor_renderer_and_can_restore_it(
+    tmp_path: Path,
+) -> None:
+    args, binding, old_units = _upgrade_args(tmp_path)
+    supervisor = installer._supervisor_source("b" * 40)
+    candidate, candidate_digest = _write(
+        args["native_units"], _render("staging", binding, supervisor)
+    )
+    args.update(native_units_sha256=candidate_digest, supervisor_source=supervisor)
+    fake = FakeSystemd(args["unit_root"])
+    fake.active = fake.enabled = dict.fromkeys(old_units, True)
+    original = _installed(args, old_units)
+    result = installer.install(**args, systemd=fake)
+    assert result["native_image_ref"] == binding.image_ref
+    assert supervisor.encode() in _installed(args, old_units)[installer._service_unit("staging")]
+
+    rollback_root = tmp_path / "rollback"
+    rollback_root.mkdir()
+    manifest, manifest_digest, old_binding = _new_artifact(rollback_root, installer.LEGACY_BINDING)
+    restored = installer.install(
+        **{
+            **args,
+            "native_units": args["previous_native_units"],
+            "native_units_sha256": args["previous_native_units_sha256"],
+            "native_artifact_manifest": manifest,
+            "native_artifact_sha256": manifest_digest,
+            "native_image_config_id": old_binding.image_config_id,
+            "previous_native_units": candidate,
+            "previous_native_units_sha256": candidate_digest,
+            "supervisor_source": installer._supervisor_source(),
+            "previous_supervisor_source": supervisor,
+            "receipt": args["receipt"].with_name("restored.json"),
+            "docker": FakeDocker(),
+        },
+        systemd=fake,
+    )
+    assert restored["status"] == "installed"
+    assert restored["native_image_ref"] == installer.NATIVE_IMAGE_REF
+    assert _installed(args, old_units) == original
+    assert all(fake.active.values()) and all(fake.enabled.values())
+
+
+def test_engine_renderer_override_does_not_accept_changed_renderer_bytes(tmp_path: Path) -> None:
+    args, binding, old_units = _upgrade_args(tmp_path)
+    supervisor = installer._supervisor_source("b" * 40)
+    _, digest = _write(args["native_units"], _render("staging", binding, supervisor))
+    renderer = tmp_path / "renderer.py"
+    renderer.write_bytes(RENDERER.read_bytes() + b"\n# unreviewed\n")
+    args.update(renderer=renderer, native_units_sha256=digest, supervisor_source=supervisor)
+    _assert_refused(args, old_units, "renderer_sha256_mismatch")
