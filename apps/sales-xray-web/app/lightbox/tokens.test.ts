@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Window } from "happy-dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, "..");
@@ -464,6 +465,86 @@ describe("Lightbox token derivative", () => {
         expect(css).toMatch(/@media\s*\(\s*pointer:\s*coarse\s*\)/);
         expect(css).toContain("44px");
       }
+    });
+
+    it("computes at least 44px hit areas under coarse pointer across desktop and mobile layouts", () => {
+      const testCoarseStyles = (
+        css: string,
+        selectors: Record<string, { minHeight?: number; minWidth?: number }>,
+        additionalTransform?: (c: string) => string,
+      ) => {
+        let transformed = css.replace(
+          /@media\s*\(\s*pointer:\s*coarse\s*\)/g,
+          "@media all",
+        );
+        if (additionalTransform) {
+          transformed = additionalTransform(transformed);
+        }
+        const win = new Window();
+        const doc = win.document;
+        const style = doc.createElement("style");
+        style.textContent = derivative + "\n" + transformed;
+        doc.head.appendChild(style);
+
+        for (const [cls, expected] of Object.entries(selectors)) {
+          const el = doc.createElement("button");
+          el.className = cls;
+          doc.body.appendChild(el);
+          const computed = win.getComputedStyle(el);
+
+          if (expected.minHeight !== undefined) {
+            const h = parseInt(computed.minHeight || computed.height, 10);
+            expect(h).toBeGreaterThanOrEqual(expected.minHeight);
+          }
+          if (expected.minWidth !== undefined) {
+            const w = parseInt(computed.minWidth || computed.width, 10);
+            expect(w).toBeGreaterThanOrEqual(expected.minWidth);
+          }
+        }
+      };
+
+      // Desktop layout (1280px)
+      testCoarseStyles(shellCss, {
+        collapseBtn: { minHeight: 44, minWidth: 44 },
+        panelSearch: { minHeight: 44 },
+        recentsViewAll: { minHeight: 44 },
+        workspaceTrigger: { minHeight: 44 },
+        toggle: { minHeight: 44, minWidth: 44 },
+        stripBtn: { minHeight: 44, minWidth: 44 },
+      });
+
+      // Mobile layout (390px - matches max-width: 899.98px)
+      testCoarseStyles(
+        shellCss,
+        {
+          collapseBtn: { minHeight: 44, minWidth: 44 },
+          panelSearch: { minHeight: 44 },
+          recentsViewAll: { minHeight: 44 },
+        },
+        (c) =>
+          c.replace(/@media\s*\(\s*max-width:\s*899\.98px\s*\)/g, "@media all"),
+      );
+
+      // Verify other control families compute 44px hit areas under coarse pointer
+      testCoarseStyles(profileCss, {
+        themeOption: { minHeight: 44, minWidth: 44 },
+        item: { minHeight: 44 },
+        headerTrigger: { minHeight: 44 },
+      });
+
+      testCoarseStyles(switcherCss, {
+        trigger: { minHeight: 44 },
+        item: { minHeight: 44 },
+        action: { minHeight: 44 },
+      });
+
+      testCoarseStyles(themeToggleCss, {
+        toggle: { minHeight: 44, minWidth: 44 },
+      });
+
+      testCoarseStyles(segmentedCss, {
+        label: { minHeight: 44 },
+      });
     });
 
     it("preserves Devanagari leading and flexible text growth without blanket fixed heights", () => {

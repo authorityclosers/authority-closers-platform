@@ -963,29 +963,6 @@
   box-shadow: var(--lx-ring-focus);
 }
 
-@media (pointer: coarse) {
-  .toggle,
-  .stripBtn,
-  .collapseBtn {
-    width: var(--lx-row-min-h, 44px);
-    height: var(--lx-row-min-h, 44px);
-    min-width: var(--lx-row-min-h, 44px);
-    min-height: var(--lx-row-min-h, 44px);
-  }
-
-  .workspaceTrigger,
-  .navRow,
-  .subRow,
-  .recentsToggleBtn,
-  .recentsViewAll,
-  .recentItem,
-  .panelSearch,
-  .newAnalysisButton,
-  .bottomLink {
-    min-height: var(--lx-row-min-h, 44px);
-  }
-}
-
 /* ---------- Tablet and mobile: no rail; top bar plus bottom navigation ---------- */
 
 @media (max-width: 899.98px) {
@@ -1450,6 +1427,33 @@
 }
 .recentsList {
   gap: 1px;
+}
+
+@media (pointer: coarse) {
+  .toggle,
+  .stripBtn,
+  .collapseBtn {
+    width: var(--lx-row-min-h, 44px);
+    height: var(--lx-row-min-h, 44px);
+    min-width: var(--lx-row-min-h, 44px);
+    min-height: var(--lx-row-min-h, 44px);
+  }
+
+  .workspaceTrigger,
+  .navRow,
+  .subRow,
+  .recentsToggleBtn,
+  .recentsViewAll,
+  .recentItem,
+  .panelSearch,
+  .newAnalysisButton,
+  .bottomLink {
+    min-height: var(--lx-row-min-h, 44px);
+  }
+
+  .panelSearch {
+    height: auto;
+  }
 }
 @keyframes edge-in {
   from {
