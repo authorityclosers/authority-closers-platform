@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -1441,5 +1444,24 @@ it("renders OperationalEmpty with accessible heading when no calls are saved", a
   expect(emptyWrap).not.toBeNull();
   expect(host.querySelector("a.secondary-button")?.textContent).toContain(
     "Analyse a call",
+  );
+});
+
+it("ensures Calls summary breakpoints override MetricBand 5-column variant on tablets and phones", () => {
+  const cssPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "calls-library.module.css",
+  );
+  const css = readFileSync(cssPath, "utf8");
+
+  // High-specificity selectors (0,3,0 / 0,4,0) override .metricBand[data-columns="5"] (0,2,0)
+  expect(css).toMatch(
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  expect(css).toMatch(
+    /@media \(max-width: 760px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  expect(css).toMatch(
+    /@media \(max-width: 520px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?grid-template-columns:\s*1fr;/,
   );
 });
