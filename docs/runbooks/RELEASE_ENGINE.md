@@ -6,12 +6,12 @@ never builds anything. It downloads the exact bundles CI produced, keeps an
 immutable copy in `/srv/authority-closers/release-store/<sha>/`, and runs the
 same source-owned installers the laptop script used to run over SSH.
 
-| Piece                                         | Source                                                                                                 | Installed by the engine with                                                                                                                                    |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core app (API, worker, learner, admin, coach) | `ac-application-<sha>` from `application.yml`                                                          | `infra/application/scripts/install-application-release.sh`                                                                                                      |
-| Sales Xray web                                | `ac-sales-xray-web-<sha>` from `sales-xray-web-image.yml` (built only when web inputs change)          | `verify-artifact.py`, `docker load`, compose `up --wait`                                                                                                        |
-| Sales Xray activation                         | the running release's `/etc/authority-closers/sales-xray/<env>/activation-<sha>.json`                  | carried forward with `prepare-sales-xray-native-activation.py` (see [Sales Xray activation](#sales-xray-activation))                                            |
-| Sales Xray native                             | `ac-sales-xray-native-<sha>` from `sales-xray-native-image.yml` (built only when native inputs change) | retained in `release-store/native/<sha>/`; `prepare-native` admits a staging transition and the automatic core path invokes the artifact-bound native installer |
+| Piece                                         | Source                                                                                                 | Installed by the engine with                                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core app (API, worker, learner, admin, coach) | `ac-application-<sha>` from `application.yml`                                                          | `infra/application/scripts/install-application-release.sh`                                                                                                                  |
+| Sales Xray web                                | `ac-sales-xray-web-<sha>` from `sales-xray-web-image.yml` (built only when web inputs change)          | `verify-artifact.py`, `docker load`, compose `up --wait`                                                                                                                    |
+| Sales Xray activation                         | the running release's `/etc/authority-closers/sales-xray/<env>/activation-<sha>.json`                  | carried forward with `prepare-sales-xray-native-activation.py` (see [Sales Xray activation](#sales-xray-activation))                                                        |
+| Sales Xray native                             | `ac-sales-xray-native-<sha>` from `sales-xray-native-image.yml` (built only when native inputs change) | retained in `release-store/native/<sha>/`; `prepare-native` admits an environment-scoped transition and the automatic core path invokes the artifact-bound native installer |
 
 ## One-time setup (owner)
 
@@ -34,16 +34,16 @@ already installed. `ac-release status` shows the installed engine commit.
 
 ## Commands
 
-| Command                                                                                                              | Does                                                                                                                                                                                                                              |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ac-release status`                                                                                                  | What runs where, pause state, failures                                                                                                                                                                                            |
-| `ac-release deploy staging [SHA] [--component core\|web\|all] [--dry-run]`                                           | Deploy a commit on `main` (default: latest)                                                                                                                                                                                       |
-| `ac-release pause staging` / `resume staging`                                                                        | Stop or restart automatic deploys; `resume` also clears failure marks                                                                                                                                                             |
-| `ac-release rollback staging --component web`                                                                        | Restore the previous Sales Xray web image                                                                                                                                                                                         |
-| `ac-release history -n 20`                                                                                           | Recent deploy records (`/var/lib/ac-release/history.jsonl`)                                                                                                                                                                       |
-| `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]`                                      | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space))                                                                                                               |
-| `ac-release store-native SHA [--from ZIP]`                                                                           | Keep a Sales Xray native build for good. Downloads it while GitHub still has it; `--from` adopts a saved copy only if it matches the digest and size GitHub recorded                                                              |
-| `ac-release prepare-native staging SHA --previous-native-units PATH --previous-native-units-sha256 HASH [--dry-run]` | Verify an exact native transition and both rollback directions. Without `--dry-run`, save an engine preparation receipt. Both modes leave units, current links, activation publication, approvals and containment flags unchanged |
+| Command                                                                                                          | Does                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ac-release status`                                                                                              | What runs where, pause state, failures                                                                                                                                                                                            |
+| `ac-release deploy staging [SHA] [--component core\|web\|all] [--dry-run]`                                       | Deploy a commit on `main` (default: latest)                                                                                                                                                                                       |
+| `ac-release pause staging` / `resume staging`                                                                    | Stop or restart automatic deploys; `resume` also clears failure marks                                                                                                                                                             |
+| `ac-release rollback staging --component web`                                                                    | Restore the previous Sales Xray web image                                                                                                                                                                                         |
+| `ac-release history -n 20`                                                                                       | Recent deploy records (`/var/lib/ac-release/history.jsonl`)                                                                                                                                                                       |
+| `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]`                                  | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space))                                                                                                               |
+| `ac-release store-native SHA [--from ZIP]`                                                                       | Keep a Sales Xray native build for good. Downloads it while GitHub still has it; `--from` adopts a saved copy only if it matches the digest and size GitHub recorded                                                              |
+| `ac-release prepare-native ENV SHA --previous-native-units PATH --previous-native-units-sha256 HASH [--dry-run]` | Verify an exact native transition and both rollback directions. Without `--dry-run`, save an engine preparation receipt. Both modes leave units, current links, activation publication, approvals and containment flags unchanged |
 
 Logs for each deploy are in `/var/log/ac-release/`.
 
@@ -202,7 +202,7 @@ deployment, organisation writes, activation changes or new canary.
 
 ## Sales Xray activation
 
-### Governed native transition (staging)
+### Governed native transition (staging and production)
 
 Unchanged native inputs continue through the strict existing compatibility proof.
 An input change, including a native workflow change, still refuses carry-forward.
@@ -224,17 +224,26 @@ healthy core identity, backup support and equal migration heads must be availabl
 for the canonical application-only rollback. Missing rollback pins refuse before
 Docker load, unit replacement or activation publication.
 
-The predecessor descriptor must come from the existing root-owned staging
-operator inputs and be pinned by its recorded SHA-256. Read that path/hash from
-the successful native installation receipt; do not generate a substitute unit
+The predecessor descriptor must come from the target environment's existing
+root-owned `operator-inputs/<env>` and be pinned by its recorded SHA-256. Read
+that path/hash from the successful native installation receipt; do not generate a substitute unit
 descriptor or provenance record. The engine's reviewed native installer permits
 the verified current core release renderer to supervise a target helper before
 the target core source is installed. This override is an internal engine API;
 there is no new standalone native-install CLI option.
 
 Preparation is keyed to the stored native build **N**, rather than a core SHA.
-The existing timer deploys the latest validated main core **T**. It consumes N's
-receipt only while its predecessor pins still match, N is an ancestor of T,
+Receipts live at `native-preparations/<env>-<N>.json`; selection reads only that
+environment's prefix. Existing staging receipts without an `environment` field
+remain valid unchanged. Production preparation and deployment preflight also
+require staging's live activation to run native source N. This reads staging's
+native identity only: approval lifetime and digest always come from the target
+environment's own current activation. Staging's approval never authorizes
+production.
+
+The existing timer deploys the latest validated main core **T** to staging;
+the approved production promotion consumes the production receipt for its
+tested staging core T. Each path consumes N's receipt only while its predecessor pins still match, N is an ancestor of T,
 and `native_artifact_compatibility.source_inputs(T)` equals N's inputs using the
 unchanged strict comparison, including the native workflow. T's activation uses
 N's immutable manifest/helper. A further native input change refuses before
@@ -249,8 +258,8 @@ It does not load an image or start/stop units, and does not clear pause/failure
 marks. Existing immutable store admission and mirror/log activity are separate
 from runtime changes.
 
-On automatic deployment the engine retains both immutable artifacts, saves the
-predecessor descriptor beside the candidate, and records `native-transition:
+On an eligible staging deployment or approved production promotion the engine
+retains both immutable artifacts, saves the predecessor descriptor beside the candidate, and records `native-transition:
 armed` before loading the target image and invoking the existing artifact-bound
 installer. It then publishes the activation using permanent operator-input
 paths and invokes the core installer. Failure in native install/start/readback,
@@ -259,11 +268,63 @@ the pinned predecessor helper and units first, then uses the installed reviewed
 controller's `AC_CORE_ROLLBACK_ONLY` path to restore the prior core without
 database migration/restore. Recovery verifies the old activation hash and healthy
 core. Created target publication is removed after restoration; its immutable
-operator bundle and all receipts remain. Staging stays paused with the failed
-target recorded. Unverifiable recovery records `recovery-failed` and keeps
-containment. Transition receipts retain their core rollback bundles/images from
-normal pruning. The operation is staging-only and does not change production
-holds or provider authority.
+operator bundle and all receipts remain. The affected environment stays paused
+with `<env>-core.failed` recording the failed target. A production failure leaves
+staging's core, activation, approval, inputs and containment flags unchanged.
+Unverifiable recovery records `recovery-failed` and keeps containment. Transition receipts retain their core rollback bundles/images from
+normal pruning. Preparation leaves containment flags and provider authority
+unchanged; runtime installation remains inside the existing deployment or
+approved promotion path.
+
+### Production native preparation and resume
+
+Root owns host execution on [AUT-1476](/AUT/issues/AUT-1476). The source change in
+[AUT-1480](/AUT/issues/AUT-1480) authorizes no production operation or pause
+clearing. After sensitive CTO review, CEO SHA-bound merge approval and green CI:
+
+1. Root installs the exact merged engine through the existing locked,
+   clean-source bootstrap below, preserving all environment flags and running
+   identities. Record the installed source SHA/module hash and verify
+   `ac-release prepare-native --help` accepts both environments. Keep production
+   contained throughout preparation.
+2. Verify staging's live core activation runs the exact stored native source N.
+   Obtain production's prior unit path and SHA-256 from its own successful native
+   installation receipt. The path must be under `operator-inputs/production`;
+   a staging pin refuses. Production's current activation must pin its own
+   unchanged approval with at least one day remaining.
+3. Run the rehearsal, then save the preparation receipt:
+
+   ```bash
+   sudo ac-release prepare-native production "$native_sha" \
+     --previous-native-units "$production_previous_units_path" \
+     --previous-native-units-sha256 "$production_previous_units_sha256" --dry-run
+   sudo ac-release prepare-native production "$native_sha" \
+     --previous-native-units "$production_previous_units_path" \
+     --previous-native-units-sha256 "$production_previous_units_sha256"
+   sudo ac-release promote --bump patch --version "$next_patch_version" --dry-run
+   ```
+
+   Use the reported next patch version for the existing promotion path. Preserve
+   receipt `native-preparations/production-<N>.json` and promotion rehearsal
+   evidence. Expected fields: `schema: ac.release.native-preparation/1`,
+   `environment: production`, `target: N`, production `previous_core`,
+   `previous_native_units`, `previous_native_units_sha256`, `approval_sha256`,
+   `source_activation_sha256`, installed `controller`, three `artifact_pins`,
+   `provider_calls: 0`, `runtime_mutation: false`, and `dry_run: false` for the
+   saved receipt (`true` for rehearsal, which writes no receipt). The core T
+   selected for promotion may differ from N only when ancestry and the existing
+   strict native-input comparison pass.
+
+4. Root alone clears production containment under the parent recovery authority
+   after all checks pass (`sudo ac-release resume production`). The next approved
+   promotion through the existing release path performs installation. Preparation
+   grants no promotion approval, creates no helper and changes no timer. Do not
+   use a manual native install, tick, rebuild or CI rerun.
+5. Record the production core/native/activation identities, unchanged production
+   approval hash and success receipt. On failure, verify production remains
+   paused with `production-core.failed`, the pinned native helper/units and core
+   predecessor are restored, and staging remains unchanged. If recovery cannot
+   be verified, retain containment and the `recovery-failed` evidence.
 
 ### Pause-preserving engine bootstrap and exact recovery handoff
 
