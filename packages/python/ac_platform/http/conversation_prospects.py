@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from starlette.requests import ClientDisconnect
 
 from ac_platform.application.settings import Settings
@@ -38,7 +38,20 @@ class _Confirm(BaseModel):
     expected_membership_id: UUID | None
 
 
-async def _body(request: Request, model: type[_Create] | type[_Confirm]) -> Any:
+class _Edit(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    display_name: str = Field(min_length=1, max_length=160)
+    expected_revision: int = Field(gt=0)
+
+    @field_validator("display_name")
+    @classmethod
+    def trim_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Supply a valid prospect name.")
+        return value.strip()
+
+
+async def _body(request: Request, model: type[_Create] | type[_Confirm] | type[_Edit]) -> Any:
     if request.headers.getlist("content-type") != ["application/json"]:
         raise HTTPException(415, "Use JSON to confirm a prospect.", headers=_PRIVATE)
     raw = bytearray()
@@ -149,6 +162,52 @@ def install_prospect_http(
     @router.post("/calls/{submission_id}/create", status_code=201)
     async def create_prospect(submission_id: UUID, request: Request, response: Response) -> Any:
         return await call_link(request, response, submission_id, operation="create")
+
+    @router.patch("/{prospect_id}")
+    async def edit_name(prospect_id: str, request: Request, response: Response) -> Any:
+        response.headers.update(_PRIVATE)
+        if (
+            settings.sales_xray_app_url is None
+            or request.url.hostname != settings.sales_xray_app_url.host
+        ):
+            raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
+        if request.query_params:
+            raise HTTPException(422, "Use the current prospect and workspace.", headers=_PRIVATE)
+        try:
+            target = UUID(prospect_id)
+        except ValueError:
+            raise HTTPException(422, "Supply a valid prospect request.", headers=_PRIVATE) from None
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            raise HTTPException(403, "Save from this Sales Xray page.", headers=_PRIVATE) from None
+        body = await _body(request, _Edit)
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                actor = auth.resolved.actor
+                if actor.tenant_id is None or actor.tenant_id not in served:
+                    raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE, headers=_PRIVATE)
+                sessions = factory(auth.database, actor.tenant_id)
+                if sessions.tenant_id != actor.tenant_id:
+                    raise RuntimeError("Prospect edits must use the selected workspace.")
+                row = await ProspectStore(GuestOwnership(sessions)).edit_name(
+                    actor,
+                    target,
+                    display_name=body.display_name,
+                    expected_revision=body.expected_revision,
+                )
+                return {
+                    "schema": "ac.sales-xray.prospect-name/1",
+                    "prospect": {
+                        "prospect_id": str(row.id),
+                        "name": row.display_name,
+                        "revision": row.revision,
+                    },
+                }
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error), headers=_PRIVATE) from None
+        except DomainError:
+            raise HTTPException(401, "Sign in to edit your prospect.", headers=_PRIVATE) from None
 
     async def read(
         request: Request,
