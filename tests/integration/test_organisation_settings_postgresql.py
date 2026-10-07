@@ -34,6 +34,7 @@ from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import InMemoryPrivateObjectStorage
 from ac_platform.organisations.settings import OrganisationSettingsService
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from tests.database.test_conversation_postgresql import _migration_head
 from tests.database.test_plans_confirmed_values_postgresql import catalogue_schema
 from tests.integration.test_media_delivery_renewal_postgresql import postgres_harness  # noqa: F401
 from tests.unit.http.test_organisation_settings import DETAILS, picture
@@ -60,7 +61,7 @@ def test_populated_0075_upgrade_preserves_rows_and_matches_organisation_model():
             after = dict(db.execute(select(Organisation.__table__)).mappings().one())
             assert {key: after[key] for key in before} == before
             assert after["details"] == {} and after["logo_id"] is None
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261005_0076"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
             columns = {
                 column["name"]: column for column in inspect(db).get_columns("organisations")
             }
