@@ -35,6 +35,7 @@ afterEach(async () => {
     });
   originalWidth = null;
   originalHeight = null;
+  vi.unstubAllGlobals();
 });
 
 it("keeps the account menu inside the mobile viewport by the active trigger", async () => {
@@ -138,6 +139,10 @@ it.each<[Allowance, string | null]>([
 });
 
 it("switches the first-call guide off and back on from the account menu", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
+  );
   localStorage.clear();
   const access: WorkspaceAccessValue = {
     status: "ready",
@@ -179,6 +184,85 @@ it("switches the first-call guide off and back on from the account menu", async 
     localStorage.getItem(guideOffKey("fictional-a", FIRST_CALL_GUIDE)),
   ).toBeNull();
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it("shows API notes and acknowledges only the displayed unseen keys when What's new opens", async () => {
+  const access: WorkspaceAccessValue = {
+    status: "ready",
+    authenticated: true,
+    context: { personId: "fictional-news", sessionId: "s", tenantId: "t" },
+    retry: () => {},
+  };
+  let seen = false;
+  const fetcher = vi.fn().mockImplementation((path: string) => {
+    if (path === "/v1/updates/seen") seen = true;
+    return Promise.resolve(
+      Response.json(
+        path === "/v1/updates"
+          ? {
+              updates: [
+                {
+                  key: "fictional-note",
+                  version: 1,
+                  release_id: "fictional",
+                  date: "2026-10-05",
+                  title: "Updates follow your account",
+                  items: ["A fictional improvement"],
+                  major: false,
+                  draft: false,
+                  published_at: null,
+                  seen,
+                },
+              ],
+              unseen_count: seen ? 0 : 1,
+            }
+          : path === "/v1/notifications"
+            ? { notifications: [], unread_count: 0 }
+            : { unseen_count: 0 },
+      ),
+    );
+  });
+  vi.stubGlobal("fetch", fetcher);
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <SettingsMenu
+          open
+          anchorRef={{ current: document.createElement("button") }}
+          onClose={() => {}}
+          name="Fictional User"
+          email="fictional@example.test"
+          allowance={null}
+        />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const menu = document.querySelector(
+    '[role="dialog"][aria-label="Account menu"]',
+  )!;
+  const news = [...menu.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("What's new"),
+  )!;
+  expect(news.textContent).toContain("1 new");
+  expect(fetcher.mock.calls.some(([path]) => path === "/v1/updates/seen")).toBe(
+    false,
+  );
+  await act(async () => news.click());
+  expect(menu.textContent).toContain("Updates follow your account");
+  expect(menu.textContent).toContain("A fictional improvement");
+  expect(fetcher).toHaveBeenCalledWith(
+    "/v1/updates/seen",
+    expect.objectContaining({
+      body: JSON.stringify({ keys: ["fictional-note"] }),
+    }),
+  );
+  await act(async () =>
+    menu.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(menu.textContent).not.toContain("1 new");
 });
 
 it("has no guide switch without a signed-in person", async () => {
