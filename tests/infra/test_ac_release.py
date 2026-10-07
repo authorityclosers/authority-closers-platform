@@ -106,6 +106,9 @@ class FakeRunner:
                 out += "\n"
         elif "rev-parse" in argv:
             out = self.head + "\n"
+        elif "ls-tree" in argv:
+            assert argv[-1] == MODULE.APPLICATION_SOURCE_MANIFEST
+            # Existing delivery fixtures model releases before this opt-in.
         elif "merge-base" in argv:
             older, newer = argv[-2], argv[-1]
             code = 0 if older == newer or (older, newer) in self.ancestors else 1
@@ -153,6 +156,72 @@ def set_current_core(engine, sha: str) -> None:
     release = engine.paths.application / "releases" / sha
     release.mkdir(parents=True)
     (engine.paths.application / "current-staging").symlink_to(release)
+
+
+@pytest.mark.parametrize("contract", ["current", "legacy", "missing", "unsupported"])
+def test_core_source_archive_uses_target_revision_manifest(tmp_path: Path, contract: str) -> None:
+    repository = tmp_path / "repository"
+    application = repository / "infra/application"
+    application.mkdir(parents=True)
+    (application / "compose.yaml").write_text("inert fixture\n")
+    canonical = MODULE.APPLICATION_SOURCE_EXTRAS[0]
+    if contract != "missing":
+        source = repository / canonical
+        source.parent.mkdir(parents=True)
+        source.write_bytes((ROOT / canonical).read_bytes())
+    if contract != "legacy":
+        (repository / MODULE.APPLICATION_SOURCE_MANIFEST).write_text(
+            canonical + "\n" if contract != "unsupported" else "scripts/unapproved.py\n"
+        )
+    git = ["git", "-C", str(repository)]
+    for arguments in [
+        ["init", "--quiet"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=AC Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "inert source fixture",
+        ],
+    ]:
+        subprocess.run([*git, *arguments], check=True)  # noqa: S603 - test-owned repository
+    sha = subprocess.run(  # noqa: S603 - test-owned repository
+        [*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    # A changed working file must never substitute for the exact commit's blob.
+    if contract == "current":
+        (repository / canonical).write_bytes(b"uncommitted replacement")
+    paths = MODULE.Paths(state=tmp_path / "engine")
+    paths.state.mkdir()
+    shutil.copytree(repository / ".git", paths.mirror)
+
+    def runner(argv, **kwargs):
+        return subprocess.run(  # noqa: S603 - only Git on the test-owned repository
+            argv, capture_output=True, text=True, check=True, **kwargs
+        )
+
+    engine = MODULE.Engine(paths=paths, run=runner)
+    if contract == "missing":
+        with pytest.raises(subprocess.CalledProcessError):
+            engine.source_archive(sha, tmp_path, "infra/application")
+        return
+    if contract == "unsupported":
+        with pytest.raises(MODULE.ReleaseError, match="unsupported paths"):
+            engine.source_archive(sha, tmp_path, "infra/application")
+        return
+    archive, digest = engine.source_archive(sha, tmp_path, "infra/application")
+    assert digest == hashlib.sha256(archive.read_bytes()).hexdigest()
+    with tarfile.open(archive) as contents:
+        assert contents.pax_headers["comment"] == sha
+        if contract == "legacy":
+            assert canonical not in contents.getnames()
+        else:
+            with contents.extractfile(canonical) as blob:
+                assert blob.read() == (ROOT / canonical).read_bytes()
 
 
 # -- discovery ---------------------------------------------------------------

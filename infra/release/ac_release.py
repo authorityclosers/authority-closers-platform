@@ -79,6 +79,8 @@ NATIVE_WORKFLOW = "sales-xray-native-image.yml"
 CORE_FILES = frozenset({"SHA256SUMS", "application-images.tar.gz", "release-images.env"})
 WEB_FILES = frozenset({"SHA256SUMS", "web-image.env", "web-image.json", "web-image.tar.gz"})
 MAX_ARTIFACT_BYTES = 450_000_000
+APPLICATION_SOURCE_MANIFEST = "infra/application/release-source-files.txt"
+APPLICATION_SOURCE_EXTRAS = ("scripts/data-changes/production-smoke-email-verification.py",)
 # Stored bundles are several hundred MB each. Keep whatever runs in staging or
 # production plus this many recent successful deploys (rollback and promotion).
 KEEP_RECENT_BUILDS = 10
@@ -2031,6 +2033,19 @@ class Engine:
 
     def source_archive(self, sha: str, stage: Path, prefix: str) -> tuple[Path, str]:
         archive = stage / f"ac-{prefix.replace('/', '-')}-{sha}.tar"
+        paths = [prefix]
+        if prefix == "infra/application":
+            git = ["git", f"--git-dir={self.paths.mirror}"]
+            # Opt in at the target revision, so older verifiers and rollback
+            # archives retain their original path contract.
+            manifest = self.run(
+                [*git, "ls-tree", "--name-only", sha, "--", APPLICATION_SOURCE_MANIFEST]
+            ).stdout.strip()
+            if manifest:
+                contents = self.run([*git, "show", f"{sha}:{APPLICATION_SOURCE_MANIFEST}"]).stdout
+                if contents != "\n".join(APPLICATION_SOURCE_EXTRAS) + "\n":
+                    raise ReleaseError("application source manifest has unsupported paths")
+                paths.extend(APPLICATION_SOURCE_EXTRAS)
         self.run(
             [
                 "git",
@@ -2040,7 +2055,7 @@ class Engine:
                 f"--output={archive}",
                 sha,
                 "--",
-                prefix,
+                *paths,
             ]
         )
         return archive, _sha256_file(archive)

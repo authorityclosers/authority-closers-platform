@@ -76,6 +76,17 @@ PY_VERIFY
   python3 "$archive_verifier" "$release_archive" "$release_archive_sha256" "$release_id"
 }
 
+extract_application_source() {
+  # The verified archive has two explicit namespaces: application files are
+  # projected to the release root; the canonical data-change script keeps its
+  # repository-relative path. Never strip components from that script.
+  tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2 -- infra/application
+  if [[ -f "$stage_dir/release-source-files.txt" ]]; then
+    tar --extract --file="$release_archive" --directory="$stage_dir" -- \
+      scripts/data-changes/production-smoke-email-verification.py
+  fi
+}
+
 getent group acops >/dev/null || { printf 'Required operator group acops is absent.\n' >&2; exit 1; }
 application_root=/srv/authority-closers/application
 releases_root="$application_root/releases"
@@ -258,7 +269,7 @@ if [[ -e "$release_dir" || -L "$release_dir" ]]; then
   }
 else
   stage_dir="$(mktemp -d "$releases_root/.stage-${release_id}.XXXXXX")"
-  tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2
+  extract_application_source
   if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" != 1 ]]; then
     cmp --silent "$stage_dir/scripts/install-application-release.sh" "$running_installer" || {
       printf 'Running installer differs from the verified archive.\n' >&2
