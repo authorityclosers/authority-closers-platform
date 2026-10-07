@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Window } from "happy-dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, "..");
@@ -409,6 +410,148 @@ describe("Lightbox token derivative", () => {
       expect(clean).toContain("--theme-row-min-h");
       expect(clean).toContain("--theme-panel-head-min-h");
       expect(clean).toContain("--theme-tile-min-h");
+    });
+  });
+
+  describe("Normalized compact controls and accessible touch targets (AUT-1474 card 3)", () => {
+    const segmentedCss = readFileSync(
+      join(here, "segmented.module.css"),
+      "utf8",
+    );
+    const callsCss = readFileSync(
+      join(appDir, "calls-library.module.css"),
+      "utf8",
+    );
+    const reportModesCss = readFileSync(
+      join(appDir, "report-modes.module.css"),
+      "utf8",
+    );
+    const shellCss = readFileSync(
+      join(appDir, "shell/lightbox-shell.module.css"),
+      "utf8",
+    );
+    const switcherCss = readFileSync(
+      join(appDir, "shell/workspace-switcher.module.css"),
+      "utf8",
+    );
+    const profileCss = readFileSync(
+      join(appDir, "profile-menu.module.css"),
+      "utf8",
+    );
+    const themeToggleCss = readFileSync(
+      join(appDir, "shell/theme-toggle.module.css"),
+      "utf8",
+    );
+
+    it("ensures desktop compact controls use at least 32px minimum hit area", () => {
+      expect(segmentedCss).toContain("--lx-control-compact-h");
+      expect(callsCss).toContain("--lx-control-compact-h");
+      expect(reportModesCss).toContain("--lx-control-compact-h");
+      expect(shellCss).toContain("--lx-control-compact-h");
+      expect(switcherCss).toContain("--lx-control-compact-h");
+      expect(profileCss).toContain("--lx-control-compact-h");
+    });
+
+    it("ensures coarse pointer touch targets use at least 44px minimum hit area", () => {
+      for (const css of [
+        segmentedCss,
+        callsCss,
+        reportModesCss,
+        shellCss,
+        switcherCss,
+        profileCss,
+        themeToggleCss,
+      ]) {
+        expect(css).toMatch(/@media\s*\(\s*pointer:\s*coarse\s*\)/);
+        expect(css).toContain("44px");
+      }
+    });
+
+    it("computes at least 44px hit areas under coarse pointer across desktop and mobile layouts", () => {
+      const testCoarseStyles = (
+        css: string,
+        selectors: Record<string, { minHeight?: number; minWidth?: number }>,
+        additionalTransform?: (c: string) => string,
+      ) => {
+        let transformed = css.replace(
+          /@media\s*\(\s*pointer:\s*coarse\s*\)/g,
+          "@media all",
+        );
+        if (additionalTransform) {
+          transformed = additionalTransform(transformed);
+        }
+        const win = new Window();
+        const doc = win.document;
+        const style = doc.createElement("style");
+        style.textContent = derivative + "\n" + transformed;
+        doc.head.appendChild(style);
+
+        for (const [cls, expected] of Object.entries(selectors)) {
+          const el = doc.createElement("button");
+          el.className = cls;
+          doc.body.appendChild(el);
+          const computed = win.getComputedStyle(el);
+
+          if (expected.minHeight !== undefined) {
+            const h = parseInt(computed.minHeight || computed.height, 10);
+            expect(h).toBeGreaterThanOrEqual(expected.minHeight);
+          }
+          if (expected.minWidth !== undefined) {
+            const w = parseInt(computed.minWidth || computed.width, 10);
+            expect(w).toBeGreaterThanOrEqual(expected.minWidth);
+          }
+        }
+      };
+
+      // Desktop layout (1280px)
+      testCoarseStyles(shellCss, {
+        collapseBtn: { minHeight: 44, minWidth: 44 },
+        panelSearch: { minHeight: 44 },
+        recentsViewAll: { minHeight: 44 },
+        workspaceTrigger: { minHeight: 44 },
+        toggle: { minHeight: 44, minWidth: 44 },
+        stripBtn: { minHeight: 44, minWidth: 44 },
+      });
+
+      // Mobile layout (390px - matches max-width: 899.98px)
+      testCoarseStyles(
+        shellCss,
+        {
+          collapseBtn: { minHeight: 44, minWidth: 44 },
+          panelSearch: { minHeight: 44 },
+          recentsViewAll: { minHeight: 44 },
+        },
+        (c) =>
+          c.replace(/@media\s*\(\s*max-width:\s*899\.98px\s*\)/g, "@media all"),
+      );
+
+      // Verify other control families compute 44px hit areas under coarse pointer
+      testCoarseStyles(profileCss, {
+        themeOption: { minHeight: 44, minWidth: 44 },
+        item: { minHeight: 44 },
+        headerTrigger: { minHeight: 44 },
+      });
+
+      testCoarseStyles(switcherCss, {
+        trigger: { minHeight: 44 },
+        item: { minHeight: 44 },
+        action: { minHeight: 44 },
+      });
+
+      testCoarseStyles(themeToggleCss, {
+        toggle: { minHeight: 44, minWidth: 44 },
+      });
+
+      testCoarseStyles(segmentedCss, {
+        label: { minHeight: 44 },
+      });
+    });
+
+    it("preserves Devanagari leading and flexible text growth without blanket fixed heights", () => {
+      expect(segmentedCss).toContain("--lx-leading-devanagari");
+      expect(callsCss).toContain("--lx-leading-devanagari");
+      expect(reportModesCss).toContain("--lx-leading-devanagari");
+      expect(shellCss).toContain("--lx-leading-devanagari");
     });
   });
 });

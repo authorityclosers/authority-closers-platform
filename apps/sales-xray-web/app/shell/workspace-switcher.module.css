@@ -8,6 +8,7 @@
 .trigger {
   display: flex;
   width: 100%;
+  min-height: var(--lx-control-compact-h, 32px);
   align-items: center;
   gap: 9px;
   padding: 5px 6px;
@@ -146,6 +147,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: var(--lx-control-compact-h, 32px);
   padding: 6px 8px;
   border: 0;
   border-radius: 9px;
@@ -196,6 +198,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: var(--lx-control-compact-h, 32px);
   padding: 7px 8px;
   border: 0;
   border-radius: 9px;
@@ -258,4 +261,12 @@
 .menu {
   right: 0;
   width: auto;
+}
+
+@media (pointer: coarse) {
+  .trigger,
+  .item,
+  .action {
+    min-height: var(--lx-row-min-h, 44px);
+  }
 }
