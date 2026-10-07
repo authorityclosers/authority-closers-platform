@@ -101,6 +101,26 @@ class FakeCommands:
             assert "User=10001" in args and "Group=10001" in args
             if self.step(args)[-2:] == ["upgrade", "head"] and "migration" in self.fail:
                 return subprocess.CompletedProcess(args, 1, b"", b"postgresql://secret")
+            if "ac_platform.product_updates.deploy" in self.step(args):
+                if "notes-timeout" in self.fail:
+                    raise subprocess.TimeoutExpired(args, 180, stderr=b"postgresql://secret")
+                if "notes-writer" in self.fail:
+                    return subprocess.CompletedProcess(
+                        args, 1, b"secret notes", b"postgresql://secret"
+                    )
+                notes = Path(self.step(args)[-1])
+                assert notes.stat().st_mode & 0o777 == 0o444
+                assert json.loads(notes.read_text())["release_sha"] == self.web_sha
+        elif args[:3] == ["docker", "image", "inspect"]:
+            image = args[-1] if "notes-image" not in self.fail else "sha256:" + "b" * 64
+            return subprocess.CompletedProcess(args, 0, f"{image}|{self.web_sha}\n".encode(), b"")
+        elif args[:2] == ["docker", "run"]:
+            if "notes-extract" in self.fail:
+                return subprocess.CompletedProcess(args, 1, b"secret notes", b"secret image")
+            payload = {"version": 1, "release_sha": self.web_sha, "complete": True, "notes": []}
+            return subprocess.CompletedProcess(args, 0, json.dumps(payload).encode(), b"")
+        elif args[0] == "sha256sum" and "notes-checksum" in self.fail:
+            return subprocess.CompletedProcess(args, 1, b"secret checksum", b"")
         elif args[0] == "systemctl":
             if args[1] == "is-active":
                 state = self.units[args[2]]
@@ -214,6 +234,9 @@ def tree(tmp_path, monkeypatch):
         helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / "infra/application/scripts/native_artifact_compatibility.py", helper)
         shutil.copyfile(SCRIPT, target / "scripts/refresh-dev-sales-xray-backend.py")
+        (target / "release-images.env").write_text(
+            f"AC_RELEASE_ID={sha}\nAC_API_IMAGE=sha256:{'a' * 64}\n"
+        )
         return target
 
     release(source)
@@ -311,11 +334,105 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
         i for i, (args, _) in enumerate(fake.calls) if args[:2] == ["systemctl", "restart"]
     )
     assert migrate_at < first_restart
+    writer = sandbox_steps(fake)[1]
+    step = fake.step(writer)
+    assert step[:-2] == [
+        str(paths.backend / ".venv/bin/python"),
+        "-m",
+        "ac_platform.product_updates.deploy",
+        "--environment",
+        "development",
+        "--release-id",
+        sha,
+    ]
+    assert step[-2] == "--notes"
+    assert f"EnvironmentFile={paths.migrator_env}" in writer
+    assert "User=10001" in writer and "Group=10001" in writer
+    assert "NoNewPrivileges=yes" in writer and "MemoryMax=768M" in writer
+    writer_at = next(i for i, (args, _) in enumerate(fake.calls) if args == writer)
+    assert migrate_at < writer_at < first_restart
+    extraction = next(args for args, _ in fake.calls if args[:2] == ["docker", "run"])
+    assert "--network=none" in extraction and "--pull=never" in extraction
+    assert "--user=10001:10001" in extraction and "--memory=64m" in extraction
+    assert not any(item.startswith(("--env", "--volume", "--mount")) for item in extraction)
+    assert value["product_notes"] == "pass"
+    assert not [
+        path
+        for path in paths.backend.glob(".ac-product-notes-*")
+        if path.name != ".ac-product-notes-release"
+    ]
     assert json.loads(output)["restarted"] == list(UNIT_ORDER)
     calls = len(fake.calls)
     noop = refresh.refresh(paths, fake, uid=0)
     assert noop["noop"]
     assert not any(args[0] in ("uv", "systemd-run", "systemctl") for args, _ in fake.calls[calls:])
+
+
+@pytest.mark.parametrize(
+    "failure", ["notes-checksum", "notes-image", "notes-extract", "notes-writer", "notes-timeout"]
+)
+def test_product_notes_failure_warns_and_refresh_finishes(tree, capsys, failure):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.fail.add(failure)
+    result = refresh.refresh(paths, fake, uid=0)
+    assert result["product_notes"] == "warn" and result["health"]["ok"]
+    assert restarts(fake) == list(UNIT_ORDER)
+    assert (paths.backend / ".ac-release-id").read_text().strip() == sha
+    captured = capsys.readouterr()
+    assert captured.err == "WARNING: Product note writer failed; dev refresh continues.\n"
+    assert "secret" not in captured.out + captured.err
+    assert not list(paths.backend.glob(".ac-product-notes-*"))
+    if failure in ("notes-checksum", "notes-image", "notes-extract"):
+        assert not any("ac_platform.product_updates.deploy" in args for args, _ in fake.calls)
+    assert not (paths.backend / ".ac-product-notes-release").exists()
+    fake.fail.clear()
+    before = len(fake.calls)
+    recovered = refresh.refresh(paths, fake, uid=0)
+    assert recovered["noop"] and recovered["product_notes"] == "pass"
+    assert not any(args[0] in ("uv", "systemctl") for args, _ in fake.calls[before:])
+    assert (paths.backend / ".ac-product-notes-release").read_text().strip() == sha
+
+
+def test_existing_native_release_backfills_notes_without_migrations_or_restarts(tree):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    refresh.refresh(paths, fake, uid=0)
+    (paths.backend / ".ac-product-notes-release").unlink()
+    before = len(fake.calls)
+    result = refresh.refresh(paths, fake, uid=0)
+    assert result["noop"] and result["migrated"] == "no" and result["product_notes"] == "pass"
+    assert not any(args[0] in ("uv", "systemctl") for args, _ in fake.calls[before:])
+    assert any("ac_platform.product_updates.deploy" in args for args, _ in fake.calls[before:])
+
+
+def test_noop_notes_backfill_checks_dev_credentials_before_starting_any_command(tree, capsys):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    refresh.refresh(paths, fake, uid=0)
+    (paths.backend / ".ac-product-notes-release").unlink()
+    paths.migrator_env.write_text(
+        "AC_ENVIRONMENT=staging\nAC_DATABASE_MIGRATOR_URL=postgresql://user:secret@other/db\n"
+    )
+    before = len(fake.calls)
+    result = refresh.refresh(paths, fake, uid=0)
+    assert result["noop"] and result["product_notes"] == "warn"
+    assert all(args[0] in ("git", "ac-release") for args, _ in fake.calls[before:])
+    captured = capsys.readouterr()
+    assert "WARNING:" in captured.err and "secret" not in captured.err + captured.out
+
+
+@pytest.mark.parametrize("key,value", [("AC_RELEASE_ID", "f" * 40), ("AC_API_IMAGE", "latest")])
+def test_product_notes_refuses_unbound_image_without_blocking_refresh(tree, capsys, key, value):
+    paths, sha, _, _ = tree
+    manifest = paths.application / "releases" / sha / "release-images.env"
+    values = refresh.env_values(manifest)
+    values[key] = value
+    manifest.write_text("".join(f"{k}={v}\n" for k, v in values.items()))
+    fake = FakeCommands(sha)
+    assert refresh.refresh(paths, fake, uid=0)["product_notes"] == "warn"
+    assert not any(args[0] == "docker" for args, _ in fake.calls)
+    assert "WARNING:" in capsys.readouterr().err
 
 
 def test_staging_pick_uses_mirror_commit_and_stored_core(tree):
@@ -646,7 +763,7 @@ def test_first_install_migrates_as_10001_behind_protected_ancestor(tree, tmp_pat
     paths, sha, _, _ = tree
     fake = FakeCommands(sha)
     refresh.refresh(paths, fake, uid=0)
-    migration, smoke = sandbox_steps(fake)
+    migration, notes, smoke = sandbox_steps(fake)
     properties = [migration[i + 1] for i, item in enumerate(migration) if item == "--property"]
     # uid 10001 never traverses root:acops 2750 /srv/authority-closers: it is
     # masked by a read-only tmpfs and only the backend is bound back, read-only.
@@ -663,6 +780,7 @@ def test_first_install_migrates_as_10001_behind_protected_ancestor(tree, tmp_pat
     )
     assert "--unit=ac-dev-sales-xray-migrate.service" in migration
     assert "--unit=ac-dev-sales-xray-smoke.service" in smoke
+    assert f"--unit={refresh.PRODUCT_NOTES_UNIT}" in notes
     # The DSN stays in the root-only file: not in any argv or child environment.
     for args, kwargs in fake.calls:
         assert not any("secret" in item or "postgresql://" in item for item in args)
@@ -746,6 +864,7 @@ def test_first_install_failure_before_migration_restores_absent_state(
     assert raised.value.exit_status == status
     result = failure_report(capsys)
     assert result["previous"] is None and result["migrated"] == "no"
+    assert not any("ac_platform.product_updates.deploy" in args for args, _ in fake.calls)
     assert (result["phase"], result["error"], result["exit_status"]) == (phase, code, status)
     assert result["rollback"] == {
         "ok": True,

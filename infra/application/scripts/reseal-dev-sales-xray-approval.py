@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HELPER_SHA256 = {
-    "refresh-dev-sales-xray-backend.py": "1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc",  # noqa: E501 - immutable helper pin
+    "refresh-dev-sales-xray-backend.py": "951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3",  # noqa: E501 - immutable helper pin
     "prepare-sales-xray-native-activation.py": "0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35",  # noqa: E501 - immutable helper pin
 }
 CODE_NAME = "reseal-dev-sales-xray-approval.py"
