@@ -1101,12 +1101,28 @@ def test_formatted_baseline_full_validation_lifecycle_restores_exact_bytes(histo
     assert load_hosted_approval_bundle(candidate).to_json() == candidate
     assert not candidate.endswith(b"\n")
     initial = tree(paths.trusted_root)
+    history_before = paths.history.lstat() if paths.history.exists() else None
     run(historical_runtime)
-    assert tree(paths.trusted_root) == initial and not paths.history.exists()
+    assert tree(paths.trusted_root) == initial
+    assert (paths.history.lstat() if paths.history.exists() else None) == history_before
     report = run(historical_runtime, apply=True)
     assert paths.targets()["approval"].read_bytes() == candidate
     directory = paths.history / report["run_id"]
-    assert (directory / "approval.before").read_bytes() == raw
+    for path in (paths.history, directory):
+        info = path.lstat()
+        assert (info.st_uid, stat.S_IMODE(info.st_mode)) == (paths.owner_uid, 0o700)
+        assert not os.listxattr(path)
+    for name, value in original.items():
+        backup = directory / (name + ".before")
+        assert backup.read_bytes() == value.raw
+        assert (backup.stat().st_uid, stat.S_IMODE(backup.stat().st_mode)) == (
+            paths.owner_uid,
+            0o600,
+        )
+    plan = tool.decoded((directory / "plan.json").read_bytes())
+    assert plan["before"] == {name: value.metadata() for name, value in original.items()}
+    assert all(value["mode"] == 0o700 for value in plan["audit_directories"].values())
+    assert all(stat.S_IMODE(path.stat().st_mode) == 0o600 for path in directory.iterdir())
     assert run(historical_runtime, apply=True)["noop"]
     adopted = tree(paths.trusted_root)
     tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0)
@@ -1115,6 +1131,182 @@ def test_formatted_baseline_full_validation_lifecycle_restores_exact_bytes(histo
     assert tool.snapshot(paths) == (original, guards)
     assert host.validated == [pins.before] * 3 + [pins.after] * 2 + [pins.before] * 3
     assert paths.targets()["approval"].read_bytes() == raw
+    history = tree(paths.history)
+    assert tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0, apply=True)["noop"]
+    assert tree(paths.history) == history
+
+
+def setgid_history(paths, state):
+    paths.history.parent.parent.chmod(0o2750)
+    paths.history.parent.chmod(0o2700)
+    if state != "fresh":
+        paths.history.mkdir(mode=0o700)
+        assert stat.S_IMODE(paths.history.stat().st_mode) == 0o2700
+        if state == "audited":
+            paths.history.chmod(0o700)
+            put(paths.history / "prior-run/plan.json", b'{"fictional":"prior plan"}\n')
+            put(paths.history / "prior-run/applied-prior.json", b'{"fictional":"prior event"}\n')
+            put(paths.history / "prior-run/approval.before", b"fictional exact prior bytes\n")
+    return tree(paths.history) if paths.history.exists() else {}
+
+
+@pytest.mark.parametrize("state", ["fresh", "residue", "audited"])
+def test_setgid_history_full_validation_lifecycle(historical_runtime, state):
+    paths, _, _ = historical_runtime
+    prior = setgid_history(paths, state)
+    ancestors_before = {path: path.stat() for path in paths.history.parents}
+    test_formatted_baseline_full_validation_lifecycle_restores_exact_bytes(historical_runtime)
+    assert all(tree(paths.history)[name] == value for name, value in prior.items())
+    for path, info in ancestors_before.items():
+        current = path.stat()
+        assert (current.st_mode, current.st_uid, current.st_gid) == (
+            info.st_mode,
+            info.st_uid,
+            info.st_gid,
+        )
+
+
+@pytest.mark.parametrize("parent_mode", [0o2700, 0o2750])
+def test_private_run_directory_clears_actual_setgid_inheritance(fixture, parent_mode):
+    paths, _, _ = fixture
+    paths.history.mkdir(mode=0o700)
+    paths.history.chmod(parent_mode)
+    directory = paths.history / "fictional-run"
+    tool.private_directory(directory, paths, create=True)
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert directory.stat().st_gid == paths.history.stat().st_gid
+    assert stat.S_IMODE(paths.history.stat().st_mode) == parent_mode
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "symlink",
+        "dangling",
+        "file",
+        "owner",
+        "group",
+        "other",
+        "sticky",
+        "setuid",
+        "nonempty-file",
+        "nonempty-directory",
+        "xattr",
+        "parent-mode",
+        "gid",
+    ],
+)
+def test_untrusted_history_refuses_apply_before_backups_or_service_changes(
+    fixture, monkeypatch, bad
+):
+    paths, _, host = fixture
+    setgid_history(paths, "residue")
+    path = paths.history
+    if bad in ("symlink", "dangling", "file"):
+        path.rmdir()
+        if bad == "file":
+            put(path, b"fictional not a directory")
+        else:
+            target = path.with_name("fictional-target")
+            if bad == "symlink":
+                target.mkdir(mode=0o700)
+            path.symlink_to(target)
+    elif bad in ("owner", "gid"):
+        # Root's bounded proof can test actual foreign ownership on fictional inputs.
+        if os.geteuid() == 0:
+            os.chown(
+                path,
+                paths.owner_uid + 1 if bad == "owner" else -1,
+                path.stat().st_gid + 1 if bad == "gid" else -1,
+            )
+            path.chmod(0o2700)
+        inode = path.stat().st_ino
+        original_fstat = os.fstat
+
+        def wrong_metadata(fd):
+            info = original_fstat(fd)
+            if info.st_ino == inode and os.geteuid() != 0:
+                fields = list(info)
+                fields[4 if bad == "owner" else 5] += 1
+                return os.stat_result(fields)
+            return info
+
+        monkeypatch.setattr(os, "fstat", wrong_metadata)
+    elif bad == "nonempty-file":
+        put(path / "prior-event.json", b"fictional existing audit")
+    elif bad == "nonempty-directory":
+        (path / "prior-run").mkdir(mode=0o700)
+    elif bad == "xattr":
+        os.setxattr(path, "user.fictional-audit", b"fictional")
+    elif bad == "parent-mode":
+        path.parent.chmod(0o2750)
+    else:
+        path.chmod({"group": 0o2710, "other": 0o2701, "sticky": 0o3700, "setuid": 0o6700}[bad])
+    before = tree(paths.trusted_root)
+    metadata = path.lstat()
+    with pytest.raises(tool.ResealError, match="history_untrusted"):
+        run(fixture, apply=True)
+    assert path.lstat() == metadata
+    assert tree(paths.trusted_root) == before
+    assert not any(
+        call[0] == "systemctl" and call[1] in ("stop", "restart", "reset-failed", "daemon-reload")
+        for call in host.calls
+    )
+
+
+@pytest.mark.parametrize("target", ["history", "run"])
+@pytest.mark.parametrize("apply", [False, True])
+def test_rollback_refuses_untrusted_audit_directory_without_normalization(fixture, target, apply):
+    paths, pins, host = fixture
+    report = run(fixture, apply=True)
+    directory = paths.history if target == "history" else paths.history / report["run_id"]
+    directory.chmod(0o2700)
+    before = tree(paths.trusted_root)
+    host.calls.clear()
+    with pytest.raises(tool.ResealError, match="history_untrusted"):
+        tool.rollback(paths, report["run_id"], runner=host, pins=pins, uid=0, apply=apply)
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o2700
+    assert tree(paths.trusted_root) == before
+    assert not host.calls
+
+
+@pytest.mark.parametrize(
+    "bad", ["collision", "group", "xattr", "chmod-failed", "chmod-ineffective"]
+)
+def test_private_run_directory_refuses_bad_creation_without_touching_history(
+    fixture, monkeypatch, bad
+):
+    paths, _, _ = fixture
+    paths.history.mkdir(mode=0o700)
+    paths.history.chmod(0o2700)
+    directory = paths.history / "fictional-run"
+    put(paths.history / "prior-event.json", b"fictional prior audit\n")
+    if bad == "collision":
+        directory.mkdir(mode=0o700)
+    original_mkdir = Path.mkdir
+
+    def bad_creation(path, *args, **kwargs):
+        original_mkdir(path, *args, **kwargs)
+        if path == directory:
+            if bad == "group":
+                path.chmod(0o2710)
+            elif bad == "xattr":
+                os.setxattr(path, "user.fictional-audit", b"fictional")
+
+    monkeypatch.setattr(Path, "mkdir", bad_creation)
+    if bad.startswith("chmod-"):
+
+        def bad_chmod(fd, mode):
+            assert mode == 0o700
+            if bad == "chmod-failed":
+                raise OSError("fictional failure")
+
+        monkeypatch.setattr(os, "fchmod", bad_chmod)
+    before = (paths.history / "prior-event.json").read_bytes()
+    with pytest.raises(tool.ResealError, match="history_untrusted"):
+        tool.private_directory(directory, paths, create=True)
+    assert (paths.history / "prior-event.json").read_bytes() == before
+    assert stat.S_IMODE(paths.history.stat().st_mode) == 0o2700
 
 
 def test_fictional_proof_harness_runs_reviewed_bootstrap_and_full_validator(
@@ -1599,10 +1791,19 @@ def test_fictional_contract_runtime_mapping_preserves_sandbox_and_fixture_source
     os.environ.get("AC_RESEAL_RUNTIME_PROOF") != "1",
     reason="Root Operator runs the fictional full-contract lifecycle explicitly",
 )
-def test_root_only_real_uid10001_formatted_contract_lifecycle(historical_runtime, monkeypatch):
+@pytest.mark.parametrize("history_state", ["fresh", "residue", "audited"])
+def test_root_only_real_uid10001_formatted_contract_lifecycle(
+    historical_runtime, monkeypatch, history_state
+):
     """Real isolated validation in every phase; all adoption targets/units fictional."""
     assert os.geteuid() == 0
     paths, pins, host = historical_runtime
+    group = grp.getgrnam("acops").gr_gid
+    for parent in (paths.history.parent.parent, paths.history.parent):
+        os.chown(parent, 0, group)
+    prior = setgid_history(paths, history_state)
+    if paths.history.exists():
+        assert paths.history.stat().st_gid == group
     backend = Path(os.environ["AC_RESEAL_PROOF_BACKEND"])
     assert backend.is_absolute() and (backend / ".venv/bin/python").is_file()
     release = (backend / ".ac-release-id").read_text().strip()
@@ -1657,4 +1858,6 @@ def test_root_only_real_uid10001_formatted_contract_lifecycle(historical_runtime
     test_formatted_baseline_full_validation_lifecycle_restores_exact_bytes(
         (paths, pins, RealHost())
     )
+    assert paths.history.stat().st_gid == group
+    assert all(tree(paths.history)[name] == value for name, value in prior.items())
     assert {path: path.stat() for path in scripts.iterdir()} == metadata

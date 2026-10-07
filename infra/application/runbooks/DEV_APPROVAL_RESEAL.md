@@ -1,4 +1,4 @@
-# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117 / AUT-1158 / AUT-1197 / AUT-1460
+# Development approval re-seal: AUT-1083 / AUT-1089 / AUT-1117 / AUT-1158 / AUT-1197 / AUT-1460 / AUT-1515
 
 Root Operator runs this tool from the **merged, released, root-owned application
 scripts directory**, after CTO review and CEO merge approval. Engineers do not
@@ -26,7 +26,7 @@ The tool intentionally keeps the serving source unchanged while adopting
 configuration from a newer reviewed tool release. If any input pin differs,
 Root reports the stable failure code on AUT-1083; do not edit the inputs or
 relax the tool's pins. The tool release SHA and checksums must be taken from
-[AUT-1460](/AUT/issues/AUT-1460)'s final merged/released handoff, rather than a moving `current-staging`
+[AUT-1515](/AUT/issues/AUT-1515)'s final merged/released handoff, rather than a moving `current-staging`
 symlink or an agent checkout.
 
 `--serving-release-id` accepts one lowercase 40-hex commit SHA. Omitting it keeps
@@ -129,8 +129,8 @@ the preflight can admit durable-input or managed-service changes.
 
 ### Root-only fictional runtime proof
 
-The normal engineer suite simulates systemd and skips two explicit Root tests.
-Root must run both tests from a root-owned copy of the exact reviewed commit,
+The normal engineer suite simulates systemd and skips four explicit Root cases.
+Root must run all four cases from a root-owned copy of the exact reviewed commit,
 with pinned dependencies, before live adoption. The test creates only fictional
 private inputs and copies of the three reviewed scripts. It gives those copies
 root:acops0750 ownership/modes, then uses real systemd and the development
@@ -144,6 +144,13 @@ real uid/gid10001 through the reviewed code/hash bootstrap and hosted validators
 in the unchanged network-isolated sandbox. The outer host/unit operations are
 simulated; all written approvals, backups and receipts are fictional fixtures.
 Neither test changes a managed service, provider, database or live input.
+
+The full lifecycle runs separately with fresh history, the exact empty 2700
+residue, and private history containing prior fictional audit entries. Its
+operator-input ancestors are root:acops2750 and root:acops2700, matching the
+reported live metadata. All five backups retain exact raw bytes; history/run
+directories finish at 0700 and backup/plan/event files at 0600. Existing audit
+entries and ancestor permissions stay unchanged.
 
 The lifecycle harness maps the interpreter, working directory and existing
 read-only backend bind together to Root's independently verified backend.
@@ -193,7 +200,7 @@ Record the source commit, installed path, three script hashes, actual uid/gid,
 zero additional groups, the test result and unchanged-source result on
 [AUT-1083](/AUT/issues/AUT-1083). A skipped test or mocked success does not satisfy
 these runtime proofs. Before review, Root records the non-skipped fictional
-proofs on its concrete child of [AUT-1460](/AUT/issues/AUT-1460); the repaired
+proofs on its concrete child of [AUT-1515](/AUT/issues/AUT-1515); the repaired
 immutable-runtime proof and live execution remain on
 [AUT-1083](/AUT/issues/AUT-1083). Reverify the serving source independently before the
 pinned dry-run/apply/rollback commands; the historical source above is not an
@@ -266,6 +273,32 @@ receipt files are mode 0600. Receipts append rather than overwrite history.
 Only bounded masked fields, hashes and command exit codes leave the process.
 No approval email, environment value or command output is reported.
 
+### Private history under setgid ancestors
+
+The refused apply on 7 October created an empty root:acops2700 history directory
+under a trusted root:acops2700 parent: Linux inherited setgid despite
+`mkdir(mode=0700)`. That refusal happened before run-id allocation, backups,
+consumer stops or target writes. Root must not repair this residue manually.
+
+The supported apply opens each directory with `O_DIRECTORY|O_NOFOLLOW`, verifies
+ownership, exact mode and absence of xattrs on its descriptor, and clears
+inherited setgid with `fchmod(0700)` before writing backups. Newly created
+directories may inherit 2700 from a trusted setgid parent with the same group.
+An existing 2700 directory is admitted only at the history path, only when
+empty, with no xattrs, and under an exact trusted 2700 parent with the same
+group. Existing private 0700 history can contain prior audit entries; they are
+preserved. Existing run-id collisions, symlinks, foreign owners, group/other
+access, unexpected bits, xattrs and nonempty 2700 history refuse.
+
+After normalization, the tool rechecks exact 0700 ownership/mode, xattrs and
+the pathname's inode against the opened descriptor, then fsyncs the directory
+and parent. The new plan records each directory's creation flag, before/final
+modes and final owner/group in `audit_directories`. It never changes ancestor
+permissions or overwrites prior history. Rollback only verifies strict 0700
+history and run directories; it does not normalize them. Dry-run leaves the
+empty residue untouched. This repair keeps both approval hashes, helper pins,
+hosted validators, template release and existing operator authorization intact.
+
 ## Rollback and verification
 
 An adoption/write/health failure attempts exact byte, metadata and prior
@@ -310,11 +343,15 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `5421eccf3560cb51bbde7cd90b0458c89ec74b453928562aabf918fec3f7eea2` |
-| `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
+| `reseal-dev-sales-xray-approval.py` | `44cfd752f5c57d937ffffb42de312916de9d903b7d202808ed4c717af121f391` |
+| `refresh-dev-sales-xray-backend.py` | `951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3` |
 | `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
 
 The tool also enforces the two helper digests before it imports their code.
+The helper bytes and constants are unchanged from this task's latest-main base
+`bafeafc1533a717cb00062a06130cdb20027ce26`. The refresh digest was already updated
+on main by [AUT-477](/AUT/issues/AUT-477); do not substitute the prior installed
+[AUT-1460](/AUT/issues/AUT-1460) helper when executing this new three-script set.
 
 ```bash
 uv run ruff format --check infra/application/scripts/reseal-dev-sales-xray-approval.py \
@@ -396,3 +433,19 @@ the working directory and read-only bind, while the fictional release marker,
 credentials, all sandbox properties and validator arguments stay unchanged.
 These results do not claim the real uid10001 proofs, approval, merge, immutable
 release or live adoption; Root's non-skipped child proof precedes CTO review.
+
+[AUT-1515](/AUT/issues/AUT-1515) local result (7 October 2026): 566 focused
+re-seal/refresh/preparation regressions passed; four real Root cases were
+explicitly skipped at engineer uid1002. Fresh setgid history, the exact empty
+2700 residue, and existing 0700 audited history pass the full hosted contract
+through apply/recheck/adoption/idempotence and rollback with all five exact raw
+backups and metadata. Direct run-directory creation clears actual inherited
+setgid under both 2700 and 2750 parents. Unsafe history ownership/modes/xattrs,
+symlinks, nonempty residue, foreign group, run collisions and failed/ineffective
+normalization refuse; rollback rejects untrusted history/run metadata without
+repair. Prior audit entries and trusted ancestors are preserved. Python
+format/lint, diff whitespace and branch admission pass. Root's four non-skipped
+uid10001 cases, sensitive CTO review, CEO SHA-bound approval, CI/merge, immutable
+manifest/provenance and installed-source verification remain required before
+the pinned live handoff on [AUT-1083](/AUT/issues/AUT-1083). No engineer live
+protected read, host permission/service change or live adoption was performed.
