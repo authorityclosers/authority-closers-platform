@@ -12,7 +12,7 @@ export interface OperationalPanelAction {
 }
 
 export interface OperationalPanelProps {
-  title: ReactNode;
+  title?: ReactNode;
   headingLevel?: "h2" | "h3" | "h4";
   id?: string;
   sub?: ReactNode;
@@ -25,6 +25,7 @@ export interface OperationalPanelProps {
   headClassName?: string;
   style?: CSSProperties;
   "aria-label"?: string;
+  "aria-labelledby"?: string;
 }
 
 export function OperationalPanel({
@@ -41,9 +42,11 @@ export function OperationalPanel({
   headClassName,
   style,
   "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
 }: OperationalPanelProps) {
   const Heading = headingLevel;
-  const titleId = id ? `${id}-title` : undefined;
+  const titleId = id && title ? `${id}-title` : undefined;
+  const effectiveAriaLabelledBy = ariaLabelledBy ?? titleId;
 
   const renderAction = () => {
     if (!action) return null;
@@ -82,31 +85,35 @@ export function OperationalPanel({
       data-pulse-adapted="true"
       className={`${styles.panel}${className ? ` ${className}` : ""}`}
       style={style}
-      aria-labelledby={titleId}
-      aria-label={!titleId ? ariaLabel : undefined}
+      aria-labelledby={effectiveAriaLabelledBy}
+      aria-label={!effectiveAriaLabelledBy ? ariaLabel : undefined}
     >
-      <div
-        className={`${styles.panelHead}${headClassName ? ` ${headClassName}` : ""}`}
-      >
-        <div className={styles.titleGroup}>
-          <Heading id={titleId} className={styles.panelTitle}>
-            {title}
-          </Heading>
-          {sub !== undefined && sub !== null ? (
-            typeof sub === "string" ? (
-              <p className={styles.panelSubtitle}>{sub}</p>
-            ) : (
-              <div className={styles.panelSubtitle}>{sub}</div>
-            )
+      {(title || tools || action) && (
+        <div
+          className={`${styles.panelHead}${headClassName ? ` ${headClassName}` : ""}`}
+        >
+          {title ? (
+            <div className={styles.titleGroup}>
+              <Heading id={titleId} className={styles.panelTitle}>
+                {title}
+              </Heading>
+              {sub !== undefined && sub !== null ? (
+                typeof sub === "string" ? (
+                  <p className={styles.panelSubtitle}>{sub}</p>
+                ) : (
+                  <div className={styles.panelSubtitle}>{sub}</div>
+                )
+              ) : null}
+            </div>
           ) : null}
+          {(tools || action) && (
+            <div className={styles.panelControls}>
+              {tools ? <div className={styles.toolsGroup}>{tools}</div> : null}
+              {renderAction()}
+            </div>
+          )}
         </div>
-        {(tools || action) && (
-          <div className={styles.panelControls}>
-            {tools ? <div className={styles.toolsGroup}>{tools}</div> : null}
-            {renderAction()}
-          </div>
-        )}
-      </div>
+      )}
       {children !== undefined && children !== null ? (
         <div
           className={`${styles.panelBody}${bodyClassName ? ` ${bodyClassName}` : ""}`}
@@ -122,6 +129,8 @@ export function OperationalPanel({
 export interface OperationalEmptyProps {
   icon?: LucideIcon;
   title: ReactNode;
+  headingLevel?: "h2" | "h3" | "h4";
+  titleId?: string;
   description?: ReactNode;
   action?: ReactNode;
   compact?: boolean;
@@ -131,11 +140,14 @@ export interface OperationalEmptyProps {
 export function OperationalEmpty({
   icon: Icon,
   title,
+  headingLevel = "h4",
+  titleId,
   description,
   action,
   compact,
   className,
 }: OperationalEmptyProps) {
+  const Heading = headingLevel;
   return (
     <div
       data-pulse-adapted="true"
@@ -148,9 +160,13 @@ export function OperationalEmpty({
       )}
       <div className={styles.emptyContent}>
         {typeof title === "string" ? (
-          <h4 className={styles.emptyTitle}>{title}</h4>
+          <Heading id={titleId} className={styles.emptyTitle}>
+            {title}
+          </Heading>
         ) : (
-          <div className={styles.emptyTitle}>{title}</div>
+          <div id={titleId} className={styles.emptyTitle}>
+            {title}
+          </div>
         )}
         {description && (
           <p className={styles.emptyDescription}>{description}</p>

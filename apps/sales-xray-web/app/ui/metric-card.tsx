@@ -89,7 +89,7 @@ export function MetricCard({
             <Icon size={18} aria-hidden="true" />
           </div>
         ) : (
-          <span />
+          <div />
         )}
         {aside && <div className={styles.asideSlot}>{aside}</div>}
       </div>
@@ -110,7 +110,9 @@ export function MetricCard({
         </div>
       </div>
 
-      <div className={styles.label}>{label}</div>
+      <div className={styles.label}>
+        {typeof label === "string" ? <span>{label}</span> : label}
+      </div>
 
       {(context !== undefined && context !== null && context !== "") ||
       (source !== undefined && source !== null && source !== "") ? (

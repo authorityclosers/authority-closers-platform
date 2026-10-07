@@ -104,3 +104,22 @@ it("renders OperationalEmpty with accessible elements and action", async () => {
   );
   expect(host.querySelector("button")?.textContent).toBe("New analysis");
 });
+
+it("supports titleless panel with custom aria-labelledby and headingLevel on empty", async () => {
+  await act(async () => {
+    root.render(
+      <OperationalPanel aria-labelledby="custom-heading" id="panel-no-title">
+        <OperationalEmpty
+          title="Empty headline"
+          headingLevel="h2"
+          titleId="custom-heading"
+        />
+      </OperationalPanel>,
+    );
+  });
+
+  const section = host.querySelector("section#panel-no-title");
+  expect(section?.getAttribute("aria-labelledby")).toBe("custom-heading");
+  const heading = host.querySelector("h2#custom-heading");
+  expect(heading?.textContent).toBe("Empty headline");
+});
