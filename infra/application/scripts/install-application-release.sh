@@ -1668,6 +1668,11 @@ backup_ready=1
 
 set_database_writer_access migrator
 compose_for "$release_dir" --profile release run --rm migrate
+if ! compose_for "$release_dir" --profile release run --rm migrate \
+  python -m ac_platform.product_updates.deploy \
+  --environment "$target_environment" --release-id "$AC_RELEASE_ID"; then
+  printf 'WARNING: Product note writer failed; application deployment continues.\n' >&2
+fi
 check_route "$api_host" /health/ready 503 "release-hold-$target_environment"
 
 # Finalize the append-only prepared record while runtime database access and

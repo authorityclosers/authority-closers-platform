@@ -51,6 +51,7 @@ WORKDIR /app
 
 COPY --from=build --chown=ac:ac /app/.venv /app/.venv
 COPY --from=build --chmod=0444 /app/.ac-release-id /app/.ac-release-id
+COPY --chmod=0444 infra/application/product-notes.json /app/product-notes.json
 COPY --chown=ac:ac alembic.ini ./
 COPY --chown=ac:ac db db
 
