@@ -47,13 +47,24 @@ checksums against that release's source-reviewed files before executing.
 ```bash
 RESEAL_TOOL_RELEASE=<merged-released-tool-sha>
 RESEAL_SERVING_RELEASE=<freshly-verified-serving-sha>
-RESEAL_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}/scripts
+RESEAL_RELEASE_DIR=/srv/authority-closers/application/releases/${RESEAL_TOOL_RELEASE}
+RESEAL_DIR=${RESEAL_RELEASE_DIR}/scripts
 RESEAL_SCRIPT=${RESEAL_DIR}/reseal-dev-sales-xray-approval.py
+(cd "$RESEAL_RELEASE_DIR" && sha256sum --check --strict RELEASE-FILES.sha256)
 sha256sum "$RESEAL_SCRIPT" \
   "$RESEAL_DIR/refresh-dev-sales-xray-backend.py" \
   "$RESEAL_DIR/prepare-sales-xray-native-activation.py"
 python3 "$RESEAL_SCRIPT" --serving-release-id "$RESEAL_SERVING_RELEASE"
 ```
+
+Root records the exact reviewed source commit and merged tool release, all three
+script hashes, the complete `RELEASE-FILES.sha256` and its successful strict
+verification, `RELEASE-COMMIT`, and the non-secret `release-images.env` provenance.
+Compare all three installed script blobs with the reviewed merged source, and
+record regular-file ownership/modes and unchanged source metadata. A successful
+three-script checksum alone does not verify the complete immutable release.
+Record the fresh serving-source evidence and masked command exits/run ids with
+the dry-run/apply/rollback handoff; neither a branch nor a moving symlink is a pin.
 
 Dry-run is the default. It acquires the installer's existing
 `application/.deployment.lock` without creating a file, reads trusted regular
@@ -305,6 +316,7 @@ uv run ruff check infra/application/scripts/reseal-dev-sales-xray-approval.py \
   tests/infra/test_reseal_dev_sales_xray_approval.py
 uv run pytest tests/infra/test_reseal_dev_sales_xray_approval.py \
   tests/infra/test_refresh_dev_sales_xray_backend.py \
+  tests/infra/test_refresh_dev_sales_xray_backend_only.py \
   tests/unit/test_prepare_sales_xray_native_activation.py -q
 ```
 
@@ -363,3 +375,14 @@ passed. The reviewed test archive and explicitly nominated immutable release
 must be pinned in the handoff; Root independently repeats the corrected proof
 on [AUT-1313](/AUT/issues/AUT-1313). This local result does not satisfy that proof
 or claim any live adoption.
+
+[AUT-1460](/AUT/issues/AUT-1460) local result (7 October 2026): 529 focused re-seal,
+refresh and preparation regressions passed; the two Root-only proofs were
+explicitly skipped. The formatted fictional baseline and compact candidate pass
+the complete hosted credential validator through every adoption/restoration
+phase. Fifteen negative input cases run in dry-run and apply, refusing before
+durable writes. The test-only pin-substitution harness also passes through the
+unchanged reviewed code/hash bootstrap and complete validator locally. Python
+format/lint, diff whitespace, branch admission and PR single-track gates pass.
+These results do not claim the real uid10001 proofs, approval, merge, immutable
+release or live adoption; Root's non-skipped child proof precedes CTO review.
