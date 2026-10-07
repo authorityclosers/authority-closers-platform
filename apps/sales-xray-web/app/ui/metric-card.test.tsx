@@ -127,3 +127,18 @@ it("renders MetricBand as an accessible labelled container", async () => {
   expect(band).not.toBeNull();
   expect(band?.getAttribute("data-columns")).toBe("4");
 });
+
+it("renders custom visual in place of icon", async () => {
+  await act(async () => {
+    root.render(
+      <MetricCard
+        label="Minutes left"
+        value="70 min"
+        visual={<span data-testid="custom-visual">Gauge</span>}
+      />,
+    );
+  });
+
+  expect(host.querySelector('[data-testid="custom-visual"]')).not.toBeNull();
+  expect(host.textContent).toContain("70 min");
+});

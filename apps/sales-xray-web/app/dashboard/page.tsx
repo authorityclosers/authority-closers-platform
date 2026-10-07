@@ -289,13 +289,15 @@ function DashboardDetails() {
                 ? undefined
                 : Clock
             }
+            visual={
+              allowanceState.status === "ready" &&
+              !allowanceState.value.unlimited ? (
+                <MinutesRing allowance={allowanceState.value} />
+              ) : undefined
+            }
             aside={
               allowanceState.status === "ready" ? (
-                !allowanceState.value.unlimited ? (
-                  <MinutesRing allowance={allowanceState.value} />
-                ) : (
-                  <MinutesUsed allowance={allowanceState.value} />
-                )
+                <MinutesUsed allowance={allowanceState.value} />
               ) : null
             }
           />

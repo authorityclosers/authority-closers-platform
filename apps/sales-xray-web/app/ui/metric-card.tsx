@@ -33,6 +33,7 @@ export interface MetricCardProps {
   delta?: MetricDeltaData | ReactNode;
   aside?: ReactNode;
   icon?: LucideIcon;
+  visual?: ReactNode;
   iconTone?: "teal" | "amber" | "neutral" | "info";
   href?: string;
   status?: "loading" | "error" | "ready";
@@ -50,6 +51,7 @@ export function MetricCard({
   delta,
   aside,
   icon: Icon,
+  visual,
   iconTone = "neutral",
   href,
   status = "ready",
@@ -78,7 +80,11 @@ export function MetricCard({
   const content = (
     <>
       <div className={styles.cardHead}>
-        {Icon ? (
+        {visual ? (
+          <div className={styles.iconWrap} data-tone={iconTone}>
+            {visual}
+          </div>
+        ) : Icon ? (
           <div className={styles.iconWrap} data-tone={iconTone}>
             <Icon size={18} aria-hidden="true" />
           </div>
