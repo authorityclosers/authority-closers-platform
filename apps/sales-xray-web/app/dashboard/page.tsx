@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, Clock, FolderOpen, Plus } from "lucide-react";
+import { AlertCircle, Clock, FolderOpen, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
