@@ -411,4 +411,66 @@ describe("Lightbox token derivative", () => {
       expect(clean).toContain("--theme-tile-min-h");
     });
   });
+
+  describe("Normalized compact controls and accessible touch targets (AUT-1474 card 3)", () => {
+    const segmentedCss = readFileSync(
+      join(here, "segmented.module.css"),
+      "utf8",
+    );
+    const callsCss = readFileSync(
+      join(appDir, "calls-library.module.css"),
+      "utf8",
+    );
+    const reportModesCss = readFileSync(
+      join(appDir, "report-modes.module.css"),
+      "utf8",
+    );
+    const shellCss = readFileSync(
+      join(appDir, "shell/lightbox-shell.module.css"),
+      "utf8",
+    );
+    const switcherCss = readFileSync(
+      join(appDir, "shell/workspace-switcher.module.css"),
+      "utf8",
+    );
+    const profileCss = readFileSync(
+      join(appDir, "profile-menu.module.css"),
+      "utf8",
+    );
+    const themeToggleCss = readFileSync(
+      join(appDir, "shell/theme-toggle.module.css"),
+      "utf8",
+    );
+
+    it("ensures desktop compact controls use at least 32px minimum hit area", () => {
+      expect(segmentedCss).toContain("--lx-control-compact-h");
+      expect(callsCss).toContain("--lx-control-compact-h");
+      expect(reportModesCss).toContain("--lx-control-compact-h");
+      expect(shellCss).toContain("--lx-control-compact-h");
+      expect(switcherCss).toContain("--lx-control-compact-h");
+      expect(profileCss).toContain("--lx-control-compact-h");
+    });
+
+    it("ensures coarse pointer touch targets use at least 44px minimum hit area", () => {
+      for (const css of [
+        segmentedCss,
+        callsCss,
+        reportModesCss,
+        shellCss,
+        switcherCss,
+        profileCss,
+        themeToggleCss,
+      ]) {
+        expect(css).toMatch(/@media\s*\(\s*pointer:\s*coarse\s*\)/);
+        expect(css).toContain("44px");
+      }
+    });
+
+    it("preserves Devanagari leading and flexible text growth without blanket fixed heights", () => {
+      expect(segmentedCss).toContain("--lx-leading-devanagari");
+      expect(callsCss).toContain("--lx-leading-devanagari");
+      expect(reportModesCss).toContain("--lx-leading-devanagari");
+      expect(shellCss).toContain("--lx-leading-devanagari");
+    });
+  });
 });
