@@ -624,6 +624,13 @@ def validate_credentials(arguments: list[str]) -> None:
     if sha(current) == before:
         permitted_diff(current, candidate)
     validator = sibling("prepare-sales-xray-native-activation.py")
+    current_validation = current
+    if sha(current) == before == APPROVAL_BEFORE:
+        # Only the digest-pinned historical baseline may use its hosted-contract
+        # representation in memory. Keep original bytes for service pins/backups;
+        # the candidate still passes the unchanged strict replacement validator.
+        _, load_bundle = validator._hosted_approval_loader()
+        current_validation = load_bundle(current).to_json()
     for name, digest in (("service", service_digest), ("template", template_digest)):
         config = load_service_config(root / (name + ".json"), digest)
         if config.environment != "development" or (
@@ -634,7 +641,7 @@ def validate_credentials(arguments: list[str]) -> None:
             raise ResealError("runtime_service_pin_mismatch")
         if name == "service":
             verify_installed_release(config, Path("/app/.ac-release-id"))
-        for raw in (current, candidate):
+        for raw in (current_validation, candidate):
             validator._validate_replacement_approval(
                 raw,
                 expected_sha256=sha(raw),
