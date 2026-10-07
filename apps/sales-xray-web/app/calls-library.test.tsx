@@ -1399,3 +1399,47 @@ it("posts logout once while pending, preserves the selector on failure, and clea
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(navigate).toHaveBeenCalledWith("/");
 });
+
+it("presents Calls summaries with MetricBand and MetricCard operational presentation and panels", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
+    [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
+    [insightPath(secondId, "call-record")]: () => ok({}, 404),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
+    [insightPath(secondId, "report")]: () =>
+      ok({ verdict: "Report without measurements" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+
+  const band = host.querySelector('section[aria-label="Calls at a glance"]')!;
+  expect(band.getAttribute("data-pulse-adapted")).toBe("true");
+  expect(band.getAttribute("data-columns")).toBe("5");
+
+  expect(host.querySelector("#metric-calls")).not.toBeNull();
+  expect(host.querySelector("#metric-duration")).not.toBeNull();
+  expect(host.querySelector("#metric-reports-ready")).not.toBeNull();
+  expect(host.querySelector("#metric-questions")).not.toBeNull();
+  expect(host.querySelector("#metric-commitments")).not.toBeNull();
+
+  const listPanel = host.querySelector("section#calls-library-list")!;
+  expect(listPanel).not.toBeNull();
+  expect(listPanel.getAttribute("data-pulse-adapted")).toBe("true");
+  expect(listPanel.getAttribute("aria-labelledby")).toBe("calls-library-title");
+});
+
+it("renders OperationalEmpty with accessible heading when no calls are saved", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([])),
+  });
+  await act(async () => renderLibrary());
+  await flush();
+
+  const heading = host.querySelector("h2#calls-library-empty");
+  expect(heading?.textContent).toBe("No saved calls yet.");
+  const emptyWrap = host.querySelector('[data-pulse-adapted="true"]');
+  expect(emptyWrap).not.toBeNull();
+  expect(host.querySelector("a.secondary-button")?.textContent).toContain(
+    "Analyse a call",
+  );
+});
