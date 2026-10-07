@@ -145,6 +145,13 @@ in the unchanged network-isolated sandbox. The outer host/unit operations are
 simulated; all written approvals, backups and receipts are fictional fixtures.
 Neither test changes a managed service, provider, database or live input.
 
+The lifecycle harness maps the interpreter, working directory and existing
+read-only backend bind together to Root's independently verified backend.
+The release-marker bind and every credential source remain fictional fixtures;
+all sandbox properties stay unchanged. Mapping only the interpreter leaves it
+hidden by the sandbox's private `/srv/authority-closers` view and fails before
+validation (`203/EXEC`), as recorded by [AUT-1489](/AUT/issues/AUT-1489).
+
 Fictional fixtures cannot have the approved historical digest. The full-contract
 test harness substitutes its fictional before digest **in process memory only**
 after the unchanged bootstrap checks all delivered script hashes. It executes
@@ -303,7 +310,7 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `d62b90bf57f0bec9a35d03ef20f1bee5f8f33e1038324c5cf5f349d1b71b8c25` |
+| `reseal-dev-sales-xray-approval.py` | `5421eccf3560cb51bbde7cd90b0458c89ec74b453928562aabf918fec3f7eea2` |
 | `refresh-dev-sales-xray-backend.py` | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
 | `prepare-sales-xray-native-activation.py` | `0e553343b07e24e7d998085753f36d061591f2990c42761c5824a1926ef41f35` |
 
@@ -376,7 +383,7 @@ must be pinned in the handoff; Root independently repeats the corrected proof
 on [AUT-1313](/AUT/issues/AUT-1313). This local result does not satisfy that proof
 or claim any live adoption.
 
-[AUT-1460](/AUT/issues/AUT-1460) local result (7 October 2026): 529 focused re-seal,
+[AUT-1460](/AUT/issues/AUT-1460) local result (7 October 2026): 530 focused re-seal,
 refresh and preparation regressions passed; the two Root-only proofs were
 explicitly skipped. The formatted fictional baseline and compact candidate pass
 the complete hosted credential validator through every adoption/restoration
@@ -384,5 +391,8 @@ phase. Fifteen negative input cases run in dry-run and apply, refusing before
 durable writes. The test-only pin-substitution harness also passes through the
 unchanged reviewed code/hash bootstrap and complete validator locally. Python
 format/lint, diff whitespace, branch admission and PR single-track gates pass.
+The runtime-mapping regression verifies that the interpreter's backend is both
+the working directory and read-only bind, while the fictional release marker,
+credentials, all sandbox properties and validator arguments stay unchanged.
 These results do not claim the real uid10001 proofs, approval, merge, immutable
 release or live adoption; Root's non-skipped child proof precedes CTO review.

@@ -64,6 +64,22 @@ def fictional_contract(path, *, run_name):
 runpy.run_path = fictional_contract
 exec(bootstrap)
 """
+
+
+def fictional_contract_command(argv, fixture_backend, backend):
+    """Expose the verified interpreter; keep marker/credentials fictional and private."""
+    actual = argv.copy()
+    position = actual.index("--") + 1
+    assert actual[position] == str(fixture_backend / ".venv/bin/python")
+    actual[position] = str(backend / ".venv/bin/python")
+    for property_name in ("WorkingDirectory", "BindReadOnlyPaths"):
+        index = actual.index(f"{property_name}={fixture_backend}")
+        actual[index] = f"{property_name}={backend}"
+    index = actual.index(tool.CODE_BOOTSTRAP)
+    actual[index : index + 1] = [FICTIONAL_CONTRACT_BOOTSTRAP, tool.CODE_BOOTSTRAP]
+    return actual
+
+
 UNIT_OBJECTS = {
     tool.refresh.API_UNIT: "/org/freedesktop/systemd1/unit/ac_2ddev_2dapi_2eservice",
     tool.refresh.WORKER_UNIT: (
@@ -1557,6 +1573,28 @@ def test_root_only_real_uid10001_code_delivery(fixture, monkeypatch):
     assert {path: path.stat() for path in scripts.iterdir()} == metadata
 
 
+def test_fictional_contract_runtime_mapping_preserves_sandbox_and_fixture_sources(fixture):
+    paths, pins, host = fixture
+    files, _ = tool.snapshot(paths)
+    tool.runtime_validation(paths, tool.Commands(host), pins, files)
+    original = next(argv for argv in host.calls if argv[0] == "systemd-run")
+    saved = original.copy()
+    backend = Path("/srv/authority-closers/development/backend")
+    actual = fictional_contract_command(original, paths.backend, backend)
+    assert original == saved
+    assert actual[actual.index("--") + 1] == str(backend / ".venv/bin/python")
+    assert f"WorkingDirectory={backend}" in actual
+    assert f"BindReadOnlyPaths={backend}" in actual
+    for prop in (*tool.refresh.SANDBOX_PROPERTIES, "PrivateNetwork=yes", "StandardError=null"):
+        assert actual.count(prop) == original.count(prop) == 1
+    assert f"BindReadOnlyPaths={paths.backend / '.ac-release-id'}:/app/.ac-release-id" in actual
+    assert [arg for arg in actual if arg.startswith("LoadCredential=")] == [
+        arg for arg in original if arg.startswith("LoadCredential=")
+    ]
+    index = actual.index(FICTIONAL_CONTRACT_BOOTSTRAP)
+    assert actual[index + 1 :] == original[original.index(tool.CODE_BOOTSTRAP) :]
+
+
 @pytest.mark.skipif(
     os.environ.get("AC_RESEAL_RUNTIME_PROOF") != "1",
     reason="Root Operator runs the fictional full-contract lifecycle explicitly",
@@ -1598,13 +1636,7 @@ def test_root_only_real_uid10001_formatted_contract_lifecycle(historical_runtime
         result = Host.__call__(host, argv, **kw)
         if argv[0] != "systemd-run":
             return result
-        actual = argv.copy()
-        position = actual.index("--") + 1
-        actual[position] = str(backend / ".venv/bin/python")
-        actual[actual.index(tool.CODE_BOOTSTRAP) : actual.index(tool.CODE_BOOTSTRAP) + 1] = [
-            FICTIONAL_CONTRACT_BOOTSTRAP,
-            tool.CODE_BOOTSTRAP,
-        ]
+        actual = fictional_contract_command(argv, paths.backend, backend)
         result = tool.refresh.command(actual, **kw)
         if result.returncode == 0:
             current = next(
