@@ -23,24 +23,24 @@ installer candidate checks and staging/production commands stay unchanged.
 
 ## Audited inputs from 7 October
 
-| Input | Identity |
-| --- | --- |
-| T | `1c06c4af14222a9de71334b25f3e373cf1fa4906` |
-| N | `386f28ba6f046fd2dda1727ca6736f9260f79709` |
-| Ordinary main-push run, attempt | `37387436215`, `1` |
-| Retained artifact | `11379402384` |
-| Immutable ZIP SHA-256 | `ec5b2e56c39b2497a3dcb11937863424fb503c00e714c5873e9f288216bc4d74` |
-| Native manifest SHA-256 | `490292f3e0bdf5a95448e35c8318979d5d36ecca86fdc51c901ac77209b2978c` |
-| Reuse input SHA-256 | `03e1098a325c1fc2142464f9ae01615ac009e64e2146534f49bdb077d4453592` |
-| Artifact metadata SHA-256 | `5a11c1c5530bab1e0e610e5bcc8e794ac0bdcbae694543635f486e79e09c5a9a` |
-| Workflow record SHA-256 | `82f32a7d3b715d7741e0ef5a8bba6d7cea49d9883f7a04d5387aef9a47300f05` |
-| Image reference | `sha256:3eb09b14990ee651c0f335a7397badc2730cec8f3df5904b9a94a5e011250f31` |
-| Image config | `sha256:68ec56ff10322f4d6cd765603f9e6b07c45189c327a60ad7a714c728bfd34cd9` |
-| N0 | `1e784afa128f8d4629aeece5179486d423c0ec52` |
-| Previous descriptor SHA-256 | `cd58ce416637aff59040ecc073c38c861767b3181cc2a48861eb8cb692ec4e15` |
-| Previous manifest SHA-256 | `b477e4b1714dffd84d5e1427b63f020aacfb8b2f51281484ce14f668af9ebbd5` |
-| Historical install receipt SHA-256 | `38289d4fa9bc6703543cba6888d8970973ad1025f49543d8fd3ca69f08506f55` |
-| Unchanged refresh helper SHA-256 | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc` |
+| Input                              | Identity                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| T                                  | `1c06c4af14222a9de71334b25f3e373cf1fa4906`                                |
+| N                                  | `386f28ba6f046fd2dda1727ca6736f9260f79709`                                |
+| Ordinary main-push run, attempt    | `37387436215`, `1`                                                        |
+| Retained artifact                  | `11379402384`                                                             |
+| Immutable ZIP SHA-256              | `ec5b2e56c39b2497a3dcb11937863424fb503c00e714c5873e9f288216bc4d74`        |
+| Native manifest SHA-256            | `490292f3e0bdf5a95448e35c8318979d5d36ecca86fdc51c901ac77209b2978c`        |
+| Reuse input SHA-256                | `03e1098a325c1fc2142464f9ae01615ac009e64e2146534f49bdb077d4453592`        |
+| Artifact metadata SHA-256          | `5a11c1c5530bab1e0e610e5bcc8e794ac0bdcbae694543635f486e79e09c5a9a`        |
+| Workflow record SHA-256            | `82f32a7d3b715d7741e0ef5a8bba6d7cea49d9883f7a04d5387aef9a47300f05`        |
+| Image reference                    | `sha256:3eb09b14990ee651c0f335a7397badc2730cec8f3df5904b9a94a5e011250f31` |
+| Image config                       | `sha256:68ec56ff10322f4d6cd765603f9e6b07c45189c327a60ad7a714c728bfd34cd9` |
+| N0                                 | `1e784afa128f8d4629aeece5179486d423c0ec52`                                |
+| Previous descriptor SHA-256        | `cd58ce416637aff59040ecc073c38c861767b3181cc2a48861eb8cb692ec4e15`        |
+| Previous manifest SHA-256          | `b477e4b1714dffd84d5e1427b63f020aacfb8b2f51281484ce14f668af9ebbd5`        |
+| Historical install receipt SHA-256 | `38289d4fa9bc6703543cba6888d8970973ad1025f49543d8fd3ca69f08506f55`        |
+| Unchanged refresh helper SHA-256   | `1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc`        |
 
 The historical receipt is provenance, **not** the current rollback snapshot.
 Each preparation independently pins current unit, descriptor, client and

@@ -15,9 +15,11 @@ Drained-consumer publication includes descriptor, units and client files, with
 current exact byte/metadata/state backups before mutation and rollback on
 failure. Default dry-run publishes nothing.
 
-Initial focused validation:
+Validation:
 
-- `uv run --no-sync pytest -q tests/infra/test_prepare_dev_sales_xray_native.py -k 'descriptor or dry_run or success' --maxfail=1`: **16 passed**.
+- Native installer/supervisor, compatibility, application archive and release guards: **233 tests passed** as part of the 294-test focused regression run.
+- Final development operator suite: **69 tests passed** after the final stop and Git-filter checks.
+- Dry-run invariance, supported CLI preparation/apply, source and renderer provenance, every publication target, stop-before-publish, mount/socket/client startup, readiness, guard and receipt rollback, adopted credentials, sandbox/root identity, stale plans and protected-state preservation are covered.
 - Ruff check and formatting pass for the new operator and tests.
 - `git diff --check`: PASS.
 - Unchanged refresh helper SHA-256:
@@ -28,8 +30,20 @@ No Docker/systemd/host installation, customer audio, provider call or database
 write occurred. The successful-transition fixture calls the actual unchanged
 refresh helper against the newly published descriptor and fixture Git objects.
 
-Final focused regression counts and source handoff hashes are recorded before
-review submission. CTO review, CEO approval and the recorded Root grant on
+Read-only dev verification: `/health/ready` returned `ready` at serving backend
+`ce753781ba69f9b2e74b9300619473173bab2be1`. No host state changed.
+
+Immutable source file hashes for release handoff:
+
+- `prepare-dev-sales-xray-native.py`: `97936a071dc4dda4f0d7276a85c99c18bfabd6c10c41dd1275f350331ac5849f`.
+- `install-sales-xray-native.py`: `fa0769bf816b182b633d2a84370084a9f2c9ab3bcd572c62c0cbe2cbf47aeed0`.
+- `native_artifact_compatibility.py`: `f822d7a4052e54cab30df28a0b00c6de9a6bdfd5bcfbf7d4f92f7e24997bebab`.
+- `render-sales-xray-native.py`: `88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76`.
+- `verify-release-archive.py`: `f595b187a93f2dcc032795b01d1e81cf40449e15b9bd700be71b4a01b62e92ac`.
+
+The merged, released source SHA C is recorded after the merge/release event;
+the task branch SHA is not represented as a released source. CTO review, CEO
+approval, released-source verification and the recorded Root grant on
 [AUT-1469](/AUT/issues/AUT-1469) remain required; this source evidence does not
 claim host completion. Operator argv and rollback checks are in
 `infra/application/runbooks/DEV_RETAINED_NATIVE.md`.

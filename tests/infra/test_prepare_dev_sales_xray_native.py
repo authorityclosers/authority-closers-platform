@@ -65,6 +65,14 @@ class Host:
             for unit in (*MODULE.CLIENTS, MODULE.OUTBOX, MODULE.TIMER, MODULE.NATIVE)
         }
 
+    def property(self, unit, prop):
+        active = self.systemd.is_active(unit)
+        return (
+            ("active" if active else "inactive")
+            if prop == "ActiveState"
+            else ("111" if active else "0")
+        )
+
     def live_bindings(self, files, image, approval, states):
         if self.client_failure and image == self.image:
             raise MODULE.TransitionError("fake_live_binding_failure")
@@ -78,15 +86,31 @@ class Host:
             self.readiness_failure = False
             raise MODULE.TransitionError("fake_readiness_failure")
 
+    def native_binding(self, descriptor):
+        for name, text in descriptor["units"].items():
+            assert (self.paths.units / name).read_bytes() == text.encode()
+
 
 class Fixture:
     def __init__(self, root, monkeypatch):
         self.root = root
         bundle = self.bundle = Bundle(root)
+        git(bundle.repo, "branch", "-m", "main")
         for name in (*MODULE.CODE, "render-sales-xray-native.py"):
             path = bundle.repo / "infra/application/scripts" / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((ROOT / "infra/application/scripts" / name).read_bytes())
+        self.dev_units = (
+            MODULE.API,
+            MODULE.WORKER,
+            MODULE.OUTBOX,
+            "ac-dev-sales-xray-refresh.service",
+            MODULE.TIMER,
+        )
+        for name in self.dev_units:
+            path = bundle.repo / "infra/application/development" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((ROOT / "infra/application/development" / name).read_bytes())
         git(bundle.repo, "add", ".")
         git(bundle.repo, "commit", "-qm", "Fictional installed native predecessor")
         self.previous = git(bundle.repo, "rev-parse", "HEAD")
@@ -117,6 +141,7 @@ class Fixture:
             backend=bundle.repo,
             studio=bundle.repo,
             release_lock=root / "release.lock",
+            proc=root / "proc",
             owner_uid=os.getuid(),
             owner_gid=os.getgid(),
             trusted_root=root,
@@ -139,6 +164,10 @@ class Fixture:
                 raw = (ROOT / "infra/application/scripts" / name).read_bytes()
                 self.write(release / "scripts" / name, raw)
                 sums.append(f"{MODULE.sha(raw)}  ./scripts/{name}\n")
+            for name in self.dev_units:
+                raw = (ROOT / "infra/application/development" / name).read_bytes()
+                self.write(release / "development" / name, raw)
+                sums.append(f"{MODULE.sha(raw)}  ./development/{name}\n")
             self.write(release / "RELEASE-FILES.sha256", "".join(sums).encode())
         (application / "current-staging").symlink_to(application / "releases" / bundle.target)
         (application / "current-production").symlink_to(application / "releases" / self.previous)
@@ -212,7 +241,10 @@ class Fixture:
             "ac-dev-sales-xray-refresh.service",
             MODULE.TIMER,
         ):
-            self.write(self.paths.units / unit, b"unchanged fictional unit bytes\n")
+            self.write(
+                self.paths.units / unit,
+                (ROOT / "infra/application/development" / unit).read_bytes(),
+            )
         self.write(self.paths.development / "outbox.env", b"unchanged fictional outbox\n", 0o600)
         self.write(
             application / "operator-inputs/development/aut-1083/candidate.json",
@@ -355,11 +387,15 @@ def test_success_publishes_matching_units_clients_descriptor_and_earns_unchanged
     [
         "native_stop",
         "native_start",
+        "native_mount_start",
+        "native_socket",
+        "client_start",
         "client_readback",
         "readiness",
         "guard",
         "reload",
         "publish_native",
+        "publish_mount",
         "publish_api_env",
         "publish_service",
         "publish_template",
@@ -392,6 +428,30 @@ def test_each_failure_restores_exact_descriptor_clients_units_and_states(
             original(unit)
 
         monkeypatch.setattr(fixture.host.systemd, "enable_now", fail_start)
+    elif target == "native_mount_start":
+        original = fixture.host.systemd.enable_now
+        once = [True]
+
+        def fail_mount(unit):
+            if unit.endswith(".mount") and once:
+                once.pop()
+                raise installer.InstallerError("fictional_mount_start_failed")
+            original(unit)
+
+        monkeypatch.setattr(fixture.host.systemd, "enable_now", fail_mount)
+    elif target == "native_socket":
+        fixture.host.systemd.socket_failures = 1
+    elif target == "client_start":
+        original = fixture.host.systemd._run
+        once = [True]
+
+        def fail_client(argv):
+            if once:
+                once.pop()
+                raise installer.InstallerError("fictional_client_start_failed")
+            return original(argv)
+
+        monkeypatch.setattr(fixture.host.systemd, "_run", fail_client)
     elif target == "client_readback":
         fixture.host.client_failure = True
     elif target == "readiness":
@@ -419,9 +479,11 @@ def test_each_failure_restores_exact_descriptor_clients_units_and_states(
             fixture.receipt
             if target == "receipt"
             else (fixture.paths.units / next(name for name in units if name.endswith(".service")))
-            if target == "publish_native"
+            if target in {"publish_native", "publish_mount"}
             else fixture.paths.targets()[target.removeprefix("publish_")]
         )
+        if target == "publish_mount":
+            selected = fixture.paths.units / next(name for name in units if name.endswith(".mount"))
         once = [True]
 
         def fail_replace(path, value):
@@ -583,3 +645,335 @@ def test_refresh_pin_remains_exact():
         ).hexdigest()
         == MODULE.REFRESH_HASH
     )
+
+
+def loaded_host(fixture, monkeypatch):
+    """Exercise the real host adapter with synthetic proc/credential namespaces."""
+    import stat
+
+    real = MODULE.Host(fixture.paths, installer, SimpleNamespace(runtime_identity=lambda: None))
+    real.systemd = fixture.host.systemd
+    states = fixture.host.inspect()
+    values = {}
+    for unit in states:
+        values[unit] = {
+            "ActiveState": states[unit]["active"],
+            "UnitFileState": states[unit]["enabled"],
+            "User": "root" if unit == MODULE.NATIVE else "10001",
+            "Group": "10001",
+            "ProtectHome": "yes",
+            "ProtectSystem": "strict",
+            "NoNewPrivileges": "yes",
+            "FragmentPath": str(fixture.paths.units / unit),
+            "NeedDaemonReload": "no",
+            "PrivateTmp": "yes",
+            "RestrictAddressFamilies": "AF_UNIX",
+            "MemoryMax": "402653184",
+            "TasksMax": "64",
+            "UMask": "0077",
+            "DropInPaths": "",
+            "SupplementaryGroups": "",
+            "MainPID": "111" if unit == MODULE.NATIVE else "222" if unit == MODULE.API else "333",
+            "InvocationID": "unchanged",
+        }
+    values["ac-dev-sales-xray-refresh.service"] = {"ActiveState": "inactive"}
+    for unit, suffix in ((MODULE.API, "release.conf"), (MODULE.WORKER, "manifest.conf")):
+        values[unit]["DropInPaths"] = str(fixture.paths.units / (unit + ".d/" + suffix))
+        names = (
+            ("approval.json", "challenge-secret", "qa-password")
+            if unit == MODULE.API
+            else ("approval.json", "service.json", "database-url")
+        )
+        values[unit]["LoadCredential"] = " ".join(
+            name + ":" + str(fixture.paths.development / name) for name in names
+        )
+    previous = MODULE.decoded(fixture.paths.descriptor.read_bytes())
+    values[MODULE.NATIVE]["ExecStart"] = previous["units"][MODULE.NATIVE]
+    values[MODULE.NATIVE]["ExecStartPre"] = previous["supervisor_source"]
+    real.property = lambda unit, prop: values[unit][prop]
+    approval = (fixture.paths.development / "approval.json").read_bytes()
+    service = (fixture.paths.development / "service.json").read_bytes()
+    for unit in MODULE.CLIENTS:
+        pid = values[unit]["MainPID"]
+        directory = fixture.paths.proc / pid / "root/run/credentials" / unit
+        fixture.write(directory / "approval.json", approval, 0o440)
+        fixture.write(directory / "service.json", service, 0o440)
+        raw = (
+            fixture.paths.targets()["api_env"].read_bytes().replace(b"\n", b"\0")
+            if unit == MODULE.API
+            else (MODULE.WORKER_KEY + "=" + MODULE.sha(service) + "\0").encode()
+        )
+        fixture.write(fixture.paths.proc / pid / "environ", raw, 0o400)
+    (fixture.paths.proc / "111").mkdir(parents=True, exist_ok=True)
+    original_stat = Path.stat
+
+    def process_stat(path, **kwargs):
+        if path in {
+            fixture.paths.proc / "111",
+            fixture.paths.proc / "222",
+            fixture.paths.proc / "333",
+        }:
+            return SimpleNamespace(st_uid=0 if path.name == "111" else 10001)
+        return original_stat(path, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", process_stat)
+    original_fstat = os.fstat
+
+    def credential_stat(fd):
+        info = original_fstat(fd)
+        if os.readlink("/proc/self/fd/" + str(fd)).startswith(str(fixture.paths.proc)):
+            return SimpleNamespace(st_uid=0, st_mode=info.st_mode, st_size=info.st_size)
+        return info
+
+    monkeypatch.setattr(MODULE.os, "fstat", credential_stat)
+    original_lstat = Path.lstat
+    socket = Path("/run/ac-sales-xray/development/native.sock")
+
+    def socket_stat(path):
+        if str(path).startswith("/run/ac-sales-xray"):
+            return SimpleNamespace(
+                st_mode=(stat.S_IFSOCK | 0o660) if path == socket else (stat.S_IFDIR | 0o750),
+                st_uid=0,
+                st_gid=10001,
+                st_nlink=1,
+            )
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", socket_stat)
+    return real, values, previous, socket
+
+
+def test_host_adapter_checks_live_processes_adopted_credentials_and_native_socket(
+    fixture, monkeypatch
+):
+    host, values, previous, socket = loaded_host(fixture, monkeypatch)
+    states = host.inspect()
+    host.native_binding(previous)
+    before = {
+        name: MODULE.read(path, fixture.paths) for name, path in fixture.paths.targets().items()
+    }
+    host.live_bindings(
+        before,
+        fixture.old_image,
+        MODULE.sha((fixture.paths.development / "approval.json").read_bytes()),
+        states,
+    )
+
+
+@pytest.mark.parametrize(
+    "unit,prop,value",
+    [
+        (MODULE.WORKER, "User", "root"),
+        (MODULE.API, "ProtectSystem", "full"),
+        (MODULE.NATIVE, "RestrictAddressFamilies", "AF_UNIX AF_INET"),
+        (MODULE.NATIVE, "MemoryMax", "infinity"),
+        (MODULE.NATIVE, "PrivateTmp", "no"),
+        (MODULE.API, "NeedDaemonReload", "yes"),
+        (MODULE.NATIVE, "DropInPaths", "/unexpected.conf"),
+        (MODULE.WORKER, "LoadCredential", "service.json:/staging/service.json"),
+        (MODULE.TIMER, "ActiveState", "active"),
+    ],
+)
+def test_host_adapter_refuses_loaded_sandbox_identity_credential_or_timer_drift(
+    fixture, monkeypatch, unit, prop, value
+):
+    host, values, previous, socket = loaded_host(fixture, monkeypatch)
+    values[unit][prop] = value
+    with pytest.raises(MODULE.TransitionError):
+        host.inspect()
+
+
+@pytest.mark.parametrize(
+    "kind", ["api_image", "worker_manifest", "approval", "native_command", "native_renderer"]
+)
+def test_host_adapter_refuses_real_adopted_binding_drift(fixture, monkeypatch, kind):
+    host, values, previous, socket = loaded_host(fixture, monkeypatch)
+    if kind == "api_image":
+        path = fixture.paths.proc / "222/environ"
+        path.chmod(0o600)
+        path.write_bytes(
+            path.read_bytes().replace(fixture.old_image.encode(), b"sha256:" + b"f" * 64)
+        )
+        path.chmod(0o400)
+    elif kind in {"worker_manifest", "approval"}:
+        name = "service.json" if kind == "worker_manifest" else "approval.json"
+        path = fixture.paths.proc / "333/root/run/credentials" / MODULE.WORKER / name
+        path.chmod(0o600)
+        path.write_bytes(b"fictional mismatched adopted credential")
+        path.chmod(0o440)
+    elif kind == "native_command":
+        values[MODULE.NATIVE]["ExecStart"] = "unbound command"
+    else:
+        values[MODULE.NATIVE]["ExecStartPre"] = "unbound renderer"
+    with pytest.raises(MODULE.TransitionError):
+        host.native_binding(previous)
+        before = {
+            name: MODULE.read(path, fixture.paths) for name, path in fixture.paths.targets().items()
+        }
+        host.live_bindings(
+            before,
+            fixture.old_image,
+            MODULE.sha((fixture.paths.development / "approval.json").read_bytes()),
+            host.inspect(),
+        )
+
+
+def test_controller_modules_require_released_provenance_and_create_no_bytecode(
+    fixture, monkeypatch
+):
+    directory = fixture.paths.application / "releases" / fixture.source / "scripts"
+    monkeypatch.setattr(MODULE, "__file__", str(directory / MODULE.CODE[0]))
+    before = fixture.snapshot()
+    controller, compatibility, refresh = MODULE.modules(fixture.paths, fixture.source)
+    assert callable(controller._validate_descriptor)
+    assert callable(compatibility.verify_reuse)
+    assert refresh.check_native.__name__ == "check_native"
+    assert fixture.snapshot() == before
+    assert not list(directory.rglob("*.pyc"))
+
+
+@pytest.mark.parametrize("name", MODULE.CODE)
+def test_controller_refuses_source_mismatch_before_loading_modules(fixture, monkeypatch, name):
+    directory = fixture.paths.application / "releases" / fixture.source / "scripts"
+    monkeypatch.setattr(MODULE, "__file__", str(directory / MODULE.CODE[0]))
+    path = directory / name
+    path.write_bytes(path.read_bytes() + b"# unreviewed source drift\n")
+    with pytest.raises(MODULE.TransitionError, match="released_source_mismatch"):
+        MODULE.modules(fixture.paths, fixture.source)
+
+
+def cli_args(fixture):
+    args = []
+    for key, value in vars(fixture.args).items():
+        args.extend(["--" + key.replace("_", "-"), str(value)])
+    return args
+
+
+def configure_cli(fixture, monkeypatch):
+    prepare = MODULE.prepare
+    monkeypatch.setattr(MODULE, "Paths", lambda: fixture.paths)
+    monkeypatch.setattr(MODULE.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        MODULE, "modules", lambda *args: (installer, verifier, fixture.host.refresh)
+    )
+    monkeypatch.setattr(MODULE, "Host", lambda *args: fixture.host)
+    monkeypatch.setattr(MODULE, "prepare", lambda *args: prepare(*args, root=False))
+
+
+def test_supported_cli_dry_run_prepare_and_apply_preserve_pins(fixture, monkeypatch, capsys):
+    configure_cli(fixture, monkeypatch)
+    argv = cli_args(fixture)
+    before = fixture.snapshot()
+    assert MODULE.main(argv) == 0
+    dry_run = json.loads(capsys.readouterr().out)
+    assert dry_run["status"] == "dry_run"
+    assert fixture.snapshot() == before
+    plan_path = fixture.paths.descriptor.parent / "native-plan.json"
+    assert MODULE.main([*argv, "--prepare", str(plan_path)]) == 0
+    prepared = json.loads(capsys.readouterr().out)
+    assert prepared["status"] == "prepared"
+    assert prepared["plan_sha256"] == dry_run["plan_sha256"]
+    assert (
+        MODULE.main(
+            [
+                *argv,
+                "--apply",
+                "--prepared-plan",
+                str(plan_path),
+                "--prepared-plan-sha256",
+                prepared["plan_sha256"],
+                "--receipt",
+                str(fixture.receipt),
+            ]
+        )
+        == 0
+    )
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["status"] == "installed" and applied["native_guard"] == "PASS"
+    assert applied["provider_calls"] == 0 and applied["database_writes"] == 0
+
+
+def test_supported_cli_refuses_stale_prepared_plan_without_mutation(fixture, monkeypatch, capsys):
+    configure_cli(fixture, monkeypatch)
+    argv = cli_args(fixture)
+    plan_path = fixture.paths.descriptor.parent / "native-plan.json"
+    assert MODULE.main([*argv, "--prepare", str(plan_path)]) == 0
+    prepared = json.loads(capsys.readouterr().out)
+    # A protected input changed after preparation; it cannot be silently re-pinned.
+    path = fixture.paths.development / "outbox.env"
+    path.write_bytes(path.read_bytes() + b"fictional changed protected input\n")
+    before = fixture.snapshot()
+    assert (
+        MODULE.main(
+            [
+                *argv,
+                "--apply",
+                "--prepared-plan",
+                str(plan_path),
+                "--prepared-plan-sha256",
+                prepared["plan_sha256"],
+                "--receipt",
+                str(fixture.receipt),
+            ]
+        )
+        == 1
+    )
+    result = json.loads(capsys.readouterr().err)
+    assert result["error"] == "prepared_plan_changed"
+    assert fixture.snapshot() == before
+    assert not fixture.receipt.exists()
+
+
+@pytest.mark.parametrize(
+    "extra", [["--receipt", "/unexpected"], ["--apply"], ["--prepared-plan-sha256", "0" * 64]]
+)
+def test_supported_cli_rejects_partial_apply_arguments(fixture, monkeypatch, capsys, extra):
+    configure_cli(fixture, monkeypatch)
+    before = fixture.snapshot()
+    assert MODULE.main([*cli_args(fixture), *extra]) == 1
+    assert json.loads(capsys.readouterr().err)["error"] == "apply_arguments_invalid"
+    assert fixture.snapshot() == before
+
+
+@pytest.mark.parametrize("kind", ["controller", "target"])
+def test_unreleased_branch_source_is_refused_before_release_or_runtime_reads(fixture, kind):
+    git(fixture.bundle.repo, "checkout", "-qb", "fictional-unreleased")
+    (fixture.bundle.repo / "ui.txt").write_text("unreleased source branch")
+    git(fixture.bundle.repo, "add", ".")
+    git(fixture.bundle.repo, "commit", "-qm", "Fictional unmerged source")
+    candidate = git(fixture.bundle.repo, "rev-parse", "HEAD")
+    before = fixture.snapshot()
+    with pytest.raises(MODULE.TransitionError, match="git_provenance_unavailable"):
+        if kind == "controller":
+            MODULE.modules(fixture.paths, candidate)
+        else:
+            fixture.args.target_core = candidate
+            fixture.prepare()
+    assert fixture.snapshot() == before
+
+
+def test_checkout_preservation_inspection_never_executes_local_git_filters(fixture):
+    marker = fixture.root / "unexpected-filter-execution"
+    git(fixture.bundle.repo, "config", "filter.fictional.clean", "touch " + str(marker))
+    git(fixture.bundle.repo, "config", "filter.fictional.process", "touch " + str(marker))
+    git(fixture.bundle.repo, "config", "filter.fictional.required", "true")
+    (fixture.bundle.repo / ".gitattributes").write_text("ui.txt filter=fictional\n")
+    (fixture.bundle.repo / "ui.txt").write_text(
+        "Dirty owner UI must be preserved without running a filter"
+    )
+    before = fixture.snapshot()
+    result = MODULE.protected(fixture.paths)
+    assert result["checkouts"]["ui"]["head"] == fixture.source
+    assert fixture.snapshot() == before
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize(
+    "state,pid", [("deactivating", "123"), ("inactive", "123"), ("failed", "0")]
+)
+def test_stop_requires_inactive_state_and_zero_pid_even_when_is_active_is_false(
+    fixture, state, pid
+):
+    fixture.host.property = lambda unit, prop: state if prop == "ActiveState" else pid
+    with pytest.raises(MODULE.TransitionError, match="unit_stop_failed"):
+        MODULE.stop(fixture.host, MODULE.NATIVE)

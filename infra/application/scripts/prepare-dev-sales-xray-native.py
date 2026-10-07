@@ -94,7 +94,6 @@ class Paths:
     backend: Path = BACKEND
     studio: Path = STUDIO
     release_lock: Path = RELEASE_LOCK
-    credentials: Path = Path("/run/credentials")
     proc: Path = Path("/proc")
     owner_uid: int = 0
     owner_gid: int = 0
@@ -138,7 +137,7 @@ def ancestors(path: Path, *, root: bool, owner_uid: int, trusted_root: Path = Pa
 
 def read(path: Path, paths: Paths, *, private: bool = False, root: bool = True) -> File:
     ancestors(path, root=root, owner_uid=paths.owner_uid, trusted_root=paths.trusted_root)
-    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as stream:
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
         info = os.fstat(stream.fileno())
         mode = stat.S_IMODE(info.st_mode)
         require(
@@ -205,21 +204,63 @@ def git(paths: Paths, *argv: str) -> bytes:
     # Git plumbing only; replacement objects and optional index writes are disabled.
     import subprocess
 
+    executable = [
+        "/usr/bin/git",
+        "--no-optional-locks",
+        "--no-replace-objects",
+        "-c",
+        "safe.directory=" + str(paths.studio),
+        "-c",
+        "safe.directory=" + str(paths.backend),
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+    ]
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+    }
+    if "status" in argv:
+        # A UI checkout belongs to acdev. Never execute its configured clean or
+        # process filters (or fsmonitor/hooks) while inspecting it as root.
+        index = argv.index("status")
+        configuration = subprocess.run(  # noqa: S603 - fixed, read-only config query
+            [
+                *executable,
+                *argv[:index],
+                "config",
+                "--local",
+                "--name-only",
+                "--get-regexp",
+                r"^filter\..*\.(clean|process|required)$",
+            ],
+            capture_output=True,
+            check=False,
+            timeout=30,
+            env=environment,
+        )
+        require(configuration.returncode in {0, 1}, "git_filter_inventory_unavailable")
+        require(len(configuration.stdout) <= 64_000, "git_filter_inventory_invalid")
+        for key in configuration.stdout.decode().splitlines():
+            require(
+                bool(
+                    re.fullmatch(
+                        r"filter\.[A-Za-z0-9._-]+\.(?:clean|process|required)", key, re.IGNORECASE
+                    )
+                ),
+                "git_filter_key_invalid",
+            )
+            executable.extend(
+                ["-c", key + ("=false" if key.lower().endswith(".required") else "=")]
+            )
     result = subprocess.run(  # noqa: S603 - validated object IDs and fixed plumbing commands
-        [
-            "/usr/bin/git",
-            "--no-optional-locks",
-            "--no-replace-objects",
-            "-c",
-            "safe.directory=" + str(paths.studio),
-            "-c",
-            "safe.directory=" + str(paths.backend),
-            *argv,
-        ],
+        [*executable, *argv],
         capture_output=True,
         timeout=30,
         check=False,
-        env={"PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"},
+        env=environment,
     )
     require(result.returncode == 0, "git_provenance_unavailable")
     return result.stdout
@@ -260,6 +301,15 @@ def released(paths: Paths, source: str, relative: str) -> tuple[Path, str]:
 
 
 def modules(paths: Paths, source: str) -> tuple[Any, Any, Any]:
+    require(bool(SHA40.fullmatch(source)), "full_source_required")
+    git(
+        paths,
+        "--git-dir=" + str(paths.mirror),
+        "merge-base",
+        "--is-ancestor",
+        source,
+        "refs/heads/main",
+    )
     verified = {}
     for name in CODE:
         verified[name] = released(paths, source, "scripts/" + name)[0]
@@ -444,6 +494,47 @@ class Host:
                 self.property(unit, "FragmentPath") == str(self.paths.units / unit),
                 "runtime_fragment_mismatch",
             )
+            require(self.property(unit, "NeedDaemonReload") == "no", "runtime_reload_required")
+            dropins = {
+                API: str(self.paths.units / (API + ".d/release.conf")),
+                WORKER: str(self.paths.units / (WORKER + ".d/manifest.conf")),
+            }
+            require(
+                self.property(unit, "DropInPaths") == dropins.get(unit, ""),
+                "runtime_dropin_mismatch",
+            )
+            if unit in CLIENTS:
+                credentials = {"approval.json:" + str(self.paths.development / "approval.json")}
+                if unit == API:
+                    credentials |= {
+                        "challenge-secret:" + str(self.paths.development / "challenge-secret"),
+                        "qa-password:" + str(self.paths.development / "qa-password"),
+                    }
+                else:
+                    credentials |= {
+                        "database-url:" + str(self.paths.development / "database-url"),
+                        "service.json:" + str(self.paths.development / "service.json"),
+                    }
+                require(
+                    set(self.property(unit, "LoadCredential").split()) == credentials,
+                    "runtime_credential_source_mismatch",
+                )
+            if unit == NATIVE:
+                for prop, expected in {
+                    "PrivateTmp": "yes",
+                    "RestrictAddressFamilies": "AF_UNIX",
+                    "MemoryMax": "402653184",
+                    "TasksMax": "64",
+                    "UMask": "0077",
+                    "DropInPaths": "",
+                    "SupplementaryGroups": "",
+                }.items():
+                    require(self.property(unit, prop) == expected, "native_sandbox_mismatch")
+                pid = self.property(unit, "MainPID")
+                require(pid.isdecimal() and int(pid) > 1, "native_pid_invalid")
+                require(
+                    (self.paths.proc / pid).stat().st_uid == 0, "native_process_identity_invalid"
+                )
             # Outbox and timer must retain these invocation identities too.
             if unit == OUTBOX:
                 result[unit]["invocation"] = self.property(unit, "InvocationID")
@@ -454,6 +545,65 @@ class Host:
         )
         return result
 
+    def native_binding(self, previous: dict) -> None:
+        command = self.property(NATIVE, "ExecStart")
+        require(
+            all(
+                value in command
+                for value in (
+                    previous["helper_root"] + "/scripts/native_runtime_helper.py",
+                    "--image-ref " + previous["native_image_ref"],
+                    "--socket /run/ac-sales-xray/development/native.sock",
+                    "--peer-uid 10001 --peer-gid 10001",
+                )
+            ),
+            "live_native_binding_mismatch",
+        )
+        require(
+            previous["supervisor_source"] in self.property(NATIVE, "ExecStartPre"),
+            "live_native_renderer_mismatch",
+        )
+        directory = Path("/run/ac-sales-xray/development")
+        for parent in (directory, *directory.parents):
+            info = parent.lstat()
+            require(
+                stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022,
+                "native_socket_parent_invalid",
+            )
+        info = directory.lstat()
+        require(
+            info.st_gid == 10001 and stat.S_IMODE(info.st_mode) == 0o750,
+            "native_socket_parent_invalid",
+        )
+        info = (directory / "native.sock").lstat()
+        require(
+            stat.S_ISSOCK(info.st_mode)
+            and info.st_nlink == 1
+            and info.st_uid == 0
+            and info.st_gid == 10001
+            and stat.S_IMODE(info.st_mode) == 0o660,
+            "native_socket_invalid",
+        )
+
+    def credential(self, unit: str, pid: str, name: str) -> bytes:
+        # Read the process's adopted credential namespace, not a host-side copy.
+        path = self.paths.proc / pid / "root/run/credentials" / unit / name
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+            info = os.fstat(stream.fileno())
+            require(
+                stat.S_ISREG(info.st_mode)
+                and info.st_uid == 0
+                and stat.S_IMODE(info.st_mode) in {0o400, 0o440}
+                and 0 < info.st_size <= 2_000_000,
+                "live_credential_untrusted",
+            )
+            raw = stream.read(2_000_001)
+            require(
+                len(raw) == info.st_size and self.property(unit, "MainPID") == pid,
+                "live_credential_changed",
+            )
+            return raw
+
     def live_bindings(
         self, before: dict[str, File], image: str, approval: str, states: dict
     ) -> None:
@@ -462,8 +612,13 @@ class Host:
                 continue
             pid = self.property(unit, "MainPID")
             require(pid.isdecimal() and int(pid) > 1, "client_pid_invalid")
+            require(
+                (self.paths.proc / pid).stat().st_uid == 10001, "client_process_identity_invalid"
+            )
             # Sensitive process environment is never returned or logged.
-            raw = (self.paths.proc / pid / "environ").read_bytes()
+            with (self.paths.proc / pid / "environ").open("rb") as stream:
+                raw = stream.read(2_000_001)
+            require(len(raw) <= 2_000_000, "process_environment_invalid")
             if unit == API:
                 require(
                     env_value(raw.replace(b"\0", b"\n"), IMAGE_KEY) == image,
@@ -480,14 +635,14 @@ class Host:
                     "live_worker_pin_mismatch",
                 )
                 require(
-                    sha((self.paths.credentials / unit / "service.json").read_bytes())
-                    == sha(before["service"].raw),
+                    sha(self.credential(unit, pid, "service.json")) == sha(before["service"].raw),
                     "live_worker_manifest_mismatch",
                 )
             require(
-                sha((self.paths.credentials / unit / "approval.json").read_bytes()) == approval,
+                sha(self.credential(unit, pid, "approval.json")) == approval,
                 "live_approval_mismatch",
             )
+            require(self.property(unit, "MainPID") == pid, "client_process_changed")
 
     def readiness(self, release: str) -> None:
         result = self.refresh.health(
@@ -514,6 +669,14 @@ def prepare(
         args.previous_receipt_sha256,
     ):
         require(bool(SHA256.fullmatch(digest)), "input_digest_invalid")
+    git(
+        paths,
+        "--git-dir=" + str(paths.mirror),
+        "merge-base",
+        "--is-ancestor",
+        args.target_core,
+        "refs/heads/main",
+    )
     proof_file = read(args.native_reuse_proof, paths)
     require(sha(proof_file.raw) == args.native_reuse_proof_sha256, "reuse_proof_digest_mismatch")
     proof = decoded(proof_file.raw)
@@ -552,11 +715,18 @@ def prepare(
     )
     require(len(compatibility["inputs"]) == 14, "native_input_inventory_changed")
     run = decoded(read(Path(proof["workflow_run"]["path"]), paths).raw)
+    artifact = decoded(read(Path(proof["artifact_metadata"]["path"]), paths).raw)
     require(
         run.get("event") == "push"
         and run.get("head_branch") == "main"
         and type(run.get("run_attempt")) is int
-        and run["run_attempt"] == 1,
+        and run["run_attempt"] == 1
+        and type(run.get("id")) is int
+        and run["id"] > 0
+        and type(run["repository"].get("id")) is int
+        and run["repository"]["id"] > 0
+        and type(artifact.get("id")) is int
+        and artifact["id"] > 0,
         "ordinary_ci_required",
     )
     for field in ("artifact_metadata", "workflow_run"):
@@ -566,6 +736,14 @@ def prepare(
         root=root,
         owner_uid=paths.owner_uid,
         trusted_root=paths.trusted_root,
+    )
+    archive_info = Path(proof["archive_path"]).lstat()
+    require(
+        stat.S_ISREG(archive_info.st_mode)
+        and archive_info.st_nlink == 1
+        and archive_info.st_uid == paths.owner_uid
+        and not archive_info.st_mode & 0o022,
+        "retained_archive_untrusted",
     )
     binding = installer._artifact_binding(
         manifest, args.native_artifact_sha256, require_root=root, canonical_paths=root
@@ -615,6 +793,10 @@ def prepare(
     )
     old_receipt = read(args.previous_receipt, paths)
     require(
+        args.previous_receipt.parent == paths.application / "deployments/development",
+        "predecessor_receipt_path_invalid",
+    )
+    require(
         sha(old_receipt.raw) == args.previous_receipt_sha256, "predecessor_receipt_digest_mismatch"
     )
     receipt = decoded(old_receipt.raw)
@@ -643,6 +825,13 @@ def prepare(
     for name, text in previous["units"].items():
         require(read(paths.units / name, paths).raw == text.encode(), "predecessor_unit_drift")
     installer._readback(host.systemd, tuple(previous["units"]), paths.units, "development")
+    host.native_binding(previous)
+    for name in (API, WORKER, OUTBOX, "ac-dev-sales-xray-refresh.service", TIMER):
+        unit, _ = released(paths, args.source_sha, "development/" + name)
+        require(
+            read(unit, paths).raw == read(paths.units / name, paths).raw,
+            "development_unit_source_mismatch",
+        )
     states = host.inspect()
     protected_before = protected(paths)
     release = read(paths.backend / ".ac-release-id", paths).raw.strip().decode()
@@ -727,7 +916,12 @@ def prepare(
 
 def stop(host: Any, unit: str) -> None:
     host.systemd.stop(unit)
-    require(not host.systemd.is_active(unit), "unit_stop_failed")
+    require(
+        not host.systemd.is_active(unit)
+        and host.property(unit, "ActiveState") == "inactive"
+        and host.property(unit, "MainPID") == "0",
+        "unit_stop_failed",
+    )
 
 
 def restore_clients(host: Any, states: dict) -> None:
@@ -758,6 +952,14 @@ def apply(
     backup.mkdir(mode=0o700)
     os.chmod(backup, 0o700)
     old_units = {name: read(paths.units / name, paths) for name in units}
+    require(
+        all(read(paths.targets()[name], paths) == value for name, value in before.items()),
+        "predecessor_binding_changed",
+    )
+    require(
+        all(value.pin() == plan["native_units_before"][name] for name, value in old_units.items()),
+        "predecessor_unit_changed",
+    )
     for name, value in {**before, **old_units}.items():
         path = backup / name
         path.write_bytes(value.raw)
@@ -801,6 +1003,7 @@ def apply(
         for name in sorted(units, key=lambda n: n.endswith(".service")):
             host.systemd.enable_now(name)
         installer._readback(host.systemd, tuple(units), paths.units, "development")
+        host.native_binding(decoded(after["descriptor"].raw))
         if changed_clients:
             restore_clients(host, plan["states"])
         require(host.inspect() == plan["states"], "runtime_state_changed")
@@ -839,6 +1042,7 @@ def apply(
                 host.systemd.daemon_reload()
                 installer._restore_states(host.systemd, plan["native_states"])
                 installer._readback(host.systemd, tuple(units), paths.units, "development")
+                host.native_binding(decoded(before["descriptor"].raw))
             if changed_clients or published:
                 restore_clients(host, plan["states"])
             require(
@@ -892,9 +1096,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         require(os.geteuid() == 0, "root_required")
         require(
-            args.apply
-            == all(
+            all(
                 v is not None for v in (args.prepared_plan, args.prepared_plan_sha256, args.receipt)
+            )
+            if args.apply
+            else all(
+                v is None for v in (args.prepared_plan, args.prepared_plan_sha256, args.receipt)
             ),
             "apply_arguments_invalid",
         )
@@ -903,6 +1110,10 @@ def main(argv: list[str] | None = None) -> int:
             host = Host(paths, installer, refresh)
             plan, before, after, units = prepare(paths, args, installer, verifier, host)
             if args.apply:
+                require(
+                    args.prepared_plan.parent == paths.descriptor.parent,
+                    "prepared_plan_path_invalid",
+                )
                 saved = read(args.prepared_plan, paths)
                 require(
                     sha(saved.raw) == args.prepared_plan_sha256 and decoded(saved.raw) == plan,
