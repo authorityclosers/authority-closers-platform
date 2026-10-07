@@ -32,6 +32,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--lx-control-compact-h, 32px);
   padding: 4px 10px 4px 6px;
   border: 1px solid var(--lx-line);
   border-radius: 99px;
@@ -238,11 +239,11 @@
 .item {
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: var(--lx-control-h, 36px);
   box-sizing: border-box;
   align-items: center;
   gap: 10px;
-  padding: 0 10px;
+  padding: 6px 10px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -347,8 +348,10 @@
 .themeOption {
   position: relative;
   display: grid;
-  width: 32px;
-  height: 28px;
+  width: var(--lx-control-compact-h, 32px);
+  height: var(--lx-control-compact-h, 32px);
+  min-width: var(--lx-control-compact-h, 32px);
+  min-height: var(--lx-control-compact-h, 32px);
   place-items: center;
   border-radius: 8px;
   color: var(--lx-muted);
@@ -406,5 +409,20 @@
   .themeOption {
     animation: none;
     transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .headerTrigger,
+  .item,
+  .themeRow {
+    min-height: var(--lx-row-min-h, 44px);
+  }
+
+  .themeOption {
+    width: var(--lx-row-min-h, 44px);
+    height: var(--lx-row-min-h, 44px);
+    min-width: var(--lx-row-min-h, 44px);
+    min-height: var(--lx-row-min-h, 44px);
   }
 }
