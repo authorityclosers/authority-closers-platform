@@ -40,6 +40,7 @@ REQUIRED_FILES = (
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/install-sales-xray-startup-recovery.py",
     "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/prepare-dev-sales-xray-native.py",
     "infra/application/scripts/recover-sales-xray-startup.py",
     "infra/application/scripts/restore-drill.py",
     "infra/application/scripts/staging-public-films.py",
