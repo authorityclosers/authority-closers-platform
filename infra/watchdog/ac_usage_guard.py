@@ -40,7 +40,7 @@ CODEX_SESSIONS = (
     Path("/home/acdev/.codex/sessions"),
     Path(f"/home/acdev/.paperclip/instances/default/companies/{COMPANY}/codex-home/sessions"),
 )
-ALERT_ISSUE = "AUT-642"
+ALERT_ISSUE = "AUT-991"
 CEO = "5c491a14-d699-477e-a7a6-4535afa5cd64"
 CLAUDE_DIVERT_AT = 99
 CLAUDE_RETURN_WEEKLY_BELOW = 70
@@ -346,7 +346,7 @@ def alert(text: str) -> None:
     if not isinstance(issue, dict) or not issue.get("id"):
         log(f"alert not posted: {ALERT_ISSUE} not found")
         return
-    body = f"**Claude usage guard (owner's laptop tooling):**\nDecision needed: {text}"
+    body = f"**Usage guard (ac server):**\nDecision needed: {text}"
     api("POST", f"/api/issues/{issue['id']}/comments", {"body": body})
     log(f"alert posted on {ALERT_ISSUE}")
 
@@ -427,7 +427,12 @@ def decide(claude: dict[str, int], codex: dict) -> list[str]:
     elif (current["diverted"] and claude and claude.get("weekly_all", 100) < CLAUDE_RETURN_WEEKLY_BELOW
           and claude.get("session", 100) < CLAUDE_RETURN_SESSION_BELOW):
         steps.append("claude_seats_home")  # 2 Oct: limits reset; the seats must not stay on Sol forever
-    if codex_used is not None and codex_used >= CODEX_ALERT_AT and current["alerted_reset"] != codex.get("resets_at"):
+    reset, alerted_reset = codex.get("resets_at"), current["alerted_reset"]
+    same_window = reset == alerted_reset or (
+        isinstance(reset, (int, float)) and isinstance(alerted_reset, (int, float))
+        and abs(reset - alerted_reset) <= 3600
+    )
+    if codex_used is not None and codex_used >= CODEX_ALERT_AT and not same_window:
         steps.append("alert")
     if not any(step in steps for step in ("claude_seats_to_sol", "codex_seats_to_claude", "flex_home")):
         steps += pace_steps(claude, codex, current)
@@ -466,9 +471,8 @@ def check(apply: bool = True) -> None:
     for step in steps:
         if step == "alert":
             alert(f"Codex weekly usage is at {codex.get('used'):.0f}% (resets {codex.get('resets_at')}). "
-                  f"Owner: use the included Full reset in ChatGPT → Settings → Usage before it reaches "
-                  f"{CODEX_FAILOVER_AT}%. Paid credits are not used: at {CODEX_FAILOVER_AT}% the guard moves "
-                  f"every Codex seat to Claude until Codex resets.")
+                  "Owner: use the included Full reset in ChatGPT → Settings → Usage before it reaches "
+                  "100%. At 100% Codex work pauses until the weekly reset. Paid credits are not used.")
             current["alerted_reset"] = codex.get("resets_at")
         else:
             globals()[step](current, reason)
