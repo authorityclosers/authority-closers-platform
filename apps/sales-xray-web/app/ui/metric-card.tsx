@@ -15,6 +15,15 @@ export interface MetricDeltaData {
   label?: string;
 }
 
+function isMetricDeltaData(delta: unknown): delta is MetricDeltaData {
+  return (
+    typeof delta === "object" &&
+    delta !== null &&
+    "value" in delta &&
+    typeof (delta as { value: unknown }).value === "number"
+  );
+}
+
 export interface MetricCardProps {
   label: ReactNode;
   value: ReactNode;
@@ -54,18 +63,16 @@ export function MetricCard({
 
   const renderDelta = () => {
     if (!delta) return null;
-    if (
-      typeof delta === "object" &&
-      delta !== null &&
-      "value" in delta &&
-      typeof (delta as MetricDeltaData).value === "number"
-    ) {
-      const d = delta as MetricDeltaData;
+    if (isMetricDeltaData(delta)) {
       return (
-        <MetricDelta value={d.value} previous={d.previous} label={d.label} />
+        <MetricDelta
+          value={delta.value}
+          previous={delta.previous}
+          label={delta.label}
+        />
       );
     }
-    return <span className={styles.deltaWrapper}>{delta}</span>;
+    return <span className={styles.deltaWrapper}>{delta as ReactNode}</span>;
   };
 
   const content = (
