@@ -97,6 +97,50 @@ class ProspectStore:
             )
         ).all()
 
+    async def edit_name(
+        self, actor: ActorContext, prospect_id: UUID, *, display_name: str, expected_revision: int
+    ) -> ConversationProspect:
+        if (
+            not isinstance(display_name, str)
+            or not 1 <= len(display_name) <= 160
+            or not display_name.strip()
+            or type(expected_revision) is not int
+            or expected_revision < 1
+        ):
+            raise ConversationError("Supply a valid prospect name and revision.")
+        query = (await self.queries(actor)).prospects
+        row = await self.database.scalar(
+            query.where(
+                ConversationProspect.id == prospect_id,
+                ConversationProspect.owner_person_id == actor.person_id,
+            )
+            .with_for_update(of=ConversationProspect)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise ConversationNotFound("This prospect is unavailable.")
+        if row.revision != expected_revision:
+            raise ConversationConflict("The prospect changed. Reload before saving again.")
+        name = display_name.strip()
+        if row.display_name == name:
+            return row
+        previous_revision = row.revision
+        now = utc(self.ownership.clock())
+        row.display_name, row.revision, row.updated_at = name, previous_revision + 1, now
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "name_changed",
+            {
+                "field": "display_name",
+                "previous_revision": str(previous_revision),
+                "current_revision": str(row.revision),
+            },
+            now,
+        )
+        return row
+
     async def _write_scope(
         self, actor: ActorContext, submission_id: UUID, *, read_only: bool = False
     ) -> SubmissionScope:
