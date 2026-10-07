@@ -800,6 +800,66 @@ def event(directory: Path, status: str, report: dict, paths: Paths) -> None:
     )
 
 
+def private_directory(path: Path, paths: Paths, *, create=False, history=False) -> dict:
+    """Normalize only new directories or the exact empty setgid history residue."""
+    ancestors(path, paths)
+    created = False
+    fd = None
+    try:
+        if create:
+            try:
+                path.mkdir(mode=0o700)
+                created = True
+            except FileExistsError:
+                if not history:
+                    raise ResealError("history_untrusted") from None
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(fd)
+        mode = stat.S_IMODE(info.st_mode)
+        if info.st_uid != paths.owner_uid or mode not in (0o700, 0o2700) or os.listxattr(fd):
+            raise ResealError("history_untrusted")
+        if mode == 0o2700:
+            parent = path.parent.lstat()
+            if (
+                not create
+                or not parent.st_mode & stat.S_ISGID
+                or (not created and stat.S_IMODE(parent.st_mode) != 0o2700)
+                or parent.st_gid != info.st_gid
+                or os.listdir(fd)
+            ):
+                raise ResealError("history_untrusted")
+            # The opened directory is already owner-only; never add group access.
+            os.fchmod(fd, 0o700)
+        final = os.fstat(fd)
+        named = path.lstat()
+        if (
+            final.st_uid != paths.owner_uid
+            or stat.S_IMODE(final.st_mode) != 0o700
+            or os.listxattr(fd)
+            or (named.st_dev, named.st_ino) != (final.st_dev, final.st_ino)
+        ):
+            raise ResealError("history_untrusted")
+        if create:
+            os.fsync(fd)
+            parent_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        return {
+            "created": created,
+            "mode_before": mode,
+            "mode": 0o700,
+            "uid": final.st_uid,
+            "gid": final.st_gid,
+        }
+    except OSError:
+        raise ResealError("history_untrusted") from None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
 def save(
     paths: Paths,
     pins: Pins,
@@ -809,19 +869,10 @@ def save(
     states: dict,
     commands: Commands,
 ) -> tuple[str, Path]:
-    ancestors(paths.history, paths)
-    if not paths.history.exists():
-        paths.history.mkdir(mode=0o700)
-    info = paths.history.lstat()
-    if (
-        not stat.S_ISDIR(info.st_mode)
-        or info.st_uid != paths.owner_uid
-        or stat.S_IMODE(info.st_mode) != 0o700
-    ):
-        raise ResealError("history_untrusted")
+    history = private_directory(paths.history, paths, create=True, history=True)
     run_id = str(uuid.uuid4())
     directory = paths.history / run_id
-    directory.mkdir(mode=0o700)
+    run_directory = private_directory(directory, paths, create=True)
     for name, value in files.items():
         write(directory / (name + ".before"), File(value.raw, 0o600, paths.owner_uid, os.getegid()))
     plan = {
@@ -831,6 +882,7 @@ def save(
         "after": {name: value.metadata() for name, value in after.items()},
         "guards": {name: value.metadata() for name, value in guards.items()},
         "units_before": states,
+        "audit_directories": {"history": history, "run": run_directory},
     }
     write(
         directory / "plan.json", File(encoded(plan) + b"\n", 0o600, paths.owner_uid, os.getegid())
@@ -930,6 +982,8 @@ def rollback(
     commands = Commands(runner)
     with audit_errors(pins, commands), deployment_lock(paths):
         directory = paths.history / run_id
+        private_directory(paths.history, paths)
+        private_directory(directory, paths)
         plan = decoded(read(directory / "plan.json", paths).raw)
         if (
             plan.get("schema") != "ac.dev-approval-reseal/1"
