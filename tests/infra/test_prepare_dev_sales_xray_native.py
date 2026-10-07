@@ -4,8 +4,10 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import sys
 import tarfile
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -952,20 +954,109 @@ def test_unreleased_branch_source_is_refused_before_release_or_runtime_reads(fix
     assert fixture.snapshot() == before
 
 
-def test_checkout_preservation_inspection_never_executes_local_git_filters(fixture):
+@pytest.fixture
+def studio(fixture):
+    path = fixture.root / "studio"
+    path.mkdir()
+    git(path, "init", "--quiet", "-b", "task/ui/fictional")
+    git(path, "config", "user.name", "Fictional studio")
+    git(path, "config", "user.email", "studio@example.invalid")
+    (path / "ui.txt").write_text("Owner UI content\n")
+    git(path, "add", ".")
+    git(path, "commit", "-qm", "Fictional owner UI")
+    return path
+
+
+@pytest.mark.parametrize("configuration", ["local", "include.path", "includeIf"])
+def test_checkout_preservation_inspection_never_executes_git_filters(
+    fixture, studio, monkeypatch, configuration
+):
+    if os.geteuid() == 0:
+        pytest.skip("The exploit control must execute only as an unprivileged test user")
     marker = fixture.root / "unexpected-filter-execution"
-    git(fixture.bundle.repo, "config", "filter.fictional.clean", "touch " + str(marker))
-    git(fixture.bundle.repo, "config", "filter.fictional.process", "touch " + str(marker))
-    git(fixture.bundle.repo, "config", "filter.fictional.required", "true")
-    (fixture.bundle.repo / ".gitattributes").write_text("ui.txt filter=fictional\n")
-    (fixture.bundle.repo / "ui.txt").write_text(
-        "Dirty owner UI must be preserved without running a filter"
-    )
+    command = "touch " + shlex.quote(str(marker))
+    if configuration == "local":
+        git(studio, "config", "filter.fictional.clean", command)
+    else:
+        included = studio / ".git/filter-test.inc"
+        git(studio, "config", "--file", str(included), "filter.fictional.clean", command)
+        key = (
+            "include.path"
+            if configuration == "include.path"
+            else "includeIf.gitdir:" + str(studio / ".git") + ".path"
+        )
+        git(studio, "config", key, str(included))
+        # Demonstrate why the previous --local inventory missed this filter.
+        assert "filter.fictional.clean" not in git(studio, "config", "--local", "--list")
+    (studio / ".gitattributes").write_text("ui.txt filter=fictional\n")
+    # Keep the tracked size equal so status compares content through the filter.
+    (studio / "ui.txt").write_text("Dirty UI content\n")
+    head = git(studio, "rev-parse", "HEAD")
+    # Positive control: ordinary Git status really executes the included command.
+    git(studio, "status", "--porcelain=v1", "--untracked-files=all")
+    assert marker.exists()
+    marker.unlink()
+
+    original = MODULE.git
+
+    def trusted_git(paths, *argv):
+        assert argv[:2] != ("-C", str(studio)), "UI inspection must never run Git"
+        return original(paths, *argv)
+
+    monkeypatch.setattr(MODULE, "git", trusted_git)
     before = fixture.snapshot()
-    result = MODULE.protected(fixture.paths)
-    assert result["checkouts"]["ui"]["head"] == fixture.source
+    result = MODULE.protected(replace(fixture.paths, studio=studio))
+    assert result["checkouts"]["ui"] == {"head": head, "branch": "task/ui/fictional"}
     assert fixture.snapshot() == before
     assert not marker.exists()
+
+
+@pytest.mark.parametrize("kind", ["loose", "packed", "detached"])
+def test_ui_refs_pin_head_and_branch_without_git(fixture, studio, monkeypatch, kind):
+    head = git(studio, "rev-parse", "HEAD")
+    if kind == "packed":
+        git(studio, "pack-refs", "--all")
+        assert not (studio / ".git/refs/heads/task/ui/fictional").exists()
+    elif kind == "detached":
+        git(studio, "checkout", "--detach", head)
+
+    def no_git(*args, **kwargs):
+        pytest.fail("Reading owner UI refs must not spawn a process")
+
+    monkeypatch.setattr("subprocess.run", no_git)
+    assert MODULE.studio_refs(studio) == {
+        "head": head,
+        "branch": "" if kind == "detached" else "task/ui/fictional",
+    }
+
+
+@pytest.mark.parametrize("component", ["HEAD", "refs/heads/task/ui/fictional", "refs/heads"])
+def test_ui_refs_refuse_symlink_files_and_directories(fixture, studio, component):
+    path = studio / ".git" / component
+    if path.is_dir():
+        path.rename(path.with_name("heads-original"))
+        path.symlink_to(path.with_name("heads-original"), target_is_directory=True)
+    else:
+        path.unlink()
+        path.symlink_to(fixture.bundle.repo / ".git/HEAD")
+    with pytest.raises(OSError):
+        MODULE.studio_refs(studio)
+
+
+@pytest.mark.parametrize("head", ["ref: refs/heads/../../config\n", "ref: refs/tags/ui\n", "bad\n"])
+def test_ui_refs_refuse_invalid_heads(studio, head):
+    (studio / ".git/HEAD").write_text(head)
+    with pytest.raises(MODULE.TransitionError, match="ui_(branch|head)_invalid"):
+        MODULE.studio_refs(studio)
+
+
+def test_git_refuses_owner_ui_checkout(fixture, studio, monkeypatch):
+    def no_git(*args, **kwargs):
+        pytest.fail("An untrusted checkout must be rejected before starting Git")
+
+    monkeypatch.setattr("subprocess.run", no_git)
+    with pytest.raises(MODULE.TransitionError, match="git_checkout_not_trusted"):
+        MODULE.git(replace(fixture.paths, studio=studio), "-C", str(studio), "status")
 
 
 @pytest.mark.parametrize(

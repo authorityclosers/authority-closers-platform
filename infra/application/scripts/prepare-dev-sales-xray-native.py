@@ -204,12 +204,18 @@ def git(paths: Paths, *argv: str) -> bytes:
     # Git plumbing only; replacement objects and optional index writes are disabled.
     import subprocess
 
+    if "-C" in argv:
+        require(argv[:2] == ("-C", str(paths.backend)), "git_checkout_not_trusted")
+        ancestors(
+            paths.backend / ".git/_",
+            root=True,
+            owner_uid=paths.owner_uid,
+            trusted_root=paths.trusted_root,
+        )
     executable = [
         "/usr/bin/git",
         "--no-optional-locks",
         "--no-replace-objects",
-        "-c",
-        "safe.directory=" + str(paths.studio),
         "-c",
         "safe.directory=" + str(paths.backend),
         "-c",
@@ -223,8 +229,8 @@ def git(paths: Paths, *argv: str) -> bytes:
         "GIT_CONFIG_GLOBAL": "/dev/null",
     }
     if "status" in argv:
-        # A UI checkout belongs to acdev. Never execute its configured clean or
-        # process filters (or fsmonitor/hooks) while inspecting it as root.
+        # Defense in depth for the trusted, root-owned backend checkout only.
+        # Never invoke Git against the owner-writable UI checkout.
         index = argv.index("status")
         configuration = subprocess.run(  # noqa: S603 - fixed, read-only config query
             [
@@ -264,6 +270,55 @@ def git(paths: Paths, *argv: str) -> bytes:
     )
     require(result.returncode == 0, "git_provenance_unavailable")
     return result.stdout
+
+
+def studio_refs(path: Path) -> dict:
+    """Read UI HEAD/branch as data; never load its config, index or attributes."""
+    with contextlib.ExitStack() as stack:
+        directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        stack.callback(os.close, directory)
+
+        def contents(*parts: str) -> bytes:
+            parent = directory
+            for part in (".git", *parts[:-1]):
+                parent = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                stack.callback(os.close, parent)
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                require(
+                    stat.S_ISREG(info.st_mode) and 0 < info.st_size <= 2_000_000,
+                    "ui_ref_file_invalid",
+                )
+                raw = stream.read(2_000_001)
+                require(len(raw) == info.st_size, "ui_ref_changed")
+                return raw
+
+        original = contents("HEAD")
+        head = original.decode().strip()
+        branch = ""
+        if head.startswith("ref: "):
+            reference = head.removeprefix("ref: ")
+            parts = reference.split("/")
+            require(
+                bool(re.fullmatch(r"refs/heads/[A-Za-z0-9._/-]+", reference))
+                and all(part not in {"", ".", ".."} for part in parts),
+                "ui_branch_invalid",
+            )
+            branch = reference.removeprefix("refs/heads/")
+            try:
+                head = contents(*parts).decode().strip()
+            except FileNotFoundError:
+                matches = [
+                    line.split(" ", 1)[0]
+                    for line in contents("packed-refs").decode().splitlines()
+                    if line.endswith(" " + reference)
+                ]
+                require(len(matches) == 1, "ui_packed_ref_invalid")
+                head = matches[0]
+        require(bool(SHA40.fullmatch(head)), "ui_head_invalid")
+        require(contents("HEAD") == original, "ui_ref_changed")
+        return {"head": head, "branch": branch}
 
 
 def blob(paths: Paths, source: str, relative: str) -> tuple[bytes, bytes]:
@@ -445,15 +500,25 @@ def protected(paths: Paths) -> dict:
         path = paths.application / name
         require(path.is_symlink(), "core_pointer_invalid")
         links[name] = os.readlink(path)
-    checkouts = {}
-    for name, path in (("backend", paths.backend), ("ui", paths.studio)):
-        checkouts[name] = {
-            "head": git(paths, "-C", str(path), "rev-parse", "HEAD").decode().strip(),
-            "branch": git(paths, "-C", str(path), "branch", "--show-current").decode().strip(),
+    checkouts = {
+        "ui": studio_refs(paths.studio),
+        "backend": {
+            "head": git(paths, "-C", str(paths.backend), "rev-parse", "HEAD").decode().strip(),
+            "branch": git(paths, "-C", str(paths.backend), "branch", "--show-current")
+            .decode()
+            .strip(),
             "status_sha256": sha(
-                git(paths, "-C", str(path), "status", "--porcelain=v1", "--untracked-files=all")
+                git(
+                    paths,
+                    "-C",
+                    str(paths.backend),
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=all",
+                )
             ),
-        }
+        },
+    }
     return {"files": files, "links": links, "checkouts": checkouts}
 
 

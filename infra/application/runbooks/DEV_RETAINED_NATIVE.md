@@ -46,6 +46,15 @@ The historical receipt is provenance, **not** the current rollback snapshot.
 Each preparation independently pins current unit, descriptor, client and
 protected file bytes/metadata and current runtime states.
 
+UI checkout inspection reads only HEAD and its loose or packed branch ref as
+data, without running Git or loading checkout config, attributes, filters or
+the index. It pins HEAD/branch; it does not inspect or hash dirty UI files.
+The backend checkout remains root-owned and retains its Git status pin.
+Keep the `ui` lane quiet from preparation through apply and rollback checks:
+a UI commit or branch switch invalidates the plan or triggers rollback.
+The operator never writes the UI checkout. Studio saves without a commit or
+branch switch do not affect this ref pin.
+
 ## Dry-run and preparation
 
 Root verifies C and its immutable script hashes against the final source
