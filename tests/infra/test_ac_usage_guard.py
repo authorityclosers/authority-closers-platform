@@ -1,8 +1,7 @@
-"""Offline coverage for the usage guard's previously failing token-refresh branch."""
+"""Offline usage-guard coverage; only fictional state and mocked dependencies."""
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -15,31 +14,94 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "infra/watchdog/ac_usage_guard.py"
-EXPORT_SHA256 = "d9a6eab0ad5618ed087b4bf92c5d4b29aed3821f740a5b5f8640b39e6aeebb0f"
 
 
-@pytest.fixture
-def guard(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("Live usage-guard dependency called")
-
-    monkeypatch.setattr(subprocess, "run", forbidden)
-    monkeypatch.setattr(urllib.request, "urlopen", forbidden)
-    monkeypatch.setattr(Path, "read_text", forbidden)
+def load_guard():
     spec = importlib.util.spec_from_file_location("offline_ac_usage_guard", SOURCE)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def guard(monkeypatch, tmp_path):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Live usage-guard dependency called")
+
+    state_path = tmp_path / "state.json"
+    read_text = Path.read_text
+
+    def fixture_read(path, *args, **kwargs):
+        if path != state_path:
+            forbidden()
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(urllib.request, "urlopen", forbidden)
+    monkeypatch.setattr(Path, "read_text", fixture_read)
+    module = load_guard()
+    monkeypatch.setattr(module, "STATE", state_path)
     monkeypatch.setattr(module, "time", SimpleNamespace(time=lambda: 10_000.0))
     monkeypatch.setattr(module, "log", Mock())
     return module
 
 
-def test_source_changes_only_the_missing_subprocess_import():
-    source = SOURCE.read_bytes()
-    assert source.count(b"import subprocess\n") == 1
-    original = source.replace(b"import subprocess\n", b"", 1)
-    assert hashlib.sha256(original).hexdigest() == EXPORT_SHA256
+def test_existing_model_policy_is_preserved(guard):
+    assert guard.CODEX_FAILOVER_AT == 1000
+    assert guard.CODEX_ALERT_AT == 90
+    assert guard.SOL_MODEL == "gpt-6.1-sol"
+    assert guard.CLAUDE_MODEL == "claude-opus-5-5"
+
+
+def test_alert_deduplicates_jitter_after_restart_and_posts_on_new_window(guard, monkeypatch):
+    monkeypatch.setattr(guard, "keep_token_fresh", Mock())
+    monkeypatch.setattr(guard, "claude_usage_cached", Mock(return_value={}))
+    monkeypatch.setattr(guard, "codex_usage", Mock())
+    monkeypatch.setattr(guard, "api", Mock(return_value={"id": "fictional-issue"}))
+    guard.save({"unrelated": {"preserved": True}})
+
+    def poll(module, resets):
+        module.codex_usage.side_effect = [{"used": 90, "resets_at": reset} for reset in resets]
+        for _ in resets:
+            module.check()
+        return [c.args[2]["body"] for c in module.api.call_args_list if c.args[0] == "POST"]
+
+    alerts = poll(guard, [1791581522, 1791581522, 1791581523, 1791581522, 1791581523])
+    assert len(alerts) == 1
+    assert guard.state()["alerted_reset"] == 1791581522
+    reloaded = load_guard()
+    for name in (
+        "STATE",
+        "time",
+        "log",
+        "keep_token_fresh",
+        "claude_usage_cached",
+        "codex_usage",
+        "api",
+    ):
+        monkeypatch.setattr(reloaded, name, getattr(guard, name))
+    assert len(poll(reloaded, [1791581523, 1791581522])) == 1
+    alerts = poll(reloaded, [1792186322, 1792186322])
+    assert len(alerts) == 2
+    assert reloaded.state()["alerted_reset"] == 1792186322
+    assert reloaded.state()["unrelated"] == {"preserved": True}
+    assert reloaded.ALERT_ISSUE == "AUT-991"
+    guard.api.assert_any_call("GET", "/api/issues/AUT-991")
+    for text in alerts:
+        assert "Usage guard (ac server):" in text
+        assert "100% Codex work pauses until the weekly reset" in text
+        assert "Paid credits are not used" in text
+        assert "1000%" not in text
+        assert "laptop" not in text
+
+
+@pytest.mark.parametrize("delta", [-3601, -3600, -1, 0, 1, 3600, 3601])
+@pytest.mark.parametrize("used", [89, 90])
+def test_alert_window_tolerance_and_threshold(guard, delta, used):
+    guard.save({"alerted_reset": 1791581522})
+    steps = guard.decide({}, {"used": used, "resets_at": 1791581522 + delta})
+    assert ("alert" in steps) == (used >= 90 and abs(delta) > 3600)
 
 
 @pytest.mark.parametrize("returncode", [0, 1])
