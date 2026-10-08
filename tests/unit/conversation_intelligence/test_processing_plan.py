@@ -664,3 +664,56 @@ def test_changed_saved_scope_cannot_become_authority(alteration: str) -> None:
         row.erased_at = datetime.now(UTC)
     with pytest.raises(ConversationDenied):
         manifest_for(row)
+
+
+def test_initial_failed_and_repair_runs_keep_prepared_provenance():
+    from copy import deepcopy
+    from dataclasses import replace
+
+    from ac_platform.conversation_intelligence.models import ConversationInferenceTask
+    from ac_platform.conversation_intelligence.reporting_pipeline import (
+        C5RepairIntent,
+        StagePlan,
+        StageRequest,
+        repair_coaching_input,
+    )
+    from tests.unit.conversation_intelligence.test_inference_tasks import _provenance_input
+
+    prepared = _provenance_input(coaching_prompt_revision="coaching-v3")
+    request = StageRequest(
+        stage="C5",
+        transcript_checkpoint_id=uuid4(),
+        fact_checkpoint_ids=(uuid4(),),
+        coaching_prompt_revision="coaching-v3",
+    )
+    checkpoint = Mock(revision=COACHING_RECIPE)
+    checkpoint.as_dict.return_value = {"stage": "C5", "revision": COACHING_RECIPE}
+    plan = StagePlan(prepared, checkpoint, 1000, request, {}, {}, None)
+    original = ConversationInferenceTask(run_id=uuid4(), state="queued", intent=plan.intent())
+    before = deepcopy(original.intent)
+    original.state = "uncertain"
+    repair = C5RepairIntent(
+        failure_code="conversation_report_payload_missing_field",
+        original_run_id=original.run_id,
+        original_response_sha256="b" * 64,
+    )
+    repaired = repair_coaching_input(prepared, repair)
+    retry = ConversationInferenceTask(
+        run_id=uuid4(),
+        state="queued",
+        intent=replace(
+            plan, prepared=repaired, request=request.model_copy(update={"repair": repair})
+        ).intent(),
+    )
+    assert original.run_id != retry.run_id
+    assert original.intent == before
+    assert retry.intent["input"]["prompt_provenance"] == before["input"]["prompt_provenance"]
+    assert retry.intent["input"]["payload_sha256"] != before["input"]["payload_sha256"]
+    assert type(prepared).from_dict(retry.intent["input"], payload=repaired.payload) == repaired
+    historical = deepcopy(before)
+    historical["input"].pop("prompt_provenance")
+    assert (
+        type(prepared).from_dict(historical["input"], payload=prepared.payload).prompt_provenance
+        is None
+    )
+    assert historical["checkpoint"]["revision"] == "qualitative-coaching-v1"
