@@ -36,6 +36,8 @@ class ConversationProspect(Base):
         UniqueConstraint("tenant_id", "id", name="uq_prospect_tenant_id"),
         _member_fk("created_by_person_id"),
         _member_fk("owner_person_id"),
+        _member_fk("confirmed_by_person_id"),
+        CheckConstraint("origin IN ('person', 'detected')", name="origin_supported"),
         CheckConstraint("revision >= 1", name="positive_revision"),
         CheckConstraint("length(trim(display_name)) BETWEEN 1 AND 160", name="name_bounds"),
         Index("ix_prospect_created", "tenant_id", "created_at", "id"),
@@ -50,6 +52,9 @@ class ConversationProspect(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revision: Mapped[int] = mapped_column(Integer)
+    origin: Mapped[str] = mapped_column(String(16), default="person", server_default="person")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by_person_id: Mapped[UUID | None] = mapped_column(Uuid)
 
 
 class ConversationProspectMembership(Base):
@@ -70,6 +75,7 @@ class ConversationProspectMembership(Base):
         ),
         _member_fk("linked_by_person_id"),
         _member_fk("ended_by_person_id"),
+        CheckConstraint("link_kind IN ('person', 'detected')", name="link_kind_supported"),
         CheckConstraint(
             "(ended_at IS NULL AND ended_reason IS NULL AND ended_by_person_id IS NULL) OR "
             "(ended_at IS NOT NULL AND ended_at >= created_at AND ended_reason IS NOT NULL AND "
@@ -98,3 +104,67 @@ class ConversationProspectMembership(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_reason: Mapped[str | None] = mapped_column(String(32))
     ended_by_person_id: Mapped[UUID | None] = mapped_column(Uuid)
+    link_kind: Mapped[str] = mapped_column(String(16), default="person", server_default="person")
+
+
+class ConversationProspectFieldRevision(Base):
+    __tablename__ = "conversation_prospect_field_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "entity_id", "field_key", "id", name="uq_prospect_field_identity"
+        ),
+        UniqueConstraint(
+            "tenant_id", "entity_id", "field_key", "revision", name="uq_prospect_field_revision"
+        ),
+        CheckConstraint("revision >= 1", name="positive_revision"),
+        ForeignKeyConstraint(
+            ["tenant_id", "entity_id"],
+            ["conversation_prospects.tenant_id", "conversation_prospects.id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "submission_id"],
+            [
+                "conversation_guest_submissions.tenant_id",
+                "conversation_guest_submissions.submission_id",
+            ],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "entity_id", "field_key", "supersedes_id"],
+            [
+                "conversation_prospect_field_revisions.tenant_id",
+                "conversation_prospect_field_revisions.entity_id",
+                "conversation_prospect_field_revisions.field_key",
+                "conversation_prospect_field_revisions.id",
+            ],
+            ondelete="RESTRICT",
+        ),
+        _member_fk("created_by_person_id"),
+        CheckConstraint("entity = 'prospect'", name="entity_supported"),
+        CheckConstraint(
+            "field_key IN ('name', 'business', 'industry', 'city', 'role', 'team_size', 'turnover', 'main_pain', 'budget', 'timeline', 'decision_maker', 'next_step', 'phone', 'email')",
+            name="field_supported",
+        ),
+        CheckConstraint(
+            "(basis = 'person' AND state = 'confirmed' AND created_by_person_id IS NOT NULL AND submission_id IS NULL AND evidence IS NULL AND extractor_revision IS NULL) OR (basis = 'heard_in_call' AND state = 'detected' AND created_by_person_id IS NULL AND submission_id IS NOT NULL AND evidence IS NOT NULL AND extractor_revision IS NOT NULL AND field_key NOT IN ('phone', 'email'))",
+            name="field_origin_shape",
+        ),
+        Index("ix_prospect_field_read", "tenant_id", "entity_id", "field_key", "created_at", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    entity: Mapped[str] = mapped_column(String(16), default="prospect", server_default="prospect")
+    entity_id: Mapped[UUID] = mapped_column(Uuid)
+    field_key: Mapped[str] = mapped_column(String(32))
+    revision: Mapped[int] = mapped_column(Integer)
+    value: Mapped[dict[str, object]] = mapped_column(JSON)
+    basis: Mapped[str] = mapped_column(String(16))
+    state: Mapped[str] = mapped_column(String(16))
+    extractor_revision: Mapped[str | None] = mapped_column(String(160))
+    submission_id: Mapped[UUID | None] = mapped_column(Uuid)
+    evidence: Mapped[dict[str, object] | None] = mapped_column(JSON(none_as_null=True))
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    supersedes_id: Mapped[UUID | None] = mapped_column(Uuid)
