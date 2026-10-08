@@ -31,3 +31,4 @@ Business-rule changes must also propagate to the controlled Drive layer.
 - 0053 — [GST and immutable tax invoices](0053-gst-and-tax-invoices.md)
 - 0054 — [Product updates and notifications](0054-product-updates-and-notifications.md)
 - 0055 — [Companion device credentials — amends ADR 0027](0055-companion-device-credentials.md)
+- 0056 — [Call capture ingest — amends ADR 0055 §7 and ADR 0042](0056-call-capture-ingest.md)

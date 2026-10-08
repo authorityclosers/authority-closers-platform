@@ -150,6 +150,8 @@ session authorization or approve any plan, consent setting or credit spend.
 
 ### 7. Capture provenance without inventing historical evidence
 
+Amended by [ADR 0056](0056-call-capture-ingest.md) for the `capture_source` list and `hardware` device platform.
+
 Every new submission records `capture_source`. For native source PUT, validate
 the required `X-Capture-Source` and persist its enum value alongside the submission.
 Web upload and browser capture paths also record their applicable value.
