@@ -186,7 +186,7 @@ export function AcquisitionFileStage({
           ref={input}
           className={styles.fileInput}
           type="file"
-          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
           multiple
           tabIndex={-1}
           aria-hidden="true"

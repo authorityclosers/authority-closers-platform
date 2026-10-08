@@ -55,7 +55,7 @@ _RAW_ROW = struct.Struct("<18d")
 _ROW = struct.Struct("<IBHHB14f")
 _HEADER = struct.Struct("<8sIIQIIQ")
 _MAGIC = b"ACAAF001"
-_FORMATS = "wav,mp3,mov,matroska,webm,ogg,flac,aac,aiff"
+_FORMATS = "wav,mp3,mov,matroska,webm,ogg,flac,aac,aiff,amr"
 
 
 class SignalError(ValueError):
@@ -95,7 +95,19 @@ def _run_bounded(
     """
     safe_environment = {
         name: os.environ[name]
-        for name in ("PATH", "SystemRoot", "WINDIR", "TEMP", "TMP", "INCLUDE", "LIB", "LIBPATH")
+        for name in (
+            "PATH",
+            "SystemRoot",
+            "WINDIR",
+            "TEMP",
+            "TMP",
+            "INCLUDE",
+            "LIB",
+            "LIBPATH",
+            # The slot guard verifies this marker against a live ancestor.
+            # Retain it so a decoder nested under guarded pytest cannot deadlock.
+            "AC_HEAVY_GUARDIAN",
+        )
         if name in os.environ
     }
     try:
