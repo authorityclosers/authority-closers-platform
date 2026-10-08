@@ -35,6 +35,7 @@ class FakeHost:
         self.images = {TAG: (NEW_ID, NEW), NEW_ID: (NEW_ID, NEW), OLD_ID: (OLD_ID, OLD)}
         self.live = (OLD_ID, OLD)
         self.healthy = healthy
+        self.lightweight_healthcheck = False
         app = root / "srv/authority-closers/application"
         release = app / "releases" / NEW
         release.mkdir(parents=True)
@@ -63,7 +64,8 @@ class FakeHost:
             return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603
         if argv[:3] == ["docker", "image", "inspect"]:
             found = self.images.get(argv[-1])
-            return done(0, f"{found[0]}|{found[1]}\n") if found else done(1)
+            label = "1" if self.lightweight_healthcheck else ""
+            return done(0, f"{found[0]}|{found[1]}|{label}\n") if found else done(1)
         if argv[:2] == ["docker", "inspect"]:
             health = "healthy" if self.healthy else "unhealthy"
             image, revision = self.live
@@ -131,6 +133,21 @@ def test_apply_serves_release_image_and_writes_receipt(host):
     up = mutations(host)[0]
     assert up[-1] == "admin-web" and "--no-deps" in up and up[-4:-2] == ["--pull", "never"]
     assert not any(c[:2] == ["docker", "pull"] or "build" in c[:3] for c in host.calls)
+    assert "healthcheck:" not in override  # Older images keep their existing probe.
+
+
+def test_new_image_adopts_lightweight_probe_and_rollback_restores_previous_override(host):
+    previous = f"services:\n  admin-web:\n    image: {OLD_ID}\n"
+    host.at(deploy.OVERRIDE).write_text(previous)
+    host.lightweight_healthcheck = True
+    code, out = run(host, "deploy", "--require-ancestor", MERGE, "--apply")
+    assert code == 0 and out["applied"] is True
+    override = host.at(deploy.OVERRIDE).read_text()
+    assert "/usr/local/bin/ac-http-healthcheck, http://127.0.0.1:3001/healthz" in override
+    assert "interval: 30s" in override and "start_period: 30s" in override
+    code, out = run(host, "rollback", "--apply")
+    assert code == 0 and out["applied"] is True
+    assert host.at(deploy.OVERRIDE).read_text() == previous
 
 
 @pytest.mark.parametrize(

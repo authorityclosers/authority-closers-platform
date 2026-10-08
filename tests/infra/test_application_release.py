@@ -1056,7 +1056,10 @@ def test_api_and_admin_adapter_use_canonical_trusted_internal_dns() -> None:
     internal_api_host = "${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}"
 
     assert "http://127.0.0.1:8000/health/ready" in COMPOSE
-    assert "headers={'Host': os.environ['AC_API_HOST']}" in COMPOSE
+    assert "- api\n      interval: 30s" in api_service
+    assert '--header "Host: ${AC_API_HOST:?AC_API_HOST is required}"' in (
+        ROOT / "infra" / "sales-xray-web" / "http-check.sh"
+    ).read_text(encoding="utf-8")
     assert f"app:\n        aliases:\n          - {internal_api_host}" in api_service
     assert f'AC_INTERNAL_API_URL: "http://{internal_api_host}:8000"' in admin_service
     assert f"AC_INTERNAL_API_HOST: {internal_api_host}" in admin_service
