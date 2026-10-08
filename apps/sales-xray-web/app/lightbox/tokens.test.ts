@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Window } from "happy-dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, "..");
@@ -166,6 +167,18 @@ describe("Lightbox token derivative", () => {
       "glow-ink",
       "film-lens-outline",
       "film-lens-fill",
+      "control-compact-h",
+      "control-h",
+      "table-head-h",
+      "row-min-h",
+      "panel-head-min-h",
+      "tile-min-h",
+      "density-control-compact",
+      "density-control",
+      "density-table-head",
+      "density-row-min",
+      "density-panel-head",
+      "density-tile-min",
     ]);
     const addedDark = new Set([
       "on-teal",
@@ -304,5 +317,241 @@ describe("Lightbox token derivative", () => {
       )
       .map((path) => relative(appDir, path));
     expect(offenders).toEqual([]);
+  });
+
+  describe("Scoped Pulse-role to Sales Xray teal adapter (AUT-1451 card 2)", () => {
+    const pulseTokensPath = join(appDir, "ui", "pulse-tokens.css");
+    const pulseTokensCss = readFileSync(pulseTokensPath, "utf8");
+
+    it("declares all 20 Pulse semantic roles in ui/pulse-tokens.css", () => {
+      const pulseRoles = [
+        "canvas",
+        "surface",
+        "surface-subtle",
+        "text",
+        "text-muted",
+        "border",
+        "border-strong",
+        "action",
+        "action-hover",
+        "action-text",
+        "focus",
+        "brand-2",
+        "info",
+        "success",
+        "warning",
+        "danger",
+        "disabled-surface",
+        "disabled-text",
+        "shadow",
+        "transition-duration",
+      ];
+
+      const clean = withoutComments(pulseTokensCss);
+      for (const role of pulseRoles) {
+        expect(clean).toMatch(new RegExp(`--theme-${role}:`));
+      }
+      expect(pulseRoles).toHaveLength(20);
+    });
+
+    it("maps Pulse roles strictly to Sales Xray teal/neutral tokens without iris or circular aliases", () => {
+      const clean = withoutComments(pulseTokensCss);
+
+      // No Iris action or brand colors
+      expect(clean).not.toMatch(
+        /#(5b45d6|4a35c0|7a68e6|a99cff|bdb3ff|b8adff)/i,
+      );
+
+      // No circular aliases (--lx-* mapping back to --theme-*)
+      expect(clean).not.toMatch(/--lx-[a-z0-9-]+:\s*var\(--theme-/);
+
+      // Action and brand map to teal
+      expect(clean).toMatch(/--theme-action:\s*var\(--lx-teal\);/);
+      expect(clean).toMatch(/--theme-action-hover:\s*var\(--lx-teal-hover\);/);
+      expect(clean).toMatch(/--theme-action-text:\s*var\(--lx-on-teal\);/);
+      expect(clean).toMatch(/--theme-brand-2:\s*var\(--lx-teal-2\);/);
+
+      // Focus outline is teal, NEVER coaching orange --lx-focus
+      expect(clean).toMatch(/--theme-focus:\s*var\(--lx-teal\);/);
+      expect(clean).not.toMatch(/--theme-focus:\s*var\(--lx-focus\);/);
+
+      // Coaching focus token --lx-focus in tokens.css remains orange (#b45309 in light, #f59e0b in dark)
+      expect(appLight.get("focus")).toBe("#b45309");
+      expect(appDarkOverrides.get("focus")).toBe("#f59e0b");
+    });
+
+    it("scopes the adapter so global :root is not polluted", () => {
+      const clean = withoutComments(pulseTokensCss);
+      // Must not declare --theme-* at global :root, html or body
+      expect(clean).not.toMatch(
+        /(?:^|\n)\s*(:root|html|body)\b[^{]*\{[^}]*--theme-/,
+      );
+      // Must declare under adapted component scope
+      expect(clean).toMatch(
+        /data-pulse-theme|data-pulse-adapted|\.pulse-adapted/,
+      );
+    });
+
+    it("is imported in styles.css via scoped import", () => {
+      expect(styles).toMatch(/@import\s+["']\.\/ui\/pulse-tokens\.css["'];/);
+    });
+
+    it("resolves operational density tokens on adapted components and in root", () => {
+      expect(appLight.get("control-compact-h")).toBe("32px");
+      expect(appLight.get("control-h")).toBe("36px");
+      expect(appLight.get("table-head-h")).toBe("36px");
+      expect(appLight.get("row-min-h")).toBe("44px");
+      expect(appLight.get("panel-head-min-h")).toBe("48px");
+      expect(appLight.get("tile-min-h")).toBe("96px");
+
+      const clean = withoutComments(pulseTokensCss);
+      expect(clean).toContain("--theme-control-compact-h");
+      expect(clean).toContain("--theme-control-h");
+      expect(clean).toContain("--theme-row-min-h");
+      expect(clean).toContain("--theme-panel-head-min-h");
+      expect(clean).toContain("--theme-tile-min-h");
+    });
+  });
+
+  describe("Normalized compact controls and accessible touch targets (AUT-1474 card 3)", () => {
+    const segmentedCss = readFileSync(
+      join(here, "segmented.module.css"),
+      "utf8",
+    );
+    const callsCss = readFileSync(
+      join(appDir, "calls-library.module.css"),
+      "utf8",
+    );
+    const reportModesCss = readFileSync(
+      join(appDir, "report-modes.module.css"),
+      "utf8",
+    );
+    const shellCss = readFileSync(
+      join(appDir, "shell/lightbox-shell.module.css"),
+      "utf8",
+    );
+    const switcherCss = readFileSync(
+      join(appDir, "shell/workspace-switcher.module.css"),
+      "utf8",
+    );
+    const profileCss = readFileSync(
+      join(appDir, "profile-menu.module.css"),
+      "utf8",
+    );
+    const themeToggleCss = readFileSync(
+      join(appDir, "shell/theme-toggle.module.css"),
+      "utf8",
+    );
+
+    it("ensures desktop compact controls use at least 32px minimum hit area", () => {
+      expect(segmentedCss).toContain("--lx-control-compact-h");
+      expect(callsCss).toContain("--lx-control-compact-h");
+      expect(reportModesCss).toContain("--lx-control-compact-h");
+      expect(shellCss).toContain("--lx-control-compact-h");
+      expect(switcherCss).toContain("--lx-control-compact-h");
+      expect(profileCss).toContain("--lx-control-compact-h");
+    });
+
+    it("ensures coarse pointer touch targets use at least 44px minimum hit area", () => {
+      for (const css of [
+        segmentedCss,
+        callsCss,
+        reportModesCss,
+        shellCss,
+        switcherCss,
+        profileCss,
+        themeToggleCss,
+      ]) {
+        expect(css).toMatch(/@media\s*\(\s*pointer:\s*coarse\s*\)/);
+        expect(css).toContain("44px");
+      }
+    });
+
+    it("computes at least 44px hit areas under coarse pointer across desktop and mobile layouts", () => {
+      const testCoarseStyles = (
+        css: string,
+        selectors: Record<string, { minHeight?: number; minWidth?: number }>,
+        additionalTransform?: (c: string) => string,
+      ) => {
+        let transformed = css.replace(
+          /@media\s*\(\s*pointer:\s*coarse\s*\)/g,
+          "@media all",
+        );
+        if (additionalTransform) {
+          transformed = additionalTransform(transformed);
+        }
+        const win = new Window();
+        const doc = win.document;
+        const style = doc.createElement("style");
+        style.textContent = derivative + "\n" + transformed;
+        doc.head.appendChild(style);
+
+        for (const [cls, expected] of Object.entries(selectors)) {
+          const el = doc.createElement("button");
+          el.className = cls;
+          doc.body.appendChild(el);
+          const computed = win.getComputedStyle(el);
+
+          if (expected.minHeight !== undefined) {
+            const h = parseInt(computed.minHeight || computed.height, 10);
+            expect(h).toBeGreaterThanOrEqual(expected.minHeight);
+          }
+          if (expected.minWidth !== undefined) {
+            const w = parseInt(computed.minWidth || computed.width, 10);
+            expect(w).toBeGreaterThanOrEqual(expected.minWidth);
+          }
+        }
+      };
+
+      // Desktop layout (1280px)
+      testCoarseStyles(shellCss, {
+        collapseBtn: { minHeight: 44, minWidth: 44 },
+        panelSearch: { minHeight: 44 },
+        recentsViewAll: { minHeight: 44 },
+        workspaceTrigger: { minHeight: 44 },
+        toggle: { minHeight: 44, minWidth: 44 },
+        stripBtn: { minHeight: 44, minWidth: 44 },
+      });
+
+      // Mobile layout (390px - matches max-width: 899.98px)
+      testCoarseStyles(
+        shellCss,
+        {
+          collapseBtn: { minHeight: 44, minWidth: 44 },
+          panelSearch: { minHeight: 44 },
+          recentsViewAll: { minHeight: 44 },
+        },
+        (c) =>
+          c.replace(/@media\s*\(\s*max-width:\s*899\.98px\s*\)/g, "@media all"),
+      );
+
+      // Verify other control families compute 44px hit areas under coarse pointer
+      testCoarseStyles(profileCss, {
+        themeOption: { minHeight: 44, minWidth: 44 },
+        item: { minHeight: 44 },
+        headerTrigger: { minHeight: 44 },
+      });
+
+      testCoarseStyles(switcherCss, {
+        trigger: { minHeight: 44 },
+        item: { minHeight: 44 },
+        action: { minHeight: 44 },
+      });
+
+      testCoarseStyles(themeToggleCss, {
+        toggle: { minHeight: 44, minWidth: 44 },
+      });
+
+      testCoarseStyles(segmentedCss, {
+        label: { minHeight: 44 },
+      });
+    });
+
+    it("preserves Devanagari leading and flexible text growth without blanket fixed heights", () => {
+      expect(segmentedCss).toContain("--lx-leading-devanagari");
+      expect(callsCss).toContain("--lx-leading-devanagari");
+      expect(reportModesCss).toContain("--lx-leading-devanagari");
+      expect(shellCss).toContain("--lx-leading-devanagari");
+    });
   });
 });

@@ -196,7 +196,10 @@ beforeEach(() => {
           state: accepted ? "report_ready" : "ready",
         });
       }
-      if (path.endsWith("/submissions"))
+      if (
+        path.endsWith("/submissions") ||
+        path.endsWith("/submissions?include_owners=true")
+      )
         return json({
           submissions: [
             {
@@ -305,7 +308,11 @@ it.each(["workspace", "entry", "session"])(
     expect(host.textContent).toContain("Sign in");
     if (boundary === "workspace") {
       await click("Sign in");
-      expect(host.querySelector("#account-auth-heading")).not.toBeNull();
+      await act(async () =>
+        vi.waitFor(() =>
+          expect(host.querySelector("#account-auth-heading")).not.toBeNull(),
+        ),
+      );
       expect(host.querySelector("#account-email")).not.toBeNull();
     } else {
       expect(host.querySelector('a[href="/login"]')).not.toBeNull();
@@ -339,7 +346,11 @@ it("keeps learner audio local when the canonical profile is incomplete", async (
     host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
   );
   await click("Analyse my call");
-  expect(host.querySelector("#account-profile-heading")).not.toBeNull();
+  await act(async () =>
+    vi.waitFor(() =>
+      expect(host.querySelector("#account-profile-heading")).not.toBeNull(),
+    ),
+  );
   expect(host.textContent).toContain(file.name);
   expect(mutationRequests()).toHaveLength(0);
   expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();

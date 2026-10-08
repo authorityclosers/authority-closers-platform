@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowRight, Clock, FolderOpen, Plus } from "lucide-react";
+import { AlertCircle, Clock, FolderOpen, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -39,6 +39,8 @@ import {
   TrendChip,
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
+import { OperationalEmpty, OperationalPanel } from "../ui/operational-panel";
+import { MetricBand, MetricCard } from "../ui/metric-card";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -216,163 +218,124 @@ function DashboardDetails() {
           </Link>
         </div>
 
-        {/* 1. Row of 4 KPI cards */}
-        <div className={styles.kpiGrid}>
-          {/* Card 1: Calls analysed */}
-          <div className={styles.kpiCard}>
-            <div className={styles.kpiTop}>
-              <div className={styles.kpiIconWrapTeal}>
-                <FolderOpen size={18} aria-hidden="true" />
-              </div>
-            </div>
-            <div className={styles.kpiValue}>
-              {activityState.status === "loading" ? (
-                <span className={styles.valueSkeleton} aria-label="Loading" />
-              ) : activityState.status === "error" ? (
-                <span className={styles.valueSkeleton} aria-hidden="true" />
-              ) : activity === null ? (
-                "—"
-              ) : (
-                activity.analysedLast30Days
-              )}
-            </div>
-            <div className={styles.kpiLabel}>Calls analysed</div>
-            <div className={styles.kpiSubtext}>
-              {activityState.status === "loading"
-                ? " "
+        {/* 1. Metric band with explicit units and context */}
+        <MetricBand label="Operational call and allowance summary" columns={4}>
+          <MetricCard
+            id="metric-analysed"
+            label="Calls analysed"
+            value={activity?.analysedLast30Days}
+            unit={activity !== null ? "calls" : undefined}
+            context={
+              activityState.status === "loading"
+                ? undefined
                 : activityState.status === "error"
-                  ? " "
+                  ? undefined
                   : activity === null
                     ? "Not available yet"
-                    : " "}
-            </div>
-            {trend && (
-              <div className={styles.kpiAside}>
+                    : "Last 30 days, India time"
+            }
+            status={activityState.status}
+            icon={FolderOpen}
+            iconTone="teal"
+            aside={
+              trend ? (
                 <TrendChip direction={trend.direction} text={trend.text} />
-              </div>
-            )}
-          </div>
+              ) : null
+            }
+          />
 
-          {/* Card 2: Reports ready */}
-          <div className={styles.kpiCard}>
-            <div className={styles.kpiTop}>
-              <div className={styles.kpiIconWrap}>
-                <FolderOpen size={18} aria-hidden="true" />
-              </div>
-            </div>
-            <div className={styles.kpiValue}>
-              {summaryState.status === "loading" ? (
-                <span className={styles.valueSkeleton} aria-label="Loading" />
-              ) : summaryState.status === "error" ? (
-                <span className={styles.valueSkeleton} aria-hidden="true" />
-              ) : summary === null ? (
-                "—"
-              ) : (
-                summary.completed
-              )}
-            </div>
-            <div className={styles.kpiLabel}>Reports ready</div>
-            <div className={styles.kpiSubtext}>
-              {summaryState.status === "loading"
-                ? " "
+          <MetricCard
+            id="metric-reports-ready"
+            label="Reports ready"
+            value={summary?.completed}
+            unit={summary !== null ? "reports" : undefined}
+            context={
+              summaryState.status === "loading"
+                ? undefined
                 : summaryState.status === "error"
-                  ? " "
+                  ? undefined
                   : summary === null
                     ? "Not available yet"
-                    : `of ${summary.total} saved calls`}
-            </div>
-            {summary && summary.total > 0 && (
-              <div className={styles.kpiAside}>
+                    : `of ${summary.total} saved calls`
+            }
+            status={summaryState.status}
+            icon={FolderOpen}
+            aside={
+              summary && summary.total > 0 ? (
                 <ShareRing part={summary.completed} total={summary.total} />
-              </div>
-            )}
-          </div>
+              ) : null
+            }
+          />
 
-          {/* Card 3: Minutes left */}
-          <div className={styles.kpiCard}>
-            <div className={styles.kpiTop}>
-              <div className={styles.kpiIconWrap}>
-                {allowanceState.status === "ready" &&
-                !allowanceState.value.unlimited ? (
-                  <MinutesRing allowance={allowanceState.value} />
-                ) : (
-                  <Clock size={18} aria-hidden="true" />
-                )}
-              </div>
-            </div>
-            <div className={styles.kpiValue}>
-              {allowanceState.status === "loading" ? (
-                <span className={styles.valueSkeleton} aria-label="Loading" />
-              ) : allowanceState.status === "error" ? (
-                <span className={styles.valueSkeleton} aria-hidden="true" />
-              ) : (
-                minutesLeft(allowanceState.value).value
-              )}
-            </div>
-            <div className={styles.kpiLabel}>Minutes left</div>
-            <div className={styles.kpiSubtext}>
-              {allowanceState.status === "loading"
-                ? " "
+          <MetricCard
+            id="metric-minutes-left"
+            label="Minutes left"
+            value={
+              allowanceState.status === "ready"
+                ? minutesLeft(allowanceState.value).value
+                : null
+            }
+            context={
+              allowanceState.status === "loading"
+                ? undefined
                 : allowanceState.status === "error"
-                  ? " "
-                  : minutesLeft(allowanceState.value).subtext}
-            </div>
-            {allowanceState.status === "ready" && (
-              <div className={styles.kpiAside}>
+                  ? undefined
+                  : minutesLeft(allowanceState.value).subtext
+            }
+            status={allowanceState.status}
+            icon={
+              allowanceState.status === "ready" &&
+              !allowanceState.value.unlimited
+                ? undefined
+                : Clock
+            }
+            visual={
+              allowanceState.status === "ready" &&
+              !allowanceState.value.unlimited ? (
+                <MinutesRing allowance={allowanceState.value} />
+              ) : undefined
+            }
+            aside={
+              allowanceState.status === "ready" ? (
                 <MinutesUsed allowance={allowanceState.value} />
-              </div>
-            )}
-          </div>
+              ) : null
+            }
+          />
 
-          {/* Card 4: Needs attention */}
-          <div className={styles.kpiCard}>
-            <div className={styles.kpiTop}>
-              <div className={styles.kpiIconWrapAmber}>
-                <AlertCircle size={18} aria-hidden="true" />
-              </div>
-            </div>
-            <div className={styles.kpiValue}>
-              {summaryState.status === "loading" ? (
-                <span className={styles.valueSkeleton} aria-label="Loading" />
-              ) : summaryState.status === "error" ? (
-                <span className={styles.valueSkeleton} aria-hidden="true" />
-              ) : summary === null ? (
-                "—"
-              ) : (
-                summary.needsAttention
-              )}
-            </div>
-            <div className={styles.kpiLabel}>Needs attention</div>
-            <div className={styles.kpiSubtext}>
-              {summaryState.status === "loading"
-                ? " "
+          <MetricCard
+            id="metric-needs-attention"
+            label="Needs attention"
+            value={summary?.needsAttention}
+            unit={summary !== null ? "calls" : undefined}
+            context={
+              summaryState.status === "loading"
+                ? undefined
                 : summaryState.status === "error"
-                  ? " "
+                  ? undefined
                   : summary === null
                     ? "Not available yet"
-                    : "Calls to check"}
-            </div>
-            {summary && (
-              <div className={styles.kpiAside}>
+                    : "Calls to check"
+            }
+            status={summaryState.status}
+            icon={AlertCircle}
+            iconTone="amber"
+            aside={
+              summary ? (
                 <AttentionAction count={summary.needsAttention} />
-              </div>
-            )}
-          </div>
-        </div>
+              ) : null
+            }
+          />
+        </MetricBand>
 
         {/* 2. Left 2/3 Calls analysed per day + Right 1/3 Call status */}
         <div className={styles.analyticsGrid}>
           {/* Left 2/3: Calls analysed per day */}
-          <div className={styles.chartCard}>
-            <div className={styles.cardHeader}>
-              <div>
-                <h3 className={styles.cardTitle}>Last 30 days</h3>
-                <p className={styles.cardSubtitle}>
-                  Calls and call time analysed each day, India time
-                </p>
-              </div>
-            </div>
-
+          <OperationalPanel
+            id="panel-last-30-days"
+            title="Last 30 days"
+            sub="Calls and call time analysed each day, India time"
+            className={styles.chartCard}
+          >
             {activityState.status === "loading" ? (
               <MonthWaveSkeleton />
             ) : activityState.status === "error" ? (
@@ -392,19 +355,15 @@ function DashboardDetails() {
             ) : (
               <MonthWave days={activity.days} />
             )}
-          </div>
+          </OperationalPanel>
 
           {/* Right 1/3: Call status */}
-          <div className={styles.skillsCard}>
-            <div className={styles.cardHeader}>
-              <div>
-                <h3 className={styles.cardTitle}>Call status</h3>
-                <p className={styles.cardSubtitle}>
-                  Where your saved calls are now
-                </p>
-              </div>
-            </div>
-
+          <OperationalPanel
+            id="panel-call-status"
+            title="Call status"
+            sub="Where your saved calls are now"
+            className={styles.skillsCard}
+          >
             {summaryState.status === "loading" ? (
               <StatusRingSkeleton />
             ) : summaryState.status === "error" ? (
@@ -424,55 +383,51 @@ function DashboardDetails() {
             ) : (
               <StatusRing summary={summary} />
             )}
-          </div>
+          </OperationalPanel>
         </div>
 
         {/* 3. Full width Recent Calls Table / Empty State */}
-        <div className={styles.tableCard}>
-          <div className={styles.cardHeader}>
-            <div>
-              <h3 className={styles.cardTitle}>Recent calls</h3>
-              <p className={styles.cardSubtitle}>
-                Latest processed audio recordings and evaluations
-              </p>
-            </div>
-            {recent && recent.length > 0 && (
-              <Link href="/analysis/calls" className={styles.viewAllLink}>
-                <span>View all calls</span>
-                {hiddenRecent > 0 ? (
-                  <span className={styles.moreChip}>+{hiddenRecent}</span>
-                ) : null}
-                <ArrowRight size={15} aria-hidden="true" />
-              </Link>
-            )}
-          </div>
-
+        <OperationalPanel
+          id="panel-recent-calls"
+          title="Recent calls"
+          sub="Latest processed audio recordings and evaluations"
+          action={
+            recent && recent.length > 0
+              ? {
+                  href: "/analysis/calls",
+                  label: "View all calls",
+                  badge: hiddenRecent > 0 ? `+${hiddenRecent}` : undefined,
+                }
+              : undefined
+          }
+          className={styles.tableCard}
+        >
           {recentState.status === "loading" ? (
             <RecentCallsSkeleton />
           ) : recentState.status === "error" ? (
             <RecentCallsSkeleton />
           ) : recent === null || recent.length === 0 ? (
-            <div className={styles.emptyCard}>
-              <div className={styles.emptyIcon}>
-                <FolderOpen size={24} aria-hidden="true" />
-              </div>
-              <h4 className={styles.emptyTitle}>
-                {isAccountEmpty ? "Analyse your first call" : "No calls yet"}
-              </h4>
-              <p className={styles.emptyDescription}>
-                {isAccountEmpty
+            <OperationalEmpty
+              icon={FolderOpen}
+              title={
+                isAccountEmpty ? "Analyse your first call" : "No calls yet"
+              }
+              description={
+                isAccountEmpty
                   ? "Upload a sales call to start your analysis."
-                  : "No calls yet"}
-              </p>
-              <Link href="/analysis/new" className={styles.primaryAction}>
-                <Plus size={16} aria-hidden="true" />
-                <span>New analysis</span>
-              </Link>
-            </div>
+                  : "No calls yet"
+              }
+              action={
+                <Link href="/analysis/new" className={styles.primaryAction}>
+                  <Plus size={16} aria-hidden="true" />
+                  <span>New analysis</span>
+                </Link>
+              }
+            />
           ) : (
             <RecentCallsList calls={recent} onHiddenChange={setHiddenRecent} />
           )}
-        </div>
+        </OperationalPanel>
       </div>
       {failing ? (
         <ConnectionNotice

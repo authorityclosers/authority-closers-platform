@@ -48,19 +48,19 @@ owned by root:root, mode 0440 with an ACL that grants read to uid 10001 only (th
 group bits are the ACL mask); the confidential readers verify that exact ACL.
 In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 
-| Source relative to development/ | Unit / delivery | In-process path |
-| --- | --- | --- |
-| `api.env` | API / EnvironmentFile | process environment only |
-| `outbox.env` | outbox worker / EnvironmentFile | process environment only |
-| `migrator.env` | refresh only (root) | none |
-| `challenge-secret` | API / LoadCredential | `C/challenge-secret` |
-| `qa-password` | API / LoadCredential | `C/qa-password` |
-| `approval.json` | both / LoadCredential | each unit's `C/approval.json` |
-| `database-url` | worker / LoadCredential | `C/database-url` |
-| `service.json` | worker / LoadCredential | `C/service.json` |
-| `service.operator-template.json` | root-only input for the refresh renderer | none |
-| `identities/elevenlabs/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/elevenlabs/token` |
-| `identities/gemini/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/gemini/token` |
+| Source relative to development/  | Unit / delivery                          | In-process path                                  |
+| -------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| `api.env`                        | API / EnvironmentFile                    | process environment only                         |
+| `outbox.env`                     | outbox worker / EnvironmentFile          | process environment only                         |
+| `migrator.env`                   | refresh only (root)                      | none                                             |
+| `challenge-secret`               | API / LoadCredential                     | `C/challenge-secret`                             |
+| `qa-password`                    | API / LoadCredential                     | `C/qa-password`                                  |
+| `approval.json`                  | both / LoadCredential                    | each unit's `C/approval.json`                    |
+| `database-url`                   | worker / LoadCredential                  | `C/database-url`                                 |
+| `service.json`                   | worker / LoadCredential                  | `C/service.json`                                 |
+| `service.operator-template.json` | root-only input for the refresh renderer | none                                             |
+| `identities/elevenlabs/token`    | worker / read-only directory bind        | `/run/ac-sales-xray/identities/elevenlabs/token` |
+| `identities/gemini/token`        | worker / read-only directory bind        | `/run/ac-sales-xray/identities/gemini/token`     |
 
 Each provider directory is root:10001 0550 with exactly one uid-10001 0400 token
 file, no symlinks or hard links. The root-only ancestor prevents agent access;
@@ -159,6 +159,13 @@ target contains `scripts/ops/ac_smoke.py`, the script runs the development smoke
 against that core and the merged UI checkout; otherwise it reports `skipped`.
 Smoke failures are reported without rolling back the backend.
 
+An explicitly reviewed backend repair can use `--preserve-studio` to retain
+the owner's active UI checkout. Backend admission, migration, health and rollback
+stay in force; studio sync/merge and its dependent UI smoke are skipped. The
+scheduled timer supplies no flag and keeps its usual behavior. The isolated
+organisation logo profile has its own [Root installation and rollback steps](organisation-avatar/README.md)
+and never activates the broader filesystem media profile.
+
 ## Fixture accounts
 
 `python -m ac_platform.development.sales_xray_fixture_accounts` creates three
@@ -247,34 +254,42 @@ sudo python3 "$S" status --require-ancestor "$M"          # expect contains[M]=t
 sudo python3 "$S" rollback                                # plan; add --apply to restore
 ```
 
-## Admin dev QA browser credential (AUT-970, AUT-984)
+## Admin dev QA browser credential (AUT-970, AUT-984, AUT-1156)
 
 Browser QA signs a fictional identity into Admin dev without seeing its
 password. Declared references (names only; a separately reviewed fixture task
 creates each account, platform grant and secret, not this code; until then the
 broker refuses with `broker_secret_unavailable`):
 
-| Identity | Account | Infisical `dev` folder | Secret name | Required Admin merge |
-| --- | --- | --- | --- | --- |
-| `billing-staff` | `qa-billing-staff-aut959@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_BILLING_STAFF` | `1daeb174…` (AUT-890) |
-| `organisation-operator` | `qa-org-operator-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR` | `61e6b240…` (AUT-447) |
-| `organisation-reader` | `qa-org-reader-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER` | `61e6b240…` (AUT-447) |
-| `organisation-denied` | `qa-org-denied-aut961@example.test` | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED` | `61e6b240…` (AUT-447) |
+| Identity                | Account                                | Infisical `dev` folder             | Secret name                             | Required Admin merge  |
+| ----------------------- | -------------------------------------- | ---------------------------------- | --------------------------------------- | --------------------- |
+| `billing-staff`         | `qa-billing-staff-aut969@example.test` | `/application`                     | `AC_DEV_BILLING_FIXTURE_PASSWORD_STAFF` | `1daeb174…` (AUT-890) |
+| `organisation-operator` | `qa-org-operator-aut961@example.test`  | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_OPERATOR`  | `61e6b240…` (AUT-447) |
+| `organisation-reader`   | `qa-org-reader-aut961@example.test`    | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_READER`    | `61e6b240…` (AUT-447) |
+| `organisation-denied`   | `qa-org-denied-aut961@example.test`    | `/sales-xray/dev-fixture-accounts` | `AC_DEV_FIXTURE_PASSWORD_ORG_DENIED`    | `61e6b240…` (AUT-447) |
 
 Organisation identities also need this capability matrix from the real API
 after sign-in (platform grants only; organisation membership roles never
 establish them):
 
-| Identity | `platform_tenants_read` | `platform_organisations_manage` | `GET /v1/platform/organisations` |
-| --- | --- | --- | --- |
-| `organisation-operator` | required | required | 200 list |
-| `organisation-reader` | required | must be absent | 200 list |
-| `organisation-denied` | must be absent | must be absent | 403 `authorization_denied` |
+| Identity                | `platform_tenants_read` | `platform_organisations_manage` | `GET /v1/platform/organisations` |
+| ----------------------- | ----------------------- | ------------------------------- | -------------------------------- |
+| `organisation-operator` | required                | required                        | 200 list                         |
+| `organisation-reader`   | required                | must be absent                  | 200 list                         |
+| `organisation-denied`   | must be absent          | must be absent                  | 403 `authorization_denied`       |
+
+Billing staff must hold `platform_billing_manage` from the same normal
+`GET /v1/me/platform-access` API. It does not need an Organisations permission
+or request. Missing access routes, failed readback or a missing grant refuse
+the browser handoff. The fixture customer is not a broker identity.
 
 - `scripts/dev-qa-credential.py`, installed root:root 0750 as
   `/usr/local/sbin/ac-dev-qa-credential`, is the only root step. It reuses
   `/usr/local/sbin/ac-infisical-run` with `dev` and the identity's folder; a root
-  inner process writes only the one named value to a pipe. It refuses unless
+  inner process writes only the selected value from the exact declared
+  secret-name allowlist to a pipe, including when the folder is `/application`.
+  The old billing name, the customer password and undeclared names are refused.
+  It refuses unless
   called through sudo by a non-root user, from the installed launcher, with
   stdout a pipe and an allowlisted identity. The bootstrap, `INFISICAL_TOKEN`,
   the folder's other secrets and every API/DB credential stay in root.
@@ -291,7 +306,8 @@ establish them):
   and require `/v1/me` to return the named account. The browser reaches the
   https origin through an in-process TLS bridge to the edge, trusted by the
   ephemeral key's SPKI pin, so the real Host, Origin and `__Host-` cookies
-  apply. Organisation identities additionally need, before any credential,
+  apply. All identities need, before any credential,
+  `/v1/me/platform-access` signed out → 401. Organisation identities also need
   `/v1/platform/organisations` signed out → 401 (404 means the API route is not
   deployed: `organisations_route_absent`), and after sign-in the matrix above
   from `/v1/me/platform-access` and the list route; any difference refuses with
@@ -348,3 +364,55 @@ Output is JSON lines with no value. The `handoff` line gives `devtools`
 (`http://127.0.0.1:<port>`) for Playwright `chromium.connectOverCDP`; the browser
 stays up for `--hold-seconds` (default 3600) or until Ctrl-C/SIGTERM, then the
 profile is deleted. A `refused` line names the failed check.
+
+## Sales Xray: protected saved-report QA (AUT-1232)
+
+Use the existing dev studio and AUT-1116 protected credential handoff to read
+only its approved fictional report `dadaed4c-2f24-4299-b2fa-c0c47f9b374a`:
+
+```sh
+# From the devenv lane checkout, as acdev; no arguments or credential output.
+.venv/bin/python infra/application/development/qa-sales-xray-report.py
+```
+
+The launcher serves the browser an ephemeral, loopback-only TLS connection to
+the existing edge on `127.0.0.1:3016`, using
+`https://salesxray-dev.authorityclosers.com` as its actual browser origin.
+Chromium trusts only that run's certificate SPKI. It supplies Host and Origin
+normally and stores the normal Secure, HttpOnly, host-only session cookie.
+Do not substitute `http://localhost:3016` with an overridden Origin: that
+invocation failed sign-in 403 and workspace 401 in the recorded reproduction.
+
+The upstream remains the existing staging studio route authorized by AUT-154;
+this invocation does not provide an independent dev database or copy the report.
+Its exact Origin exception and normal account authorization remain enforced by
+staging. No host/service install, Caddy edit, account/grant change or security
+setting is needed. The Admin launcher's origin, edge and credential rules retain
+their existing defaults; only its TLS utility accepts explicit internal host
+and edge arguments for reuse.
+
+A fictional sentinel must receive 401 before the credential is read. The real
+password is read into memory from the existing AUT-1116 file and submitted
+through the current UI's password form. Chromium receives only PATH, HOME and
+the host's shared-library path in its environment. The report is read at
+1440x900 and 390x844; JSON stdout contains statuses, binding and visibility
+flags only. Other reports, external requests, encoded API paths and background
+writes are blocked. The browser, profile and temporary TLS files are removed
+when the run ends. No screenshot, transcript or report text is exported.
+
+Use the source-owned invocation from a reviewed main release after merge; the
+normal release train carries the script. When running a released copy, use the
+lane's existing Python/browser environment:
+
+```sh
+.venv/bin/python /srv/authority-closers/application/current-staging/development/qa-sales-xray-report.py
+```
+
+Both launcher files must come from that same release tree. Rollback is to stop
+using this QA command; it changes no persistent runtime configuration. Do not
+fall back to the failing HTTP/header-override invocation or injected cookies.
+
+The [AUT-1156 released-runner runbook](../../../docs/evidence/20261005_AUT1156_BILLING_QA_TRANSPORT.md#operator-runbook)
+specifies Root installation, the immutable API executable, dev network and
+input boundaries, access-manager prerequisites, preview/apply and rollback.
+Actual fixture application stays on [AUT-959](/AUT/issues/AUT-959).

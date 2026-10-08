@@ -1,3 +1,5 @@
+@import "./ui/pulse-tokens.css";
+
 /* AC's existing Clarity Grid geometry, cobalt/academy tokens and editorial
    headings, scoped to this standalone app. No remote font or media request. */
 
@@ -148,6 +150,20 @@
     #6366f1 100%
   );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
+
+  /* ---------- Operational density (study section 2.4, card 2) ---------- */
+  --lx-control-compact-h: 32px;
+  --lx-control-h: 36px;
+  --lx-table-head-h: 36px;
+  --lx-row-min-h: 44px;
+  --lx-panel-head-min-h: 48px;
+  --lx-tile-min-h: 96px;
+  --lx-density-control-compact: 32px;
+  --lx-density-control: 36px;
+  --lx-density-table-head: 36px;
+  --lx-density-row-min: 44px;
+  --lx-density-panel-head: 48px;
+  --lx-density-tile-min: 96px;
 }
 
 :where(html:not([data-lx-root]))
@@ -177,6 +193,40 @@ html:has(> body.sales-xray-document) {
   overscroll-behavior-y: none;
   background: var(--lx-paper);
 }
+
+/* Standalone pages and panels use the app's thin scroller. Keep specificity
+   low so the report rail and intentionally hidden horizontal bars still win.
+   The learner-web document is outside this boundary. */
+:where(html:has(> body.sales-xray-document), .sales-xray-document *) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lx-line-strong) transparent;
+}
+
+@supports not (scrollbar-width: thin) {
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar-thumb {
+    border-radius: 99px;
+    background: var(--lx-line-strong);
+  }
+
+  :where(
+    html:has(> body.sales-xray-document),
+    .sales-xray-document *
+  )::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 .sales-xray-document {
   margin: 0;
   --font-sans: var(--lx-font-ui);

@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -135,7 +138,7 @@ const ok = (body: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
-const LIST = "GET /v1/conversation/acquisition/submissions";
+const LIST = "GET /v1/conversation/acquisition/submissions?include_owners=true";
 const insightPath = (id: string, kind: string) =>
   `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
 const measuredRecord = {
@@ -535,7 +538,7 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(fetchMock.mock.calls[0][0]).toBe(
-    "/v1/conversation/acquisition/submissions",
+    "/v1/conversation/acquisition/submissions?include_owners=true",
   );
   expect(fetchMock.mock.calls[0][1]).toEqual(
     expect.objectContaining({
@@ -571,7 +574,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
   );
   await flush();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
   await act(async () =>
@@ -607,7 +610,7 @@ it("keeps pagination available when concurrent erasure empties a page", async ()
     host.querySelector(`[data-submission-id="${secondId}"]`),
   ).not.toBeNull();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
   );
 });
 
@@ -681,7 +684,7 @@ it("refreshes the visible library after a background upload and shows its ready 
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toBe(
-    "/v1/conversation/acquisition/submissions",
+    "/v1/conversation/acquisition/submissions?include_owners=true",
   );
   expect(
     host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
@@ -1103,7 +1106,7 @@ it("keeps the loaded cursor when a status-only refresh leaves page membership un
   await flush();
 
   expect(fetchMock.mock.calls[2][0]).toBe(
-    `/v1/conversation/acquisition/submissions?before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
 });
@@ -1309,7 +1312,7 @@ it("settles a timed-out next-page read and leaves its cursor retryable", async (
     "Saved calls could not be loaded",
   );
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&before=${cursor}`,
   );
 });
 
@@ -1398,4 +1401,67 @@ it("posts logout once while pending, preserves the selector on failure, and clea
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(navigate).toHaveBeenCalledWith("/");
+});
+
+it("presents Calls summaries with MetricBand and MetricCard operational presentation and panels", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
+    [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
+    [insightPath(secondId, "call-record")]: () => ok({}, 404),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
+    [insightPath(secondId, "report")]: () =>
+      ok({ verdict: "Report without measurements" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+
+  const band = host.querySelector('section[aria-label="Calls at a glance"]')!;
+  expect(band.getAttribute("data-pulse-adapted")).toBe("true");
+  expect(band.getAttribute("data-columns")).toBe("5");
+
+  expect(host.querySelector("#metric-calls")).not.toBeNull();
+  expect(host.querySelector("#metric-duration")).not.toBeNull();
+  expect(host.querySelector("#metric-reports-ready")).not.toBeNull();
+  expect(host.querySelector("#metric-questions")).not.toBeNull();
+  expect(host.querySelector("#metric-commitments")).not.toBeNull();
+
+  const listPanel = host.querySelector("section#calls-library-list")!;
+  expect(listPanel).not.toBeNull();
+  expect(listPanel.getAttribute("data-pulse-adapted")).toBe("true");
+  expect(listPanel.getAttribute("aria-labelledby")).toBe("calls-library-title");
+});
+
+it("renders OperationalEmpty with accessible heading when no calls are saved", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([])),
+  });
+  await act(async () => renderLibrary());
+  await flush();
+
+  const heading = host.querySelector("h2#calls-library-empty");
+  expect(heading?.textContent).toBe("No saved calls yet.");
+  const emptyWrap = host.querySelector('[data-pulse-adapted="true"]');
+  expect(emptyWrap).not.toBeNull();
+  expect(host.querySelector("a.secondary-button")?.textContent).toContain(
+    "Analyse a call",
+  );
+});
+
+it("ensures Calls summary breakpoints override MetricBand 5-column variant on tablets and phones", () => {
+  const cssPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "calls-library.module.css",
+  );
+  const css = readFileSync(cssPath, "utf8");
+
+  // High-specificity selectors (0,3,0 / 0,4,0) override .metricBand[data-columns="5"] (0,2,0)
+  expect(css).toMatch(
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  expect(css).toMatch(
+    /@media \(max-width: 760px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  expect(css).toMatch(
+    /@media \(max-width: 520px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?grid-template-columns:\s*1fr;/,
+  );
 });

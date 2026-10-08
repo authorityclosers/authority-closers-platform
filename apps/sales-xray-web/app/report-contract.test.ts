@@ -715,3 +715,131 @@ describe("server-withheld guest report preview", () => {
     ).toThrow("report_overview_invalid");
   });
 });
+
+const previousCallContextExample = {
+  schema: "ac.sales-xray.previous-call-context/1",
+  composition: "local_source_citations",
+  membership_id: "22222222-2222-4222-8222-222222222222",
+  prospect_id: "33333333-3333-4333-8333-333333333333",
+  sources: [
+    {
+      membership_id: "44444444-4444-4444-8444-444444444444",
+      submission_id: "11111111-1111-4111-8111-111111111111",
+      recording_id: "55555555-5555-4555-8555-555555555555",
+      call_created_at: "2026-10-06T09:00:00+00:00",
+      report_url: "/analysis/calls/11111111-1111-4111-8111-111111111111",
+      reference: {
+        snapshot_id: "66666666-6666-4666-8666-666666666666",
+        snapshot_kind: "c5_checkpoint",
+        source_revision: 1,
+        source_sha256:
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        transcript_revision: "fictional-transcript-r1",
+        report_sha256:
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        report_created_at: "2026-10-06T09:05:00+00:00",
+        transcript_checkpoint_id: "77777777-7777-4777-8777-777777777777",
+        transcript_manifest_sha256:
+          "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      },
+      source_quotes: [
+        {
+          segment_id: "s1",
+          quote: "I will send the proposal on Friday.",
+          start_ms: 0,
+          end_ms: 900,
+        },
+      ],
+      report_interpretations: [
+        {
+          source: {
+            text: "A next action was stated.",
+            evidence: [
+              {
+                segment_id: "s1",
+                quote: "I will send the proposal on Friday.",
+                start_ms: 0,
+                end_ms: 900,
+              },
+            ],
+          },
+          possible_concern: "The prospect may want time to review.",
+          interpretation_kind: "inference",
+        },
+      ],
+    },
+  ],
+};
+
+describe("account report prior-call context compatibility", () => {
+  function accountEnvelope() {
+    const envelope = previewEnvelope();
+    envelope.report.access = "claimed_account";
+    Object.assign(envelope.report, { preview: null });
+    return envelope;
+  }
+
+  it.each([
+    [
+      "empty",
+      {
+        schema: "ac.sales-xray.previous-call-context/1",
+        composition: "local_source_citations",
+        membership_id: null,
+        prospect_id: null,
+        sources: [],
+      },
+    ],
+    ["published fictional example", previousCallContextExample],
+  ])(
+    "accepts and ignores %s context without changing the current report",
+    (_, context) => {
+      const envelope = accountEnvelope();
+      const expected = parseAcquisitionReport(
+        envelope,
+        expectedSubmission,
+        transcript,
+      );
+      const parsed = parseAcquisitionReport(
+        { ...envelope, previous_call_context: context },
+        expectedSubmission,
+        transcript,
+      );
+      expect(parsed.claimed).toBe(true);
+      expect(parsed).toEqual(expected);
+    },
+  );
+
+  it("keeps unknown envelope fields rejected when prior-call context is present", () => {
+    expect(() =>
+      parseAcquisitionReport(
+        {
+          ...accountEnvelope(),
+          previous_call_context: previousCallContextExample,
+          unknown_field: true,
+        },
+        expectedSubmission,
+        transcript,
+      ),
+    ).toThrow("report_envelope_unknown_field");
+  });
+
+  it("keeps current-call evidence and source validation with prior-call context", () => {
+    const envelope = {
+      ...accountEnvelope(),
+      previous_call_context: previousCallContextExample,
+    };
+    envelope.report.content.strengths[0].evidence[0].quote =
+      "I will send the proposal on Friday.";
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("quote_mismatch");
+    envelope.report.content.strengths[0].evidence[0].quote =
+      transcript.segments[0].text;
+    envelope.source_sha256 =
+      previousCallContextExample.sources[0].reference.source_sha256;
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_envelope_binding");
+  });
+});

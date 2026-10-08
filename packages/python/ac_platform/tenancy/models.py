@@ -201,6 +201,13 @@ class Organisation(Base):
     )
     creation_command_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     domain_verification_token: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict[str, str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
+    )
+    logo_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
 
 class OrganisationDomainSetting(Base):

@@ -74,7 +74,7 @@ jobs:
             ${{ runner.temp }}/visual-output/receipt.json
             ${{ runner.temp }}/visual-output/report.md
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
       - name: Link review evidence
         if: always() && steps.evidence.outputs.artifact-url != ''
         env:

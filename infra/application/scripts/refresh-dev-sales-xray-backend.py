@@ -63,6 +63,7 @@ RUNTIME_GID = 10001
 RUNTIME_USER = "ac-sales-xray-runtime"
 RUNTIME_GROUP = "ac-sales-xray-native"
 MIGRATE_UNIT = "ac-dev-sales-xray-migrate.service"
+PRODUCT_NOTES_UNIT = "ac-dev-sales-xray-product-notes.service"
 SMOKE_UNIT = "ac-dev-sales-xray-smoke.service"
 RUNNING_STATES = ("active", "activating", "reloading", "deactivating")
 UNIT_STATES = (*RUNNING_STATES, "inactive", "failed")
@@ -793,6 +794,101 @@ def smoke(paths: Paths, runner, target: str, web: str) -> str:
     return "pass" if result.returncode == 0 else "fail"
 
 
+def product_notes(paths: Paths, runner, target: str) -> str:
+    """Read release-baked notes without credentials; write only through the dev sandbox."""
+    try:
+        runtime_identity()
+        migration_environment(paths)
+        release = paths.application / "releases" / target
+        call(
+            runner,
+            ["sha256sum", "--check", "--strict", "--quiet", "RELEASE-FILES.sha256"],
+            cwd=release,
+            env={"PATH": SAFE_PATH},
+            timeout=30,
+        )
+        values = env_values(release / "release-images.env")
+        image = values.get("AC_API_IMAGE", "")
+        if values.get("AC_RELEASE_ID") != target or not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
+            raise RefreshError("product_notes_image_invalid")
+        identity = call(
+            runner,
+            [
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                image,
+            ],
+            env={"PATH": SAFE_PATH},
+            timeout=30,
+        )
+        if identity.stdout.decode().strip() != f"{image}|{target}":
+            raise RefreshError("product_notes_image_mismatch")
+        baked = call(
+            runner,
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--pull=never",
+                "--network=none",
+                "--read-only",
+                "--user=10001:10001",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges",
+                "--memory=64m",
+                "--memory-swap=64m",
+                "--cpus=0.25",
+                "--pids-limit=16",
+                "--entrypoint=/bin/cat",
+                image,
+                "/app/product-notes.json",
+            ],
+            env={"PATH": SAFE_PATH},
+            timeout=60,
+        )
+        # Only public note text crosses this boundary. The DSN stays in systemd's env file.
+        with tempfile.NamedTemporaryFile(dir=paths.backend, prefix=".ac-product-notes-") as notes:
+            notes.write(baked.stdout)
+            notes.flush()
+            os.fchmod(notes.fileno(), 0o444)
+            call(
+                runner,
+                sandboxed(
+                    paths,
+                    PRODUCT_NOTES_UNIT,
+                    [
+                        str(paths.backend / ".venv/bin/python"),
+                        "-m",
+                        "ac_platform.product_updates.deploy",
+                        "--environment",
+                        "development",
+                        "--release-id",
+                        target,
+                        "--notes",
+                        notes.name,
+                    ],
+                    environment=(
+                        "AC_ENVIRONMENT=development",
+                        f"PATH={SAFE_PATH}",
+                        "HOME=/",
+                        "PYTHONDONTWRITEBYTECODE=1",
+                    ),
+                    environment_file=paths.migrator_env,
+                    runtime=120,
+                ),
+                env={"PATH": SAFE_PATH},
+                timeout=180,
+            )
+        atomic_write(paths.backend / ".ac-product-notes-release", (target + "\n").encode(), 0o644)
+        return "pass"
+    except (RefreshError, OSError, UnicodeError, subprocess.SubprocessError):
+        print("WARNING: Product note writer failed; dev refresh continues.", file=sys.stderr)
+        return "warn"
+
+
 def failure_report(
     target: str, saved: Saved | None, phase: str, error: RefreshError, migrated: bool, **extra
 ) -> dict[str, Any]:
@@ -821,10 +917,19 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         if result.returncode == 0:
             previous = result.stdout.decode().strip()
             if previous == target:
+                try:
+                    notes_current = (
+                        paths.backend / ".ac-product-notes-release"
+                    ).read_text().strip() == target
+                except OSError:
+                    notes_current = False
                 return {
                     "target": target,
                     "previous": target,
                     "migrated": "no",
+                    "product_notes": "pass"
+                    if notes_current
+                    else product_notes(paths, runner, target),
                     "restarted": [],
                     "health": "not_checked",
                     "smoke": "skipped",
@@ -936,6 +1041,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
             timeout=1860,
         )
         migrated = True
+        notes_result = product_notes(paths, runner, target)
         phase = "activation"
         try:
             atomic_write(paths.backend / ".ac-release-id", (target + "\n").encode(), 0o644)
@@ -983,6 +1089,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
             "target": target,
             "previous": previous,
             "migrated": "yes" if migrated else "no",
+            "product_notes": notes_result,
             "restarted": list(DEV_UNITS),
             "health": checked,
             "studio": error.code,
@@ -995,6 +1102,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         "target": target,
         "previous": previous,
         "migrated": "yes",
+        "product_notes": notes_result,
         "restarted": list(DEV_UNITS),
         "health": checked,
         "studio": "merged",

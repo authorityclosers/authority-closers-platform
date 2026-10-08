@@ -97,7 +97,53 @@ class ProspectStore:
             )
         ).all()
 
-    async def _write_scope(self, actor: ActorContext, submission_id: UUID) -> SubmissionScope:
+    async def edit_name(
+        self, actor: ActorContext, prospect_id: UUID, *, display_name: str, expected_revision: int
+    ) -> ConversationProspect:
+        if (
+            not isinstance(display_name, str)
+            or not 1 <= len(display_name) <= 160
+            or not display_name.strip()
+            or type(expected_revision) is not int
+            or expected_revision < 1
+        ):
+            raise ConversationError("Supply a valid prospect name and revision.")
+        query = (await self.queries(actor)).prospects
+        row = await self.database.scalar(
+            query.where(
+                ConversationProspect.id == prospect_id,
+                ConversationProspect.owner_person_id == actor.person_id,
+            )
+            .with_for_update(of=ConversationProspect)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise ConversationNotFound("This prospect is unavailable.")
+        if row.revision != expected_revision:
+            raise ConversationConflict("The prospect changed. Reload before saving again.")
+        name = display_name.strip()
+        if row.display_name == name:
+            return row
+        previous_revision = row.revision
+        now = utc(self.ownership.clock())
+        row.display_name, row.revision, row.updated_at = name, previous_revision + 1, now
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "name_changed",
+            {
+                "field": "display_name",
+                "previous_revision": str(previous_revision),
+                "current_revision": str(row.revision),
+            },
+            now,
+        )
+        return row
+
+    async def _write_scope(
+        self, actor: ActorContext, submission_id: UUID, *, read_only: bool = False
+    ) -> SubmissionScope:
         scope = await self.ownership.require_submission_owner(
             submission_id, actor=actor, shared_identity_locks=True
         )
@@ -109,7 +155,7 @@ class ProspectStore:
                 ConversationRecording.id == scope.recording_id,
                 ConversationRecording.tenant_id == scope.tenant_id,
             )
-            .with_for_update()
+            .with_for_update(read=read_only)
             .execution_options(populate_existing=True)
         )
         if recording is None or recording.state not in ("awaiting_upload", "ready"):
@@ -178,7 +224,9 @@ class ProspectStore:
         expected_membership_id: UUID | None,
     ) -> ConversationProspectMembership:
         scope = await self._write_scope(actor, submission_id)
-        await self.read(actor, prospect_id)
+        prospect = await self.read(actor, prospect_id)
+        if prospect.owner_person_id != actor.person_id:
+            raise ConversationNotFound("This prospect is unavailable.")
         current = await self._active(scope)
         if current is not None and current.prospect_id == prospect_id:
             return current

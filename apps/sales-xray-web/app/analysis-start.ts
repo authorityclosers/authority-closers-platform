@@ -5,7 +5,10 @@ import {
   submissionPath,
   type Submission,
 } from "./acquisition-client";
-import { parseProcessingPlan, type ProcessingPlan } from "./call-studio";
+import {
+  parseProcessingPlan,
+  type ProcessingPlan,
+} from "./processing-plan-contract";
 import {
   STATUS_READ_TIMEOUT_MS,
   readProcessingPlan,

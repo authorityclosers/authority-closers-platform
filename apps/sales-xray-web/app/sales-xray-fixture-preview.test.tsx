@@ -63,7 +63,11 @@ it("mounts the real static processing panel after local health with no operation
   expect(
     container.querySelector('[data-testid="operational-studio"]'),
   ).toBeNull();
-  expect(container.textContent).toContain("Opening local test state");
+  await act(async () =>
+    vi.waitFor(() =>
+      expect(container.textContent).toContain("Opening local test state"),
+    ),
+  );
   await act(async () => {
     releaseHealth(
       new Response(JSON.stringify({ analysis_read_only: true }), {
@@ -120,8 +124,12 @@ it("keeps the operational studio unmounted when the read-only bridge is unavaila
   expect(
     container.querySelector('[data-testid="operational-studio"]'),
   ).toBeNull();
-  expect(container.textContent).toContain(
-    "require the read-only review bridge",
+  await act(async () =>
+    vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        "require the read-only review bridge",
+      ),
+    ),
   );
   expect(container.querySelector('[data-fixture="true"]')).toBeNull();
   expect(requests).toEqual(["/health"]);
@@ -148,7 +156,11 @@ it("renders one or three local synthetic Files in the production stage without o
       </StandaloneStudio>,
     ),
   );
-  expect(container.querySelector('[data-fixture="true"]')).not.toBeNull();
+  await act(async () =>
+    vi.waitFor(() =>
+      expect(container.querySelector('[data-fixture="true"]')).not.toBeNull(),
+    ),
+  );
   expect(container.textContent).toContain("Synthetic layout preview");
   expect(container.textContent).toContain(
     "No real recording is selected, stored, or uploaded.",
@@ -203,7 +215,11 @@ it.each(["auth.email", "auth.code", "auth.error"] as const)(
         </StandaloneStudio>,
       ),
     );
-    expect(container.querySelector('[data-fixture="true"]')).not.toBeNull();
+    await act(async () =>
+      vi.waitFor(() =>
+        expect(container.querySelector('[data-fixture="true"]')).not.toBeNull(),
+      ),
+    );
     expect(
       container.querySelector('[data-review-preview="true"]'),
     ).not.toBeNull();

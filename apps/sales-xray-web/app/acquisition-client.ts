@@ -56,6 +56,8 @@ export type LibrarySubmission = {
   hasReport: boolean;
   /** Owner call name (C1); null when the server predates labels. */
   label: CallLabel | null;
+  /** Returned only when the server authorises organisation rep metadata. */
+  owner?: { personId: string; name: string };
 };
 export type SubmissionLibraryPage = {
   submissions: LibrarySubmission[];
@@ -418,6 +420,8 @@ export function parseSubmissionLibraryPage(
             "has_report",
             "display_name",
             "display_name_revision",
+            "owner_person_id",
+            "owner_name",
           ].includes(key),
       ) ||
       typeof submission.submission_id !== "string" ||
@@ -430,6 +434,16 @@ export function parseSubmissionLibraryPage(
       submission.state.length === 0 ||
       submission.state.length > 128 ||
       typeof submission.has_report !== "boolean"
+    )
+      throw new ReportContractError("acquisition_library_submission");
+    const hasOwner =
+      "owner_person_id" in submission || "owner_name" in submission;
+    if (
+      hasOwner &&
+      (typeof submission.owner_person_id !== "string" ||
+        !UUID.test(submission.owner_person_id) ||
+        typeof submission.owner_name !== "string" ||
+        !submission.owner_name.trim())
     )
       throw new ReportContractError("acquisition_library_submission");
     let label: CallLabel | null;
@@ -446,6 +460,14 @@ export function parseSubmissionLibraryPage(
       state: submission.state,
       hasReport: submission.has_report,
       label,
+      ...(hasOwner
+        ? {
+            owner: {
+              personId: submission.owner_person_id as string,
+              name: submission.owner_name as string,
+            },
+          }
+        : {}),
     });
   }
   return {

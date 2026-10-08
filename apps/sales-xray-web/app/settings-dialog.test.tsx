@@ -13,12 +13,14 @@ vi.mock("next/link", () => ({
   default: ({
     href,
     replace,
+    onClick,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { replace?: boolean }) => (
     <a
       {...props}
       href={href}
       onClick={(event) => {
+        onClick?.(event);
         const navigate =
           !event.defaultPrevented &&
           event.button === 0 &&
@@ -42,7 +44,11 @@ vi.mock("next/link", () => ({
 }));
 
 import { SettingsDialogHost } from "./settings-dialog";
+import { ProfileMenu } from "./profile-menu";
+import { invalidateShellProfile } from "./shell/profile-store";
 import { closeSettings, openSettings } from "./settings-open";
+import { GuideProgressStore } from "./guide-progress";
+import { FIRST_CALL_GUIDE } from "./guide-registry";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
@@ -63,10 +69,26 @@ function json(body: unknown, status = 200) {
 async function flush() {
   await act(async () => {
     for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    if (host.querySelector("dialog"))
+      await vi.waitFor(
+        () => {
+          const dialog = host.querySelector("dialog");
+          expect(
+            dialog === null ||
+              dialog.querySelector('[role="tab"][aria-selected="true"]') !==
+                null,
+          ).toBe(true);
+        },
+        { timeout: 3000 },
+      );
   });
 }
 
-async function render(authenticated: boolean) {
+async function render(
+  authenticated: boolean,
+  personId: string | null = "p",
+  withProfileMenu = false,
+) {
   await act(async () =>
     root.render(
       <UploadSessionProvider>
@@ -74,12 +96,16 @@ async function render(authenticated: boolean) {
           value={{
             status: authenticated ? "ready" : "unauthenticated",
             authenticated,
-            context: authenticated
-              ? { personId: "p", sessionId: "s", tenantId: "t" }
-              : null,
+            context:
+              authenticated && personId
+                ? { personId, sessionId: "s", tenantId: "t" }
+                : null,
             retry: () => {},
           }}
         >
+          {withProfileMenu ? (
+            <ProfileMenu authenticated={authenticated} accountHref="/account" />
+          ) : null}
           <SettingsDialogHost />
         </WorkspaceAccessProvider>
       </UploadSessionProvider>,
@@ -89,6 +115,7 @@ async function render(authenticated: boolean) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   window.history.replaceState(null, "", "/dashboard");
   host = document.createElement("div");
   document.body.append(host);
@@ -144,6 +171,62 @@ it("never opens account settings for a signed-out visitor", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 
+it("restarts the dismissed guide from Help and closes Settings so it can be seen", async () => {
+  new GuideProgressStore("p", FIRST_CALL_GUIDE).update({
+    stepId: "moments",
+    status: "skipped",
+  });
+  await render(true);
+  await act(async () => openSettings("help"));
+  await flush();
+  const toggle = host.querySelector<HTMLButtonElement>(
+    '[role="switch"][aria-label="First call guide"]',
+  )!;
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  await act(async () => toggle.click());
+  await flush();
+  expect(host.querySelector("dialog")).toBeNull();
+  expect(window.location.hash).toBe("");
+  expect(new GuideProgressStore("p", FIRST_CALL_GUIDE).getSnapshot()).toEqual({
+    stepId: "welcome",
+    status: "active",
+  });
+});
+
+it("keeps Help open when switching the guide off, remembers it, and isolates accounts", async () => {
+  await render(true);
+  await act(async () => openSettings("help"));
+  await flush();
+  const getToggle = () =>
+    host.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="First call guide"]',
+    )!;
+  expect(getToggle().getAttribute("aria-checked")).toBe("true");
+  await act(async () => getToggle().click());
+  await flush();
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+  expect(host.querySelector("dialog")).not.toBeNull();
+  await act(async () => closeSettings("replace"));
+  await act(async () => openSettings("help"));
+  await flush();
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+  await render(true, "q");
+  expect(getToggle().getAttribute("aria-checked")).toBe("true");
+  await render(true, "p");
+  expect(getToggle().getAttribute("aria-checked")).toBe("false");
+});
+
+it("hides the guide switch until the signed-in account identity is known", async () => {
+  await render(true, null);
+  await act(async () => openSettings("help"));
+  await flush();
+  expect(host.querySelector("dialog")).not.toBeNull();
+  expect(host.querySelector('[aria-label="First call guide"]')).toBeNull();
+  expect(
+    host.querySelector('#account-pane-help a[href^="mailto:"]'),
+  ).not.toBeNull();
+});
+
 it("replaces the settings entry with an internal destination", async () => {
   await render(true);
   const initialLength = window.history.length;
@@ -188,3 +271,40 @@ it.each(["ctrl", "meta", "shift", "blank", "download"])(
     expect(host.querySelector("dialog")).not.toBeNull();
   },
 );
+
+it("opens Profile from the pop-up without leaving the current call and returns focus", async () => {
+  invalidateShellProfile();
+  window.history.replaceState(
+    null,
+    "",
+    "/analysis/calls/fictional-call?view=report",
+  );
+  await render(true, "p", true);
+  const trigger = host.querySelector<HTMLButtonElement>(
+    "button[aria-expanded]",
+  )!;
+  await act(async () => trigger.click());
+  const profileLink = host.querySelector<HTMLAnchorElement>(
+    '[aria-label="Profile actions"] a[href="/account#profile"]',
+  )!;
+  profileLink.focus();
+  await act(async () => profileLink.click());
+  await flush();
+  expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+  expect(window.location.pathname + window.location.search).toBe(
+    "/analysis/calls/fictional-call?view=report",
+  );
+  expect(window.location.hash).toBe("#settings/profile");
+  const dialog = host.querySelector("dialog")!;
+  expect(
+    dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain("Profile");
+  expect(dialog.querySelector("#account-pane-profile")?.textContent).toContain(
+    "asha@example.invalid",
+  );
+  await act(async () => closeSettings("replace"));
+  await flush();
+  expect(host.querySelector("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  invalidateShellProfile();
+});

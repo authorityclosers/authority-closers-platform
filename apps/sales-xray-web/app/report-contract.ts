@@ -718,6 +718,9 @@ export function parseAcquisitionReport(
       "recovery",
       "display_name",
       "display_name_revision",
+      // Locally composed prior-call citations are reserved for their own UI;
+      // this parser ignores them and validates the current call as before.
+      "previous_call_context",
     ],
     "report_envelope",
   );

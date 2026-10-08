@@ -196,6 +196,65 @@ it("reuses a failed checkout key, shows server tax before payment and handles SD
   expect(text()).not.toContain("Payment successful");
 });
 
+it.each([null, 1, 2, 3])(
+  "keeps the Organisation floor in the stepper and checkout with catalogue minimum %s",
+  async (seatMin) => {
+    const onSelectionChange = vi.fn();
+    await render(
+      <PlansScreen
+        plans={PLANS_CATALOGUE_FIXTURE.map((plan) =>
+          plan.key === "organisation" ? { ...plan, seatMin } : plan,
+        )}
+        gstRate={PLANS_GST_RATE}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+    const minimum = Math.max(2, seatMin ?? 2);
+    const output = host.querySelector(
+      '[aria-label="Seats for Organisation"] output',
+    )!;
+    const decrease = button("Decrease seats for Organisation");
+    expect(output.textContent).toBe(String(minimum));
+    expect(decrease.disabled).toBe(true);
+    await click("Decrease seats for Organisation");
+    expect(output.textContent).toBe(String(minimum));
+    await click("Increase seats for Organisation");
+    expect(output.textContent).toBe(String(minimum + 1));
+    expect(decrease.disabled).toBe(false);
+    await click("Decrease seats for Organisation");
+    await click("Get Organisation");
+    expect(onSelectionChange).toHaveBeenLastCalledWith({
+      planKey: "organisation",
+      interval: "month",
+      seats: minimum,
+    });
+    expect(text()).toContain(`Subtotal (${minimum} seats)`);
+    expect(text()).not.toMatch(/\b1 seats\b|\b[2-9] seat\b/);
+  },
+);
+
+it("stops Organisation at 49 seats and retains the Personal singular and Enterprise floor", async () => {
+  await render(
+    <PlansScreen plans={PLANS_CATALOGUE_FIXTURE} gstRate={PLANS_GST_RATE} />,
+  );
+  const output = host.querySelector(
+    '[aria-label="Seats for Organisation"] output',
+  )!;
+  for (let seat = 2; seat < 49; seat++)
+    await click("Increase seats for Organisation");
+  expect(output.textContent).toBe("49");
+  expect(button("Increase seats for Organisation").disabled).toBe(true);
+  await click("Increase seats for Organisation");
+  expect(output.textContent).toBe("49");
+  await click("Get Personal");
+  expect(text()).toContain("Subtotal (1 seat)");
+  expect(text()).not.toContain("1 seats");
+  await click("Close checkout");
+  await click("Get Enterprise");
+  expect(text()).toContain("Subtotal (50 seats)");
+  expect(button("Decrease seats for Enterprise").disabled).toBe(true);
+});
+
 it("prices two team seats yearly, accepts the server total and warns about renewal approval", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
   await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
@@ -283,7 +342,7 @@ it("return verification shows minutes and the canonical new balance, with no dup
   expect(text()).toContain("Order minutes800");
   expect(text()).not.toMatch(/credits/i);
   expect(host.querySelector('span[aria-live="polite"]')?.textContent).toBe(
-    "+800 analysis minutes",
+    "+800 analysis minutes (13 h 20 min)",
   );
   expect(verifyOrder).toHaveBeenCalled();
   fixtureProviderReports(checkout.order.orderId, "paid");
@@ -305,12 +364,16 @@ it("keeps the final announcement stable while the visible minutes animate", asyn
     await render(<AnimatedCountUp targetMinutes={800} />);
     const announcement = host.querySelector('[aria-live="polite"]')!;
     const animated = host.querySelector('[aria-hidden="true"]')!;
-    expect(announcement.textContent).toBe("+800 analysis minutes");
+    expect(announcement.textContent).toBe(
+      "+800 analysis minutes (13 h 20 min)",
+    );
     await act(async () => frame(100));
     expect(animated.textContent).toContain("+0");
     await act(async () => frame(700));
     expect(animated.textContent).toContain("+700");
-    expect(announcement.textContent).toBe("+800 analysis minutes");
+    expect(announcement.textContent).toBe(
+      "+800 analysis minutes (13 h 20 min)",
+    );
   } finally {
     await act(async () => root.render(null));
     animation.mockRestore();

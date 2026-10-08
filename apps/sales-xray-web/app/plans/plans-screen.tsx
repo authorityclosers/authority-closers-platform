@@ -45,6 +45,11 @@ export type PurchaseQuote = {
 
 export type TopUpPack = DisplayTopUpPack;
 
+function minimumSeats(plan: Plan) {
+  if (plan.key === "organisation") return Math.max(2, plan.seatMin ?? 2);
+  return plan.key === "enterprise" ? 50 : (plan.seatMin ?? 1);
+}
+
 export type PlansScreenProps = {
   plans: Plan[];
   gstRate: number;
@@ -74,6 +79,30 @@ export type PlansScreenProps = {
  * - Top-ups removed from /plans (live in Settings → Plan & billing).
  * - Success: animated minute count-up, receipt link, and "Start an analysis".
  */
+function formatAllowanceHours(mins: number): string {
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0
+    ? `${count(hours)} h ${count(remMins)} min`
+    : `${count(hours)} h`;
+}
+
+function formatCurrentPlanAllowance(availableSeconds: number): string {
+  const mins = minutes(availableSeconds);
+  if (mins > 60) {
+    return `${count(mins)} min (${formatAllowanceHours(mins)}) left`;
+  }
+  return `${count(mins)} minutes left`;
+}
+
+function formatSuccessAllowance(availableSeconds: number): string {
+  const mins = minutes(availableSeconds);
+  if (mins > 60) {
+    return `${count(mins)} min (${formatAllowanceHours(mins)}) available on your account.`;
+  }
+  return `${count(mins)} analysis minutes available on your account.`;
+}
+
 export function PlansScreen({
   plans,
   gstRate,
@@ -109,10 +138,9 @@ export function PlansScreen({
   }, [error]);
 
   const plan = plans.find((item) => item.key === selectedPlanKey);
-  const seats = plan
-    ? (seatCounts[plan.key] ??
-      (plan.key === "enterprise" ? 50 : (plan.seatMin ?? 1)))
-    : 1;
+  const seatsFor = (item: Plan) =>
+    Math.max(minimumSeats(item), seatCounts[item.key] ?? minimumSeats(item));
+  const seats = plan ? seatsFor(plan) : 1;
   const selection: PlanSelection | null = plan
     ? { planKey: plan.key, interval, seats }
     : null;
@@ -147,13 +175,11 @@ export function PlansScreen({
     setSelectedPlanKey(key);
     setMobileTab(key);
     const item = plans.find((i) => i.key === key);
-    const itemSeats =
-      seatCounts[key] ?? (key === "enterprise" ? 50 : (item?.seatMin ?? 1));
     if (item) {
       onSelectionChange?.({
         planKey: key,
         interval,
-        seats: itemSeats,
+        seats: seatsFor(item),
       });
     }
   };
@@ -164,9 +190,12 @@ export function PlansScreen({
   };
 
   const changeSeats = (key: string, next: number) => {
-    setSeatCounts((prev) => ({ ...prev, [key]: next }));
+    const item = plans.find((plan) => plan.key === key);
+    if (!item) return;
+    const bounded = Math.max(minimumSeats(item), next);
+    setSeatCounts((prev) => ({ ...prev, [key]: bounded }));
     if (selectedPlanKey === key) {
-      onSelectionChange?.({ planKey: key, interval, seats: next });
+      onSelectionChange?.({ planKey: key, interval, seats: bounded });
     }
   };
 
@@ -203,7 +232,7 @@ export function PlansScreen({
               {allowance?.unlimited
                 ? `Unlimited · ${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                 : allowance
-                  ? `${count(minutes(allowance.availableSeconds))} analysis minutes available on your account.`
+                  ? formatSuccessAllowance(allowance.availableSeconds)
                   : "Your updated analysis minutes are being confirmed."}
             </p>
             <div className={styles.actions}>
@@ -236,7 +265,9 @@ export function PlansScreen({
                     <b>Current: {mePlan.plan.name}</b> ·{" "}
                     {mePlan.allowance.unlimited
                       ? `Unlimited · ${count(minutes(mePlan.allowance.committedSeconds))} min used or reserved by analyses.`
-                      : `${count(minutes(mePlan.allowance.availableSeconds))} minutes left`}
+                      : formatCurrentPlanAllowance(
+                          mePlan.allowance.availableSeconds,
+                        )}
                   </span>
                 </div>
               ) : null}
@@ -297,8 +328,8 @@ export function PlansScreen({
                 const isOrganisation = item.key === "organisation";
                 const isEnterprise = item.key === "enterprise";
                 const team = !isPersonal;
-                const defaultMin = isEnterprise ? 50 : (item.seatMin ?? 1);
-                const number = seatCounts[item.key] ?? defaultMin;
+                const defaultMin = minimumSeats(item);
+                const number = seatsFor(item);
                 const price = planPrice(item, interval);
                 const itemSubtotal = price === null ? null : price * number;
                 const itemGst =
@@ -422,7 +453,8 @@ export function PlansScreen({
                         {itemTotal !== null ? (
                           <div className={styles.liveTotalLine}>
                             <span>
-                              {number} seats · <b>{money(itemTotal)}</b> a{" "}
+                              {number} {number === 1 ? "seat" : "seats"} ·{" "}
+                              <b>{money(itemTotal)}</b> a{" "}
                               {interval === "month" ? "month" : "year"} incl.
                               GST
                             </span>

@@ -189,7 +189,10 @@ function LightboxShellFrame({
   const [accountCardOpen, setAccountCardOpen] = useState(false);
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
   const accountAnchorRef = useRef<HTMLElement | null>(null);
-  const unseenNews = useUnseenNews();
+  const unseenNews = useUnseenNews(
+    authenticated,
+    process.env.NODE_ENV !== "test",
+  );
   const profile = useShellProfile(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -886,6 +889,7 @@ function LightboxShellFrame({
           onClose={closeAccountCard}
           name={profileName}
           email={profile?.email ?? null}
+          photoUrl={profile?.photo_url}
           allowance={shownAllowance}
         />
       ) : null}

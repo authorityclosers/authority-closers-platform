@@ -94,6 +94,10 @@ const config: NextConfig = {
                   "/v1/auth/google/completion",
                   "/v1/me/sales-xray-profile",
                   "/v1/me/sales-xray-profile/write-eligibility",
+                  "/v1/updates",
+                  "/v1/updates/seen",
+                  "/v1/notifications",
+                  "/v1/notifications/read",
                 ].map((source) => ({
                   source,
                   destination: `${apiOrigin}${source}`,

@@ -16,9 +16,9 @@ import {
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -29,45 +29,15 @@ import type { Allowance } from "../acquisition-client";
 import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { openSettings } from "../settings-open";
-import { CHANGELOG } from "./changelog";
+import { AccountAvatarImage } from "../speaker-avatar";
+import { useShellUpdates } from "./updates-store";
 import styles from "./settings-menu.module.css";
 
 type View = "main" | "language" | "news";
 
-const SEEN_KEY = "ac.xray.news-seen";
-const SEEN_EVENT = "sales-xray:news-seen";
-
-function readSeen(): string | null {
-  try {
-    return localStorage.getItem(SEEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function subscribeSeen(callback: () => void) {
-  window.addEventListener(SEEN_EVENT, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(SEEN_EVENT, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
-
-/** How many changelog entries are newer than the last one this viewer saw. */
-export function useUnseenNews(): number {
-  const seen = useSyncExternalStore(subscribeSeen, readSeen, () => null);
-  const index = CHANGELOG.findIndex((entry) => entry.id === seen);
-  return index === -1 ? CHANGELOG.length : index;
-}
-
-function markNewsSeen() {
-  try {
-    localStorage.setItem(SEEN_KEY, CHANGELOG[0]?.id ?? "");
-  } catch {
-    // Private windows may refuse storage; the badge simply stays.
-  }
-  window.dispatchEvent(new Event(SEEN_EVENT));
+/** The badge follows the account's canonical receipt count. */
+export function useUnseenNews(authenticated = true, enabled = true): number {
+  return useShellUpdates(authenticated, enabled).unseen_count;
 }
 
 const DAY = new Intl.DateTimeFormat("en-IN", {
@@ -155,6 +125,7 @@ export function SettingsMenu({
   onClose,
   name,
   email,
+  photoUrl,
   allowance,
 }: {
   open: boolean;
@@ -162,6 +133,7 @@ export function SettingsMenu({
   onClose: () => void;
   name: string | null;
   email: string | null;
+  photoUrl?: string | null;
   allowance: Allowance | null;
 }) {
   const [view, setView] = useState<View>("main");
@@ -169,7 +141,13 @@ export function SettingsMenu({
     null,
   );
   const card = useRef<HTMLDivElement>(null);
-  const unseen = useUnseenNews();
+  const updates = useShellUpdates();
+  const { markSeen } = updates;
+  const unseen = updates.unseen_count;
+  const displayedKeys = useMemo(
+    () => updates.notes.filter((note) => !note.seen).map((note) => note.key),
+    [updates.notes],
+  );
   const minutes = minutesLine(allowance);
   const guide = useFirstCallGuideSwitch();
 
@@ -250,8 +228,9 @@ export function SettingsMenu({
 
   useEffect(() => {
     // The shell mounts the card only while open, so each open starts at main.
-    if (open && view === "news") markNewsSeen();
-  }, [open, view]);
+    if (open && view === "news" && displayedKeys.length)
+      void markSeen(displayedKeys).catch(() => {});
+  }, [open, view, displayedKeys, markSeen]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -273,7 +252,9 @@ export function SettingsMenu({
           <>
             <div className={styles.who}>
               <span className={styles.avatar} aria-hidden="true">
-                {initials(name, email)}
+                <AccountAvatarImage key={email} photoUrl={photoUrl}>
+                  {initials(name, email)}
+                </AccountAvatarImage>
               </span>
               <span className={styles.whoText}>
                 <b>{name || "Your account"}</b>
@@ -401,10 +382,19 @@ export function SettingsMenu({
         {view === "news" && (
           <>
             <Back label="What's new" onBack={() => setView("main")} />
+            {!updates.notes.length ? (
+              <p className={styles.note}>
+                {updates.status === "error"
+                  ? "Updates could not load. Try again when you return."
+                  : updates.status === "loading"
+                    ? "Loading updates…"
+                    : "You're up to date."}
+              </p>
+            ) : null}
             <ol className={styles.news}>
-              {CHANGELOG.map((entry, index) => (
+              {updates.notes.map((entry, index) => (
                 <li
-                  key={entry.id}
+                  key={entry.key}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <time dateTime={entry.date}>
@@ -412,7 +402,7 @@ export function SettingsMenu({
                   </time>
                   <b>
                     {entry.title}
-                    {index < unseen ? (
+                    {!entry.seen ? (
                       <span className={styles.dot} aria-label="New" />
                     ) : null}
                   </b>
