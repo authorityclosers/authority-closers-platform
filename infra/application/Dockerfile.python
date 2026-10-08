@@ -41,7 +41,7 @@ USER root
 # boundary. Keep the runtime image self-contained so production processing does
 # not depend on an unbounded host executable or a second mutable container.
 RUN apt-get update && \
-    apt-get install --yes --no-install-recommends ffmpeg && \
+    apt-get install --yes --no-install-recommends ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 10001 ac && \
@@ -52,6 +52,7 @@ WORKDIR /app
 COPY --from=build --chown=ac:ac /app/.venv /app/.venv
 COPY --from=build --chmod=0444 /app/.ac-release-id /app/.ac-release-id
 COPY --chmod=0444 infra/application/product-notes.json /app/product-notes.json
+COPY --chmod=0555 infra/sales-xray-web/http-check.sh /usr/local/bin/ac-http-healthcheck
 COPY --chown=ac:ac alembic.ini ./
 COPY --chown=ac:ac db db
 
