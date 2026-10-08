@@ -375,6 +375,16 @@ export function ProfileMenu({
               <span>Calls</span>
             </Link>
             <ThemeRow />
+            {authenticated ? (
+              <Link
+                href="/get-apps"
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <Monitor size={16} aria-hidden="true" />
+                <span>Get the apps</span>
+              </Link>
+            ) : null}
           </div>
           <div className={styles.separator} role="separator" />
           <p className={styles.groupLabel}>Help</p>

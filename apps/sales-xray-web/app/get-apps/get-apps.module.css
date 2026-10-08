@@ -1,0 +1,42 @@
+.page {
+  max-width: 1040px;
+  margin: auto;
+  padding: 24px;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+}
+
+.page a {
+  color: var(--lx-teal);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+  margin-block: 24px;
+}
+
+.card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg, 20px);
+  background: var(--lx-surface);
+  overflow-wrap: anywhere;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.card summary {
+  cursor: pointer;
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-block: 12px;
+}
