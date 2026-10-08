@@ -48,7 +48,7 @@ def profile(row: ConversationProspect) -> dict[str, Any]:
         "revision": row.revision,
         "owner_person_id": str(row.owner_person_id),
         "stage": None,
-        "tags": [],
+        "tags": row.tags,
         "photo_url": None,
         "contact": None,
         "fields": [],

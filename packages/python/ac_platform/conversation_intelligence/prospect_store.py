@@ -28,6 +28,21 @@ from ac_platform.conversation_intelligence.prospect_models import (
 from ac_platform.kernel.authz import ActorContext
 
 
+def validated_tags(value: object) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or len(value) > 10
+        or any(
+            not isinstance(tag, str) or not 1 <= len(tag) <= 40 or not tag.strip() for tag in value
+        )
+    ):
+        raise ValueError("Supply valid prospect tags.")
+    tags = [tag.strip() for tag in value]
+    if len(set(tags)) != len(tags):
+        raise ValueError("Supply distinct prospect tags.")
+    return tags
+
+
 @dataclass(frozen=True)
 class ProspectQueries:
     """Authorized SQL building blocks for bounded API pages/aggregates.
@@ -136,6 +151,49 @@ class ProspectStore:
                 "field": "display_name",
                 "previous_revision": str(previous_revision),
                 "current_revision": str(row.revision),
+            },
+            now,
+        )
+        return row
+
+    async def edit_tags(
+        self, actor: ActorContext, prospect_id: UUID, *, tags: list[str], expected_revision: int
+    ) -> ConversationProspect:
+        try:
+            tags = validated_tags(tags)
+        except ValueError:
+            raise ConversationError("Supply valid prospect tags and revision.") from None
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise ConversationError("Supply valid prospect tags and revision.")
+        query = (await self.queries(actor)).prospects
+        row = await self.database.scalar(
+            query.where(
+                ConversationProspect.id == prospect_id,
+                ConversationProspect.owner_person_id == actor.person_id,
+            )
+            .with_for_update(of=ConversationProspect)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise ConversationNotFound("This prospect is unavailable.")
+        if row.revision != expected_revision:
+            raise ConversationConflict("The prospect changed. Reload before saving again.")
+        if row.tags == tags:
+            return row
+        previous_revision, previous_count = row.revision, len(row.tags)
+        now = utc(self.ownership.clock())
+        row.tags, row.revision, row.updated_at = tags, previous_revision + 1, now
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "tags_changed",
+            {
+                "field": "tags",
+                "previous_revision": str(previous_revision),
+                "current_revision": str(row.revision),
+                "previous_tag_count": str(previous_count),
+                "current_tag_count": str(len(tags)),
             },
             now,
         )

@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -43,6 +44,7 @@ class ConversationProspect(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("tenants.id", ondelete="RESTRICT"))
     display_name: Mapped[str] = mapped_column(String(160))
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, server_default=text("'[]'"))
     created_by_person_id: Mapped[UUID] = mapped_column(Uuid)
     owner_person_id: Mapped[UUID] = mapped_column(Uuid)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
