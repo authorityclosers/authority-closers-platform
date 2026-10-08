@@ -9,6 +9,18 @@ from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Revision = Annotated[str, Field(min_length=1, max_length=128)]
+AudioType = Literal[
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
+    "audio/flac",
+    "audio/mp4",
+    "audio/amr",
+    "audio/amr-wb",
+    "audio/aac",
+    "audio/3gpp",
+    "audio/webm",
+]
 
 
 class Contract(BaseModel):
@@ -18,7 +30,7 @@ class Contract(BaseModel):
 class RecordingIntent(Contract):
     source_sha256: Digest
     source_bytes: StrictInt = Field(gt=0, le=MAX_AUDIO_BYTES)
-    content_type: Literal["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4"]
+    content_type: AudioType
     permission_reference: UUID
     purpose: Literal["internal_analysis"]
 
@@ -33,7 +45,7 @@ class RunIntent(Contract):
 class IntakeIntent(Contract):
     source_sha256: Digest
     source_bytes: StrictInt = Field(gt=0, le=MAX_AUDIO_BYTES)
-    content_type: Literal["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4"]
+    content_type: AudioType
     duration_ms: StrictInt = Field(gt=0, le=7200000)
     purpose: Literal["internal_analysis"]
 

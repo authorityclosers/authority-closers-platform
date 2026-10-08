@@ -75,11 +75,16 @@ _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 _ALLOWED_CONTENT_TYPES = frozenset(
     {
         "application/octet-stream",
+        "audio/aac",
+        "audio/amr",
+        "audio/amr-wb",
+        "audio/3gpp",
         "audio/flac",
         "audio/mp4",
         "audio/mpeg",
         "audio/ogg",
         "audio/wav",
+        "audio/webm",
         "audio/x-wav",
     }
 )

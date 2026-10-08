@@ -1314,7 +1314,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               id="call-file"
               className="visually-hidden"
               type="file"
-              accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+              accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
               aria-label="Choose sales call audio"
               onChange={(e) => selectFile(e.target.files?.[0])}
             />

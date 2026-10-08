@@ -10,13 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 from uuid import UUID
 
 from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredSource
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.checkpoints import content_hash
-from ac_platform.conversation_intelligence.contracts import IntakeIntent
+from ac_platform.conversation_intelligence.contracts import AudioType, IntakeIntent
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import (
     HOSTED_C1_RATE,
@@ -25,8 +24,6 @@ from ac_platform.conversation_intelligence.native_runtime import (
     NativeRuntimeError,
 )
 from ac_platform.conversation_intelligence.signals import _HEADER, MAX_SECONDS, file_sha256
-
-AudioType = Literal["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4"]
 
 
 class NativePreflightTimeout(ConversationError):
@@ -44,8 +41,19 @@ def original_content_type(header: bytes) -> AudioType:
         return "audio/ogg"
     if header.startswith(b"fLaC"):
         return "audio/flac"
+    if header.startswith(b"#!AMR-WB\n"):
+        return "audio/amr-wb"
+    if header.startswith(b"#!AMR\n"):
+        return "audio/amr"
+    if header.startswith(b"\x1a\x45\xdf\xa3") and b"\x42\x82\x84webm" in header:
+        return "audio/webm"
     if len(header) >= 12 and header[4:8] == b"ftyp":
+        if header[8:11] == b"3gp":
+            return "audio/3gpp"
         return "audio/mp4"
+    # ADTS shares MPEG's sync bits; its zero layer bits distinguish AAC.
+    if len(header) >= 7 and header[0] == 255 and header[1] & 0xF6 == 0xF0:
+        return "audio/aac"
     if header.startswith(b"ID3") or (
         len(header) >= 2 and header[0] == 255 and header[1] & 0xE0 == 0xE0
     ):

@@ -2875,7 +2875,7 @@ export function AcquisitionStudio({
                   className="visually-hidden"
                   id="acquisition-file"
                   type="file"
-                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
                   aria-label="Choose sales call audio"
                   disabled={
                     !policy ||
