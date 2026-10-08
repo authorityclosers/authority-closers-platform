@@ -327,6 +327,7 @@ it("rejects an already aborted signal before HTTP", async () => {
 
 it("retains an abort during an error-body read", async () => {
   const controller = new AbortController();
+  const reason = new DOMException("Fictional cancelled read", "AbortError");
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({
@@ -334,12 +335,12 @@ it("retains an abort during an error-body read", async () => {
       status: 403,
       headers: new Headers({ "content-type": "application/problem+json" }),
       json: async () => {
-        controller.abort();
-        throw controller.signal.reason;
+        controller.abort(reason);
+        throw reason;
       },
     })),
   );
   await expect(
     liveCredits.readBalance("personal", controller.signal),
-  ).rejects.toBe(controller.signal.reason);
+  ).rejects.toBe(reason);
 });
