@@ -2,6 +2,25 @@
 
 export type OrgRole = "owner" | "admin" | "member";
 
+export const organisationDetailFields = [
+  "name",
+  "legal_name",
+  "gstin",
+  "address",
+  "industry",
+  "team_size",
+  "website",
+  "city",
+] as const;
+export type OrganisationDetails = Record<
+  (typeof organisationDetailFields)[number],
+  string
+>;
+export type OrganisationSettings = OrganisationDetails & {
+  tenant_id: string;
+  logo_url: string | null;
+};
+
 export type Organisation = {
   tenantId: string;
   name: string;
@@ -66,12 +85,13 @@ export const noOrganisationSelected = (error: unknown) =>
 async function call(
   path: string,
   init: RequestInit & { signal?: AbortSignal } = {},
+  requestKey?: string,
 ): Promise<unknown> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body) headers.set("Content-Type", "application/json");
   if (init.method && init.method !== "GET")
-    headers.set("Idempotency-Key", crypto.randomUUID());
+    headers.set("Idempotency-Key", requestKey ?? crypto.randomUUID());
   const response = await fetch(`/v1/organisation${path}`, {
     credentials: "same-origin",
     cache: "no-store",
@@ -217,6 +237,63 @@ export async function readOrganisation(
   signal?: AbortSignal,
 ): Promise<Organisation> {
   return parseOrganisation(await call("", { signal }));
+}
+
+export function parseOrganisationSettings(
+  value: unknown,
+  tenantId: string,
+): OrganisationSettings {
+  const data = obj(value);
+  if (
+    !exact(value, [...organisationDetailFields, "tenant_id", "logo_url"]) ||
+    !id(data.tenant_id) ||
+    data.tenant_id !== tenantId ||
+    !organisationDetailFields.every(
+      (field) => typeof data[field] === "string",
+    ) ||
+    !nullableText(data.logo_url)
+  )
+    throw new Error("Invalid organisation settings response.");
+  return data as OrganisationSettings;
+}
+
+export async function readOrganisationSettings(
+  tenantId: string,
+  signal?: AbortSignal,
+) {
+  return parseOrganisationSettings(
+    await call("/settings", { signal }),
+    tenantId,
+  );
+}
+
+export async function saveOrganisationSettings(
+  tenantId: string,
+  details: OrganisationDetails,
+  requestKey: string,
+  signal?: AbortSignal,
+) {
+  if (
+    !/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/.test(
+      requestKey,
+    )
+  )
+    throw new Error("A canonical UUIDv4 request key is required.");
+  const body = Object.fromEntries(
+    organisationDetailFields.map((field) => [field, details[field]]),
+  );
+  return parseOrganisationSettings(
+    await call(
+      "/settings",
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+        signal,
+      },
+      requestKey,
+    ),
+    tenantId,
+  );
 }
 
 export async function readMembers(signal?: AbortSignal): Promise<OrgMember[]> {
