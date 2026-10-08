@@ -150,7 +150,6 @@
 	handle @production_sales_xray_static {
 		import base_security_headers
 		header X-Authority-Closers-Route "sales-xray-production"
-		header Cache-Control "public, max-age=31536000, immutable"
 		reverse_proxy ac-production-sales-xray-web:3016
 	}
 	@production_sales_xray host salesxray.authorityclosers.com

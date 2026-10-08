@@ -150,7 +150,6 @@
 	handle @staging_sales_xray_static {
 		import base_security_headers
 		header X-Authority-Closers-Route "sales-xray-staging"
-		header Cache-Control "public, max-age=31536000, immutable"
 		reverse_proxy ac-staging-sales-xray-web:3016
 	}
 	@staging_sales_xray host salesxray-staging.authorityclosers.com
