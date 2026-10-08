@@ -138,8 +138,14 @@ companion_pairings = sa.Table(
     _companion_time("expires_at"),
     _companion_time("decided_at", nullable=True),
     _companion_time("collected_at", nullable=True),
-    sa.CheckConstraint("code_sha256 ~ '^[0-9a-f]{64}$'", name="code_hash"),
-    sa.CheckConstraint("poll_secret_sha256 ~ '^[0-9a-f]{64}$'", name="poll_hash"),
+    sa.CheckConstraint("length(code_sha256) = 64", name="code_hash_length"),
+    sa.CheckConstraint("length(poll_secret_sha256) = 64", name="poll_hash_length"),
+    sa.CheckConstraint("code_sha256 ~ '^[0-9a-f]{64}$'", name="code_hash").ddl_if(
+        dialect="postgresql"
+    ),
+    sa.CheckConstraint("poll_secret_sha256 ~ '^[0-9a-f]{64}$'", name="poll_hash").ddl_if(
+        dialect="postgresql"
+    ),
     sa.CheckConstraint("length(name) BETWEEN 1 AND 160", name="name_bounded"),
     sa.CheckConstraint(
         "platform IN ('android', 'ios', 'windows', 'macos', 'chrome')", name="platform"
@@ -147,7 +153,7 @@ companion_pairings = sa.Table(
     sa.CheckConstraint(
         "expires_at > created_at AND expires_at <= created_at + interval '10 minutes'",
         name="expiry",
-    ),
+    ).ddl_if(dialect="postgresql"),
     sa.CheckConstraint(
         "state IN ('pending', 'approved', 'denied', 'collected') AND "
         "(state IN ('approved', 'collected')) = (device_id IS NOT NULL) AND "
@@ -176,7 +182,7 @@ companion_refresh_families = sa.Table(
         "absolute_expires_at > created_at AND "
         "absolute_expires_at <= created_at + interval '90 days'",
         name="absolute_expiry",
-    ),
+    ).ddl_if(dialect="postgresql"),
     sa.CheckConstraint(
         "idle_expires_at > created_at AND idle_expires_at <= absolute_expires_at",
         name="idle_expiry",
@@ -196,39 +202,22 @@ companion_credentials = sa.Table(
     _companion_time("created_at"),
     _companion_time("expires_at"),
     _companion_time("consumed_at", nullable=True),
-    sa.CheckConstraint("token_sha256 ~ '^[0-9a-f]{64}$'", name="token_hash"),
+    sa.CheckConstraint("length(token_sha256) = 64", name="token_hash_length"),
+    sa.CheckConstraint("token_sha256 ~ '^[0-9a-f]{64}$'", name="token_hash").ddl_if(
+        dialect="postgresql"
+    ),
     sa.CheckConstraint(
         "expires_at > created_at AND "
         "((kind = 'access' AND expires_at <= created_at + interval '15 minutes') OR "
         "(kind = 'refresh' AND expires_at <= created_at + interval '30 days') OR "
         "(kind = 'web_session' AND expires_at <= created_at + interval '60 seconds'))",
         name="kind_expiry",
-    ),
+    ).ddl_if(dialect="postgresql"),
     sa.CheckConstraint(
         "consumed_at IS NULL OR consumed_at BETWEEN created_at AND expires_at",
         name="consumption_time",
     ),
     sa.Index("ix_companion_credentials_family_id", "family_id"),
-)
-CAPTURE_SOURCES = (
-    "web_upload",
-    "browser_display_capture",
-    "android_dialer_pickup",
-    "android_share",
-    "ios_share",
-    "ios_recorder",
-    "desktop_recorder",
-    "desktop_watch_folder",
-    "chrome_tab",
-)
-# Provenance is schema-only here; card 6 owns mapping and writing this column.
-_submissions = Base.metadata.tables["conversation_guest_submissions"]
-_submissions.append_column(sa.Column("capture_source", sa.String(32), nullable=True))
-_submissions.append_constraint(
-    sa.CheckConstraint(
-        "capture_source IN (" + ", ".join(repr(source) for source in CAPTURE_SOURCES) + ")",
-        name="capture_source",
-    )
 )
 
 

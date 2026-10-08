@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
-from sqlalchemy import UniqueConstraint
+import pytest
+from sqlalchemy import UniqueConstraint, create_engine, insert, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.db.models import model_metadata
 
 
@@ -170,6 +176,67 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
     }
 
     assert set(model_metadata().tables) == expected
+
+
+@pytest.mark.parametrize(
+    "table_name,column",
+    [
+        ("companion_pairings", "code_sha256"),
+        ("companion_pairings", "poll_secret_sha256"),
+        ("companion_credentials", "token_sha256"),
+    ],
+)
+def test_sqlite_registry_creation_keeps_hash_length_checks(table_name: str, column: str) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    try:
+        metadata = model_metadata()
+        metadata.create_all(engine)
+        table = metadata.tables[table_name]
+        now = datetime.now(UTC)
+        values = {"id": uuid4(), "created_at": now, "expires_at": now}
+        if table_name == "companion_pairings":
+            values.update(
+                name="Synthetic",
+                platform="ios",
+                state="pending",
+                code_sha256="a" * 64,
+                poll_secret_sha256="b" * 64,
+            )
+        else:
+            values.update(family_id=uuid4(), kind="access", token_sha256="c" * 64)
+        with engine.begin() as db, pytest.raises(IntegrityError, match="hash_length"):
+            db.execute(insert(table).values(**(values | {column: "short"})))
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("capture_source", [None, "chrome_tab"])
+def test_submission_capture_source_round_trips_through_orm(capture_source: str | None) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    try:
+        model_metadata().create_all(engine)
+        with Session(engine) as db:
+            submission = ConversationGuestSubmission(
+                tenant_id=uuid4(),
+                submission_id=uuid4(),
+                person_id=uuid4(),
+                recording_id=uuid4(),
+                processing_lease_id=uuid4(),
+                usage_id=uuid4(),
+                source_sha256="d" * 64,
+                created_at=datetime.now(UTC),
+                capture_source=capture_source,
+            )
+            db.add(submission)
+            db.commit()
+            db.expunge_all()
+            stored = db.scalars(select(ConversationGuestSubmission)).one()
+            assert stored.capture_source == capture_source
+            with pytest.raises(IntegrityError, match="capture_source"), db.begin_nested():
+                stored.capture_source = "inferred"
+                db.flush()
+    finally:
+        engine.dispose()
 
 
 def test_media_caption_supersession_target_is_uniquely_addressable() -> None:

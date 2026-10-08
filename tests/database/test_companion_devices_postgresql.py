@@ -67,7 +67,15 @@ def binding(postgres_harness: Engine):
 
 def test_migration_matches_registry(postgres_harness: Engine) -> None:
     with postgres_harness.connect() as db:
-        assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
+        differences = compare_metadata(MigrationContext.configure(db), model_metadata())
+    # Portable metadata adds length checks; the unchanged PostgreSQL migration
+    # already enforces exact length with its stricter hexadecimal regex checks.
+    # Any other schema difference must still fail this proof.
+    assert sorted((change[0], change[1].name) for change in differences) == [
+        ("add_constraint", "ck_companion_credentials_token_hash_length"),
+        ("add_constraint", "ck_companion_pairings_code_hash_length"),
+        ("add_constraint", "ck_companion_pairings_poll_hash_length"),
+    ]
 
 
 @pytest.mark.parametrize("column", ["code_sha256", "poll_secret_sha256"])

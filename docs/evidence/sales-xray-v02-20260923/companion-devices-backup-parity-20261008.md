@@ -12,7 +12,8 @@ attempts, refresh families and hashed access/refresh/web-session credentials.
 Database checks reject plaintext credentials and invalid expiry bounds; a trigger
 preserves credential payloads and spent-token timestamps across rotation. The
 submission capture-source column is nullable and has no default or backfill.
-It is registered as schema metadata; card 6 owns its ORM mapping and writers.
+It is mapped on `ConversationGuestSubmission`; card 6 owns its writers. The ORM
+mapping was moved to the owning model in the CTO-requested revision below.
 
 All three separately packaged backup/restore catalogues recognise the new head
 and retain historical mappings, including prospect tags (v48, 133 tables).
@@ -68,3 +69,35 @@ Supply the explicit disposable loopback `AC_TEST_DATABASE_URL` for database
 checks without printing its value. Sensitive review requires CTO review followed
 by CEO approval; the watchdog owns merge. Native routes, capture-source writers,
 activation flags and staging/production changes remain outside this card.
+
+CTO delta verification on 2026-10-08 (after review of `95cf0c4`):
+
+- PostgreSQL regex and interval constraints in the registry now use
+  `.ddl_if(dialect="postgresql")`. Portable hash length checks still apply on
+  both dialects. The PostgreSQL migration SQL remains unchanged. Its regex
+  checks already enforce exact length; the registry drift proof allows exactly
+  the three redundant metadata length constraints and rejects any other drift.
+- `capture_source` and its allowed-value CHECK now belong to the mapped
+  `ConversationGuestSubmission` class. Registry mutation was removed. SQLite
+  ORM readback covers NULL and `chrome_tab`, and rejects `inferred`.
+- SQLite registry, database certificates, certificate services and certificate
+  HTTP tests: 34 passed. This exercises full registry creation, including all
+  four companion tables, and verifies rejection of short hashes.
+- Disposable PostgreSQL companion storage tests: 8 passed. Release-tool and
+  prospect-tag parity tests: 199 passed. Three pure catalogue assertions passed
+  again. Formatting, lint and mypy passed. Root-owned/live restore proofs were
+  not repeated or claimed.
+- Branch FastAPI lifespan and `/health/ready` were checked again against the
+  existing fictional loopback database: HTTP 200, `status: ready`, release
+  `local-unreleased`; readback remains `20261008_0078`. No migration was applied
+  again. The TestClient used the allowed loopback Host. Hosted merged-head
+  verification still requires the reviewed release.
+- The credential DELETE-history concern was recorded separately in Intake
+  Ledger AUT-1618 for a later card, as the CTO directed. The existing UPDATE
+  trigger and migration are unchanged by this revision.
+
+Reproduce the SQLite regression checks:
+
+```sh
+uv run pytest -q tests/database/test_model_registry.py tests/database/test_certificates.py tests/unit/certificates/test_services.py tests/unit/http/test_certificate_routes.py
+```
