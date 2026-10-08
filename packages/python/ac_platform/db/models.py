@@ -8,6 +8,9 @@ drift checks.
 
 from __future__ import annotations
 
+from datetime import datetime
+
+import sqlalchemy as sa
 from sqlalchemy import MetaData
 
 from ac_platform.app_updates import models as app_update_models
@@ -88,6 +91,144 @@ MODEL_MODULES = (
     billing_credit_models,
     billing_invoice_models,
     billing_order_models,
+)
+
+
+def _companion_hash(name: str) -> sa.Column[str]:
+    return sa.Column(name, sa.String(64), nullable=False, unique=True)
+
+
+def _companion_time(name: str, *, nullable: bool = False) -> sa.Column[datetime]:
+    return sa.Column(name, sa.DateTime(timezone=True), nullable=nullable)
+
+
+# Core tables keep this storage-only card inside the canonical registry. Native
+# HTTP admission and credential transitions are implemented by subsequent cards.
+companion_devices = sa.Table(
+    "companion_devices",
+    Base.metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("tenant_id", sa.Uuid(), nullable=False),
+    sa.Column("person_id", sa.Uuid(), nullable=False),
+    sa.Column("name", sa.String(160), nullable=False),
+    sa.Column("platform", sa.String(16), nullable=False),
+    _companion_time("created_at"),
+    _companion_time("revoked_at", nullable=True),
+    sa.ForeignKeyConstraint(
+        ["tenant_id", "person_id"], ["memberships.tenant_id", "memberships.person_id"]
+    ),
+    sa.CheckConstraint("length(name) BETWEEN 1 AND 160", name="name_bounded"),
+    sa.CheckConstraint(
+        "platform IN ('android', 'ios', 'windows', 'macos', 'chrome')", name="platform"
+    ),
+    sa.CheckConstraint("revoked_at IS NULL OR revoked_at >= created_at", name="revocation_time"),
+    sa.Index("ix_companion_devices_owner", "tenant_id", "person_id"),
+)
+companion_pairings = sa.Table(
+    "companion_pairings",
+    Base.metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    _companion_hash("code_sha256"),
+    _companion_hash("poll_secret_sha256"),
+    sa.Column("name", sa.String(160), nullable=False),
+    sa.Column("platform", sa.String(16), nullable=False),
+    sa.Column("state", sa.String(16), nullable=False),
+    sa.Column("device_id", sa.Uuid(), sa.ForeignKey("companion_devices.id"), unique=True),
+    _companion_time("created_at"),
+    _companion_time("expires_at"),
+    _companion_time("decided_at", nullable=True),
+    _companion_time("collected_at", nullable=True),
+    sa.CheckConstraint("code_sha256 ~ '^[0-9a-f]{64}$'", name="code_hash"),
+    sa.CheckConstraint("poll_secret_sha256 ~ '^[0-9a-f]{64}$'", name="poll_hash"),
+    sa.CheckConstraint("length(name) BETWEEN 1 AND 160", name="name_bounded"),
+    sa.CheckConstraint(
+        "platform IN ('android', 'ios', 'windows', 'macos', 'chrome')", name="platform"
+    ),
+    sa.CheckConstraint(
+        "expires_at > created_at AND expires_at <= created_at + interval '10 minutes'",
+        name="expiry",
+    ),
+    sa.CheckConstraint(
+        "state IN ('pending', 'approved', 'denied', 'collected') AND "
+        "(state IN ('approved', 'collected')) = (device_id IS NOT NULL) AND "
+        "(state = 'pending') = (decided_at IS NULL) AND "
+        "(state = 'collected') = (collected_at IS NOT NULL)",
+        name="state_binding",
+    ),
+    sa.CheckConstraint(
+        "decided_at IS NULL OR decided_at BETWEEN created_at AND expires_at", name="decision_time"
+    ),
+    sa.CheckConstraint(
+        "collected_at IS NULL OR collected_at BETWEEN decided_at AND expires_at",
+        name="collection_time",
+    ),
+)
+companion_refresh_families = sa.Table(
+    "companion_refresh_families",
+    Base.metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column("device_id", sa.Uuid(), sa.ForeignKey("companion_devices.id"), nullable=False),
+    _companion_time("created_at"),
+    _companion_time("idle_expires_at"),
+    _companion_time("absolute_expires_at"),
+    _companion_time("revoked_at", nullable=True),
+    sa.CheckConstraint(
+        "absolute_expires_at > created_at AND "
+        "absolute_expires_at <= created_at + interval '90 days'",
+        name="absolute_expiry",
+    ),
+    sa.CheckConstraint(
+        "idle_expires_at > created_at AND idle_expires_at <= absolute_expires_at",
+        name="idle_expiry",
+    ),
+    sa.CheckConstraint("revoked_at IS NULL OR revoked_at >= created_at", name="revocation_time"),
+    sa.Index("ix_companion_refresh_families_device_id", "device_id"),
+)
+companion_credentials = sa.Table(
+    "companion_credentials",
+    Base.metadata,
+    sa.Column("id", sa.Uuid(), primary_key=True),
+    sa.Column(
+        "family_id", sa.Uuid(), sa.ForeignKey("companion_refresh_families.id"), nullable=False
+    ),
+    sa.Column("kind", sa.String(16), nullable=False),
+    _companion_hash("token_sha256"),
+    _companion_time("created_at"),
+    _companion_time("expires_at"),
+    _companion_time("consumed_at", nullable=True),
+    sa.CheckConstraint("token_sha256 ~ '^[0-9a-f]{64}$'", name="token_hash"),
+    sa.CheckConstraint(
+        "expires_at > created_at AND "
+        "((kind = 'access' AND expires_at <= created_at + interval '15 minutes') OR "
+        "(kind = 'refresh' AND expires_at <= created_at + interval '30 days') OR "
+        "(kind = 'web_session' AND expires_at <= created_at + interval '60 seconds'))",
+        name="kind_expiry",
+    ),
+    sa.CheckConstraint(
+        "consumed_at IS NULL OR consumed_at BETWEEN created_at AND expires_at",
+        name="consumption_time",
+    ),
+    sa.Index("ix_companion_credentials_family_id", "family_id"),
+)
+CAPTURE_SOURCES = (
+    "web_upload",
+    "browser_display_capture",
+    "android_dialer_pickup",
+    "android_share",
+    "ios_share",
+    "ios_recorder",
+    "desktop_recorder",
+    "desktop_watch_folder",
+    "chrome_tab",
+)
+# Provenance is schema-only here; card 6 owns mapping and writing this column.
+_submissions = Base.metadata.tables["conversation_guest_submissions"]
+_submissions.append_column(sa.Column("capture_source", sa.String(32), nullable=True))
+_submissions.append_constraint(
+    sa.CheckConstraint(
+        "capture_source IN (" + ", ".join(repr(source) for source in CAPTURE_SOURCES) + ")",
+        name="capture_source",
+    )
 )
 
 

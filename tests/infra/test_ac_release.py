@@ -1075,10 +1075,11 @@ def bundle_with_head(tmp_path: Path, head: str) -> Path:
     return bundle
 
 
-def test_known_migration_head_is_accepted(tmp_path: Path) -> None:
+@pytest.mark.parametrize("head", ["20261003_0072", "20261008_0077"])
+def test_known_migration_head_is_accepted(tmp_path: Path, head: str) -> None:
     engine = make_engine(tmp_path)
-    foundation_backup_tool(engine, "20261002_0067", "20261003_0072")
-    engine.require_backup_support(bundle_with_head(tmp_path, "20261003_0072"))
+    foundation_backup_tool(engine, "20261002_0067", head)
+    engine.require_backup_support(bundle_with_head(tmp_path, head))
 
 
 @pytest.mark.parametrize("installed", [("20260924_0048",), ()])

@@ -9,6 +9,10 @@ from ac_platform.db.models import model_metadata
 
 def test_g1_model_registry_contains_every_migrated_table() -> None:
     expected = {
+        "companion_devices",
+        "companion_pairings",
+        "companion_refresh_families",
+        "companion_credentials",
         "persons",
         "password_credentials",
         "email_challenges",

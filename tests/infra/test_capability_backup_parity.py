@@ -74,6 +74,8 @@ SPEAKER_ROLES_FREEZE = "20261003_0072"
 BILLING_CREDITS = "20261003_0073"
 PROSPECTS = "20261004_0074"
 PRODUCT_UPDATES = "20261004_0075"
+ORGANISATION_SETTINGS = "20261005_0076"
+COMPANION_DEVICES = "20261008_0077"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -128,10 +130,13 @@ HEADS = (
     BILLING_CREDITS,
     PROSPECTS,
     PRODUCT_UPDATES,
+    ORGANISATION_SETTINGS,
+    COMPANION_DEVICES,
 )
 VERSIONED_HEADS = HEADS[1:]
 PARITY_HEADS = HEADS
 TABLELESS_VERSIONED_HEADS = (
+    ORGANISATION_SETTINGS,
     SPEAKER_ROLES_FREEZE,
     REVISION,
     MEDIA_LIBRARY,
@@ -146,6 +151,12 @@ TABLELESS_VERSIONED_HEADS = (
     INACTIVE_PLAN_VALUES,
 )
 NEW_TABLES = {
+    COMPANION_DEVICES: (
+        "companion_devices",
+        "companion_pairings",
+        "companion_refresh_families",
+        "companion_credentials",
+    ),
     PRACTICE: (
         "practice_set_versions",
         "practice_attempts",
@@ -409,6 +420,15 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             module.PROSPECTS_PARITY_TABLES + NEW_TABLES[PRODUCT_UPDATES],
         )
         assert len(module.parity_tables_for_head(PRODUCT_UPDATES)) == 133
+        assert module.VERSIONED_PARITY_CONTRACTS[ORGANISATION_SETTINGS] == (
+            "ac-postgres-parity-v47",
+            module.PRODUCT_UPDATES_PARITY_TABLES,
+        )
+        assert module.VERSIONED_PARITY_CONTRACTS[COMPANION_DEVICES] == (
+            "ac-postgres-parity-v48",
+            module.ORGANISATION_SETTINGS_PARITY_TABLES + NEW_TABLES[COMPANION_DEVICES],
+        )
+        assert len(module.parity_tables_for_head(COMPANION_DEVICES)) == 137
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
             module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
