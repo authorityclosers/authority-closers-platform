@@ -3404,9 +3404,6 @@ export function AcquisitionStudio({
                   onDownload={() => void downloadReport()}
                   onRequestDeletion={() => setDeleteConfirm(true)}
                 />
-                {submission && !embedded && (
-                  <ProspectLinkControl submissionId={submission.id} />
-                )}
                 {submission && deleteConfirm && (
                   <div className={styles.reportDeleteConfirm} role="alert">
                     <p>
@@ -3489,6 +3486,13 @@ export function AcquisitionStudio({
                       label: "Prospect",
                       content: (
                         <>
+                          {submission && !embedded && (
+                            <ProspectLinkControl
+                              submissionId={submission.id}
+                              transcript={result.transcript}
+                              onSelectEvidence={seek}
+                            />
+                          )}
                           <KeyFacts
                             callId={submission?.id ?? null}
                             transcript={result.transcript}

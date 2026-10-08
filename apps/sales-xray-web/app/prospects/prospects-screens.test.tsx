@@ -136,6 +136,10 @@ describe("ProspectsListView", () => {
       host.querySelector('[data-testid="empty-prospects"]'),
     ).not.toBeNull();
     expect(host.textContent).toContain("No prospects recorded yet");
+    expect(host.textContent).toContain(
+      "Open an analysed call’s Prospect tab to save a new prospect",
+    );
+    expect(host.textContent).not.toContain("appear here automatically");
   });
 
   it("renders prospects list with initials and missing stage badge", async () => {

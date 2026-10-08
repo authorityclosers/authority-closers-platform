@@ -3123,6 +3123,16 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       ?.hasAttribute("hidden"),
   ).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
+  const prospectPanel = container.querySelector(
+    '[data-report-mode-section="prospect"]',
+  )!;
+  expect(prospectPanel.querySelector("[data-prospect-card]")).not.toBeNull();
+  expect(container.querySelectorAll("[data-prospect-card]")).toHaveLength(1);
+  expect(
+    prospectPanel
+      .querySelectorAll("[data-prospect-card], [data-prospect-snapshot]")[0]
+      ?.hasAttribute("data-prospect-card"),
+  ).toBe(true);
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
       .evidence[0];
