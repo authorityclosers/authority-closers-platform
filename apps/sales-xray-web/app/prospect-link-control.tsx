@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+import { ACQUISITION, record } from "./acquisition-client";
+import { Clip } from "./report-kit";
+import type { ReportEvidence, Transcript } from "./report-contract";
+import styles from "./report-kit.module.css";
+import factStyles from "./key-facts.module.css";
 
 import { PROSPECTS_API, UUID_RE } from "./prospects-client";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -105,16 +111,110 @@ async function request(
     : page;
 }
 
-function Control({ submissionId }: { submissionId: string }) {
+type Props = {
+  submissionId: string;
+  transcript?: Transcript;
+  onSelectEvidence?: (evidence: ReportEvidence, title: string) => void;
+  /** Reserved for Card D2's server-backed detected state. */
+  statusSlot?: ReactNode;
+};
+type HeardName = { name: string; evidence: ReportEvidence[] };
+
+async function statedName(
+  submissionId: string,
+  transcript: Transcript,
+  signal: AbortSignal,
+): Promise<HeardName | null> {
+  const response = await fetch(
+    `${ACQUISITION}/submissions/${submissionId}/speaker-map`,
+    {
+      credentials: "same-origin",
+      redirect: "error",
+      cache: "no-store",
+      signal,
+    },
+  );
+  if (!response.ok) return null;
+  const data = record(await response.json());
+  if (
+    data.schema !== "ac.sales-xray.speaker-map/1" ||
+    data.submission_id !== submissionId ||
+    data.transcript_revision !== transcript.revision ||
+    !["predicted", "confirmed", "channel", "model_named"].includes(
+      data.status as string,
+    ) ||
+    !Array.isArray(data.speakers)
+  )
+    return null;
+  const prospects = data.speakers
+    .map(record)
+    .filter((row) => row.role === "prospect");
+  if (prospects.length !== 1) return null;
+  const row = prospects[0];
+  if (
+    row.name_source !== "stated_in_call" ||
+    typeof row.display_name !== "string" ||
+    !transcript.segments.some(
+      (segment) => segment.speaker_id === row.speaker_id,
+    ) ||
+    !row.display_name.trim() ||
+    row.display_name.trim().length > 160 ||
+    !Array.isArray(row.name_evidence) ||
+    !row.name_evidence.length
+  )
+    return null;
+  const evidence: ReportEvidence[] = [];
+  for (const value of row.name_evidence) {
+    const ref = record(value);
+    const segment = transcript.segments.find((s) => s.id === ref.segment_id);
+    if (
+      !segment ||
+      !Number.isInteger(ref.start_ms) ||
+      !Number.isInteger(ref.end_ms) ||
+      (ref.start_ms as number) < segment.start_ms ||
+      (ref.end_ms as number) > segment.end_ms ||
+      (ref.end_ms as number) <= (ref.start_ms as number)
+    )
+      return null;
+    evidence.push({
+      segment_id: segment.id,
+      quote: segment.text,
+      start_ms: ref.start_ms as number,
+      end_ms: ref.end_ms as number,
+    });
+  }
+  return { name: row.display_name.trim(), evidence };
+}
+
+function Control({
+  submissionId,
+  transcript,
+  onSelectEvidence,
+  statusSlot,
+}: Props) {
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState("");
+  const [editedName, setName] = useState<string | null>(null);
+  const [heard, setHeard] = useState<HeardName | null>(null);
+  const name = editedName ?? heard?.name ?? "";
   const [offset, setOffset] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const pending = useRef<AbortController | null>(null);
 
   useEffect(() => () => pending.current?.abort(), []);
+  useEffect(() => {
+    if (!transcript) return;
+    const load = new AbortController();
+    void statedName(submissionId, transcript, load.signal)
+      .then((value) => {
+        if (!load.signal.aborted) setHeard(value);
+      })
+      .catch(() => {
+        /* Manual entry stays available when the map is missing. */
+      });
+    return () => load.abort();
+  }, [submissionId, transcript]);
   useEffect(() => {
     const load = new AbortController();
     void request(submissionId, `suggestions?offset=${offset}`, load.signal)
@@ -156,8 +256,33 @@ function Control({ submissionId }: { submissionId: string }) {
   }
 
   return (
-    <section aria-label="Prospect history" className="panel">
-      <h2>Prospect history</h2>
+    <section
+      aria-label="Prospect"
+      className={`${styles.card} ${styles.tone}`}
+      data-tone="info"
+      data-prospect-card
+    >
+      <h2>Prospect</h2>
+      {statusSlot}
+      {heard && (
+        <div>
+          <p>Name heard in this call: {heard.name}</p>
+          {heard.evidence.map((evidence) =>
+            onSelectEvidence ? (
+              <Clip
+                key={evidence.segment_id}
+                evidence={evidence}
+                title="Prospect name"
+                onPlay={onSelectEvidence}
+              />
+            ) : (
+              <blockquote key={evidence.segment_id}>
+                {evidence.quote}
+              </blockquote>
+            ),
+          )}
+        </div>
+      )}
       {error && (
         <p role="alert">
           {error}{" "}
@@ -191,7 +316,7 @@ function Control({ submissionId }: { submissionId: string }) {
       {page?.suggestions.map((item) => (
         <div key={item.prospect_id}>
           <p>
-            This looks like {item.name} from{" "}
+            Same as {item.name}? Earlier call:{" "}
             {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
               new Date(item.previous_call_at),
             )}
@@ -226,7 +351,7 @@ function Control({ submissionId }: { submissionId: string }) {
               })
             }
           >
-            Confirm {item.name}
+            Same as {item.name}?
           </button>
         </div>
       ))}
@@ -240,7 +365,9 @@ function Control({ submissionId }: { submissionId: string }) {
           <label>
             New prospect name{" "}
             <input
+              className={factStyles.select}
               value={name}
+              disabled={busy}
               maxLength={160}
               required
               onChange={(event) => setName(event.target.value)}
@@ -251,7 +378,7 @@ function Control({ submissionId }: { submissionId: string }) {
             className="secondary-button"
             disabled={busy || error !== null || !name.trim()}
           >
-            Create prospect and link this call
+            Save as new prospect
           </button>
         </form>
       )}
@@ -271,11 +398,8 @@ function Control({ submissionId }: { submissionId: string }) {
   );
 }
 
-export function ProspectLinkControl({
-  submissionId,
-}: {
-  submissionId: string;
-}) {
+export function ProspectLinkControl(props: Props) {
+  const { submissionId } = props;
   const access = useWorkspaceAccess();
   if (
     access?.status !== "ready" ||
@@ -286,8 +410,8 @@ export function ProspectLinkControl({
     return null;
   return (
     <Control
-      key={`${submissionId}:${access.context.personId}:${access.context.tenantId}`}
-      submissionId={submissionId}
+      key={`${submissionId}:${props.transcript?.revision}:${access.context.personId}:${access.context.tenantId}`}
+      {...props}
     />
   );
 }

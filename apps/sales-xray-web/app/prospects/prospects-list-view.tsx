@@ -220,7 +220,7 @@ export function ProspectsListView() {
               <p className={styles.emptyText}>
                 {searchQuery || stageFilter !== null
                   ? "Try clearing the search query or stage filter."
-                  : "Prospects appear here automatically when customer calls are analyzed."}
+                  : "Open an analysed call’s Prospect tab to save a new prospect or link it to an earlier prospect."}
               </p>
             </div>
           ) : (
