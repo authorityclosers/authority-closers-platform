@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { SyntheticReportPreview } from "./synthetic-report-preview";
-import { syntheticEvidence } from "./synthetic-report";
+import { syntheticEvidence, syntheticReport } from "./synthetic-report";
 import fixture from "../../../tests/fixtures/call-map-v1.json";
 import { formatTranscriptTime } from "../../report-transcript";
 
@@ -32,6 +32,32 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button: ${label}`);
   return found;
 }
+
+it("exposes the production Prospect cards and preserves their fictional source selection across report views", async () => {
+  await act(async () => root.render(<SyntheticReportPreview />));
+  await act(async () => button("Tabbed view").click());
+  await act(async () => button("Prospect").click());
+  const panel = container.querySelector(
+    '[data-report-mode-section="prospect"]',
+  )!;
+  expect(panel.hasAttribute("hidden")).toBe(false);
+  expect(panel.textContent).toContain("A guess, not a fact");
+  const evidence =
+    syntheticReport.overview.prospect_interpretations[0].source.evidence[0];
+  await act(async () =>
+    panel.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  const status = container.querySelector('[role="status"]')!;
+  expect(status.textContent).toContain(evidence.quote);
+  expect(status.textContent).toContain(
+    "No audio exists in this display fixture.",
+  );
+  await act(async () => button("Reading view").click());
+  expect(panel.hasAttribute("hidden")).toBe(false);
+  expect(container.querySelector('[role="status"]')?.textContent).toContain(
+    evidence.quote,
+  );
+});
 
 it("labels the synthetic report, exposes exact evidence through the real skill reader, and never invents a score or audio", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
