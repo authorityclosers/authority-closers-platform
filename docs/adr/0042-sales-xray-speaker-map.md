@@ -2,6 +2,8 @@
 
 Date: 2026-09-30. Status: Accepted (architecture) — CTO, 30 Sep 2026; CEO option A decided: naming within coaching-v7.
 
+Amended by [ADR 0056](0056-call-capture-ingest.md) for provider-declared channel roles.
+
 ## Context
 
 Sales Xray needs one server contract for speaker names, roles and the account holder's confirmation. The fixed rev 3 contract replaces D1 of rev 2 and adds N1–N8 and the frozen-snapshot requirements of AUT-615 R1–R8. This ADR records those decisions; it does not activate a recipe or approve scoring. ADR 0036 remains unchanged.
