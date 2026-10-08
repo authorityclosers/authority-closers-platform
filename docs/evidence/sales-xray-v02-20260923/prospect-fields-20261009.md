@@ -22,8 +22,8 @@ to read verified source citations, not person-entered contact values.
 {
   "expected_revision": 1,
   "fields": {
-    "business": {"kind": "text", "text": "Fictional Ltd"},
-    "city": {"kind": "text", "text": "Jaipur"}
+    "business": { "kind": "text", "text": "Fictional Ltd" },
+    "city": { "kind": "text", "text": "Jaipur" }
   }
 }
 ```
@@ -34,19 +34,21 @@ containing all 14 registry keys. List/detail expose the same map and registry.
 The existing `fields` array remains compatible and contains additional known
 person fields; `contact` and `next_step` now use stored values.
 
+The complete fictional response is in
+[`prospect-fields-example-20261009.json`](prospect-fields-example-20261009.json).
 Representative entries from `prospect.profile_fields`:
 
 ```json
 {
   "business": {
     "state": "known",
-    "value": {"kind": "text", "text": "Fictional Ltd"},
+    "value": { "kind": "text", "text": "Fictional Ltd" },
     "basis": "person",
     "locked": true,
     "set_by": "<signed-in-person-id>",
     "set_at": "2026-10-09T00:00:00+00:00"
   },
-  "industry": {"state": "unknown", "reason": "not_asked"}
+  "industry": { "state": "unknown", "reason": "not_asked" }
 }
 ```
 
@@ -82,8 +84,31 @@ wrong migration head. This is catalogue/row-count parity, not a live restore.
 
 ## Verification
 
-Pending final test results. Fictional data only; no staging/production state or
-provider activation. The public dev Prospects URL returns HTTP 302 to sign-in.
+Fictional data only; no staging/production state or provider activation.
+
+- Populated 0077 upgrade proof passed, including metadata equality, existing
+  names/tags/membership preservation and unchanged audit hashes.
+- 42 prospect field, tag, confirmation, report-context and historical backup
+  parity checks passed. The earlier store/library suite passed 10 checks, and
+  the updated name-edit concurrency/rollback check passed separately.
+- 28 registry, numeric fidelity and new backup-parity checks passed.
+- Required Python checks passed: Ruff format (1062 files), Ruff lint, and
+  mypy (435 modules).
+- PUT/detail SQL statement counts stayed at 36/23 for 1 and 20 linked calls.
+  Existing list/detail reads stayed at 18/23 for 1/20/25 linked calls.
+- The public dev Prospects URL returns HTTP 302 to sign-in. No authenticated
+  browser or live API write was verified.
+
+Live dev migration is blocked: the configured local database reports
+`20261008_0078`, introduced by AUT-1557's companion-device PR #410, which was
+not on main when this branch started. This branch's Alembic upgrade exits 255:
+“Can't locate revision identified by '20261008_0078'.” Read-back confirmed the
+same head and 0 prospects / 0 links. No migration was applied and no stamp or
+manual data correction was made. PR #410 changes the same three backup
+catalogues and occupies the shared-file slot. After it merges, resume on this
+branch, update from main and allocate the next revision/parity contract before
+opening this card's PR. The migration identifiers and example are therefore a
+tested pre-integration contract, not a deployed claim.
 
 Dev API check after migration: create/link a fictional prospect, PUT Business and
 City, GET its detail from a second session in the same workspace and confirm the

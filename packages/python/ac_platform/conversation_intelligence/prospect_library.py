@@ -23,9 +23,11 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
 )
-from ac_platform.conversation_intelligence.prospect_models import ConversationProspect
-from ac_platform.conversation_intelligence.prospect_models import ConversationProspectFieldRevision
 from ac_platform.conversation_intelligence.prospect_fields import FIELD_REGISTRY, field_registry
+from ac_platform.conversation_intelligence.prospect_models import (
+    ConversationProspect,
+    ConversationProspectFieldRevision,
+)
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.reports import ReportDraft

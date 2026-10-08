@@ -12,8 +12,8 @@ from starlette.requests import ClientDisconnect
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
-from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary, profile
 from ac_platform.conversation_intelligence.prospect_fields import field_registry, validate_fields
+from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary, profile
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore, validated_tags
 from ac_platform.conversation_intelligence.prospect_suggestions import (
     SCHEMA,

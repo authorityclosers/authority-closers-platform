@@ -143,11 +143,19 @@ class ConversationProspectFieldRevision(Base):
         _member_fk("created_by_person_id"),
         CheckConstraint("entity = 'prospect'", name="entity_supported"),
         CheckConstraint(
-            "field_key IN ('name', 'business', 'industry', 'city', 'role', 'team_size', 'turnover', 'main_pain', 'budget', 'timeline', 'decision_maker', 'next_step', 'phone', 'email')",
+            "field_key IN ('name', 'business', 'industry', 'city', 'role', 'team_size', "
+            "'turnover', 'main_pain', 'budget', 'timeline', 'decision_maker', "
+            "'next_step', 'phone', 'email')",
             name="field_supported",
         ),
         CheckConstraint(
-            "(basis = 'person' AND state = 'confirmed' AND created_by_person_id IS NOT NULL AND submission_id IS NULL AND evidence IS NULL AND extractor_revision IS NULL) OR (basis = 'heard_in_call' AND state = 'detected' AND created_by_person_id IS NULL AND submission_id IS NOT NULL AND evidence IS NOT NULL AND extractor_revision IS NOT NULL AND field_key NOT IN ('phone', 'email'))",
+            "(basis = 'person' AND state = 'confirmed' AND "
+            "created_by_person_id IS NOT NULL AND submission_id IS NULL AND "
+            "evidence IS NULL AND extractor_revision IS NULL) OR "
+            "(basis = 'heard_in_call' AND state = 'detected' AND "
+            "created_by_person_id IS NULL AND submission_id IS NOT NULL AND "
+            "evidence IS NOT NULL AND extractor_revision IS NOT NULL AND "
+            "field_key NOT IN ('phone', 'email'))",
             name="field_origin_shape",
         ),
         Index("ix_prospect_field_read", "tenant_id", "entity_id", "field_key", "created_at", "id"),

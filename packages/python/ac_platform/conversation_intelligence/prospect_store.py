@@ -21,13 +21,13 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
+from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
 )
-from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
-from ac_platform.conversation_intelligence.prospect_fields import validate_fields, validate_evidence
 from ac_platform.conversation_intelligence.prospect_fact_contract import ProspectFactValidationError
+from ac_platform.conversation_intelligence.prospect_fields import validate_evidence, validate_fields
 from ac_platform.conversation_intelligence.prospect_models import (
     ConversationProspect,
     ConversationProspectFieldRevision,
@@ -418,9 +418,7 @@ class ProspectStore:
                 .over(
                     partition_by=(field.entity_id, field.field_key, field.basis),
                     order_by=(
-                        case(
-                            (field.basis == "person", None), else_=usage.created_at
-                        ).desc(),
+                        case((field.basis == "person", None), else_=usage.created_at).desc(),
                         field.revision.desc(),
                     ),
                 )
@@ -454,8 +452,12 @@ class ProspectStore:
             r
             for r in rows
             if r.basis == "person"
-            or self._supported_field(
-                r.value, r.evidence or {}, sources.get(by_submission.get(r.submission_id), [])
+            or (
+                r.submission_id is not None
+                and r.submission_id in by_submission
+                and self._supported_field(
+                    r.value, r.evidence or {}, sources.get(by_submission[r.submission_id], [])
+                )
             )
         ]
 
@@ -530,8 +532,11 @@ class ProspectStore:
     def _supported_field(
         value: dict[str, Any], evidence: dict[str, Any], sources: list[tuple[dict[str, Any], Any]]
     ) -> bool:
+        segment_id = evidence.get("segment_id")
+        if not isinstance(segment_id, str):
+            return False
         for segments, plan in sources:
-            segment = segments.get(evidence.get("segment_id"))
+            segment = segments.get(segment_id)
             if (
                 segment is not None
                 and evidence.get("quote")

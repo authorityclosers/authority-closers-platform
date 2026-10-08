@@ -13,7 +13,11 @@ from tests.infra.test_postgres_restore_proof import restore_drill_contract as dr
 
 HEAD = "20261009_0078"
 PREVIOUS = "20261007_0077"
-TABLES = ("conversation_prospects", "conversation_prospect_memberships", "conversation_prospect_field_revisions")
+TABLES = (
+    "conversation_prospects",
+    "conversation_prospect_memberships",
+    "conversation_prospect_field_revisions",
+)
 
 
 def test_all_backup_consumers_cover_exact_prospect_migration() -> None:
