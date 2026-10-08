@@ -37,6 +37,7 @@ import {
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
 import { useWorkspaceAccess } from "../workspace-access";
+import { CompanyDetailsPanel } from "./company-details-panel";
 import {
   addMember,
   changeRole,
@@ -109,7 +110,7 @@ async function readBase(signal: AbortSignal): Promise<Base> {
 function useLive<T>(
   read: (signal: AbortSignal) => Promise<T>,
   enabled: boolean,
-): [Live<T>, () => void] {
+): [Live<T>, () => void, () => void] {
   const [state, setState] = useState<Live<T>>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -137,6 +138,7 @@ function useLive<T>(
       setState({ status: "loading" });
       setAttempt((count) => count + 1);
     }, []),
+    useCallback(() => setAttempt((count) => count + 1), []),
   ];
 }
 
@@ -194,7 +196,9 @@ export function OrganisationView() {
     if (!authenticated) return;
     const controller = new AbortController();
     readBase(controller.signal)
-      .then(setBase)
+      .then((value) => {
+        if (!controller.signal.aborted) setBase(value);
+      })
       .catch(() => {
         if (!controller.signal.aborted) setBase({ status: "error" });
       });
@@ -202,7 +206,7 @@ export function OrganisationView() {
       .then(setAllowance)
       .catch(() => {});
     return () => controller.abort();
-  }, [authenticated]);
+  }, [authenticated, access?.context?.tenantId, access?.context?.sessionId]);
 
   const current =
     base.status === "ready"
@@ -210,13 +214,35 @@ export function OrganisationView() {
         null)
       : null;
   const isOrganisation = current?.kind === "organisation";
-
-  const [org, reloadOrg] = useLive(readOrganisation, isOrganisation);
+  const tenantId =
+    authenticated &&
+    isOrganisation &&
+    current.tenant_id === access?.context?.tenantId
+      ? current.tenant_id
+      : null;
+  const readCurrentOrganisation = useCallback(
+    async (signal: AbortSignal) => {
+      const value = await readOrganisation(signal);
+      if (value.tenantId !== tenantId)
+        throw new Error("Organisation tenant mismatch.");
+      return value;
+    },
+    [tenantId],
+  );
+  const [org, reloadOrg, refreshOrganisation] = useLive(
+    readCurrentOrganisation,
+    isOrganisation && tenantId !== null,
+  );
   const [members, reloadMembers] = useLive(readMembers, isOrganisation);
   const [activity] = useLive(readActivity, isOrganisation);
-  const live = org.status === "ready";
-  const myRole: OrgRole | null = org.status === "ready" ? org.value.role : null;
+  const live = org.status === "ready" && org.value.tenantId === tenantId;
+  const myRole: OrgRole | null = live ? org.value.role : null;
   const canManage = live && (myRole === "owner" || myRole === "admin");
+  const refreshAccess = useCallback(() => {
+    refreshOrganisation();
+    access?.retry();
+  }, [refreshOrganisation, access]);
+  const showPersonal = useCallback(() => setMissing(true), []);
 
   return (
     <AcquisitionShell
@@ -249,14 +275,10 @@ export function OrganisationView() {
           <>
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
-                {initials(
-                  org.status === "ready" ? org.value.name : current.name,
-                )}
+                {initials(live ? org.value.name : current.name)}
               </span>
               <div className={styles.headerCopy}>
-                <h1>
-                  {org.status === "ready" ? org.value.name : current.name}
-                </h1>
+                <h1>{live ? org.value.name : current.name}</h1>
                 <p>
                   Organisation
                   {org.status === "ready"
@@ -408,11 +430,21 @@ export function OrganisationView() {
 
               {tab === "company" && (
                 <CompanyPanel
-                  key={org.status}
-                  name={current.name}
-                  org={org.status === "ready" ? org.value : null}
+                  key={`${tenantId}:${org.status}`}
+                  org={live ? org.value : null}
                   isOwner={live && myRole === "owner"}
                   reload={reloadOrg}
+                  details={
+                    <CompanyDetailsPanel
+                      key={`${access?.context?.sessionId}:${tenantId}`}
+                      tenantId={tenantId}
+                      role={myRole}
+                      authenticated={authenticated}
+                      refresh={refreshOrganisation}
+                      onAccessLost={refreshAccess}
+                      onPersonal={showPersonal}
+                    />
+                  }
                 />
               )}
             </div>
@@ -855,15 +887,15 @@ function ActivityPanel({
 }
 
 function CompanyPanel({
-  name,
   org,
   isOwner,
   reload,
+  details,
 }: {
-  name: string;
   org: Organisation | null;
   isOwner: boolean;
   reload: () => void;
+  details: ReactNode;
 }) {
   const [domains, setDomains] = useState<string[]>(org?.verifiedDomains ?? []);
   const [autoJoin, setAutoJoin] = useState(org?.autoJoin ?? false);
@@ -986,29 +1018,7 @@ function CompanyPanel({
           </small>
         </div>
       </section>
-      <section className={styles.card}>
-        <h2>
-          <Building2 size={16} aria-hidden="true" /> Company details
-        </h2>
-        <form
-          className={styles.form}
-          onSubmit={(event) => event.preventDefault()}
-        >
-          <label>
-            <span>Company name</span>
-            <input value={name} readOnly />
-          </label>
-          {["Website", "Industry", "Team size", "City", "GST number"].map(
-            (label) => (
-              <label key={label}>
-                <span>{label}</span>
-                <input placeholder="Not set" disabled />
-              </label>
-            ),
-          )}
-        </form>
-        <p className={styles.cardNote}>Editing company details: {NOT_LIVE}</p>
-      </section>
+      {details}
     </div>
   );
 }

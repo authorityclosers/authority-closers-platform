@@ -35,6 +35,7 @@ let routes: Record<string, unknown>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let writeStatus: number;
 let writeDetail: string;
+let accessRetry: ReturnType<typeof vi.fn<() => void>>;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 beforeEach(() => {
@@ -43,6 +44,7 @@ beforeEach(() => {
   root = createRoot(host);
   writeStatus = 204;
   writeDetail = "";
+  accessRetry = vi.fn();
   routes = {
     "/v1/me/sales-xray-workspaces": {
       selected_tenant_id: tenantId,
@@ -70,6 +72,18 @@ beforeEach(() => {
       verified_domains: ["example.com"],
       auto_join: true,
       member_count: 2,
+    },
+    "/v1/organisation/settings": {
+      tenant_id: tenantId,
+      name: "Authority Closers",
+      legal_name: "Fictional Limited",
+      gstin: "",
+      address: "123 Example Street",
+      industry: "Training",
+      team_size: "3-10",
+      website: "https://example.test",
+      city: "Example City",
+      logo_url: null,
     },
     "/v1/organisation/members": {
       members: [
@@ -100,6 +114,22 @@ beforeEach(() => {
     },
   };
   fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (
+      path === "/v1/organisation/settings" &&
+      init?.method === "PUT" &&
+      writeStatus === 204
+    ) {
+      const details = JSON.parse(String(init.body)) as Record<string, string>;
+      const canonical = Object.fromEntries(
+        Object.entries(details).map(([key, value]) => [key, value.trim()]),
+      );
+      routes[path] = { ...(routes[path] as object), ...canonical };
+      routes["/v1/organisation"] = {
+        ...(routes["/v1/organisation"] as object),
+        name: canonical.name,
+      };
+      return json(routes[path]);
+    }
     if (init?.method && init.method !== "GET")
       return writeStatus === 204
         ? new Response(null, { status: 204 })
@@ -115,15 +145,19 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
-async function render() {
+async function render(contextTenant = tenantId, authenticated = true) {
   await act(async () =>
     root.render(
       <WorkspaceAccessContext.Provider
         value={{
           status: "ready",
-          authenticated: true,
-          context: { personId: ownerId, sessionId: "s-1", tenantId },
-          retry: () => {},
+          authenticated,
+          context: {
+            personId: ownerId,
+            sessionId: "s-1",
+            tenantId: contextTenant,
+          },
+          retry: accessRetry,
         }}
       >
         <OrganisationView />
@@ -410,3 +444,182 @@ it.each([0, 2_700])(
     expect(stat.querySelector("i")).toBeNull();
   },
 );
+
+const settingsCalls = () =>
+  fetchMock.mock.calls.filter(([path]) => path === "/v1/organisation/settings");
+const detailsForm = () =>
+  host.querySelector<HTMLFormElement>('form[aria-label="Company details"]');
+async function editCompanyName(name: string) {
+  await act(async () => {
+    const field =
+      detailsForm()!.querySelector<HTMLInputElement>('input[name="name"]')!;
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(field, name);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+const saveDetails = () =>
+  act(async () =>
+    detailsForm()!.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    ),
+  );
+
+it.each(["owner", "admin"])(
+  "wires %s details saves, fresh-entry persistence and canonical header refresh while preserving domain rights",
+  async (role) => {
+    org().role = role;
+    await render();
+    expect(settingsCalls()).toHaveLength(0);
+    await click("Company");
+    expect(detailsForm()?.querySelectorAll("input")).toHaveLength(8);
+    expect(button("Save").disabled).toBe(role !== "owner");
+    expect(
+      host.querySelector<HTMLInputElement>('input[aria-label="Domain to add"]')
+        ?.disabled,
+    ).toBe(role !== "owner");
+    await editCompanyName("  Fictional Renamed Studio  ");
+    await saveDetails();
+    expect(host.querySelector("h1")?.textContent).toBe(
+      "Fictional Renamed Studio",
+    );
+    expect(detailsForm()?.textContent).toContain("Saved.");
+    const body = JSON.parse(String(writes()[0][1].body));
+    expect(body.team_size).toBe("3-10");
+    expect(body.legal_name).toBe("Fictional Limited");
+    expect(body.city).toBe("Example City");
+    await click("Overview");
+    await click("Company");
+    expect(
+      detailsForm()?.querySelector<HTMLInputElement>('input[name="name"]')
+        ?.value,
+    ).toBe("Fictional Renamed Studio");
+    expect(settingsCalls().filter(([, init]) => !init?.method)).toHaveLength(2);
+  },
+);
+it("gives members a permission explanation without a private GET, draft, Save or directory-role authority", async () => {
+  org().role = "member";
+  await render();
+  await click("Company");
+  expect(host.textContent).toContain("Only owners and admins");
+  expect(detailsForm()).toBeNull();
+  expect(button("Save details")).toBeUndefined();
+  expect(settingsCalls()).toHaveLength(0);
+  expect(button("Save").disabled).toBe(true);
+});
+it.each([401, 403])(
+  "clears the form and refreshes existing access after a %i save without changing the header",
+  async (status) => {
+    await render();
+    await click("Company");
+    await editCompanyName("Unsaved Fictional Draft");
+    writeStatus = status;
+    writeDetail = "Access changed";
+    await saveDetails();
+    expect(detailsForm()).toBeNull();
+    expect(host.textContent).not.toContain("Unsaved Fictional Draft");
+    expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
+    expect(accessRetry).toHaveBeenCalledOnce();
+    expect(settingsCalls()).toHaveLength(2);
+  },
+);
+it("keeps a rejected save's draft and does not rename the header", async () => {
+  await render();
+  await click("Company");
+  await editCompanyName("Unsaved Fictional Draft");
+  writeStatus = 422;
+  writeDetail = "Invalid details";
+  await saveDetails();
+  expect(
+    detailsForm()?.querySelector<HTMLInputElement>('input[name="name"]')?.value,
+  ).toBe("Unsaved Fictional Draft");
+  expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
+  expect(detailsForm()?.textContent).not.toContain("Saved.");
+});
+it.each(["read", "write"])(
+  "uses Personal fallback only for the exact settings %s 404",
+  async (operation) => {
+    await render();
+    if (operation === "read") {
+      fetchMock.mockResolvedValueOnce(
+        json({ detail: "No organisation selected." }, 404),
+      );
+      await click("Company");
+    } else {
+      await click("Company");
+      writeStatus = 404;
+      writeDetail = "No organisation selected.";
+      await saveDetails();
+    }
+    expect(host.textContent).toContain("You are on your personal account");
+    expect(detailsForm()).toBeNull();
+  },
+);
+it("shows an unavailable settings route as a retry error instead of Personal or Coming soon", async () => {
+  delete routes["/v1/organisation/settings"];
+  await render();
+  await click("Company");
+  expect(host.textContent).toContain("Company details could not be loaded");
+  expect(button("Try again")).toBeDefined();
+  expect(host.textContent).not.toContain("You are on your personal account");
+  expect(detailsForm()).toBeNull();
+});
+it.each(["session", "organisation"])(
+  "does not load settings for a %s tenant mismatch",
+  async (mismatch) => {
+    if (mismatch === "organisation")
+      routes["/v1/organisation"] = {
+        ...(routes["/v1/organisation"] as object),
+        tenant_id: inviteId,
+      };
+    await render(mismatch === "session" ? inviteId : tenantId);
+    await click("Company");
+    expect(detailsForm()).toBeNull();
+    expect(settingsCalls()).toHaveLength(0);
+  },
+);
+it("aborts an old details write on session tenant change so it cannot rename the new header", async () => {
+  await render();
+  await click("Company");
+  await editCompanyName("Old Unsaved Fictional Draft");
+  const oldSettings = {
+    ...(routes["/v1/organisation/settings"] as object),
+    name: "Old Saved Fictional Draft",
+  };
+  let resolve!: (response: Response) => void;
+  fetchMock.mockImplementationOnce(
+    () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  );
+  await saveDetails();
+  const signal = writes()[0][1].signal as AbortSignal;
+  const directory = routes["/v1/me/sales-xray-workspaces"] as {
+    selected_tenant_id: string;
+    workspaces: Array<{ tenant_id: string; name: string }>;
+  };
+  directory.selected_tenant_id = inviteId;
+  directory.workspaces[1].tenant_id = inviteId;
+  directory.workspaces[1].name = "Other Fictional Studio";
+  routes["/v1/organisation"] = {
+    ...(routes["/v1/organisation"] as object),
+    tenant_id: inviteId,
+    name: "Other Fictional Studio",
+  };
+  routes["/v1/organisation/settings"] = {
+    ...(routes["/v1/organisation/settings"] as object),
+    tenant_id: inviteId,
+    name: "Other Fictional Studio",
+  };
+  await render(inviteId);
+  expect(signal.aborted).toBe(true);
+  await act(async () => resolve(json(oldSettings)));
+  expect(host.querySelector("h1")?.textContent).toBe("Other Fictional Studio");
+  expect(
+    detailsForm()?.querySelector<HTMLInputElement>('input[name="name"]')?.value,
+  ).toBe("Other Fictional Studio");
+  expect(host.textContent).not.toContain("Saved.");
+});

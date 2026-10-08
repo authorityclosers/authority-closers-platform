@@ -94,6 +94,16 @@ it("separates the report observation, exact source words, and hypothesis", async
   const card = container.querySelector<HTMLElement>(
     "[data-prospect-index='0']",
   )!;
+  expect(card.tagName).toBe("OL");
+  expect(card.getAttribute("aria-label")).toBe(
+    "Prospect signal 1: source and interpretation",
+  );
+  expect(
+    [...card.children].map((part) => part.getAttribute("data-prospect-part")),
+  ).toEqual(["verbatim", "source", "hypothesis"]);
+  expect(
+    [...card.querySelectorAll("h3")].map((heading) => heading.textContent),
+  ).toEqual(["What they said", "What the report noticed", "What it may mean"]);
   expect(
     card.querySelector('[data-prospect-part="source"]')?.textContent,
   ).toContain(interpretation.source.text);
@@ -113,6 +123,34 @@ it("separates the report observation, exact source words, and hypothesis", async
   )!;
   await act(async () => play.click());
   expect(selected).toHaveBeenCalledWith(evidence, "Prospect signal 1");
+});
+
+it("keeps every source quote and selects its exact evidence, independently of the hypothesis", async () => {
+  const report = parsedReport();
+  const item = report.overview!.prospect_interpretations[0];
+  const segment = fixture.transcript.segments[1];
+  item.source.evidence.push({
+    segment_id: segment.id,
+    start_ms: segment.start_ms,
+    end_ms: segment.end_ms,
+    quote: segment.text,
+  });
+  item.possible_concern = "कदाचित वेळ हवा आहे. Ask rather than assume. ".repeat(
+    8,
+  );
+  await render(report);
+  const words = container.querySelector('[data-prospect-part="verbatim"]')!;
+  const controls = words.querySelectorAll<HTMLButtonElement>("button");
+  expect(controls).toHaveLength(2);
+  for (const [index, evidence] of item.source.evidence.entries()) {
+    expect(words.textContent).toContain(evidence.quote);
+    await act(async () => controls[index].click());
+    expect(selected).toHaveBeenLastCalledWith(evidence, "Prospect signal 1");
+  }
+  expect(
+    container.querySelector('[data-prospect-part="hypothesis"]')?.textContent,
+  ).toContain(item.possible_concern);
+  expect(words.textContent).not.toContain(item.possible_concern);
 });
 
 it("keeps guest preview counts and never renders withheld interpretations", async () => {

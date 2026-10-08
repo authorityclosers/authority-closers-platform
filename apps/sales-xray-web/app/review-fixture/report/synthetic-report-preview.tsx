@@ -7,6 +7,7 @@ import { formatTranscriptTime } from "../../report-transcript";
 import { SalesSkills } from "../../sales-skills";
 import { NextCallPlan } from "../../next-call-plan";
 import { DipakOverview } from "../../dipak-overview";
+import { ProspectSnapshot } from "../../prospect-snapshot";
 import { CallMapPreview } from "./call-map-preview";
 import { syntheticReport, syntheticCallRecord } from "./synthetic-report";
 import styles from "./synthetic-report-preview.module.css";
@@ -57,6 +58,16 @@ export function SyntheticReportPreview() {
                   report={syntheticReport}
                   onSelectEvidence={selectSource}
                   callRecord={syntheticCallRecord}
+                />
+              ),
+            },
+            {
+              id: "prospect",
+              label: "Prospect",
+              content: (
+                <ProspectSnapshot
+                  report={syntheticReport}
+                  onSelectEvidence={selectSource}
                 />
               ),
             },
