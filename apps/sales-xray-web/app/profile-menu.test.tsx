@@ -51,6 +51,26 @@ async function signOut() {
       .click(),
   );
 }
+it.each([true, false])(
+  "shows Get the apps only for signed-in accounts (%s)",
+  async (authenticated) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+    );
+    await act(async () =>
+      root.render(
+        <ProfileMenu authenticated={authenticated} accountHref="/account" />,
+      ),
+    );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+    );
+    expect(Boolean(host.querySelector('a[href="/get-apps"]'))).toBe(
+      authenticated,
+    );
+  },
+);
 it.each(["header", "rail"] as const)(
   "shows the canonical profile name in the signed-in menu (%s)",
   async (variant) => {
