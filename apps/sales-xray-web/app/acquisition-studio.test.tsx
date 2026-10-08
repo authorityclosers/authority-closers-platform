@@ -3071,7 +3071,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   claimed = true;
   accepted = true;
   window.history.replaceState(null, "", `/?call=${submissionId}`);
-  await mount();
+  await mountWithAccountAccess();
   expect(
     container.querySelector(
       '[aria-label="Sales Xray navigation"] [aria-current="page"]',
