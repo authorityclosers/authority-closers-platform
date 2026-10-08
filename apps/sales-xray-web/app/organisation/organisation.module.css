@@ -33,6 +33,7 @@
 }
 
 .headerCopy h1 {
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--lx-ink);
   font-size: 22px;
@@ -329,6 +330,7 @@
 .form label {
   display: grid;
   gap: 5px;
+  min-width: 0;
 }
 
 .form label span {
@@ -338,6 +340,8 @@
 }
 
 .form input {
+  min-width: 0;
+  width: 100%;
   height: 36px;
   padding: 0 11px;
   border: 1px solid var(--lx-line);
@@ -957,6 +961,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.detailsActions {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+.detailsActions small {
+  overflow-wrap: anywhere;
 }
 @keyframes banner-pulse {
   50% {

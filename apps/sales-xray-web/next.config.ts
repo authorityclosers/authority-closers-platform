@@ -154,7 +154,10 @@ const config: NextConfig = {
         async headers() {
           return [
             {
-              source: "/:path*",
+              // Content-hashed build files keep Next's immutable caching, so the
+              // browser and Cloudflare serve them without asking the server
+              // again (AUT-1342). Pages, data and documents stay no-store.
+              source: "/:path((?!_next/static/).*)",
               headers: [
                 { key: "Referrer-Policy", value: "no-referrer" },
                 { key: "X-Content-Type-Options", value: "nosniff" },

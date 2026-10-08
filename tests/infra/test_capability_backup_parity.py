@@ -75,7 +75,8 @@ BILLING_CREDITS = "20261003_0073"
 PROSPECTS = "20261004_0074"
 PRODUCT_UPDATES = "20261004_0075"
 ORGANISATION_SETTINGS = "20261005_0076"
-COMPANION_DEVICES = "20261008_0077"
+PROSPECT_TAGS = "20261007_0077"
+COMPANION_DEVICES = "20261008_0078"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -131,11 +132,13 @@ HEADS = (
     PROSPECTS,
     PRODUCT_UPDATES,
     ORGANISATION_SETTINGS,
+    PROSPECT_TAGS,
     COMPANION_DEVICES,
 )
 VERSIONED_HEADS = HEADS[1:]
 PARITY_HEADS = HEADS
 TABLELESS_VERSIONED_HEADS = (
+    PROSPECT_TAGS,
     ORGANISATION_SETTINGS,
     SPEAKER_ROLES_FREEZE,
     REVISION,
@@ -151,12 +154,6 @@ TABLELESS_VERSIONED_HEADS = (
     INACTIVE_PLAN_VALUES,
 )
 NEW_TABLES = {
-    COMPANION_DEVICES: (
-        "companion_devices",
-        "companion_pairings",
-        "companion_refresh_families",
-        "companion_credentials",
-    ),
     PRACTICE: (
         "practice_set_versions",
         "practice_attempts",
@@ -268,6 +265,12 @@ NEW_TABLES = {
     BILLING_CREDITS: ("billing_credit_entries",),
     PROSPECTS: ("conversation_prospects", "conversation_prospect_memberships"),
     PRODUCT_UPDATES: ("product_updates", "update_seen", "notifications"),
+    COMPANION_DEVICES: (
+        "companion_devices",
+        "companion_pairings",
+        "companion_refresh_families",
+        "companion_credentials",
+    ),
 }
 PARITY_NEW_TABLES = NEW_TABLES
 ROOT = Path(__file__).parents[2]
@@ -425,8 +428,8 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             module.PRODUCT_UPDATES_PARITY_TABLES,
         )
         assert module.VERSIONED_PARITY_CONTRACTS[COMPANION_DEVICES] == (
-            "ac-postgres-parity-v48",
-            module.ORGANISATION_SETTINGS_PARITY_TABLES + NEW_TABLES[COMPANION_DEVICES],
+            "ac-postgres-parity-v49",
+            module.PROSPECT_TAGS_PARITY_TABLES + NEW_TABLES[COMPANION_DEVICES],
         )
         assert len(module.parity_tables_for_head(COMPANION_DEVICES)) == 137
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
@@ -828,6 +831,9 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         128,
         130,
         133,
+        133,
+        133,
+        137,
     )
     expected_contracts = (
         None,
@@ -883,6 +889,9 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v44",
         "ac-postgres-parity-v45",
         "ac-postgres-parity-v46",
+        "ac-postgres-parity-v47",
+        "ac-postgres-parity-v48",
+        "ac-postgres-parity-v49",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

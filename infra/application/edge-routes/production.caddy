@@ -142,6 +142,16 @@
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		reverse_proxy ac-production-api:8000
 	}
+	# Content-hashed build files are immutable: let browsers and Cloudflare keep them (AUT-1342).
+	@production_sales_xray_static {
+		host salesxray.authorityclosers.com
+		path /_next/static/*
+	}
+	handle @production_sales_xray_static {
+		import base_security_headers
+		header X-Authority-Closers-Route "sales-xray-production"
+		reverse_proxy ac-production-sales-xray-web:3016
+	}
 	@production_sales_xray host salesxray.authorityclosers.com
 	handle @production_sales_xray {
 		import base_security_headers

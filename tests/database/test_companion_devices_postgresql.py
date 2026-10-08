@@ -171,7 +171,7 @@ def test_credentials_are_hash_only_bounded_and_preserve_spent_history(
 
 
 def test_upgrade_preserves_legacy_null_and_is_forward_only(postgres_harness: Engine) -> None:
-    path = Path(__file__).parents[2] / "db/migrations/versions/20261008_0077_companion_devices.py"
+    path = Path(__file__).parents[2] / "db/migrations/versions/20261008_0078_companion_devices.py"
     spec = importlib.util.spec_from_file_location("companion_migration", path)
     assert spec and spec.loader
     migration = importlib.util.module_from_spec(spec)

@@ -1075,7 +1075,7 @@ def bundle_with_head(tmp_path: Path, head: str) -> Path:
     return bundle
 
 
-@pytest.mark.parametrize("head", ["20261003_0072", "20261008_0077"])
+@pytest.mark.parametrize("head", ["20261003_0072", "20261008_0078"])
 def test_known_migration_head_is_accepted(tmp_path: Path, head: str) -> None:
     engine = make_engine(tmp_path)
     foundation_backup_tool(engine, "20261002_0067", head)

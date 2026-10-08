@@ -1,10 +1,11 @@
 # Companion device storage and backup parity — AUT-1557
 
-Source baseline: `bc61dbfaca369ee81f22a1e4097a5783a12d71a2`, ADR 0055.
+Source baseline: `df769bac0ddb5d70880a0db382834503fb4c149e` (merged prospect
+tags, PR #399), approved ADR 0055 (PR #402).
 
-| Draft migration head | Contract | Tables |
-| --- | --- | --- |
-| `20261008_0077` | `ac-postgres-parity-v48` | 137 |
+| Migration head | Predecessor | Contract | Tables |
+| --- | --- | --- | --- |
+| `20261008_0078` | `20261007_0077` | `ac-postgres-parity-v49` | 137 |
 
 The four additional tables store device membership bindings, hashed pairing
 attempts, refresh families and hashed access/refresh/web-session credentials.
@@ -13,26 +14,57 @@ preserves credential payloads and spent-token timestamps across rotation. The
 submission capture-source column is nullable and has no default or backfill.
 It is registered as schema metadata; card 6 owns its ORM mapping and writers.
 
-All three separately packaged backup/restore catalogues recognise the draft head
-and retain their historical mappings. These contracts attest table inventories
-and row counts, not individual values or a live restore.
+All three separately packaged backup/restore catalogues recognise the new head
+and retain historical mappings, including prospect tags (v48, 133 tables).
+These contracts attest table inventories and row counts, not individual values
+or a live restore. Install foundation tools from this reviewed source before
+applying the migration through the release train in deployed environments.
 
-Local verification on 2026-10-08:
+Verification on 2026-10-08:
 
-- Disposable PostgreSQL migration/registry tests: 15 passed, including schema
-  drift, exact constraint rejections, immutable rotation history and legacy NULLs.
-- Release-tool tests: 190 passed. Root-only backup parity tests: 4,118 skipped
-  because this session has no root access; the pure three-catalogue contract
-  assertion was executed directly and passed (v48, 137 tables).
+- Database migration/registry and release-tool/prospect-tag catalogue tests:
+  214 passed. The database tests use disposable PostgreSQL schemas and include
+  full registry drift, exact constraint rejections, immutable credential
+  rotation history and legacy NULLs.
+- Root-owned backup parity tests were skipped, not passed (4,118 skips in the
+  initial collection). Three pure assertions from that module were then run
+  directly after reconciling the full historical inventory expectations:
+  `test_three_separately_packaged_helpers_have_identical_versioned_contracts`,
+  `test_compatibility_head_catalogue_contains_only_actual_checked_in_revisions`,
+  and `test_versioned_contracts_match_all_new_migration_tables_exactly`.
+  All passed: v49, 137 tables, one checked-in linear migration head.
 - Required Python formatting, lint and mypy checks passed; migration and
-  foundation-tool formatting/lint also passed.
-- Existing dev `/health/ready` returned `ready` with release
-  `ce753781ba69f9b2e74b9300619473173bab2be1`. The draft migration was not applied
-  to dev and does not constitute a new-head dev-start proof.
+  foundation-tool formatting/lint passed. No screen files changed.
+- Using `~/.config/acdev/database.env`, `uv run alembic upgrade head` applied
+  `0076 -> 0077 -> 0078` to the fictional loopback local dev database. Readback
+  confirmed `20261008_0078`, all four companion tables and nullable capture
+  source without a default.
+- FastAPI's real lifespan started from this branch against that local dev DB;
+  `/health/ready` returned HTTP 200 with
+  `{"status":"ready","release_id":"local-unreleased"}` through TestClient.
+  This is branch startup evidence, not a deployed release claim.
+- The shared dev API on `127.0.0.1:8100`, using the dev application Host,
+  remains ready on release `ce753781ba69f9b2e74b9300619473173bab2be1`.
+  The hosted `https://salesxray-dev.authorityclosers.com/health/ready` request
+  encountered Cloudflare Access (302). After merge/release, verify the hosted
+  dev API serves the merged build and migration head; this remains pending.
 
-PR #399 (AUT-1534) currently owns the preceding prospect-tag migration and
-overlapping backup catalogue files. Before publishing this card's PR, integrate
-that merged schema baseline, select its next migration/contract version, rerun
-the affected proofs, and apply the final migration on the fictional dev database.
-The temporary draft head/version above must not be deployed alongside PR #399.
-No native routes, activation flags, staging or production state were changed.
+Reproduce focused checks from the API lane:
+
+```sh
+uv run pytest -q tests/database/test_companion_devices_postgresql.py tests/database/test_model_registry.py tests/infra/test_ac_release.py tests/infra/test_prospect_tags_backup_parity.py
+uv run ruff format --check packages/python tests
+uv run ruff check packages/python tests
+uv run mypy packages/python
+uv run python - <<'PY'
+from tests.infra import test_capability_backup_parity as parity
+parity.test_three_separately_packaged_helpers_have_identical_versioned_contracts()
+parity.test_compatibility_head_catalogue_contains_only_actual_checked_in_revisions()
+parity.test_versioned_contracts_match_all_new_migration_tables_exactly()
+PY
+```
+
+Supply the explicit disposable loopback `AC_TEST_DATABASE_URL` for database
+checks without printing its value. Sensitive review requires CTO review followed
+by CEO approval; the watchdog owns merge. Native routes, capture-source writers,
+activation flags and staging/production changes remain outside this card.
