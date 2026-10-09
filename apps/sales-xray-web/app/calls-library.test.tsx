@@ -194,12 +194,14 @@ it("excludes reserved durations and unknown questions from measured summaries", 
   const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
   const value = (label: string) =>
     Array.from(stats.children)
-      .find((child) => child.querySelector("span")?.textContent === label)
-      ?.querySelector("strong")?.textContent;
-  expect(value("Measured call duration")).toBe("2 min");
+      .find((child) => child.querySelector("dt")?.textContent === label)
+      ?.querySelector("dd b")?.textContent;
+  expect(value("Measured call time")).toBe("2 min");
   expect(value("Questions per call")).toBe("6");
-  expect(value("Next steps and commitments")).toBe("0");
-  expect(stats.textContent).toContain("across 1 measured calls");
+  expect(value("Reports ready")).toBe("2");
+  // The reserved estimate of the second call never counts as measured.
+  expect(stats.textContent).toContain("across 1 measured call");
+  expect(stats.textContent).not.toContain("—");
 });
 
 it("shows unavailable summaries and lets failed report reads recover from the list", async () => {
@@ -214,12 +216,10 @@ it("shows unavailable summaries and lets failed report reads recover from the li
   await act(async () => renderLibrary({ insights: true }));
   await flush();
   const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
-  expect(
-    Array.from(stats.querySelectorAll("strong")).filter(
-      (item) => item.textContent === "—",
-    ),
-  ).toHaveLength(3);
-  expect(host.textContent).toContain("Report could not be read");
+  // An unknown figure says so in words; it is never a broken "—".
+  expect(stats.textContent?.match(/Not measured yet/g)).toHaveLength(2);
+  expect(stats.textContent).not.toContain("—");
+  expect(host.textContent).toContain("Summary didn't load");
   recovered = true;
   await act(async () =>
     Array.from(host.querySelectorAll("button"))
@@ -228,7 +228,7 @@ it("shows unavailable summaries and lets failed report reads recover from the li
   );
   await flush();
   expect(host.textContent).toContain("Recovered report");
-  expect(host.textContent).not.toContain("Report could not be read");
+  expect(host.textContent).not.toContain("Summary didn't load");
 });
 
 it("renames a call only after the server confirms it (C1)", async () => {
@@ -407,7 +407,7 @@ it("reads as one full-width Calls page with estimated lengths and per-row openin
   expect([...host.querySelectorAll("h1")].map((h) => h.textContent)).toEqual([
     "Calls",
   ]);
-  const calls = host.querySelector(".calls-library-app")!;
+  const calls = host.querySelector("[data-variant]")!;
   expect(calls.querySelectorAll("h2")).toHaveLength(0);
   expect(calls.textContent).not.toMatch(/Saved calls|Your calls|PRIVATE CALL/);
   expect(host.textContent).toContain("3 saved calls");
@@ -430,18 +430,8 @@ it("reads as one full-width Calls page with estimated lengths and per-row openin
   ]);
   expect(
     items[0].querySelector(".calls-library-duration-clock")?.textContent,
-  ).toBe("About 59:58");
+  ).toBe("~59:58");
   expect(calls.textContent).not.toMatch(/measured/i);
-  // Bars compare against the longest loaded estimate; very short calls stay visible.
-  const widths = items.map((item) =>
-    parseFloat(
-      item.querySelector<HTMLElement>(".calls-library-duration-fill")?.style
-        .width ?? "NaN",
-    ),
-  );
-  expect(widths[0]).toBe(100);
-  expect(widths[1]).toBe(4);
-  expect(widths[2]).toBeCloseTo((1_200 / 3_598) * 100, 3);
   expect(items.map((item) => item.dataset.tone)).toEqual([
     "ready",
     "ready",
@@ -472,10 +462,16 @@ it("starts New analysis as a fresh call without cancelling the remembered one", 
   );
   await act(async () => renderLibrary());
   await flush();
-  const newAnalysis =
-    host.querySelector<HTMLAnchorElement>(".calls-library-new");
+  // One primary per page: the shell's New analysis, never a second copy here.
+  const newAnalysis = [...host.querySelectorAll<HTMLAnchorElement>("a")].filter(
+    (link) => link.textContent?.trim() === "New analysis",
+  );
+  expect(newAnalysis.length).toBeGreaterThan(0);
+  const view = host.querySelector("[data-variant]")!;
+  expect(newAnalysis.some((link) => view.contains(link))).toBe(false);
   // Fresh-call intent: the studio must not reopen the remembered report.
-  expect(newAnalysis?.getAttribute("href")).toBe("/analysis/new");
+  for (const link of newAnalysis)
+    expect(link.getAttribute("href")).toBe("/analysis/new");
   // The saved call stays saved and listed; nothing was deleted or cancelled.
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(firstId);
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(1);
@@ -1074,7 +1070,7 @@ it("removes a call deleted before an explicit first-page refresh", async () => {
   await flush();
 
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(0);
-  expect(host.textContent).toContain("No saved calls yet.");
+  expect(host.textContent).toContain("No calls yet");
 });
 
 it("keeps the loaded cursor when a status-only refresh leaves page membership unchanged", async () => {
@@ -1403,7 +1399,7 @@ it("posts logout once while pending, preserves the selector on failure, and clea
   expect(navigate).toHaveBeenCalledWith("/");
 });
 
-it("presents Calls summaries with MetricBand and MetricCard operational presentation and panels", async () => {
+it("shows four figures from the loaded calls and one labelled list", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
     [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
@@ -1415,23 +1411,20 @@ it("presents Calls summaries with MetricBand and MetricCard operational presenta
   await act(async () => renderLibrary({ insights: true }));
   await flush();
 
-  const band = host.querySelector('section[aria-label="Calls at a glance"]')!;
-  expect(band.getAttribute("data-pulse-adapted")).toBe("true");
-  expect(band.getAttribute("data-columns")).toBe("5");
+  const strip = host.querySelector('dl[aria-label="Calls at a glance"]')!;
+  expect([...strip.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(
+    ["Calls", "Reports ready", "Measured call time", "Questions per call"],
+  );
+  expect(strip.querySelector("#metric-calls dd b")?.textContent).toBe("2");
+  expect(host.querySelector("#metric-commitments")).toBeNull();
 
-  expect(host.querySelector("#metric-calls")).not.toBeNull();
-  expect(host.querySelector("#metric-duration")).not.toBeNull();
-  expect(host.querySelector("#metric-reports-ready")).not.toBeNull();
-  expect(host.querySelector("#metric-questions")).not.toBeNull();
-  expect(host.querySelector("#metric-commitments")).not.toBeNull();
-
-  const listPanel = host.querySelector("section#calls-library-list")!;
-  expect(listPanel).not.toBeNull();
-  expect(listPanel.getAttribute("data-pulse-adapted")).toBe("true");
-  expect(listPanel.getAttribute("aria-labelledby")).toBe("calls-library-title");
+  const list = host.querySelector("section#calls-library-list")!;
+  expect(list.getAttribute("aria-labelledby")).toBe("calls-library-title");
+  // Report content shows in the row itself, not a promise of it.
+  expect(list.textContent).toContain("Measured report");
 });
 
-it("renders OperationalEmpty with accessible heading when no calls are saved", async () => {
+it("shows one empty state with one action when no calls are saved", async () => {
   routeFetch({
     [LIST]: () => ok(page([])),
   });
@@ -1439,29 +1432,29 @@ it("renders OperationalEmpty with accessible heading when no calls are saved", a
   await flush();
 
   const heading = host.querySelector("h2#calls-library-empty");
-  expect(heading?.textContent).toBe("No saved calls yet.");
-  const emptyWrap = host.querySelector('[data-pulse-adapted="true"]');
-  expect(emptyWrap).not.toBeNull();
-  expect(host.querySelector("a.secondary-button")?.textContent).toContain(
-    "Analyse a call",
-  );
+  expect(heading?.textContent).toBe("No calls yet");
+  const empty = heading!.closest("section")!;
+  expect(empty.textContent).not.toContain("home page");
+  const actions = empty.querySelectorAll("a, button");
+  expect(actions).toHaveLength(1);
+  expect(actions[0].textContent).toContain("Analyse a call");
+  expect(actions[0].getAttribute("href")).toBe("/analysis/new");
 });
 
-it("ensures Calls summary breakpoints override MetricBand 5-column variant on tablets and phones", () => {
+it("keeps phone rows readable and the module on tokens only", () => {
   const cssPath = join(
     dirname(fileURLToPath(import.meta.url)),
     "calls-library.module.css",
   );
-  const css = readFileSync(cssPath, "utf8");
+  const css = readFileSync(cssPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-  // High-specificity selectors (0,3,0 / 0,4,0) override .metricBand[data-columns="5"] (0,2,0)
+  // Phone rows: the title wraps to two lines and the search never zooms.
   expect(css).toMatch(
-    /@media \(max-width: 1100px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    /@container calls-page \(max-width: 760px\) \{[\s\S]*?-webkit-line-clamp: 2;/,
   );
   expect(css).toMatch(
-    /@media \(max-width: 760px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input \{\s*font-size: 16px;/,
   );
-  expect(css).toMatch(
-    /@media \(max-width: 520px\) \{[\s\S]*?\.stats\.stats\[data-columns\][\s\S]*?grid-template-columns:\s*1fr;/,
-  );
+  // No raw colours: every colour is a lightbox token.
+  expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
 });

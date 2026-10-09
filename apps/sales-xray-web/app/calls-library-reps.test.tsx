@@ -157,8 +157,10 @@ it("renders rep labels, distinguishes duplicate names, and filters by UUID witho
     [repB, "Fictional Rep (2)"],
   ]);
   expect(
-    host.querySelector(`[data-submission-id="${ids[0]}"]`)?.textContent,
-  ).toContain("Rep: Fictional Rep (1)");
+    host.querySelector(
+      `[data-submission-id="${ids[0]}"] [aria-label="Rep: Fictional Rep (1)"]`,
+    ),
+  ).not.toBeNull();
   await choose(repB);
   expect(visibleIds()).toEqual([ids[1]]);
   expect(fetchMock).toHaveBeenCalledOnce();
@@ -402,7 +404,7 @@ it("fails closed when owner metadata is partial", async () => {
     ok(page([row(ids[0], null, "", { owner_name: "Unverified rep" })])),
   );
   await mount();
-  expect(host.textContent).toContain("Saved calls need another check");
+  expect(host.textContent).toContain("Your calls didn't load");
   expect(host.textContent).not.toContain("Unverified rep");
   expect(visibleIds()).toEqual([]);
 });
