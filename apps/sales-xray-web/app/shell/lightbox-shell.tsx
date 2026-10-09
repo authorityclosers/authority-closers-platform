@@ -58,7 +58,14 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import { SettingsMenu, useUnseenNews } from "./settings-menu";
+import { SettingsMenu } from "./settings-menu";
+import { useShellUpdates } from "./updates-store";
+import { UpdatesBell } from "./updates-bell";
+import { UpdateNotices } from "./update-notices";
+import {
+  isRelativeUpdateHref,
+  type UpdateNotification,
+} from "./updates-client";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -187,12 +194,48 @@ function LightboxShellFrame({
   }, []);
   // The gear opens the account card; the card opens settings sections.
   const [accountCardOpen, setAccountCardOpen] = useState(false);
+  const [accountView, setAccountView] = useState<"main" | "news">("main");
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
   const accountAnchorRef = useRef<HTMLElement | null>(null);
-  const unseenNews = useUnseenNews(
+  const updates = useShellUpdates(
     authenticated,
     process.env.NODE_ENV !== "test",
   );
+  const unseenNews = updates.unseen_count;
+  const { markRead } = updates;
+  const updatesContextKey =
+    authenticated && access?.authenticated === true ? recentContextKey : null;
+  const openNews = useCallback((anchor: HTMLElement | null = null) => {
+    accountAnchorRef.current = anchor;
+    setAccountView("news");
+    setAccountCardOpen(true);
+  }, []);
+  const navigateEvent = useCallback((href: string) => {
+    if (isRelativeUpdateHref(href)) window.location.assign(href);
+  }, []);
+  const navigationContext = useRef(updatesContextKey);
+  useEffect(() => {
+    navigationContext.current = updatesContextKey;
+  }, [updatesContextKey]);
+  const openEvent = useCallback(
+    async (entry: UpdateNotification) => {
+      if (!isRelativeUpdateHref(entry.href)) return;
+      await markRead([entry.id]);
+      if (navigationContext.current === updatesContextKey)
+        navigateEvent(entry.href);
+    },
+    [markRead, navigateEvent, updatesContextKey],
+  );
+  const bell = updatesContextKey ? (
+    <UpdatesBell
+      key={updatesContextKey}
+      notifications={updates.notifications}
+      unreadCount={updates.unread_count}
+      status={updates.notifications_status}
+      openNews={openNews}
+      openEvent={openEvent}
+    />
+  ) : null;
   const profile = useShellProfile(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -474,6 +517,7 @@ function LightboxShellFrame({
     if (authenticated && active !== "account" && opensInPlace(event)) {
       event.preventDefault();
       accountAnchorRef.current = event.currentTarget;
+      setAccountView("main");
       setAccountCardOpen((open) => !open);
     }
   }
@@ -640,6 +684,7 @@ function LightboxShellFrame({
             ) : null}
           </div>
           <div className={styles.stripBottom}>
+            {bell}
             <Link
               className={`${styles.stripBtn}${active === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
@@ -782,6 +827,7 @@ function LightboxShellFrame({
         <header className={styles.mobileBar}>
           <BrandLockup href={homeHref} />
           <div className={styles.barActions}>
+            {bell}
             <MinutesMeter allowance={allowance} variant="pill" />
             <ProfileMenu
               authenticated={authenticated}
@@ -882,8 +928,16 @@ function LightboxShellFrame({
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />
+      <UpdateNotices
+        updates={updates}
+        contextKey={updatesContextKey}
+        openNews={openNews}
+        openEvent={navigateEvent}
+      />
       {accountCardOpen && authenticated ? (
         <SettingsMenu
+          key={accountView}
+          initialView={accountView}
           open
           anchorRef={accountAnchorRef}
           onClose={closeAccountCard}
