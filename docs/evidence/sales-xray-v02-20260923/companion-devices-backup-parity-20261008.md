@@ -143,3 +143,43 @@ uv run pytest -q tests/database/test_companion_devices_postgresql.py tests/datab
 Remove only that disposable database afterwards. The old stamped dev database
 is not evidence for the revised migration. CTO delta review resumes after
 GitHub CI is green at the new head, then CEO approval; watchdog owns merge.
+
+Historical populated-upgrade fixture correction on 2026-10-09:
+
+- Application CI at `e70f7cf` passed schema parity and three Python test shards.
+  Shard 3 failed only
+  `test_populated_0076_upgrade_preserves_identity_history_and_model`: its 0076
+  database cannot serve today's mapped `capture_source` column. That test also
+  pinned its final version assertion to 0077 despite upgrading to `head`.
+- Bounded scope addition: correct that existing fixture in
+  `tests/database/test_prospect_tags_postgresql.py`. Reflect and temporarily map
+  the legacy submission table only while populating 0076; restore the current
+  model before upgrading and verifying the actual Alembic head. The fixture
+  retains its identity, audit-hash, membership and zero-drift assertions, and
+  now verifies the legacy submission's new capture provenance remains NULL.
+- Production code, migration SQL and backup contracts are unchanged by this
+  fixture correction.
+- Focused verification on the run-injected disposable loopback test target:
+  **46 passed** (4 prospect-tag PostgreSQL tests, 8 companion PostgreSQL tests,
+  34 SQLite/certificate regressions). The populated 0076-to-head test preserves
+  prospect identity, audit hashes and membership, checks legacy provenance is
+  NULL, and requires zero metadata differences. One existing Starlette
+  TestClient deprecation warning was reported. Each PostgreSQL fixture removed
+  its isolated fictional schema; no shared database migration was applied.
+- Initial attempts using the local dev application and migration roles failed
+  at `CREATE SCHEMA` because those roles lack database CREATE privilege. Those
+  attempts do not count as PostgreSQL proof; no grants or settings were changed.
+  The successful run used the already injected `AC_TEST_DATABASE_URL` and
+  `AC_CONVERSATION_POSTGRES_TEST_URL`, without displaying their values.
+- Python formatting (1,059 files), lint and mypy (434 source files) passed.
+  Import ordering in the corrected fixture was fixed before the successful run.
+  `git diff --check` passed. The earlier fresh-database exact Alembic
+  upgrade/check proof remains valid for the unchanged migration and registry.
+  New-head CI, hosted merged-head readiness and root-only restore are not
+  claimed by this local test run.
+
+Reproduce the final fixture regression with those disposable test URLs injected:
+
+```sh
+uv run pytest -q tests/database/test_prospect_tags_postgresql.py tests/database/test_companion_devices_postgresql.py tests/database/test_model_registry.py tests/database/test_certificates.py tests/unit/certificates/test_services.py tests/unit/http/test_certificate_routes.py
+```
