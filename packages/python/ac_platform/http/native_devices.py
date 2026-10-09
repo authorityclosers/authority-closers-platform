@@ -24,7 +24,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
+from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule, client_identity
 from ac_platform.native_devices import NativeDevices, NativeOutcome, digest, failure
 
 
@@ -138,8 +138,10 @@ def install_native_devices_http(
                 origin is not None or any(key.startswith("sec-fetch-") for key in request.headers)
             ):
                 raise HTTPException(403, "Use the companion execution context for credentials.")
-        address = request.client.host if request.client else "unknown"
-        # Ignore untrusted forwarded addresses. Keys have no plaintext secrets.
+        address = client_identity(
+            request.scope, trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses
+        )
+        # Reuse canonical trusted-proxy and IPv6 /64 handling; no secret keys.
         await limit("address:" + digest(address), operation)
 
     async def browser_surface(request: Request) -> None:
