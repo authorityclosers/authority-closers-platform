@@ -15,7 +15,10 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.inference import ConversationInference
-from ac_platform.conversation_intelligence.inference_tasks import _text_prompt_view
+from ac_platform.conversation_intelligence.inference_tasks import (
+    _text_prompt_view,
+    input_metadata_for_saved_intent,
+)
 from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationRecording,
@@ -109,7 +112,11 @@ async def read_report_basis(
             input_metadata=task.intent["input"],
             request=task.intent["request"],
         )
-        if prepared.input_sha256 != task.input_sha256 or prepared.as_dict() != task.intent["input"]:
+        if (
+            prepared.input_sha256 != task.input_sha256
+            or input_metadata_for_saved_intent(prepared, task.intent["input"])
+            != task.intent["input"]
+        ):
             raise ValueError
         if prepared.max_completion_tokens is None:
             raise ValueError

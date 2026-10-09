@@ -596,6 +596,17 @@ class PreparedTaskInput:
         return prepared
 
 
+def input_metadata_for_saved_intent(
+    prepared: PreparedTaskInput, saved_input: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Compare legacy C5 inputs without inventing or rewriting their provenance."""
+
+    metadata = prepared.as_dict()
+    if prepared.checkpoint == "C5" and "prompt_provenance" not in saved_input:
+        metadata.pop("prompt_provenance", None)
+    return metadata
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedTaskOutput:
     """Immutable normalized JSON plus the exact provider response receipt."""
