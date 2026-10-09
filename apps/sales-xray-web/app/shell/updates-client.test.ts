@@ -8,6 +8,7 @@ import {
   readNotifications,
   markUpdatesSeen,
   markNotificationsRead,
+  isRelativeUpdateHref,
 } from "./updates-client";
 
 const note = {
@@ -91,6 +92,8 @@ it.each([
   { notifications: [], unread_count: 0.5 },
   { notifications: [{ ...release, count: "1" }], unread_count: 1 },
   { notifications: [{ ...event, body: null }], unread_count: 1 },
+  { notifications: [{ ...event, href: null }], unread_count: 1 },
+  { notifications: [{ ...event, href: 1 }], unread_count: 1 },
   { notifications: [{ ...event, kind: "unknown" }], unread_count: 1 },
 ])("rejects malformed notification responses: %j", (value) => {
   expect(() => parseNotifications(value)).toThrow();
@@ -102,14 +105,35 @@ it.each([
   "/path\n",
   "javascript:alert(1)",
   "relative/path",
-])("rejects navigation outside relative paths: %s", (href) => {
-  expect(() =>
-    parseNotifications({
-      notifications: [{ ...event, href }],
-      unread_count: 1,
-    }),
-  ).toThrow();
-});
+  "/\t/example.test",
+  "/\u0000/example.test",
+])(
+  "keeps unsafe destinations visible without a navigation link: %s",
+  (href) => {
+    expect(isRelativeUpdateHref(href)).toBe(false);
+    expect(
+      parseNotifications({
+        notifications: [release, { ...event, href }],
+        unread_count: 2,
+      }),
+    ).toEqual({
+      notifications: [release, { ...event, href: null }],
+      unread_count: 2,
+    });
+  },
+);
+it.each(["/", "/analysis/calls/fictional", "/my report?label=hello world"])(
+  "preserves safe relative paths, including spaces: %s",
+  (href) => {
+    expect(isRelativeUpdateHref(href)).toBe(true);
+    expect(
+      parseNotifications({
+        notifications: [{ ...event, href }],
+        unread_count: 1,
+      }).notifications[0].href,
+    ).toBe(href);
+  },
+);
 it.each([
   null,
   [],

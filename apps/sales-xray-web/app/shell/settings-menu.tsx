@@ -127,7 +127,9 @@ export function SettingsMenu({
   email,
   photoUrl,
   allowance,
+  initialView = "main",
 }: {
+  initialView?: View;
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -136,7 +138,7 @@ export function SettingsMenu({
   photoUrl?: string | null;
   allowance: Allowance | null;
 }) {
-  const [view, setView] = useState<View>("main");
+  const [view, setView] = useState<View>(initialView);
   const [place, setPlace] = useState<{ left: number; bottom: number } | null>(
     null,
   );
@@ -402,6 +404,9 @@ export function SettingsMenu({
                   </time>
                   <b>
                     {entry.title}
+                    {entry.draft ? (
+                      <span className={styles.draft}>Draft</span>
+                    ) : null}
                     {!entry.seen ? (
                       <span className={styles.dot} aria-label="New" />
                     ) : null}
