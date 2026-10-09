@@ -200,3 +200,60 @@ it("renders unlimited allowances with clock icon and without used-minutes text",
   expect(host.querySelector('[title*="min used"]')).toBeNull();
   expect(host.textContent).not.toContain("min used");
 });
+
+function routeReads(routes: Record<string, () => Response>) {
+  fetchMock.mockImplementation(async (url: string) => {
+    const path = url.replace(base, "");
+    return (
+      routes[path]?.() ??
+      new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 })
+    );
+  });
+}
+
+it("shows one Get started panel for a brand-new account instead of zero figures", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 0,
+        processing: 0,
+        completed: 0,
+        needs_attention: 0,
+      }),
+    "/submissions": () => Response.json({ submissions: [], next_cursor: null }),
+    "/session": () =>
+      Response.json({
+        allowance: {
+          allowance_seconds: 1800,
+          committed_seconds: 0,
+          available_seconds: 1800,
+          unlimited: false,
+        },
+      }),
+  });
+  await renderPage(true);
+  expect(host.querySelector("h2#get-started")?.textContent).toBe(
+    "Analyse your first call",
+  );
+  expect(host.querySelector('[aria-label="Dashboard figures"]')).toBeNull();
+  expect(host.querySelectorAll("ol li")).toHaveLength(3);
+  expect(host.querySelector('a[href="/analysis/new"]')?.textContent).toContain(
+    "Analyse a call",
+  );
+});
+
+it("says a failed read did not load instead of keeping a skeleton forever", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      new Response(JSON.stringify({ detail: "Unavailable" }), { status: 503 }),
+    "/submissions": () => Response.json({ submissions: [], next_cursor: null }),
+  });
+  await renderPage(true);
+  const ready = host.querySelector("#metric-reports-ready")!;
+  expect(ready.textContent).toContain("Not loaded");
+  expect(ready.querySelector('[aria-hidden="true"]')).toBeNull();
+  expect(host.textContent).toContain("Not loaded. It retries by itself.");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "Some dashboard numbers could not load",
+  );
+});

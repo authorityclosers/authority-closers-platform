@@ -16,8 +16,8 @@ import { formatClock } from "../lightbox/time";
 import styles from "./recent-calls.module.css";
 
 /** Row height and gap in px; the stylesheet reads them from --row and --gap. */
-const ROW = 42;
-const GAP = 2;
+const ROW = 44;
+const GAP = 0;
 
 function callLength(seconds: number): string | null {
   if (!Number.isFinite(seconds) || seconds <= 0) return null;

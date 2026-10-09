@@ -1,8 +1,8 @@
 "use client";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { PageSkeleton } from "../shell/page-skeleton";
 import { useWorkspaceAccess } from "../workspace-access";
+import { DashboardSkeleton } from "./dashboard-skeleton";
 
 export default function DashboardLoading() {
   const access = useWorkspaceAccess();
@@ -13,7 +13,7 @@ export default function DashboardLoading() {
       loading={!access}
       active="dashboard"
     >
-      <PageSkeleton variant="dashboard" />
+      <DashboardSkeleton />
     </AcquisitionShell>
   );
 }

@@ -1237,6 +1237,8 @@
 
   .filters {
     grid-area: filters;
+    /* The desktop auto margin would shrink-wrap the chips past the edge. */
+    margin-right: 0;
     mask-image: linear-gradient(
       to right,
       var(--lx-ink) calc(100% - 20px),

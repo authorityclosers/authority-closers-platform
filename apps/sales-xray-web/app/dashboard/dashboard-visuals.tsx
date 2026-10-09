@@ -34,108 +34,87 @@ export function callTime(seconds: number): string {
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? "" : "s"}`;
 
+/** A zero-based axis with at most four steps of a round size. */
+export function axisTicks(peak: number): number[] {
+  const top = Math.max(1, peak);
+  const step =
+    [1, 2, 5, 10, 20, 50, 100].find((size) => top / size <= 4) ?? 200;
+  const max = Math.ceil(top / step) * step;
+  return Array.from({ length: max / step + 1 }, (_, index) => index * step);
+}
+
 /**
- * The last 30 days drawn as one audio waveform: each day is a bar as tall as
- * the call time analysed that day, mirrored around the centre line. Days with
- * no calls are a quiet dot. Hover a day to read it.
+ * Calls analysed each day for the last 30 days: zero-based bars on a labelled
+ * axis, today solid, other days lighter. Hover or focus a day to read it.
  */
-export function MonthWave({ days }: { days: ActivityDay[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const calls = days.reduce((sum, day) => sum + day.analysed, 0);
+export function DayBars({ days }: { days: ActivityDay[] }) {
+  const [focus, setFocus] = useState<number | null>(null);
+  const ticks = axisTicks(Math.max(0, ...days.map((day) => day.analysed)));
+  const max = ticks[ticks.length - 1];
+  const total = days.reduce((sum, day) => sum + day.analysed, 0);
   const seconds = days.reduce((sum, day) => sum + day.analysedSeconds, 0);
-  const active = days.filter((day) => day.analysed > 0).length;
-  const peak = Math.max(1, ...days.map((day) => day.analysedSeconds));
-  const busiest = days.reduce<ActivityDay | null>(
-    (best, day) =>
-      day.analysed > 0 &&
-      (!best ||
-        day.analysedSeconds > best.analysedSeconds ||
-        (day.analysedSeconds === best.analysedSeconds &&
-          day.analysed > best.analysed))
-        ? day
-        : best,
-    null,
-  );
-  const focus = hover === null ? null : days[hover];
-
+  const shown = focus === null ? null : days[focus];
+  const last = days.length - 1;
   return (
-    <div className={styles.month}>
-      <dl className={styles.stats}>
-        <div>
-          <dt>Calls analysed</dt>
-          <dd>{calls}</dd>
-        </div>
-        <div>
-          <dt>Call time analysed</dt>
-          <dd>{callTime(seconds)}</dd>
-        </div>
-        <div>
-          <dt>Days with calls</dt>
-          <dd>
-            {active}
-            <small> of {days.length}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Busiest day</dt>
-          <dd>{busiest ? dayLabel(busiest.date) : "—"}</dd>
-        </div>
-      </dl>
-
-      <div
-        className={styles.wave}
-        role="img"
-        aria-label={`Last ${days.length} days: ${plural(calls, "call")} analysed, ${callTime(seconds)} of calls, on ${plural(active, "day")}.`}
-        onMouseLeave={() => setHover(null)}
-      >
-        {days.map((day, index) => (
-          <span
-            key={day.date}
-            className={styles.day}
-            data-empty={day.analysed === 0 ? "" : undefined}
-            data-today={index === days.length - 1 ? "" : undefined}
-            data-hot={hover === index ? "" : undefined}
-            style={
-              {
-                "--h":
-                  day.analysedSeconds > 0
-                    ? Math.max(0.16, Math.sqrt(day.analysedSeconds / peak))
-                    : 0,
-                "--i": index,
-              } as CSSProperties
-            }
-            onMouseEnter={() => setHover(index)}
-          >
-            <i />
-          </span>
-        ))}
-        {focus && hover !== null && (
-          <p
-            className={styles.tip}
-            style={{ "--x": (hover + 0.5) / days.length } as CSSProperties}
-          >
-            <b>{hover === days.length - 1 ? "Today" : dayLabel(focus.date)}</b>
-            {focus.analysed === 0
-              ? "No calls"
-              : `${plural(focus.analysed, "call")} · ${callTime(focus.analysedSeconds)}`}
-          </p>
-        )}
-      </div>
-
-      <div className={styles.axis} aria-hidden="true">
-        {days.map((day, index) =>
-          (index % 7 === 0 && index <= days.length - 5) ||
-          index === days.length - 1 ? (
-            <span
-              key={day.date}
-              style={{ "--x": (index + 0.5) / days.length } as CSSProperties}
-            >
-              {index === days.length - 1 ? "Today" : dayLabel(day.date)}
+    <figure className={styles.chart} onMouseLeave={() => setFocus(null)}>
+      <figcaption className={styles.readout} aria-live="polite">
+        {shown ? (
+          <>
+            <b>{last === focus ? "Today" : dayLabel(shown.date)}</b>
+            <span>
+              {plural(shown.analysed, "call")} ·{" "}
+              {callTime(shown.analysedSeconds)}
             </span>
-          ) : null,
+          </>
+        ) : (
+          <>
+            <b>{plural(total, "call")}</b>
+            <span>{callTime(seconds)} of calls analysed</span>
+          </>
         )}
+      </figcaption>
+      <div className={styles.plot}>
+        <ol className={styles.axis} aria-hidden="true">
+          {[...ticks].reverse().map((tick) => (
+            <li key={tick}>{tick}</li>
+          ))}
+        </ol>
+        <div
+          className={styles.bars}
+          style={{ "--rows": ticks.length - 1 } as CSSProperties}
+        >
+          {days.map((day, index) => (
+            <button
+              key={day.date}
+              type="button"
+              className={styles.day}
+              data-today={index === last ? "" : undefined}
+              data-focus={focus === index ? "" : undefined}
+              aria-label={`${index === last ? "Today" : dayLabel(day.date)}: ${plural(day.analysed, "call")}, ${callTime(day.analysedSeconds)}`}
+              onMouseEnter={() => setFocus(index)}
+              onFocus={() => setFocus(index)}
+              onBlur={() => setFocus(null)}
+            >
+              <i
+                data-zero={day.analysed === 0 ? "" : undefined}
+                style={{ height: `${(day.analysed / max) * 100}%` }}
+              />
+            </button>
+          ))}
+        </div>
+        <ol className={styles.dates} aria-hidden="true">
+          {days.map((day, index) => (
+            <li key={day.date}>
+              {index === last
+                ? "Today"
+                : (last - index) % 7 === 0
+                  ? dayLabel(day.date)
+                  : ""}
+            </li>
+          ))}
+        </ol>
       </div>
-    </div>
+    </figure>
   );
 }
 
@@ -143,78 +122,45 @@ const PARTS = [
   { tone: "ready", label: "Report ready" },
   { tone: "active", label: "In progress" },
   { tone: "attention", label: "Needs attention" },
-  { tone: "other", label: "Other saved" },
+  { tone: "idle", label: "Other" },
 ] as const;
 
-/** Where each ring segment starts and how long it is, out of 100. */
-function ringSegments(values: number[], total: number) {
-  const shown = values.filter((value) => value > 0).length;
-  const gap = shown > 1 ? 2.2 : 0;
-  const shares = values.map((value) => (value / Math.max(1, total)) * 100);
-  return PARTS.map((part, index) => ({
-    ...part,
-    value: values[index],
-    share: shares[index],
-    offset:
-      shares.slice(0, index).reduce((sum, share) => sum + share, 0) + gap / 2,
-    length: Math.max(0, shares[index] - gap),
-  }));
-}
-
-/** Saved calls as one ring: each colour is a status, the centre is the total. */
-export function StatusRing({ summary }: { summary: CallSummary }) {
-  const [hover, setHover] = useState<string | null>(null);
+/** Every saved call once: one split bar and a full-text row per status. */
+export function StatusSplit({ summary }: { summary: CallSummary }) {
   const values = [
     summary.completed,
     summary.processing,
     summary.needsAttention,
     otherSavedCalls(summary),
   ];
-  const segments = ringSegments(values, summary.total);
-  const focus = segments.find((segment) => segment.tone === hover) ?? null;
-
+  const total = Math.max(1, summary.total);
   return (
-    <div className={styles.status} onMouseLeave={() => setHover(null)}>
-      <div className={styles.ring}>
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle className={styles.track} cx="50" cy="50" r="40" />
-          {segments.map((segment, index) =>
-            segment.value > 0 ? (
-              <circle
-                key={segment.tone}
-                className={styles.segment}
-                data-tone={segment.tone}
-                data-dim={hover && hover !== segment.tone ? "" : undefined}
-                cx="50"
-                cy="50"
-                r="40"
-                pathLength={100}
-                strokeDasharray={`${segment.length} ${100 - segment.length}`}
-                strokeDashoffset={-segment.offset}
-                style={{ "--i": index } as CSSProperties}
-                onMouseEnter={() => setHover(segment.tone)}
-              />
-            ) : null,
-          )}
-        </svg>
-        <p className={styles.centre}>
-          <b>{focus ? focus.value : summary.total}</b>
-          <span>{focus ? focus.label : "saved calls"}</span>
-        </p>
+    <div className={styles.status}>
+      <p className={styles.statusTotal}>
+        <b>{summary.total}</b> saved {summary.total === 1 ? "call" : "calls"}
+      </p>
+      <div className={styles.split} aria-hidden="true">
+        {PARTS.map((part, index) =>
+          values[index] > 0 ? (
+            <i
+              key={part.tone}
+              data-tone={part.tone}
+              style={{ flexGrow: values[index] }}
+            />
+          ) : null,
+        )}
       </div>
       <ul className={styles.legend}>
-        {segments.map((segment) => (
+        {PARTS.map((part, index) => (
           <li
-            key={segment.tone}
-            data-tone={segment.tone}
-            data-zero={segment.value === 0 ? "" : undefined}
-            data-hot={hover === segment.tone ? "" : undefined}
-            onMouseEnter={() => setHover(segment.tone)}
+            key={part.tone}
+            data-tone={part.tone}
+            data-zero={values[index] === 0 ? "" : undefined}
           >
             <i aria-hidden="true" />
-            <span>{segment.label}</span>
-            <b>{segment.value}</b>
-            <small>{Math.round(segment.share)}%</small>
+            <span>{part.label}</span>
+            <b>{values[index]}</b>
+            <small>{Math.round((values[index] / total) * 100)}%</small>
           </li>
         ))}
       </ul>
@@ -222,7 +168,7 @@ export function StatusRing({ summary }: { summary: CallSummary }) {
   );
 }
 
-/** A small gauge for the Minutes left tile: the ring is the time still left. */
+/** A small gauge for the Minutes left figure: the ring is the time still left. */
 export function MinutesRing({ allowance }: { allowance: Allowance }) {
   if (allowance.unlimited || allowance.allowance_seconds <= 0) return null;
   const left = Math.min(
@@ -249,55 +195,6 @@ export function MinutesRing({ allowance }: { allowance: Allowance }) {
   );
 }
 
-/** Small right-hand extras for the four dashboard tiles; real data only. */
-export function TrendChip({
-  direction,
-  text,
-}: {
-  direction: "up" | "down" | "flat";
-  text: string;
-}) {
-  const [delta, ...rest] = text.split(" vs ");
-  const against = rest.length ? `vs ${rest.join(" vs ")}` : "";
-  return (
-    <span
-      className={styles.trend}
-      data-direction={direction}
-      title={`${delta} ${against}`.trim()}
-    >
-      <b>
-        {direction === "up" ? "↑ " : direction === "down" ? "↓ " : ""}
-        {delta}
-      </b>
-      {against && <small>{against.replace("previous ", "prev. ")}</small>}
-    </span>
-  );
-}
-
-export function ShareRing({ part, total }: { part: number; total: number }) {
-  if (total <= 0) return null;
-  const share = Math.round((part / total) * 100);
-  return (
-    <span
-      className={styles.share}
-      title={`${part} of ${total} saved calls have a report`}
-    >
-      <svg viewBox="0 0 36 36" aria-hidden="true">
-        <circle className={styles.gaugeTrack} cx="18" cy="18" r="15" />
-        <circle
-          className={styles.gaugeFill}
-          cx="18"
-          cy="18"
-          r="15"
-          pathLength={100}
-          strokeDasharray={`${share} 100`}
-        />
-      </svg>
-      <b>{share}%</b>
-    </span>
-  );
-}
-
 export function MinutesUsed({ allowance }: { allowance: Allowance }) {
   if (allowance.unlimited || allowance.allowance_seconds <= 0) return null;
   const used = Math.max(
@@ -309,8 +206,7 @@ export function MinutesUsed({ allowance }: { allowance: Allowance }) {
   const total = Math.round(allowance.allowance_seconds / 60);
   return (
     <span className={styles.used} title={`${used} of ${total} min used`}>
-      <b>{used}</b>
-      <small>min used</small>
+      {used} min used
     </span>
   );
 }
@@ -326,53 +222,44 @@ export function AttentionAction({ count }: { count: number }) {
   );
 }
 
-/** The month card while its numbers load: same boxes, same waveform line. */
-export function MonthWaveSkeleton() {
+/** The chart while it loads: the same box, axis and baseline. */
+export function DayBarsSkeleton() {
   return (
-    <div className={styles.month} aria-label="Loading the last 30 days">
-      <div className={styles.stats} aria-hidden="true">
-        {[0, 1, 2, 3].map((index) => (
-          <div key={index}>
-            <span className={styles.skel} style={{ width: "70%" }} />
-            <span
-              className={styles.skel}
-              style={{ width: "40%", height: 14, marginTop: 6 }}
-            />
-          </div>
-        ))}
+    <div className={styles.chart} aria-hidden="true">
+      <p className={styles.readout}>
+        <i className={styles.skeletonLine} data-w="readout" />
+      </p>
+      <div className={styles.plot}>
+        <ol className={styles.axis}>
+          <li />
+          <li />
+        </ol>
+        <div className={`${styles.bars} ${styles.skeletonBars}`}>
+          {Array.from({ length: 30 }, (_, index) => (
+            <span key={index} className={styles.day}>
+              <i style={{ height: `${18 + ((index * 37) % 50)}%` }} />
+            </span>
+          ))}
+        </div>
+        <ol className={styles.dates}>
+          <li />
+        </ol>
       </div>
-      <div className={styles.wave} aria-hidden="true">
-        {Array.from({ length: 30 }, (_, index) => (
-          <span
-            key={index}
-            className={styles.day}
-            data-empty=""
-            data-loading=""
-            style={{ "--i": index } as CSSProperties}
-          >
-            <i />
-          </span>
-        ))}
-      </div>
-      <div className={styles.axis} aria-hidden="true" />
     </div>
   );
 }
 
-/** The status card while its counts load: an empty ring and legend bars. */
-export function StatusRingSkeleton() {
+export function StatusSplitSkeleton() {
   return (
-    <div className={styles.status} aria-label="Loading call status">
-      <div className={styles.ring} aria-hidden="true">
-        <svg viewBox="0 0 100 100">
-          <circle className={styles.track} cx="50" cy="50" r="40" />
-        </svg>
-      </div>
-      <ul className={styles.legend} aria-hidden="true">
-        {[70, 55, 80, 45].map((width) => (
-          <li key={width}>
-            <i className={styles.skel} />
-            <span className={styles.skel} style={{ width: `${width}%` }} />
+    <div className={styles.status} aria-hidden="true">
+      <p className={styles.statusTotal}>
+        <i className={styles.skeletonLine} data-w="total" />
+      </p>
+      <div className={`${styles.split} ${styles.skeletonSplit}`} />
+      <ul className={styles.legend}>
+        {PARTS.map((part) => (
+          <li key={part.tone} data-skeleton="">
+            <i className={styles.skeletonLine} data-w="legend" />
           </li>
         ))}
       </ul>
