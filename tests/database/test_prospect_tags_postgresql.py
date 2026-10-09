@@ -517,15 +517,20 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
                     "now": setup.clock[0],
                 },
             )
-            db.add(
-                ConversationProspectMembership(
-                    id=uuid4(),
-                    tenant_id=setup.state.tenant_id,
-                    prospect_id=identifier,
-                    submission_id=call,
-                    linked_by_person_id=setup.state.person_id,
-                    created_at=setup.clock[0],
-                )
+            await db.execute(
+                text(
+                    "INSERT INTO conversation_prospect_memberships (id, tenant_id, prospect_id, "
+                    "submission_id, linked_by_person_id, created_at) "
+                    "VALUES (:id, :tenant, :prospect, :call, :person, :now)"
+                ),
+                {
+                    "id": uuid4(),
+                    "tenant": setup.state.tenant_id,
+                    "prospect": identifier,
+                    "call": call,
+                    "person": setup.state.person_id,
+                    "now": setup.clock[0],
+                },
             )
             await store(setup, db)._audit(
                 setup.state.actor, identifier, "created", {}, setup.clock[0]
@@ -542,7 +547,14 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
                 .one()
             )
             events = (await db.scalars(select(AuditEvent))).all()
-            members = (await db.scalars(select(ConversationProspectMembership))).all()
+            members = (
+                await db.execute(
+                    select(
+                        ConversationProspectMembership.id,
+                        ConversationProspectMembership.submission_id,
+                    )
+                )
+            ).all()
             preserved = (
                 dict(row),
                 [(e.id, e.event_hash) for e in events],
@@ -558,14 +570,13 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
             setup, identifier, preserved = run(populate())
         if not invocation:
             pytest.fail("The isolated parent migration was not captured.", pytrace=False)
-        migrated = original(invocation[0], **invocation[1])
+        migrated = original([*invocation[0][:-1], "20261007_0077"], **invocation[1])
         if migrated.returncode:
             pytest.fail(
                 "Isolated tags migration failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
-            assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261007_0077"
             row = dict(
                 db.execute(
                     text("SELECT * FROM conversation_prospects WHERE id=:id"), {"id": identifier}
@@ -586,6 +597,14 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
                 )
                 == preserved[2]
             )
+        migrated = original(invocation[0], **invocation[1])
+        if migrated.returncode:
+            pytest.fail(
+                "Isolated head migration failed; environment/output withheld.", pytrace=False
+            )
+        with engine.connect() as db:
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
+            assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             assert db.execute(
                 text("SELECT submission_id, capture_source FROM conversation_guest_submissions")
             ).all() == [(preserved[2][0][1], None)]
