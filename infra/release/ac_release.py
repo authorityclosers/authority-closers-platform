@@ -676,6 +676,8 @@ class EdgeProjectionRecovery:
                     )
                 self.preserved(plan)
                 after = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+                if any(after[env]["sha256"] != EDGE_REPAIR_HASHES[env][1] for env in ENVIRONMENTS):
+                    raise ReleaseError("edge repair final projection differs from its owner pins")
                 self.save(
                     directory / "completed.json", self.encoded({"at": _now(), "after": after})
                 )
@@ -757,6 +759,8 @@ class EdgeProjectionRecovery:
                 self.replace(env, backups[env], EDGE_REPAIR_HASHES[env][1], digest + "-rollback")
         self.preserved(plan)
         after = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+        if any(after[env]["sha256"] != EDGE_REPAIR_HASHES[env][0] for env in ENVIRONMENTS):
+            raise ReleaseError("edge repair rollback final projection differs from its backup pins")
         self.save(directory / "completed.json", self.encoded({"at": _now(), "after": after}))
         directory.chmod(0o555)
         self.sync_directory(directory)

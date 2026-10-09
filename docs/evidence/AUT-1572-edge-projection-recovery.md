@@ -143,3 +143,47 @@ then exercise the supported rollback from its retained prepared receipt.
 
 Repository CI, source merge/installation, managerial reconciliation of the
 cleared live condition, and any separately approved live invocation remain open.
+
+## CTO correction: final public-route digest verification
+
+Review baseline: PR #412 at `52e56cf0d80c28e6c61ac97d159652c0b66a4438`.
+Correction run: `12fca629-0568-4be6-8661-80d57496fdb7`, 9 October 2026 UTC.
+The CTO's P1 finding was reproduced locally before changing the implementation:
+all **8** new fictional race cases failed because apply or rollback returned
+success instead of rejecting concurrent public-route drift.
+
+Both completion paths now compare **both** collected public-route digests with
+the required pins before creating `completed.json`: immutable owner hashes for
+apply and verified backup hashes for rollback. A mismatch raises an error.
+Apply then follows its existing compensation/containment path, replacing only
+recognized owner bytes and refusing unknown drift. Rollback retains its prepared
+receipt without declaring completion. Neither path overwrites unknown bytes;
+the original plan, prepared evidence and verified backups remain available.
+No failure receipt is forced over the existing unknown-drift containment refusal.
+
+The eight regression cases exercise apply and rollback after the first
+replacement, after the last replacement (the CTO's reproduction), and just
+before completion with drift in either public projection. They assert rejection,
+absence of a completion receipt for the failed operation, preservation of unknown
+bytes and original backups, unchanged original apply evidence during rollback,
+preserved bindings/holds, and mutation-free refusal of a subsequent rollback.
+
+The full focused release-engine suite passed **388 tests in 88.37s** (exit 0),
+including all **50** recovery tests. Ruff lint/format checks, `git diff --check`
+and the final lane check each exited 0. The verification commands remain the
+ones listed above; no broader workspace test or live activation was used.
+
+```sh
+# At the review baseline with only the new regression tests: 8 failed.
+.venv/bin/python -m pytest tests/infra/test_ac_release_edge_repair.py -k final_projection_drift -q --tb=short
+# After the correction: 50 passed in 8.06s.
+.venv/bin/python -m pytest tests/infra/test_ac_release_edge_repair.py -q --tb=short
+```
+
+The Root `main` checkout was clean and fast-forward synchronization reported
+already up to date. The existing devenv task checkout was clean at the review
+baseline; `ac-gate check` permitted this task (exit 0). Only the prescribed
+source, recovery tests and this evidence document changed. This correction run
+performed no host repair, release invocation, installation, service action or
+new live read-back. The earlier live reconciliation remains historical evidence,
+and the review/approval/installation/Root-verification gates above still apply.

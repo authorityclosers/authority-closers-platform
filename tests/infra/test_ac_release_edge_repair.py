@@ -437,6 +437,77 @@ def test_replacement_race_preserves_unknown_drift(recovery, monkeypatch):
     assert (recovery.receipts / digest / "prepared.json").exists()
 
 
+@pytest.mark.parametrize("mode", ["apply", "rollback"])
+@pytest.mark.parametrize(
+    ("phase", "drift_env"),
+    [
+        ("first-replacement", "staging"),
+        ("last-replacement", "staging"),
+        ("before-completion", "staging"),
+        ("before-completion", "production"),
+    ],
+)
+def test_final_projection_drift_refuses_completion_and_preserves_evidence(
+    recovery, monkeypatch, mode, phase, drift_env
+):
+    digest = rehearse(recovery)
+    if mode == "rollback":
+        recovery.execute(OWNER, apply=True, plan_sha256=digest)
+    original_receipt = recovery.receipts / digest
+    original_evidence = (
+        {p.name: p.read_bytes() for p in original_receipt.iterdir()}
+        if original_receipt.exists()
+        else None
+    )
+    original_replace = recovery.replace
+    original_preserved = recovery.preserved
+    injected = False
+    unknown = b"unknown concurrent public route\n"
+    target_index = 1 if mode == "apply" else 0
+
+    def inject():
+        nonlocal injected
+        if not injected:
+            injected = True
+            write(recovery.projections / f"{drift_env}.caddy", unknown)
+
+    def replace(env, *args, **kwargs):
+        original_replace(env, *args, **kwargs)
+        if (phase == "first-replacement" and env == M.ENVIRONMENTS[0]) or (
+            phase == "last-replacement" and env == M.ENVIRONMENTS[-1]
+        ):
+            inject()
+
+    def preserved(plan):
+        original_preserved(plan)
+        if phase == "before-completion" and all(
+            recovery.projection(env)[1]["sha256"] == M.EDGE_REPAIR_HASHES[env][target_index]
+            for env in M.ENVIRONMENTS
+        ):
+            inject()
+
+    monkeypatch.setattr(recovery, "replace", replace)
+    monkeypatch.setattr(recovery, "preserved", preserved)
+    with pytest.raises(M.ReleaseError, match="unexpected drift|final projection"):
+        recovery.execute(OWNER, **{mode: True}, plan_sha256=digest)
+    assert injected
+    assert recovery.projection(drift_env)[0] == unknown
+    failed_receipt = recovery.receipts / (digest + "-rollback" if mode == "rollback" else digest)
+    assert (failed_receipt / "prepared.json").exists()
+    assert not (failed_receipt / "completed.json").exists()
+    for env in M.ENVIRONMENTS:
+        assert (
+            sha((original_receipt / f"{env}.before").read_bytes()) == M.EDGE_REPAIR_HASHES[env][0]
+        )
+    if original_evidence is not None:
+        assert {p.name: p.read_bytes() for p in original_receipt.iterdir()} == original_evidence
+    recovery.preserved(json.loads((original_receipt / "plan.json").read_bytes()))
+    before_retry = filesystem(M.EDGE_REPAIR_ANCHOR)
+    with pytest.raises(M.ReleaseError, match="unexpected drift"):
+        recovery.execute(OWNER, rollback=True, plan_sha256=digest)
+    assert filesystem(M.EDGE_REPAIR_ANCHOR) == before_retry
+
+
 def test_broken_hold_symlink_is_rejected(recovery):
     (recovery.paths.config / "production.HELD-broken").symlink_to("missing")
     with pytest.raises(OSError):
