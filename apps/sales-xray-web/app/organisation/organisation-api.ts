@@ -43,6 +43,13 @@ export type OrgMember = {
   | { status: "invited"; personId: null; inviteId: string }
 );
 
+/** Counts over the same permitted calls that `calls` lists. */
+export type ActivityCounts = {
+  calls: number;
+  recordedMinutes: number;
+  reportsReady: number;
+};
+
 export type OrgActivity = {
   members: Array<{
     personId: string;
@@ -51,6 +58,10 @@ export type OrgActivity = {
     reportsReady: number;
     lastCallAt: string | null;
   }>;
+  /** UTC days with at least one permitted call; empty on older servers. */
+  perDay: Array<ActivityCounts & { date: string }>;
+  /** People with at least one permitted call; empty on older servers. */
+  perRep: Array<ActivityCounts & { personId: string; name: string }>;
   calls: Array<{
     id: string;
     ownerPersonId: string;
@@ -300,9 +311,27 @@ export async function readMembers(signal?: AbortSignal): Promise<OrgMember[]> {
   return parseMembers(await call("/members", { signal }));
 }
 
+const counts = (item: Record<string, unknown>): ActivityCounts => ({
+  calls: num(item.calls),
+  recordedMinutes: num(item.recorded_minutes),
+  reportsReady: num(item.reports_ready),
+});
+
 export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
   const data = obj(await call("/activity?days=30", { signal }));
   return {
+    perDay: list(data.per_day).map((raw) => {
+      const item = obj(raw);
+      return { date: text(item.date) ?? "", ...counts(item) };
+    }),
+    perRep: list(data.per_rep).map((raw) => {
+      const item = obj(raw);
+      return {
+        personId: text(item.person_id) ?? "",
+        name: text(item.name) ?? "",
+        ...counts(item),
+      };
+    }),
     members: list(data.members).map((raw) => {
       const item = obj(raw);
       return {

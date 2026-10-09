@@ -10,6 +10,11 @@ vi.mock("../acquisition-shell", () => ({
     <main>{children}</main>
   ),
 }));
+const notices = vi.hoisted(() => ({
+  notify: vi.fn(),
+  dismissNotice: vi.fn(),
+}));
+vi.mock("../notice-center", () => notices);
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,6 +44,8 @@ let accessRetry: ReturnType<typeof vi.fn<() => void>>;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 beforeEach(() => {
+  window.history.replaceState(null, "", "/organisation");
+  notices.notify.mockClear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -172,6 +179,17 @@ const button = (name: string) =>
       item.textContent?.trim() === name,
   )!;
 const click = (name: string) => act(async () => button(name).click());
+/** The confirmation's action button is named for its verb (Add, Remove…). */
+const confirm = () =>
+  act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+      .at(-1)!
+      .click(),
+  );
+const noticeText = () =>
+  notices.notify.mock.calls
+    .map(([notice]) => `${notice.title} ${notice.message ?? ""}`)
+    .join("\n");
 const writes = () =>
   fetchMock.mock.calls.filter(
     ([, init]) => init?.method && init.method !== "GET",
@@ -212,16 +230,16 @@ it("reads the header, zero usage, dates and invite identity from the real contra
   await click("Members");
   expect(host.querySelectorAll('[role="row"]')).toHaveLength(4);
   expect(host.textContent).toContain("Invited");
+  expect(host.textContent).toContain("Has not joined yet");
   expect(host.textContent).toContain("Joined");
   expect(host.textContent).toContain("Last active");
   expect(host.textContent).toContain("Admin (you)");
-  expect(button("Revoke invite for new")).toBeDefined();
-  expect(host.querySelector('select[aria-label="Role for new"]')).toBeNull();
-  const cells = [...host.querySelectorAll('[role="row"]')][2].querySelectorAll(
-    '[role="cell"]',
-  );
-  expect(cells[2].textContent).toBe("0");
-  expect(cells[3].textContent).toBe("0");
+  expect(button("Revoke invite for new@example.com")).toBeDefined();
+  expect(
+    host.querySelector('select[aria-label="Role for new@example.com"]'),
+  ).toBeNull();
+  // Usage figures live on Overview only, from one source; no zero columns here.
+  expect(host.textContent).not.toContain("Minutes");
 });
 
 it.each([
@@ -255,7 +273,7 @@ it.each([
   ],
   [
     "revoke",
-    () => click("Revoke invite for new"),
+    () => click("Revoke invite for new@example.com"),
     `/v1/organisation/invites/${inviteId}`,
     "DELETE",
     undefined,
@@ -268,7 +286,7 @@ it.each([
     await action();
     expect(host.querySelector('[role="dialog"]')).not.toBeNull();
     expect(writes()).toHaveLength(0);
-    await click("Confirm");
+    await confirm();
     expect(writes()).toHaveLength(1);
     const [url, init] = writes()[0];
     expect(url).toBe(path);
@@ -301,12 +319,14 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   await select("Role for the new person", "admin");
   await click("Make Dipak the owner");
   org().role = "admin";
-  await click("Confirm");
-  expect(host.querySelector("header")?.textContent).toContain("you are Admin");
+  await confirm();
+  expect(host.querySelector("header")?.textContent).toContain(
+    "Your role: Admin",
+  );
   expect(button("Make Dipak the owner")).toBeUndefined();
   expect(host.querySelector('select[aria-label="Role for Dipak"]')).toBeNull();
   await add();
-  await click("Confirm");
+  await confirm();
   expect(JSON.parse(String(writes()[1][1].body)).role).toBe("member");
 });
 it("allows admins to add/remove members and revoke pending invites", async () => {
@@ -328,20 +348,21 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   expect(button("Make Dipak the owner")).toBeUndefined();
   expect(button("Remove Admin")).toBeUndefined();
   expect(button("Remove Dipak").disabled).toBe(false);
-  expect(button("Revoke invite for new").disabled).toBe(false);
+  expect(button("Revoke invite for new@example.com").disabled).toBe(false);
 });
 it("uses the API role and shows members only their own row read-only", async () => {
   org().role = "member";
   await render();
   await click("Members");
-  expect(host.querySelector("header")?.textContent).toContain("you are Member");
+  expect(host.querySelector("header")?.textContent).toContain(
+    "Your role: Member",
+  );
   expect(host.querySelectorAll('[role="row"]')).toHaveLength(2);
   expect(host.textContent).not.toContain("dipak@example.com");
   expect(host.textContent).not.toContain("new@example.com");
-  expect(
-    host.querySelector<HTMLInputElement>('input[aria-label="Email to add"]')
-      ?.disabled,
-  ).toBe(true);
+  // Members see one quiet line instead of a form they cannot use.
+  expect(host.querySelector('input[aria-label="Email to add"]')).toBeNull();
+  expect(host.textContent).toContain("Only owners and admins can add people");
   expect(button("Remove Admin")).toBeUndefined();
 });
 it.each([
@@ -354,8 +375,11 @@ it.each([
   await render();
   await click("Members");
   await click("Remove Dipak");
-  await click("Confirm");
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain(detail);
+  await confirm();
+  // Errors are corner cards, never banners inside the page.
+  expect(noticeText()).toContain(detail);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.querySelector('[role="dialog"]')).not.toBeNull();
 });
 it("hides Organisation after a Personal 404 on a write", async () => {
   writeStatus = 404;
@@ -363,7 +387,7 @@ it("hides Organisation after a Personal 404 on a write", async () => {
   await render();
   await click("Members");
   await click("Remove Dipak");
-  await click("Confirm");
+  await confirm();
   expect(host.textContent).toContain("You are on your personal account");
   expect(
     host.querySelector('nav[aria-label="Organisation sections"]'),
@@ -399,13 +423,15 @@ it("does not invent rows or usage when members cannot load", async () => {
       ?.disabled,
   ).toBe(true);
 });
-it("keeps personal Create/Join flows Coming soon and makes no organisation reads", async () => {
+it("shows no promised Create/Join buttons on Personal and makes no organisation reads", async () => {
   (
     routes["/v1/me/sales-xray-workspaces"] as { selected_tenant_id: string }
   ).selected_tenant_id = "personal";
   await render();
   expect(host.textContent).toContain("You are on your personal account");
-  expect(button("Create an organisationSoon").disabled).toBe(true);
+  expect(host.textContent).toContain("To open Directory name");
+  expect(host.textContent).not.toMatch(/soon/i);
+  expect(host.querySelectorAll("button")).toHaveLength(0);
   expect(
     fetchMock.mock.calls.some(([path]) => path.startsWith("/v1/organisation")),
   ).toBe(false);
@@ -422,28 +448,146 @@ it("rejects expanded directory responses without the old workspace list", async 
   ).toBe(false);
 });
 
-it.each([0, 2_700])(
-  "shows Unlimited organisation usage with %i available seconds",
-  async (available) => {
-    routes["/v1/conversation/acquisition/session"] = {
-      allowance: {
-        allowance_seconds: 3_600,
-        committed_seconds: 1_200,
-        available_seconds: available,
-        unlimited: true,
+const day = (daysAgo: number) =>
+  new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+const deskId = "00000000-0000-4000-8000-000000000005";
+const testId = "00000000-0000-4000-8000-000000000006";
+function activityRoutes(activeDays = [0]) {
+  const person = (
+    id: string,
+    name: string,
+    email: string,
+    role = "member",
+  ) => ({
+    ...active,
+    person_id: id,
+    name,
+    email,
+    role,
+  });
+  routes["/v1/organisation/members"] = {
+    members: [
+      person(ownerId, "Admin", "admin@fictional-studio.in", "owner"),
+      person(deskId, "Admin", "desk@fictional-mail.in"),
+      person(memberId, "Dipak", "dipak@fictional-studio.in"),
+      person(testId, "Quinn Fixture", "qa-quinn@example.test"),
+    ],
+  };
+  (routes["/v1/organisation"] as { member_count: number }).member_count = 4;
+  routes["/v1/organisation/activity?days=30"] = {
+    // Usage-ledger totals deliberately disagree; Overview must not use them.
+    members: [
+      {
+        person_id: ownerId,
+        calls: 2,
+        minutes: 9,
+        reports_ready: 0,
+        last_call_at: null,
       },
-    };
-    await render();
-    await click("Usage & credits");
-    const stat = [...host.querySelectorAll("span")].find(
-      (node) => node.textContent === "Your minutes",
-    )!.parentElement!;
-    expect(stat.textContent).toContain("Unlimited");
-    expect(stat.textContent).toContain("20 min used or reserved");
-    expect(stat.textContent).not.toContain("left");
-    expect(stat.querySelector("i")).toBeNull();
-  },
-);
+    ],
+    calls: activeDays.map((ago, index) => ({
+      id: `00000000-0000-4000-8000-0000000001${String(index).padStart(2, "0")}`,
+      owner_person_id: ownerId,
+      owner_name: "Admin",
+      label: index === 0 ? null : "Fictional follow-up",
+      created_at: `${day(ago)}T09:30:00Z`,
+      duration_seconds: 252,
+      state: index === 0 ? "report_ready" : "processing",
+      has_report: index === 0,
+    })),
+    per_day: activeDays.map((ago, index) => ({
+      date: day(ago),
+      calls: 1,
+      recorded_minutes: 4.2,
+      reports_ready: index === 0 ? 1 : 0,
+    })),
+    per_rep: [
+      {
+        person_id: ownerId,
+        name: "Admin",
+        calls: activeDays.length,
+        recorded_minutes: 4.2 * activeDays.length,
+        reports_ready: 1,
+      },
+    ],
+  };
+}
+const kpi = (label: string) =>
+  [...host.querySelectorAll("dt")].find((node) => node.textContent === label)
+    ?.parentElement?.textContent;
+
+it("reconciles every Overview figure with the calls it lists", async () => {
+  activityRoutes();
+  await render();
+  expect(kpi("Calls")).toBe("Calls1call saved");
+  expect(kpi("Minutes recorded")).toBe(
+    "Minutes recorded4length of those calls",
+  );
+  expect(kpi("Reports ready")).toBe("Reports ready1of 1 call");
+  expect(kpi("People with calls")).toBe("People with calls1of 4 members");
+  expect(host.textContent).not.toContain("2 calls");
+  const rows = host.querySelectorAll('[aria-label="Team calls"] a[role="row"]');
+  expect(rows).toHaveLength(1);
+  expect(rows[0].textContent).toContain("Unnamed call");
+  expect(rows[0].textContent).toContain("Report ready");
+  // One sparse day is not a trend.
+  expect(host.querySelector('[role="img"]')).toBeNull();
+});
+
+it("lists active people first and folds quiet and test accounts away", async () => {
+  activityRoutes();
+  await render();
+  const people = () =>
+    [...host.querySelectorAll('[aria-labelledby="org-people"] li')].map(
+      (item) => item.textContent,
+    );
+  expect(people()).toHaveLength(1);
+  expect(people()[0]).toContain("1 call");
+  // Two people share a name, so each shows the email that tells them apart.
+  expect(people()[0]).toContain("admin@fictional-studio.in");
+  expect(host.textContent).not.toContain("Dipak");
+  await click("3 more people with no calls or test accounts");
+  expect(people()).toHaveLength(4);
+  expect(people()[1]).toContain("desk@fictional-mail.in");
+  expect(people().at(-1)).toContain("Quinn FixtureTest");
+  expect(host.textContent).toContain("No calls");
+});
+
+it("draws a 30-day bar only with at least three active days", async () => {
+  activityRoutes([0, 3, 9]);
+  await render();
+  expect(
+    host.querySelector('[aria-label="Calls per day over the last 30 days"]')
+      ?.children,
+  ).toHaveLength(30);
+  expect(kpi("Reports ready")).toBe("Reports ready1of 3 calls");
+  expect(host.textContent).toContain("Analysis in progress");
+});
+
+it("scopes Overview to the member's own calls without team figures", async () => {
+  activityRoutes();
+  org().role = "member";
+  await render();
+  expect(host.textContent).toContain("Your calls");
+  expect(kpi("People with calls")).toBeUndefined();
+  expect(host.querySelector('[aria-labelledby="org-people"]')).toBeNull();
+});
+
+it("explains an activity route that this server does not have", async () => {
+  await render();
+  expect(host.textContent).toContain(
+    "Activity is not available on this server yet",
+  );
+  expect(host.textContent).not.toMatch(/coming soon/i);
+});
+
+it("keeps the selected section in the address for reloads and links", async () => {
+  await render();
+  await click("Company");
+  expect(window.location.search).toBe("?tab=company");
+  await click("Overview");
+  expect(window.location.search).toBe("");
+});
 
 const settingsCalls = () =>
   fetchMock.mock.calls.filter(([path]) => path === "/v1/organisation/settings");
@@ -475,11 +619,15 @@ it.each(["owner", "admin"])(
     expect(settingsCalls()).toHaveLength(0);
     await click("Company");
     expect(detailsForm()?.querySelectorAll("input")).toHaveLength(8);
-    expect(button("Save").disabled).toBe(role !== "owner");
-    expect(
-      host.querySelector<HTMLInputElement>('input[aria-label="Domain to add"]')
-        ?.disabled,
-    ).toBe(role !== "owner");
+    const domainInput = host.querySelector('input[aria-label="Domain to add"]');
+    if (role === "owner") {
+      expect(button("Save domains").disabled).toBe(false);
+      expect(domainInput).not.toBeNull();
+    } else {
+      expect(button("Save domains")).toBeUndefined();
+      expect(domainInput).toBeNull();
+      expect(host.textContent).toContain("Only the owner can change domains.");
+    }
     await editCompanyName("  Fictional Renamed Studio  ");
     await saveDetails();
     expect(host.querySelector("h1")?.textContent).toBe(
@@ -507,7 +655,7 @@ it("gives members a permission explanation without a private GET, draft, Save or
   expect(detailsForm()).toBeNull();
   expect(button("Save details")).toBeUndefined();
   expect(settingsCalls()).toHaveLength(0);
-  expect(button("Save").disabled).toBe(true);
+  expect(button("Save domains")).toBeUndefined();
 });
 it.each([401, 403])(
   "clears the form and refreshes existing access after a %i save without changing the header",
