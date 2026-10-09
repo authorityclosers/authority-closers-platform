@@ -211,7 +211,7 @@
 
 @media (min-width: 1180px) {
   .columns[data-team] {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
 
@@ -330,7 +330,7 @@
 .callHead,
 .callRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 88px 64px 148px;
+  grid-template-columns: minmax(0, 1fr) 76px 56px 140px;
   align-items: center;
   gap: 12px;
   padding: 0 14px;
@@ -338,7 +338,7 @@
 
 .callHead[data-team],
 .callRow[data-team] {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 88px 64px 148px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) 76px 56px 140px;
 }
 
 .callHead,
@@ -414,6 +414,13 @@
   align-items: center;
   gap: 8px;
   color: var(--lx-ink-3);
+}
+
+.callPerson span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .callPerson i,
@@ -543,7 +550,7 @@
 
 .people li {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 56px auto;
+  grid-template-columns: 24px minmax(0, 1fr) 48px 104px;
   align-items: center;
   gap: 10px;
   min-height: 48px;
@@ -574,6 +581,13 @@
 .personName small {
   color: var(--lx-muted);
   font-size: 12px;
+}
+
+.nameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .personBar {
@@ -707,8 +721,29 @@
 
 .roleSelect {
   height: 28px;
-  border-color: var(--lx-line);
+  margin-left: -10px;
+  border-color: transparent;
   background-color: transparent;
+  color: var(--lx-ink-3);
+  cursor: pointer;
+}
+
+.roleSelect:hover:not(:disabled) {
+  border-color: var(--lx-line-strong);
+  color: var(--lx-ink);
+}
+
+/* Row actions appear on hover or focus where a pointer can hover; always on touch. */
+@media (hover: hover) {
+  .memberRow .rowActions {
+    opacity: 0;
+    transition: opacity var(--lx-dur-quick, 120ms) ease;
+  }
+
+  .memberRow:hover .rowActions,
+  .memberRow:focus-within .rowActions {
+    opacity: 1;
+  }
 }
 
 .select:focus-visible,
@@ -750,6 +785,10 @@
 
 .memberRow {
   min-height: 52px;
+}
+
+.memberRow:hover {
+  background: var(--lx-paper-2);
 }
 
 .memberRow[data-invited] .avatar {
@@ -1357,10 +1396,20 @@
   }
 
   .memberRow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "person role actions";
-    gap: 10px;
-    padding: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "person person"
+      "role actions";
+    gap: 2px 10px;
+    padding: 10px 14px 6px;
+  }
+
+  .memberRow > .roleCell {
+    padding-left: 34px;
+  }
+
+  .memberRow .rowActions {
+    opacity: 1;
   }
 
   .memberRow > .person {

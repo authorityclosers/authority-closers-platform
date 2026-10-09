@@ -103,7 +103,7 @@ export function isTestEmail(email: string | null) {
 }
 
 const memberName = (member: OrgMember) =>
-  member.name || member.email?.split("@")[0] || "Unnamed member";
+  member.name || member.email || "Unnamed member";
 
 /** Whole minutes; a call shorter than a minute is "<1", not zero. */
 function minutes(value: number) {
@@ -581,7 +581,7 @@ function OverviewPanel({
           <Kpi
             label="Minutes recorded"
             value={minutes(totals.minutes)}
-            context="audio length of those calls"
+            context="length of those calls"
           />
           <Kpi
             label="Reports ready"
@@ -704,7 +704,7 @@ function CallsTable({
                   {team ? (
                     <span role="cell" className={styles.callPerson}>
                       <i aria-hidden="true">{initials(person)}</i>
-                      {person}
+                      <span>{person}</span>
                     </span>
                   ) : null}
                   <span
@@ -842,7 +842,7 @@ function PeopleActivity({
               </i>
               <span className={styles.personName}>
                 <b>
-                  {row.name}
+                  <span className={styles.nameText}>{row.name}</span>
                   {row.test ? <span className={styles.tag}>Test</span> : null}
                 </b>
                 {row.duplicate && row.email ? <small>{row.email}</small> : null}
@@ -1107,7 +1107,7 @@ function MembersPanel({
                   </i>
                   <span className={styles.personName}>
                     <b>
-                      {name}
+                      <span className={styles.nameText}>{name}</span>
                       {isYou ? (
                         <span className={styles.you}> (you)</span>
                       ) : null}
@@ -1120,7 +1120,11 @@ function MembersPanel({
                         <span className={styles.tag}>Test</span>
                       ) : null}
                     </b>
-                    <small>{member.email}</small>
+                    <small>
+                      {member.status === "invited" && !member.name
+                        ? "Has not joined yet"
+                        : member.email}
+                    </small>
                   </span>
                 </span>
                 <span role="cell" className={styles.roleCell}>
