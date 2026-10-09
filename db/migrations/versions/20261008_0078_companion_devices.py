@@ -46,7 +46,9 @@ def upgrade() -> None:
     collected_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT pk_companion_pairings PRIMARY KEY (id),
     CONSTRAINT ck_companion_pairings_code_hash CHECK (code_sha256 ~ '^[0-9a-f]{64}$' ),
+    CONSTRAINT ck_companion_pairings_code_hash_length CHECK (length(code_sha256) = 64),
     CONSTRAINT ck_companion_pairings_poll_hash CHECK (poll_secret_sha256 ~ '^[0-9a-f]{64}$' ),
+    CONSTRAINT ck_companion_pairings_poll_hash_length CHECK (length(poll_secret_sha256) = 64),
     CONSTRAINT ck_companion_pairings_name_bounded CHECK (length(name) BETWEEN 1 AND 160),
     CONSTRAINT ck_companion_pairings_platform CHECK (platform IN ( 'android' , 'ios' , 'windows' ,
       'macos' , 'chrome' )),
@@ -101,6 +103,7 @@ def upgrade() -> None:
     consumed_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT pk_companion_credentials PRIMARY KEY (id),
     CONSTRAINT ck_companion_credentials_token_hash CHECK (token_sha256 ~ '^[0-9a-f]{64}$' ),
+    CONSTRAINT ck_companion_credentials_token_hash_length CHECK (length(token_sha256) = 64),
     CONSTRAINT ck_companion_credentials_kind_expiry CHECK (expires_at > created_at AND ((kind =
       'access' AND expires_at <= created_at + interval '15 minutes' ) OR (kind = 'refresh' AND
       expires_at <= created_at + interval '30 days' ) OR (kind = 'web_session' AND expires_at <=

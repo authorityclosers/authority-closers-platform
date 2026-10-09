@@ -74,9 +74,9 @@ CTO delta verification on 2026-10-08 (after review of `95cf0c4`):
 
 - PostgreSQL regex and interval constraints in the registry now use
   `.ddl_if(dialect="postgresql")`. Portable hash length checks still apply on
-  both dialects. The PostgreSQL migration SQL remains unchanged. Its regex
-  checks already enforce exact length; the registry drift proof allows exactly
-  the three redundant metadata length constraints and rejects any other drift.
+  both dialects. That revision omitted these three checks from the migration.
+  CI rejected the schema difference; its earlier drift proof is superseded by
+  the zero-drift verification below.
 - `capture_source` and its allowed-value CHECK now belong to the mapped
   `ConversationGuestSubmission` class. Registry mutation was removed. SQLite
   ORM readback covers NULL and `chrome_tab`, and rejects `inferred`.
@@ -94,10 +94,52 @@ CTO delta verification on 2026-10-08 (after review of `95cf0c4`):
   verification still requires the reviewed release.
 - The credential DELETE-history concern was recorded separately in Intake
   Ledger AUT-1618 for a later card, as the CTO directed. The existing UPDATE
-  trigger and migration are unchanged by this revision.
+  UPDATE trigger is unchanged; the migration correction is recorded below.
 
 Reproduce the SQLite regression checks:
 
 ```sh
 uv run pytest -q tests/database/test_model_registry.py tests/database/test_certificates.py tests/unit/certificates/test_services.py tests/unit/http/test_certificate_routes.py
 ```
+
+CTO schema-parity correction on 2026-10-09 (after review of `f57a0f2`):
+
+- Added `ck_companion_pairings_code_hash_length`,
+  `ck_companion_pairings_poll_hash_length`, and
+  `ck_companion_credentials_token_hash_length` to the unpublished 0078
+  migration. Its regex and expiry checks remain. The storage drift test now
+  requires `differences == []`; no schema drift is accepted and no Alembic or
+  workflow gate changed.
+- Created a fresh, uniquely named fictional database on the explicitly
+  configured loopback test PostgreSQL server. Replayed the complete chain from
+  empty with the exact CI command:
+  `uv run alembic upgrade head && uv run alembic check`.
+  Both succeeded; Alembic reported `No new upgrade operations detected.`
+- In that fresh database, ran the PostgreSQL storage suite and SQLite registry,
+  certificate database/service/HTTP regressions: **42 passed** (8 PostgreSQL,
+  34 SQLite/certificate). The storage fixture also replays the migration chain
+  in an isolated schema and confirms zero metadata differences. One existing
+  Starlette TestClient deprecation warning was reported.
+- The disposable database was removed in the verification script's `finally`
+  block. Neither the previously stamped local dev database nor any shared dev,
+  staging or production database was repaired or migrated in this revision.
+- Python formatting/lint and mypy passed (434 source files). Migration
+  formatting/lint and `git diff --check` passed. All three pure catalogue
+  assertions passed again; v49 and 137 tables remain unchanged. Earlier
+  release-tool/parity test results apply to unchanged files. Root-only restore
+  and hosted new-head proof remain unclaimed.
+
+Reproduce on a fresh disposable fictional loopback database: create a uniquely
+named test database, inject its URL as `AC_DATABASE_URL`,
+`AC_DATABASE_MIGRATOR_URL`, `AC_TEST_DATABASE_URL` and
+`AC_CONVERSATION_POSTGRES_TEST_URL` without printing credentials, set
+`AC_ENVIRONMENT=test`, and clear inherited `PGOPTIONS`. Run:
+
+```sh
+uv run alembic upgrade head && uv run alembic check
+uv run pytest -q tests/database/test_companion_devices_postgresql.py tests/database/test_model_registry.py tests/database/test_certificates.py tests/unit/certificates/test_services.py tests/unit/http/test_certificate_routes.py
+```
+
+Remove only that disposable database afterwards. The old stamped dev database
+is not evidence for the revised migration. CTO delta review resumes after
+GitHub CI is green at the new head, then CEO approval; watchdog owns merge.
