@@ -21,7 +21,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
   type FormEvent,
 } from "react";
 import { BrandMark } from "./shell/brand-lockup";
@@ -51,90 +50,11 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
-// Decorative "x-ray" of a conversation: a scan passes over a two-speaker
-// waveform and the kinds of moment Sales Xray looks for light up. It shows no
-// data; heights are a fixed pattern so server and client render the same.
-const XRAY_BAR_COUNT = 64;
-const XRAY_SWEEP_SECONDS = 7;
-const XRAY_BARS = Array.from({ length: XRAY_BAR_COUNT }, (_, index) => {
-  const envelope = Math.abs(Math.sin(index * 0.21) * Math.cos(index * 0.047));
-  const grain = ((index * 37) % 11) / 11;
-  return Math.round(16 + 74 * (0.3 + 0.7 * envelope) * (0.62 + 0.38 * grain));
-});
-const XRAY_SPEAKER_TURNS = [0, 12, 23, 37, 47] as const;
-const XRAY_MOMENTS = [
-  { kind: "strength", label: "Strong moment", from: 16, to: 19, row: 0 },
-  { kind: "objection", label: "Objection", from: 28, to: 31, row: 1 },
-  { kind: "missed", label: "Missed opportunity", from: 40, to: 43, row: 0 },
-  { kind: "next", label: "Next step", from: 55, to: 58, row: 1 },
-] as const;
 const XRAY_FEATURES = [
-  { Icon: UsersRound, label: "Speakers separated" },
-  { Icon: Sparkles, label: "Moments and objections" },
-  { Icon: FileText, label: "A clear summary" },
+  { Icon: UsersRound, label: "Know who said what" },
+  { Icon: Sparkles, label: "Find the moments that matter" },
+  { Icon: FileText, label: "Leave with a clear next step" },
 ] as const;
-
-function xrayDelay(position: number) {
-  return `${((position + 0.5) / XRAY_BAR_COUNT) * XRAY_SWEEP_SECONDS}s`;
-}
-
-function xraySpeaker(index: number) {
-  return XRAY_SPEAKER_TURNS.filter((turn) => turn <= index).length % 2 === 1
-    ? "rep"
-    : "buyer";
-}
-
-function xrayMoment(index: number) {
-  return XRAY_MOMENTS.find(
-    (moment) => index >= moment.from && index <= moment.to,
-  );
-}
-
-function XrayScene() {
-  return (
-    <div className={styles.xray} aria-hidden="true">
-      {XRAY_MOMENTS.map((moment) => (
-        <span
-          key={moment.kind}
-          className={styles.tag}
-          data-kind={moment.kind}
-          data-row={moment.row}
-          style={
-            {
-              "--x": `${(((moment.from + moment.to) / 2 + 0.5) / XRAY_BAR_COUNT) * 100}%`,
-              "--d": xrayDelay(moment.from),
-            } as CSSProperties
-          }
-        >
-          <i />
-          {moment.label}
-        </span>
-      ))}
-      <div className={styles.track}>
-        {XRAY_BARS.map((height, index) => {
-          const moment = xrayMoment(index);
-          return (
-            <span
-              key={index}
-              className={styles.bar}
-              data-speaker={xraySpeaker(index)}
-              data-kind={moment?.kind}
-              style={
-                {
-                  "--h": `${height}%`,
-                  "--d": xrayDelay(index),
-                } as CSSProperties
-              }
-            />
-          );
-        })}
-        <span className={styles.beamRail}>
-          <span className={styles.beam} />
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // Google sign-in cannot finish on the dev site until dev has its own sign-in
 // server (AUT-157): Google returns to staging, which cannot see the dev start.
@@ -733,7 +653,7 @@ export function AccountAuth({
     ) : unavailable && !googleAvailable ? (
       "Sign in with your existing Authority Closers account."
     ) : (
-      "One quick step for new and returning members."
+      "Get a sign-in code by email, or use your existing password."
     );
   return (
     <section
@@ -742,7 +662,7 @@ export function AccountAuth({
       aria-busy={pending}
       data-review-preview={preview ? "true" : undefined}
     >
-      <div className={styles.stage}>
+      <header className={styles.header}>
         {selectedFile ? (
           onCancel ? (
             <button
@@ -763,29 +683,6 @@ export function AccountAuth({
             {brandContent}
           </Link>
         )}
-        <div className={styles.storyCopy}>
-          <h2>
-            Hear the <span className={styles.accent}>opportunity</span>
-            <br />
-            in every call.
-          </h2>
-          <p>Bring your conversation. Leave with a clearer next step.</p>
-        </div>
-        <XrayScene />
-        <ul className={styles.features}>
-          {XRAY_FEATURES.map(({ Icon, label }) => (
-            <li key={label}>
-              <Icon size={16} aria-hidden="true" />
-              {label}
-            </li>
-          ))}
-        </ul>
-        <p className={styles.shared}>
-          <ShieldCheck size={15} aria-hidden="true" />
-          One AC account. Your learning, calls and reports.
-        </p>
-      </div>
-      <div className={styles.formColumn}>
         <div className={styles.formBar}>
           {selectedFile && onCancel ? (
             <button
@@ -797,158 +694,115 @@ export function AccountAuth({
             </button>
           ) : !selectedFile ? (
             <Link className={styles.returnLink} href="/">
-              <ArrowLeft size={16} aria-hidden="true" /> Return to app
+              <ArrowLeft size={16} aria-hidden="true" /> Back to home
             </Link>
           ) : (
             <span />
           )}
           <ThemeToggle />
         </div>
-        <div className={styles.card}>
-          <p className={styles.eyebrow}>
-            {displayedStep === "code"
-              ? "One quick check"
-              : displayedStep === "confirmed"
-                ? "You’re signed in"
-                : displayedStep === "password"
-                  ? "Existing AC account"
-                  : "Welcome to Sales Xray"}
+      </header>
+      <div className={styles.body}>
+        <aside className={styles.stage}>
+          <div className={styles.storyCopy}>
+            <h2>
+              Hear the <span className={styles.accent}>opportunity</span>
+              <br />
+              in every call.
+            </h2>
+            <p>Bring your conversation. Leave with a clearer next step.</p>
+          </div>
+          <ul className={styles.features}>
+            {XRAY_FEATURES.map(({ Icon, label }) => (
+              <li key={label}>
+                <Icon size={16} aria-hidden="true" />
+                {label}
+              </li>
+            ))}
+          </ul>
+          <p className={styles.shared}>
+            <ShieldCheck size={15} aria-hidden="true" />
+            One AC account. Your learning, calls and reports.
           </p>
-          <h1 id="account-auth-heading">{heading}</h1>
-          <p className={styles.lead}>{lead}</p>
-          {displayedStep === "confirmed" ? (
-            <div className={styles.confirmed}>
-              <span className={styles.confirmedMark}>
-                <Check aria-hidden="true" />
-              </span>
-              Account confirmed
-            </div>
-          ) : (
-            <>
-              {displayedStep !== "password" && unavailable ? (
-                <div role="status" className={styles.notice}>
-                  <span>Email code sign-in isn’t available right now.</span>
-                  <div className={styles.noticeActions}>
-                    <button
-                      type="button"
-                      className={styles.noticePrimary}
-                      disabled={preview || !interactive}
-                      onClick={() => {
-                        setStep("password");
-                        setError("");
-                      }}
-                    >
-                      Use my existing password{" "}
-                      <ArrowRight size={16} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.textButton}
-                      disabled={preview}
-                      onClick={() => setLoadAttempt((value) => value + 1)}
-                    >
-                      Check code sign-in again
-                    </button>
-                  </div>
-                </div>
-              ) : displayedStep !== "password" && !activeConfig ? (
-                <p role="status" className={styles.notice}>
-                  <LoaderCircle className={styles.spin} size={18} />
-                  Preparing secure sign-in…
-                </p>
-              ) : null}
-              {displayedStep === "email" &&
-              unavailable &&
-              !googleAvailable ? null : displayedStep === "email" ? (
-                <>
-                  <label
-                    className={styles.consent}
-                    data-checked={consent ? "true" : undefined}
-                  >
-                    <input
-                      type="checkbox"
-                      form="account-email-form"
-                      checked={consent}
-                      onChange={(event) => setConsent(event.target.checked)}
-                      disabled={preview || pending}
-                      required
-                    />
-                    <span className={styles.check} aria-hidden="true">
-                      <svg viewBox="0 0 16 16">
-                        <path d="M3.5 8.4 6.6 11.3 12.5 5" />
-                      </svg>
-                    </span>
-                    <span>
-                      I confirm that I am 18 or older and accept the current
-                      Authority Closers{" "}
-                      <a
-                        href="https://app.authorityclosers.com/terms"
-                        target="_blank"
-                        rel="noreferrer"
+        </aside>
+        <div className={styles.formColumn}>
+          <div className={styles.card}>
+            <p className={styles.eyebrow}>
+              {displayedStep === "code"
+                ? "One quick check"
+                : displayedStep === "confirmed"
+                  ? "You’re signed in"
+                  : displayedStep === "password"
+                    ? "Existing AC account"
+                    : "Welcome to Sales Xray"}
+            </p>
+            <h1 id="account-auth-heading">{heading}</h1>
+            <p className={styles.lead}>{lead}</p>
+            <p
+              ref={errorRef}
+              tabIndex={-1}
+              role={error ? "alert" : undefined}
+              className={styles.error}
+            >
+              {error}
+            </p>
+
+            {displayedStep === "confirmed" ? (
+              <div className={styles.confirmed}>
+                <span className={styles.confirmedMark}>
+                  <Check aria-hidden="true" />
+                </span>
+                Account confirmed
+              </div>
+            ) : (
+              <>
+                {displayedStep !== "password" && unavailable ? (
+                  <div role="status" className={styles.notice}>
+                    <span>Email code sign-in isn’t available right now.</span>
+                    <div className={styles.noticeActions}>
+                      <button
+                        type="button"
+                        className={styles.noticePrimary}
+                        disabled={preview || !interactive}
+                        onClick={() => {
+                          setStep("password");
+                          setError("");
+                        }}
                       >
-                        Terms
-                      </a>{" "}
-                      and{" "}
-                      <a
-                        href="https://app.authorityclosers.com/privacy"
-                        target="_blank"
-                        rel="noreferrer"
+                        Use my existing password{" "}
+                        <ArrowRight size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        disabled={preview}
+                        onClick={() => setLoadAttempt((value) => value + 1)}
                       >
-                        Privacy notice
-                      </a>{" "}
-                      for my learner account.
-                    </span>
-                  </label>
-                  {googleBlocked ? (
-                    <p className={styles.consentHint}>
-                      Google sign-in is not available on the dev site yet. Use
-                      an email code, or your password.
-                    </p>
-                  ) : null}
-                  {googleAvailable && (
-                    <button
-                      type="button"
-                      className={styles.google}
-                      onClick={google}
-                      disabled={preview || !consent || pending}
-                      aria-describedby={
-                        !consent ? "account-google-consent-hint" : undefined
-                      }
-                    >
-                      <GoogleMark />
-                      Continue with Google
-                    </button>
-                  )}
-                  {googleAvailable && !consent && (
-                    <p
-                      id="account-google-consent-hint"
-                      className={styles.consentHint}
-                    >
-                      Tick the box above to continue with Google or email.
-                    </p>
-                  )}
-                  {googleAvailable && available && (
-                    <div className={styles.divider}>
-                      <span>or use email</span>
+                        Check code sign-in again
+                      </button>
                     </div>
-                  )}
-                  <form
-                    id="account-email-form"
-                    onSubmit={sendCode}
-                    className={styles.form}
-                  >
+                  </div>
+                ) : displayedStep !== "password" && !activeConfig ? (
+                  <p role="status" className={styles.notice}>
+                    <LoaderCircle className={styles.spin} size={18} />
+                    Preparing secure sign-in…
+                  </p>
+                ) : null}
+                {displayedStep === "email" &&
+                unavailable &&
+                !googleAvailable ? null : displayedStep === "email" ? (
+                  <>
                     {available && (
-                      <>
-                        <label
-                          htmlFor="account-email"
-                          className={styles.visuallyHidden}
-                        >
-                          Email address
-                        </label>
+                      <div className={styles.emailField}>
+                        {" "}
+                        <label htmlFor="account-email">Email address</label>
                         <div className={styles.inputWrap}>
                           <Mail size={18} aria-hidden="true" />
                           <input
                             id="account-email"
+                            form="account-email-form"
+                            autoCapitalize="none"
+                            spellCheck={false}
                             name="email"
                             type="email"
                             autoComplete="email"
@@ -960,261 +814,330 @@ export function AccountAuth({
                             disabled={preview || pending}
                           />
                         </div>
-                        <button
-                          type="submit"
-                          className={styles.primary}
-                          disabled={
-                            preview || !available || !consent || pending
-                          }
+                      </div>
+                    )}
+                    <label
+                      className={styles.consent}
+                      data-checked={consent ? "true" : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        form="account-email-form"
+                        checked={consent}
+                        onChange={(event) => setConsent(event.target.checked)}
+                        disabled={preview || pending}
+                        required
+                      />
+                      <span className={styles.check} aria-hidden="true">
+                        <svg viewBox="0 0 16 16">
+                          <path d="M3.5 8.4 6.6 11.3 12.5 5" />
+                        </svg>
+                      </span>
+                      <span>
+                        I confirm that I am 18 or older and accept the current
+                        Authority Closers{" "}
+                        <a
+                          href="https://app.authorityclosers.com/terms"
+                          target="_blank"
+                          rel="noreferrer"
                         >
-                          {pending ? (
-                            <>
-                              <LoaderCircle className={styles.spin} size={18} />
-                              Sending…
-                            </>
+                          Terms
+                        </a>{" "}
+                        and{" "}
+                        <a
+                          href="https://app.authorityclosers.com/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Privacy notice
+                        </a>{" "}
+                        for my learner account.
+                      </span>
+                    </label>
+                    {googleAvailable && (
+                      <button
+                        type="button"
+                        className={styles.google}
+                        onClick={google}
+                        disabled={preview || !consent || pending}
+                        aria-describedby={
+                          !consent ? "account-google-consent-hint" : undefined
+                        }
+                      >
+                        <GoogleMark />
+                        Continue with Google
+                      </button>
+                    )}
+                    {googleAvailable && !consent && (
+                      <p
+                        id="account-google-consent-hint"
+                        className={styles.consentHint}
+                      >
+                        Tick the box above to continue with Google or email.
+                      </p>
+                    )}
+                    {googleAvailable && available && (
+                      <div className={styles.divider}>
+                        <span>or use email</span>
+                      </div>
+                    )}
+                    <form
+                      id="account-email-form"
+                      onSubmit={sendCode}
+                      className={styles.form}
+                    >
+                      {available && (
+                        <>
+                          <button
+                            type="submit"
+                            className={styles.primary}
+                            disabled={
+                              preview || !available || !consent || pending
+                            }
+                          >
+                            {pending ? (
+                              <>
+                                <LoaderCircle
+                                  className={styles.spin}
+                                  size={18}
+                                />
+                                Sending…
+                              </>
+                            ) : (
+                              <>
+                                Send sign-in code
+                                <ArrowRight
+                                  size={18}
+                                  className={styles.arrow}
+                                />
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </form>
+                    {popupActive && pending && (
+                      <div className={styles.popupActions} role="status">
+                        <p>Finish sign-in in the Google window.</p>
+                        <button type="button" onClick={checkGoogleWindow}>
+                          I finished Google sign-in
+                        </button>
+                        <button type="button" onClick={cancelGoogle}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : displayedStep === "password" ? (
+                  <>
+                    <form className={styles.form} onSubmit={submitPassword}>
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        disabled={pending}
+                        onClick={() => {
+                          setStep("email");
+                          setShowPassword(false);
+                          setError("");
+                        }}
+                      >
+                        <ArrowLeft size={15} /> Other sign-in options
+                      </button>
+                      <label htmlFor="account-password-email">
+                        Email address
+                      </label>
+                      <div className={styles.inputWrap}>
+                        <Mail size={18} aria-hidden="true" />
+                        <input
+                          id="account-password-email"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          type="email"
+                          autoComplete="username"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                          maxLength={320}
+                          required
+                          disabled={pending}
+                        />
+                      </div>
+                      <label htmlFor="account-password">Password</label>
+                      <div className={styles.inputWrap}>
+                        <input
+                          id="account-password"
+                          ref={passwordRef}
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="current-password"
+                          required
+                          disabled={pending}
+                        />
+                        <button
+                          type="button"
+                          className={styles.reveal}
+                          aria-label={
+                            showPassword ? "Hide password" : "Show password"
+                          }
+                          aria-pressed={showPassword}
+                          onClick={() => setShowPassword((visible) => !visible)}
+                          disabled={pending}
+                        >
+                          {showPassword ? (
+                            <EyeOff size={18} aria-hidden="true" />
                           ) : (
-                            <>
-                              Send sign-in code
-                              <ArrowRight size={18} className={styles.arrow} />
-                            </>
+                            <Eye size={18} aria-hidden="true" />
                           )}
                         </button>
-                      </>
-                    )}
-                  </form>
-                  {popupActive && pending && (
-                    <div className={styles.popupActions} role="status">
-                      <p>Finish sign-in in the Google window.</p>
-                      <button type="button" onClick={checkGoogleWindow}>
-                        I finished Google sign-in
+                      </div>
+                      <button
+                        type="submit"
+                        className={styles.primary}
+                        disabled={pending || preview}
+                      >
+                        {pending ? "Signing in…" : "Sign in"}
+                        <ArrowRight
+                          size={18}
+                          aria-hidden="true"
+                          className={styles.arrow}
+                        />
                       </button>
-                      <button type="button" onClick={cancelGoogle}>
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : displayedStep === "password" ? (
-                <>
-                  <form className={styles.form} onSubmit={submitPassword}>
+                    </form>
+                    {!selectedFile &&
+                      (learnerLinks.forgotPasswordHref ||
+                        learnerLinks.registerHref) && (
+                        <div className={styles.passwordLinks}>
+                          {learnerLinks.forgotPasswordHref ? (
+                            <a href={learnerLinks.forgotPasswordHref}>
+                              Forgot your password?
+                            </a>
+                          ) : null}
+                          {learnerLinks.registerHref ? (
+                            <a href={learnerLinks.registerHref}>
+                              Create a learner account
+                            </a>
+                          ) : null}
+                        </div>
+                      )}
+                  </>
+                ) : (
+                  <form className={styles.form} onSubmit={verify}>
                     <button
                       type="button"
                       className={styles.textButton}
-                      disabled={pending}
+                      disabled={pending || preview}
                       onClick={() => {
                         setStep("email");
-                        setShowPassword(false);
                         setError("");
+                        setSessionCheckNeeded(false);
                       }}
                     >
-                      <ArrowLeft size={15} /> Other sign-in options
+                      <ArrowLeft size={15} />
+                      Change email
                     </button>
-                    <label htmlFor="account-password-email">
-                      Email address
-                    </label>
-                    <div className={styles.inputWrap}>
-                      <Mail size={18} aria-hidden="true" />
-                      <input
-                        id="account-password-email"
-                        type="email"
-                        autoComplete="username"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        maxLength={320}
-                        required
-                        disabled={pending}
-                      />
-                    </div>
-                    <label htmlFor="account-password">Password</label>
-                    <div className={styles.inputWrap}>
-                      <input
-                        id="account-password"
-                        ref={passwordRef}
-                        type={showPassword ? "text" : "password"}
-                        autoComplete="current-password"
-                        required
-                        disabled={pending}
-                      />
-                      <button
-                        type="button"
-                        className={styles.reveal}
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
-                        aria-pressed={showPassword}
-                        onClick={() => setShowPassword((visible) => !visible)}
-                        disabled={pending}
-                      >
-                        {showPassword ? (
-                          <EyeOff size={18} aria-hidden="true" />
-                        ) : (
-                          <Eye size={18} aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
+                    <label htmlFor="account-code">Sign-in code</label>
+                    <input
+                      ref={codeRef}
+                      id="account-code"
+                      className={styles.code}
+                      name="code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      onInput={(event) => {
+                        event.currentTarget.value = event.currentTarget.value
+                          .replace(/\D/g, "")
+                          .slice(0, 6);
+                      }}
+                      required
+                      disabled={pending || preview}
+                      aria-describedby="code-help"
+                    />
+                    <p id="code-help" className={styles.codeHelp}>
+                      {expired
+                        ? "This code has expired. Request a new one below."
+                        : "You can paste the complete code from your email."}
+                    </p>
                     <button
                       type="submit"
                       className={styles.primary}
-                      disabled={pending || preview}
+                      disabled={pending || expired || preview}
                     >
-                      {pending ? "Signing in…" : "Sign in"}
-                      <ArrowRight
-                        size={18}
-                        aria-hidden="true"
-                        className={styles.arrow}
-                      />
+                      {pending ? (
+                        <>
+                          <LoaderCircle className={styles.spin} size={18} />
+                          Verifying…
+                        </>
+                      ) : (
+                        <>
+                          Verify and continue
+                          <ArrowRight size={18} className={styles.arrow} />
+                        </>
+                      )}
                     </button>
-                  </form>
-                  {!selectedFile && (
-                    <div className={styles.passwordLinks}>
-                      {learnerLinks.forgotPasswordHref ? (
-                        <a href={learnerLinks.forgotPasswordHref}>
-                          Forgot your password?
-                        </a>
-                      ) : (
-                        <p>
-                          Reset your password in the Authority Closers learning
-                          app.
-                        </p>
-                      )}
-                      {learnerLinks.registerHref ? (
-                        <a href={learnerLinks.registerHref}>
-                          Create a learner account
-                        </a>
-                      ) : (
-                        <p>
-                          Create your learner account in the Authority Closers
-                          learning app.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <form className={styles.form} onSubmit={verify}>
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    disabled={pending || preview}
-                    onClick={() => {
-                      setStep("email");
-                      setError("");
-                      setSessionCheckNeeded(false);
-                    }}
-                  >
-                    <ArrowLeft size={15} />
-                    Change email
-                  </button>
-                  <label htmlFor="account-code">Sign-in code</label>
-                  <input
-                    ref={codeRef}
-                    id="account-code"
-                    className={styles.code}
-                    name="code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]{6}"
-                    onInput={(event) => {
-                      event.currentTarget.value = event.currentTarget.value
-                        .replace(/\D/g, "")
-                        .slice(0, 6);
-                    }}
-                    required
-                    disabled={pending || preview}
-                    aria-describedby="code-help"
-                  />
-                  <p id="code-help" className={styles.codeHelp}>
-                    {expired
-                      ? "This code has expired. Request a new one below."
-                      : "You can paste the complete code from your email."}
-                  </p>
-                  <button
-                    type="submit"
-                    className={styles.primary}
-                    disabled={pending || expired || preview}
-                  >
-                    {pending ? (
-                      <>
-                        <LoaderCircle className={styles.spin} size={18} />
-                        Verifying…
-                      </>
-                    ) : (
-                      <>
-                        Verify and continue
-                        <ArrowRight size={18} className={styles.arrow} />
-                      </>
+                    {sessionCheckNeeded && (
+                      <button
+                        type="button"
+                        className={styles.resend}
+                        disabled={pending || preview}
+                        onClick={() => void checkVerifiedSession()}
+                      >
+                        Check sign-in status
+                      </button>
                     )}
-                  </button>
-                  {sessionCheckNeeded && (
                     <button
                       type="button"
                       className={styles.resend}
-                      disabled={pending || preview}
-                      onClick={() => void checkVerifiedSession()}
+                      disabled={pending || seconds > 0 || preview}
+                      onClick={() => void sendCode()}
                     >
-                      Check sign-in status
+                      {seconds > 0
+                        ? `Resend code in ${seconds}s`
+                        : "Resend code"}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.resend}
-                    disabled={pending || seconds > 0 || preview}
-                    onClick={() => void sendCode()}
-                  >
-                    {seconds > 0 ? `Resend code in ${seconds}s` : "Resend code"}
-                  </button>
-                </form>
-              )}
-              <p
-                ref={errorRef}
-                tabIndex={-1}
-                role={error ? "alert" : undefined}
-                className={styles.error}
-              >
-                {error}
-              </p>
-            </>
-          )}
-          {selectedFile && (
-            <div className={styles.file}>
-              <FileAudio
-                className={styles.fileIcon}
-                size={22}
-                aria-hidden="true"
-              />
-              <span className={styles.fileDetails}>
-                <strong title={selectedFile.name}>{selectedFile.name}</strong>
-                <small className={styles.fileStatus}>
-                  Ready on this device · not uploaded yet
-                </small>
-              </span>
-              <AudioLines
-                className={styles.fileWave}
-                size={21}
-                aria-hidden="true"
-              />
-            </div>
-          )}
-          <div className={styles.cardFoot}>
-            {displayedStep === "email" && !unavailable && (
-              <button
-                type="button"
-                className={styles.password}
-                disabled={pending || preview || !interactive}
-                onClick={() => {
-                  setStep("password");
-                  setError("");
-                }}
-              >
-                Use my existing password
-              </button>
+                  </form>
+                )}
+              </>
             )}
-            <p className={styles.footnote}>
-              {selectedFile
-                ? "Your recording stays here while you sign in."
-                : "The same account works across Authority Closers."}
-            </p>
+            {selectedFile && (
+              <div className={styles.file}>
+                <FileAudio
+                  className={styles.fileIcon}
+                  size={22}
+                  aria-hidden="true"
+                />
+                <span className={styles.fileDetails}>
+                  <strong title={selectedFile.name}>{selectedFile.name}</strong>
+                  <small className={styles.fileStatus}>
+                    Ready on this device · not uploaded yet
+                  </small>
+                </span>
+                <AudioLines
+                  className={styles.fileWave}
+                  size={21}
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+            <div className={styles.cardFoot}>
+              {displayedStep === "email" && !unavailable && (
+                <button
+                  type="button"
+                  className={styles.password}
+                  disabled={pending || preview || !interactive}
+                  onClick={() => {
+                    setStep("password");
+                    setError("");
+                  }}
+                >
+                  Use my existing password
+                </button>
+              )}
+              <p className={styles.footnote}>
+                {selectedFile
+                  ? "Your recording stays here while you sign in."
+                  : "The same account works across Authority Closers."}
+              </p>
+            </div>
           </div>
         </div>
       </div>

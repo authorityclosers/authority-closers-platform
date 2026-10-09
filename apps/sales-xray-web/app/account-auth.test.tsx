@@ -708,3 +708,64 @@ it("manual Google recovery waits for the exact callback and the matching receipt
   ]);
   expect(onAuthenticated).toHaveBeenCalledOnce();
 });
+
+it("keeps the email field and consent associated with the code form after responsive reordering", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(config)),
+  );
+  await act(async () => root.render(<AccountAuth onAuthenticated={vi.fn()} />));
+  await flush();
+  const form = host.querySelector<HTMLFormElement>("#account-email-form")!;
+  const email = host.querySelector<HTMLInputElement>("#account-email")!;
+  const consent = host.querySelector<HTMLInputElement>(
+    'input[type="checkbox"]',
+  )!;
+  expect(email.form).toBe(form);
+  expect(consent.form).toBe(form);
+  expect(email.required).toBe(true);
+  expect(consent.required).toBe(true);
+  expect(
+    email.compareDocumentPosition(consent) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled,
+  ).toBe(true);
+});
+
+it("focuses the failure message before the password form and keeps recovery local", async () => {
+  const onAuthenticated = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("/config")) return Response.json(config);
+      if (url === "/v1/auth/password/login")
+        return new Response(null, { status: 401 });
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  await act(async () =>
+    root.render(<AccountAuth onAuthenticated={onAuthenticated} />),
+  );
+  await flush();
+  await click("Use my existing password");
+  await changeInput("#account-password-email", "existing@example.test");
+  await changeInput("#account-password", "synthetic-password");
+  await submit();
+  const alert = host.querySelector('[role="alert"]')!;
+  const form = host.querySelector("form")!;
+  expect(alert.textContent).toContain("We couldn’t complete password sign-in");
+  expect(document.activeElement).toBe(alert);
+  expect(
+    alert.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(host.querySelector<HTMLInputElement>("#account-password")!.value).toBe(
+    "",
+  );
+  expect(onAuthenticated).not.toHaveBeenCalled();
+  await click("Other sign-in options");
+  expect(host.querySelector<HTMLInputElement>("#account-email")!.value).toBe(
+    "existing@example.test",
+  );
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
