@@ -95,7 +95,7 @@ def profile(
                     "submission_id": str(current.submission_id),
                     **(current.evidence or {}),
                 }
-    # Existing person-created labels remain readable even for fixtures predating 0078.
+    # Existing person-created labels remain readable even for fixtures predating field history.
     if fields["name"]["state"] == "unknown" and row.origin == "person":
         fields["name"] = {
             "state": "known",

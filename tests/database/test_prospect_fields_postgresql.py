@@ -10,11 +10,13 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import delete, event, select, text, update
+from sqlalchemy import MetaData, Table, delete, event, select, text, update
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import registry
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
+from ac_platform.conversation_intelligence import guest_models, guest_ownership
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.models import (
@@ -412,6 +414,16 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
         patch.setattr(subprocess, "run", parent_first)
         engine = next(harness)
 
+    # Populate 0077 with its historical submission mapping; capture_source arrives
+    # in companion-device 0078 before the prospect-field 0079 migration.
+    legacy_registry = registry()
+    legacy_table = Table("conversation_guest_submissions", MetaData(), autoload_with=engine)
+
+    class LegacySubmission:
+        pass
+
+    legacy_registry.map_imperatively(LegacySubmission, legacy_table)
+
     async def populate() -> tuple[Any, UUID, Any]:
         setup = await _setup(engine, tmp_path)
         call, identifier, membership = await direct_call(setup), uuid4(), uuid4()
@@ -470,14 +482,17 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
         return setup, identifier, preserved
 
     try:
-        _setup_result, identifier, preserved = run(populate())
+        with monkeypatch.context() as patch:
+            patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
+            patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
+            _setup_result, identifier, preserved = run(populate())
         migrated = original(invocation[0], **invocation[1])
         if migrated.returncode:
             pytest.fail(
-                "Isolated 0078 migration failed; environment/output withheld.", pytrace=False
+                "Isolated 0079 migration failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261009_0078"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261009_0079"
             assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             row = dict(
                 db.execute(
@@ -501,4 +516,5 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
             revision = db.execute(select(FieldRevision.__table__)).mappings().one()
             assert revision["value"] == value("Legacy Fictional") and revision["revision"] == 4
     finally:
+        legacy_registry.dispose()
         harness.close()

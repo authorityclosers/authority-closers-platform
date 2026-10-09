@@ -36,6 +36,11 @@ RUN pnpm --filter @ac/sales-xray-web build
 
 FROM ${NODE_IMAGE} AS runtime
 
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends curl jq && \
+    rm -rf /var/lib/apt/lists/*
+COPY --chmod=0555 infra/sales-xray-web/http-check.sh /usr/local/bin/ac-http-healthcheck
+
 ARG AC_RELEASE_ID
 ENV AC_RELEASE_ID=${AC_RELEASE_ID} \
     HOSTNAME=0.0.0.0 \

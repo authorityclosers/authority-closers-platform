@@ -1,6 +1,8 @@
 # Server-saved prospect fields — r13 Card A (AUT-1585)
 
-Migration `20261009_0078` follows `20261007_0077`. It adds the append-only
+Migration `20261009_0079` follows companion-device `20261008_0078` (PR #410,
+merged as `baed1ce`). Revision 0079 is reserved on AUT-1585 after verifying that
+main and open PRs have no competing revision/catalogue change. It adds the append-only
 `conversation_prospect_field_revisions` table and the origin/confirmation/link-kind
 columns needed by Card D. Existing tags, names, memberships and audit hashes are
 preserved. Existing names receive a snapshot revision; this does not reconstruct
@@ -77,8 +79,9 @@ its source evidence. A prospect revision orders writes even at equal timestamps.
 
 ## Backup parity
 
-All three catalogues map 0078 to `ac-postgres-parity-v49`, 134 unique tables,
-including the new field history table. Historical mappings remain unchanged.
+All three catalogues map 0079 to `ac-postgres-parity-v50`, 138 unique tables,
+including the four companion-device tables and new field history table. The
+0078/v49 mapping and all earlier mappings remain unchanged.
 Parity proof fails closed on a missing table, changed count, extra table or
 wrong migration head. This is catalogue/row-count parity, not a live restore.
 
@@ -99,16 +102,20 @@ Fictional data only; no staging/production state or provider activation.
 - The public dev Prospects URL returns HTTP 302 to sign-in. No authenticated
   browser or live API write was verified.
 
-Live dev migration is blocked: the configured local database reports
-`20261008_0078`, introduced by AUT-1557's companion-device PR #410, which was
-not on main when this branch started. This branch's Alembic upgrade exits 255:
-“Can't locate revision identified by '20261008_0078'.” Read-back confirmed the
-same head and 0 prospects / 0 links. No migration was applied and no stamp or
-manual data correction was made. PR #410 changes the same three backup
-catalogues and occupies the shared-file slot. After it merges, resume on this
-branch, update from main and allocate the next revision/parity contract before
-opening this card's PR. The migration identifiers and example are therefore a
-tested pre-integration contract, not a deployed claim.
+## Integrated baseline and live verification limit (9 October)
+
+Updated this task branch from `origin/main` after PR #410 merged; resolved the
+three catalogue conflicts by retaining companion-device v49 and appending fields
+v50. The tags populated-upgrade regression keeps main's historical guest mapping;
+the fields test also uses historical 0077 columns, then upgrades through 0078 to 0079. No historical migration or parity mapping is rewritten.
+
+Read-only preview inspection: both lane loopback endpoints (`3040`, `3050`) are
+unreachable. The installed lane edge configuration still directs `/v1/*` to
+staging. Public dev `/prospects` returns 302 to sign-in. Loopback API `8100` with
+Host `localhost` reports `ce753781ba69f9b2e74b9300619473173bab2be1`, not this task.
+No lane service, upstream, host setting or shared dev/staging data was changed.
+Authenticated deployed API/browser verification remains a release/runtime check;
+the disposable PostgreSQL/HTTP proof does not claim it.
 
 Dev API check after migration: create/link a fictional prospect, PUT Business and
 City, GET its detail from a second session in the same workspace and confirm the

@@ -11,8 +11,8 @@ from tests.infra.test_postgres_backup import backup
 from tests.infra.test_postgres_restore_proof import proof
 from tests.infra.test_postgres_restore_proof import restore_drill_contract as drill
 
-HEAD = "20261009_0078"
-PREVIOUS = "20261007_0077"
+HEAD = "20261009_0079"
+PREVIOUS = "20261008_0078"
 TABLES = (
     "conversation_prospects",
     "conversation_prospect_memberships",
@@ -22,11 +22,11 @@ TABLES = (
 
 def test_all_backup_consumers_cover_exact_prospect_migration() -> None:
     for module in (backup, proof, drill):
-        assert module.parity_contract_for_head(HEAD) == "ac-postgres-parity-v49"
+        assert module.parity_contract_for_head(HEAD) == "ac-postgres-parity-v50"
         tables = module.parity_tables_for_head(HEAD)
         assert tables == module.parity_tables_for_head(PREVIOUS) + (TABLES[2],)
-        assert len(tables) == len(set(tables)) == 134
-        assert module.parity_contract_for_head(PREVIOUS) == "ac-postgres-parity-v48"
+        assert len(tables) == len(set(tables)) == 138
+        assert module.parity_contract_for_head(PREVIOUS) == "ac-postgres-parity-v49"
 
         for head, mapping in module.VERSIONED_PARITY_CONTRACTS.items():
             assert module.parity_contract_for_head(head) == mapping[0]
@@ -77,7 +77,7 @@ def test_populated_restore_parity_requires_exact_prospect_history(
                     "actual_migration_versions": [PREVIOUS if mode == "wrong_head" else HEAD],
                     "canonical_tables_checked": len(expected),
                 },
-                "parity_contract": "ac-postgres-parity-v49",
+                "parity_contract": "ac-postgres-parity-v50",
             }
         ),
         encoding="utf-8",

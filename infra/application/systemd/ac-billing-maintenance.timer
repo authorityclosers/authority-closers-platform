@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily internal billing capacity expiry v1 enqueue
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+AccuracySec=1min
+Unit=ac-billing-maintenance.service
+
+[Install]
+WantedBy=timers.target

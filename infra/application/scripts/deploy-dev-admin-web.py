@@ -43,6 +43,7 @@ SERVICE = "admin-web"
 CONTAINER = f"{PROJECT}-{SERVICE}-1"
 IMAGE_REPOSITORY = "ghcr.io/authorityclosers/authority-closers-admin-web"
 REVISION_LABEL = "org.opencontainers.image.revision"
+HEALTHCHECK_LABEL = "com.authorityclosers.http-healthcheck"
 EDGE = "http://127.0.0.1:3017"
 HOST = "admin-dev.authorityclosers.com"
 SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -88,7 +89,7 @@ def compose_argv(*files: Path) -> list[str]:
     return argv
 
 
-def override_text(sha: str) -> str:
+def override_text(sha: str, *, lightweight_healthcheck: bool = False) -> str:
     return (
         "# Written by deploy-dev-admin-web.py (AUT-970). Do not edit by hand;\n"
         "# every compose command for acdev-xray must pass this file after compose.yaml.\n"
@@ -96,6 +97,16 @@ def override_text(sha: str) -> str:
         f"  {SERVICE}:\n"
         f"    image: {IMAGE_REPOSITORY}:{sha}\n"
         "    pull_policy: never\n"
+        + (
+            "    healthcheck:\n"
+            "      test: [CMD, /usr/local/bin/ac-http-healthcheck, http://127.0.0.1:3001/healthz]\n"
+            "      interval: 30s\n"
+            "      timeout: 5s\n"
+            "      retries: 5\n"
+            "      start_period: 30s\n"
+            if lightweight_healthcheck
+            else ""
+        )
     )
 
 
@@ -143,12 +154,16 @@ class Deployer:
         return image
 
     def image(self, reference: str) -> dict[str, str] | None:
-        fmt = '{{.Id}}|{{index .Config.Labels "' + REVISION_LABEL + '"}}'
+        fmt = (
+            '{{.Id}}|{{index .Config.Labels "' + REVISION_LABEL + '"}}|'
+            '{{index .Config.Labels "' + HEALTHCHECK_LABEL + '"}}'
+        )
         result = self.run(["docker", "image", "inspect", "--format", fmt, reference])
         if result.returncode != 0:
             return None
-        image_id, _, revision = result.stdout.strip().partition("|")
-        return {"id": image_id, "revision": revision}
+        image_id, _, rest = result.stdout.strip().partition("|")
+        revision, _, healthcheck = rest.partition("|")
+        return {"id": image_id, "revision": revision, "healthcheck": healthcheck}
 
     def container(self) -> dict[str, str] | None:
         fmt = (
@@ -304,20 +319,27 @@ class Deployer:
         live = self.container()
         require(live is not None, "container_missing")
         assert live is not None
-        return {"image": image, "image_id": tagged["id"], "before": live}
+        return {
+            "image": image,
+            "image_id": tagged["id"],
+            "before": live,
+            "lightweight_healthcheck": tagged["healthcheck"] == "1",
+        }
 
     def deploy(self, sha: str | None, ancestors: list[str], *, apply: bool) -> dict[str, Any]:
         sha = sha or self.staging_release()
         plan = self.preflight(sha, ancestors)
         override = self.path(OVERRIDE)
         previous = override.read_text(encoding="utf-8") if override.is_file() else None
-        validate = self.write_candidate(sha)
+        lightweight = plan["lightweight_healthcheck"]
+        validate = self.write_candidate(sha, lightweight_healthcheck=lightweight)
         result: dict[str, Any] = {
             "action": "deploy",
             "release": sha,
             "image": plan["image"],
             "before": plan["before"],
             "override": str(OVERRIDE),
+            "lightweight_healthcheck": lightweight,
             "compose": compose_argv(COMPOSE, OVERRIDE)
             + ["up", "--detach", "--no-deps", "--no-build", "--pull", "never", "--force-recreate"]
             + [SERVICE],
@@ -326,7 +348,7 @@ class Deployer:
         require(validate, "compose_config_invalid")
         if not apply:
             return result
-        self.write(OVERRIDE, override_text(sha), 0o644)
+        self.write(OVERRIDE, override_text(sha, lightweight_healthcheck=lightweight), 0o644)
         if not (self.recreate(True) and self.wait_serving(plan["image_id"], sha)):
             self.restore_override(previous)
             restored = self.recreate(previous is not None) and self.wait_serving(
@@ -347,11 +369,13 @@ class Deployer:
         )
         return {**result, "applied": True, "receipt": receipt}
 
-    def write_candidate(self, sha: str) -> bool:
+    def write_candidate(self, sha: str, *, lightweight_healthcheck: bool = False) -> bool:
         """Validate the merged compose model with the candidate override, writing nothing live."""
 
         candidate = self.path(OVERRIDE).with_name(f".candidate-{os.getpid()}.yaml")
-        candidate.write_text(override_text(sha), encoding="utf-8")
+        candidate.write_text(
+            override_text(sha, lightweight_healthcheck=lightweight_healthcheck), encoding="utf-8"
+        )
         try:
             result = self.run(compose_argv(COMPOSE, candidate) + ["config", "--format", "json"])
             if result.returncode != 0:
