@@ -221,11 +221,9 @@ def install_prospect_http(
                     raise RuntimeError("Prospect edits must use the selected workspace.")
                 store = ProspectStore(GuestOwnership(sessions))
                 if fields:
-                    row = await store.edit_fields(
+                    row, history = await store.edit_fields_and_read(
                         actor, target, fields=body.fields, expected_revision=body.expected_revision
                     )
-                    scope = await store.queries(actor)
-                    history = await store.field_rows(actor, [row.id], scope)
                     return {
                         "schema": "ac.sales-xray.prospect-fields/1",
                         "field_registry": field_registry(),

@@ -216,6 +216,24 @@ class ProspectStore:
         )
         return row
 
+    async def edit_fields_and_read(
+        self, actor: ActorContext, prospect_id: UUID, *, fields: object, expected_revision: int
+    ) -> tuple[ConversationProspect, Sequence[ConversationProspectFieldRevision]]:
+        """Fence detected evidence before the prospect write and tenant audit lock.
+
+        The caller keeps this transaction open through response construction.
+        After the edit, refresh only person rows: acquiring source locks after
+        audit would invert sensitive marking's recording-before-audit order.
+        A concurrent field write changes the expected revision and fails closed.
+        """
+        scope = await self.queries(actor)
+        history = await self.field_rows(actor, [prospect_id], scope)
+        row = await self.edit_fields(
+            actor, prospect_id, fields=fields, expected_revision=expected_revision
+        )
+        person_rows = await self._latest_fields(row, basis="person")
+        return row, [r for r in history if r.basis == "heard_in_call"] + list(person_rows.values())
+
     async def _field_target(self, actor: ActorContext, prospect_id: UUID) -> ConversationProspect:
         query = (await self.queries(actor)).prospects
         row = await self.database.scalar(
@@ -322,7 +340,9 @@ class ProspectStore:
         assert recording is not None
         sources = await self._field_sources([recording])
         if any(
-            not self._supported_field(value, refs[key], sources.get(recording.id, []))
+            not self._supported_field(
+                value, refs[key], sources.get((recording.tenant_id, recording.id), [])
+            )
             for key, value in values.items()
         ):
             raise ConversationError("Supply supported detected prospect fields.")
@@ -402,10 +422,13 @@ class ProspectStore:
                     and_(link.recording_id == recording.id, link.tenant_id == recording.tenant_id),
                 )
                 .where(
+                    link.tenant_id == actor.tenant_id,
+                    recording.tenant_id == actor.tenant_id,
                     link.submission_id.in_(
                         select(field.submission_id).where(eligible, field.basis == "heard_in_call")
-                    )
+                    ),
                 )
+                .order_by(recording.id)
                 .with_for_update(of=recording, read=True)
                 .execution_options(populate_existing=True)
             )
@@ -447,27 +470,32 @@ class ProspectStore:
             )
         ).all()
         sources = await self._field_sources(recordings)
-        by_submission = {submission: r.id for submission, r in locked}
+        by_submission = {(r.tenant_id, submission): (r.tenant_id, r.id) for submission, r in locked}
         return [
             r
             for r in rows
             if r.basis == "person"
             or (
                 r.submission_id is not None
-                and r.submission_id in by_submission
+                and (r.tenant_id, r.submission_id) in by_submission
                 and self._supported_field(
-                    r.value, r.evidence or {}, sources.get(by_submission[r.submission_id], [])
+                    r.value,
+                    r.evidence or {},
+                    sources.get(by_submission[(r.tenant_id, r.submission_id)], []),
                 )
             )
         ]
 
     async def _field_sources(
         self, recordings: Sequence[ConversationRecording]
-    ) -> dict[UUID, list[tuple[dict[str, Any], Any]]]:
+    ) -> dict[tuple[UUID, UUID], list[tuple[dict[str, Any], Any]]]:
+        tenant_id = self.ownership.tenant_id
+        recordings = [r for r in recordings if r.tenant_id == tenant_id]
         checkpoints = (
             await self.database.scalars(
                 select(ConversationCheckpoint)
                 .where(
+                    ConversationCheckpoint.tenant_id == tenant_id,
                     ConversationCheckpoint.recording_id.in_([r.id for r in recordings]),
                     ConversationCheckpoint.stage == "C2",
                     ConversationCheckpoint.erased_at.is_(None),
@@ -482,14 +510,19 @@ class ProspectStore:
         marks = (
             await self.database.scalars(
                 _effective_statement(
+                    # ADR 0051: ID-only marks follow a shared transcript even
+                    # across duplicate recordings. Source content stays scoped.
                     or_(
-                        mark.recording_id.in_([r.id for r in recordings]),
+                        and_(
+                            mark.tenant_id == tenant_id,
+                            mark.recording_id.in_([r.id for r in recordings]),
+                        ),
                         mark.transcript_revision.in_(revisions),
-                    )
+                    ),
                 )
             )
         ).all()
-        result: dict[UUID, list[tuple[dict[str, Any], Any]]] = {}
+        result: dict[tuple[UUID, UUID], list[tuple[dict[str, Any], Any]]] = {}
         for recording in recordings:
             texts = {
                 r.payload["revision"]: {
@@ -525,7 +558,7 @@ class ProspectStore:
                         for g in grams(texts.get(m.transcript_revision, {}).get(m.segment_id, ""))
                     },
                 )
-                result.setdefault(recording.id, []).append((segments, plan))
+                result.setdefault((recording.tenant_id, recording.id), []).append((segments, plan))
         return result
 
     @staticmethod
