@@ -77,6 +77,27 @@
    may move them into Infisical or the team password manager as set out in
    OWNER-APPROVED SECRETS.
 
+# DELIVERY AMENDMENT (owner order, 9 Oct 2026)
+
+These rules supersede older delivery wording where they conflict.
+
+- **Feature strike path:** for each owner-visible feature, the CEO saves a one-page
+  `strike-brief` document with the screen, states, data, acceptance checks and
+  preview URL. One Sol builder builds the API, UI and tests end to end in one
+  lane checkout with that lane's live preview. One PR, about 1,500 changed lines
+  at most; one CTO review. CEO approval follows only for sensitive paths
+  (billing, payments, identity/auth/security/secrets, migrations, infra,
+  workflows, the gate, data-change scripts, AGENTS.md, lockfiles or manifests).
+  Pilots: [AUT-1579](/AUT/issues/AUT-1579) (Card C) and [AUT-1350](/AUT/issues/AUT-1350). Owner permissions in rule 5 still apply.
+- **Review deadline:** a green PR gets a verdict within 60 minutes. Otherwise
+  the watchdog routes it to the backup reviewer (CTO, pod lead or CEO).
+  Silence is never approval; reviews and approvals remain bound to the head SHA.
+- **Done means in production:** the release engine closes the task with the
+  production version. A review, merge or dev preview is delivery evidence,
+  not task completion.
+- **Managers:** CEO and CTO are woken only for decisions and reviews. Each posts
+  at most one comment per run and creates at most three new cards per day.
+
 # OWNER-APPROVED DATA CHANGES
 
 Purpose: make urgent account, workspace and access changes in minutes, without
