@@ -81,6 +81,8 @@ def test_confirmation_reconciles_only_matching_bound_roles(change):
     "case",
     [
         "valid",
+        "legacy",
+        "drifted_template",
         "fallback",
         "no_report",
         "bad_intent",
@@ -117,6 +119,10 @@ async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
         max_completion_tokens=request.max_completion_tokens,
     )
     intent = {"request": request.model_dump(mode="json"), "input": prepared.as_dict()}
+    if case == "legacy":
+        intent["input"].pop("prompt_provenance")
+    elif case == "drifted_template":
+        intent["input"]["prompt_provenance"]["template_sha256"] = "0" * 64
     task = SimpleNamespace(
         intent=intent, intent_sha256=content_hash(intent), input_sha256=prepared.input_sha256
     )
@@ -159,7 +165,7 @@ async def test_basis_uses_exact_saved_provider_input_or_content_free_null(
     recording = SimpleNamespace(id=uuid4(), tenant_id=uuid4(), person_id=uuid4(), generation=1)
     before = deepcopy((intent, transcript, packet))
     result = await read_report_basis(reader, recording, uuid4(), current_map())
-    if case == "valid":
+    if case in {"valid", "legacy"}:
         assert result == project_report_basis(roles, current_map())
         assert caplog.messages == []
     else:

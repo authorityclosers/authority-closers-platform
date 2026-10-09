@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.inference import (
 from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
+    input_metadata_for_saved_intent,
     validate_coaching_result,
     validate_fact_result,
     validate_scribe_result,
@@ -440,10 +441,14 @@ class ConversationInferenceWorker:
             block := coaching_revision_runtime_block(plan.request.coaching_prompt_revision)
         ):
             raise ConversationDenied(block)
+        rebuilt_intent = plan.intent()
+        saved_input = task.intent.get("input") if isinstance(task.intent, dict) else None
+        if isinstance(saved_input, Mapping) and "input" in rebuilt_intent:
+            rebuilt_intent["input"] = input_metadata_for_saved_intent(plan.prepared, saved_input)
         if (
             task.intent is None
             or content_hash(task.intent) != task.intent_sha256
-            or task.intent_sha256 != content_hash(plan.intent())
+            or task.intent_sha256 != content_hash(rebuilt_intent)
             or task.cache_key != plan.checkpoint.cache_key
             or task.input_sha256 != plan.prepared.input_sha256
             or run.recipe_revision != plan.recipe_revision

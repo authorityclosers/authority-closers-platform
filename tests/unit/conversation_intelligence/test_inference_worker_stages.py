@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -16,7 +17,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
-from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_coaching_input,
     prepare_fact_inputs,
@@ -312,8 +313,8 @@ def test_save_raw_streams_provider_response_in_storage_chunks(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7"])
-async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_input(
+@pytest.mark.parametrize("revision", ["coaching-v6", "coaching-v7", "legacy", "drifted_template"])
+async def test_worker_checks_queued_c5_legacy_provenance_drift_and_revision_gates(
     monkeypatch: pytest.MonkeyPatch,
     revision: str,
 ) -> None:
@@ -361,8 +362,45 @@ async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_inpu
         tenant_id=tenant_id,
     )
 
-    with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
-        await worker._scope(database, job)
+    if revision in {"legacy", "drifted_template"}:
+        from tests.unit.conversation_intelligence.test_coaching_source_context import (
+            source_and_facts,
+        )
+
+        transcript, packet = source_and_facts()
+        prepared = prepare_coaching_input(transcript, [packet], profile=load_report_profile())
+        intent = {"input": prepared.as_dict(), "request": {}}
+        saved = deepcopy(intent)
+        if revision == "legacy":
+            saved["input"].pop("prompt_provenance")
+        else:
+            saved["input"]["prompt_provenance"]["template_sha256"] = "0" * 64
+        checkpoint = SimpleNamespace(stage="C5", cache_key="fictional-cache-key")
+        plan = SimpleNamespace(
+            prepared=prepared,
+            checkpoint=checkpoint,
+            recipe_revision="qualitative-coaching-v1",
+            intent=lambda: deepcopy(intent),
+        )
+        task.intent, task.intent_sha256 = deepcopy(saved), content_hash(saved)
+        task.input_sha256, task.cache_key = prepared.input_sha256, checkpoint.cache_key
+        task.quote_id, run.recipe_revision = uuid4(), plan.recipe_revision
+        service = SimpleNamespace(
+            plan_task=AsyncMock(return_value=plan),
+            _quote=AsyncMock(return_value=(object(), None, None)),
+        )
+        monkeypatch.setattr(worker_module, "ConversationInference", lambda *args, **kwargs: service)
+        if revision == "legacy":
+            assert (await worker._scope(database, job)).plan is plan
+            service._quote.assert_awaited_once()
+        else:
+            with pytest.raises(ConversationConflict, match="immutable provider input changed"):
+                await worker._scope(database, job)
+            service._quote.assert_not_awaited()
+        assert task.intent == saved and content_hash(task.intent) == task.intent_sha256
+    else:
+        with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
+            await worker._scope(database, job)
 
     assert database.scalar.await_count == 3
     application.get.assert_awaited_once()

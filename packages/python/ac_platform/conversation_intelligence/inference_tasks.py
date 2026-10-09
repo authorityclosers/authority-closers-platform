@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, NoReturn, cast
 
 from ac_platform.conversation_intelligence import reports
@@ -59,6 +59,7 @@ from ac_platform.conversation_intelligence.reports import (
     build_fact_groq_prompts,
     build_report_groq_prompt,
     coaching_source_context,
+    coaching_template_sha256,
     extract_style_independent_facts,
     load_report_profile,
     parse_fact_packet,
@@ -300,6 +301,25 @@ def _validate_text_payload_metadata(
 
 
 @dataclass(frozen=True, slots=True)
+class C5PromptProvenance:
+    """Bounded immutable preparation receipt; absent on historical inputs."""
+
+    prompt_revision: str
+    template_sha256: str
+    provider: str
+    model: str
+    output_language: ReportLanguage
+
+    def __post_init__(self) -> None:
+        _identifier(self.prompt_revision, "prompt_revision")
+        _sha256(self.template_sha256, "template_sha256")
+        _identifier(self.provider, "provider")
+        _identifier(self.model, "model")
+        if self.output_language not in {"en", "hi-Deva+en", "mr-Deva+en"}:
+            _fail("provenance_language_invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class PreparedTaskInput:
     """Immutable provider request metadata and exact canonical request bytes."""
 
@@ -318,6 +338,7 @@ class PreparedTaskInput:
     chunk_index: int | None = None
     chunk_count: int | None = None
     covered_segment_ids: tuple[str, ...] = ()
+    prompt_provenance: C5PromptProvenance | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.task, str) or self.task not in {"asr", "facts", "coaching"}:
@@ -335,6 +356,13 @@ class PreparedTaskInput:
         _identifier(self.provider, "provider")
         _identifier(self.model, "model")
         _identifier(self.operation, "operation")
+        if self.prompt_provenance is not None and (
+            not isinstance(self.prompt_provenance, C5PromptProvenance)
+            or self.task != "coaching"
+            or self.prompt_provenance.provider != self.provider
+            or self.prompt_provenance.model != self.model
+        ):
+            _fail("provenance_route_mismatch")
         _sha256(self.source_sha256, "source_sha256")
         _sha256(self.input_sha256, "input_sha256")
         if self.transcript_revision is not None:
@@ -501,6 +529,11 @@ class PreparedTaskInput:
             "chunk_index": self.chunk_index,
             "chunk_count": self.chunk_count,
             "covered_segment_ids": list(self.covered_segment_ids),
+            **(
+                {"prompt_provenance": asdict(self.prompt_provenance)}
+                if self.prompt_provenance is not None
+                else {}
+            ),
         }
 
     @classmethod
@@ -526,7 +559,7 @@ class PreparedTaskInput:
             "chunk_count",
             "covered_segment_ids",
         }
-        if set(value) != required_keys:
+        if set(value) not in (required_keys, required_keys | {"prompt_provenance"}):
             _fail("task_reconstruction_invalid")
         expected_payload_sha = value.get("payload_sha256")
         if expected_payload_sha != hashlib.sha256(payload).hexdigest():
@@ -535,6 +568,11 @@ class PreparedTaskInput:
         if not isinstance(covered_value, list | tuple):
             _fail("task_reconstruction_invalid")
         try:
+            provenance = (
+                C5PromptProvenance(**value["prompt_provenance"])
+                if "prompt_provenance" in value
+                else None
+            )
             prepared = cls(
                 task=value["task"],
                 checkpoint=value["checkpoint"],
@@ -551,10 +589,22 @@ class PreparedTaskInput:
                 chunk_index=value.get("chunk_index"),
                 chunk_count=value.get("chunk_count"),
                 covered_segment_ids=tuple(cast(Sequence[str], covered_value)),
+                prompt_provenance=provenance,
             )
         except (KeyError, TypeError):
             _fail("task_reconstruction_invalid")
         return prepared
+
+
+def input_metadata_for_saved_intent(
+    prepared: PreparedTaskInput, saved_input: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Compare legacy C5 inputs without inventing or rewriting their provenance."""
+
+    metadata = prepared.as_dict()
+    if prepared.checkpoint == "C5" and "prompt_provenance" not in saved_input:
+        metadata.pop("prompt_provenance", None)
+    return metadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -1074,6 +1124,13 @@ def prepare_coaching_input(
         ),
         payload=payload,
         max_completion_tokens=max_completion_tokens,
+        prompt_provenance=C5PromptProvenance(
+            prompt_revision=coaching_prompt_revision,
+            template_sha256=coaching_template_sha256(prompt),
+            provider=provider,
+            model=model,
+            output_language=report_language,
+        ),
     )
 
 
