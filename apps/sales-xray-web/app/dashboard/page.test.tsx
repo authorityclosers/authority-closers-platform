@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { WorkspaceAccessContext } from "../workspace-access";
-import DashboardPage from "./page";
+import DashboardPage from "./route-view";
 
 // Exercise the real dashboard reads without the shell's separate profile reads.
 vi.mock("../shell/lightbox-shell", () => ({

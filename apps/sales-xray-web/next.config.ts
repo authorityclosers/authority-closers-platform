@@ -81,6 +81,7 @@ const config: NextConfig = {
                 ...[
                   "/v1/me/workspaces",
                   "/v1/me/sales-xray-workspaces",
+                  "/v1/me/sales-xray-bootstrap",
                   "/v1/me/plan",
                   "/v1/me/usage",
                   "/v1/context",

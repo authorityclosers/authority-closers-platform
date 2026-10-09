@@ -38,7 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseProfile(value: unknown): AccountProfileRecord {
+export function parseProfile(value: unknown): AccountProfileRecord {
   if (
     !isRecord(value) ||
     !(typeof value.name === "string" || value.name === null) ||

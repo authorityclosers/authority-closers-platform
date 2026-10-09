@@ -3,9 +3,9 @@ import { act, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AppSession } from "./app-session";
-import PlansPage from "./plans/page";
-import ProspectsPage from "./prospects/page";
-import ProspectDetailPage from "./prospects/[prospectId]/page";
+import PlansPage from "./plans/route-view";
+import ProspectsPage from "./prospects/route-view";
+import ProspectDetailPage from "./prospects/[prospectId]/route-view";
 import { useWorkspaceAccess } from "./workspace-access";
 
 let pathname = "/plans";

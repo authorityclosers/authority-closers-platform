@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
 }));
-import Page from "./page";
+import Page from "./route-view";
 import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,

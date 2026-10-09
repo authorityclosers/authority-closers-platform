@@ -76,6 +76,22 @@ async def require_sales_xray_write_profile(
         ) from None
 
 
+def profile_response_value(value: SalesXrayProfileSnapshot) -> dict[str, object]:
+    return SalesXrayProfileResponse(
+        name=value.name,
+        email=value.email,
+        phone_number_e164=value.phone_number_e164,
+        phone_verified=value.phone_verified,
+        profile_complete=value.profile_complete,
+        revision=value.revision,
+        given_name=value.given_name,
+        family_name=value.family_name,
+        locale=value.locale,
+        company_domain=value.hosted_domain,
+        photo_url=value.photo_url,
+    ).model_dump()
+
+
 def install_sales_xray_profile_http(
     application: FastAPI,
     *,
@@ -124,21 +140,6 @@ def install_sales_xray_profile_http(
             return HTTPException(403, str(error), headers={"Cache-Control": "private, no-store"})
         return HTTPException(403, str(error), headers={"Cache-Control": "private, no-store"})
 
-    def response_value(value: SalesXrayProfileSnapshot) -> dict[str, object]:
-        return SalesXrayProfileResponse(
-            name=value.name,
-            email=value.email,
-            phone_number_e164=value.phone_number_e164,
-            phone_verified=value.phone_verified,
-            profile_complete=value.profile_complete,
-            revision=value.revision,
-            given_name=value.given_name,
-            family_name=value.family_name,
-            locale=value.locale,
-            company_domain=value.hosted_domain,
-            photo_url=value.photo_url,
-        ).model_dump()
-
     def photo_headers(etag: str | None = None) -> dict[str, str]:
         result = {
             "Cache-Control": "private, no-cache",
@@ -173,7 +174,7 @@ def install_sales_xray_profile_http(
             )
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
-        return response_value(value)
+        return profile_response_value(value)
 
     @router.get("/photo", response_class=Response)
     async def read_profile_photo(
@@ -226,7 +227,7 @@ def install_sales_xray_profile_http(
             raise HTTPException(
                 422, "Choose a valid name and explicit E.164 phone number."
             ) from None
-        return response_value(value)
+        return profile_response_value(value)
 
     @router.get("/write-eligibility", status_code=204)
     async def write_eligibility(

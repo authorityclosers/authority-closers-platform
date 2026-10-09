@@ -14,7 +14,7 @@ vi.mock(
 vi.mock("./upload-check", () => ({
   UploadCheck: () => <span>Upload verification</span>,
 }));
-import Page from "./page";
+import Page from "./route-view";
 import { entry, policy } from "../tests/acquisition-fixture";
 
 const selected = "11111111-1111-4111-8111-111111111111";

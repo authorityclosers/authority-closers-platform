@@ -16,7 +16,7 @@ vi.mock("./acquisition-studio", () => ({
   ),
 }));
 
-import Page from "./page";
+import Page from "./route-view";
 
 it("passes a valid saved-call selector to the acquisition studio", async () => {
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");

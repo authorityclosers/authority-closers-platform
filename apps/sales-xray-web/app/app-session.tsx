@@ -1,5 +1,6 @@
 "use client";
 
+import type { SessionSeed } from "./session-data";
 import { RefreshCw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -134,13 +135,19 @@ function PurchaseSession({ children }: { children: ReactNode }) {
  * plans confirms the same identity inside its focused purchase shell;
  * other pages (login, auth, review fixtures) receive their children directly.
  */
-export function AppSession({ children }: { children: ReactNode }) {
+export function AppSession({
+  children,
+  initial = null,
+}: {
+  children: ReactNode;
+  initial?: SessionSeed | null;
+}) {
   const pathname = usePathname();
   if (pathname?.replace(/\/$/, "") === "/plans") {
     return <PurchaseSession>{children}</PurchaseSession>;
   }
   if (isShellRoute(pathname)) {
-    return <StandaloneStudio>{children}</StandaloneStudio>;
+    return <StandaloneStudio initial={initial}>{children}</StandaloneStudio>;
   }
   return <>{children}</>;
 }

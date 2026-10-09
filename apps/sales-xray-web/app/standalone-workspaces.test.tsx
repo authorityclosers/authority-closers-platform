@@ -227,3 +227,39 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     expect(button(`Current workspace: ${name}`)).not.toBeNull();
   }
 });
+
+it("uses a selected server bootstrap without browser identity reads or selection writes", async () => {
+  await act(async () =>
+    root.render(
+      <StandaloneStudio
+        initial={{
+          view: {
+            kind: "ready",
+            choices: {
+              person_id: "person-id",
+              session_id: "session-id",
+              selected_tenant_id: "org-id",
+              workspaces: [organisation],
+              salesXrayWorkspaces: [organisation],
+            },
+          },
+          profile: null,
+        }}
+      >
+        <UploadProbe />
+      </StandaloneStudio>,
+    ),
+  );
+  expect(host.querySelector("[data-upload]")?.getAttribute("data-tenant")).toBe(
+    "org-id",
+  );
+  expect(
+    fetcher.mock.calls.filter(([path]) =>
+      [
+        "/v1/me/workspaces",
+        "/v1/me/sales-xray-workspaces",
+        "/v1/context",
+      ].includes(path),
+    ),
+  ).toHaveLength(0);
+});

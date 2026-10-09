@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import re
 import tempfile
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -496,6 +496,50 @@ def install_submission_http(
             return parse_report_language_preference(bytes(raw))
         except ValueError:
             raise fail(422, "Choose one supported report language.") from None
+
+    @router.get("/dashboard")
+    async def dashboard(request: Request, response: Response) -> dict[str, Any]:
+        host = guard(request, response)
+        try:
+            context = (
+                learner_read_account(request)
+                if host == "learner"
+                else asynccontextmanager(read_require_actor)(request)
+            )
+            async with context as auth:
+                actor = auth.resolved.actor
+                selected = workspace(actor)
+                current = ownership(auth.database, selected)
+                operations: dict[str, Callable[[], Awaitable[Any]]] = {
+                    "summary": lambda: account_library_summary(
+                        current, actor, shared_identity_locks=True
+                    ),
+                    "activity": lambda: account_activity(
+                        current, actor, shared_identity_locks=True
+                    ),
+                    "allowance": lambda: current.sessions.allowance(
+                        actor=actor, shared_identity_locks=True
+                    ),
+                    "recent": lambda: account_library(
+                        current, actor, shared_identity_locks=True, limit=5
+                    ),
+                }
+                parts = {}
+                for name, read in operations.items():
+                    try:
+                        # One AsyncSession is used sequentially. A failed part's
+                        # savepoint cannot poison the remaining read transaction.
+                        async with asyncio.timeout(2), auth.database.begin_nested():
+                            parts[name] = {"status": 200, "data": await read()}
+                    except ConversationError as error:
+                        parts[name] = {"status": error.status}
+                    except (SQLAlchemyError, TimeoutError):
+                        parts[name] = {"status": 503}
+                return parts
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
 
     @router.get("/submissions")
     async def saved_calls(

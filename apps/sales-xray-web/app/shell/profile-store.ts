@@ -67,12 +67,16 @@ export function useShellProfile(authenticated: boolean, enabled = true) {
           if (active && current === generation) setValue(null);
         });
     };
-    refresh();
+    if (access?.profile === undefined) refresh();
     window.addEventListener(PROFILE_UPDATED_EVENT, refresh);
     return () => {
       active = false;
       window.removeEventListener(PROFILE_UPDATED_EVENT, refresh);
     };
-  }, [signedIn, signedOut, enabled, key]);
-  return signedIn && value?.key === key ? value.profile : null;
+  }, [signedIn, signedOut, enabled, key, access?.profile]);
+  return signedIn
+    ? value?.key === key
+      ? value.profile
+      : (access?.profile ?? null)
+    : null;
 }

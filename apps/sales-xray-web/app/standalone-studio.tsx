@@ -29,11 +29,17 @@ import {
   usePendingAnalysis,
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
-import {
-  readSalesXrayWorkspaces,
-  type SalesXrayWorkspace,
-} from "./sales-xray-workspaces";
+import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
 import { WorkspaceNoAccess } from "./workspace-no-access";
+import {
+  parseWorkspaceChoices,
+  isRecord,
+  type ViewState,
+  type WorkspaceChoices,
+} from "./workspace-choices";
+export { parseWorkspaceChoices } from "./workspace-choices";
+export type { WorkspaceChoices } from "./workspace-choices";
+import type { SessionSeed } from "./session-data";
 import { FirstCallGuide } from "./guide-host";
 
 const loadingOptions = { loading: FeatureLoading };
@@ -58,36 +64,6 @@ const SalesXrayFixturePreview = dynamic(
   { ...loadingOptions },
 );
 
-type Workspace = Readonly<{
-  tenant_id: string;
-  name: string;
-}>;
-
-type IdentityWorkspaceChoices = Readonly<{
-  person_id: string;
-  session_id: string;
-  selected_tenant_id: string | null;
-  workspaces: readonly Workspace[];
-}>;
-
-export type WorkspaceChoices = IdentityWorkspaceChoices &
-  Readonly<{
-    salesXrayWorkspaces?: readonly SalesXrayWorkspace[];
-  }>;
-
-type ViewState =
-  | { kind: "loading" }
-  | { kind: "unauthenticated" }
-  | { kind: "ready"; choices: WorkspaceChoices }
-  | { kind: "empty"; choices: WorkspaceChoices }
-  | { kind: "unavailable"; message: string }
-  | {
-      kind: "chooser" | "selecting";
-      choices: WorkspaceChoices;
-      selectedTenantId?: string;
-      error?: string;
-    };
-
 const GENERIC_LOAD_ERROR =
   "Workspace access could not be checked. Try again in a moment.";
 const GENERIC_SELECTION_ERROR =
@@ -109,51 +85,6 @@ const cardStyle: CSSProperties = {
   boxShadow: "var(--lx-shadow-2, var(--shadow))",
   animation: "gate-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-/** Keep the chooser boundary strict: every identity value comes from the API. */
-export function parseWorkspaceChoices(
-  value: unknown,
-): IdentityWorkspaceChoices | null {
-  if (!isRecord(value)) return null;
-  const keys = ["person_id", "session_id", "selected_tenant_id", "workspaces"];
-  if (Object.keys(value).some((key) => !keys.includes(key))) return null;
-  if (!nonEmptyString(value.person_id) || !nonEmptyString(value.session_id))
-    return null;
-  if (
-    value.selected_tenant_id !== null &&
-    !nonEmptyString(value.selected_tenant_id)
-  )
-    return null;
-  if (!Array.isArray(value.workspaces)) return null;
-  const workspaces: Workspace[] = [];
-  const ids = new Set<string>();
-  for (const item of value.workspaces) {
-    if (!isRecord(item)) return null;
-    const itemKeys = ["tenant_id", "name"];
-    if (Object.keys(item).some((key) => !itemKeys.includes(key))) return null;
-    if (!nonEmptyString(item.tenant_id) || !nonEmptyString(item.name))
-      return null;
-    if (ids.has(item.tenant_id)) return null;
-    ids.add(item.tenant_id);
-    workspaces.push({ tenant_id: item.tenant_id, name: item.name });
-  }
-  if (value.selected_tenant_id !== null && !ids.has(value.selected_tenant_id))
-    return null;
-  return {
-    person_id: value.person_id,
-    session_id: value.session_id,
-    selected_tenant_id: value.selected_tenant_id,
-    workspaces,
-  };
-}
 
 async function readWorkspaceChoices(
   signal: AbortSignal,
@@ -234,16 +165,19 @@ export function StandaloneStudio({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
+  initial = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
+  initial?: SessionSeed | null;
 }) {
   return (
     <PendingAnalysisProvider>
       <StandaloneStudioView
         variant={variant}
         openingExistingCall={openingExistingCall}
+        initial={initial}
       >
         {children}
       </StandaloneStudioView>
@@ -255,10 +189,12 @@ function StandaloneStudioView({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
+  initial = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
+  initial?: SessionSeed | null;
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
@@ -291,7 +227,9 @@ function StandaloneStudioView({
   const [attempt, setAttempt] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
-  const [view, setView] = useState<ViewState>({ kind: "loading" });
+  const [view, setView] = useState<ViewState>(
+    initial?.view ?? { kind: "loading" },
+  );
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
     string | null
@@ -311,6 +249,17 @@ function StandaloneStudioView({
     // account read. Production returns false synchronously and uses the normal
     // server-confirmed workspace path.
     if (review.readOnly === null) return;
+    if (
+      attempt === 0 &&
+      initial &&
+      !(
+        initial.view.kind === "chooser" &&
+        initial.view.choices.salesXrayWorkspaces?.some(
+          (item) => item.kind === "personal",
+        )
+      )
+    )
+      return;
     if (review.fixtureRequested) return;
     const controller = new AbortController();
     const requestGeneration = ++generation.current;
@@ -360,6 +309,7 @@ function StandaloneStudioView({
     };
   }, [
     attempt,
+    initial,
     embedded,
     observeAccount,
     review.fixtureRequested,
@@ -522,6 +472,14 @@ function StandaloneStudioView({
           : null,
     retry,
     workspaces: accountChoices?.salesXrayWorkspaces,
+    profile:
+      attempt === 0 &&
+      accountChoices ===
+        (initial?.view && "choices" in initial.view
+          ? initial.view.choices
+          : null)
+        ? initial?.profile
+        : undefined,
     ...(review.readOnly === false && !review.fixtureRequested
       ? { requestAccountSignIn, requestAnalysisAccess }
       : {}),

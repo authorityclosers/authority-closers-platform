@@ -175,6 +175,7 @@ async def account_library(
     before: UUID | None = None,
     shared_identity_locks: bool = False,
     include_owners: bool = False,
+    limit: int = PAGE_SIZE,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
@@ -184,6 +185,8 @@ async def account_library(
     Every selected row is rechecked through the report read port. Organisation
     owners/admins can read all account-owned calls; this grants no write/audio access.
     """
+    if not 1 <= limit <= PAGE_SIZE:
+        raise ValueError("Saved-call read limit is out of bounds.")
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(
         None,
@@ -208,7 +211,7 @@ async def account_library(
         )
     rows = (
         await ownership.database.scalars(
-            query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE + 1)
+            query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(limit + 1)
         )
     ).all()
     owners = {}
@@ -221,7 +224,7 @@ async def account_library(
                 Person,
                 Person.id == func.coalesce(usage.person_id, ConversationVisitorClaim.person_id),
             )
-            .where(usage.id.in_([row.id for row in rows[:PAGE_SIZE]]))
+            .where(usage.id.in_([row.id for row in rows[:limit]]))
             .with_only_columns(usage.id, Person.id, Person.display_name, Person.email)
         ):
             owners[receipt] = dict(
@@ -229,7 +232,7 @@ async def account_library(
             )
     reports = AcquisitionReports(ownership)
     entries = []
-    for row in rows[:PAGE_SIZE]:
+    for row in rows[:limit]:
         try:
             progress = await reports.progress(
                 row.submission_id,
@@ -262,7 +265,7 @@ async def account_library(
         )
     return {
         "submissions": entries,
-        "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
+        "next_cursor": str(rows[limit - 1].submission_id) if len(rows) > limit else None,
     }
 
 
