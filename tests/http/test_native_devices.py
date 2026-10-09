@@ -129,8 +129,15 @@ async def native(postgres_harness, monkeypatch) -> AsyncIterator[Any]:
     await engine.dispose()
 
 
+async def native_post(client, path, **kwargs) -> httpx.Response:
+    request = client.build_request("POST", path, **kwargs)
+    request.headers.pop("origin", None)
+    return await client.send(request)
+
+
 async def start(native) -> dict[str, Any]:
-    result = await native.client.post(
+    result = await native_post(
+        native.client,
         PREFIX + "/pair/start",
         json={
             "name": "Fictional phone",
@@ -142,7 +149,8 @@ async def start(native) -> dict[str, Any]:
 
 
 async def poll(native, pairing) -> httpx.Response:
-    return await native.client.post(
+    return await native_post(
+        native.client,
         PREFIX + "/pair/poll",
         json={
             "pairing_id": pairing["pairing_id"],
@@ -167,7 +175,9 @@ async def paired(native) -> dict[str, Any]:
 
 
 async def refresh(native, token) -> httpx.Response:
-    return await native.client.post(PREFIX + "/token/refresh", json={"refresh_token": token})
+    return await native_post(
+        native.client, PREFIX + "/token/refresh", json={"refresh_token": token}
+    )
 
 
 @pytest.mark.asyncio
@@ -432,6 +442,19 @@ async def test_membership_removal_revokes_binding_on_next_request(native):
 @pytest.mark.asyncio
 async def test_cookie_origin_and_browser_bearer_separation(native):
     tokens = await paired(native)
+    assert (
+        await native.client.post(
+            PREFIX + "/token/refresh",
+            json={
+                "refresh_token": tokens["refresh_token"],
+            },
+        )
+    ).status_code == 403
+    assert (
+        await native_post(
+            native.client, PREFIX + "/pair/poll", json={}, headers={"Sec-Fetch-Site": "same-origin"}
+        )
+    ).status_code == 403
     pairing = await start(native)
     data = {"code": pairing["code"], "decision": "approve"}
     for origin in ["https://evil.example.test", ""]:
@@ -451,14 +474,15 @@ async def test_cookie_origin_and_browser_bearer_separation(native):
         )
     ).status_code == 200
     assert (
-        await native.client.post(
+        await native_post(
+            native.client,
             PREFIX + "/pair/poll",
             json={
                 "pairing_id": pairing["pairing_id"],
             },
         )
     ).status_code == 422
-    assert (await native.client.post(PREFIX + "/token/refresh", json={})).status_code == 422
+    assert (await native_post(native.client, PREFIX + "/token/refresh", json={})).status_code == 422
     for path in [
         "/notifications",
         "/conversation/acquisition/submissions",
@@ -493,7 +517,8 @@ async def test_address_rate_limit_and_safe_validation(native, caplog):
     for _ in range(5):
         await start(native)
     assert (
-        await native.client.post(
+        await native_post(
+            native.client,
             PREFIX + "/pair/start",
             json={
                 "name": "Fictional",
@@ -506,11 +531,11 @@ async def test_address_rate_limit_and_safe_validation(native, caplog):
         ("/token/refresh", {"refresh_token": marker}),
         ("/pair/poll", {"pairing_id": str(uuid4()), "poll_secret": marker}),
     ]:
-        result = await native.client.post(PREFIX + path, json=data)
+        result = await native_post(native.client, PREFIX + path, json=data)
         assert result.status_code == 422 and marker not in result.text
     assert marker not in caplog.text
     assert (
-        await native.client.post(PREFIX + "/token/refresh", content=b"x" * 4097)
+        await native_post(native.client, PREFIX + "/token/refresh", content=b"x" * 4097)
     ).status_code == 413
 
 

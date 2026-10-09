@@ -131,8 +131,13 @@ def install_native_devices_http(
         ):
             raise HTTPException(422, "Credentials and pairing codes must use the request body.")
         operation = request.url.path.rsplit("/", 1)[-1]
-        if operation == "devices":
-            operation = "devices"
+        if operation in {"start", "poll", "refresh"}:
+            origin = request.headers.get("origin")
+            extension = origin is not None and re.fullmatch(r"chrome-extension://[a-p]{32}", origin)
+            if not extension and (
+                origin is not None or any(key.startswith("sec-fetch-") for key in request.headers)
+            ):
+                raise HTTPException(403, "Use the companion execution context for credentials.")
         address = request.client.host if request.client else "unknown"
         # Ignore untrusted forwarded addresses. Keys have no plaintext secrets.
         await limit("address:" + digest(address), operation)
