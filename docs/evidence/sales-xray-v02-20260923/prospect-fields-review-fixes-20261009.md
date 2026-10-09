@@ -90,3 +90,44 @@ repeat or claim a live restore or release.
   are still running at this checkpoint; their complete result follows below.
 - Repository lane check passes. This is a local test checkpoint, not a green-CI
   or deployed-acceptance receipt.
+
+## Final local receipt (supersedes the checkpoint)
+
+The implementation commit is `879ccfe`; the final handoff also contains this
+receipt. No Python code changed after the following passing checks.
+
+```text
+python -m pytest -q -s --tb=short
+  tests/database/test_prospect_field_safety_postgresql.py
+  tests/database/test_prospect_fields_postgresql.py::test_put_persistence_noop_stale_race_denials_rollback_and_queries
+  tests/database/test_prospect_fields_postgresql.py::test_detected_person_lock_disagreement_source_and_history_guards
+  tests/database/test_prospect_library_postgresql.py
+
+field PUT/sensitive mark (put first): both committed; later evidence withheld
+field PUT/sensitive mark (mark first): both committed; later evidence withheld
+field PUT/detail SQL statements (1/20 calls): [(37, 23), (37, 23)]
+8 passed in 435.40s
+
+python -m pytest -q
+  tests/unit/conversation_intelligence/test_prospect_fields.py
+  tests/unit/conversation_intelligence/test_prospect_fact_contract.py
+  tests/unit/conversation_intelligence/test_prospect_report_context.py
+  tests/infra/test_prospect_fields_backup_parity.py
+30 passed in 13.89s
+
+ruff format --check packages/python tests: 1067 files already formatted
+ruff check packages/python tests: All checks passed!
+mypy: Success: no issues found in 440 source files
+python3 scripts/ac_task.py check: lane may be worked on
+```
+
+The first new database run returned 1 passed / 2 failed. One fictional erasure
+fixture omitted clearing the manifest; the corrected fixture clears payload and
+manifest together under the existing history guard. The other case used PUT's
+same session in a bare marking-store call, bypassing the operator identity
+resolver and creating an identity/foreign-key cycle. The final race fixture uses
+an independently identified canonical safety operator. The fresh 8-pass run
+above supersedes those fixture failures and also proves unchanged stale/no-op,
+denials, atomic rollback, person-lock/disagreement behavior, library scope,
+provenance/corruption rejection and constant query counts. These are disposable
+schema tests using fictional data and runtime-injected loopback access.
