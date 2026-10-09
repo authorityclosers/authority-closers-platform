@@ -54,6 +54,31 @@ Representative entries from `prospect.profile_fields`:
 }
 ```
 
+A readable detected field has the same typed `value`, `basis:"heard_in_call"`,
+`locked:false`, `set_at`, and `evidence`:
+
+```json
+{
+  "state": "known",
+  "value": { "kind": "text", "text": "Jaipur" },
+  "basis": "heard_in_call",
+  "locked": false,
+  "set_at": "2026-10-09T00:00:00+00:00",
+  "evidence": {
+    "submission_id": "00000000-0000-4000-8000-000000000003",
+    "segment_id": "fictional-segment-1",
+    "quote": "Our business is in Jaipur.",
+    "start_ms": 0,
+    "end_ms": 1000
+  }
+}
+```
+
+A later disagreement adds `heard_differently` to the locked person entry: an
+array of `{value, evidence, set_at}` with the same evidence shape, up to five
+recent readable detections. The person entry's value and metadata stay current.
+These examples are fictional contract examples, not live provider receipts.
+
 Use `set_by` and `set_at` for “Set by you · date”. Missing values are explicit
 unknown states. To clear a non-name field, send
 `{"kind":"unknown","reason":"not_asked"}` or `not_mentioned`; this is a
@@ -95,8 +120,9 @@ Fictional data only; no staging/production state or provider activation.
   parity checks passed. The earlier store/library suite passed 10 checks, and
   the updated name-edit concurrency/rollback check passed separately.
 - 28 registry, numeric fidelity and new backup-parity checks passed.
-- Required Python checks passed: Ruff format (1062 files), Ruff lint, and
-  mypy (435 modules).
+- Prior-run Python checks passed: Ruff format (1062 files), Ruff lint, and
+  mypy (435 modules). Integration-run checks passed: Ruff format (1066 files),
+  Ruff lint, and mypy (440 modules).
 - PUT/detail SQL statement counts stayed at 36/23 for 1 and 20 linked calls.
   Existing list/detail reads stayed at 18/23 for 1/20/25 linked calls.
 - The public dev Prospects URL returns HTTP 302 to sign-in. No authenticated
@@ -107,7 +133,22 @@ Fictional data only; no staging/production state or provider activation.
 Updated this task branch from `origin/main` after PR #410 merged; resolved the
 three catalogue conflicts by retaining companion-device v49 and appending fields
 v50. The tags populated-upgrade regression keeps main's historical guest mapping;
-the fields test also uses historical 0077 columns, then upgrades through 0078 to 0079. No historical migration or parity mapping is rewritten.
+the fields test also uses historical 0077 columns, then upgrades through 0078 to 0079. The tags fixture keeps its intermediate 0077 history comparison before
+checking full metadata and capture defaults at head. No historical migration or
+parity mapping is rewritten.
+
+Final corrected historical-upgrade/registry/numeric/parity command: **29 passed
+in 87.30 seconds**. Model-registry suite: **12 passed in 17.31 seconds**. The
+initial regression process had already imported the pre-correction historical
+tags fixture; its failure is superseded by the passing corrected upgrade proof.
+That process finished with **73 passed, 1 failed, 4234 skipped in 1150.12
+seconds**. Its sole failure was the pre-correction 0076 fixture inserting the
+new `link_kind` column before it existed. The corrected fixture uses historical
+columns and checks 0077 before upgrading to head; its passing final receipt above
+supersedes that failure. All remaining prospect HTTP/store/library/confirmation,
+report-context and unit checks passed. The 4234 skipped generic metadata cases
+require the root control-plane gate; they are not restore evidence. The dedicated
+new/old prospect catalogue checks run without root and passed.
 
 Read-only preview inspection: both lane loopback endpoints (`3040`, `3050`) are
 unreachable. The installed lane edge configuration still directs `/v1/*` to
@@ -122,3 +163,23 @@ City, GET its detail from a second session in the same workspace and confirm the
 same `profile_fields` values and person/date metadata. Unset fields must be
 explicit unknown. The editing widgets and their phone/laptop presentation belong
 to Cards B/C; they are outside this backend card.
+
+## Review and delivery path
+
+PR #414 is the inspectable code handoff. Paperclip native gates route the exact
+final SHA to CTO review, then CEO merge approval; a final builder verification
+stage keeps delivery open for CI, governed merge/release, authenticated dev
+acceptance and the production-version receipt. Builder does not approve its own
+code or merge. Host/runtime work must use the Root/AUT-63 path; no laptop deploy
+or staging API write is part of this evidence.
+
+The fresh regression command covered `tests/database/test_prospect_*_postgresql.py`
+(fields, tags, profile edit, library, store, confirmation, report context),
+`tests/unit/conversation_intelligence/test_prospect_fields.py`,
+`test_prospect_fact_contract.py`, `test_prospect_report_context.py`, and
+`tests/infra/test_prospect_fields_backup_parity.py`,
+`test_prospect_tags_backup_parity.py`, `test_capability_backup_parity.py`.
+The final corrective command reran the populated-0076 tags proof together with
+registry, fact-contract and new-parity cases. The final model-registry command
+ran `tests/database/test_model_registry.py`. No affected behavioral failure remains
+in those receipts; GitHub CI still must verify the final pushed SHA.
