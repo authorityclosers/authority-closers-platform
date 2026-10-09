@@ -74,6 +74,9 @@ SPEAKER_ROLES_FREEZE = "20261003_0072"
 BILLING_CREDITS = "20261003_0073"
 PROSPECTS = "20261004_0074"
 PRODUCT_UPDATES = "20261004_0075"
+ORGANISATION_SETTINGS = "20261005_0076"
+PROSPECT_TAGS = "20261007_0077"
+COMPANION_DEVICES = "20261008_0078"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -128,10 +131,15 @@ HEADS = (
     BILLING_CREDITS,
     PROSPECTS,
     PRODUCT_UPDATES,
+    ORGANISATION_SETTINGS,
+    PROSPECT_TAGS,
+    COMPANION_DEVICES,
 )
 VERSIONED_HEADS = HEADS[1:]
 PARITY_HEADS = HEADS
 TABLELESS_VERSIONED_HEADS = (
+    PROSPECT_TAGS,
+    ORGANISATION_SETTINGS,
     SPEAKER_ROLES_FREEZE,
     REVISION,
     MEDIA_LIBRARY,
@@ -257,6 +265,12 @@ NEW_TABLES = {
     BILLING_CREDITS: ("billing_credit_entries",),
     PROSPECTS: ("conversation_prospects", "conversation_prospect_memberships"),
     PRODUCT_UPDATES: ("product_updates", "update_seen", "notifications"),
+    COMPANION_DEVICES: (
+        "companion_devices",
+        "companion_pairings",
+        "companion_refresh_families",
+        "companion_credentials",
+    ),
 }
 PARITY_NEW_TABLES = NEW_TABLES
 ROOT = Path(__file__).parents[2]
@@ -409,6 +423,15 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             module.PROSPECTS_PARITY_TABLES + NEW_TABLES[PRODUCT_UPDATES],
         )
         assert len(module.parity_tables_for_head(PRODUCT_UPDATES)) == 133
+        assert module.VERSIONED_PARITY_CONTRACTS[ORGANISATION_SETTINGS] == (
+            "ac-postgres-parity-v47",
+            module.PRODUCT_UPDATES_PARITY_TABLES,
+        )
+        assert module.VERSIONED_PARITY_CONTRACTS[COMPANION_DEVICES] == (
+            "ac-postgres-parity-v49",
+            module.PROSPECT_TAGS_PARITY_TABLES + NEW_TABLES[COMPANION_DEVICES],
+        )
+        assert len(module.parity_tables_for_head(COMPANION_DEVICES)) == 137
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
             module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
@@ -808,6 +831,9 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         128,
         130,
         133,
+        133,
+        133,
+        137,
     )
     expected_contracts = (
         None,
@@ -863,6 +889,9 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v44",
         "ac-postgres-parity-v45",
         "ac-postgres-parity-v46",
+        "ac-postgres-parity-v47",
+        "ac-postgres-parity-v48",
+        "ac-postgres-parity-v49",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

@@ -11,12 +11,14 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import event, select, text, update
+from sqlalchemy import MetaData, Table, event, select, text, update
+from sqlalchemy.orm import registry
 from starlette.requests import Request
 
 import ac_platform.http.conversation_prospects as prospect_http
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
+from ac_platform.conversation_intelligence import guest_models, guest_ownership
 from ac_platform.conversation_intelligence.application import ConversationConflict
 from ac_platform.conversation_intelligence.prospect_models import (
     ConversationProspect,
@@ -26,8 +28,8 @@ from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.db.models import model_metadata
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_conversation_account_library_postgresql import _session
+from tests.database.test_conversation_postgresql import _migration_head, run, seed, wait_blocked
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
-from tests.database.test_conversation_postgresql import run, seed, wait_blocked
 from tests.database.test_conversation_submission_http_postgresql import _setup
 from tests.database.test_prospect_library_postgresql import snapshot
 from tests.database.test_prospect_profile_edit_postgresql import PREFIX, client_for, private
@@ -487,6 +489,17 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
         patch.setattr(subprocess, "run", parent_first)
         engine = next(harness)
 
+    # Populate the historical schema with its actual columns, then use today's
+    # registry only after upgrading. New nullable ORM columns do not exist at 0076.
+    legacy_registry = registry()
+    legacy_table = Table("conversation_guest_submissions", MetaData(), autoload_with=engine)
+    assert "capture_source" not in legacy_table.c
+
+    class LegacySubmission:
+        pass
+
+    legacy_registry.map_imperatively(LegacySubmission, legacy_table)
+
     async def populate() -> tuple[Any, UUID, Any]:
         setup = await _setup(engine, tmp_path)
         call, identifier = await direct_call(setup), uuid4()
@@ -539,7 +552,10 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
         return setup, identifier, preserved
 
     try:
-        setup, identifier, preserved = run(populate())
+        with monkeypatch.context() as patch:
+            patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
+            patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
+            setup, identifier, preserved = run(populate())
         if not invocation:
             pytest.fail("The isolated parent migration was not captured.", pytrace=False)
         migrated = original(invocation[0], **invocation[1])
@@ -548,7 +564,7 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
                 "Isolated tags migration failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261007_0077"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
             assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             row = dict(
                 db.execute(
@@ -570,5 +586,9 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
                 )
                 == preserved[2]
             )
+            assert db.execute(
+                text("SELECT submission_id, capture_source FROM conversation_guest_submissions")
+            ).all() == [(preserved[2][0][1], None)]
     finally:
+        legacy_registry.dispose()
         harness.close()
