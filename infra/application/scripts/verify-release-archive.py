@@ -33,7 +33,12 @@ with archive_path.open("rb") as archive_file:
 if digest.hexdigest() != expected_sha256:
     fail("release archive SHA-256 does not match")
 
+source_manifest = "infra/application/release-source-files.txt"
+canonical_script = "scripts/data-changes/production-smoke-email-verification.py"
+extra_directories = {"scripts", "scripts/", "scripts/data-changes", "scripts/data-changes/"}
 required_files = {
+    source_manifest,
+    canonical_script,
     "infra/application/compose.yaml",
     "infra/application/compose.sales-xray-hosted.yaml",
     "infra/application/compose.sales-xray-hosted-openai.yaml",
@@ -54,6 +59,7 @@ required_files = {
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/prepare-dev-sales-xray-native.py",
     "infra/application/scripts/recover-sales-xray-startup.py",
     "infra/application/scripts/install-sales-xray-startup-recovery.py",
     "infra/application/scripts/restore-drill.py",
@@ -62,6 +68,7 @@ required_files = {
     "infra/application/scripts/verify-release-archive.py",
 }
 seen_files: set[str] = set()
+seen_paths: set[str] = set()
 verifier_member_sha256 = ""
 try:
     with tarfile.open(archive_path, mode="r:") as release_archive:
@@ -72,14 +79,32 @@ try:
             path = PurePosixPath(name)
             if not name or "\\" in name or path.is_absolute() or ".." in path.parts:
                 fail(f"release archive contains an unsafe path: {name!r}")
-            if name not in {"infra", "infra/"} and not (
+            if path.as_posix() in seen_paths:
+                fail(f"release archive contains a duplicate path: {name}")
+            seen_paths.add(path.as_posix())
+            if name not in {"infra", "infra/", canonical_script, *extra_directories} and not (
                 name == "infra/application" or name.startswith("infra/application/")
             ):
                 fail(f"release archive contains an unexpected path: {name}")
             if not (member.isfile() or member.isdir()):
                 fail(f"release archive contains a non-regular entry: {name}")
+            if name in extra_directories and not member.isdir():
+                fail(f"release archive source parent must be a directory: {name}")
             if member.isfile():
+                if name.removeprefix("infra/application/") in {
+                    "scripts",
+                    "scripts/data-changes",
+                    canonical_script,
+                } and name.startswith("infra/application/"):
+                    fail(f"release archive would shadow the canonical script: {name}")
                 seen_files.add(name)
+                if name == source_manifest:
+                    member_file = release_archive.extractfile(member)
+                    if (
+                        member_file is None
+                        or member_file.read() != (canonical_script + "\n").encode()
+                    ):
+                        fail("application source manifest has unsupported paths")
                 if name == "infra/application/scripts/verify-release-archive.py":
                     member_file = release_archive.extractfile(member)
                     if member_file is None:

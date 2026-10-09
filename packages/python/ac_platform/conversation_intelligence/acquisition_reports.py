@@ -8,6 +8,7 @@ binding. Reading retained evidence cannot renew processing or dispatch a provide
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -234,10 +235,16 @@ class AcquisitionReports:
             recording,
             submission_id=submission_id,
             access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+            actor=actor if scope.claimed_account else None,
         )
 
     async def render_report(
-        self, recording: ConversationRecording, *, submission_id: UUID, access: ReportAccess
+        self,
+        recording: ConversationRecording,
+        *,
+        submission_id: UUID,
+        access: ReportAccess,
+        actor: ActorContext | None = None,
     ) -> dict[str, Any]:
         """The post-authorization report projection, withheld per the recording's marks."""
 
@@ -277,6 +284,9 @@ class AcquisitionReports:
                         "official_score": False,
                     },
                 },
+                actor=actor if access is ReportAccess.ACCOUNT else None,
+                submission_id=submission_id,
+                report_created_at=recovered.created_at,
             )
         draft = await self._draft(recording)
         if draft is None:
@@ -303,16 +313,37 @@ class AcquisitionReports:
             ),
         )
         return await self._withheld(
-            recording, report.transcript_revision, {"submission_id": str(submission_id), **envelope}
+            recording,
+            report.transcript_revision,
+            {"submission_id": str(submission_id), **envelope},
+            actor=actor if access is ReportAccess.ACCOUNT else None,
+            submission_id=submission_id,
+            report_created_at=draft.created_at,
         )
 
     async def _withheld(
-        self, recording: ConversationRecording, transcript_revision: str, payload: dict[str, Any]
+        self,
+        recording: ConversationRecording,
+        transcript_revision: str,
+        payload: dict[str, Any],
+        *,
+        actor: ActorContext | None = None,
+        submission_id: UUID | None = None,
+        report_created_at: datetime | None = None,
     ) -> dict[str, Any]:
         plan = await withheld_plan_for(
             self.database, recording_id=recording.id, served_revisions=(transcript_revision,)
         )
-        return withhold(payload, plan)
+        projected = withhold(payload, plan)
+        if actor is not None and submission_id is not None and report_created_at is not None:
+            from ac_platform.conversation_intelligence.prospect_report_context import (
+                previous_call_context,
+            )
+
+            projected["previous_call_context"] = await previous_call_context(
+                self.ownership, actor, submission_id, report_created_at=report_created_at
+            )
+        return projected
 
     async def transcript(
         self,

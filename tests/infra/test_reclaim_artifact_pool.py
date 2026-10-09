@@ -31,6 +31,7 @@ def artifact(
         "id": identity,
         "name": name,
         "size_in_bytes": size,
+        "expired": False,
         "created_at": f"2026-10-05T00:{identity:02d}:00Z",
         "workflow_run": {
             "head_branch": branch,
@@ -256,7 +257,7 @@ if "DELETE" in args:
 elif "/pulls?" in args[-1]:
     print(json.dumps([state["pulls"]]))
 else:
-    pages = [{"artifacts": state["artifacts"][:1]}, {"artifacts": state["artifacts"][1:]}]
+    pages = [{"total_count": len(state["artifacts"]), "artifacts": state["artifacts"]}]
     if "--slurp" in args:
         print(json.dumps(pages))
     else:

@@ -178,13 +178,7 @@
 
 .chartCard,
 .skillsCard {
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border-radius: 12px;
-  background: var(--lx-surface);
-  border: 1px solid var(--lx-line);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  min-width: 0;
 }
 
 .cardHeader {
@@ -299,13 +293,7 @@
 
 /* Recent Calls Card & Table */
 .tableCard {
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border-radius: 12px;
-  background: var(--lx-surface);
-  border: 1px solid var(--lx-line);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  min-width: 0;
 }
 
 .viewAllLink {
@@ -697,13 +685,6 @@
     top: 8px;
     right: 10px;
     font-size: 11px;
-  }
-  .chartCard,
-  .skillsCard {
-    padding: 12px 16px;
-  }
-  .tableCard {
-    padding: 12px 14px 10px;
   }
   .cardHeader {
     margin-bottom: 8px;

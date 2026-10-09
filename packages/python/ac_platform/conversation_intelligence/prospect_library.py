@@ -4,10 +4,11 @@ Call snapshots remain source-bound hypotheses. No profile, stage, promise,
 readiness measure or score is inferred from their prose.
 """
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, false, func, or_, select
+from sqlalchemy import and_, false, func, or_, select, true
 
 from ac_platform.conversation_intelligence.acquisition_library import _report_columns
 from ac_platform.conversation_intelligence.acquisition_models import ConversationAcquisitionUsage
@@ -47,7 +48,7 @@ def profile(row: ConversationProspect) -> dict[str, Any]:
         "revision": row.revision,
         "owner_person_id": str(row.owner_person_id),
         "stage": None,
-        "tags": [],
+        "tags": row.tags,
         "photo_url": None,
         "contact": None,
         "fields": [],
@@ -213,7 +214,12 @@ class ProspectLibrary:
         }
 
     async def _snapshots(
-        self, recordings: list[ConversationRecording], *, include_facts: bool = False
+        self,
+        recordings: list[ConversationRecording],
+        *,
+        include_facts: bool = False,
+        include_context: bool = False,
+        as_of: datetime | None = None,
     ) -> dict[UUID, Any]:
         """Three batch reads, independent of call count; never invoke a provider.
 
@@ -227,6 +233,7 @@ class ProspectLibrary:
             await self.database.scalars(
                 select(c)
                 .where(c.recording_id.in_(ids), c.erased_at.is_(None), c.stage.in_(("C2", "C5")))
+                .where(or_(c.stage == "C2", c.created_at <= as_of) if as_of else true())
                 .order_by(c.created_at.desc(), c.id.desc())
             )
         ).all()
@@ -237,6 +244,7 @@ class ProspectLibrary:
                     ConversationRetainedC5Version.recording_id.in_(ids),
                     ConversationRetainedC5Version.erased_at.is_(None),
                     ConversationRetainedC5Version.payload.is_not(None),
+                    ConversationRetainedC5Version.created_at <= as_of if as_of else true(),
                 )
                 .order_by(
                     ConversationRetainedC5Version.created_at.desc(),
@@ -306,9 +314,9 @@ class ProspectLibrary:
                 report = ReportDraft.model_validate(source.payload)
             except ValueError:
                 continue
-            transcript = next(
+            transcript_row = next(
                 (
-                    row.payload
+                    row
                     for row in bound
                     if row.stage == "C2"
                     and row.payload is not None
@@ -316,8 +324,10 @@ class ProspectLibrary:
                 ),
                 None,
             )
-            if transcript is None or report.source_sha256 != recording.source_sha256:
+            if transcript_row is None or report.source_sha256 != recording.source_sha256:
                 continue
+            transcript = transcript_row.payload
+            assert transcript is not None
             segments = {
                 s["id"]: s
                 for s in transcript.get("segments", [])
@@ -401,8 +411,46 @@ class ProspectLibrary:
                         if refs:
                             facts.append({"key": fact.key, "text": fact.text, "evidence": refs})
                 projected["facts"] = facts
+            if include_context:
+                projected.update(
+                    report_sha256=content_hash(source.payload),
+                    report_created_at=source.created_at.isoformat(),
+                    transcript_checkpoint_id=str(transcript_row.id),
+                    transcript_manifest_sha256=transcript_row.manifest_sha256,
+                    source_quotes=_context_quotes(report, notes, segments),
+                )
             result[recording.id] = withhold(projected, plan)
         return result
+
+
+def _context_quotes(
+    report: ReportDraft, notes: list[dict[str, Any]], segments: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Literal source wording only; task descriptions and hypotheses stay separate."""
+    references = [ref for note in notes for ref in note["source"]["evidence"]]
+    if report.call_map is not None:
+        for items in (
+            report.call_map.seller_tasks,
+            report.call_map.prospect_tasks,
+            report.call_map.prospect_facts,
+        ):
+            references.extend(
+                ref.model_dump(mode="json") for item in items for ref in item.evidence
+            )
+    quotes = {}
+    for ref in references:
+        segment = segments.get(ref["segment_id"])
+        if segment is None or not ref["quote"] or ref["quote"] not in segment.get("text", ""):
+            continue
+        quotes[(ref["segment_id"], ref["quote"])] = {
+            "segment_id": ref["segment_id"],
+            "quote": ref["quote"],
+            "start_ms": segment["start_ms"],
+            "end_ms": segment["end_ms"],
+        }
+    return sorted(
+        quotes.values(), key=lambda ref: (ref["start_ms"], ref["segment_id"], ref["quote"])
+    )[:12]
 
 
 def _supported(evidence: list[dict[str, Any]], segments: dict[str, Any]) -> bool:

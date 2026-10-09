@@ -17,8 +17,12 @@ APPLICATION = ROOT / "infra" / "application"
 VERIFIER = APPLICATION / "scripts" / "verify-release-archive.py"
 INSTALLER = APPLICATION / "scripts" / "install-application-release.sh"
 PREPARER = APPLICATION / "scripts" / "prepare-release-inputs.py"
+SOURCE_MANIFEST = "infra/application/release-source-files.txt"
+CANONICAL_SCRIPT = "scripts/data-changes/production-smoke-email-verification.py"
 
 REQUIRED_FILES = (
+    SOURCE_MANIFEST,
+    CANONICAL_SCRIPT,
     "infra/application/compose.yaml",
     "infra/application/compose.sales-xray-hosted.yaml",
     "infra/application/compose.sales-xray-hosted-openai.yaml",
@@ -40,6 +44,7 @@ REQUIRED_FILES = (
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/install-sales-xray-startup-recovery.py",
     "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/prepare-dev-sales-xray-native.py",
     "infra/application/scripts/recover-sales-xray-startup.py",
     "infra/application/scripts/restore-drill.py",
     "infra/application/scripts/staging-public-films.py",
@@ -400,6 +405,8 @@ def _write_fixture_archive(
     contents["infra/application/scripts/verify-release-archive.py"] = (
         VERIFIER.read_bytes() if embedded_verifier is None else embedded_verifier
     )
+    contents[SOURCE_MANIFEST] = (CANONICAL_SCRIPT + "\n").encode()
+    contents[CANONICAL_SCRIPT] = (ROOT / CANONICAL_SCRIPT).read_bytes()
 
     with tarfile.open(
         archive_path,
@@ -442,6 +449,10 @@ def _git_archive_fixture(tmp_path: Path) -> tuple[Path, str]:
             if name.endswith("verify-release-archive.py")
             else (f"synthetic release fixture: {name}\n".encode())
         )
+        if name == SOURCE_MANIFEST:
+            payload = (CANONICAL_SCRIPT + "\n").encode()
+        elif name == CANONICAL_SCRIPT:
+            payload = (ROOT / CANONICAL_SCRIPT).read_bytes()
         destination.write_bytes(payload)
 
     subprocess.run(  # noqa: S603 - executable and arguments are test-controlled
@@ -461,7 +472,7 @@ def _git_archive_fixture(tmp_path: Path) -> tuple[Path, str]:
         check=True,
     )
     subprocess.run(  # noqa: S603 - executable and arguments are test-controlled
-        [git, "-C", str(repository), "add", "infra/application"],
+        [git, "-C", str(repository), "add", "infra/application", CANONICAL_SCRIPT],
         check=True,
     )
     subprocess.run(  # noqa: S603 - executable and arguments are test-controlled
@@ -486,6 +497,7 @@ def _git_archive_fixture(tmp_path: Path) -> tuple[Path, str]:
             commit,
             "--",
             "infra/application",
+            CANONICAL_SCRIPT,
         ],
         check=True,
     )
@@ -499,6 +511,86 @@ def test_accepts_valid_git_commit_bound_archive(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert f"PASS  Application archive is path-safe and commit-bound to {commit}." in result.stdout
+
+
+@pytest.mark.parametrize("mutation", [None, "tamper", "missing"])
+def test_installed_canonical_script_is_byte_exact_and_manifest_verified(
+    tmp_path: Path, mutation: str | None
+) -> None:
+    archive, commit = _git_archive_fixture(tmp_path)
+    result = _run_verifier(archive, _archive_sha256(archive), commit)
+    assert result.returncode == 0, result.stderr
+    release = tmp_path / "installed-release"
+    release.mkdir()
+    installer = INSTALLER.read_text(encoding="utf-8")
+    start = installer.index('  (\n    cd "$stage_dir"')
+    manifest_writer = installer[start : installer.index('\n  find "$stage_dir" -type d', start)]
+    harness = tmp_path / "packaging.sh"
+    harness.write_text(
+        "set -euo pipefail\n"
+        f"release_archive={shlex.quote(str(archive))}\n"
+        f"stage_dir={shlex.quote(str(release))}\n"
+        + _installer_function("extract_application_source", "\n\ngetent group")
+        + "\nextract_application_source\n"
+        + manifest_writer,
+        encoding="utf-8",
+    )
+    packaged = subprocess.run(  # noqa: S603 - inert packaging functions in a test directory
+        [_bash_executable(), str(harness)], capture_output=True, text=True, check=False
+    )
+    assert packaged.returncode == 0, packaged.stderr
+    installed = release / CANONICAL_SCRIPT
+    assert installed.read_bytes() == (ROOT / CANONICAL_SCRIPT).read_bytes()
+    digest = hashlib.sha256(installed.read_bytes()).hexdigest()
+    assert digest == "11aae24a9301bb9eb9efee5a8dbb4535911cdba38ebd1c0ff2cc187d8366ce43"
+    assert f"{digest}  ./{CANONICAL_SCRIPT}\n" in (release / "RELEASE-FILES.sha256").read_text()
+    assert not (release / "production-smoke-email-verification.py").exists()
+    if mutation == "tamper":
+        installed.write_bytes(installed.read_bytes() + b"\n# tampered\n")
+    elif mutation == "missing":
+        installed.unlink()
+    checksum = shutil.which("sha256sum")
+    assert checksum is not None
+    checked = subprocess.run(  # noqa: S603 - checksum verification in a test directory
+        [checksum, "--check", "--strict", "RELEASE-FILES.sha256"],
+        cwd=release,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (checked.returncode == 0) == (mutation is None)
+    assert f"./{CANONICAL_SCRIPT}: {'OK' if mutation is None else 'FAILED'}" in checked.stdout
+
+
+def test_missing_canonical_source_fails_archive_verification(tmp_path: Path) -> None:
+    archive = tmp_path / "missing-script.tar"
+    _write_fixture_archive(archive, without=[CANONICAL_SCRIPT])
+    result = _run_verifier(archive, _archive_sha256(archive), COMMIT)
+    assert result.returncode != 0
+    assert "release archive is missing required files" in result.stderr
+    assert CANONICAL_SCRIPT in result.stderr
+
+
+@pytest.mark.parametrize(
+    "name,member_type",
+    [
+        ("scripts/data-changes/unapproved.py", tarfile.REGTYPE),
+        (CANONICAL_SCRIPT, tarfile.SYMTYPE),
+        (CANONICAL_SCRIPT, tarfile.REGTYPE),
+        ("infra/application/" + CANONICAL_SCRIPT, tarfile.REGTYPE),
+    ],
+)
+def test_extra_source_namespace_rejects_unapproved_links_duplicates_and_shadows(
+    tmp_path: Path, name: str, member_type: bytes
+) -> None:
+    archive = tmp_path / "unsafe-extra-source.tar"
+    _write_fixture_archive(
+        archive,
+        without=[CANONICAL_SCRIPT] if member_type == tarfile.SYMTYPE else [],
+        extra_members=[{"name": name, "member_type": member_type, "linkname": "/outside"}],
+    )
+    result = _run_verifier(archive, _archive_sha256(archive), COMMIT)
+    assert result.returncode != 0
 
 
 def test_rejects_archive_with_wrong_sha256(tmp_path: Path) -> None:
@@ -747,7 +839,7 @@ def test_installer_verifies_archive_before_extracting_and_rejects_unsafe_inputs(
     installer = INSTALLER.read_text(encoding="utf-8")
     stage_call = 'python3 "$script_dir/prepare-release-inputs.py" stage'
     verify_call = 'python3 "$script_dir/verify-release-archive.py"'
-    extract_call = 'tar --extract --file="$release_archive"'
+    extract_call = "\n  extract_application_source\n"
 
     # Caller-owned inputs are consumed only by the stable-copy boundary.
     assert stage_call in installer

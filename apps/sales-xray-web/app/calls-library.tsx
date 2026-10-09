@@ -7,8 +7,10 @@ import {
   ArrowRight,
   ArrowUpDown,
   AudioLines,
+  Clock,
   Download,
   Eye,
+  FileText,
   Handshake,
   MessageCircleQuestion,
   FolderOpen,
@@ -41,6 +43,8 @@ import reps from "./calls-reps.module.css";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { csvRows } from "./csv-export";
+import { MetricBand, MetricCard } from "./ui/metric-card";
+import { OperationalEmpty, OperationalPanel } from "./ui/operational-panel";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -1085,19 +1089,18 @@ function CallsLibraryContent({
     )
       return null;
     return (
-      <section
-        className="panel calls-library-list-panel calls-library-preview"
-        aria-labelledby="calls-library-preview-heading"
-      >
-        <div className="calls-library-list-heading">
-          <div>
-            <p className="eyebrow">PRIVATE CALL LIBRARY</p>
-            <h2 id="calls-library-preview-heading">Recent calls</h2>
-          </div>
+      <OperationalPanel
+        id="calls-library-preview"
+        title="Recent calls"
+        headingLevel="h2"
+        sub={<p className="eyebrow">PRIVATE CALL LIBRARY</p>}
+        action={
           <Link className="text-button" href={callsHref}>
             View all calls
           </Link>
-        </div>
+        }
+        className="calls-library-list-panel calls-library-preview"
+      >
         <div className="calls-library-items">
           {submissions.slice(0, 3).map(submissionButton)}
         </div>
@@ -1106,7 +1109,7 @@ function CallsLibraryContent({
             {error}
           </div>
         ) : null}
-      </section>
+      </OperationalPanel>
     );
   }
 
@@ -1240,47 +1243,73 @@ function CallsLibraryContent({
             className="panel calls-library-state"
             aria-labelledby="calls-library-empty"
           >
-            <AudioLines size={26} aria-hidden="true" />
-            <h2 id="calls-library-empty">No saved calls yet.</h2>
-            <p>Upload a call from the Sales Xray home page to begin.</p>
-            <Link href={newCallHref(studioHref)} className="secondary-button">
-              Analyse a call <ArrowRight size={16} aria-hidden="true" />
-            </Link>
+            <OperationalEmpty
+              icon={AudioLines}
+              title="No saved calls yet."
+              headingLevel="h2"
+              titleId="calls-library-empty"
+              description="Upload a call from the Sales Xray home page to begin."
+              action={
+                <Link
+                  href={newCallHref(studioHref)}
+                  className="secondary-button"
+                >
+                  Analyse a call <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              }
+            />
           </section>
         ) : (
           <>
             {stats ? (
-              <section className={styles.stats} aria-label="Calls at a glance">
-                <div>
-                  <span>Calls</span>
-                  <strong>{stats.calls}</strong>
-                  <small>{stats.thisWeek} this week</small>
-                </div>
-                <div>
-                  <span>Measured call duration</span>
-                  <strong>{stats.time ?? "—"}</strong>
-                  <small>across {durations.length} measured calls</small>
-                </div>
-                <div>
-                  <span>Reports ready</span>
-                  <strong>{stats.ready}</strong>
-                  <small>{stats.open} still open</small>
-                </div>
-                <div>
-                  <span>Questions per call</span>
-                  <strong>{stats.questions ?? "—"}</strong>
-                  <small>across {questions.length} measured calls</small>
-                </div>
-                <div>
-                  <span>Next steps and commitments</span>
-                  <strong>{stats.commitments ?? "—"}</strong>
-                  <small>with recorded evidence</small>
-                </div>
-              </section>
+              <MetricBand
+                label="Calls at a glance"
+                columns={5}
+                className={styles.stats}
+              >
+                <MetricCard
+                  id="metric-calls"
+                  label="Calls"
+                  value={stats.calls}
+                  context={`${stats.thisWeek} this week`}
+                  icon={FolderOpen}
+                  iconTone="teal"
+                />
+                <MetricCard
+                  id="metric-duration"
+                  label="Measured call duration"
+                  value={stats.time}
+                  context={`across ${durations.length} measured calls`}
+                  icon={Clock}
+                />
+                <MetricCard
+                  id="metric-reports-ready"
+                  label="Reports ready"
+                  value={stats.ready}
+                  context={`${stats.open} still open`}
+                  icon={FileText}
+                />
+                <MetricCard
+                  id="metric-questions"
+                  label="Questions per call"
+                  value={stats.questions}
+                  context={`across ${questions.length} measured calls`}
+                  icon={MessageCircleQuestion}
+                />
+                <MetricCard
+                  id="metric-commitments"
+                  label="Next steps and commitments"
+                  value={stats.commitments}
+                  context="with recorded evidence"
+                  icon={Handshake}
+                />
+              </MetricBand>
             ) : null}
-            <section
-              className="panel calls-library-list-panel"
+            <OperationalPanel
+              id="calls-library-list"
               aria-labelledby="calls-library-title"
+              className="calls-library-list-panel"
+              bodyClassName={styles.listPanelBody}
             >
               {selectedSubmission && (
                 <div
@@ -1544,7 +1573,7 @@ function CallsLibraryContent({
                   ) : null}
                 </div>
               ) : null}
-            </section>
+            </OperationalPanel>
           </>
         )}
       </Main>

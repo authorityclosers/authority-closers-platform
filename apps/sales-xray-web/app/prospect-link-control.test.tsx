@@ -1,4 +1,4 @@
-import { act, StrictMode } from "react";
+import { act, StrictMode, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -58,6 +58,37 @@ const page = {
     },
   ],
 };
+const transcript = {
+  source_sha256: "a".repeat(64),
+  revision: "fictional-r1",
+  timebase_id: "1ms",
+  duration_ms: 1000,
+  segments: [
+    {
+      id: "s-name",
+      speaker_id: "buyer",
+      text: "I’m Fictional Mehta.",
+      start_ms: 0,
+      end_ms: 900,
+    },
+  ],
+};
+const speakerMap = {
+  schema: "ac.sales-xray.speaker-map/1",
+  submission_id: call,
+  transcript_revision: transcript.revision,
+  status: "predicted",
+  speakers: [
+    {
+      speaker_id: "buyer",
+      role: "prospect",
+      display_name: "Fictional Mehta",
+      name_source: "stated_in_call",
+      name_evidence: [{ segment_id: "s-name", start_ms: 0, end_ms: 900 }],
+    },
+  ],
+};
+let mapResponse: unknown;
 let host: HTMLDivElement;
 let root: Root;
 let fetcher: ReturnType<typeof vi.fn>;
@@ -67,6 +98,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   fetcher = vi.fn();
+  mapResponse = speakerMap;
   respond(page);
   vi.stubGlobal("fetch", fetcher);
 });
@@ -77,16 +109,23 @@ afterEach(async () => {
 });
 function respond(value: unknown, status = 200) {
   fetcher.mockImplementation(
-    async () => new Response(JSON.stringify(value), { status }),
+    async (url: string) =>
+      new Response(
+        JSON.stringify(url.endsWith("/speaker-map") ? mapResponse : value),
+        { status },
+      ),
   );
 }
 
-async function render(value: WorkspaceAccessValue = access) {
+async function render(
+  value: WorkspaceAccessValue = access,
+  props: Partial<ComponentProps<typeof ProspectLinkControl>> = {},
+) {
   await act(async () =>
     root.render(
       <StrictMode>
         <WorkspaceAccessContext.Provider value={value}>
-          <ProspectLinkControl submissionId={call} />
+          <ProspectLinkControl submissionId={call} {...props} />
         </WorkspaceAccessContext.Provider>
       </StrictMode>,
     ),
@@ -113,7 +152,7 @@ it("shows both source quotes and writes only on explicit confirmation, including
     ...page,
     membership: { membership_id: membership, prospect_id: prospect },
   });
-  await click("Confirm Mehta Example");
+  await click("Same as Mehta Example?");
   const [url, options] = fetcher.mock.calls.at(-1)!;
   expect(url).toContain(`/calls/${call}/confirm`);
   expect(JSON.parse(options.body)).toEqual({
@@ -153,13 +192,13 @@ it("clears old suggestions on a workspace change and ignores the old pending req
 it("keeps a stale-link conflict visible and disables confirmation until reload", async () => {
   await render();
   respond({}, 409);
-  await click("Confirm Mehta Example");
+  await click("Same as Mehta Example?");
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
     "call link changed",
   );
   expect(
     Array.from(host.querySelectorAll("button")).find(
-      (b) => b.textContent === "Confirm Mehta Example",
+      (b) => b.textContent === "Same as Mehta Example?",
     )?.disabled,
   ).toBe(true);
 });
@@ -173,7 +212,7 @@ it("rejects a suggestion that claims an already confirmed identity", async () =>
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
     "could not be verified",
   );
-  expect(host.textContent).not.toContain("Confirm Mehta Example");
+  expect(host.textContent).not.toContain("Same as Mehta Example?");
 });
 
 it("creates the first prospect through the same authenticated app path", async () => {
@@ -200,4 +239,114 @@ it("creates the first prospect through the same authenticated app path", async (
   expect(JSON.parse(fetcher.mock.calls.at(-1)![1].body)).toEqual({
     display_name: "Fictional Mehta",
   });
+});
+
+it("prefills a stated name, plays its transcript quote and creates only on a tap", async () => {
+  const play = vi.fn();
+  respond({ ...page, suggestions: [] });
+  await render(access, { transcript, onSelectEvidence: play });
+  expect(host.querySelector("input")!.value).toBe("Fictional Mehta");
+  expect(host.textContent).toContain("I’m Fictional Mehta.");
+  expect(
+    fetcher.mock.calls.every(
+      ([, options]) => !options.method || options.method === "GET",
+    ),
+  ).toBe(true);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label^="Play source moment"]')!
+      .click(),
+  );
+  expect(play).toHaveBeenCalledWith(
+    {
+      segment_id: "s-name",
+      quote: "I’m Fictional Mehta.",
+      start_ms: 0,
+      end_ms: 900,
+    },
+    "Prospect name",
+  );
+  respond({
+    ...page,
+    membership: { membership_id: membership, prospect_id: prospect },
+  });
+  await act(async () =>
+    host
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(fetcher.mock.calls.at(-1)![0]).toContain(`/calls/${call}/create`);
+  expect(JSON.parse(fetcher.mock.calls.at(-1)![1].body)).toEqual({
+    display_name: "Fictional Mehta",
+  });
+  expect(host.querySelector(`a[href="/prospects/${prospect}"]`)).not.toBeNull();
+});
+
+it.each(["user", "account_profile", "model", null])(
+  "leaves the name blank for %s rather than treating it as stated",
+  async (name_source) => {
+    mapResponse = {
+      ...speakerMap,
+      speakers: [{ ...speakerMap.speakers[0], name_source }],
+    };
+    await render(access, { transcript });
+    expect(host.querySelector("input")!.value).toBe("");
+    expect(
+      host.querySelector('button[type="submit"]')!.hasAttribute("disabled"),
+    ).toBe(true);
+    expect(host.textContent).not.toContain("Name heard");
+  },
+);
+
+it.each(["missing", "revision", "evidence", "ambiguous"])(
+  "keeps manual entry available with a %s map",
+  async (kind) => {
+    mapResponse =
+      kind === "missing"
+        ? {}
+        : kind === "revision"
+          ? { ...speakerMap, transcript_revision: "old-r1" }
+          : {
+              ...speakerMap,
+              speakers:
+                kind === "ambiguous"
+                  ? [...speakerMap.speakers, speakerMap.speakers[0]]
+                  : [
+                      {
+                        ...speakerMap.speakers[0],
+                        name_evidence: [
+                          { segment_id: "unknown", start_ms: 0, end_ms: 900 },
+                        ],
+                      },
+                    ],
+            };
+    await render(access, { transcript });
+    expect(host.querySelector("input")!.value).toBe("");
+    expect(host.querySelector("form")).not.toBeNull();
+  },
+);
+
+it("keeps a person's edit when the speaker map arrives later", async () => {
+  let finish: (response: Response) => void = () => {};
+  fetcher.mockImplementation(async (url: string) =>
+    url.endsWith("/speaker-map")
+      ? new Promise<Response>((resolve) => {
+          finish = resolve;
+        })
+      : new Response(JSON.stringify(page)),
+  );
+  await render(access, { transcript });
+  const input = host.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "Person’s correction");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => finish(new Response(JSON.stringify(speakerMap))));
+  expect(input.value).toBe("Person’s correction");
+  expect(host.textContent).toContain(
+    "Name heard in this call: Fictional Mehta",
+  );
 });

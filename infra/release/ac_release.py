@@ -23,7 +23,7 @@ Commands (``ac-release <command>``):
                                     artifacts and core images nothing needs
     store-native SHA [--from ZIP]   keep a Sales Xray native build for good
                                     (GitHub deletes it after one day)
-    prepare-native staging SHA --previous-native-units PATH --previous-native-units-sha256 HASH
+    prepare-native ENV SHA --previous-native-units PATH --previous-native-units-sha256 HASH
                                     pin an exact native transition, without starting it
 
 Production deploys are refused unless ``/etc/ac-release/production.enabled``
@@ -79,6 +79,8 @@ NATIVE_WORKFLOW = "sales-xray-native-image.yml"
 CORE_FILES = frozenset({"SHA256SUMS", "application-images.tar.gz", "release-images.env"})
 WEB_FILES = frozenset({"SHA256SUMS", "web-image.env", "web-image.json", "web-image.tar.gz"})
 MAX_ARTIFACT_BYTES = 450_000_000
+APPLICATION_SOURCE_MANIFEST = "infra/application/release-source-files.txt"
+APPLICATION_SOURCE_EXTRAS = ("scripts/data-changes/production-smoke-email-verification.py",)
 # Stored bundles are several hundred MB each. Keep whatever runs in staging or
 # production plus this many recent successful deploys (rollback and promotion).
 KEEP_RECENT_BUILDS = 10
@@ -2031,6 +2033,19 @@ class Engine:
 
     def source_archive(self, sha: str, stage: Path, prefix: str) -> tuple[Path, str]:
         archive = stage / f"ac-{prefix.replace('/', '-')}-{sha}.tar"
+        paths = [prefix]
+        if prefix == "infra/application":
+            git = ["git", f"--git-dir={self.paths.mirror}"]
+            # Opt in at the target revision, so older verifiers and rollback
+            # archives retain their original path contract.
+            manifest = self.run(
+                [*git, "ls-tree", "--name-only", sha, "--", APPLICATION_SOURCE_MANIFEST]
+            ).stdout.strip()
+            if manifest:
+                contents = self.run([*git, "show", f"{sha}:{APPLICATION_SOURCE_MANIFEST}"]).stdout
+                if contents != "\n".join(APPLICATION_SOURCE_EXTRAS) + "\n":
+                    raise ReleaseError("application source manifest has unsupported paths")
+                paths.extend(APPLICATION_SOURCE_EXTRAS)
         self.run(
             [
                 "git",
@@ -2040,7 +2055,7 @@ class Engine:
                 f"--output={archive}",
                 sha,
                 "--",
-                prefix,
+                *paths,
             ]
         )
         return archive, _sha256_file(archive)
@@ -2157,8 +2172,7 @@ class Engine:
                 # Forward carry-over must never create or widen an older worker's scope.
                 try:
                     self.keep_native_build(build.sha)
-                    if environment == "staging":
-                        native_plan = self.native_deployment_plan(build.sha, source, stage)
+                    native_plan = self.native_deployment_plan(environment, build.sha, source, stage)
                     if native_plan is not None:
                         activation = {
                             "sales_xray_activation": "prepared native transition",
@@ -2187,7 +2201,7 @@ class Engine:
                 }
             try:
                 if native_plan is not None:
-                    self.install_native_transition(build.sha, native_plan, source, log)
+                    self.install_native_transition(environment, build.sha, native_plan, source, log)
                 completed = self.run(
                     ["bash", str(installer)], env=env, log=log, check=False, timeout=3600
                 )
@@ -2204,6 +2218,7 @@ class Engine:
                         {
                             "at": _now(),
                             "action": "native-transition",
+                            "environment": environment,
                             "target": build.sha,
                             "previous_core": previous,
                             "result": "success",
@@ -2214,17 +2229,18 @@ class Engine:
             except BaseException as error:
                 if native_plan is not None and native_plan.get("armed"):
                     # Persist containment first. A failed recovery cannot restart the train.
-                    self.set_paused("staging", True, "native/core transition failed")
-                    self.paths.failed_flag("staging", "core").write_text(
+                    self.set_paused(environment, True, "native/core transition failed")
+                    self.paths.failed_flag(environment, "core").write_text(
                         build.sha + "\n", encoding="utf-8"
                     )
                     try:
-                        self.restore_native_transition(build.sha, native_plan, log)
+                        self.restore_native_transition(environment, build.sha, native_plan, log)
                     except BaseException as recovery_error:
                         self.record(
                             {
                                 "at": _now(),
                                 "action": "native-transition",
+                                "environment": environment,
                                 "target": build.sha,
                                 "previous_core": previous,
                                 "result": "recovery-failed",
@@ -2671,13 +2687,21 @@ class Engine:
                     if "sha256:" + verifier.stream_sha(stream) != digest:
                         raise ReleaseError("native OCI layer digest mismatch")
 
-    def native_preparation_path(self, sha: str) -> Path:
-        return self.paths.state / "native-preparations" / f"staging-{sha}.json"
+    def native_preparation_path(self, environment: str, sha: str) -> Path:
+        return self.paths.state / "native-preparations" / f"{environment}-{sha}.json"
 
     def prepare_native(
-        self, sha: str, previous_units: Path, previous_digest: str, *, dry_run: bool
+        self,
+        environment: str,
+        sha: str,
+        previous_units: Path,
+        previous_digest: str,
+        *,
+        dry_run: bool,
     ) -> dict[str, Any]:
-        """Prepare an exact staging transition; this operation never starts a helper."""
+        """Prepare an exact environment transition; this operation never starts a helper."""
+        if environment not in ENVIRONMENTS:
+            raise ReleaseError("native transition environment invalid")
         with self.locked(wait=True):
             head = self.main_head()
             if not SHA_RE.fullmatch(sha) or not self.is_ancestor(sha, head):
@@ -2690,10 +2714,11 @@ class Engine:
                 source = stage / "source"
                 self.extract_source(archive, source, "infra/application")
                 plan = self.prepare_native_transition(
-                    sha, previous_units, previous_digest, source, stage
+                    environment, sha, previous_units, previous_digest, source, stage
                 )
                 receipt = {
                     "schema": "ac.release.native-preparation/1",
+                    "environment": environment,
                     "target": sha,
                     "previous_core": plan["previous_core"],
                     "previous_native_units": str(previous_units),
@@ -2710,7 +2735,7 @@ class Engine:
                     "dry_run": dry_run,
                 }
                 if not dry_run:
-                    path = self.native_preparation_path(sha)
+                    path = self.native_preparation_path(environment, sha)
                     path.parent.mkdir(mode=0o700, exist_ok=True)
                     temporary = path.with_suffix(".next")
                     temporary.write_text(
@@ -2721,19 +2746,25 @@ class Engine:
                     self.record({"at": _now(), "action": "native-prepare", **receipt})
                 return receipt
 
-    def native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any] | None:
+    def native_deployment_plan(
+        self, environment: str, sha: str, source: Path, stage: Path
+    ) -> dict[str, Any] | None:
         try:
-            return self._native_deployment_plan(sha, source, stage)
+            return self._native_deployment_plan(environment, sha, source, stage)
         except ReleaseError:
             raise
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise ReleaseError("native preparation is incomplete; runtime unchanged") from error
 
-    def _native_deployment_plan(self, sha: str, source: Path, stage: Path) -> dict[str, Any] | None:
+    def _native_deployment_plan(
+        self, environment: str, sha: str, source: Path, stage: Path
+    ) -> dict[str, Any] | None:
         # The timer delivers current main, while native CI only builds on input
         # changes. Select a preparation by its native source, not the core SHA.
         candidates = []
-        for path in sorted((self.paths.state / "native-preparations").glob("staging-*.json")):
+        for path in sorted(
+            (self.paths.state / "native-preparations").glob(f"{environment}-*.json")
+        ):
             if path.is_symlink() or not path.is_file():
                 raise ReleaseError("native preparation must be a regular engine-owned receipt")
             prepared = json.loads(path.read_text(encoding="utf-8"))
@@ -2742,12 +2773,13 @@ class Engine:
                 prepared.get("schema") != "ac.release.native-preparation/1"
                 or not isinstance(native_sha, str)
                 or not SHA_RE.fullmatch(native_sha)
-                or path != self.native_preparation_path(native_sha)
+                or prepared.get("environment", "staging") != environment
+                or path != self.native_preparation_path(environment, native_sha)
             ):
                 raise ReleaseError("native preparation identity is invalid")
             # Completed preparations cannot govern a new predecessor. Normal
             # strict carry-forward takes over after a successful transition.
-            if prepared.get("previous_core") != self.current_core("staging"):
+            if prepared.get("previous_core") != self.current_core(environment):
                 continue
             if self.is_ancestor(native_sha, sha):
                 candidates.append(prepared)
@@ -2776,6 +2808,7 @@ class Engine:
         ):
             raise ReleaseError("native_inputs_changed: prepared native source does not cover core")
         plan = self.prepare_native_transition(
+            environment,
             native_sha,
             Path(prepared["previous_native_units"]),
             prepared["previous_native_units_sha256"],
@@ -2791,7 +2824,7 @@ class Engine:
         return plan
 
     def install_native_transition(
-        self, sha: str, plan: dict[str, Any], source: Path, log: Path
+        self, environment: str, sha: str, plan: dict[str, Any], source: Path, log: Path
     ) -> None:
         """Switch the admitted helper under engine control, retaining both directions."""
         installer = plan["installer"]
@@ -2814,7 +2847,8 @@ class Engine:
             self.seal_native_tree(target)
         home = (
             self.paths.application
-            / "operator-inputs/staging"
+            / "operator-inputs"
+            / environment
             / (f"native-{sha}-" + secrets.token_hex(8))
         )
         home.mkdir(mode=0o750)
@@ -2827,7 +2861,7 @@ class Engine:
         self.seal_native_tree(home)
         plan.update({"home": home, "installed_units": units, "saved_previous_units": previous})
         if (
-            self.current_core("staging") != plan["previous_core"]
+            self.current_core(environment) != plan["previous_core"]
             or _sha256_file(plan["source_activation"]) != plan["source_activation_sha256"]
             or _sha256_file(previous) != plan["previous_digest"]
             or _sha256_file(plan["previous_manifest"]) != plan["previous_manifest_sha256"]
@@ -2846,6 +2880,7 @@ class Engine:
             {
                 "at": _now(),
                 "action": "native-transition",
+                "environment": environment,
                 "target": sha,
                 "native_source": native_sha,
                 "previous_core": plan["previous_core"],
@@ -2864,14 +2899,15 @@ class Engine:
             ["docker", "load", "--input", str(target / "native-image.tar.gz")], log=log, timeout=900
         )
         result = installer.install(
-            environment="staging",
+            environment=environment,
             native_units=units,
             native_units_sha256=_sha256_file(units),
             renderer=plan["renderer"],
             renderer_python=Path("/usr/bin/python3"),
             native_image_config_id=plan["binding"].image_config_id,
             receipt=self.paths.application
-            / "deployments/staging"
+            / "deployments"
+            / environment
             / f"native-{sha}-{home.name[-16:]}.json",
             start=True,
             native_artifact_manifest=target / "native-image.json",
@@ -2920,7 +2956,7 @@ class Engine:
         ):
             raise ReleaseError("native activation changed after preflight")
         self._seal_activation(home, output)
-        self._publish_activation("staging", sha, output)
+        self._publish_activation(environment, sha, output)
 
     def seal_native_tree(self, root: Path) -> None:
         import grp
@@ -2933,21 +2969,24 @@ class Engine:
                 os.chown(path, 0, group)
             path.chmod(0o750 if path.is_dir() else 0o440)
 
-    def restore_native_transition(self, sha: str, plan: dict[str, Any], log: Path) -> None:
+    def restore_native_transition(
+        self, environment: str, sha: str, plan: dict[str, Any], log: Path
+    ) -> None:
         """Restore the pinned helper first, then the healthy application source."""
         installer = plan["installer"]
         previous = plan["saved_previous_units"]
         old = json.loads(previous.read_text(encoding="utf-8"))
         renderer = Path(old["supervisor_source"])
         result = installer.install(
-            environment="staging",
+            environment=environment,
             native_units=previous,
             native_units_sha256=plan["previous_digest"],
             renderer=renderer,
             renderer_python=Path("/usr/bin/python3"),
             native_image_config_id=plan["previous_binding"].image_config_id,
             receipt=self.paths.application
-            / "deployments/staging"
+            / "deployments"
+            / environment
             / f"native-restore-{sha}-{secrets.token_hex(8)}.json",
             start=True,
             native_artifact_manifest=plan["previous_manifest"],
@@ -2966,12 +3005,12 @@ class Engine:
             raise ReleaseError("native rollback activation pin changed")
         # The canonical application-only installer also repairs a partial install
         # which left the current link on the predecessor but changed its services.
-        self.deploy_core("staging", plan["rollback_build"], rollback_only=True)
-        self.check_core("staging", plan["previous_core"], log)
+        self.deploy_core(environment, plan["rollback_build"], rollback_only=True)
+        self.check_core(environment, plan["previous_core"], log)
         self.record(
             {
                 "at": _now(),
-                "environment": "staging",
+                "environment": environment,
                 "component": "core",
                 "action": "rollback",
                 "sha": plan["previous_core"],
@@ -2981,8 +3020,8 @@ class Engine:
             }
         )
         for path in (
-            self.activation_path("staging", sha),
-            self.activation_path("staging", sha).with_suffix(".json.sha256"),
+            self.activation_path(environment, sha),
+            self.activation_path(environment, sha).with_suffix(".json.sha256"),
         ):
             if path.exists():
                 path.unlink()
@@ -2990,6 +3029,7 @@ class Engine:
             {
                 "at": _now(),
                 "action": "native-transition",
+                "environment": environment,
                 "target": sha,
                 "previous_core": plan["previous_core"],
                 "result": "restored",
@@ -3000,6 +3040,7 @@ class Engine:
 
     def prepare_native_transition(
         self,
+        environment: str,
         sha: str,
         previous_units: Path,
         previous_digest: str,
@@ -3009,7 +3050,7 @@ class Engine:
     ) -> dict[str, Any]:
         try:
             return self._prepare_native_transition(
-                sha, previous_units, previous_digest, source, stage, core_sha
+                environment, sha, previous_units, previous_digest, source, stage, core_sha
             )
         except ReleaseError:
             raise
@@ -3018,6 +3059,7 @@ class Engine:
 
     def _prepare_native_transition(
         self,
+        environment: str,
         sha: str,
         previous_units: Path,
         previous_digest: str,
@@ -3026,12 +3068,23 @@ class Engine:
         core_sha: str | None = None,
     ) -> dict[str, Any]:
         """Prove both directions and prepare policy before the first runtime mutation."""
+        if environment not in ENVIRONMENTS:
+            raise ReleaseError("native transition environment invalid")
         installer, verifier = self.native_controller(stage)
+        if environment == "production":
+            staging_core = self.current_core("staging")
+            if staging_core is None:
+                raise ReleaseError(
+                    "production native transition requires a live staging activation"
+                )
+            staging = verifier.parse(verifier.read(self.activation_path("staging", staging_core)))
+            if self.native_for_image(staging["native_image_ref"])[0] != sha:
+                raise ReleaseError("production native transition target is not running on staging")
         core_sha = core_sha or sha
-        current = self.current_core("staging")
+        current = self.current_core(environment)
         if current is None or not self.is_ancestor(current, core_sha):
             raise ReleaseError("native transition predecessor is not an ancestor")
-        activation = self.activation_path("staging", current)
+        activation = self.activation_path(environment, current)
         descriptor = verifier.parse(verifier.read(activation))
         if self.approval_expiry(descriptor) - self.clock() < APPROVAL_MIN_REMAINING_SECONDS:
             raise ReleaseError("native transition approval expires within one day")
@@ -3046,7 +3099,7 @@ class Engine:
         if descriptor["native_image_config_id"] != old_binding.image_config_id:
             raise ReleaseError("native transition predecessor config mismatch")
         if previous_units.is_symlink() or not previous_units.is_relative_to(
-            self.paths.application / "operator-inputs/staging"
+            self.paths.application / "operator-inputs" / environment
         ):
             raise ReleaseError("native transition predecessor pin path invalid")
         installer._ensure_existing_parents(
@@ -3058,7 +3111,7 @@ class Engine:
         installer._validate_descriptor(
             previous,
             raw,
-            environment="staging",
+            environment=environment,
             supplied_sha256=previous_digest,
             binding=old_binding,
             supervisor_source=old_supervisor,
@@ -3071,7 +3124,7 @@ class Engine:
             previous,
             renderer=renderer,
             renderer_python=Path("/usr/bin/python3"),
-            environment="staging",
+            environment=environment,
             canonical_paths=True,
             binding=old_binding,
             enforce_path_binding=False,
@@ -3079,7 +3132,7 @@ class Engine:
         )
         old_renderer = Path(old_supervisor)
         old_renderer_hash = _sha256_file(old_renderer)
-        if "staging" not in installer.REVIEWED_RENDERERS.get(old_renderer_hash, ()):
+        if environment not in installer.REVIEWED_RENDERERS.get(old_renderer_hash, ()):
             raise ReleaseError("native rollback renderer is not reviewed")
         installer._verify_reference_renderer(old_renderer, old_renderer_hash, trusted_owner=True)
         names = tuple(previous["units"])
@@ -3097,7 +3150,7 @@ class Engine:
         states = installer._capture_states(systemd, names)
         if not all(state["active"] and state["enabled"] for state in states.values()):
             raise ReleaseError("native transition predecessor units are not healthy and enabled")
-        installer._readback(systemd, names, unit_root, "staging")
+        installer._readback(systemd, names, unit_root, environment)
         if installer.SubprocessGroup().ensure(dry_run=True)["status"] != "present":
             raise ReleaseError("native transition rollback group is missing")
         if installer.SubprocessDocker(old_binding).inspect_identity() not in old_binding.identities:
@@ -3112,7 +3165,7 @@ class Engine:
             self.store_bundle(build, "core", CORE_FILES)
         ) != self.bundle_migration_head(old_bundle):
             raise ReleaseError("native transition cannot prove application-only core rollback")
-        self.check_core("staging", current, self.new_log("staging", "native-preflight", sha))
+        self.check_core(environment, current, self.new_log(environment, "native-preflight", sha))
         controller = (
             stage / "native-controller/infra/application/scripts/install-application-release.sh"
         )
@@ -3121,7 +3174,7 @@ class Engine:
                 "native transition controller cannot restore the core without database writes"
             )
         target = self.verify_native_target(sha, stage, verifier, installer)
-        if self.activation_path("staging", core_sha).exists():
+        if self.activation_path(environment, core_sha).exists():
             raise ReleaseError(
                 "native transition target activation already exists; do not overwrite"
             )
@@ -3132,7 +3185,7 @@ class Engine:
         rendered, _ = installer._rendered_descriptor(
             renderer=renderer,
             renderer_python=Path("/usr/bin/python3"),
-            environment="staging",
+            environment=environment,
             canonical_paths=True,
             binding=binding,
             supervisor_source=supervisor,
@@ -3140,7 +3193,7 @@ class Engine:
         installer._validate_descriptor(
             rendered,
             json.dumps(rendered).encode(),
-            environment="staging",
+            environment=environment,
             supplied_sha256=hashlib.sha256(json.dumps(rendered).encode()).hexdigest(),
             binding=binding,
             supervisor_source=supervisor,
@@ -4606,7 +4659,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     native.add_argument("sha")
     native.add_argument("--from", dest="local_zip", type=Path, metavar="ZIP")
     preparation = sub.add_parser("prepare-native")
-    preparation.add_argument("environment", choices=("staging",))
+    preparation.add_argument("environment", choices=ENVIRONMENTS)
     preparation.add_argument("sha")
     preparation.add_argument("--previous-native-units", type=Path, required=True)
     preparation.add_argument("--previous-native-units-sha256", required=True)
@@ -4691,6 +4744,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "prepare-native":
             _print(
                 engine.prepare_native(
+                    args.environment,
                     args.sha,
                     args.previous_native_units,
                     args.previous_native_units_sha256,

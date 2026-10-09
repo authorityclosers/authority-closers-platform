@@ -1056,7 +1056,10 @@ def test_api_and_admin_adapter_use_canonical_trusted_internal_dns() -> None:
     internal_api_host = "${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}"
 
     assert "http://127.0.0.1:8000/health/ready" in COMPOSE
-    assert "headers={'Host': os.environ['AC_API_HOST']}" in COMPOSE
+    assert "- api\n      interval: 30s" in api_service
+    assert '--header "Host: ${AC_API_HOST:?AC_API_HOST is required}"' in (
+        ROOT / "infra" / "sales-xray-web" / "http-check.sh"
+    ).read_text(encoding="utf-8")
     assert f"app:\n        aliases:\n          - {internal_api_host}" in api_service
     assert f'AC_INTERNAL_API_URL: "http://{internal_api_host}:8000"' in admin_service
     assert f"AC_INTERNAL_API_HOST: {internal_api_host}" in admin_service
@@ -1712,6 +1715,52 @@ def test_api_image_bakes_a_root_owned_read_only_release_marker() -> None:
     assert "printf '%s\\n' \"$AC_RELEASE_ID\" > /app/.ac-release-id" in PYTHON_DOCKERFILE
     assert "--chmod=0444 /app/.ac-release-id /app/.ac-release-id" in PYTHON_DOCKERFILE
     assert PYTHON_DOCKERFILE.index("/app/.ac-release-id") < PYTHON_DOCKERFILE.index("USER ac")
+
+
+@pytest.mark.parametrize("writer_status", [0, 1])
+def test_product_note_writer_follows_migrations_and_failure_allows_deploy(
+    tmp_path: Path, writer_status: int
+) -> None:
+    migration = 'compose_for "$release_dir" --profile release run --rm migrate\n'
+    start = INSTALLER.index(migration, INSTALLER.index("trap finish EXIT"))
+    end = INSTALLER.index("\n# Finalize the append-only prepared record", start)
+    step = INSTALLER[start:end]
+    events = tmp_path / "events"
+    harness = f"""set -euo pipefail
+release_dir=/fictional/release
+target_environment=staging
+AC_RELEASE_ID={"a" * 40}
+api_host=fictional.example.test
+writer_command="/fictional/release --profile release run --rm migrate "
+writer_command+="python -m ac_platform.product_updates.deploy "
+writer_command+="--environment staging --release-id {"a" * 40}"
+compose_for() {{
+  if [[ "$*" == "/fictional/release --profile release run --rm migrate" ]]; then
+    printf 'migrated\\n' >> {shlex.quote(str(events))}
+  elif [[ "$*" == "$writer_command" ]]; then
+    printf 'writer\\n' >> {shlex.quote(str(events))}
+    return {writer_status}
+  else
+    return 99
+  fi
+}}
+check_route() {{ printf 'continued\\n' >> {shlex.quote(str(events))}; }}
+{step}
+"""
+    result = subprocess.run(  # noqa: S603 - fixed Bash harness, no real installer operations
+        [_bash_executable(), "-s"], input=harness, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert events.read_text().splitlines() == ["migrated", "writer", "continued"]
+    assert ("WARNING: Product note writer failed" in result.stderr) == (writer_status != 0)
+    rollback = INSTALLER[
+        INSTALLER.index(
+            'if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then',
+            INSTALLER.index("rollback_application_only()"),
+        ) : INSTALLER.index("finish() {", INSTALLER.index("rollback_application_only()"))
+    ]
+    assert "rollback_application_only\n  exit 0" in rollback
+    assert "product_updates.deploy" not in rollback
 
 
 def test_release_bundle_uses_verified_transport_manifests_as_runtime_ids() -> None:

@@ -41,17 +41,24 @@
 .label {
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: var(--lx-control-h, 36px);
   align-items: center;
   justify-content: center;
   padding: 0 var(--lx-space-2);
   border-radius: var(--lx-radius-sm);
   color: var(--lx-ink-3);
   font: var(--lx-text-meta);
+  line-height: var(--lx-leading-devanagari, 1.4);
   text-align: center;
   transition:
     background-color var(--lx-dur-move) var(--lx-ease-move),
     color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.segmented[data-density="compact"] .label,
+.compact .label {
+  min-height: var(--lx-control-compact-h, 32px);
+  font-size: 12px;
 }
 
 .input:checked + .label {
@@ -78,8 +85,10 @@
 }
 
 @media (pointer: coarse) {
-  .label {
-    min-height: 44px;
+  .label,
+  .segmented[data-density="compact"] .label,
+  .compact .label {
+    min-height: var(--lx-row-min-h, 44px);
   }
 }
 

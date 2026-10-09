@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-HELPER_SHA256 = "1dabe645d9e42f9004c401118c26c4077e57c856aa7a828f39a839109201e2fc"
+HELPER_SHA256 = "951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3"
 
 
 def load_helper():

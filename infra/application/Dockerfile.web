@@ -41,7 +41,15 @@ RUN pnpm --filter @ac/learner-web build && \
     pnpm --filter @ac/admin-web build && \
     pnpm --filter @ac/coach-web build
 
-FROM ${NODE_IMAGE} AS learner
+FROM ${NODE_IMAGE} AS health-runtime
+
+LABEL com.authorityclosers.http-healthcheck="1"
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends curl jq && \
+    rm -rf /var/lib/apt/lists/*
+COPY --chmod=0555 infra/sales-xray-web/http-check.sh /usr/local/bin/ac-http-healthcheck
+
+FROM health-runtime AS learner
 
 ARG AC_RELEASE_ID
 LABEL org.opencontainers.image.revision=${AC_RELEASE_ID}
@@ -65,7 +73,7 @@ USER node
 EXPOSE 3000
 CMD ["node", "apps/learner-web/server.js"]
 
-FROM ${NODE_IMAGE} AS admin
+FROM health-runtime AS admin
 
 ARG AC_RELEASE_ID
 LABEL org.opencontainers.image.revision=${AC_RELEASE_ID}
@@ -86,7 +94,7 @@ USER node
 EXPOSE 3001
 CMD ["node", "apps/admin-web/server.js"]
 
-FROM ${NODE_IMAGE} AS coach
+FROM health-runtime AS coach
 
 ARG AC_RELEASE_ID
 LABEL org.opencontainers.image.revision=${AC_RELEASE_ID}

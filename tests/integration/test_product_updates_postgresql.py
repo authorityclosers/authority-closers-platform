@@ -1,10 +1,8 @@
-"""0074→head upgrade preserves capability history and seeds the frozen changelog."""
+"""0074→head upgrade preserves capability history and seeds the frozen original notes."""
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -25,6 +23,69 @@ from tests.database.test_capability_grants import audit, grant, seed_scope
 from tests.database.test_capability_grants_postgresql import _postgres_schema
 
 ROOT = Path(__file__).parents[2]
+
+# Freeze the retired release list at 386f28b independently of the migration seed.
+ORIGINAL_RELEASE_NOTES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    (
+        "2026-09-30-settings-card",
+        "2026-09-30",
+        "Everything from one card",
+        (
+            "The gear opens one card for settings, language, usage, plans and this list.",
+            "The minutes pill is smaller and shows the full picture on hover.",
+        ),
+    ),
+    (
+        "2026-09-30-dashboard",
+        "2026-09-30",
+        "A cleaner dashboard",
+        (
+            "Recent calls fit your screen, with no scrollbar.",
+            "Your last 30 days drawn as one waveform, and a ring for where your calls are.",
+            "Tiles show your trend, how many calls have a report and minutes used.",
+        ),
+    ),
+    (
+        "2026-09-30-status",
+        "2026-09-30",
+        "Live status on every call",
+        (
+            "A small mark shows if a report is ready, in progress or needs you.",
+            "Calls being analysed play a little equaliser.",
+            "The call you have open is highlighted in Recents.",
+        ),
+    ),
+    (
+        "2026-09-30-report",
+        "2026-09-30",
+        "More from every report",
+        (
+            "Switch the call map between who talked, call stages and the prospect's interest.",
+            "Key facts to confirm or fill in: time asked for, price, next step and numbers heard.",
+            "A Raw data tab with every question, number and finding, ready to download.",
+            "The transcript uses the names you gave each speaker.",
+        ),
+    ),
+    (
+        "2026-09-29-speakers",
+        "2026-09-29",
+        "Name the people on the call",
+        (
+            "A lane for every voice, with names, roles and icons.",
+            "One tap to confirm which voice is you.",
+            "Reports work in dark mode.",
+        ),
+    ),
+    (
+        "2026-09-29-header",
+        "2026-09-29",
+        "A report header that stays with you",
+        (
+            "The call name and menu stay pinned while you read.",
+            "The waveform folds into the header as you scroll.",
+        ),
+    ),
+)
 
 
 @pytest.fixture(scope="module")
@@ -77,13 +138,7 @@ def updates_engine() -> Iterator[Engine]:
 
 
 def test_six_seed_notes_match_the_original_text_and_order(updates_engine: Engine) -> None:
-    source = (ROOT / "apps/sales-xray-web/app/shell/changelog.ts").read_text()
-    entries = re.findall(
-        r'\{\s*id: "([^"]+)",\s*date: "([^"]+)",\s*title: "([^"]+)",\s*items: (\[.*?\])',
-        source,
-        re.DOTALL,
-    )
-    assert len(entries) == 6
+    assert len(ORIGINAL_RELEASE_NOTES) == 6
     with Session(updates_engine) as database:
         rows = database.scalars(
             select(ProductUpdate)
@@ -91,12 +146,12 @@ def test_six_seed_notes_match_the_original_text_and_order(updates_engine: Engine
             .order_by(ProductUpdate.published_at.desc())
         ).all()
         assert len(rows) == 6
-        for row, (slug, day, title, items) in zip(rows, entries, strict=True):
+        for row, (slug, day, title, items) in zip(rows, ORIGINAL_RELEASE_NOTES, strict=True):
             assert (row.note_key, row.note_date.isoformat(), row.title, row.items) == (
                 "seed-" + slug,
                 day,
                 title,
-                json.loads(re.sub(r",\s*\]", "]", items)),
+                list(items),
             )
             assert (row.version, row.status, row.release_id, row.audience, row.major) == (
                 1,

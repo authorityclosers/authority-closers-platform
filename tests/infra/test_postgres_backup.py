@@ -316,7 +316,7 @@ def test_foundation_restore_reads_require_r2_admission_under_the_repository_lock
         "  printf 'AC_BACKUP_FAILURE=r2_quota_paused\\n' >&2\n"
         "  exit 1\nfi"
     ) in source
-    assert "restic snapshots --tag authority-closers-foundation --latest 1 --json" in source
+    assert "restic snapshots --tag authority-closers-foundation --json latest" in source
     assert 'restic restore "$snapshot_id" --target "$restore_dir"' in source
     assert "restic check --read-data-subset=1/20" in source
     policy = backup.read_policy(FOUNDATION / "config" / "r2" / "free-tier-policy.conf")
@@ -365,10 +365,128 @@ restic() {
     expected_calls = ["GUARD_CALL"]
     if guard_status == 0:
         expected_calls.append(
-            "RESTIC_CALL:snapshots --tag authority-closers-foundation --latest 1 --json"
+            "RESTIC_CALL:snapshots --tag authority-closers-foundation --json latest"
         )
     assert result.stdout.splitlines() == expected_calls
     assert result.stderr == ("" if guard_status == 0 else "AC_BACKUP_FAILURE=r2_quota_paused\n")
+
+
+def _foundation_snapshot_selection_block() -> str:
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text()
+    return source[source.index("started_epoch=") : source.index("\nrestore_dir=")]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires Bash, jq and GNU date")
+def test_foundation_latest_selects_across_real_local_restic_path_groups(tmp_path: Path) -> None:
+    binary = shutil.which("restic")
+    if binary is None:
+        pytest.skip("local Restic is unavailable")
+    env = {
+        "PATH": os.defpath,
+        "TZ": "UTC",
+        "GOMAXPROCS": "1",
+        "RESTIC_REPOSITORY": str(tmp_path / "fictional-repo"),
+        "RESTIC_PASSWORD": "fictional",  # noqa: S105 - disposable local test repository
+        "RESTIC_CACHE_DIR": str(tmp_path / "cache"),
+        "AC_FOUNDATION_RPO_TARGET_SECONDS": "86400",
+    }
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603 - fixed binary and local fictional inputs
+            [binary, *args], env=env, capture_output=True, text=True, check=True, timeout=30
+        )
+
+    run("init")
+    paths = [tmp_path / f"fictional-source-{index}" for index in range(18)]
+    for path in paths:
+        path.mkdir()
+        (path / "fixture.txt").write_text("fictional foundation data\n")
+    newest_id = ""
+    for count, age, tag in (
+        (6, 10800, "authority-closers-foundation"),
+        (7, 7200, "authority-closers-foundation"),
+        (18, 3600, "authority-closers-foundation"),
+        (18, 60, "authority-closers-postgres"),
+    ):
+        result = run(
+            "backup",
+            "--json",
+            "--tag",
+            tag,
+            "--host",
+            "fictional-vps",
+            "--time",
+            time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - age)),
+            *(str(path) for path in paths[:count]),
+        )
+        if tag == "authority-closers-foundation":
+            newest_id = json.loads(result.stdout.splitlines()[-1])["snapshot_id"][:8]
+    legacy = json.loads(
+        run("snapshots", "--tag", "authority-closers-foundation", "--latest", "1", "--json").stdout
+    )
+    assert sorted(len(snapshot["paths"]) for snapshot in legacy) == [6, 7, 18]
+    result = subprocess.run(  # noqa: S603 - committed selector, local repository only
+        [
+            "/usr/bin/bash",
+            "-c",
+            "set -euo pipefail\n"
+            + _foundation_snapshot_selection_block()
+            + '\nprintf "%s\\n" "$snapshot_id"',
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == newest_id
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires Bash, jq and GNU date")
+@pytest.mark.parametrize(
+    "candidates",
+    [
+        [],
+        None,
+        "invalid-json",
+        [{}],
+        [{"short_id": "fictional"}],
+        [{"short_id": "", "time": "2026-10-06T02:20:23Z"}],
+        [{"short_id": "fictional", "time": "invalid-time"}],
+        [{"short_id": "fictional", "time": "2000-01-01T00:00:00Z"}],
+        [{"short_id": "fictional", "time": "2999-01-01T00:00:00Z"}],
+    ],
+)
+def test_foundation_latest_rejects_unusable_or_stale_data_without_retry(candidates: object) -> None:
+    harness = """set -euo pipefail
+synthetic_json="$1"
+AC_FOUNDATION_RPO_TARGET_SECONDS=86400
+restic() { printf 'QUERY\\n' >&3; printf '%s\\n' "$synthetic_json"; }
+exec 3>&1
+"""
+    result = subprocess.run(  # noqa: S603 - copied selector and synthetic JSON only
+        [
+            "/usr/bin/bash",
+            "-c",
+            harness + _foundation_snapshot_selection_block(),
+            "proof",
+            json.dumps(candidates),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode != 0
+    assert result.stderr.strip()
+    assert result.stdout == "QUERY\n"  # No older snapshot retry after rejection.
+    if (
+        isinstance(candidates, list)
+        and candidates
+        and candidates[0].get("time", "").startswith(("2000", "2999"))
+    ):
+        assert "foundation RPO target" in result.stderr
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Bash syntax proof runs on POSIX CI")
