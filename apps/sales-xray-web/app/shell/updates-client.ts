@@ -45,7 +45,7 @@ export function isRelativeUpdateHref(value: unknown): value is string {
     text(value) &&
     value.startsWith("/") &&
     !value.startsWith("//") &&
-    !/[\\\s\u0000-\u001f]/.test(value)
+    !/[\\\u0000-\u001f\u007f]/.test(value)
   );
 }
 function note(value: unknown): UpdateNote {
@@ -85,10 +85,14 @@ function notification(value: unknown): UpdateNotification {
           String(v.kind),
         ) ||
         typeof v.body !== "string" ||
-        !isRelativeUpdateHref(v.href))
+        typeof v.href !== "string")
   )
     throw new Error("invalid_notifications_response");
-  return v as UpdateNotification;
+  // A bad destination must not hide an otherwise valid notification.
+  return {
+    ...v,
+    href: isRelativeUpdateHref(v.href) ? v.href : null,
+  } as UpdateNotification;
 }
 export function parseUpdates(value: unknown) {
   const v = record(value);

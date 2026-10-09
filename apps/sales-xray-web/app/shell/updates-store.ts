@@ -17,6 +17,7 @@ type UpdatesState = Readonly<{
   notifications: UpdateNotification[];
   unread_count: number;
   status: "loading" | "ready" | "error";
+  notifications_status: "loading" | "ready" | "error";
 }>;
 const EMPTY: UpdatesState = {
   notes: [],
@@ -24,6 +25,7 @@ const EMPTY: UpdatesState = {
   notifications: [],
   unread_count: 0,
   status: "loading",
+  notifications_status: "loading",
 };
 
 /** Each account/session/workspace owns its requests, receipts and last successful lists. */
@@ -39,14 +41,25 @@ export function createUpdatesStore(isCurrent = () => true) {
   const refresh = (): Promise<void> => {
     if (pending) return pending;
     const generation = revision;
-    const request = Promise.all([readUpdates(), readNotifications()])
-      .then(([notes, notifications]) => {
-        if (revision === generation)
-          publish({ ...notes, ...notifications, status: "ready" });
-      })
-      .catch(() => {
-        if (revision === generation) publish({ status: "error" });
-      })
+    const request = Promise.all([
+      readUpdates()
+        .then((notes) => {
+          if (revision === generation) publish({ ...notes, status: "ready" });
+        })
+        .catch(() => {
+          if (revision === generation) publish({ status: "error" });
+        }),
+      readNotifications()
+        .then((notifications) => {
+          if (revision === generation)
+            publish({ ...notifications, notifications_status: "ready" });
+        })
+        .catch(() => {
+          if (revision === generation)
+            publish({ notifications_status: "error" });
+        }),
+    ])
+      .then(() => {})
       .finally(() => {
         if (pending === request) pending = null;
       });

@@ -109,6 +109,116 @@ it("keeps the last lists and counts when a refresh or acknowledgement fails", as
   await expect(store.markSeen([note.key])).rejects.toThrow("503");
   expect(store.getSnapshot().unseen_count).toBe(1);
 });
+it("shows What's new on first load even when the notifications payload is malformed", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((path: string) =>
+      Promise.resolve(
+        Response.json(
+          path === "/v1/updates"
+            ? { updates: [note], unseen_count: 1 }
+            : {
+                notifications: [{ ...release, count: "invalid" }],
+                unread_count: 1,
+              },
+        ),
+      ),
+    ),
+  );
+  const store = createUpdatesStore();
+  await store.refresh();
+  expect(store.getSnapshot()).toMatchObject({
+    notes: [note],
+    unseen_count: 1,
+    status: "ready",
+    notifications: [],
+    notifications_status: "error",
+  });
+});
+it("shows the bell on first load even when What's new fails", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementation((path: string) =>
+        Promise.resolve(
+          path === "/v1/updates"
+            ? new Response(null, { status: 503 })
+            : Response.json({ notifications: [release], unread_count: 1 }),
+        ),
+      ),
+  );
+  const store = createUpdatesStore();
+  await store.refresh();
+  expect(store.getSnapshot()).toMatchObject({
+    notes: [],
+    status: "error",
+    notifications: [release],
+    unread_count: 1,
+    notifications_status: "ready",
+  });
+});
+it("publishes each surface before the other pending request finishes", async () => {
+  let finish!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation((path: string) =>
+      path === "/v1/notifications"
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve(Response.json({ updates: [note], unseen_count: 1 })),
+    ),
+  );
+  const store = createUpdatesStore();
+  const first = store.refresh();
+  await vi.waitFor(() => expect(store.getSnapshot().status).toBe("ready"));
+  expect(store.getSnapshot().notifications_status).toBe("loading");
+  expect(store.refresh()).toBe(first);
+  finish(Response.json({ notifications: [release], unread_count: 1 }));
+  await first;
+  expect(store.getSnapshot().notifications_status).toBe("ready");
+});
+it("keeps only the failed surface's last list while updating the healthy one", async () => {
+  const fetcher = responses();
+  vi.stubGlobal("fetch", fetcher);
+  const store = createUpdatesStore();
+  await store.refresh();
+  fetcher.mockImplementation((path: string) =>
+    Promise.resolve(
+      path === "/v1/notifications"
+        ? new Response(null, { status: 503 })
+        : Response.json({
+            updates: [{ ...note, title: "New fictional title" }],
+            unseen_count: 1,
+          }),
+    ),
+  );
+  await store.refresh();
+  expect(store.getSnapshot()).toMatchObject({
+    notes: [{ title: "New fictional title" }],
+    status: "ready",
+    notifications: [release],
+    unread_count: 1,
+    notifications_status: "error",
+  });
+  fetcher.mockImplementation((path: string) =>
+    Promise.resolve(
+      path === "/v1/updates"
+        ? new Response(null, { status: 503 })
+        : Response.json({ notifications: [], unread_count: 0 }),
+    ),
+  );
+  await store.refresh();
+  expect(store.getSnapshot()).toMatchObject({
+    notes: [{ title: "New fictional title" }],
+    unseen_count: 1,
+    status: "error",
+    notifications: [],
+    unread_count: 0,
+    notifications_status: "ready",
+  });
+});
 it("ignores a stale read that arrives after a newer seen receipt", async () => {
   const fetcher = responses();
   let resolve!: (value: Response) => void;
