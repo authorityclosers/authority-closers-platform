@@ -14,6 +14,7 @@ import { PolicyFooter } from "../policy-footer";
 import { LightboxShell } from "../shell/lightbox-shell";
 import { getShellState } from "../shell/shell-store";
 import { WorkspaceNoAccess } from "../workspace-no-access";
+import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   analysedTrend,
@@ -363,7 +364,9 @@ function DashboardDetails() {
                   ) : activityAllZero ? (
                     <Quiet text="No calls analysed in the last 30 days." />
                   ) : (
-                    <DayBars days={activity.days} />
+                    <SectionBoundary name="The daily chart">
+                      <DayBars days={activity.days} />
+                    </SectionBoundary>
                   )}
                 </div>
               </section>
@@ -388,7 +391,9 @@ function DashboardDetails() {
                   ) : summary.total === 0 ? (
                     <Quiet text="No saved calls yet." />
                   ) : (
-                    <StatusSplit summary={summary} />
+                    <SectionBoundary name="Call status">
+                      <StatusSplit summary={summary} />
+                    </SectionBoundary>
                   )}
                 </div>
               </section>
@@ -415,11 +420,13 @@ function DashboardDetails() {
                 ) : recent === null || recent.length === 0 ? (
                   <Quiet text="No calls yet." />
                 ) : (
-                  <RecentCallsList
-                    calls={recent}
-                    viewerId={access?.context?.personId ?? null}
-                    onHiddenChange={setHiddenRecent}
-                  />
+                  <SectionBoundary name="Recent calls">
+                    <RecentCallsList
+                      calls={recent}
+                      viewerId={access?.context?.personId ?? null}
+                      onHiddenChange={setHiddenRecent}
+                    />
+                  </SectionBoundary>
                 )}
               </div>
             </section>

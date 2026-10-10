@@ -32,6 +32,7 @@ import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
+import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import { CompanyDetailsPanel } from "./company-details-panel";
 import {
@@ -393,54 +394,62 @@ export function OrganisationView() {
                   retry={reloadActivity}
                   analysed={
                     canManage && tenantId !== null ? (
-                      <ReceiptActivitySection
-                        key={tenantId}
-                        members={
-                          members.status === "ready"
-                            ? members.value.filter(
-                                (member) => member.status === "active",
-                              )
-                            : null
-                        }
-                        onAccessLost={refreshAccess}
-                      />
+                      <SectionBoundary name="Calls analysed">
+                        <ReceiptActivitySection
+                          key={tenantId}
+                          members={
+                            members.status === "ready"
+                              ? members.value.filter(
+                                  (member) => member.status === "active",
+                                )
+                              : null
+                          }
+                          onAccessLost={refreshAccess}
+                        />
+                      </SectionBoundary>
                     ) : null
                   }
                 />
               )}
 
               {tab === "members" && (
-                <MembersPanel
-                  members={members}
-                  reload={() => {
-                    reloadMembers();
-                    reloadOrg();
-                  }}
-                  canManage={canManage}
-                  isOwner={live && myRole === "owner"}
-                  yourPersonId={access?.context?.personId ?? null}
-                  onMissing={() => setMissing(true)}
-                />
+                <SectionBoundary name="Members">
+                  <MembersPanel
+                    members={members}
+                    reload={() => {
+                      reloadMembers();
+                      reloadOrg();
+                    }}
+                    canManage={canManage}
+                    isOwner={live && myRole === "owner"}
+                    yourPersonId={access?.context?.personId ?? null}
+                    onMissing={() => setMissing(true)}
+                  />
+                </SectionBoundary>
               )}
 
               {tab === "company" && (
-                <CompanyPanel
-                  key={`${tenantId}:${org.status}`}
-                  org={live ? org.value : null}
-                  isOwner={live && myRole === "owner"}
-                  reload={reloadOrg}
-                  details={
-                    <CompanyDetailsPanel
-                      key={`${access?.context?.sessionId}:${tenantId}`}
-                      tenantId={tenantId}
-                      role={myRole}
-                      authenticated={authenticated}
-                      refresh={refreshOrganisation}
-                      onAccessLost={refreshAccess}
-                      onPersonal={showPersonal}
-                    />
-                  }
-                />
+                <SectionBoundary name="Company">
+                  <CompanyPanel
+                    key={`${tenantId}:${org.status}`}
+                    org={live ? org.value : null}
+                    isOwner={live && myRole === "owner"}
+                    reload={reloadOrg}
+                    details={
+                      <SectionBoundary name="Company details">
+                        <CompanyDetailsPanel
+                          key={`${access?.context?.sessionId}:${tenantId}`}
+                          tenantId={tenantId}
+                          role={myRole}
+                          authenticated={authenticated}
+                          refresh={refreshOrganisation}
+                          onAccessLost={refreshAccess}
+                          onPersonal={showPersonal}
+                        />
+                      </SectionBoundary>
+                    }
+                  />
+                </SectionBoundary>
               )}
             </div>
           </>
@@ -524,6 +533,12 @@ function PersonalState({ organisations }: { organisations: Workspace[] }) {
 }
 
 type ActivityCall = OrgActivity["calls"][number];
+
+/** Calls in the period: the server's daily counts, else the calls listed. */
+const totalCalls = ({ perDay, calls }: OrgActivity) =>
+  perDay.length > 0
+    ? perDay.reduce((sum, day) => sum + day.calls, 0)
+    : calls.length;
 
 /** Every figure comes from the same permitted calls that the table lists. */
 function summarise(activity: OrgActivity) {
@@ -647,62 +662,90 @@ function OverviewPanel({
       </div>
     );
 
-  const totals = summarise(activity.value);
   return (
     <div className={styles.overview}>
-      <section className={styles.section} aria-labelledby="org-period">
-        <div className={styles.sectionHead}>
-          <h2 id="org-period">Last 30 days</h2>
-          <span>
-            {team
-              ? "Everyone in the organisation"
-              : "Your calls in this organisation"}
-          </span>
-        </div>
-        <dl className={styles.strip} data-columns={team ? 4 : 3}>
-          <Kpi
-            label="Calls"
-            value={totals.calls}
-            context={totals.calls === 1 ? "call saved" : "calls saved"}
-            series={totals.series}
-          />
-          <Kpi
-            label="Minutes recorded"
-            value={minutes(totals.minutes)}
-            context="length of those calls"
-          />
-          <Kpi
-            label="Reports ready"
-            value={totals.reports}
-            context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
-          />
-          {team ? (
-            <Kpi
-              label="People with calls"
-              value={totals.people}
-              context={
-                memberCount !== null
-                  ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
-                  : "members"
-              }
-            />
-          ) : null}
-        </dl>
-      </section>
-
-      <div className={styles.columns} data-team={team ? "" : undefined}>
-        <CallsTable
-          calls={activity.value.calls}
-          total={totals.calls}
+      <SectionBoundary name="Last 30 days">
+        <PeriodStrip
+          activity={activity.value}
+          memberCount={memberCount}
           team={team}
         />
+      </SectionBoundary>
+
+      <div className={styles.columns} data-team={team ? "" : undefined}>
+        <SectionBoundary name={team ? "Team calls" : "Your calls"}>
+          <CallsTable
+            calls={activity.value.calls}
+            total={totalCalls(activity.value)}
+            team={team}
+          />
+        </SectionBoundary>
         {team ? (
-          <PeopleActivity activity={activity.value} members={members} />
+          <SectionBoundary name="Calls by person">
+            <PeopleActivity activity={activity.value} members={members} />
+          </SectionBoundary>
         ) : null}
       </div>
-      {team ? <TeamPatternsSection calls={activity.value.calls} /> : null}
+      {team ? (
+        <SectionBoundary name="What keeps coming up">
+          <TeamPatternsSection calls={activity.value.calls} />
+        </SectionBoundary>
+      ) : null}
       {analysed}
     </div>
+  );
+}
+
+function PeriodStrip({
+  activity,
+  memberCount,
+  team,
+}: {
+  activity: OrgActivity;
+  memberCount: number | null;
+  team: boolean;
+}) {
+  const totals = summarise(activity);
+  return (
+    <section className={styles.section} aria-labelledby="org-period">
+      <div className={styles.sectionHead}>
+        <h2 id="org-period">Last 30 days</h2>
+        <span>
+          {team
+            ? "Everyone in the organisation"
+            : "Your calls in this organisation"}
+        </span>
+      </div>
+      <dl className={styles.strip} data-columns={team ? 4 : 3}>
+        <Kpi
+          label="Calls"
+          value={totals.calls}
+          context={totals.calls === 1 ? "call saved" : "calls saved"}
+          series={totals.series}
+        />
+        <Kpi
+          label="Minutes recorded"
+          value={minutes(totals.minutes)}
+          context="length of those calls"
+        />
+        <Kpi
+          label="Reports ready"
+          value={totals.reports}
+          context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
+        />
+        {team ? (
+          <Kpi
+            label="People with calls"
+            value={totals.people}
+            context={
+              memberCount !== null
+                ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
+                : "members"
+            }
+          />
+        ) : null}
+      </dl>
+    </section>
   );
 }
 

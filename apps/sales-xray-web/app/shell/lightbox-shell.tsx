@@ -54,6 +54,7 @@ import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import { phoneTabFor } from "./phone-nav";
+import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
   readCallSummary,
@@ -282,7 +283,8 @@ function LightboxShellFrame({
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pageTitle = resolvePageTitle(active, heading);
-  const phoneTab = phoneTabFor(usePathname(), active);
+  const pathname = usePathname();
+  const phoneTab = phoneTabFor(pathname, active);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -872,62 +874,64 @@ function LightboxShellFrame({
                 </Link>
               </div>
               {recentsOpen && (
-                <div className={styles.recentsList}>
-                  {recentsPending && visibleRecentCalls.length === 0
-                    ? [62, 44, 72].map((width, index) => (
-                        <div
-                          key={width}
-                          className={styles.recentSkeleton}
-                          style={
-                            {
-                              "--i": index,
-                              "--w": `${width}%`,
-                            } as CSSProperties
-                          }
-                          aria-hidden="true"
-                        >
-                          <i />
-                          <span />
-                          <em />
-                        </div>
-                      ))
-                    : null}
-                  {!recentsPending &&
-                  recentsReady &&
-                  visibleRecentCalls.length === 0 ? (
-                    <p className={styles.recentsEmpty}>No calls here yet</p>
-                  ) : null}
-                  {visibleRecentCalls.map((call, index) => (
-                    <RecentCallItem
-                      key={call.id}
-                      index={index}
-                      call={call}
-                      href={callHref(call.id)}
-                      mine={ownsCall(call.owner, viewerId)}
-                      owner={
-                        recentsShowOwners
-                          ? call.owner
-                            ? ownerLabel(call.owner, viewerId)
-                            : "You"
-                          : null
-                      }
-                      onChange={(next) => updateRecentCall(call.id, next)}
-                    />
-                  ))}
-                  {recentsElsewhere ? (
-                    <p className={styles.recentsElsewhere}>
-                      None of these are yours.{" "}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          requestWorkspace(recentsElsewhere.tenant_id)
+                <SectionBoundary name="Recents">
+                  <div className={styles.recentsList}>
+                    {recentsPending && visibleRecentCalls.length === 0
+                      ? [62, 44, 72].map((width, index) => (
+                          <div
+                            key={width}
+                            className={styles.recentSkeleton}
+                            style={
+                              {
+                                "--i": index,
+                                "--w": `${width}%`,
+                              } as CSSProperties
+                            }
+                            aria-hidden="true"
+                          >
+                            <i />
+                            <span />
+                            <em />
+                          </div>
+                        ))
+                      : null}
+                    {!recentsPending &&
+                    recentsReady &&
+                    visibleRecentCalls.length === 0 ? (
+                      <p className={styles.recentsEmpty}>No calls here yet</p>
+                    ) : null}
+                    {visibleRecentCalls.map((call, index) => (
+                      <RecentCallItem
+                        key={call.id}
+                        index={index}
+                        call={call}
+                        href={callHref(call.id)}
+                        mine={ownsCall(call.owner, viewerId)}
+                        owner={
+                          recentsShowOwners
+                            ? call.owner
+                              ? ownerLabel(call.owner, viewerId)
+                              : "You"
+                            : null
                         }
-                      >
-                        Switch to Personal
-                      </button>
-                    </p>
-                  ) : null}
-                </div>
+                        onChange={(next) => updateRecentCall(call.id, next)}
+                      />
+                    ))}
+                    {recentsElsewhere ? (
+                      <p className={styles.recentsElsewhere}>
+                        None of these are yours.{" "}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            requestWorkspace(recentsElsewhere.tenant_id)
+                          }
+                        >
+                          Switch to Personal
+                        </button>
+                      </p>
+                    ) : null}
+                  </div>
+                </SectionBoundary>
               )}
             </div>
           )}
@@ -1019,7 +1023,14 @@ function LightboxShellFrame({
           </div>
         ) : null}
         <main id="main-content" className={styles.main}>
-          {children}
+          {/* A page that fails leaves the shell working: navigation, Recents. */}
+          <SectionBoundary
+            name="This screen"
+            note="Your calls and reports are safe."
+            resetKey={pathname}
+          >
+            {children}
+          </SectionBoundary>
         </main>
       </div>
       <nav

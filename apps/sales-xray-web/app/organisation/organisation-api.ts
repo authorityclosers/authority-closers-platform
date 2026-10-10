@@ -344,10 +344,14 @@ export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
         lastCallAt: text(item.last_call_at),
       };
     }),
-    calls: list(data.calls).map((raw) => {
+    // A row links to its call, so it needs a real call id and date.
+    calls: list(data.calls).flatMap((raw) => {
       const item = obj(raw);
+      const callId = text(item.id)?.toLowerCase() ?? "";
+      if (!id(callId) || !date(item.created_at) || item.created_at === null)
+        return [];
       return {
-        id: text(item.id) ?? "",
+        id: callId,
         ownerPersonId: text(item.owner_person_id) ?? "",
         ownerName: text(item.owner_name),
         label: text(item.label),

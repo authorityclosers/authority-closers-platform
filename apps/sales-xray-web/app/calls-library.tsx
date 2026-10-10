@@ -35,6 +35,7 @@ import {
   rememberSubmission,
   type LibrarySubmission,
 } from "./acquisition-client";
+import { SectionBoundary } from "./ui/section-boundary";
 import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
 import { newCallHref } from "./new-call-navigation";
@@ -1810,28 +1811,33 @@ function CallsLibraryContent({
         </>
       )}
       {workspace && previewSubmission ? (
-        <CallsDrawer
-          key={previewSubmission.id}
-          id={previewSubmission.id}
-          title={titleOf(previewSubmission)}
-          meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
-          status={submissionState(previewSubmission)}
-          tone={callTone(previewSubmission)}
-          insight={insightOf(previewSubmission.id)}
-          readState={statusOf(previewSubmission.id)}
-          onRetry={retryInsights}
-          hasReport={previewSubmission.hasReport}
-          canRename={Boolean(
-            previewSubmission.label &&
-              ownsCall(previewSubmission.owner, viewerId),
-          )}
-          onOpen={() => openSubmission(previewSubmission)}
-          onRename={() => {
-            setPreviewId(null);
-            setRenamingId(previewSubmission.id);
-          }}
-          onClose={() => setPreviewId(null)}
-        />
+        <SectionBoundary
+          name="The call preview"
+          resetKey={previewSubmission.id}
+        >
+          <CallsDrawer
+            key={previewSubmission.id}
+            id={previewSubmission.id}
+            title={titleOf(previewSubmission)}
+            meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
+            status={submissionState(previewSubmission)}
+            tone={callTone(previewSubmission)}
+            insight={insightOf(previewSubmission.id)}
+            readState={statusOf(previewSubmission.id)}
+            onRetry={retryInsights}
+            hasReport={previewSubmission.hasReport}
+            canRename={Boolean(
+              previewSubmission.label &&
+                ownsCall(previewSubmission.owner, viewerId),
+            )}
+            onOpen={() => openSubmission(previewSubmission)}
+            onRename={() => {
+              setPreviewId(null);
+              setRenamingId(previewSubmission.id);
+            }}
+            onClose={() => setPreviewId(null)}
+          />
+        </SectionBoundary>
       ) : null}
     </div>
   );
