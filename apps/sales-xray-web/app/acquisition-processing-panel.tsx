@@ -413,7 +413,18 @@ export function AcquisitionProcessingPanel({
             <summary aria-label="More actions" title="More actions">
               <MoreHorizontal size={16} aria-hidden="true" />
             </summary>
-            <div className={styles.menu} role="group" aria-label="Call actions">
+            <div
+              className={styles.menu}
+              role="group"
+              aria-label="Call actions"
+              // Choosing an item closes the menu.
+              onClick={(event) => {
+                if ((event.target as Element).closest("button, a"))
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+              }}
+            >
               {children}
             </div>
           </details>

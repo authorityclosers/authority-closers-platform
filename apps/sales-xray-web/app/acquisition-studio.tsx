@@ -92,7 +92,6 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
-import { dismissNotice, notify } from "./notice-center";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
 import { clearSpeakerProfiles } from "./speaker-profiles";
@@ -151,6 +150,18 @@ type ExistingCallEntryState = {
 // Status checks after a miss: 3 s, then longer, settling at 30 s. A call on
 // screen is never given up on because the network blinked.
 const STATUS_RETRY_MS = [3_000, 6_000, 12_000, 24_000, 30_000];
+// Misses in a row before the corner card; one blip shows only in the steps.
+const STATUS_CARD_AFTER = 3;
+// Answers no retry changes: signed out, no access, gone, or superseded.
+const isFinalStatusAnswer = (error: unknown) =>
+  error instanceof AcquisitionError &&
+  [401, 403, 404, 409].includes(error.status);
+// A blip: offline, a timed-out read, a busy or restarting server.
+const isStatusBlip = (error: unknown) =>
+  error instanceof TypeError ||
+  (error instanceof DOMException && error.name === "TimeoutError") ||
+  (error instanceof AcquisitionError &&
+    (error.status >= 500 || error.status === 408 || error.status === 429));
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -338,6 +349,10 @@ export function AcquisitionStudio({
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
+  // Whether a status miss earns the corner card (see STATUS_CARD_AFTER), and
+  // the misses in a row for the call on screen.
+  const [statusCard, setStatusCard] = useState(false);
+  const statusMissRef = useRef({ id: "", count: 0 });
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
@@ -1064,9 +1079,15 @@ export function AcquisitionStudio({
     if (!submission || result || review.requested) return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let failures = 0;
     const bound = submission;
-    const noticeId = `status-refresh:${bound.id}`;
+    // A retry keeps counting, so its card stays until a check succeeds.
+    let failures =
+      statusMissRef.current.id === bound.id ? statusMissRef.current.count : 0;
+    const countMisses = (count: number, card: boolean) => {
+      failures = count;
+      statusMissRef.current = { id: bound.id, count };
+      setStatusCard(card);
+    };
     async function poll() {
       try {
         const observed = await observeSubmission(bound, abort.signal);
@@ -1074,7 +1095,7 @@ export function AcquisitionStudio({
         const next = observed.progress;
         setProgress(next);
         setStatusIssue("");
-        if (failures) dismissNotice(noticeId);
+        countMisses(0, false);
         if (observed.result) {
           setResult(observed.result);
           setError("");
@@ -1108,41 +1129,29 @@ export function AcquisitionStudio({
           });
           return;
         }
-        failures = 0;
       } catch (error) {
         if (abort.signal.aborted) return;
-        failures += 1;
+        const misses = failures + 1;
+        // Only blips wait for the corner card; anything else shows it at once.
+        countMisses(
+          misses,
+          !isStatusBlip(error) || misses >= STATUS_CARD_AFTER,
+        );
         setStatusIssue(message(error));
-        // No retry changes these answers. A call still opening from its link
+        // No retry changes a final answer. A call still opening from its link
         // also stops after three misses, so its recovery view can take over.
         if (
-          (error instanceof AcquisitionError &&
-            [401, 403, 404, 409].includes(error.status)) ||
-          (failures >= 3 && entryOpening.current === bound.id)
+          isFinalStatusAnswer(error) ||
+          (misses >= STATUS_CARD_AFTER && entryOpening.current === bound.id)
         ) {
-          dismissNotice(noticeId);
           setExistingCallEntry({
             submissionId: bound.id,
             state: "failed",
           });
           return;
         }
-        // A call on screen keeps its last confirmed steps and never stops
-        // being checked; one corner card says so and offers a retry now.
-        if (failures === 3)
-          notify({
-            id: noticeId,
-            tone: "error",
-            title: "Can’t refresh this call’s status",
-            message: "Your call is saved. Sales Xray keeps checking by itself.",
-            action: {
-              label: "Try again",
-              run: () => {
-                dismissNotice(noticeId);
-                setPollAttempt((n) => n + 1);
-              },
-            },
-          });
+        // A call on screen keeps its last confirmed steps and is never given
+        // up on; after three misses the corner card offers a retry now.
       }
       if (!abort.signal.aborted)
         timer = setTimeout(
@@ -1154,7 +1163,6 @@ export function AcquisitionStudio({
     return () => {
       abort.abort();
       if (timer) clearTimeout(timer);
-      dismissNotice(noticeId);
     };
   }, [submission, result, pollAttempt, review.requested, rootAnalysisState]);
 
@@ -2032,7 +2040,7 @@ export function AcquisitionStudio({
     );
     const visibleError =
       error ||
-      statusIssue ||
+      (statusCard ? statusIssue : "") ||
       (pending?.accountChanged
         ? "Your account or workspace changed. Choose your audio files again."
         : "");
@@ -2467,11 +2475,8 @@ export function AcquisitionStudio({
                   </button>
                 ) : null}
               </div>
-              {statusIssue && !error && (
-                <p>
-                  Status could not be refreshed. This does not mean analysis
-                  failed.
-                </p>
+              {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
+                <p>Your call is saved. Sales Xray keeps checking by itself.</p>
               )}
               <ErrorMessage
                 message={
@@ -2493,7 +2498,7 @@ export function AcquisitionStudio({
                     } else setAttempt((n) => n + 1);
                   }}
                 >
-                  Check again
+                  {statusIssue && !error ? "Try again" : "Check again"}
                 </button>
                 {error &&
                   submission &&
@@ -3731,7 +3736,8 @@ export function AcquisitionStudio({
 }
 
 function errorTitle(error: unknown, statusOnly: boolean) {
-  if (statusOnly) return "Status not refreshed";
+  if (statusOnly && !isFinalStatusAnswer(error))
+    return "Can’t refresh this call’s status";
   if (error instanceof AcquisitionError) {
     if (error.status === 401) return "You’re signed out";
     if (error.status === 403) return "Access needs a check";

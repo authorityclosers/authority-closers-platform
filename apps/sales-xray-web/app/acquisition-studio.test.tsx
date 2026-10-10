@@ -33,7 +33,6 @@ import {
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
 import * as processingReviewPort from "./processing-review-port";
-import { NoticeCenter } from "./notice-center";
 import { spokenClipRange } from "./lightbox/time";
 import {
   allowance,
@@ -2225,26 +2224,26 @@ it("keeps checking a call on screen through repeated misses, with one corner car
   existing = true;
   processingMode = "running";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
-  const page = await Page({ searchParams: Promise.resolve({}) });
-  await act(async () =>
-    root.render(
-      <>
-        <NoticeCenter />
-        {page}
-      </>,
-    ),
-  );
-  await flush();
+  await mount();
   const lookups = () =>
     calls.filter(({ path }) => path.endsWith(`/submissions/${submissionId}`))
       .length;
   savedLookupUnavailable = true;
-  // Misses at +3 s, +6 s and +12 s; the third raises the card.
-  for (const wait of [3_000, 6_000, 12_000]) {
+  // Misses at +3 s and +6 s show only in the steps' line.
+  for (const wait of [3_000, 6_000]) {
     await act(async () => vi.advanceTimersByTimeAsync(wait));
     await flush();
   }
-  expect(container.textContent).toContain("Can’t refresh this call’s status");
+  expect(container.textContent).toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  // The third (+12 s) raises the corner card.
+  await act(async () => vi.advanceTimersByTimeAsync(12_000));
+  await flush();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    "Can’t refresh this call’s status",
+  );
   expect(container.textContent).toContain(
     "Sales Xray keeps checking by itself",
   );
