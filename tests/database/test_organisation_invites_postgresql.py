@@ -21,7 +21,7 @@ from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.kernel.errors import ResourceNotFound
+from ac_platform.kernel.errors import ResourceConflict, ResourceNotFound
 from ac_platform.organisations import invite_email
 from ac_platform.organisations.service import OrganisationSeatsFull, OrganisationService
 from ac_platform.outbox.models import Job, JobStatus, OutboxEvent
@@ -190,6 +190,93 @@ def test_competing_invites_cannot_reserve_the_same_last_paid_seat(postgres_harne
                 )
                 assert (await verify_audit_chain(database, tenant_id)).valid
                 assert await database.get(Organisation, tenant_id) is not None
+        finally:
+            await cancel_pending(task)
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("removed", [False, True])
+def test_acceptance_replay_refreshes_membership_after_registry_fence(postgres_harness, removed):
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        task = None
+        try:
+            owner, member, tenant_id = await setup(engine)
+            key = uuid4()
+            async with AsyncSession(engine) as database, database.begin():
+                invited = await service(database, owner).request_member(
+                    tenant_id,
+                    f"worker-{member.person_id.hex}@example.test",
+                    "admin",
+                    uuid4(),
+                    actor_person_id=owner.person_id,
+                    require_acceptance=True,
+                )
+                invite_id = UUID(str(invited["invite_id"]))
+                accepted = await service(database, owner).accept_invite(
+                    invite_id, key, actor_person_id=member.person_id
+                )
+                assert accepted["role"] == "admin"
+
+            loaded = asyncio.get_running_loop().create_future()
+            proceed = asyncio.Event()
+
+            async def replay():
+                async with AsyncSession(engine) as database, database.begin():
+                    cached = await database.get(Membership, (tenant_id, member.person_id))
+                    assert cached.role == "admin" and cached.status == "active"
+                    loaded.set_result(await database.scalar(text("SELECT pg_backend_pid()")))
+                    await proceed.wait()
+                    return await service(database, owner).accept_invite(
+                        invite_id, key, actor_person_id=member.person_id
+                    )
+
+            task = asyncio.create_task(replay())
+            pid = await asyncio.wait_for(loaded, 5)
+            async with AsyncSession(engine) as database, database.begin():
+                if removed:
+                    await service(database, owner).remove_member(
+                        tenant_id, member.person_id, uuid4(), actor_person_id=owner.person_id
+                    )
+                else:
+                    await service(database, owner).change_member_role(
+                        tenant_id,
+                        member.person_id,
+                        "member",
+                        uuid4(),
+                        actor_person_id=owner.person_id,
+                    )
+                snapshot = [
+                    (row.id, row.event_hash)
+                    for row in await database.scalars(
+                        select(AuditEvent)
+                        .where(AuditEvent.tenant_id == tenant_id)
+                        .order_by(AuditEvent.sequence_no)
+                    )
+                ]
+                proceed.set()
+                await wait_blocked(engine, pid, task)
+            if removed:
+                with pytest.raises(ResourceConflict, match="already been used"):
+                    await asyncio.wait_for(task, 5)
+            else:
+                assert (await asyncio.wait_for(task, 5))["role"] == "member"
+            async with AsyncSession(engine) as database, database.begin():
+                current = await database.get(Membership, (tenant_id, member.person_id))
+                assert current.status == ("inactive" if removed else "active")
+                assert (current.ended_at is not None) is removed
+                assert await database.get(OrganisationInvite, invite_id) is not None
+                assert [
+                    (row.id, row.event_hash)
+                    for row in await database.scalars(
+                        select(AuditEvent)
+                        .where(AuditEvent.tenant_id == tenant_id)
+                        .order_by(AuditEvent.sequence_no)
+                    )
+                ] == snapshot
+                assert (await verify_audit_chain(database, tenant_id)).valid
         finally:
             await cancel_pending(task)
             await engine.dispose()

@@ -181,6 +181,69 @@ async def test_existing_person_must_choose_invite_even_when_domain_auto_join_is_
         assert verify_audit_chain_sync(db, state.tenant).valid
 
 
+@pytest.mark.parametrize("replay_confirmation", [False, True])
+async def test_acceptance_replay_reports_current_role_without_rewriting_history(
+    state, replay_confirmation
+):
+    remove_other_membership(state)
+    invited = await invite(state, role="admin")
+    invite_id = UUID(invited.json()["invite_id"])
+    key = uuid4()
+    path = f"/invites/{invite_id}/accept"
+    accepted = await person_call(state, path, method="POST", key=key)
+    assert accepted.status_code == 200, accepted.text
+    if replay_confirmation:
+        key = uuid4()
+        assert (await person_call(state, path, method="POST", key=key)).status_code == 200
+    changed = await call(
+        state, "PATCH", f"/members/{state.other}", body={"role": "member"}, key=uuid4()
+    )
+    assert changed.status_code == 200, changed.text
+    with Session(state.engine) as db:
+        original_audits = list(db.scalars(select(AuditEvent).order_by(AuditEvent.id)))
+        snapshot = [(row.id, row.payload, row.event_hash) for row in original_audits]
+    replay = await person_call(state, path, method="POST", key=key)
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == {**accepted.json(), "role": "member"}
+    with Session(state.engine) as db:
+        assert [
+            (row.id, row.payload, row.event_hash)
+            for row in db.scalars(select(AuditEvent).order_by(AuditEvent.id))
+        ] == snapshot
+        assert db.get(OrganisationInvite, invite_id).role == "admin"
+        assert db.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+        assert verify_audit_chain_sync(db, state.tenant).valid
+
+
+@pytest.mark.parametrize("replay_confirmation", [False, True])
+async def test_acceptance_replay_cannot_claim_or_restore_removed_membership(
+    state, replay_confirmation
+):
+    remove_other_membership(state)
+    invited = await invite(state)
+    invite_id = UUID(invited.json()["invite_id"])
+    key = uuid4()
+    path = f"/invites/{invite_id}/accept"
+    accepted = await person_call(state, path, method="POST", key=key)
+    assert accepted.status_code == 200, accepted.text
+    if replay_confirmation:
+        key = uuid4()
+        assert (await person_call(state, path, method="POST", key=key)).status_code == 200
+    removed = await call(state, "DELETE", f"/members/{state.other}", key=uuid4())
+    assert removed.status_code == 204, removed.text
+    with Session(state.engine) as db:
+        audit_count = db.scalar(select(func.count()).select_from(AuditEvent))
+    replay = await person_call(state, path, method="POST", key=key)
+    assert replay.status_code == 409, replay.text
+    with Session(state.engine) as db:
+        member = db.get(Membership, (state.tenant, state.other))
+        assert member.status == "inactive" and member.ended_at is not None
+        assert db.get(OrganisationInvite, invite_id).status == "accepted"
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == audit_count
+        assert db.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+        assert verify_audit_chain_sync(db, state.tenant).valid
+
+
 async def test_person_who_does_not_exist_can_sign_up_then_accept_and_mail_contains_no_grant(state):
     response = await invite(state, email="new-person@example.test")
     assert response.status_code == 200, response.text
