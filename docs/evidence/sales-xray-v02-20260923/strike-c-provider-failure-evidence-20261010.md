@@ -86,7 +86,8 @@ unchanged; no audit internals are added to learner responses.
 
 - Changed Python files pass Ruff lint and formatting; package mypy passed for
   all 437 source files after fixing the nullable tenant guard.
-- Two broader unit runs reached 87 passing cases but failed in existing real
+- The focused observation, provider transport and inference-worker stage suite
+  passed: **79 tests**. Two broader unit runs reached 87 passing cases but failed in existing real
   broker subprocess timeout tests (`broker_process_unavailable` instead of
   `broker_timeout`); both runs were stopped. The wrapper-descendant timeout test
   passed independently (1 passed). These are not complete passing suite receipts.
@@ -99,8 +100,9 @@ unchanged; no audit internals are added to learner responses.
   source-bound checkpoint fixture directly, isolating provider evidence from
   native decoding. They cover complete/incomplete observations, a binding
   mismatch, evidence surviving cleanup failure, identical/conflicting appends,
-  stale lease/generation fencing and the generic retry guard. This revised
-  database fixture has not yet executed locally; CI must verify it.
+  stale lease/generation fencing and the generic retry guard. All **4 PostgreSQL
+  cases passed** locally in 73.30 seconds. CI and staging verification remain
+  separate requirements.
 - Database invocations explicitly selected the existing disposable loopback
   `ac_test_lane_sx-billing`. The launcher-provided URLs still named sx-prospects;
   neither that database nor host settings were changed.
