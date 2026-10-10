@@ -453,10 +453,12 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                             assert response.headers["cache-control"] == "private, no-store"
                             assert response.headers["vary"] == "Cookie"
                             read_counts[person, name, suffix] = len(reads) - start_reads
-                            # Speaker reads retain two ownership checks plus
-                            # transcript/report attribution. A visitor claim
-                            # adds one lookup to each ownership check.
-                            budget = 66 if suffix == "/speaker-map" else 60
+                            # Claimed visitor calls repeat scope admission under
+                            # the visitor fence, including the live role/privacy
+                            # checks. Reserve two admission passes for them;
+                            # speaker maps also read their retained revision.
+                            admission_passes = 2 if name == "claimed" else 1
+                            budget = (66 if suffix == "/speaker-map" else 60) * admission_passes
                             assert read_counts[person, name, suffix] <= budget, (
                                 name,
                                 suffix,
