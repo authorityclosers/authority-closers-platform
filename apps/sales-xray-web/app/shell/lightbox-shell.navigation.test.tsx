@@ -131,16 +131,8 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? [
-            "Dashboard",
-            "Calls",
-            "New",
-            "Prospects",
-            "Coaching",
-            "More",
-            "Settings",
-          ]
-        : ["Dashboard", "Calls", "New", "Prospects", "Coaching", "More"],
+        ? ["Dashboard", "Calls", "New", "Prospects", "More", "Settings"]
+        : ["Dashboard", "Calls", "New", "Prospects", "More"],
     );
     expect(nav.querySelector('a[href="/prospects"]')?.textContent?.trim()).toBe(
       "Prospects",
@@ -152,28 +144,6 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");
-    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
-  }
-});
-
-it("places Coaching after Prospects and marks the same section on desktop and phone", () => {
-  const host = document.createElement("div");
-  host.innerHTML = renderToStaticMarkup(
-    <AcquisitionShell authenticated active="coaching">
-      <p>One personal focus</p>
-    </AcquisitionShell>,
-  );
-  for (const selector of [
-    'aside[aria-label="Sales Xray navigation"]',
-    'nav[aria-label="Mobile Sales Xray navigation"]',
-  ]) {
-    const nav = host.querySelector(selector)!;
-    const link = nav.querySelector('a[href="/coaching"]')!;
-    expect(link.getAttribute("data-next-client-link")).toBe("true");
-    expect(link.getAttribute("aria-current")).toBe("page");
-    expect(link.previousElementSibling?.getAttribute("href")).toBe(
-      "/prospects",
-    );
     expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
   }
 });

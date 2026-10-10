@@ -7,8 +7,6 @@ it("lights the phone tab from the address before the page settles", () => {
   expect(phoneTabFor("/dashboard", "analyse")).toBe("dashboard");
   expect(phoneTabFor("/prospects", "analyse")).toBe("prospects");
   expect(phoneTabFor("/prospects/8f3c", "analyse")).toBe("prospects");
-  expect(phoneTabFor("/coaching", "analyse")).toBe("coaching");
-  expect(phoneTabFor("/coaching/lesson", "analyse")).toBe("coaching");
   expect(phoneTabFor("/organisation", "analyse")).toBe("more");
   expect(phoneTabFor("/account", undefined)).toBe("more");
   expect(phoneTabFor("/plans", undefined)).toBe("more");

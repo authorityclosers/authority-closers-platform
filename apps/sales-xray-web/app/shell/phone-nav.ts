@@ -1,12 +1,6 @@
 import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 
-export type PhoneTab =
-  | "dashboard"
-  | "calls"
-  | "new"
-  | "prospects"
-  | "coaching"
-  | "more";
+export type PhoneTab = "dashboard" | "calls" | "new" | "prospects" | "more";
 
 type ShellActive =
   | "dashboard"
@@ -14,15 +8,13 @@ type ShellActive =
   | "calls"
   | "account"
   | "organisation"
-  | "prospects"
-  | "coaching";
+  | "prospects";
 
 const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   dashboard: "dashboard",
   analyse: "new",
   calls: "calls",
   prospects: "prospects",
-  coaching: "coaching",
   account: "more",
   organisation: "more",
 };
@@ -45,7 +37,6 @@ export function phoneTabFor(
       return "calls";
     if (under(pathname, NEW_ANALYSIS_PATH)) return "new";
     if (under(pathname, "/prospects")) return "prospects";
-    if (under(pathname, "/coaching")) return "coaching";
     if (
       ["/organisation", "/account", "/plans"].some((root) =>
         under(pathname, root),
