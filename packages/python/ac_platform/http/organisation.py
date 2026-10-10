@@ -324,7 +324,7 @@ def install_organisation_http(
             tenant_id=result.tenant_id,
             handle=result.slug,
             name=result.name,
-            your_role="owner",
+            your_role=cast(Literal["owner", "admin", "member"], result.owner_role),
         )
 
     @router.get("/profile", response_model=OrganisationProfileResponse)

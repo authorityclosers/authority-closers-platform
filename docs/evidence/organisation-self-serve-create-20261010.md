@@ -38,6 +38,13 @@ tenant UUID and asserts the full UUID suffix, uniqueness and the existing
 application behavior or assertion scope is relaxed. The cancelled later CI runs
 are not treated as successful validation.
 
+Create replay reports the creator's current active role. After ownership
+transfer it returns `your_role: "admin"`; after membership ends it returns 409
+without restoring membership, adding another organisation, or appending a new
+creation audit. Legacy operator receipts retain their existing behavior.
+The HTTP creation and organisation service suites pass together: **22 passed in
+6.91s**, including the real owner-transfer route and ended-membership replay.
+
 ## Dev check after delivery
 
 Sign in with a verified account in Personal. Submit the request above with a

@@ -1,6 +1,7 @@
 """Verified-person organisation creation through canonical cookie transactions."""
 
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -140,3 +141,46 @@ async def test_owner_identifier_cannot_be_supplied_in_body(state):
     assert response.status_code == 422
     with Session(state.engine) as db:
         assert db.scalar(select(func.count()).select_from(Organisation)) == 0
+
+
+async def test_create_replay_reports_current_role_after_owner_transfer(state):
+    key = uuid4()
+    first = await create(state, key=key)
+    tenant_id = UUID(first.json()["tenant_id"])
+    with Session(state.engine) as db, db.begin():
+        db.add(Membership(tenant_id=tenant_id, person_id=state.other, role="admin"))
+        db.get(IdentitySession, state.session).selected_tenant_id = tenant_id
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=state.app), base_url=ORIGIN
+    ) as client:
+        transferred = await client.post(
+            "/v1/organisation/owner",
+            json={"person_id": str(state.other)},
+            headers={
+                "Origin": ORIGIN,
+                "Cookie": f"ac_session={TOKEN}",
+                "Idempotency-Key": str(uuid4()),
+            },
+        )
+    assert transferred.status_code == 200, transferred.text
+    replay = await create(state, key=key)
+    assert replay.status_code == 201 and replay.json()["your_role"] == "admin"
+    assert replay.json()["tenant_id"] == first.json()["tenant_id"]
+    with Session(state.engine) as db:
+        assert db.get(Membership, (tenant_id, state.other)).role == "owner"
+        assert verify_audit_chain_sync(db, tenant_id).valid
+
+
+async def test_create_replay_does_not_restore_or_claim_ended_membership(state):
+    key = uuid4()
+    first = await create(state, key=key)
+    tenant_id = UUID(first.json()["tenant_id"])
+    with Session(state.engine) as db, db.begin():
+        membership = db.get(Membership, (tenant_id, state.person))
+        membership.status, membership.ended_at = "inactive", datetime.now(UTC)
+    replay = await create(state, key=key)
+    assert replay.status_code == 409, replay.text
+    with Session(state.engine) as db:
+        assert db.get(Membership, (tenant_id, state.person)).status == "inactive"
+        assert db.scalar(select(func.count()).select_from(Organisation)) == 1
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == 1

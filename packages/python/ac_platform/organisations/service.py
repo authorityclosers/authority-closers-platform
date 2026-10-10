@@ -198,6 +198,15 @@ class OrganisationService:
                 raise OrganisationCommandConflict(
                     "created owner no longer matches the command intent"
                 )
+            if actor_person_id is not None and (
+                tenant.status != TenantStatus.ACTIVE.value
+                or owner.status != MembershipStatus.ACTIVE.value
+                or owner.ended_at is not None
+                or owner.role not in {"owner", "admin", "member"}
+            ):
+                raise ResourceConflict(
+                    "Creation is recorded, but your organisation membership is no longer active."
+                )
             return OrganisationResult(
                 prior.tenant_id,
                 prior.tenant_id,
