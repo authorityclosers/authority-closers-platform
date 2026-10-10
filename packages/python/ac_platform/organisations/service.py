@@ -970,7 +970,12 @@ class OrganisationService:
         }
         prior = await self._replay(tenant_id, command_id, intent)
         if prior is not None:
-            return cast(dict[str, object], prior.payload["result"])
+            member = (await self._lock_members(tenant_id, actor_person_id)).get(actor_person_id)
+            if member is None:
+                raise ResourceConflict("This invitation has already been used.")
+            # The acceptance audit stays historical; replay reports the live role
+            # without restoring ended membership or rewriting the original result.
+            return self._accepted_result(invite, member)
         invite = await self.session.scalar(
             select(OrganisationInvite)
             .where(OrganisationInvite.id == invite_id)
@@ -979,8 +984,8 @@ class OrganisationService:
         )
         assert invite is not None
         if invite.status == "accepted" and invite.accepted_person_id == actor_person_id:
-            member = await self.session.get(Membership, (tenant_id, actor_person_id))
-            if member is not None and member.status == "active" and member.ended_at is None:
+            member = (await self._lock_members(tenant_id, actor_person_id)).get(actor_person_id)
+            if member is not None:
                 result = self._accepted_result(invite, member)
                 await self._audit(
                     tenant_id,
