@@ -771,6 +771,7 @@ function LightboxShellFrame({
             <Link
               className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/coaching"
+              prefetch={false}
               aria-label="Coaching"
               data-rail-tip="Coaching"
               aria-current={place === "coaching" ? "page" : undefined}
@@ -1107,6 +1108,7 @@ function LightboxShellFrame({
         <Link
           className={styles.bottomLink}
           href="/coaching"
+          prefetch={false}
           aria-current={phoneTab === "coaching" ? "page" : undefined}
         >
           <GraduationCap size={20} aria-hidden="true" />
