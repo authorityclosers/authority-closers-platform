@@ -50,6 +50,12 @@ type Props = {
   refreshProblem?: boolean;
   /** When the call was saved (ISO), for the elapsed time; omitted when unknown. */
   startedAt?: string;
+  /** Shown after "Delete this call…" in the menu: the one confirm step. */
+  deleteConfirm?: {
+    disabled: boolean;
+    onDelete: () => void;
+    onKeep: () => void;
+  };
   /** Local review only: render static synthetic stages without live-call claims. */
   staticPreview?: boolean;
   children?: ReactNode;
@@ -200,6 +206,7 @@ export function AcquisitionProcessingPanel({
   waitingForApproval = false,
   accepted = false,
   startedAt,
+  deleteConfirm,
   staticPreview = false,
   children,
 }: Props) {
@@ -406,12 +413,46 @@ export function AcquisitionProcessingPanel({
             <summary aria-label="More actions" title="More actions">
               <MoreHorizontal size={16} aria-hidden="true" />
             </summary>
-            <div className={styles.menu} role="group" aria-label="Call actions">
+            <div
+              className={styles.menu}
+              role="group"
+              aria-label="Call actions"
+              // Choosing an item closes the menu.
+              onClick={(event) => {
+                if ((event.target as Element).closest("button, a"))
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+              }}
+            >
               {children}
             </div>
           </details>
         ) : null}
       </div>
+
+      {deleteConfirm && !staticPreview ? (
+        <div className={styles.confirm} role="alert">
+          <p>Remove this recording and its report? This cannot be undone.</p>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.danger}
+              disabled={deleteConfirm.disabled}
+              onClick={deleteConfirm.onDelete}
+            >
+              Delete call
+            </button>
+            <button
+              type="button"
+              className={styles.keep}
+              onClick={deleteConfirm.onKeep}
+            >
+              Keep call
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {phase === "working" && (
         <p className={styles.note}>
