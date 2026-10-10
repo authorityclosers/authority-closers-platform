@@ -110,6 +110,7 @@ def test_concurrent_http_budget_and_verified_add(postgres_harness):  # noqa: F81
                         headers={
                             "cookie": f"ac_session={actor_token}",
                             "Idempotency-Key": str(key),
+                            "Origin": str(settings.public_app_url).rstrip("/"),
                         },
                     )
 
@@ -123,20 +124,13 @@ def test_concurrent_http_budget_and_verified_add(postgres_harness):  # noqa: F81
                 )
                 assert [r.status_code for r in pair] == [200, 200]
                 assert pair[0].json() == pair[1].json()
-                # A request holding the target's shared identity fence must
-                # produce a retryable conflict, rather than a lock cycle.
-                with Session(postgres_harness.engine) as held, held.begin():
-                    held.scalar(
-                        select(Membership)
-                        .where(
-                            Membership.tenant_id == org.tenant_id, Membership.person_id == target
-                        )
-                        .with_for_update(read=True)
-                    )
-                    busy = await asyncio.wait_for(
-                        add(f"rep-{target}@example.test", uuid4()), timeout=5
-                    )
-                    assert busy.status_code == 409
+                # Existing verified people stay pending until they explicitly
+                # accept. A new command cannot duplicate the pending invite.
+                assert pair[0].json()["status"] == "invited"
+                async with sessions() as db:
+                    assert await db.get(Membership, (org.tenant_id, target)) is None
+                busy = await asyncio.wait_for(add(f"rep-{target}@example.test", uuid4()), timeout=5)
+                assert busy.status_code == 409
                 async with sessions() as db, db.begin():
                     db.add_all(
                         [

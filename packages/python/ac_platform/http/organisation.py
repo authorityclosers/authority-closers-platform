@@ -3,7 +3,7 @@
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
@@ -14,13 +14,21 @@ from sqlalchemy import func, select
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.http.organisation_settings import install_organisation_settings_routes
-from ac_platform.identity.services import TenantScopeDeniedError
+from ac_platform.identity.models import Person
+from ac_platform.identity.services import TenantScopeDeniedError, normalize_email
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
+from ac_platform.organisations.invitations import invitation_policies
 from ac_platform.organisations.seats import seat_exempt
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows, organisation_pool, organisation_seats
-from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
+from ac_platform.tenancy.models import (
+    Membership,
+    Organisation,
+    OrganisationDomainSetting,
+    OrganisationInvite,
+    Tenant,
+)
 
 
 class OrganisationResponse(BaseModel):
@@ -49,6 +57,30 @@ class ChangeHandleRequest(BaseModel):
 class CreateOrganisationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
     name: str = Field(min_length=2, max_length=80)
+
+
+class PendingInviteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    invite_id: UUID
+    tenant_id: UUID
+    organisation_name: str
+    role: Literal["admin", "member"]
+    invited_at: datetime
+    expires_at: datetime | None
+
+
+class PendingInvitesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    invites: list[PendingInviteResponse]
+
+
+class AcceptedInviteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    invite_id: UUID
+    tenant_id: UUID
+    person_id: UUID
+    role: Literal["owner", "admin", "member"]
+    status: Literal["accepted"]
 
 
 class MemberResponse(BaseModel):
@@ -203,6 +235,71 @@ def install_organisation_http(
 
     command_dependency = Depends(command_id)
     person_dependency = Depends(require_actor, scope="function")
+    person_read_dependency = Depends(require_actor.read_only, scope="function")  # type: ignore[attr-defined]
+
+    @router.get("/invites", response_model=PendingInvitesResponse)
+    async def pending_invites(
+        response: Response, auth: AuthenticatedTransaction = person_read_dependency
+    ) -> PendingInvitesResponse:
+        person = await auth.database.get(Person, auth.resolved.actor.person_id)
+        assert person is not None and person.email is not None
+        rows = list(
+            await auth.database.execute(
+                select(OrganisationInvite, Tenant)
+                .join(Tenant, Tenant.id == OrganisationInvite.tenant_id)
+                .join(Organisation, Organisation.tenant_id == Tenant.id)
+                .where(
+                    func.lower(OrganisationInvite.email_normalized)
+                    == normalize_email(person.email).lower(),
+                    OrganisationInvite.status == "pending",
+                    Tenant.status == "active",
+                    Tenant.id.not_in(
+                        [
+                            value
+                            for value in (
+                                settings.operations_tenant_id,
+                                settings.public_learner_tenant_id,
+                            )
+                            if value is not None
+                        ]
+                    ),
+                )
+                .order_by(OrganisationInvite.created_at, OrganisationInvite.id)
+            )
+        )
+        policies = await invitation_policies(auth.database, [invite for invite, _ in rows])
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["vary"] = "Cookie"
+        return PendingInvitesResponse(
+            invites=[
+                PendingInviteResponse(
+                    invite_id=invite.id,
+                    tenant_id=invite.tenant_id,
+                    organisation_name=tenant.name,
+                    role=cast(Literal["admin", "member"], invite.role),
+                    invited_at=invite.created_at,
+                    expires_at=policies[invite.id].expires_at,
+                )
+                for invite, tenant in rows
+                if not policies[invite.id].expired(datetime.now(UTC))
+            ]
+        )
+
+    @router.post("/invites/{invite_id}/accept", response_model=AcceptedInviteResponse)
+    async def accept_invite(
+        invite_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = person_dependency,
+        key: UUID = command_dependency,
+    ) -> AcceptedInviteResponse:
+        require_safe_origin(request, settings)
+        result = await service(auth).accept_invite(
+            invite_id, key, actor_person_id=auth.resolved.actor.person_id
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["vary"] = "Cookie"
+        return AcceptedInviteResponse.model_validate_json(json.dumps(result))
 
     @router.post("", response_model=OrganisationProfileResponse, status_code=201)
     async def create(
@@ -359,10 +456,12 @@ def install_organisation_http(
 
     @router.post("/members", response_model=MemberResponse)
     async def add(
+        request: Request,
         body: AddMemberRequest,
         auth: AuthenticatedTransaction = selected_dependency,
         key: UUID = command_dependency,
     ) -> MemberResponse:
+        require_safe_origin(request, settings)
         assert auth.resolved.actor.tenant_id is not None
         result = await service(auth).request_member(
             auth.resolved.actor.tenant_id,
@@ -370,15 +469,18 @@ def install_organisation_http(
             body.role,
             key,
             actor_person_id=auth.resolved.actor.person_id,
+            require_acceptance=True,
         )
         return MemberResponse.model_validate_json(json.dumps(result))
 
     @router.delete("/invites/{invite_id}", status_code=204)
     async def revoke(
+        request: Request,
         invite_id: UUID,
         auth: AuthenticatedTransaction = selected_dependency,
         key: UUID = command_dependency,
     ) -> None:
+        require_safe_origin(request, settings)
         assert auth.resolved.actor.tenant_id is not None
         await service(auth).revoke_invite(
             auth.resolved.actor.tenant_id,

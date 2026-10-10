@@ -100,7 +100,9 @@ def state(request):
 
 
 async def call(state, method="GET", path="", *, body=None, token=TOKEN, key=None):
-    headers = {} if token is None else {"cookie": f"ac_session={token}"}
+    headers = {"Origin": "https://learner.authorityclosers.test"}
+    if token is not None:
+        headers["cookie"] = f"ac_session={token}"
     if key is not None:
         headers["Idempotency-Key"] = str(key)
     async with httpx.AsyncClient(

@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -25,6 +25,12 @@ from ac_platform.kernel.errors import (
     ResourceConflict,
     ResourceNotFound,
 )
+from ac_platform.organisations.invitations import (
+    INVITATION_LIFETIME,
+    INVITATION_POLICY_SCHEMA,
+    invitation_policies,
+)
+from ac_platform.organisations.invite_email import enqueue_invitation_email
 from ac_platform.organisations.usage import invite_row, member_rows, organisation_seats
 from ac_platform.tenancy.models import (
     Membership,
@@ -781,9 +787,12 @@ class OrganisationService:
         *,
         actor_person_id: UUID,
         operator_reference: str | None = None,
+        require_acceptance: bool = False,
     ) -> dict[str, object]:
         role = _member_role(role)
         intent = {"email": "", "role": role, "actor_person_id": str(actor_person_id)}
+        if require_acceptance:
+            intent["invitation_policy"] = INVITATION_POLICY_SCHEMA
         acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
         if acting not in {"owner", "admin", "operator"}:
             raise AuthorizationDenied("Organisation administration is required.")
@@ -791,6 +800,8 @@ class OrganisationService:
             raise AuthorizationDenied("Only the owner can add an admin.")
         try:
             email = normalize_email(email)
+            if require_acceptance:
+                email = email.lower()
         except ValueError as error:
             raise OrganisationCommandError("A valid email is required.") from error
         intent["email"] = email
@@ -814,7 +825,7 @@ class OrganisationService:
         person = await self.session.scalar(
             select(Person).where(func.lower(Person.email) == email.lower())
         )
-        if person is not None:
+        if person is not None and not require_acceptance:
             target = await self.session.get(Membership, (tenant_id, person.id))
             if acting == "admin" and target is not None and target.role != "member":
                 raise AuthorizationDenied("An admin can add members only.")
@@ -831,6 +842,15 @@ class OrganisationService:
             audit = await self._command_audit(tenant_id, command_id, "organisation.member_added")
             assert audit is not None
             return cast(dict[str, object], audit.payload["result"])
+        if person is not None:
+            target = await self.session.get(Membership, (tenant_id, person.id))
+            if target is not None:
+                if acting == "admin" and target.role != "member":
+                    raise AuthorizationDenied("An admin can invite members only.")
+                if target.role == "owner" or (
+                    target.status == "active" and target.ended_at is None
+                ):
+                    raise ResourceConflict("This person is already an organisation member.")
         pending = await self.session.scalar(
             select(OrganisationInvite).where(
                 OrganisationInvite.tenant_id == tenant_id,
@@ -839,7 +859,21 @@ class OrganisationService:
             )
         )
         if pending is not None:
-            raise ResourceConflict("A pending invite already exists for this email.")
+            policy = (await invitation_policies(self.session, [pending]))[pending.id]
+            if not policy.expired(now):
+                raise ResourceConflict("A pending invite already exists for this email.")
+            pending.status, pending.closed_at = "revoked", now
+            await self._audit(
+                tenant_id,
+                uuid5(pending.id, "expiry"),
+                "organisation.invite_expired",
+                "organisation_invite",
+                pending.id,
+                {"before": {"status": "pending"}, "after": {"status": "expired"}},
+                "invitation_expired",
+                actor_person_id=actor_person_id,
+            )
+            await self.session.flush()
         if acting != "operator":
             await self._ensure_seat_available(tenant_id)
         invite = OrganisationInvite(
@@ -848,6 +882,7 @@ class OrganisationService:
             role=role,
             command_id=command_id,
             invited_by_person_id=actor_person_id,
+            created_at=now,
         )
         self.session.add(invite)
         await self.session.flush()
@@ -863,11 +898,153 @@ class OrganisationService:
                 "result": result,
                 "before": None,
                 "after": {"status": "pending"},
+                **(
+                    {
+                        "invitation_policy": {
+                            "schema": INVITATION_POLICY_SCHEMA,
+                            "explicit_acceptance": True,
+                            "expires_at": (now + INVITATION_LIFETIME).isoformat(),
+                        }
+                    }
+                    if require_acceptance
+                    else {}
+                ),
             },
             operator_reference,
             actor_person_id=actor_person_id,
         )
+        if require_acceptance:
+            await enqueue_invitation_email(self.session, invite)
         return result
+
+    async def accept_invite(
+        self, invite_id: UUID, command_id: UUID, *, actor_person_id: UUID
+    ) -> dict[str, object]:
+        person = await self.session.get(Person, actor_person_id)
+        if (
+            person is None
+            or person.status != "active"
+            or person.email is None
+            or person.email_verified_at is None
+        ):
+            raise AuthorizationDenied("Verify your email before accepting an invitation.")
+        # Discover only an invite bound to the actual verified email, never arbitrary IDs.
+        invite = await self.session.scalar(
+            select(OrganisationInvite).where(
+                OrganisationInvite.id == invite_id,
+                func.lower(OrganisationInvite.email_normalized)
+                == normalize_email(person.email).lower(),
+            )
+        )
+        if invite is None:
+            raise ResourceNotFound("Invitation not found.")
+        tenant_id = invite.tenant_id
+        await self._organisation(tenant_id, lock=True)
+        tenant = await self.session.scalar(
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update(read=True)
+        )
+        if tenant is None or tenant.status != "active":
+            raise ResourceNotFound("Invitation not found.")
+        intent = {
+            "action": "accept_invite",
+            "invite_id": str(invite_id),
+            "actor_person_id": str(actor_person_id),
+        }
+        prior = await self._replay(tenant_id, command_id, intent)
+        if prior is not None:
+            return cast(dict[str, object], prior.payload["result"])
+        invite = await self.session.scalar(
+            select(OrganisationInvite)
+            .where(OrganisationInvite.id == invite_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        assert invite is not None
+        if invite.status == "accepted" and invite.accepted_person_id == actor_person_id:
+            member = await self.session.get(Membership, (tenant_id, actor_person_id))
+            if member is not None and member.status == "active" and member.ended_at is None:
+                result = self._accepted_result(invite, member)
+                await self._audit(
+                    tenant_id,
+                    command_id,
+                    "organisation.invite_acceptance_confirmed",
+                    "organisation_invite",
+                    invite_id,
+                    {
+                        "http_intent": intent,
+                        "result": result,
+                        "before": {"status": "accepted"},
+                        "after": {"status": "accepted"},
+                    },
+                    "invite_already_accepted",
+                    actor_person_id=actor_person_id,
+                )
+                return result
+            raise ResourceConflict("This invitation has already been used.")
+        if invite.status != "pending":
+            raise ResourceNotFound("Pending invitation not found.")
+        policy = (await invitation_policies(self.session, [invite]))[invite.id]
+        now = datetime.now(UTC)
+        if policy.expired(now):
+            raise ResourceConflict("This invitation has expired. Ask for a new invitation.")
+        # The pending invitation already reserves one seat; acceptance replaces it.
+        await self._ensure_seat_available(tenant_id, extra=0)
+        try:
+            member = await self.session.scalar(
+                select(Membership)
+                .where(Membership.tenant_id == tenant_id, Membership.person_id == actor_person_id)
+                .with_for_update(nowait=True)
+                .execution_options(populate_existing=True)
+            )
+        except DBAPIError as error:
+            if getattr(error.orig, "sqlstate", None) == "55P03":
+                raise ResourceConflict("Membership is busy; retry with the same key.") from error
+            raise
+        if member is not None and member.status == "active" and member.ended_at is None:
+            raise ResourceConflict("You are already an organisation member.")
+        before = None if member is None else {"role": member.role, "status": member.status}
+        if member is None:
+            member = Membership(tenant_id=tenant_id, person_id=actor_person_id, role=invite.role)
+            self.session.add(member)
+        else:
+            if member.role == "owner":
+                raise ResourceConflict("An invitation cannot replace the organisation owner.")
+            member.role, member.status, member.ended_at = invite.role, "active", None
+            member.revision += 1
+        invite.status, invite.closed_at, invite.accepted_person_id = (
+            "accepted",
+            now,
+            actor_person_id,
+        )
+        await self.session.flush()
+        result = self._accepted_result(invite, member)
+        await self._audit(
+            tenant_id,
+            command_id,
+            "organisation.member_joined",
+            "organisation_membership",
+            actor_person_id,
+            {
+                "http_intent": intent,
+                "result": result,
+                "invite_id": str(invite_id),
+                "before": before,
+                "after": {"role": member.role, "status": "active"},
+            },
+            "invite_accepted",
+            actor_person_id=actor_person_id,
+        )
+        return result
+
+    @staticmethod
+    def _accepted_result(invite: OrganisationInvite, member: Membership) -> dict[str, object]:
+        return {
+            "invite_id": str(invite.id),
+            "tenant_id": str(invite.tenant_id),
+            "person_id": str(member.person_id),
+            "role": member.role,
+            "status": "accepted",
+        }
 
     async def revoke_invite(
         self,
