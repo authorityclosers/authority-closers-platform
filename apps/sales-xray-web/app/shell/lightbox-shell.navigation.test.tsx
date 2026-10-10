@@ -212,4 +212,8 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   expect(
     host.querySelectorAll('[title="Workspace: Authority Closers"]'),
   ).toHaveLength(2);
+  // Phones: the workspace sits on a small line above the page title (r17).
+  const phone = host.querySelector("header span[title] b")?.parentElement;
+  expect(phone?.querySelector("small")?.textContent).toBe("Authority Closers");
+  expect(phone?.querySelector("b")?.textContent).toBe("Calls");
 });

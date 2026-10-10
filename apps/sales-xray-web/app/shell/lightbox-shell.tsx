@@ -937,12 +937,19 @@ function LightboxShellFrame({
       </aside>
       <div className={styles.content}>
         <header className={styles.mobileBar}>
-          {workspaceLabel ? (
+          {/* r17: the lens, then where you are: workspace over page title. */}
+          {workspaceLabel || pageTitle ? (
             <div className={styles.mobileWorkspace}>
               <BrandLockup href={homeHref} markOnly />
-              <span title={`Workspace: ${workspaceLabel}`}>
-                <small>Workspace</small>
-                <b>{workspaceLabel}</b>
+              <span
+                title={
+                  workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
+                }
+              >
+                {workspaceLabel ? (
+                  <small>{pageTitle ? workspaceLabel : "Workspace"}</small>
+                ) : null}
+                <b>{pageTitle ?? workspaceLabel}</b>
               </span>
             </div>
           ) : (

@@ -774,6 +774,9 @@ function CallsLibraryContent({
   );
   const showReps = !preview && repOptions.length > 0;
   const viewerId = access?.context?.personId ?? null;
+  const callers = new Set(
+    submissions.map((row) => row.owner?.personId ?? viewerId),
+  ).size;
   // Number same-name options in UUID order; expose no additional account data.
   const repLabel = (personId: string) => {
     if (personId === viewerId) return "You";
@@ -1345,7 +1348,10 @@ function CallsLibraryContent({
                 {`${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"}`}
                 <span className={styles.privacy}>
                   {" "}
-                  · private to your account and workspace
+                  {/* Owners and admins see the team's calls, not just theirs. */}
+                  {showReps
+                    ? `· from ${callers}${nextCursor ? "+" : ""} ${callers === 1 && !nextCursor ? "person" : "people"} in this workspace`
+                    : "· private to your account and workspace"}
                 </span>
               </>
             ) : (

@@ -1445,6 +1445,18 @@
   }
 }
 
+/* Phones: the shell's header already reads "Calls"; screen readers keep the h1. */
+@media (max-width: 899.98px) {
+  .page[data-variant="standalone"] .headerCopy h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Match the tone selectors' specificity so this always wins. */
   .spin,
