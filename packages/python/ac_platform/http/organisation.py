@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
+from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.http.organisation_settings import install_organisation_settings_routes
 from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
@@ -44,6 +44,11 @@ class OrganisationProfileResponse(BaseModel):
 class ChangeHandleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     handle: str
+
+
+class CreateOrganisationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+    name: str = Field(min_length=2, max_length=80)
 
 
 class MemberResponse(BaseModel):
@@ -197,6 +202,33 @@ def install_organisation_http(
         return parsed
 
     command_dependency = Depends(command_id)
+    person_dependency = Depends(require_actor, scope="function")
+
+    @router.post("", response_model=OrganisationProfileResponse, status_code=201)
+    async def create(
+        request: Request,
+        response: Response,
+        body: CreateOrganisationRequest,
+        auth: AuthenticatedTransaction = person_dependency,
+        key: UUID = command_dependency,
+    ) -> OrganisationProfileResponse:
+        require_safe_origin(request, settings)
+        actor = auth.resolved.actor
+        result = await service(auth).create(
+            body.name,
+            actor.person_id,
+            key,
+            "self-serve-organisation:AUT-1694",
+            actor_person_id=actor.person_id,
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["vary"] = "Cookie"
+        return OrganisationProfileResponse(
+            tenant_id=result.tenant_id,
+            handle=result.slug,
+            name=result.name,
+            your_role="owner",
+        )
 
     @router.get("/profile", response_model=OrganisationProfileResponse)
     async def profile(

@@ -154,11 +154,29 @@ class OrganisationService:
         operator_reference: str,
         *,
         reason: str | None = None,
+        actor_person_id: UUID | None = None,
     ) -> OrganisationResult:
         name = name.strip()
         if not 2 <= len(name) <= 80:
             raise OrganisationCommandError("organisation name must contain 2 to 80 characters")
         operator_reference = _required_text(operator_reference, "operator reference", 160)
+        if actor_person_id is not None and actor_person_id != owner_person_id:
+            raise AuthorizationDenied("A person can create an organisation only for themselves.")
+        owner_person = await self.session.get(Person, owner_person_id)
+        if actor_person_id is not None and (
+            owner_person is None
+            or owner_person.status != PersonStatus.ACTIVE.value
+            or owner_person.email is None
+            or owner_person.email_verified_at is None
+        ):
+            raise AuthorizationDenied("Verify your email before creating an organisation.")
+        intent = {
+            "name": name,
+            "owner_person_id": str(owner_person_id),
+            "operator_reference": operator_reference,
+        }
+        if actor_person_id is not None:
+            intent["actor_person_id"] = str(actor_person_id)
         prior = await self.session.scalar(
             select(Organisation).where(Organisation.creation_command_id == command_id)
         )
@@ -166,12 +184,7 @@ class OrganisationService:
             tenant = await self.session.get(Tenant, prior.tenant_id)
             owner = await self._creation_owner(prior.tenant_id, command_id)
             audit = await self._command_audit(prior.tenant_id, command_id, "organisation.created")
-            expected = {
-                "name": name,
-                "owner_person_id": str(owner_person_id),
-                "operator_reference": operator_reference,
-            }
-            if tenant is None or audit is None or audit.payload.get("intent") != expected:
+            if tenant is None or audit is None or audit.payload.get("intent") != intent:
                 raise OrganisationCommandConflict(
                     "command ID already records a different create intent"
                 )
@@ -191,11 +204,10 @@ class OrganisationService:
 
         await self._ensure_command_id_available(command_id, "organisation.created")
 
-        owner_person = await self.session.get(Person, owner_person_id)
         if owner_person is None or owner_person.status != PersonStatus.ACTIVE.value:
             raise OrganisationCommandError("owner must be an active person")
         tenant_id = uuid4()
-        slug = _tenant_slug(name)
+        slug = _tenant_slug(name, tenant_id)
         tenant = Tenant(id=tenant_id, slug=slug, name=name, status=TenantStatus.ACTIVE.value)
         organisation = Organisation(
             tenant_id=tenant_id,
@@ -212,12 +224,12 @@ class OrganisationService:
         self.session.add(tenant)
         await self.session.flush()
         self.session.add_all([organisation, membership])
-        await self.session.flush()
-        intent = {
-            "name": name,
-            "owner_person_id": str(owner_person_id),
-            "operator_reference": operator_reference,
-        }
+        try:
+            await self.session.flush()
+        except IntegrityError as error:
+            raise OrganisationCommandConflict(
+                "The create command is already in use; retry with the same request."
+            ) from error
         await self._audit(
             tenant_id,
             command_id,
@@ -231,6 +243,7 @@ class OrganisationService:
                 "after": {"role": "owner", "status": "active"},
             },
             reason,
+            actor_person_id=actor_person_id,
         )
         return OrganisationResult(tenant_id, tenant_id, name, slug, owner_person_id, "owner")
 
@@ -1195,7 +1208,8 @@ def _normalize_domain(value: str) -> str:
     return domain
 
 
-def _tenant_slug(name: str) -> str:
+def _tenant_slug(name: str, tenant_id: UUID) -> str:
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
-    stem = re.sub(r"[^a-z0-9]+", "-", ascii_name).strip("-")[:50].strip("-") or "organisation"
-    return f"{stem}-{secrets.token_hex(2)}"
+    stem = re.sub(r"[^a-z0-9]+", "-", ascii_name).strip("-")[:30].strip("-") or "organisation"
+    # Fit the tenant's 63-character column and bind uniqueness to its immutable ID.
+    return f"{stem}-{tenant_id.hex}"
