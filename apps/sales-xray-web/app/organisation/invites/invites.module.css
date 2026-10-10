@@ -1,0 +1,37 @@
+/* Invitations: one calm column, the kit's pieces only. */
+.page {
+  display: grid;
+  align-content: start;
+  gap: var(--sx-gap);
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+  margin: 0 auto;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  line-height: 1.45;
+}
+
+.skeleton {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.skeletonHead {
+  display: grid;
+  min-height: 28px;
+  align-content: end;
+}

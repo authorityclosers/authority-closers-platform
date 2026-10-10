@@ -35,6 +35,8 @@ import {
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useBranding } from "../shell/branding-store";
+import { useInvites } from "../shell/invites-store";
+import { CREATE_ORGANISATION_EVENT } from "../shell/shell-store";
 import { OrgLogo } from "../shell/org-logo";
 import {
   CALLS_SHOWN,
@@ -503,6 +505,8 @@ function SignedOut({ onSignIn }: { onSignIn?: () => void }) {
 }
 
 function PersonalState({ organisations }: { organisations: Workspace[] }) {
+  const invites = useInvites();
+  const waiting = invites.invites.length;
   return (
     <section className={styles.state}>
       <span className={styles.stateIcon} aria-hidden="true">
@@ -518,6 +522,24 @@ function PersonalState({ organisations }: { organisations: Workspace[] }) {
           To open {organisations.map((item) => item.name).join(", ")}, switch
           workspace from the menu at the top of the sidebar.
         </p>
+      ) : null}
+      {/* One action, and only one the server can keep. */}
+      {waiting > 0 ? (
+        <Link className={styles.primary} href="/organisation/invites">
+          {waiting === 1
+            ? `See your invitation from ${invites.invites[0].organisationName}`
+            : `See your ${waiting} invitations`}
+        </Link>
+      ) : invites.live && organisations.length === 0 ? (
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={() =>
+            window.dispatchEvent(new Event(CREATE_ORGANISATION_EVENT))
+          }
+        >
+          Create an organisation
+        </button>
       ) : null}
     </section>
   );
@@ -1127,9 +1149,24 @@ function MembersPanel({
     }
     setInvalid("");
     setConfirming({
-      message: `Add ${address} as ${ROLE_LABEL[additionRole]}?`,
-      verb: "Add",
-      action: () => addMember(address, additionRole),
+      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? They join once they accept.`,
+      verb: "Invite",
+      action: async () => {
+        const answer = await addMember(address, additionRole);
+        // Older servers add people at once; newer ones invite them.
+        const invitedNow =
+          !answer ||
+          typeof answer !== "object" ||
+          (answer as { status?: unknown }).status !== "active";
+        notify({
+          id: ACTION_NOTICE,
+          tone: "success",
+          title: invitedNow ? `${address} is invited` : `${address} was added`,
+          message: invitedNow
+            ? "When they sign in with this email, the invitation waits in their workspace menu."
+            : undefined,
+        });
+      },
       added: true,
     });
   };
@@ -1175,14 +1212,14 @@ function MembersPanel({
               <UserPlus size={15} aria-hidden="true" />
               <input
                 type="email"
-                placeholder="Add people by email"
+                placeholder="Invite people by email"
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
                   setInvalid("");
                 }}
                 disabled={disabled}
-                aria-label="Email to add"
+                aria-label="Email to invite"
                 aria-describedby={invalid ? "org-add-error" : undefined}
               />
             </label>
@@ -1206,7 +1243,7 @@ function MembersPanel({
               className={styles.primary}
               disabled={disabled}
             >
-              Add
+              Invite
             </button>
             {invalid ? (
               <small

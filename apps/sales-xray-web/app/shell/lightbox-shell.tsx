@@ -65,6 +65,7 @@ import {
   type CallSummary,
 } from "../dashboard/dashboard-data";
 import {
+  CREATE_ORGANISATION_EVENT,
   getShellState,
   OPEN_SWITCHER_EVENT,
   RECENTS_CHANGED_EVENT,
@@ -642,6 +643,12 @@ function LightboxShellFrame({
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
   const invites = useInvites(authenticated && !loading);
+  useEffect(() => {
+    if (!invites.live) return;
+    const open = () => setCreateOpen(true);
+    window.addEventListener(CREATE_ORGANISATION_EVENT, open);
+    return () => window.removeEventListener(CREATE_ORGANISATION_EVENT, open);
+  }, [invites.live]);
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
