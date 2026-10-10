@@ -8,7 +8,7 @@ export type PhoneTab =
   | "coaching"
   | "more";
 
-type ShellActive =
+export type ShellActive =
   | "dashboard"
   | "analyse"
   | "calls"
@@ -54,4 +54,25 @@ export function phoneTabFor(
       return "more";
   }
   return active ? FROM_ACTIVE[active] : null;
+}
+
+/**
+ * The lit rail icon follows the address too, so a page that forgets to say
+ * where it is (it defaults to New analysis) still lights its own icon.
+ */
+export function shellActiveFor(
+  pathname: string | null,
+  active: ShellActive,
+): ShellActive {
+  if (pathname) {
+    if (under(pathname, "/dashboard")) return "dashboard";
+    if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
+      return "calls";
+    if (under(pathname, NEW_ANALYSIS_PATH)) return "analyse";
+    if (under(pathname, "/prospects")) return "prospects";
+    if (under(pathname, "/coaching")) return "coaching";
+    if (under(pathname, "/organisation")) return "organisation";
+    if (under(pathname, "/account")) return "account";
+  }
+  return active;
 }

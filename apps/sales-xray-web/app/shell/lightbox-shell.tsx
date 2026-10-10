@@ -54,7 +54,7 @@ import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
-import { phoneTabFor } from "./phone-nav";
+import { phoneTabFor, shellActiveFor } from "./phone-nav";
 import { RailTip } from "./rail-tip";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
@@ -148,6 +148,21 @@ function resolvePageTitle(
 }
 
 const subscribeNothing = () => () => {};
+
+// A rail icon's name for text readers and tests. Hidden inline, so it stays
+// hidden even when the page draws before its stylesheet (dev recompiles);
+// the visible label floats above every layer on hover or focus (rail-tip.tsx).
+const RAIL_NAME_STYLE: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+};
 
 // Apple keyboards show ⌘; everyone else presses Ctrl (the server assumes Ctrl).
 const shortcutLabel = () =>
@@ -287,8 +302,9 @@ function LightboxShellFrame({
   const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
-  const pageTitle = resolvePageTitle(active, heading);
   const pathname = usePathname();
+  const place = shellActiveFor(pathname, active);
+  const pageTitle = resolvePageTitle(place, heading);
   const phoneTab = phoneTabFor(pathname, active);
 
   const toggleCollapsed = () => {
@@ -717,84 +733,84 @@ function LightboxShellFrame({
           </div>
           <div className={styles.stripNav}>
             <Link
-              className={`${styles.stripBtn}${active === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Dashboard"
               data-rail-tip="Dashboard"
-              aria-current={active === "dashboard" ? "page" : undefined}
+              aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>Dashboard</span>
+              <span style={RAIL_NAME_STYLE}>Dashboard</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
               data-rail-tip="New analysis"
-              aria-current={active === "analyse" ? "page" : undefined}
+              aria-current={place === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>New analysis</span>
+              <span style={RAIL_NAME_STYLE}>New analysis</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/analysis/calls"
               aria-label="Calls"
               data-rail-tip="Calls"
-              aria-current={active === "calls" ? "page" : undefined}
+              aria-current={place === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>Calls</span>
+              <span style={RAIL_NAME_STYLE}>Calls</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
               aria-label="Prospects"
               data-rail-tip="Prospects"
-              aria-current={active === "prospects" ? "page" : undefined}
+              aria-current={place === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>Prospects</span>
+              <span style={RAIL_NAME_STYLE}>Prospects</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/coaching"
               aria-label="Coaching"
               data-rail-tip="Coaching"
-              aria-current={active === "coaching" ? "page" : undefined}
+              aria-current={place === "coaching" ? "page" : undefined}
             >
               <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>Coaching</span>
+              <span style={RAIL_NAME_STYLE}>Coaching</span>
             </Link>
-            {inOrganisation || active === "organisation" ? (
+            {inOrganisation || place === "organisation" ? (
               <Link
-                className={`${styles.stripBtn}${active === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
+                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
                 prefetch={false}
                 aria-label="Organisation"
                 data-rail-tip="Organisation"
-                aria-current={active === "organisation" ? "page" : undefined}
+                aria-current={place === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railName}>Organisation</span>
+                <span style={RAIL_NAME_STYLE}>Organisation</span>
               </Link>
             ) : null}
           </div>
           <div className={styles.stripBottom}>
             {bell}
             <Link
-              className={`${styles.stripBtn}${active === "account" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
               aria-label={accountLabel}
               data-rail-tip={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
-              aria-current={active === "account" ? "page" : undefined}
+              aria-current={place === "account" ? "page" : undefined}
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railName}>{accountLabel}</span>
+              <span style={RAIL_NAME_STYLE}>{accountLabel}</span>
             </Link>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { phoneTabFor } from "./phone-nav";
+import { phoneTabFor, shellActiveFor } from "./phone-nav";
 
 it("lights the phone tab from the address before the page settles", () => {
   // The old root loader said "analyse" on every route while loading.
@@ -33,4 +33,15 @@ it("falls back to the page's own section where the address is shared", () => {
   expect(phoneTabFor("/", undefined)).toBeNull();
   // A path that merely starts with a section name is not that section.
   expect(phoneTabFor("/dashboards", undefined)).toBeNull();
+});
+
+it("lights the desktop rail icon from the address too", () => {
+  // Coaching's page leaves the shell at its New analysis default.
+  expect(shellActiveFor("/coaching", "analyse")).toBe("coaching");
+  expect(shellActiveFor("/organisation", "analyse")).toBe("organisation");
+  expect(shellActiveFor("/account", "analyse")).toBe("account");
+  expect(shellActiveFor("/analysis/calls/0b6e", "analyse")).toBe("calls");
+  expect(shellActiveFor("/analysis/new", "dashboard")).toBe("analyse");
+  expect(shellActiveFor("/", "dashboard")).toBe("dashboard");
+  expect(shellActiveFor(null, "prospects")).toBe("prospects");
 });
