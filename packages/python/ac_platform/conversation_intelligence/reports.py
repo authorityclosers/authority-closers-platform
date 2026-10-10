@@ -2391,6 +2391,12 @@ def merge_fact_packets(
         raise ReportError("fact_aggregate_invalid") from exc
 
 
+def coaching_template_sha256(prompt: Mapping[str, Any]) -> str:
+    """Fingerprint the compiled call-free system template used by the C5 builder."""
+
+    return hashlib.sha256(prompt["messages"][0]["content"].encode("utf-8")).hexdigest()
+
+
 def build_report_groq_prompt(
     transcript: Mapping[str, Any],
     fact_packets: Sequence[FactPacket],

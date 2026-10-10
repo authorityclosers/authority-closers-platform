@@ -1,0 +1,301 @@
+{
+  "base_sha": "4c76de1c69e7edc77f36486dbf347d2bdfc0b862",
+  "observer_sha256": "23ee4381f87ca0f09810038932a51c7f2ffd08f74f1f064fc9ac630439073dcf",
+  "script_sha256": "1803cac5e725e9456196a1688e72118d11a721b5a59c3c683c76407c7069b3a5",
+  "before": {
+    "method": "Playwright, actual observer via Vite, fictional canary, 3 GETs",
+    "samples": [
+      {
+        "delayMs": 150,
+        "rep": 1,
+        "elapsedMs": 686.8999998569489,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 87
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 295
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 497
+          }
+        ]
+      },
+      {
+        "delayMs": 150,
+        "rep": 2,
+        "elapsedMs": 595.5,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 5
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 202
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 402
+          }
+        ]
+      },
+      {
+        "delayMs": 150,
+        "rep": 3,
+        "elapsedMs": 598.5,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 3
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 200
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 418
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 1,
+        "elapsedMs": 995.5,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 2
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 309
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 614
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 2,
+        "elapsedMs": 1009.6000001430511,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 5
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 312
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 617
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 3,
+        "elapsedMs": 919.2999999523163,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 90
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 396
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 701
+          }
+        ]
+      }
+    ]
+  },
+  "after": {
+    "method": "Playwright, actual observer via Vite, fictional canary, 3 GETs",
+    "samples": [
+      {
+        "delayMs": 150,
+        "rep": 1,
+        "elapsedMs": 391,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 8
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 205
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 205
+          }
+        ]
+      },
+      {
+        "delayMs": 150,
+        "rep": 2,
+        "elapsedMs": 399.09999990463257,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 3
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 198
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 198
+          }
+        ]
+      },
+      {
+        "delayMs": 150,
+        "rep": 3,
+        "elapsedMs": 493.60000014305115,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 91
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 297
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 298
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 1,
+        "elapsedMs": 697.5,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 5
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 313
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 313
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 2,
+        "elapsedMs": 616.9000000953674,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 5
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 311
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 312
+          }
+        ]
+      },
+      {
+        "delayMs": 300,
+        "rep": 3,
+        "elapsedMs": 611.5,
+        "requests": [
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738",
+            "startMs": 3
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/transcript",
+            "startMs": 307
+          },
+          {
+            "path": "/v1/conversation/acquisition/submissions/7b6443d3-9b2d-4f97-9e70-5e82e54f8738/report",
+            "startMs": 307
+          }
+        ]
+      }
+    ]
+  },
+  "summary": [
+    {
+      "delay_ms": 150,
+      "before": {
+        "median_ms": 598.5,
+        "range_ms": [
+          595.5,
+          686.9
+        ],
+        "request_start_gap_ms": [
+          202,
+          200,
+          218
+        ]
+      },
+      "after": {
+        "median_ms": 399.1,
+        "range_ms": [
+          391,
+          493.6
+        ],
+        "request_start_gap_ms": [
+          0,
+          0,
+          1
+        ]
+      },
+      "median_gain_ms": 199.4
+    },
+    {
+      "delay_ms": 300,
+      "before": {
+        "median_ms": 995.5,
+        "range_ms": [
+          919.3,
+          1009.6
+        ],
+        "request_start_gap_ms": [
+          305,
+          305,
+          305
+        ]
+      },
+      "after": {
+        "median_ms": 616.9,
+        "range_ms": [
+          611.5,
+          697.5
+        ],
+        "request_start_gap_ms": [
+          0,
+          1,
+          0
+        ]
+      },
+      "median_gain_ms": 378.6
+    }
+  ]
+}

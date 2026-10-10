@@ -49,12 +49,13 @@ export async function observeSubmission(
     bound,
   );
   if (!progress.has_report) return { progress, result: null };
-  const transcript = parseTranscript(
-    await read(`${submissionPath(bound.id)}/transcript`, signal),
-    bound.sha,
-  );
+  const [transcriptPayload, reportPayload] = await Promise.all([
+    read(`${submissionPath(bound.id)}/transcript`, signal),
+    read(`${submissionPath(bound.id)}/report`, signal),
+  ]);
+  const transcript = parseTranscript(transcriptPayload, bound.sha);
   const verified = parseAcquisitionReport(
-    await read(`${submissionPath(bound.id)}/report`, signal),
+    reportPayload,
     { submissionId: bound.id, recordingId: bound.recordingId },
     transcript,
   );

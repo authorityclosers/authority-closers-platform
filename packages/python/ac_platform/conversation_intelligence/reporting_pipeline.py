@@ -271,6 +271,8 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
             raise ConversationConflict("The coaching repair envelope is unavailable.")
         parts[0]["text"] = _repair_system_content(parts[0]["text"], repair, prospect_ids)
     payload = canonical(body)
+    # Preserve the compiled static C5 template receipt. The run-specific repair
+    # context is bound separately by the exact payload digest, as call input is.
     return replace(
         prepared,
         payload=payload,
@@ -331,6 +333,8 @@ class StagePlan:
         return self.checkpoint.revision
 
     def intent(self) -> dict[str, Any]:
+        # Persist the preparation receipt before dispatch, including failed runs.
+        # The receipt comes from preparation; completion never refreshes it.
         return {
             "schema": "ac.sales-xray.text-intent/1",
             "request": self.request.model_dump(mode="json"),

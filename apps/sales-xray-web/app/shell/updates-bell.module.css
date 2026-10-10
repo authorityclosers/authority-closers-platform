@@ -1,0 +1,90 @@
+.trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-muted);
+  cursor: pointer;
+}
+.trigger:hover {
+  background: var(--lx-sunken);
+}
+.trigger:focus-visible,
+.panel button:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+.badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  padding: 1px 3px;
+  border-radius: 9px;
+  background: var(--lx-teal);
+  color: white;
+  font-size: 10px;
+  line-height: 14px;
+}
+.panel {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 16px));
+  max-height: min(420px, calc(100dvh - 16px));
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  box-shadow: 0 12px 36px rgb(15 23 42 / 16%);
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.panel p {
+  font-size: 12px;
+}
+.panel ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.panel li {
+  border-radius: 8px;
+}
+.panel li[data-unread="true"] {
+  background: var(--lx-sunken);
+}
+.panel button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.panel button:disabled {
+  cursor: default;
+}
+.panel strong {
+  font-size: 13px;
+}
+.panel span,
+.panel small {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.panel small {
+  color: var(--lx-teal);
+}

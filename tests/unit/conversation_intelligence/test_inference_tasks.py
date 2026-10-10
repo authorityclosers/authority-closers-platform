@@ -651,3 +651,85 @@ def test_raw_provider_provenance_cannot_name_different_parsed_content() -> None:
         validate_scribe_result(replace(result, raw_json=b"{}"), prepared, duration_ms=1_000)
     with pytest.raises(InferenceTaskError, match="scribe_duration_mismatch"):
         validate_scribe_result(result, prepared, duration_ms=2_000)
+
+
+def _provenance_input(**options):
+    from ac_platform.conversation_intelligence.reports import parse_fact_packet
+
+    transcript = _transcript(count=1)
+    packet = parse_fact_packet(
+        {"overview": "Fictional fact.", "observations": [], "uncertainties": []}, transcript
+    )
+    return prepare_coaching_input(transcript, [packet], **options)
+
+
+@pytest.mark.parametrize(
+    "provider,model,language",
+    [
+        ("groq", "llama-3.3-70b-versatile", "en"),
+        ("groq", "llama-3.3-70b-versatile", "hi-Deva+en"),
+        ("gemini", "gemini-3.8-flash", "mr-Deva+en"),
+        ("openai", "gpt-6-luna", "en"),
+    ],
+)
+def test_c5_provenance_captures_effective_route_and_language(provider, model, language):
+    from ac_platform.conversation_intelligence.qualitative_pack import (
+        load_qualitative_pack_for_revision,
+    )
+
+    prepared = _provenance_input(
+        provider=provider,
+        model=model,
+        report_language=language,
+        coaching_prompt_revision="coaching-v5",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+    )
+    receipt = prepared.as_dict()["prompt_provenance"]
+    assert set(receipt) == {
+        "prompt_revision",
+        "template_sha256",
+        "provider",
+        "model",
+        "output_language",
+    }
+    assert receipt["prompt_revision"] == "coaching-v5"
+    assert (receipt["provider"], receipt["model"], receipt["output_language"]) == (
+        provider,
+        model,
+        language,
+    )
+    assert receipt["template_sha256"] != prepared.payload_sha256
+    english = _provenance_input(
+        provider=provider,
+        model=model,
+        coaching_prompt_revision="coaching-v5",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+    )
+    assert english.prompt_provenance.output_language == "en"
+    if language != "en":
+        assert english.prompt_provenance.template_sha256 != receipt["template_sha256"]
+
+
+def test_c5_reconstruction_preserves_saved_receipt_and_legacy_unknown(monkeypatch):
+    from ac_platform.conversation_intelligence import reports
+
+    prepared = _provenance_input(coaching_prompt_revision="coaching-v3")
+    metadata = prepared.as_dict()
+    before = deepcopy(metadata)
+    monkeypatch.setattr(reports, "COACHING_VOICE_INSTRUCTION", "Changed current settings.")
+    restored = type(prepared).from_dict(metadata, payload=prepared.payload)
+    assert restored == prepared
+    restored.as_dict()["prompt_provenance"]["prompt_revision"] = "unrelated"
+    assert metadata == before == restored.as_dict()
+    legacy = {key: value for key, value in metadata.items() if key != "prompt_provenance"}
+    historical = type(prepared).from_dict(legacy, payload=prepared.payload)
+    assert historical.prompt_provenance is None
+    assert historical.as_dict() == legacy
+    forged = deepcopy(metadata)
+    forged["prompt_provenance"]["model"] = "different-model"
+    with pytest.raises(InferenceTaskError, match="provenance_route_mismatch"):
+        type(prepared).from_dict(forged, payload=prepared.payload)
+    forged = deepcopy(metadata)
+    forged["prompt_provenance"]["template_text"] = "forbidden"
+    with pytest.raises(InferenceTaskError, match="task_reconstruction_invalid"):
+        type(prepared).from_dict(forged, payload=prepared.payload)

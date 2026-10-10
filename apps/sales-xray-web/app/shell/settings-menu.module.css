@@ -550,3 +550,14 @@
 .go:active {
   transform: scale(0.98);
 }
+
+.draft {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--lx-line);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--lx-muted);
+}

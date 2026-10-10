@@ -17,6 +17,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from ac_platform.db.base import Base
 
+CAPTURE_SOURCES = (
+    "web_upload",
+    "browser_display_capture",
+    "android_dialer_pickup",
+    "android_share",
+    "ios_share",
+    "ios_recorder",
+    "desktop_recorder",
+    "desktop_watch_folder",
+    "chrome_tab",
+)
+
 
 class ConversationProcessingPrincipal(Base):
     __tablename__ = "conversation_processing_principals"
@@ -145,6 +157,10 @@ class ConversationGuestSubmission(Base):
             ],
         ),
         CheckConstraint("length(source_sha256) = 64", name="source_hash"),
+        CheckConstraint(
+            "capture_source IN (" + ", ".join(repr(source) for source in CAPTURE_SOURCES) + ")",
+            name="capture_source",
+        ),
     )
     tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     submission_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -153,4 +169,5 @@ class ConversationGuestSubmission(Base):
     processing_lease_id: Mapped[UUID] = mapped_column(Uuid)
     usage_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_acquisition_usage.id"))
     source_sha256: Mapped[str] = mapped_column(String(64))
+    capture_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

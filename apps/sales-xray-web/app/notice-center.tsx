@@ -23,6 +23,8 @@ export type Notice = Readonly<{
   action?: Readonly<{ label: string; run: () => void }>;
   /** Milliseconds before it leaves by itself; errors stay until dismissed. */
   timeout?: number;
+  /** Permanent dismissal: retain the card until the API acknowledges it. */
+  onDismiss?: () => Promise<void>;
 }>;
 
 let notices: readonly Notice[] = [];
@@ -55,11 +57,25 @@ const ICON = { error: AlertCircle, info: Info, success: CheckCircle2 };
 
 function NoticeCard({ notice }: { notice: Notice }) {
   const [copied, setCopied] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [dismissFailed, setDismissFailed] = useState(false);
   const Icon = ICON[notice.tone];
+  const dismiss = async () => {
+    if (dismissing) return;
+    setDismissing(true);
+    setDismissFailed(false);
+    try {
+      await notice.onDismiss?.();
+      dismissNotice(notice.id);
+    } catch {
+      setDismissFailed(true);
+      setDismissing(false);
+    }
+  };
   useEffect(() => {
     const timeout =
       notice.timeout ?? (notice.tone === "error" ? undefined : 5000);
-    if (!timeout) return;
+    if (!timeout || notice.onDismiss) return;
     const timer = window.setTimeout(() => dismissNotice(notice.id), timeout);
     return () => window.clearTimeout(timer);
   }, [notice]);
@@ -82,7 +98,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
                 type="button"
                 className={styles.action}
                 onClick={() => {
-                  dismissNotice(notice.id);
+                  if (!notice.onDismiss) dismissNotice(notice.id);
                   notice.action?.run();
                 }}
               >
@@ -108,12 +124,16 @@ function NoticeCard({ notice }: { notice: Notice }) {
             ) : null}
           </div>
         ) : null}
+        {dismissFailed ? (
+          <p role="alert">Could not dismiss. Try again.</p>
+        ) : null}
       </div>
       <button
         type="button"
         className={styles.close}
         aria-label="Dismiss"
-        onClick={() => dismissNotice(notice.id)}
+        disabled={dismissing}
+        onClick={() => void dismiss()}
       >
         <X size={15} aria-hidden="true" />
       </button>
