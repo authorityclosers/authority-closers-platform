@@ -92,6 +92,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { dismissNotice, notify } from "./notice-center";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
 import { clearSpeakerProfiles } from "./speaker-profiles";
@@ -147,6 +148,9 @@ type ExistingCallEntryState = {
   submissionId: string;
   state: "opening" | "restored" | "failed";
 };
+// Status checks after a miss: 3 s, then longer, settling at 30 s. A call on
+// screen is never given up on because the network blinked.
+const STATUS_RETRY_MS = [3_000, 6_000, 12_000, 24_000, 30_000];
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -334,11 +338,16 @@ export function AcquisitionStudio({
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
-  const [checkingStatus, setCheckingStatus] = useState(false);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // When this page saw the analysis accepted, for the progress clock. A call
+  // opened later has no known start, so it shows no clock.
+  const [analysisStart, setAnalysisStart] = useState<{
+    id: string;
+    at: string;
+  } | null>(null);
   const [deleted, setDeleted] = useState(false);
   const [deletionOnlyId, setDeletionOnlyId] = useState<string | null>(null);
   const [clientRouteResolved, setClientRouteResolved] =
@@ -363,6 +372,12 @@ export function AcquisitionStudio({
         ? existingCallEntry.state
         : "opening"
       : null;
+  // The status poll reads this: a call still opening from its link.
+  const entryOpening = useRef<string | null>(null);
+  useEffect(() => {
+    entryOpening.current =
+      requestedCallEntryState === "opening" ? activeRequestedCallId : null;
+  }, [requestedCallEntryState, activeRequestedCallId]);
   const [dragActive, setDragActive] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -656,7 +671,6 @@ export function AcquisitionStudio({
             setSavedCallNeedsSession(false);
             setError("");
             setStatusIssue("");
-            setCheckingStatus(false);
             setMoment(null);
             setPlaybackMessage("");
             setDeleteConfirm(false);
@@ -988,6 +1002,11 @@ export function AcquisitionStudio({
         });
         setPlanRequiresAction(false);
         setPlanExpired(false);
+        setAnalysisStart((current) =>
+          current?.id === bound.id
+            ? current
+            : { id: bound.id, at: new Date().toISOString() },
+        );
         setPollAttempt((n) => n + 1);
       }
     },
@@ -1047,14 +1066,15 @@ export function AcquisitionStudio({
     let timer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
     const bound = submission;
+    const noticeId = `status-refresh:${bound.id}`;
     async function poll() {
       try {
-        setCheckingStatus(true);
         const observed = await observeSubmission(bound, abort.signal);
         if (abort.signal.aborted) return;
         const next = observed.progress;
         setProgress(next);
         setStatusIssue("");
+        if (failures) dismissNotice(noticeId);
         if (observed.result) {
           setResult(observed.result);
           setError("");
@@ -1093,27 +1113,48 @@ export function AcquisitionStudio({
         if (abort.signal.aborted) return;
         failures += 1;
         setStatusIssue(message(error));
+        // No retry changes these answers. A call still opening from its link
+        // also stops after three misses, so its recovery view can take over.
         if (
-          failures >= 3 ||
           (error instanceof AcquisitionError &&
-            [401, 403, 404, 409].includes(error.status))
+            [401, 403, 404, 409].includes(error.status)) ||
+          (failures >= 3 && entryOpening.current === bound.id)
         ) {
+          dismissNotice(noticeId);
           setExistingCallEntry({
             submissionId: bound.id,
             state: "failed",
           });
           return;
         }
-      } finally {
-        if (!abort.signal.aborted) setCheckingStatus(false);
+        // A call on screen keeps its last confirmed steps and never stops
+        // being checked; one corner card says so and offers a retry now.
+        if (failures === 3)
+          notify({
+            id: noticeId,
+            tone: "error",
+            title: "Can’t refresh this call’s status",
+            message: "Your call is saved. Sales Xray keeps checking by itself.",
+            action: {
+              label: "Try again",
+              run: () => {
+                dismissNotice(noticeId);
+                setPollAttempt((n) => n + 1);
+              },
+            },
+          });
       }
       if (!abort.signal.aborted)
-        timer = setTimeout(() => void poll(), failures ? 6000 : 3000);
+        timer = setTimeout(
+          () => void poll(),
+          STATUS_RETRY_MS[Math.min(failures, STATUS_RETRY_MS.length - 1)],
+        );
     }
     void poll();
     return () => {
       abort.abort();
       if (timer) clearTimeout(timer);
+      dismissNotice(noticeId);
     };
   }, [submission, result, pollAttempt, review.requested, rootAnalysisState]);
 
@@ -1461,6 +1502,11 @@ export function AcquisitionStudio({
         return { state: "needs_action", message: started.message };
       if (started.plan && active.current && !signal.aborted)
         setPlan(started.plan);
+      if (active.current && !signal.aborted)
+        setAnalysisStart({
+          id: outcome.bound.id,
+          at: new Date().toISOString(),
+        });
       return { state: "accepted" };
     };
 
@@ -1628,7 +1674,6 @@ export function AcquisitionStudio({
     setSubmission(null);
     setProgress(null);
     setStatusIssue("");
-    setCheckingStatus(false);
     setPlan(null);
     setResult(null);
     clearConsent();
@@ -1921,7 +1966,6 @@ export function AcquisitionStudio({
           ? rootAnalysisMessage
           : error,
     statusIssue: review.frame ? "" : statusIssue,
-    checkingStatus: review.frame ? false : checkingStatus,
     requestedCallEntryState: review.frame
       ? "restored"
       : requestedCallEntryState,
@@ -1935,7 +1979,6 @@ export function AcquisitionStudio({
     busy,
     error,
     statusIssue,
-    checkingStatus,
     requestedCallEntryState,
   }: {
     submission: Submission | null;
@@ -1945,7 +1988,6 @@ export function AcquisitionStudio({
     busy: string;
     error: string | AcquisitionError;
     statusIssue: string | AcquisitionError;
-    checkingStatus: boolean;
     requestedCallEntryState: "opening" | "restored" | "failed" | null;
   }) {
     if (entry && !entry.enabled && requestedCallEntryState === null) {
@@ -3193,18 +3235,21 @@ export function AcquisitionStudio({
                       ) ?? undefined
                     }
                     paused={processingProjection.attention}
+                    startedAt={
+                      analysisStart?.id === submission.id
+                        ? analysisStart.at
+                        : undefined
+                    }
+                    deleteConfirm={
+                      deleteConfirm
+                        ? {
+                            disabled: !!busy || analysisWriteBlocked,
+                            onDelete: () => void erase(),
+                            onKeep: () => setDeleteConfirm(false),
+                          }
+                        : undefined
+                    }
                   >
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={!!busy || checkingStatus}
-                      onClick={() => {
-                        setConsentedSubmissionId(null);
-                        setPollAttempt((n) => n + 1);
-                      }}
-                    >
-                      {checkingStatus ? "Checking status…" : "Check status"}
-                    </button>
                     <Link
                       href={callHref(
                         submission.id,
@@ -3251,9 +3296,21 @@ export function AcquisitionStudio({
                         Start analysis
                       </button>
                     )}
+                    {!deleteConfirm && (
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => setDeleteConfirm(true)}
+                      >
+                        Delete this call…
+                      </button>
+                    )}
                   </AcquisitionProcessingPanel>
                 )}
-                {(submission || deletionOnlyId) && (
+                {/* The progress screen keeps deletion in its ⋯ menu. */}
+                {(deletionOnlyId ||
+                  (submission && (report || (plan && !plan.accepted)))) && (
                   <div className={styles.callActions}>
                     <details className={styles.privacyActions}>
                       <summary>Privacy &amp; support</summary>

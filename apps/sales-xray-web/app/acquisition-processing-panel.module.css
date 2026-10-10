@@ -250,6 +250,45 @@
   gap: 8px;
 }
 
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-left: 3px solid var(--sx-bad);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-bad-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.confirm p {
+  margin: 0;
+}
+
+.danger {
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-bad);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-bad);
+  /* The on-accent ink reads on the danger fill in both themes. */
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.danger:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ---------- File ---------- */
 
 .file {

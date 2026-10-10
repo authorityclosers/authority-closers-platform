@@ -33,6 +33,7 @@ import {
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
 import * as processingReviewPort from "./processing-review-port";
+import { NoticeCenter } from "./notice-center";
 import { spokenClipRange } from "./lightbox/time";
 import {
   allowance,
@@ -84,6 +85,7 @@ let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
 let savedLookupDelayed: boolean;
+let savedLookupUnavailable: boolean;
 let sourcePutAttempted: boolean;
 let lostSourceUpload: { id: string; sha: string } | null;
 let resolveDeferredSourcePut: ((value: Response) => void) | null;
@@ -329,6 +331,7 @@ beforeEach(() => {
   quoteFailure = null;
   analysisPaused = false;
   savedLookupDelayed = false;
+  savedLookupUnavailable = false;
   sourcePutAttempted = false;
   lostSourceUpload = null;
   resolveDeferredSourcePut = null;
@@ -361,6 +364,11 @@ beforeEach(() => {
           );
         });
       }
+      if (
+        savedLookupUnavailable &&
+        path.endsWith(`/submissions/${submissionId}`)
+      )
+        return response({}, 503);
       if (path === "/v1/me/workspaces" && workspaceUnauthorized)
         return response({}, 401);
       if (path === "/v1/me/workspaces")
@@ -1917,11 +1925,12 @@ it("keeps status refresh read-only and starts a saved upload with one retry acti
   expect(container.textContent).not.toContain("Continue analysis");
 });
 
-it("restores an unapproved call without quoting or accepting, including manual status checks", async () => {
+it("restores an unapproved call without quoting or accepting, including later status checks", async () => {
   existing = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  await click("Check status");
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
   expect(container.textContent).toContain("Ready to start");
   expect(
     container.querySelector('[data-hero-stage="ready"] h1')?.textContent,
@@ -2059,14 +2068,12 @@ it.each(["paused", "read-only"])(
   },
 );
 
-it.each(["unmount", "another call", "check status"])(
+it.each(["unmount", "another call"])(
   "does not accept a delayed quote after %s ends the consent binding",
   async (change) => {
     const finishQuote = await beginDelayedPlanQuote();
     if (change === "unmount") await act(async () => root.render(null));
-    else if (change === "another call")
-      await navigateToCall(secondSubmissionId);
-    else await click("Check status");
+    else await navigateToCall(secondSubmissionId);
     await finishQuote();
     expect(quotes()[0].init.signal?.aborted).toBe(true);
     expect(accepts()).toHaveLength(0);
@@ -2214,6 +2221,77 @@ it("retains confirmed work during a refresh failure and clears the connection wa
   ).toHaveLength(0);
 });
 
+it("keeps checking a call on screen through repeated misses, with one corner card that offers a retry", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  const page = await Page({ searchParams: Promise.resolve({}) });
+  await act(async () =>
+    root.render(
+      <>
+        <NoticeCenter />
+        {page}
+      </>,
+    ),
+  );
+  await flush();
+  const lookups = () =>
+    calls.filter(({ path }) => path.endsWith(`/submissions/${submissionId}`))
+      .length;
+  savedLookupUnavailable = true;
+  // Misses at +3 s, +6 s and +12 s; the third raises the card.
+  for (const wait of [3_000, 6_000, 12_000]) {
+    await act(async () => vi.advanceTimersByTimeAsync(wait));
+    await flush();
+  }
+  expect(container.textContent).toContain("Can’t refresh this call’s status");
+  expect(container.textContent).toContain(
+    "Sales Xray keeps checking by itself",
+  );
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  expect(container.textContent).not.toContain("Could not open your saved call");
+  // It is still checking: the next read follows 24 s later.
+  const before = lookups();
+  await act(async () => vi.advanceTimersByTimeAsync(24_000));
+  await flush();
+  expect(lookups()).toBe(before + 1);
+  savedLookupUnavailable = false;
+  await click("Try again");
+  expect(container.textContent).not.toContain(
+    "Can’t refresh this call’s status",
+  );
+  expect(container.textContent).not.toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(0);
+});
+
+it("moves deletion into the progress menu and confirms it in place", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).not.toContain("Privacy & support");
+  await click("Delete this call…");
+  const confirm = container.querySelector(
+    '[aria-label="Analysis progress"] [role="alert"]',
+  );
+  expect(confirm?.textContent).toContain(
+    "Remove this recording and its report?",
+  );
+  await click("Keep call");
+  expect(
+    container.querySelector('[aria-label="Analysis progress"] [role="alert"]'),
+  ).toBeNull();
+  expect(calls.filter(({ init }) => init.method === "DELETE")).toHaveLength(0);
+});
+
 it("keeps interactive progress controls outside the live status announcer", async () => {
   existing = true;
   processingMode = "running";
@@ -2223,10 +2301,13 @@ it("keeps interactive progress controls outside the live status announcer", asyn
   expect(panel.getAttribute("role")).toBeNull();
   expect(panel.querySelector('[role="status"] button')).toBeNull();
   expect(panel.querySelector('[role="status"] a')).toBeNull();
-  expect(button("Check status")).toBeDefined();
+  expect(
+    panel.querySelector('summary[aria-label="More actions"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain("Check status");
 });
 
-it("bounds a hung status read and permits a GET-only retry without losing confirmed stages", async () => {
+it("bounds a hung status read and retries it by itself (GET only) without losing confirmed stages", async () => {
   existing = true;
   processingMode = "running";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
@@ -2234,10 +2315,8 @@ it("bounds a hung status read and permits a GET-only retry without losing confir
   savedLookupDelayed = true;
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
-  expect(button("Checking status").disabled).toBe(true);
   await act(async () => vi.advanceTimersByTimeAsync(STATUS_READ_TIMEOUT_MS));
   await flush();
-  expect(button("Check status").disabled).toBe(false);
   expect(container.textContent).toContain(
     "Status cannot currently be refreshed",
   );
@@ -2245,7 +2324,9 @@ it("bounds a hung status read and permits a GET-only retry without losing confir
     "In progress",
   );
   savedLookupDelayed = false;
-  await click("Check status");
+  // After one miss the next check waits 6 s.
+  await act(async () => vi.advanceTimersByTimeAsync(6_000));
+  await flush();
   expect(container.textContent).not.toContain(
     "Status cannot currently be refreshed",
   );
@@ -2288,7 +2369,8 @@ it("ignores an old observation after unmount and replacement of the studio", asy
       { stage: "C4", state: "running" },
     ],
   };
-  await click("Check status");
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
   await act(async () =>
     finishOld(
       response({
