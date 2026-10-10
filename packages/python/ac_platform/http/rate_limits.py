@@ -68,7 +68,7 @@ DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
         name="password-login",
         method="POST",
-        path=re.compile(r"^/v1/auth/password/login$"),
+        path=re.compile(r"^/v1/auth/password/(?:login|first-change)$"),
         capacity=10,
         refill_seconds=600,
     ),

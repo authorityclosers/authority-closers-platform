@@ -69,6 +69,10 @@ class EmailVerificationRequired(PasswordAuthError):
     """The credential is valid but the email challenge is not consumed."""
 
 
+class TemporaryPasswordChangeRequired(PasswordAuthError):
+    """The temporary verifier is valid but grants no ordinary session."""
+
+
 class InvalidEmailChallenge(PasswordAuthError):
     """The challenge is absent, expired, consumed, or bound to another purpose."""
 
@@ -284,15 +288,21 @@ class PasswordIdentityService:
         *,
         email: str,
         password: str,
+        allow_temporary: bool = False,
     ) -> Person:
-        normalized_email = normalize_email(email)
+        if "@" in email:
+            identifier = func.lower(Person.email) == normalize_email(email)
+        else:
+            from ac_platform.identity.username_accounts import normalize_username
+
+            identifier = func.lower(Person.username) == normalize_username(email)
         row = cast(
             tuple[Person, PasswordCredential] | None,
             (
                 await self.session.execute(
                     select(Person, PasswordCredential)
                     .join(PasswordCredential, PasswordCredential.person_id == Person.id)
-                    .where(func.lower(Person.email) == normalized_email)
+                    .where(identifier)
                     .with_for_update()
                 )
             ).one_or_none(),
@@ -304,7 +314,20 @@ class PasswordIdentityService:
         password_matches = verify_password(password, credential.password_hash)
         if not password_matches or person is None or person.status != PersonStatus.ACTIVE.value:
             raise InvalidPasswordCredentials("email or password is not valid")
-        if person.email_verified_at is None:
+        if person.password_change_required:
+            expiry = person.temporary_password_expires_at
+            if (
+                expiry is None
+                or (expiry.replace(tzinfo=UTC) if expiry.tzinfo is None else expiry.astimezone(UTC))
+                <= utc_now()
+            ):
+                raise InvalidPasswordCredentials("Sign-in details are not valid.")
+            if not allow_temporary:
+                raise TemporaryPasswordChangeRequired("Choose your own password before continuing.")
+            return person
+        if person.email_verified_at is None and (
+            person.username is None or person.username_verified_at is None
+        ):
             raise EmailVerificationRequired("email verification is required")
         return person
 
@@ -322,6 +345,7 @@ class PasswordIdentityService:
         if (
             person is None
             or person.status != PersonStatus.ACTIVE.value
+            or person.password_change_required
             or person.email_verified_at is None
         ):
             return None
@@ -354,6 +378,7 @@ class PasswordIdentityService:
         if (
             person is None
             or person.status != PersonStatus.ACTIVE.value
+            or person.password_change_required
             or person.email_verified_at is not None
         ):
             return None
@@ -512,7 +537,11 @@ class PasswordIdentityService:
         person = await self.session.scalar(
             select(Person).where(Person.id == candidate.person_id).with_for_update()
         )
-        if person is None or person.status != PersonStatus.ACTIVE.value:
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.password_change_required
+        ):
             raise InvalidEmailChallenge("the email challenge is not valid")
         challenge = await self.session.scalar(
             select(EmailChallenge)

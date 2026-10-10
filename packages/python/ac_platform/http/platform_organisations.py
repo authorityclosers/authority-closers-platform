@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
@@ -61,6 +61,25 @@ class OperatorChangeRoleRequest(ReasonRequest):
 class OperatorTransferOwnerRequest(ReasonRequest):
     # A JSON body carries the identifier as a string.
     person_id: UUID = Field(strict=False)
+
+
+class CreateUsernameAccountRequest(ReasonRequest):
+    username: str = Field(min_length=3, max_length=60)
+    display_name: str = Field(min_length=1, max_length=200)
+    email: str | None = Field(default=None, min_length=3, max_length=320)
+
+
+class UsernameAccountResponse(_Strict):
+    person_id: UUID
+    username: str
+    email: str | None
+    display_name: str
+    role: Literal["owner", "admin", "member"]
+    membership_status: Literal["active", "inactive", "suspended"]
+    password_change_required: bool
+    expires_at: datetime | None
+    temporary_password: str | None = Field(repr=False)
+    replayed: bool
 
 
 def _command_id(value: Annotated[str, Header(alias="Idempotency-Key")]) -> UUID:
@@ -249,5 +268,53 @@ def install_platform_organisations_http(
             actor_person_id=auth.resolved.actor.person_id,
             operator_reference=body.reason,
         )
+
+    @router.post("/{tenant_id}/accounts", response_model=UsernameAccountResponse, status_code=201)
+    async def create_account(
+        request: Request,
+        response: Response,
+        tenant_id: UUID,
+        body: CreateUsernameAccountRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+        key: UUID = command_dependency,
+    ) -> UsernameAccountResponse:
+        result = await (await manage(request, auth, tenant_id)).create_username_member(
+            tenant_id,
+            body.username,
+            body.display_name,
+            body.email,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+            operator_reference=body.reason,
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        response.headers["vary"] = "Cookie"
+        return UsernameAccountResponse.model_validate_json(json.dumps(result))
+
+    @router.post(
+        "/{tenant_id}/accounts/{person_id}/temporary-password",
+        response_model=UsernameAccountResponse,
+    )
+    async def reissue_password(
+        request: Request,
+        response: Response,
+        tenant_id: UUID,
+        person_id: UUID,
+        body: ReasonRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+        key: UUID = command_dependency,
+    ) -> UsernameAccountResponse:
+        result = await (await manage(request, auth, tenant_id)).reissue_username_password(
+            tenant_id,
+            person_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+            operator_reference=body.reason,
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        response.headers["vary"] = "Cookie"
+        return UsernameAccountResponse.model_validate_json(json.dumps(result))
 
     application.include_router(router)

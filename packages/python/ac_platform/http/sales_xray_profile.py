@@ -34,7 +34,7 @@ class SalesXrayProfileResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None
-    email: str
+    email: str | None
     phone_number_e164: str | None
     phone_verified: bool
     profile_complete: bool

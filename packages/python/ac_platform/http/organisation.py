@@ -242,7 +242,12 @@ def install_organisation_http(
         response: Response, auth: AuthenticatedTransaction = person_read_dependency
     ) -> PendingInvitesResponse:
         person = await auth.database.get(Person, auth.resolved.actor.person_id)
-        assert person is not None and person.email is not None
+        if person is None:
+            raise ResourceNotFound("The authenticated person no longer exists.")
+        if person.email is None or person.email_verified_at is None:
+            response.headers["cache-control"] = "private, no-store"
+            response.headers["vary"] = "Cookie"
+            return PendingInvitesResponse(invites=[])
         rows = list(
             await auth.database.execute(
                 select(OrganisationInvite, Tenant)

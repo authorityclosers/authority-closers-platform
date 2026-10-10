@@ -205,7 +205,11 @@ class EmailLoginCodeService:
             else None
         )
         if person is not None:
-            if person.status != PersonStatus.ACTIVE.value:
+            if (
+                person.status != PersonStatus.ACTIVE.value
+                or person.password_change_required
+                or (person.username is not None and person.email_verified_at is None)
+            ):
                 if challenge is not None and challenge.consumed_at is None:
                     challenge.consumed_at = current
                     await self.session.flush()
@@ -394,8 +398,11 @@ class EmailLoginCodeService:
         # A concurrent registration can win the unique-email race after the
         # initial lookup. Re-evaluate status and privilege on that canonical
         # person before mailbox proof can issue any session.
-        if person.status != PersonStatus.ACTIVE.value or await self._has_privileged_membership(
-            person.id
+        if (
+            person.status != PersonStatus.ACTIVE.value
+            or person.password_change_required
+            or (person.username is not None and person.email_verified_at is None)
+            or await self._has_privileged_membership(person.id)
         ):
             challenge.consumed_at = current
             await self.session.flush()

@@ -1,0 +1,21 @@
+# AUT-1694: Admin-issued username account candidate
+
+Sensitive sign-in/identity change; requires CTO/CEO review and the owner's one-tap approval. Local candidate only. Remote PR #438 remains the green staging-admin tool at `24394718`. The username migration/runtime are withheld while the shared slot and C's migration/backup ownership remain occupied.
+
+Admin can create a new username person with optional email and active member membership using `POST /v1/platform/organisations/{tenant_id}/accounts`. It reuses `platform_organisations_manage`, canonical authentication, the Admin surface/origin guard, an exact UUIDv4 Idempotency-Key and a recorded reason. It refuses existing usernames/emails; it does not attach identities by name or modify roles/billing. The one-time response uses private/no-store and includes a server-generated temporary password. Only a scrypt verifier is stored; replay and append-only audits contain no password.
+
+A bounded `POST .../accounts/{person_id}/temporary-password` recovers lost initial delivery for an unfinished member account provisioned by that organisation. It cannot reset an established account, owner/admin or unrelated account. It replaces the verifier and revokes old sessions; a new audited command is required for a new one-time response. Replays return current metadata and no secret.
+
+`POST /v1/auth/password/login` accepts username or email in the existing `email` body field. A valid temporary verifier gives an honest `authenticated:false,password_change_required:true` response, clears the browser session cookie, and grants no normal session. `POST /v1/auth/password/first-change` requires that verifier, a different 12–256 character password, explicit age/Terms acknowledgement and exact current consent version. One transaction records username possession proof and consent, replaces the verifier, clears the gate, revokes older sessions, appends an audit and issues a normal session. The current canonical person/session gate also denies pending-change accounts through email, Google and direct issuance. Password validation responses never echo request inputs. Login and change share the existing 10-attempt/600-second client budget.
+
+Optional email remains unverified. Provider linking/email recovery/invitation acceptance retain mailbox-proof requirements. `/v1/me` and Sales Xray contact profile support honest nullable email; pending email invites return an empty list without mailbox proof. The sole active registered organisation can be selected on sign-in, without fabricating Personal membership. Profile name/phone completeness and processing/access/usage rules remain separate.
+
+Validation on the actual combined local tree:
+
+- 249 focused identity, auth, profile, organisation, Admin and rate-limit checks passed in 97.26s. Includes PostgreSQL creation/change/sign-in by both identifiers, one-time replay/audit secrecy, expiry/reissue, concurrent one-success/one-refusal, session revocation, duplicate/admission denials, nullable profile and unchanged mailbox proof.
+- Five existing PostgreSQL email reclamation, password recovery/onboarding, membership isolation and concurrent Google sign-in/consent regressions passed in 20.10s.
+- Targeted mypy passed in 12 source files; Ruff check/format passed in all 19 changed/new Python files; diff and API task check passed. Final schema classification/default proof is recorded separately.
+
+No UI file, real account/password, live approval, staging/production data, provider, service, release or deployment was changed. No browser/server was started. A owns Sales Xray login/change UI and G owns Admin's one-time copy panel. The final fixture tests do not replace authenticated hosted acceptance or release compatibility. Full create/invite/accept/upload/owner-read/Personal placement remains subject to the recorded C/B/Root boundaries.
+
+The detailed candidate JSON/response contract and post-deployment manual dev script are in `/home/acdev/strikes/1694/USERNAME-API-CANDIDATE.md`; E NOTES.md carries the ownership/publishing blockers and existing exact staging commands. Never issue Vijay/Ria credentials through CLI/chat or screenshot a populated password form. The owner receives them once through Admin after reviewed deployment.
