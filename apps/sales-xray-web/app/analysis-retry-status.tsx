@@ -50,6 +50,17 @@ export function AnalysisRetryAction({
     flight.current = controller;
     setBusy(true);
     const timeout = setTimeout(() => controller.abort(), 20_000);
+    let terminalConfirmed = false;
+    const clearTerminalPlan = () => {
+      terminalConfirmed = true;
+      setPlan(null);
+      key.current = null;
+      try {
+        sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
+      } catch {
+        /* The confirmed terminal plan needs a fresh command. */
+      }
+    };
     try {
       key.current ??= retryKey(submissionId);
       const value = await acquisition(
@@ -100,10 +111,14 @@ export function AnalysisRetryAction({
       if (plan) {
         if (
           saved.id !== plan.id ||
-          saved.plan_fingerprint !== plan.plan_fingerprint ||
-          !saved.accepted ||
-          !["active", "completed"].includes(saved.state)
+          saved.plan_fingerprint !== plan.plan_fingerprint
         )
+          throw new Error("Retry was not accepted.");
+        if (["held", "cancelled"].includes(saved.state)) {
+          clearTerminalPlan();
+          throw new AcquisitionError(409);
+        }
+        if (!saved.accepted || !["active", "completed"].includes(saved.state))
           throw new Error("Retry was not accepted.");
         try {
           sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
@@ -122,17 +137,36 @@ export function AnalysisRetryAction({
         }
         window.location.reload();
       } else if (["held", "cancelled"].includes(saved.state)) {
-        key.current = null;
-        try {
-          sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
-        } catch {
-          /* Optional cache. */
-        }
+        clearTerminalPlan();
         throw new AcquisitionError(409);
       } else {
         setPlan(saved);
       }
     } catch (error) {
+      if (
+        plan &&
+        !terminalConfirmed &&
+        error instanceof AcquisitionError &&
+        [403, 409].includes(error.status) &&
+        !controller.signal.aborted
+      ) {
+        try {
+          const latest = parseProcessingPlan(
+            await acquisition(`${submissionPath(submissionId)}/plan`, {
+              signal: controller.signal,
+            }),
+            recordingId,
+          );
+          if (
+            latest.id === plan.id &&
+            latest.plan_fingerprint === plan.plan_fingerprint &&
+            ["held", "cancelled"].includes(latest.state)
+          )
+            clearTerminalPlan();
+        } catch {
+          /* An ambiguous read must retain the exact acceptance command. */
+        }
+      }
       notify({
         id: `analysis-retry:${submissionId}`,
         tone: "error",

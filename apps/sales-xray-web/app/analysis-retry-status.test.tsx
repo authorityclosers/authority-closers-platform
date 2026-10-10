@@ -217,3 +217,104 @@ it("does not confirm acceptance for a different plan on the same call", async ()
   expect(reload).not.toHaveBeenCalled();
   expect(notify).toHaveBeenCalledTimes(1);
 });
+
+it.each(["held", "cancelled"])(
+  "returns to Try again when the exact accepted retry becomes %s",
+  async (state) => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...plan, accepted: true, state })),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(plan)));
+    vi.stubGlobal("fetch", fetch);
+    const reload = vi
+      .spyOn(window.location, "reload")
+      .mockImplementation(() => undefined);
+    await render();
+    await click();
+    const originalKey = fetch.mock.calls[0][1].headers["Idempotency-Key"];
+    await click();
+    expect(button().textContent).toBe("Try again");
+    expect(container.textContent).not.toContain("Review this retry");
+    expect(
+      sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`),
+    ).toBeNull();
+    expect(reload).not.toHaveBeenCalled();
+    await click();
+    expect(fetch.mock.calls[2][0]).toContain("/retry");
+    expect(fetch.mock.calls[2][1].headers["Idempotency-Key"]).not.toBe(
+      originalKey,
+    );
+  },
+);
+
+it("reconciles an expired approval refusal against the exact terminal plan", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+    .mockResolvedValueOnce(new Response("", { status: 403 }))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...plan, state: "held" })),
+    );
+  vi.stubGlobal("fetch", fetch);
+  await render();
+  await click();
+  await click();
+  expect(fetch.mock.calls[2][0]).toContain("/plan");
+  expect(fetch.mock.calls[2][1].method).toBeUndefined();
+  expect(button().textContent).toBe("Try again");
+  expect(sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`)).toBeNull();
+  expect(notify).toHaveBeenCalledTimes(1);
+});
+
+it("retains the approval command when a refusal read returns another plan", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+    .mockResolvedValueOnce(new Response("", { status: 403 }))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...plan,
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          state: "held",
+        }),
+      ),
+    );
+  vi.stubGlobal("fetch", fetch);
+  await render();
+  await click();
+  const key = sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`);
+  await click();
+  expect(button().textContent).toBe("Accept and retry analysis");
+  expect(sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`)).toBe(key);
+  expect(notify).toHaveBeenCalledTimes(1);
+});
+
+it("reuses an ambiguous acceptance command without issuing a fresh retry", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+    .mockRejectedValueOnce(new Error("fictional acknowledgement lost"))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...plan, accepted: true, state: "active" }),
+      ),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const reload = vi
+    .spyOn(window.location, "reload")
+    .mockImplementation(() => undefined);
+  await render();
+  await click();
+  await click();
+  expect(button().textContent).toBe("Accept and retry analysis");
+  await click();
+  expect(fetch.mock.calls[2][0]).toContain("/plan");
+  expect(fetch.mock.calls[2][1].headers["Idempotency-Key"]).toBe(
+    fetch.mock.calls[1][1].headers["Idempotency-Key"],
+  );
+  expect(reload).toHaveBeenCalledTimes(1);
+});
