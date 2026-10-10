@@ -1131,7 +1131,11 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   expect(
     calls.filter((call) => call.path.endsWith("/plan/quote")),
   ).toHaveLength(1);
-  expect(calls.filter((call) => call.path.endsWith("/plan"))).toHaveLength(1);
+  expect(
+    calls.filter(
+      (call) => call.path.endsWith("/plan") && call.init.method === "POST",
+    ),
+  ).toHaveLength(1);
   await flush();
   expect(
     container.querySelector('[aria-label="Sales call report"]'),
@@ -1252,7 +1256,11 @@ it.each([
     );
     await click("Check again");
     expect(mutations()).toHaveLength(before);
-    expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
+    expect(
+      calls.filter(
+        ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+      ),
+    ).toHaveLength(1);
     expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   },
@@ -1276,7 +1284,11 @@ it("refreshes one stale plan into an explicit review without retrying acceptance
   expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
     2,
   );
-  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
 });
 
 it("shows the advertised trial allowance for a clean visitor", async () => {
@@ -1309,7 +1321,11 @@ it("clears consent when the selected file changes", async () => {
 
   expect(button("Analyse my call").disabled).toBe(true);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
-  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
 });
 
 it("rejects an audio file above the provider limit before creating a session", async () => {
@@ -1831,13 +1847,15 @@ it("shows the live processing stages without inventing a percentage", async () =
   processingMode = "running";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
-    "Transcribing your call",
+  // One true headline with a realistic estimate; the steps move on their own.
+  expect(container.querySelector('[role="status"] h2')?.textContent).toBe(
+    "Analysing your call",
   );
+  expect(container.textContent).toContain("Usually about 2–4 minutes");
   expect(
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
-  expect(container.querySelector('[data-phase="C2"]')).not.toBeNull();
+  expect(container.querySelector('[data-phase="working"]')).not.toBeNull();
   expect(container.querySelector('[data-mobile-fit="true"]')).not.toBeNull();
   expect(container.querySelector('[data-compact-busy="true"]')).toBeNull();
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
@@ -1847,8 +1865,9 @@ it("shows the live processing stages without inventing a percentage", async () =
     "Queued",
   );
   expect(container.querySelector('[data-stage="C5"] small')?.textContent).toBe(
-    "Not started",
+    "",
   );
+  expect(container.textContent).not.toContain("LAST CONFIRMED STATUS");
   expect(container.textContent).not.toMatch(/\b\d+%\b/);
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
 });
@@ -1904,7 +1923,9 @@ it("restores an unapproved call without quoting or accepting, including manual s
     container.querySelector('[data-hero-stage="ready"] h1')?.textContent,
   ).toBe("Ready to analyse");
   expect(container.textContent).not.toContain("We're processing your call");
-  expect(container.textContent).toContain("Start analysis here");
+  expect(container.textContent).toContain(
+    "Start analysis to generate your report",
+  );
   expect(
     calls.filter(({ init }) =>
       ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
@@ -2092,9 +2113,12 @@ it("reconciles a lost acceptance response without a second acceptance or upload"
       ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
     ),
   ).toHaveLength(1);
+  // Reconciled by reading the plan (the progress panel also reads it for its
+  // live stage); never by a second acceptance.
   expect(
-    calls.filter(({ path, init }) => path.endsWith("/plan") && !init.method),
-  ).toHaveLength(1);
+    calls.filter(({ path, init }) => path.endsWith("/plan") && !init.method)
+      .length,
+  ).toBeGreaterThanOrEqual(1);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
   expect(container.textContent).not.toContain("This request did not finish");
   expect(container.textContent).not.toContain("Continue analysis");
@@ -2516,18 +2540,17 @@ it("requires review if the returned frozen plan differs from the requested langu
   ).toHaveLength(0);
 });
 
-it("shows delayed-update guidance without changing progress, identity or submitting more work", async () => {
+it("keeps one steady headline through a long wait without changing progress, identity or submitting more work", async () => {
   existing = true;
   processingMode = "running";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
   await act(async () => vi.advanceTimersByTimeAsync(60_001));
   await flush();
-  expect(
-    container.querySelector('[data-update-delayed="true"]'),
-  ).not.toBeNull();
-  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
-    "Transcribing your call",
+  // No "no update yet" worry line: the estimate and the live steps say it.
+  expect(container.querySelector("[data-update-delayed]")).toBeNull();
+  expect(container.querySelector('[role="status"] h2')?.textContent).toBe(
+    "Analysing your call",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "In progress",
@@ -2557,11 +2580,11 @@ it("shows delayed-update guidance without changing progress, identity or submitt
   };
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
-  expect(
-    container.querySelector('[data-update-delayed="false"]'),
-  ).not.toBeNull();
-  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
-    "Checking the conversation",
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Complete",
+  );
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "In progress",
   );
 
   progressOverride = { ...progress, has_report: true };
@@ -2615,8 +2638,9 @@ it("shows saved completed work when an uncertain stage pauses processing", async
   expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
     "Paused · needs attention",
   );
+  // A step that hasn't begun is an empty circle, not "Not started".
   expect(container.querySelector('[data-stage="C5"] small')?.textContent).toBe(
-    "Not started",
+    "",
   );
   expect(container.textContent).not.toContain("fresh plan");
   expect(container.textContent).not.toContain("Review and continue analysis");
@@ -2692,7 +2716,9 @@ it("lets a reloaded held call request one quote, then requires explicit approval
   expect(container.textContent).toContain(plan.stages[0].privacy_notice);
   expect(button("Continue analysis").disabled).toBe(false);
   await click("Continue analysis");
-  const starts = calls.filter(({ path }) => path.endsWith("/plan"));
+  const starts = calls.filter(
+    ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+  );
   expect(starts).toHaveLength(1);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(container.querySelector("audio")?.getAttribute("src")).toContain(
@@ -2735,7 +2761,11 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
     1,
   );
-  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
 });
 
@@ -2748,7 +2778,11 @@ it("keeps an expired held quote explicit and does not accept it", async () => {
 
   expect(container.textContent).toContain("This step is available until");
   expect(button("Continue analysis").disabled).toBe(true);
-  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
 });
 
 it("disables recovery for a reloaded held call while analysis is paused", async () => {
@@ -2892,9 +2926,8 @@ it("describes completed C4 chunks as saved work without claiming the entire stag
     "Work saved",
   );
   expect(container.querySelector('svg[data-paused="true"]')).toBeNull();
-  expect(container.textContent).toContain(
-    "Some conversation analysis is saved with this call",
-  );
+  // The step's own label says it; no second line repeats it while working.
+  expect(container.querySelector('[data-paused="true"]')).toBeNull();
 });
 
 it("replays the same upload only after a retry lookup confirms no submission", async () => {
@@ -2939,7 +2972,11 @@ it("recovers a committed upload after a lost response and a 31-minute wait witho
   );
   expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
   expect(calls.some((call) => call.path.endsWith("/plan/quote"))).toBe(false);
-  expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+  expect(
+    calls.some(
+      (call) => call.path.endsWith("/plan") && call.init.method === "POST",
+    ),
+  ).toBe(false);
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "Queued",
   );
@@ -2969,7 +3006,11 @@ it.each(["mismatch", "denied", "malformed", "unavailable"])(
     await click("Analyse my call");
     expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
-    expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+    expect(
+      calls.some(
+        (call) => call.path.endsWith("/plan") && call.init.method === "POST",
+      ),
+    ).toBe(false);
   },
 );
 

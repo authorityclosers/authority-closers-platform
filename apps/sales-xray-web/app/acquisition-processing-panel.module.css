@@ -1,552 +1,373 @@
-/* Processing: one calm, full-height composition. The last confirmed status
-   and the x-ray wave sit at the centre, a slim three-part stage bar below,
-   and the call with its quiet actions on a single hairline row at the foot.
-   The wrappers dissolve (display: contents) so the DOM order the tests and
-   screen readers rely on is unchanged while the layout stays minimal. */
+/* Analysis progress, Pulse-calm: one headline, three steps that move, the
+   file on one quiet line and one reassurance line. Fixed sizes: text 12-15
+   px, rows at least 40 px, controls 32 px (44 px on touch). */
 .panel {
-  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "notice notice"
-    ". ."
-    "copy copy"
-    "wave wave"
-    "journey journey"
-    ". ."
-    "file actions"
-    "guidance guidance";
-  grid-template-rows:
-    auto minmax(8px, 1fr) auto auto auto minmax(16px, 1fr)
-    auto auto;
-  column-gap: 0;
+  align-content: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 560px;
   min-width: 0;
   min-height: calc(100dvh - var(--lx-topbar-h, 64px) - 150px);
+  margin-inline: auto;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
+  font-size: 13px;
+  line-height: 1.45;
   text-align: left;
 }
-.statusBlock,
-.signalCard,
-.footer {
-  display: contents;
-}
-.signalDivider {
-  display: none;
-}
 
-/* The shell's top bar names the page; keep the heading for assistive tech. */
-.heading {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+/* ---------- Headline ---------- */
 
-/* ---------- Centre ---------- */
-.connection {
-  grid-area: notice;
-  justify-self: center;
-  margin: 0;
-  padding: 7px 14px;
-  border: 1px solid color-mix(in srgb, var(--lx-warning) 35%, transparent);
-  border-radius: var(--lx-radius-pill);
-  background: var(--lx-warning-soft);
-  color: var(--lx-ink-3);
-  font-size: 12.5px;
-}
-.signalCopy {
-  grid-area: copy;
-  justify-self: center;
-  width: min(100%, 720px);
-  text-align: center;
-  animation: rise var(--lx-dur-reveal) var(--lx-ease-move) both;
-}
-.panel .signalCopy p {
-  max-width: 58ch;
-  margin: 0 auto;
-  color: var(--lx-muted);
-  font-size: 15px;
-  line-height: 1.55;
-}
-.panel .signalCopy p:first-child {
-  margin: 0 0 10px;
-  color: var(--lx-muted-2);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.panel .signalCopy h3 {
-  margin: 0 0 8px;
-  color: var(--lx-ink);
-  font: 800 clamp(28px, 2.7vw, 42px) / 1.08 var(--lx-font-display);
-  letter-spacing: -0.035em;
-  text-wrap: balance;
-}
-.panel .signalCopy h3 ~ p ~ p {
-  margin-top: 10px;
-  color: var(--lx-warning);
-  font-size: 12.5px;
-}
-.waveStage {
-  grid-area: wave;
-  justify-self: center;
-  width: min(100%, 1040px);
-  margin: clamp(22px, 4vh, 44px) 0 clamp(18px, 3vh, 32px);
-  animation: rise var(--lx-dur-develop) var(--lx-ease-move) 80ms both;
-}
-
-/* ---------- Stage bar ---------- */
-.journey {
-  grid-area: journey;
-  justify-self: center;
-  width: min(100%, 720px);
-  animation: rise var(--lx-dur-develop) var(--lx-ease-move) 140ms both;
-}
-.stageList {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.stage {
-  position: relative;
-  display: grid;
-  align-content: start;
-  gap: 2px;
-  min-width: 0;
-  padding-top: 14px;
-}
-.stage::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--lx-line);
-}
-.stage[data-visual-state="completed"]::before,
-.stage[data-visual-state="saved"]::before {
-  background: var(--lx-teal);
-}
-.stage[data-visual-state="active"]::before {
-  background: linear-gradient(
-    90deg,
-    var(--lx-teal) 0%,
-    color-mix(in srgb, var(--lx-teal) 30%, var(--lx-line)) 50%,
-    var(--lx-teal) 100%
-  );
-  background-size: 200% 100%;
-  animation: flow 1.6s linear infinite;
-}
-.stage[data-visual-state="attention"]::before {
-  background: var(--lx-warning);
-}
-.stageIcon,
-.stageDescription {
-  display: none;
-}
-.stage strong {
-  color: var(--lx-ink);
-  font-size: 13.5px;
-  font-weight: 650;
-}
-.stageStatus {
-  color: var(--lx-muted-2);
-  font-size: 12px;
-  font-weight: 500;
-}
-.stage[data-visual-state="active"] .stageStatus,
-.stage[data-visual-state="completed"] .stageStatus,
-.stage[data-visual-state="saved"] .stageStatus {
-  color: var(--lx-teal);
-}
-.stage[data-visual-state="attention"] .stageStatus {
-  color: var(--lx-warning);
-}
-
-/* ---------- Foot: the call and its actions ---------- */
-.fileCard,
-.actions {
-  padding-top: 16px;
-  border-top: 1px solid var(--lx-line);
-}
-.fileCard {
-  grid-area: file;
+.head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  min-width: 0;
-}
-.fileHeading {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.fileRow {
-  display: flex;
-  min-width: 0;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
-.fileIcon {
+
+.signal {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   flex: none;
   place-items: center;
-  border-radius: 10px;
-  background: var(--lx-gradient-brand);
-  color: var(--lx-film-text);
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
 }
-.fileIcon svg {
-  width: 18px;
-  height: 18px;
+
+.signal[data-phase="attention"] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
 }
-.fileCopy {
+
+.signal[data-phase="example"],
+.signal[data-phase="ready"] {
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+}
+
+/* Working: one soft pulse, the only motion on the screen. */
+.signal i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.signal[data-phase="working"] i {
+  animation: progress-pulse 1.6s var(--lx-ease-move, ease-in-out) infinite;
+}
+
+@keyframes progress-pulse {
+  0%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.headCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.headCopy h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.headCopy p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Needing attention, the headline comes from the status copy (the reason
+   and any safe retry); it takes this panel's scale and theme colours. */
+.panel .headCopy h3 {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.panel .headCopy p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.panel .headCopy p:first-child:not(:only-child) {
+  margin-bottom: 2px;
+  color: var(--lx-warning);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Steps ---------- */
+
+.steps {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 10px 14px;
+}
+
+.step + .step {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+.marker {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1.5px solid var(--lx-line-strong);
+  border-radius: 50%;
+  color: var(--lx-on-teal);
+}
+
+.step[data-state="done"] .marker {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal);
+}
+
+.step[data-state="active"] .marker {
+  border-color: var(--lx-teal);
+  box-shadow: inset 0 0 0 4px var(--lx-surface);
+  background: var(--lx-teal);
+}
+
+.step[data-state="attention"] .marker {
+  border-color: var(--lx-warning);
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.stepCopy {
   display: grid;
   min-width: 0;
   gap: 1px;
 }
-.fileCopy strong {
-  overflow: hidden;
-  max-width: 34ch;
-  color: var(--lx-ink);
+
+.stepCopy strong {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
+}
+
+.stepCopy span {
+  overflow: hidden;
+  color: var(--lx-muted);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.fileCopy small {
+
+.step[data-state="waiting"] strong {
+  color: var(--lx-ink-3);
+}
+
+.stepStatus {
   color: var(--lx-muted);
   font-size: 12px;
-}
-.fileStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
-  border-radius: var(--lx-radius-pill);
-  background: var(--lx-sunken);
-  color: var(--lx-ink-3);
-  font-size: 12px;
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.fileStatus span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--lx-muted-2);
-}
-.fileStatus[data-state="active"] {
-  background: var(--lx-teal-soft);
+
+.step[data-state="done"] .stepStatus {
   color: var(--lx-teal);
 }
-.fileStatus[data-state="active"] span {
-  background: var(--lx-teal);
-  animation: pulse 1.2s ease-in-out infinite;
+
+.step[data-state="active"] .stepStatus {
+  color: var(--lx-ink);
+  font-weight: 600;
 }
-.fileStatus[data-state="attention"] {
-  background: var(--lx-warning-soft);
+
+.step[data-state="attention"] .stepStatus {
   color: var(--lx-warning);
+  font-weight: 600;
 }
-.fileStatus[data-state="attention"] span {
-  background: var(--lx-warning);
-}
-.savedEvidence {
-  margin: 0;
-  color: var(--lx-muted);
-  font-size: 12.5px;
-}
+
+/* ---------- Saved work and actions ---------- */
+
 .savedWork {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  color: var(--lx-muted);
-  font-size: 12.5px;
+  gap: 10px;
+  color: var(--lx-ink-3);
+  font-size: 13px;
 }
+
 .savedWork svg {
   flex: none;
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--lx-teal);
 }
+
 .savedWork strong {
-  color: var(--lx-ink-3);
-  font-size: 12.5px;
-}
-.savedWork p {
-  margin: 1px 0 0;
-  line-height: 1.45;
-}
-.actions {
-  grid-area: actions;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-left: 16px;
-}
-.panel .actions > :is(button, a) {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin: 0;
-  padding: 0 14px;
-  border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-pill);
-  background: var(--lx-surface);
-  box-shadow: none;
-  color: var(--lx-ink-3);
-  font: 600 13px/1 var(--lx-font-ui);
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    border-color var(--lx-dur-quick) var(--lx-ease-quick),
-    color var(--lx-dur-quick) var(--lx-ease-quick);
-}
-.panel .actions > :is(button, a):hover:not(:disabled) {
-  border-color: var(--lx-line-strong);
   color: var(--lx-ink);
-}
-.panel .actions > :global(.primary-button) {
-  border-color: transparent;
-  background: var(--lx-gradient-primary);
-  box-shadow: var(--lx-shadow-cta);
-  color: var(--lx-on-teal);
-}
-.panel .actions > :global(.primary-button):hover:not(:disabled) {
-  color: var(--lx-on-teal);
-}
-.panel .actions > :is(button, a):disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.panel .actions svg {
-  width: 15px;
-  height: 15px;
-}
-.footer > p {
-  grid-area: guidance;
-  margin: 8px 0 0;
-  color: var(--lx-muted-2);
-  font-size: 12px;
-  line-height: 1.5;
+  font-weight: 600;
 }
 
-/* ---------- Motion ---------- */
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-@keyframes flow {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
-/* ---------- Fit ---------- */
-@media (max-height: 780px) {
-  .waveStage {
-    --xray-height: clamp(72px, 13vh, 110px);
-    margin-block: 16px 14px;
-  }
-}
-@media (max-width: 760px) {
-  .panel {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "notice"
-      "copy"
-      "wave"
-      "journey"
-      "file"
-      "actions"
-      "guidance";
-    grid-template-rows: none;
-    min-height: 0;
-    row-gap: 12px;
-  }
-  .actions {
-    justify-content: flex-start;
-    padding-top: 0;
-    border-top: 0;
-  }
-  .stageList {
-    gap: 8px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .signalCopy,
-  .waveStage,
-  .journey,
-  .stage[data-visual-state="active"]::before,
-  .fileStatus[data-state="active"] span {
-    animation: none;
-  }
-}
-
-/* ---------- Paused / needs attention: one calm line of reassurance ---------- */
-.savedWork {
-  flex-basis: 100%;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: 12.5px;
-}
-.savedWork > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 6px;
-}
-.savedWork strong {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
 .savedWork p {
   margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- File ---------- */
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
   color: var(--lx-muted);
 }
-.savedWork p + p::before {
-  content: "·";
-  margin-right: 6px;
-  color: var(--lx-muted-2);
-}
-.savedEvidence {
-  flex-basis: 100%;
-}
-/* The status line already explains a pause; do not repeat it in the foot. */
-.panel[data-paused="true"] .footer > p {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-/* Leave room for a corner notice so it never covers the actions. */
-.panel[data-paused="true"] {
-  padding-bottom: 110px;
+
+.file svg {
+  flex: none;
 }
 
-/* ---------- Paused: the recovery action leads, the foot stays one line ---------- */
-.panel[data-paused="true"] {
-  grid-template-areas:
-    "notice notice"
-    ". ."
-    "copy copy"
-    "wave wave"
-    "journey journey"
-    "actions actions"
-    ". ."
-    "file file"
-    "guidance guidance";
-  grid-template-rows:
-    auto minmax(8px, 1fr) auto auto auto auto minmax(16px, 1fr)
-    auto auto;
-  padding-bottom: 0;
-}
-.panel[data-paused="true"] .actions {
-  justify-content: center;
-  gap: 8px;
-  margin-top: clamp(20px, 3.4vh, 32px);
-  padding: 0;
-  border-top: 0;
-}
-/* The last action is the way forward (continue, or start another call). */
-.panel[data-paused="true"] .actions > :last-child {
-  order: -1;
-  min-height: 42px;
-  padding: 0 20px;
-  border-color: transparent;
-  background: var(--lx-gradient-primary);
-  box-shadow: var(--lx-shadow-cta);
-  color: var(--lx-on-teal);
-  font-weight: 700;
-}
-.panel[data-paused="true"] .actions > :last-child:hover:not(:disabled) {
-  color: var(--lx-on-teal);
-}
-.panel[data-paused="true"] .actions > :last-child svg {
-  color: var(--lx-on-teal);
-}
-.panel[data-paused="true"] .fileCard {
-  flex-wrap: nowrap;
-}
-.panel[data-paused="true"] .savedWork {
-  min-width: 0;
-  flex: 1 1 auto;
-  flex-basis: auto;
-}
-.panel[data-paused="true"] .savedWork svg {
-  width: 15px;
-  height: 15px;
-}
-.panel[data-paused="true"] .savedWork > div {
-  min-width: 0;
-  flex-wrap: nowrap;
-}
-.panel[data-paused="true"] .savedWork p {
+.file strong {
   overflow: hidden;
+  min-width: 0;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* One line of reassurance; the rest stays for screen readers. */
-.panel[data-paused="true"] .savedWork p + p {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+
+.file small {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
-@media (max-width: 760px) {
-  .panel[data-paused="true"] {
-    grid-template-areas:
-      "notice"
-      "copy"
-      "wave"
-      "journey"
-      "actions"
-      "file"
-      "guidance";
+
+.more {
+  position: relative;
+  margin-left: auto;
+}
+
+.more summary {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: var(--lx-radius-sm);
+  color: var(--lx-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.more summary::-webkit-details-marker {
+  display: none;
+}
+
+.more summary:hover,
+.more[open] summary {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+}
+
+.more summary:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  min-width: 200px;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2, var(--lx-shadow-1));
+}
+
+/* The studio's buttons become quiet menu rows here. */
+.menu > :global(*) {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.menu > :global(*):hover {
+  background: var(--lx-sunken);
+}
+
+.note {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .more summary {
+    width: 44px;
+    height: 44px;
   }
-  .panel[data-paused="true"] .fileCard {
-    flex-wrap: wrap;
+
+  .menu > :global(*) {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 720px) {
+  .panel {
+    align-content: start;
+    min-height: 0;
+    padding-top: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal[data-phase="working"] i {
+    animation: none;
   }
 }

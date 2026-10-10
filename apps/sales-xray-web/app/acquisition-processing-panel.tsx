@@ -1,21 +1,31 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  AudioLines,
+  AlertTriangle,
   Check,
   FileAudio2,
-  FileText,
+  MoreHorizontal,
   ShieldCheck,
 } from "lucide-react";
-import type { Progress } from "./acquisition-client";
-import { ProcessingStatusCopy } from "./processing-status-copy";
 import {
-  projectProcessing,
-  stageNames,
-  type ProcessingStage,
-} from "./processing-state";
-import { XrayWave } from "./xray-wave";
+  acquisition,
+  AcquisitionError,
+  submissionPath,
+  type Progress,
+} from "./acquisition-client";
+import { ProcessingStatusCopy } from "./processing-status-copy";
+import { projectProcessing, type ProcessingStage } from "./processing-state";
+import {
+  formatElapsed,
+  PROCESSING_STEPS,
+  projectSteps,
+  readLivePlan,
+  stepIndexForStage,
+  type LivePlan,
+  type StepState,
+} from "./processing-steps";
+import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./acquisition-processing-panel.module.css";
 
 export type AcquisitionProcessingStageRow = {
@@ -38,110 +48,235 @@ type Props = {
   waitingForApproval?: boolean;
   accepted?: boolean;
   refreshProblem?: boolean;
+  /** When the call was saved (ISO), for the elapsed time; omitted when unknown. */
+  startedAt?: string;
   /** Local review only: render static synthetic stages without live-call claims. */
   staticPreview?: boolean;
   children?: ReactNode;
 };
 
-const stages = [
-  {
-    id: "C2",
-    title: "Listening",
-    description: "Transcribing and separating speakers",
-    Icon: FileAudio2,
-  },
-  {
-    id: "C4",
-    title: "Understanding",
-    description: "Identifying key moments, objections and themes",
-    Icon: AudioLines,
-  },
-  {
-    id: "C5",
-    title: "Preparing your report",
-    description: "Turning saved findings into a clear summary",
-    Icon: FileText,
-  },
-] as const;
+const POLL_MS = 3_000;
+const HIDDEN_POLL_MS = 15_000;
+// A ready report the page hasn't opened after this long gets a button.
+const OPEN_FALLBACK_MS = 8_000;
+const DONE = PROCESSING_STEPS.length;
 
-function visualState(state: string | null, paused: boolean) {
-  if (state === "completed") return "completed";
-  if (state === "saved") return "saved";
-  if (state === "running" && !paused) return "active";
-  if (
-    ["held", "failed", "cancelled", "uncertain"].includes(state ?? "") ||
-    (paused && state === "running")
-  )
-    return "attention";
-  return "waiting";
+type Times = { start: (number | null)[]; end: (number | null)[] };
+const noTimes = (): Times => ({
+  start: PROCESSING_STEPS.map(() => null),
+  end: PROCESSING_STEPS.map(() => null),
+});
+
+/**
+ * The plan's live stage, read every few seconds while the call is analysed
+ * (slower in a background tab). Step durations are kept only for steps this
+ * screen saw start and finish, so nothing is guessed.
+ */
+function useLivePlan(submissionId: string | undefined, enabled: boolean) {
+  const [plan, setPlan] = useState<LivePlan | null>(null);
+  const [times, setTimes] = useState<Times>(noTimes);
+  const lastIndex = useRef<number | null>(null);
+  useEffect(() => {
+    if (!submissionId || !enabled) return;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const next = readLivePlan(
+          await acquisition(`${submissionPath(submissionId)}/plan`, {
+            signal: abort.signal,
+          }),
+        );
+        if (abort.signal.aborted) return;
+        if (next) {
+          const finished =
+            next.reportReady ||
+            next.state === "completed" ||
+            next.state === "cancelled";
+          const index = finished ? DONE : stepIndexForStage(next.stage);
+          const before = lastIndex.current;
+          if (index !== null && before !== null && index > before) {
+            const now = Date.now();
+            setTimes((current) => ({
+              start: current.start.map((value, step) =>
+                step === index ? now : value,
+              ),
+              end: current.end.map((value, step) =>
+                step >= before && step < index ? now : value,
+              ),
+            }));
+          }
+          if (index !== null) lastIndex.current = index;
+          setPlan(next);
+          stopped = finished;
+        }
+      } catch (error) {
+        if (abort.signal.aborted) return;
+        // A call without a plan (older servers) keeps the task rows as truth.
+        if (
+          error instanceof AcquisitionError &&
+          [401, 403, 404].includes(error.status)
+        )
+          stopped = true;
+      }
+      if (!stopped && !abort.signal.aborted)
+        timer = setTimeout(
+          () => void tick(),
+          document.visibilityState === "hidden" ? HIDDEN_POLL_MS : POLL_MS,
+        );
+    };
+    void tick();
+    return () => {
+      abort.abort();
+      clearTimeout(timer);
+    };
+  }, [submissionId, enabled]);
+  return { plan, times };
 }
 
-export function AcquisitionProcessingPanel({
-  stageRows,
-  statusText,
-  fileName,
-  fileMeta,
-  allowanceLabel,
-  paused = false,
-  submissionId,
-  progress,
-  waitingForApproval = false,
-  accepted = false,
-  refreshProblem = false,
-  staticPreview = false,
-  children,
-}: Props) {
-  const projection = projectProcessing(progress ?? null, waitingForApproval);
-  const [hidden, setHidden] = useState(false);
+/** The browser's own offline signal, for one honest line. */
+function useOffline() {
   const [offline, setOffline] = useState(false);
   useEffect(() => {
-    const sync = () => {
-      setHidden(document.visibilityState === "hidden");
-      setOffline(!navigator.onLine);
-    };
-    sync();
-    document.addEventListener("visibilitychange", sync);
+    const sync = () => setOffline(!navigator.onLine);
+    const first = setTimeout(sync, 0);
     window.addEventListener("online", sync);
     window.addEventListener("offline", sync);
     return () => {
-      document.removeEventListener("visibilitychange", sync);
+      clearTimeout(first);
       window.removeEventListener("online", sync);
       window.removeEventListener("offline", sync);
     };
   }, []);
-  const rows = stages.map((stage) => {
-    const actual = stageRows.find((row) => row.stage === stage.id);
-    return { ...stage, state: actual?.state ?? null, label: actual?.label };
-  });
-  const active = !paused && rows.some((row) => row.state === "running");
-  const queued = rows.some(
-    (row) => row.state === "queued" || row.state === "pending",
-  );
+  return offline;
+}
+
+/** A clock for the elapsed time, ticking only while it is shown. */
+function useNow(running: boolean) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (!running) return;
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [running]);
+  return now;
+}
+
+/** A step's status: measured time when seen, else the server's own label. */
+function stepStatus(
+  state: StepState,
+  duration: number | null,
+  row: AcquisitionProcessingStageRow | undefined,
+) {
+  if (state === "done") {
+    if (duration !== null) return `Done · ${formatElapsed(duration)}`;
+    return row?.state === "completed"
+      ? "Complete"
+      : row?.state === "saved"
+        ? "Work saved"
+        : "Done";
+  }
+  if (state === "active") return "In progress";
+  if (state === "attention")
+    return row?.state === "uncertain"
+      ? "Paused · needs attention"
+      : ["failed", "held"].includes(row?.state ?? "")
+        ? "Needs attention"
+        : "Paused";
+  return row?.state === "queued" || row?.state === "pending" ? "Queued" : "";
+}
+
+export function AcquisitionProcessingPanel({
+  stageRows,
+  fileName,
+  fileMeta,
+  paused = false,
+  submissionId,
+  refreshProblem = false,
+  progress,
+  waitingForApproval = false,
+  accepted = false,
+  startedAt,
+  staticPreview = false,
+  children,
+}: Props) {
+  const access = useWorkspaceAccess();
+  const offline = useOffline();
+  const projection = projectProcessing(progress ?? null, waitingForApproval);
+  const live = useLivePlan(submissionId, !staticPreview);
   const needsAttention =
     paused ||
-    rows.some((row) =>
+    projection.paused ||
+    stageRows.some((row) =>
       ["held", "failed", "cancelled", "uncertain"].includes(row.state ?? ""),
-    );
-  const connectionProblem = refreshProblem || offline;
-  const motionSuspended =
-    staticPreview || hidden || needsAttention || connectionProblem;
-  const currentStage =
-    projection.current?.stage ??
-    rows.find((row) => row.state === "running")?.id ??
-    "processing";
-  const guidance =
-    accepted || progress?.automatic_progression
-      ? "Analysis can continue after you leave. Keep this call’s link to return in this browser while your session and call remain available."
-      : waitingForApproval
-        ? "Start analysis here, or return to this call from Calls."
-        : "Your recording is saved. We’re confirming that analysis has started.";
-  const fileStatus = needsAttention
-    ? "Needs attention"
-    : active
-      ? "Processing"
-      : queued
-        ? "Queued"
-        : "Checking status";
+    ) ||
+    ["held", "failed"].includes(live.plan?.state ?? "");
+  const hasReport = Boolean(progress?.has_report || live.plan?.reportReady);
+  const states = projectSteps({
+    plan: live.plan,
+    rows: stageRows,
+    attention: needsAttention,
+    hasReport,
+  });
+  const notStarted = waitingForApproval && !accepted && !live.plan?.stage;
+  const working =
+    !staticPreview && !needsAttention && !hasReport && !notStarted;
+  const started = startedAt ? Date.parse(startedAt) : NaN;
+  const now = useNow(working && Number.isFinite(started));
+  const elapsed =
+    now !== null && Number.isFinite(started)
+      ? formatElapsed(now - started)
+      : null;
+
+  const [openStale, setOpenStale] = useState(false);
+  useEffect(() => {
+    if (!hasReport || staticPreview) return;
+    const timer = setTimeout(() => setOpenStale(true), OPEN_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [hasReport, staticPreview]);
+
+  const phase = staticPreview
+    ? "example"
+    : needsAttention
+      ? "attention"
+      : hasReport
+        ? "done"
+        : notStarted
+          ? "ready"
+          : "working";
+  const headline =
+    phase === "example"
+      ? "Example processing state"
+      : phase === "attention"
+        ? projection.paused
+          ? "Analysis paused"
+          : "Your call needs attention"
+        : phase === "done"
+          ? "Your report is ready"
+          : phase === "ready"
+            ? "Ready to start"
+            : "Analysing your call";
+  const subline =
+    phase === "example"
+      ? "Paused interface example. No call was uploaded or analysed."
+      : phase === "attention"
+        ? "This stage needs checking before analysis can continue."
+        : phase === "done"
+          ? "Opening it now."
+          : phase === "ready"
+            ? "Your recording is saved. Start analysis to generate your report."
+            : refreshProblem || offline
+              ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
+              : `Usually about 2–4 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
+  const signedIn = access?.authenticated === true;
+  // Recovery and start actions stay in view; the rest wait in the ⋯ menu.
+  const actionsInline = phase === "attention" || phase === "ready";
 
   return (
     <section
@@ -149,211 +284,145 @@ export function AcquisitionProcessingPanel({
       aria-label={
         staticPreview ? "Example analysis progress" : "Analysis progress"
       }
+      data-phase={phase}
       data-paused={needsAttention}
-      data-motion-suspended={motionSuspended}
-      data-animated={active && !motionSuspended}
       data-fixture={staticPreview}
     >
-      <div className={styles.heading}>
-        <span
-          className={styles.headingSignal}
-          data-phase={currentStage}
-          data-paused={needsAttention}
-          aria-hidden="true"
-        >
-          <AudioLines
-            className={styles.headingWave}
-            size={33}
-            strokeWidth={1.85}
-          />
+      <div className={styles.head}>
+        <span className={styles.signal} data-phase={phase} aria-hidden="true">
+          {phase === "attention" ? (
+            <AlertTriangle size={16} strokeWidth={2.2} />
+          ) : phase === "done" ? (
+            <Check size={16} strokeWidth={2.6} />
+          ) : (
+            <i />
+          )}
         </span>
-        <h2 id="acquisition-processing-title">
-          {staticPreview
-            ? "Example processing state"
-            : waitingForApproval && !accepted
-              ? "Ready to analyse"
-              : "Processing your call"}
-        </h2>
-        {!staticPreview && allowanceLabel && (
-          <span className={styles.allowance}>
-            <ShieldCheck size={19} strokeWidth={1.8} aria-hidden="true" />
-            {allowanceLabel}
-          </span>
-        )}
+        <div
+          className={styles.headCopy}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {phase === "attention" && submissionId ? (
+            // The reason and any safe retry (Strike C) come from the status copy.
+            <ProcessingStatusCopy
+              submissionId={submissionId}
+              progress={progress ?? null}
+              title={headline}
+              paused={projection.paused}
+              needsAttention
+              refreshProblem={refreshProblem || offline}
+              waitingForApproval={waitingForApproval}
+            />
+          ) : (
+            <>
+              <h2 id="acquisition-processing-title">{headline}</h2>
+              <p>{subline}</p>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className={styles.statusBlock}>
-        {!staticPreview && connectionProblem && (
-          <p className={styles.connection} role="status">
-            {offline
-              ? "Your browser is offline."
-              : "Status cannot currently be refreshed."}{" "}
-            The stage trail shows the last confirmed information.
-          </p>
-        )}
-        <div
-          className={styles.signalCard}
-          data-animated={active && !motionSuspended}
-        >
-          <div className={styles.waveStage}>
-            <XrayWave
-              mode={
-                active && !motionSuspended
-                  ? "scanning"
-                  : motionSuspended
-                    ? "still"
-                    : "resting"
-              }
-            />
-          </div>
-          <span className={styles.signalDivider} aria-hidden="true" />
-          <div
-            className={styles.signalCopy}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {staticPreview ? (
-              <div>
-                <p>LOCAL TEST STATE</p>
-                <h3>{statusText}</h3>
-                <p>
-                  Paused interface example. No call was uploaded or analysed.
-                </p>
-              </div>
-            ) : submissionId ? (
-              <ProcessingStatusCopy
-                submissionId={submissionId}
-                progress={progress ?? null}
-                title={statusText}
-                paused={projection.paused}
-                needsAttention={needsAttention}
-                refreshProblem={connectionProblem}
-                waitingForApproval={waitingForApproval}
-              />
-            ) : (
-              <div>
-                <h3>{statusText}</h3>
-                <p>
-                  The stage trail below reflects the latest confirmed update for
-                  this call.
-                </p>
-              </div>
+      <ol className={styles.steps} aria-label="Processing stages">
+        {PROCESSING_STEPS.map((step, index) => {
+          const state = states[index];
+          const start = live.times.start[index];
+          const end = live.times.end[index];
+          const duration =
+            start !== null && end !== null ? Math.max(0, end - start) : null;
+          return (
+            <li
+              key={step.id}
+              className={styles.step}
+              data-stage={step.id}
+              data-state={state}
+              aria-current={state === "active" ? "step" : undefined}
+            >
+              <span className={styles.marker} aria-hidden="true">
+                {state === "done" ? (
+                  <Check size={13} strokeWidth={3} />
+                ) : state === "attention" ? (
+                  <AlertTriangle size={12} strokeWidth={2.4} />
+                ) : null}
+              </span>
+              <span className={styles.stepCopy}>
+                <strong>{step.title}</strong>
+                <span>{step.description}</span>
+              </span>
+              <small className={styles.stepStatus}>
+                {stepStatus(
+                  state,
+                  duration,
+                  stageRows.find((row) => row.stage === step.id),
+                )}
+              </small>
+            </li>
+          );
+        })}
+      </ol>
+
+      {!staticPreview && phase === "attention" && (
+        <aside className={styles.savedWork} aria-label="Saved work">
+          <ShieldCheck size={16} aria-hidden="true" />
+          <div>
+            <strong>Your recording is saved</strong>
+            <p>There’s no need to upload it again.</p>
+            <p>
+              {projection.savedTranscript
+                ? "The completed transcript stays attached to this call."
+                : "A completed transcript has not been confirmed yet."}
+            </p>
+            {projection.savedEvidence && (
+              <p>Some conversation analysis is saved with this call.</p>
             )}
           </div>
+        </aside>
+      )}
+
+      {!staticPreview && actionsInline && children ? (
+        <div className={styles.actions} role="group" aria-label="Call actions">
+          {children}
         </div>
-        <footer className={styles.footer}>
-          <p>
-            {staticPreview
-              ? "This example stays paused. Choose another state in the review controls."
-              : needsAttention
-                ? "Completed work remains saved. Review the available recovery action before continuing."
-                : guidance}
-          </p>
-          {!staticPreview && (
-            <div
-              className={styles.actions}
-              role="group"
-              aria-label="Recovery actions"
-            >
+      ) : null}
+
+      {phase === "done" && openStale ? (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => window.location.reload()}
+          >
+            Open report
+          </button>
+        </div>
+      ) : null}
+
+      <div className={styles.file}>
+        <FileAudio2 size={16} strokeWidth={1.9} aria-hidden="true" />
+        <strong title={fileName || undefined}>
+          {fileName || (staticPreview ? "Example audio" : "Your recording")}
+        </strong>
+        {fileMeta && <small>{fileMeta}</small>}
+        {!staticPreview && !actionsInline && children ? (
+          <details className={styles.more}>
+            <summary aria-label="More actions" title="More actions">
+              <MoreHorizontal size={16} aria-hidden="true" />
+            </summary>
+            <div className={styles.menu} role="group" aria-label="Call actions">
               {children}
             </div>
-          )}
-        </footer>
+          </details>
+        ) : null}
       </div>
 
-      <div className={styles.journey}>
-        <ol className={styles.stageList} aria-label="Processing stages">
-          {rows.map((row) => {
-            const state = visualState(row.state, needsAttention);
-            const Icon = row.Icon;
-            return (
-              <li
-                className={styles.stage}
-                key={row.id}
-                data-stage={row.id}
-                data-state={row.state ?? "not-started"}
-                data-visual-state={state}
-                aria-current={state === "active" ? "step" : undefined}
-                aria-label={`${stageNames[row.id]}: ${row.label ?? (row.state === null ? "Not started" : row.state)}`}
-              >
-                <span className={styles.stageIcon} aria-hidden="true">
-                  {state === "completed" ? (
-                    <Check size={24} strokeWidth={2.8} />
-                  ) : (
-                    <Icon size={27} strokeWidth={1.9} />
-                  )}
-                </span>
-                <strong>{row.title}</strong>
-                <span className={styles.stageDescription}>
-                  {row.description}
-                </span>
-                <small className={styles.stageStatus}>
-                  {row.label ??
-                    (row.state === null ? "Not started" : row.state)}
-                </small>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
-      <div className={styles.fileCard}>
-        <div className={styles.fileHeading}>
-          <FileText size={23} strokeWidth={1.9} aria-hidden="true" />
-          <h3>{staticPreview ? "Example audio" : "Uploaded file"}</h3>
-        </div>
-        <div className={styles.fileRow}>
-          <span className={styles.fileIcon} aria-hidden="true">
-            <FileAudio2 size={24} strokeWidth={1.8} />
-          </span>
-          <span className={styles.fileCopy}>
-            <strong title={fileName || undefined}>
-              {fileName || "Your recording"}
-            </strong>
-            {fileMeta && <small>{fileMeta}</small>}
-          </span>
-          <span
-            className={styles.fileStatus}
-            data-state={
-              staticPreview
-                ? "waiting"
-                : needsAttention
-                  ? "attention"
-                  : active
-                    ? "active"
-                    : "waiting"
-            }
-          >
-            <span aria-hidden="true" />
-            {staticPreview ? "Example" : fileStatus}
-          </span>
-        </div>
-        {!staticPreview && !needsAttention && projection.savedEvidence && (
-          <p className={styles.savedEvidence}>
-            Some conversation analysis is saved with this call.
-          </p>
-        )}
-        {!staticPreview && needsAttention && (
-          <aside className={styles.savedWork} aria-label="Saved work">
-            <ShieldCheck size={17} aria-hidden="true" />
-            <div>
-              <strong>Your saved work</strong>
-              <p>
-                Your recording is saved. There’s no need to upload it again.
-              </p>
-              <p>
-                {projection.savedTranscript
-                  ? "The completed transcript stays attached to this call."
-                  : "A completed transcript has not been confirmed yet."}
-              </p>
-              {projection.savedEvidence && (
-                <p>Some conversation analysis is saved with this call.</p>
-              )}
-            </div>
-          </aside>
-        )}
-      </div>
+      {phase === "working" && (
+        <p className={styles.note}>
+          {signedIn
+            ? "You can leave this page. Your report will appear in Calls when it’s ready."
+            : "You can leave this page. Keep this call’s link to come back while your session and call remain available."}
+        </p>
+      )}
     </section>
   );
 }
