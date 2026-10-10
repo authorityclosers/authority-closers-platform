@@ -415,6 +415,16 @@ it.each(["/v1/organisation", "/v1/organisation/members"])(
     expect(host.querySelector('[role="alert"]')).toBeNull();
   },
 );
+it("lets everyone open their own profile from their row, and no one else's", async () => {
+  await render();
+  await click("Members");
+  const edit = host.querySelectorAll('[aria-label="Edit your profile"]');
+  expect(edit).toHaveLength(1);
+  expect(edit[0].closest('[role="row"]')?.textContent).toContain("(you)");
+  await act(async () => (edit[0] as HTMLButtonElement).click());
+  expect(window.location.hash).toBe("#settings/profile");
+  window.history.replaceState(null, "", "/organisation");
+});
 it("does not invent rows or usage when members cannot load", async () => {
   delete routes["/v1/organisation/members"];
   await render();

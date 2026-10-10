@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronDown,
   Crown,
+  Pencil,
   Plus,
   RefreshCw,
   Trash2,
@@ -28,6 +29,7 @@ import { callDate, callTone, submissionState } from "../call-status";
 import { formatClock } from "../lightbox/time";
 import { newCallHref } from "../new-call-navigation";
 import { dismissNotice, notify } from "../notice-center";
+import { openSettings } from "../settings-open";
 import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
@@ -1391,6 +1393,18 @@ function MembersPanel({
                   {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
                 </span>
                 <span role="cell" className={styles.rowActions}>
+                  {isYou ? (
+                    // Everyone keeps their own name, phone and photo current.
+                    <button
+                      type="button"
+                      className={styles.icon}
+                      title="Edit your profile"
+                      aria-label="Edit your profile"
+                      onClick={() => openSettings("profile")}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  ) : null}
                   {manageable ? (
                     <>
                       {isOwner && member.status === "active" ? (
