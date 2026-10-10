@@ -11,6 +11,11 @@
   gap: 12px;
 }
 
+.card {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+
 .parts {
   position: relative;
   display: grid;
@@ -62,7 +67,7 @@
 .stepLabel {
   margin: 5px 0 8px;
   color: var(--lx-muted);
-  font: 700 11.5px/1.4 var(--lx-font-ui, inherit);
+  font: 600 12px/1.4 var(--lx-font-ui, inherit);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -71,7 +76,7 @@
   display: block;
   margin: 0;
   color: var(--lx-ink);
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 550;
   line-height: 1.55;
 }
@@ -84,11 +89,7 @@
 .meaning {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
-  border: 1px dashed
-    color-mix(in srgb, var(--lx-hypothesis) 45%, var(--lx-line));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--lx-hypothesis) 6%, var(--lx-surface));
+  padding: 0;
 }
 
 .meaning p {

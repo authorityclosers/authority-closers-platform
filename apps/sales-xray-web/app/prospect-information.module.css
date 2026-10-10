@@ -34,7 +34,7 @@
 .edit input,
 .edit select {
   width: 100%;
-  min-height: 36px;
+  min-height: 32px;
   color: var(--lx-ink);
   background: var(--lx-surface);
   border: 1px solid var(--lx-line-soft);
@@ -43,7 +43,7 @@
   font: inherit;
 }
 .edit button {
-  min-height: 36px;
+  min-height: 32px;
   color: var(--lx-teal);
   background: var(--lx-surface);
   border: 1px solid var(--lx-line-soft);
@@ -96,7 +96,7 @@
   align-items: center;
   font-size: 15px;
   font-weight: 600;
-  min-height: 36px;
+  min-height: 32px;
 }
 .section > summary small {
   max-width: 50%;
@@ -125,7 +125,7 @@
   color: var(--lx-muted);
 }
 .fact dt small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--lx-teal);
 }
 .fact[data-fact-label="Unknown"] dt small {
@@ -145,6 +145,11 @@
   color: var(--lx-muted);
   margin: 6px 0;
 }
+.lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .evidence {
   font-size: 12px;
   margin-top: 8px;
@@ -154,6 +159,15 @@
   color: var(--lx-teal);
   cursor: pointer;
   padding: 4px 0;
+}
+.evidence summary {
+  min-height: 32px;
+  line-height: 24px;
+}
+.evidence a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
 }
 .evidence blockquote {
   margin: 8px 0;
@@ -183,5 +197,88 @@
   .section > summary small {
     max-width: 100%;
     text-align: left;
+  }
+}
+
+.linkSection {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--lx-line-soft);
+  font-size: 13px;
+}
+.linkSection h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+.linkSection input {
+  width: 100%;
+  max-width: 360px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--lx-ink);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-sm);
+}
+.linkSection button {
+  min-height: 32px;
+  font: inherit;
+}
+.profileLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 8px;
+  color: var(--lx-teal);
+  font-size: 13px;
+}
+.factSkeleton {
+  min-height: 88px;
+}
+.factSkeleton dt,
+.factSkeleton dd,
+.factSkeleton small,
+.profileSkeleton {
+  display: block;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-paper-2);
+}
+.factSkeleton dt {
+  width: 48%;
+  height: 16px;
+}
+.factSkeleton dd {
+  width: 80%;
+  height: 32px;
+}
+.factSkeleton small {
+  width: 36%;
+  height: 12px;
+  margin-top: 6px;
+}
+.profileSkeleton {
+  width: 180px;
+  height: 32px;
+  margin-top: 8px;
+}
+@media (max-width: 600px) {
+  .edit button,
+  .evidence a,
+  .evidence summary,
+  .linkSection input,
+  .section > summary,
+  .linkSection button,
+  .profileLink {
+    min-height: 44px;
+  }
+  .evidence summary {
+    line-height: 36px;
+  }
+  .factSkeleton {
+    min-height: 100px;
+  }
+  .factSkeleton dd,
+  .profileSkeleton {
+    height: 44px;
   }
 }

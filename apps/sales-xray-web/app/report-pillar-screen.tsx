@@ -9,6 +9,7 @@ import type { ReportEvidence } from "./report-contract";
 import type { ReportPanel } from "./report-modes";
 import {
   reportPillars,
+  REPORT_SKILLS,
   type PillarEntry,
   type ReportPillar,
 } from "./report-pillars";
@@ -235,6 +236,12 @@ function PillarScreen({
                   title={entry.label}
                   onSelect={onSelect}
                 />
+                <Link
+                  className={styles.destination}
+                  href={`/coaching?focus=${REPORT_SKILLS[i][0]}`}
+                >
+                  Get coaching on this
+                </Link>
               </details>
             ))
           : pillar.entries.map((entry, i) => (

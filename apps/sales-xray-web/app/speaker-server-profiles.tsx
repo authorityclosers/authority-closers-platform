@@ -9,6 +9,7 @@ import {
   SpeakerProfilesContext,
   clearSpeakerProfiles,
   readSpeakerProfiles,
+  ROLE_WORDS,
   type SpeakerProfiles,
   type SpeakerRole,
 } from "./speaker-profiles";
@@ -200,6 +201,20 @@ export function SpeakerServerProfiles({
           ]),
         )
       : {};
+  const predicted = Object.entries(drafts).filter(
+    ([id]) => id !== "unattributed",
+  );
+  const needsConfirmation =
+    validCall &&
+    map?.available &&
+    predicted.some(([id, profile]) => profile.role && !map.profiles[id]?.role);
+  const completeSuggestion =
+    predicted.length > 1 &&
+    predicted.every(([, profile]) => profile.role !== null) &&
+    predicted.filter(
+      ([, profile]) => profile.role === "you" || profile.role === "salesperson",
+    ).length === 1 &&
+    predicted.filter(([, profile]) => profile.role === "prospect").length === 1;
 
   async function save(changes: SpeakerProfiles) {
     const signal = controller.current?.signal;
@@ -297,6 +312,26 @@ export function SpeakerServerProfiles({
           <span>Speaker names not set yet.</span>
           <ActionButton variant="quiet" onClick={() => setRetry((n) => n + 1)}>
             Reload speaker details
+          </ActionButton>
+        </div>
+      )}
+      {needsConfirmation && completeSuggestion && (
+        <div className={styles.mapNotice} aria-label="Detected speakers">
+          <span>
+            Detected:{" "}
+            {predicted
+              .map(
+                ([id, profile]) =>
+                  `${profile.name || id} · ${ROLE_WORDS[profile.role!]}`,
+              )
+              .join("; ")}
+          </span>
+          <ActionButton
+            variant="quiet"
+            disabled={saving}
+            onClick={() => void save(drafts)}
+          >
+            {saving ? "Saving…" : "Confirm speakers"}
           </ActionButton>
         </div>
       )}

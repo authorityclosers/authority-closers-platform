@@ -232,7 +232,8 @@ def test_confirmation_denies_foreign_calls_prospects_and_unsafe_admission(
                     updated_at=foreign.now,
                 )
                 db.add(foreign_prospect)
-                # Organisation-wide read permission must not become write authority.
+                # AUT-1592 permits shared customer links for an owned call;
+                # it still grants no teammate-call or prospect-field write authority.
                 db.add(
                     Organisation(
                         tenant_id=setup.state.tenant_id,
@@ -266,11 +267,21 @@ def test_confirmation_denies_foreign_calls_prospects_and_unsafe_admission(
                     )
                 ).status_code == 403
                 client.headers["Origin"] = ORIGIN
-                for target in [hidden_id, foreign_id]:
-                    assert (
-                        await client.post(path, json={**body, "prospect_id": str(target)})
-                    ).status_code == 404
-                assert (await client.get(PREFIX + f"/{hidden_id}")).status_code == 200
+                linked = await client.post(path, json=body)
+                assert linked.status_code == 200, linked.text
+                assert linked.json()["membership"]["prospect_id"] == str(hidden_id)
+                assert (
+                    await client.post(path, json={**body, "prospect_id": str(foreign_id)})
+                ).status_code == 404
+                detail = await client.get(PREFIX + f"/{hidden_id}")
+                assert detail.status_code == 200
+                assert detail.json()["prospect"]["can_edit"] is False
+                assert detail.json()["prospect"]["can_confirm"] is False
+                async with setup.sessions() as db:
+                    shared = await db.get(ConversationProspect, hidden_id)
+                    assert shared is not None
+                    assert shared.owner_person_id == other.person_id
+                    assert shared.created_by_person_id == other.person_id
                 for call in [hidden, foreign_call]:
                     assert (
                         await client.get(f"{PREFIX}/calls/{call}/suggestions")

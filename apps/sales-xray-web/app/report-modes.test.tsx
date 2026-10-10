@@ -4,6 +4,10 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportModes } from "./report-modes";
 import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
+import {
   DOCUMENT_CHAPTERS,
   type DocumentReportData,
 } from "./report-document-data";
@@ -108,6 +112,68 @@ const sections = () =>
     ...container.querySelectorAll<HTMLElement>("[data-report-mode-section]"),
   ].filter((section) => !section.closest("[data-reading-panels][hidden]"));
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
+
+it("opens call Coaching from the retained report without loading another route", async () => {
+  const onSelect = vi.fn();
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ report: syntheticReport }}
+        onSelectEvidence={onSelect}
+      />,
+    ),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Coaching view"]')!
+      .click(),
+  );
+  expect(mode().dataset.view).toBe("coaching");
+  expect(window.location.search).toContain("view=coaching");
+  expect(window.location.search).toContain("section=call-coaching");
+  expect(sections()).toHaveLength(1);
+  expect(container.textContent).toContain("Coaching for this call");
+  expect(container.textContent).toContain(
+    syntheticReport.overview!.next_call_focus!.behavior,
+  );
+  const source = container.querySelector<HTMLButtonElement>(
+    "[data-call-coaching] button",
+  )!;
+  await act(async () => source.click());
+  expect(onSelect).toHaveBeenCalledWith(
+    syntheticReport.improvements[0].evidence[0],
+    "Coaching for this call",
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .click(),
+  );
+  expect(mode().dataset.view).toBe("tabs");
+  expect(sections()).toHaveLength(6);
+});
+
+it("renders an initially chosen Coaching view without a processing screen", () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/analysis?call=${call}&view=coaching&section=call-coaching`,
+  );
+  // The URL is a browser snapshot: server output stays at the existing default.
+  const html = renderToString(
+    <ReportModes
+      panels={panels()}
+      boundCallId={call}
+      documentData={{ report: syntheticReport }}
+      initialView="coaching"
+    />,
+  );
+  expect(html).toContain('data-view="coaching"');
+  expect(html).toContain("Coaching for this call");
+  expect(html).not.toContain("Working on your call");
+});
 
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
@@ -1365,4 +1431,81 @@ it("keeps the same mounted panel state across all three report views", async () 
     expect(note.value).toBe("unsaved fictional note");
     expect(container.querySelector('[data-review-point="14"]')).toBe(point);
   }
+});
+
+it("adds Story with the six pillars while keeping the current tabs and default", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?call=${call}&view=tabs&section=overview`,
+  );
+  await render(call);
+  expect(mode().dataset.view).toBe("tabs");
+  expect(container.textContent).toContain("Summary point");
+  const tabsBefore = [...container.querySelectorAll('[role="tab"]')].map(
+    (tab) => tab.textContent,
+  );
+  const story = container.querySelector<HTMLButtonElement>(
+    'button[title="Story view"]',
+  )!;
+  await act(async () => story.click());
+  expect(mode().dataset.view).toBe("story");
+  expect(window.location.search).toContain("view=story");
+  expect(
+    container.querySelectorAll('[data-pulse-adapted="true"]'),
+  ).toHaveLength(6);
+  expect(
+    container.querySelectorAll('a[href^="/coaching?focus="]'),
+  ).toHaveLength(8);
+  expect(container.textContent).not.toContain("Summary point");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .click(),
+  );
+  expect(
+    [...container.querySelectorAll('[role="tab"]')].map(
+      (tab) => tab.textContent,
+    ),
+  ).toEqual(tabsBefore);
+  expect(container.textContent).toContain("Summary point");
+});
+
+it("remembers the chosen view per person and workspace, with explicit URLs taking priority", async () => {
+  const person = (id: string): WorkspaceAccessValue => ({
+    status: "ready",
+    authenticated: true,
+    context: { personId: id, tenantId: "tenant-one", sessionId: "session" },
+    retry: () => {},
+  });
+  const show = async (id: string, key: string) =>
+    act(async () =>
+      root.render(
+        <WorkspaceAccessContext.Provider value={person(id)}>
+          <ReportModes
+            key={key}
+            panels={panels()}
+            boundCallId={call}
+            documentData={{ report: syntheticReport }}
+          />
+        </WorkspaceAccessContext.Provider>,
+      ),
+    );
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await show("first", "first");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
+      .click(),
+  );
+  expect(localStorage.getItem("ac:report-view:tenant-one:first")).toBe("story");
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await show("first", "reopened");
+  expect(mode().dataset.view).toBe("story");
+  await show("second", "second");
+  expect(mode().dataset.view).toBe("reading");
+  window.history.replaceState(null, "", `/?call=${call}&view=tabs`);
+  await show("first", "explicit");
+  expect(mode().dataset.view).toBe("tabs");
+  localStorage.removeItem("ac:report-view:tenant-one:first");
 });

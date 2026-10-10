@@ -208,7 +208,7 @@ export function FullShellPreview() {
                         content: (
                           <>
                             <KeyFacts
-                              callId={FIXTURE_CALL_ID}
+                              callId={null}
                               transcript={transcript}
                               report={syntheticReport}
                               durationMs={FIXTURE_DURATION_MS}

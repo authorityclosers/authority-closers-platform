@@ -43,10 +43,20 @@ import {
 } from "./report-document-data";
 import { ReportDocument } from "./report-document";
 import { reportScreenPanels } from "./report-pillar-screen";
+import { ReportCallCoaching } from "./report-call-coaching";
 import type { ReportEvidence } from "./report-contract";
 import type { ContextualSourcePlayback } from "./source-playback-context";
+import { OperationalPanel } from "./ui/operational-panel";
+import { useWorkspaceAccess } from "./workspace-access";
 
-type View = "reading" | "tabs" | "document";
+type View = "reading" | "tabs" | "document" | "story" | "coaching";
+const VIEWS: readonly View[] = [
+  "reading",
+  "tabs",
+  "document",
+  "story",
+  "coaching",
+];
 type TextSize = "100" | "112.5" | "125";
 const TEXT_SIZE_KEY = "ac:report-text-size";
 const TEXT_SIZE_CHANGE = "ac:report-text-size-change";
@@ -87,6 +97,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   "next-call-plan": Lightbulb,
   transcript: BookOpen,
   "raw-data": TableProperties,
+  "call-coaching": Lightbulb,
 };
 
 function SectionIcon({ id }: { id: string }) {
@@ -96,9 +107,11 @@ function SectionIcon({ id }: { id: string }) {
 
 function subscribe(notify: () => void) {
   window.addEventListener("popstate", notify);
+  window.addEventListener("storage", notify);
   window.addEventListener(CHANGE, notify);
   return () => {
     window.removeEventListener("popstate", notify);
+    window.removeEventListener("storage", notify);
     window.removeEventListener(CHANGE, notify);
   };
 }
@@ -124,8 +137,7 @@ function addressFromSearch(
     return null;
   // No explicit view: the caller applies its preferred default.
   const view: View | null =
-    views.length === 1 &&
-    (views[0] === "reading" || views[0] === "tabs" || views[0] === "document")
+    views.length === 1 && VIEWS.includes(views[0] as View)
       ? (views[0] as View)
       : null;
   const section =
@@ -443,7 +455,18 @@ function renderReportPanels(
           hidden={view === "tabs" && selected !== panel.id}
           tabIndex={view === "tabs" ? 0 : -1}
         >
-          {view === "tabs" ? (
+          {view === "story" || view === "coaching" ? (
+            <OperationalPanel
+              title={
+                <span id={`${id}-heading-${panel.id}`} tabIndex={-1}>
+                  {panel.label}
+                </span>
+              }
+              headingLevel="h2"
+            >
+              {panel.content}
+            </OperationalPanel>
+          ) : view === "tabs" ? (
             <h2
               id={`${id}-heading-${panel.id}`}
               tabIndex={-1}
@@ -469,7 +492,9 @@ function renderReportPanels(
               </p>
             </div>
           )}
-          <div className={styles.reportContent}>{panel.content}</div>
+          {view !== "story" && view !== "coaching" && (
+            <div className={styles.reportContent}>{panel.content}</div>
+          )}
         </section>
       ))}
     </div>
@@ -518,20 +543,60 @@ export function ReportModes({
   structure?: "custom" | "pillars";
   prospectControls?: ReactNode;
 }) {
-  const panels =
-    structure === "pillars" && documentData?.report
+  const storyPanels =
+    documentData?.report && !documentData.report.preview
+      ? reportScreenPanels(
+          documentData,
+          onSelectEvidence,
+          onSelectContextualPlayback,
+          prospectControls,
+        )
+      : [];
+  const coachingPanels: ReportPanel[] =
+    documentData?.report && !documentData.report.preview
       ? [
-          ...reportScreenPanels(
-            documentData,
-            onSelectEvidence,
-            onSelectContextualPlayback,
-            prospectControls,
-          ),
-          ...suppliedPanels.filter(
-            (panel) => panel.id === "transcript" || panel.id === "raw-data",
-          ),
+          {
+            id: "call-coaching",
+            label: "Coaching for this call",
+            content: (
+              <ReportCallCoaching
+                data={documentData}
+                callId={boundCallId}
+                onSelectEvidence={onSelectEvidence}
+                onSelectContextualPlayback={onSelectContextualPlayback}
+              />
+            ),
+          },
         ]
-      : suppliedPanels;
+      : [];
+  // Keep the owner's existing report; new call-level detail expands within it.
+  const enrichedPanels = suppliedPanels.map((panel) => {
+    const additions =
+      panel.id === "overview"
+        ? [0, 1]
+        : panel.id === "skills"
+          ? [4]
+          : panel.id === "next-call-plan"
+            ? [5]
+            : [];
+    return {
+      ...panel,
+      content: (
+        <>
+          {panel.content}
+          {additions.map((index) => {
+            const extra = storyPanels[index];
+            return extra ? (
+              <details key={extra.id} className={styles.supplement}>
+                <summary>{extra.label}</summary>
+                {extra.content}
+              </details>
+            ) : null;
+          })}
+        </>
+      ),
+    };
+  });
   const id = useId();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const navRowRef = useRef<HTMLDivElement | null>(null);
@@ -540,9 +605,11 @@ export function ReportModes({
   // Cancels a pending jump correction; set while an origin restore owns scrolling.
   const cancelSettle = useRef<(() => void) | null>(null);
   const restoring = useRef(false);
-  const [local, setLocal] = useState<Address>({
+  const [local, setLocal] = useState<
+    Address & { preferenceKey?: string | null }
+  >({
     view: null,
-    section: panels[0]?.id ?? "",
+    section: suppliedPanels[0]?.id ?? "",
   });
 
   const savedTextSize = useSyncExternalStore(
@@ -569,13 +636,35 @@ export function ReportModes({
     desktopSnapshot,
     serverDesktopSnapshot,
   );
-  const preferredView: View = initialView ?? (desktop ? "tabs" : "reading");
+  const access = useWorkspaceAccess();
+  const preferenceKey =
+    access?.authenticated && access.context
+      ? `ac:report-view:${access.context.tenantId}:${access.context.personId}`
+      : null;
+  const savedView = useSyncExternalStore(
+    subscribe,
+    () => {
+      try {
+        const saved = preferenceKey
+          ? localStorage.getItem(preferenceKey)
+          : null;
+        return VIEWS.includes(saved as View) ? (saved as View) : null;
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  const preferredView: View =
+    initialView ?? savedView ?? (desktop ? "tabs" : "reading");
   const slot = useSyncExternalStore(
     subscribeToolbar,
     toolbarSlot,
     serverToolbarSlot,
   );
-  const [readingSection, setReadingSection] = useState(panels[0]?.id ?? "");
+  const [readingSection, setReadingSection] = useState(
+    suppliedPanels[0]?.id ?? "",
+  );
   const [returnPoint, setReturnPointState] = useState<ReturnPoint | null>(null);
   const returnRef = useRef<ReturnPoint | null>(null);
   const setReturnPoint = (point: ReturnPoint | null) => {
@@ -651,14 +740,27 @@ export function ReportModes({
         documentData?.report &&
           new URLSearchParams(search).get("view") === "document"
           ? DOCUMENT_CHAPTERS.map((chapter) => ({ ...chapter, content: null }))
-          : panels,
+          : [...enrichedPanels, ...storyPanels, ...coachingPanels],
         pathname,
       )
     : null;
-  const address = linked ?? local;
-  const view: View = linked
+  const scopedLocal =
+    local.preferenceKey === preferenceKey ? local : { ...local, view: null };
+  const address = linked ?? scopedLocal;
+  const requestedView: View = linked
     ? (linked.view ?? preferredView)
-    : (local.view ?? preferredView);
+    : (scopedLocal.view ?? preferredView);
+  const view =
+    (requestedView === "story" && !storyPanels.length) ||
+    (requestedView === "coaching" && !coachingPanels.length)
+      ? "reading"
+      : requestedView;
+  const panels =
+    view === "story"
+      ? storyPanels
+      : view === "coaching"
+        ? coachingPanels
+        : enrichedPanels;
 
   const activePanels: ReportPanel[] =
     view === "document" && documentData?.report
@@ -801,7 +903,15 @@ export function ReportModes({
     focus = false,
     history: "push" | "replace" = "push",
   ) {
-    if (!activePanels.some((panel) => panel.id === section)) return;
+    const destinations =
+      nextView === "story"
+        ? storyPanels
+        : nextView === "coaching"
+          ? coachingPanels
+          : nextView === "document" && documentData?.report
+            ? DOCUMENT_CHAPTERS
+            : enrichedPanels;
+    if (!destinations.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
       const current = new URL(window.location.href);
@@ -832,7 +942,7 @@ export function ReportModes({
         window.history.replaceState(window.history.state, "", target);
       skipBookmarkScroll.current = changesLocation;
       window.dispatchEvent(new Event(CHANGE));
-    } else setLocal({ view: nextView, section });
+    } else setLocal({ view: nextView, section, preferenceKey });
     setReadingSection(section);
     if (focus) {
       requestAnimationFrame(() =>
@@ -912,10 +1022,27 @@ export function ReportModes({
   }
 
   function changeView(nextView: View) {
-    const section =
-      view !== "tabs" ? currentSection : (selected ?? activePanels[0]?.id);
-    if (section && nextView !== view)
+    const destinations =
+      nextView === "story"
+        ? storyPanels
+        : nextView === "coaching"
+          ? coachingPanels
+          : nextView === "document" && documentData?.report
+            ? DOCUMENT_CHAPTERS
+            : enrichedPanels;
+    const origin = view !== "tabs" ? currentSection : selected;
+    const section = destinations.some((panel) => panel.id === origin)
+      ? origin
+      : destinations[0]?.id;
+    if (section && nextView !== view) {
       navigate(section, nextView, true, "replace");
+      if (preferenceKey) {
+        try {
+          localStorage.setItem(preferenceKey, nextView);
+        } catch {}
+        window.dispatchEvent(new Event(CHANGE));
+      }
+    }
   }
 
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
@@ -974,7 +1101,10 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      {(view === "reading" || view === "document") && (
+      {(view === "reading" ||
+        view === "document" ||
+        view === "story" ||
+        view === "coaching") && (
         <nav
           className={styles.contents}
           aria-label={label}
@@ -1042,6 +1172,28 @@ export function ReportModes({
           <FileText aria-hidden="true" />
           <span className={styles.toolbarLabel}>Document view</span>
         </button>
+        {storyPanels.length > 0 && (
+          <button
+            type="button"
+            title="Story view"
+            aria-pressed={view === "story"}
+            onClick={() => changeView("story")}
+          >
+            <BookOpen aria-hidden="true" />
+            <span className={styles.toolbarLabel}>Story</span>
+          </button>
+        )}
+        {coachingPanels.length > 0 && (
+          <button
+            type="button"
+            title="Coaching view"
+            aria-pressed={view === "coaching"}
+            onClick={() => changeView("coaching")}
+          >
+            <Lightbulb aria-hidden="true" />
+            <span className={styles.toolbarLabel}>Coaching</span>
+          </button>
+        )}
       </div>
       <div className={styles.textSizeGroup} role="group" aria-label="Text size">
         <button
