@@ -14,11 +14,16 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationReportMinuteEvent,
 )
 from ac_platform.conversation_intelligence.acquisition_usage import acquisition_seconds
+from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
+from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import (
     ConversationAnalysisSettings,
+    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationProcessingPlan,
+    ConversationRecording,
+    ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.outbox.models import Job
@@ -271,6 +276,118 @@ def test_owner_retry_preserves_source_cap_and_captures_one_delivered_report(
                     job = await db.get(Job, original.job_id)
                     assert retained.intent == original_intent and retained.state == "uncertain"
                     assert job.dispatch_started_at == dispatch and job.attempt_count == 1
+                assert broker.calls == 3 and refusal.calls == 1
+
+                # Fictional, never-dispatched history rows push the real
+                # selected runs/checkpoints outside both recent windows. The
+                # exact current timeline must still return the saved evidence.
+                async with setup.sessions() as db, db.begin():
+                    recording = await db.get(ConversationRecording, UUID(first["recording_id"]))
+                    current_plan = await db.get(ConversationProcessingPlan, UUID(fresh["id"]))
+                    template = await db.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.run_id.in_(
+                                UUID(value) for value in current_plan.progress["stage_run_ids"]
+                            ),
+                            ConversationInferenceTask.stage == "C4",
+                        )
+                    )
+                    c2_row = await db.scalar(
+                        select(ConversationCheckpoint).where(
+                            ConversationCheckpoint.recording_id == recording.id,
+                            ConversationCheckpoint.stage == "C2",
+                        )
+                    )
+                    c3_row = await db.scalar(
+                        select(ConversationCheckpoint).where(
+                            ConversationCheckpoint.recording_id == recording.id,
+                            ConversationCheckpoint.stage == "C3",
+                        )
+                    )
+                    parents = tuple(
+                        verified_checkpoint(row, binding_for(recording)) for row in (c2_row, c3_row)
+                    )
+                    history_at = datetime.now(UTC)
+                    for index in range(260):
+                        payload = {"fixture_index": index}
+                        checkpoint = build_checkpoint(
+                            binding_for(recording),
+                            "C4",
+                            "fictional-history-v1",
+                            payload,
+                            parents,
+                            content_hash(payload),
+                        )
+                        db.add(
+                            ConversationCheckpoint(
+                                id=uuid4(),
+                                tenant_id=recording.tenant_id,
+                                person_id=recording.person_id,
+                                recording_id=recording.id,
+                                cache_key=checkpoint.cache_key,
+                                manifest_sha256=checkpoint.manifest_sha256,
+                                payload_sha256=checkpoint.payload_sha256,
+                                stage="C4",
+                                manifest=checkpoint.as_dict(),
+                                payload=payload,
+                                created_at=history_at,
+                            )
+                        )
+                    run_ids, jobs = [uuid4() for _ in range(128)], []
+                    for identifier in run_ids:
+                        job = Job(
+                            id=uuid4(),
+                            tenant_id=recording.tenant_id,
+                            kind="fixture.progress-history",
+                            dedupe_key=str(identifier),
+                            payload={"schema": 1, "run_id": str(identifier)},
+                        )
+                        jobs.append(job)
+                        db.add(job)
+                    await db.flush()
+                    for identifier, job in zip(run_ids, jobs, strict=True):
+                        db.add(
+                            ConversationRun(
+                                id=identifier,
+                                tenant_id=recording.tenant_id,
+                                person_id=recording.person_id,
+                                recording_id=recording.id,
+                                request_key=str(identifier),
+                                intent_sha256=template.intent_sha256,
+                                recipe_revision="fictional-history-v1",
+                                generation=recording.generation,
+                                state="queued",
+                                job_id=job.id,
+                                created_at=history_at,
+                            )
+                        )
+                    await db.flush()
+                    for identifier, job in zip(run_ids, jobs, strict=True):
+                        db.add(
+                            ConversationInferenceTask(
+                                run_id=identifier,
+                                tenant_id=recording.tenant_id,
+                                person_id=recording.person_id,
+                                recording_id=recording.id,
+                                session_id=template.session_id,
+                                processing_lease_id=template.processing_lease_id,
+                                job_id=job.id,
+                                quote_id=template.quote_id,
+                                generation=recording.generation,
+                                stage="C4",
+                                cache_key=content_hash({"history_run": str(identifier)}),
+                                input_sha256=template.input_sha256,
+                                intent_sha256=template.intent_sha256,
+                                intent=template.intent,
+                                state="queued",
+                                created_at=history_at,
+                            )
+                        )
+                archived = await client.get(path)
+                assert archived.status_code == 200, archived.text
+                assert len(archived.json()["stages"]) == 128
+                assert archived.json()["stage_progress"] == progress["stage_progress"]
+                assert archived.json()["terminal_state"] == "done"
                 assert broker.calls == 3 and refusal.calls == 1
         finally:
             await setup.engine.dispose()

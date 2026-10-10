@@ -6,12 +6,13 @@ polling or a predecessor's completion. Older/local starts can be unknown.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.inference import binding_for
@@ -43,32 +44,137 @@ class StageCheckpoint:
     finished_at: datetime
 
 
-async def read_stage_checkpoints(
-    database: AsyncSession, recording: ConversationRecording
-) -> list[StageCheckpoint]:
-    # Read metadata only: no transcript, report, provider payload or audio.
+async def read_selected_executions(
+    database: AsyncSession,
+    recording: ConversationRecording,
+    processing_lease_id: UUID | None,
+    plan: ConversationProcessingPlan | None,
+    known: list[StageExecution],
+) -> list[StageExecution]:
+    """A reused selected task can predate the legacy last-128 task window."""
+
+    values = None if plan is None else plan.progress.get("stage_run_ids")
+    if not isinstance(values, list) or len(values) > 128:
+        return []
+    identifiers: set[UUID] = set()
+    for value in values:
+        if isinstance(value, str):
+            with suppress(ValueError):
+                identifiers.add(UUID(value))
+    identifiers.difference_update(item.task.run_id for item in known)
+    if not identifiers:
+        return []
     rows = (
         await database.execute(
-            select(
-                ConversationCheckpoint.id,
-                ConversationCheckpoint.stage,
-                ConversationCheckpoint.manifest_sha256,
-                ConversationCheckpoint.manifest,
-                ConversationCheckpoint.created_at,
+            select(ConversationInferenceTask, Job, ConversationRun)
+            .join(Job, Job.id == ConversationInferenceTask.job_id)
+            .join(
+                ConversationRun,
+                (ConversationRun.id == ConversationInferenceTask.run_id)
+                & (ConversationRun.job_id == Job.id),
             )
             .where(
-                ConversationCheckpoint.recording_id == recording.id,
-                ConversationCheckpoint.tenant_id == recording.tenant_id,
-                ConversationCheckpoint.person_id == recording.person_id,
-                ConversationCheckpoint.erased_at.is_(None),
+                ConversationInferenceTask.run_id.in_(identifiers),
+                ConversationInferenceTask.recording_id == recording.id,
+                ConversationInferenceTask.tenant_id == recording.tenant_id,
+                ConversationInferenceTask.person_id == recording.person_id,
+                ConversationInferenceTask.processing_lease_id == processing_lease_id,
+                ConversationInferenceTask.generation == recording.generation,
+                ConversationInferenceTask.erased_at.is_(None),
             )
-            .order_by(ConversationCheckpoint.created_at.desc(), ConversationCheckpoint.id.desc())
-            .limit(256)
         )
     ).all()
+    return [StageExecution(row[0], row[1], row[2]) for row in rows]
+
+
+async def read_stage_checkpoints(
+    database: AsyncSession,
+    recording: ConversationRecording,
+    *,
+    executions: list[StageExecution],
+    plan: ConversationProcessingPlan | None,
+) -> list[StageCheckpoint]:
+    # Read metadata only: no transcript, report, provider payload or audio.
+    query = select(
+        ConversationCheckpoint.id,
+        ConversationCheckpoint.stage,
+        ConversationCheckpoint.manifest_sha256,
+        ConversationCheckpoint.manifest,
+        ConversationCheckpoint.created_at,
+    ).where(
+        ConversationCheckpoint.recording_id == recording.id,
+        ConversationCheckpoint.tenant_id == recording.tenant_id,
+        ConversationCheckpoint.person_id == recording.person_id,
+        ConversationCheckpoint.erased_at.is_(None),
+    )
+    rows = (
+        await database.execute(
+            query.order_by(
+                ConversationCheckpoint.created_at.desc(), ConversationCheckpoint.id.desc()
+            ).limit(256)
+        )
+    ).all()
+    chosen = executions[:128]
+    if plan is not None and isinstance(plan.progress.get("stage_run_ids"), list):
+        selected_ids = {value for value in plan.progress["stage_run_ids"] if isinstance(value, str)}
+        chosen = [item for item in executions if str(item.task.run_id) in selected_ids][:128]
+    identifiers = {item.task.checkpoint_id for item in chosen if item.task.checkpoint_id}
+    digests: set[str] = set()
+    for item in chosen:
+        intent = item.task.intent
+        manifest = None if not isinstance(intent, dict) else intent.get("checkpoint")
+        parents = None if not isinstance(manifest, dict) else manifest.get("parents")
+        if isinstance(parents, list) and len(parents) <= 2:
+            digests.update(
+                parent[1]
+                for parent in parents
+                if isinstance(parent, list) and len(parent) == 2 and isinstance(parent[1], str)
+            )
+    identifiers.difference_update(row[0] for row in rows)
+    digests.difference_update(row[2] for row in rows)
+    if identifiers or digests:
+        extra = (
+            await database.execute(
+                query.where(
+                    or_(
+                        ConversationCheckpoint.id.in_(identifiers),
+                        ConversationCheckpoint.manifest_sha256.in_(digests),
+                    )
+                ).limit(512)
+            )
+        ).all()
+        known = {row[0] for row in rows}
+        rows = [*rows, *(row for row in extra if row[0] not in known)]
     binding = asdict(binding_for(recording))
+    # A retained C3 names its exact local C1/C0 ancestry even when those
+    # checkpoint publications precede the recent metadata window.
+    anchors: set[str] = set()
+    for row in rows:
+        manifest = row[3]
+        if not isinstance(manifest, dict) or manifest.get("binding") != binding:
+            continue
+        parents = manifest.get("parents")
+        if isinstance(parents, list) and len(parents) <= 2:
+            anchors.update(
+                parent[1]
+                for parent in parents
+                if isinstance(parent, list)
+                and len(parent) == 2
+                and parent[0] in ("C0", "C1")
+                and isinstance(parent[1], str)
+            )
+    anchors.difference_update(row[2] for row in rows)
+    if anchors:
+        extra = (
+            await database.execute(
+                query.where(ConversationCheckpoint.manifest_sha256.in_(anchors)).limit(512)
+            )
+        ).all()
+        known = {row[0] for row in rows}
+        rows = [*rows, *(row for row in extra if row[0] not in known)]
+    rows = sorted(rows, key=lambda row: (row[4], row[0]))
     result = []
-    for identifier, stage, digest, manifest, finished in reversed(rows):
+    for identifier, stage, digest, manifest, finished in rows:
         if (
             not isinstance(manifest, dict)
             or manifest.get("binding") != binding

@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.sensitive_segments_store import withh
 from ac_platform.conversation_intelligence.submission_progress import (
     StageExecution,
     project_stage_progress,
+    read_selected_executions,
     read_stage_checkpoints,
 )
 from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
@@ -632,6 +633,13 @@ class AcquisitionReports:
                 retry_available = True
             except ConversationNotFound:
                 pass
+        timeline_executions = executions + await read_selected_executions(
+            self.database,
+            recording,
+            scope.processing_lease_id,
+            None if local_retry else plan,
+            executions,
+        )
         stage_progress = project_stage_progress(
             plan=None if local_retry else plan,
             local_run=local_run,
@@ -639,8 +647,13 @@ class AcquisitionReports:
                 (job for job in held_jobs if local_run is not None and job.id == local_run.job_id),
                 None,
             ),
-            executions=executions,
-            checkpoints=await read_stage_checkpoints(self.database, recording),
+            executions=timeline_executions,
+            checkpoints=await read_stage_checkpoints(
+                self.database,
+                recording,
+                executions=timeline_executions,
+                plan=None if local_retry else plan,
+            ),
             has_report=has_report,
             run_state=run_state,
             report_finished_at=report_finished_at,

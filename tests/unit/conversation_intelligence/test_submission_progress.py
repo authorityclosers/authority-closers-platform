@@ -10,6 +10,7 @@ from ac_platform.conversation_intelligence.submission_progress import (
     StageCheckpoint,
     StageExecution,
     project_stage_progress,
+    read_stage_checkpoints,
 )
 
 NOW = datetime(2026, 10, 10, tzinfo=UTC)
@@ -199,3 +200,32 @@ def test_terminal_coordinator_retains_only_known_content_free_execution_evidence
     }
     plan.progress = {"current_stage": [], "stage_run_ids": [None]}
     assert _retained_progress(plan) == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("parents", [None, "unknown", [["C1", 123]], [[[1], "a" * 64]]])
+async def test_malformed_checkpoint_metadata_is_unavailable_without_crashing(parents):
+    recording = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        person_id=uuid4(),
+        source_sha256="a" * 64,
+        source_revision=1,
+    )
+    manifest = {
+        "binding": {
+            "tenant_id": str(recording.tenant_id),
+            "recording_id": str(recording.id),
+            "source_sha256": recording.source_sha256,
+            "source_revision": "1",
+        },
+        "stage": "C3",
+        "manifest_sha256": "b" * 64,
+        "parents": parents,
+    }
+
+    class Database:
+        async def execute(self, query):
+            return SimpleNamespace(all=lambda: [(uuid4(), "C3", "b" * 64, manifest, NOW)])
+
+    assert await read_stage_checkpoints(Database(), recording, executions=[], plan=None) == []

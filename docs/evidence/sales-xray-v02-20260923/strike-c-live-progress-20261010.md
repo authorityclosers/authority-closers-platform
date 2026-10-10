@@ -42,6 +42,12 @@ The timeline selects those tasks, so a retry does not inherit an old failed
 task's dispatch/finish or its downstream C3/C6 checkpoint lineage. Old plans
 without this additive selection retain their original source-scoped task
 projection. Quoted and local retries do not claim provider-stage execution.
+Exact selected runs and checkpoint/ancestor references are fetched separately
+when they predate the legacy 128-task / 256-checkpoint history windows. These
+lookups are bounded and retain the same source/tenant/person/lease/generation
+fences. The original task response remains capped at 128. Malformed checkpoint
+metadata is unavailable rather than raising during projection.
+
 All reads remain under the existing ownership and source/generation fences;
 the metadata query additionally binds tenant, person, source revision and hash,
 ignores erased/mismatched checkpoints, and fetches no content payloads.
@@ -53,13 +59,17 @@ No page/layout, report/prospect rendering or coaching code was edited here.
 
 ## Verification
 
-- 82 focused progress/acquisition/plan unit checks pass; all 14 speaker-role
+- 86 focused progress/acquisition/plan unit checks pass; all 14 speaker-role
   freeze checks pass after adding a real run-ID shape to their fictional task
   fixture.
 - Both cookie/HTTP/PostgreSQL capped-retry cases pass. They verify queued C2,
   dispatched terminal 503 evidence, stranger 404, clean successor timing,
   C4/C5/C6 read-back, all seven completion fields, preserved original task
-  shape and the existing single delivered charge/race assertions.
+  shape and the existing single delivered charge/race assertions. The extended
+  delivered case seeds 128 fictional, never-dispatched history tasks and 260
+  newer checkpoints: the original task list remains at 128, while all seven
+  canonical timeline rows/timestamps remain exactly identical. No additional
+  provider call or minute change occurs.
 - Four PostgreSQL coordinator exception/diagnostic cases pass. Selected stages
   survive a terminal transition while partial enqueue work rolls back.
 - 52 focused frontend checks pass (legacy response compatibility, step
