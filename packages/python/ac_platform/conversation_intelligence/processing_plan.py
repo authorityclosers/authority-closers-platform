@@ -6,13 +6,14 @@ process loss: actual effects are still existing deduplicated, reserved AC jobs.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.conversation_intelligence.activation_contract import StageApproval
@@ -1421,7 +1422,9 @@ class ConversationProcessingPlans:
                 "current_stage": profile_hold_stage,
                 "failure_code": "account_profile_required",
             }
-            row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
+            row.next_check_at = min(
+                utc(row.expires_at), utc(self.app.clock()) + timedelta(seconds=2)
+            )
             return
         bad = next(
             (item for item in tasks if item.state in {"failed", "uncertain", "cancelled"}), None
@@ -1437,7 +1440,7 @@ class ConversationProcessingPlans:
             row.progress = {**_roles_freeze_progress(row), "current_stage": current}
         if repair_progress is not None:
             row.progress["c5_repair"] = repair_progress
-        row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
+        row.next_check_at = min(utc(row.expires_at), utc(self.app.clock()) + timedelta(seconds=2))
 
 
 class ProcessingPlanScheduler:
@@ -1457,8 +1460,14 @@ class ProcessingPlanScheduler:
             candidate = await db.scalar(
                 select(ConversationProcessingPlan)
                 .where(
-                    ConversationProcessingPlan.state == "active",
-                    ConversationProcessingPlan.next_check_at <= datetime.now(UTC),
+                    ConversationProcessingPlan.state.in_(("active", "quoted")),
+                    or_(
+                        ConversationProcessingPlan.expires_at <= func.clock_timestamp(),
+                        (
+                            (ConversationProcessingPlan.state == "active")
+                            & (ConversationProcessingPlan.next_check_at <= func.clock_timestamp())
+                        ),
+                    ),
                     ConversationProcessingPlan.erased_at.is_(None),
                 )
                 .order_by(ConversationProcessingPlan.next_check_at)
@@ -1467,6 +1476,25 @@ class ProcessingPlanScheduler:
             if candidate is None:
                 return False
             identifier, recording_id = candidate.id, candidate.recording_id
+            # Expiry owns the terminal transition even when execution admission
+            # can no longer succeed (expired lease, permission or retention).
+            now = await db.scalar(select(func.clock_timestamp()))
+            assert now is not None
+            if utc(candidate.expires_at) <= utc(now):
+                row = await db.scalar(
+                    select(ConversationProcessingPlan)
+                    .where(ConversationProcessingPlan.id == identifier)
+                    .with_for_update(skip_locked=True)
+                    .execution_options(populate_existing=True)
+                )
+                if row is None or row.state not in {"active", "quoted"}:
+                    return False
+                row.state = "held"
+                row.progress = {
+                    **_roles_freeze_progress(row),
+                    "failure_code": "processing_budget_expired",
+                }
+                return True
             actor = actor_from_row(candidate)
             plans: ConversationProcessingPlans | None = None
             try:
@@ -1485,8 +1513,11 @@ class ProcessingPlanScheduler:
                     if row is None or row.state != "active":
                         return False
                     plans = ConversationProcessingPlans(app, self.authority, self.storage)
-                    await plans.advance(actor, row)
-            except (ConversationError, InferenceTaskError):
+                    # An individual coordinator pass must also be bounded; a
+                    # hung local planning step cannot occupy this worker forever.
+                    async with asyncio.timeout(30):
+                        await plans.advance(actor, row)
+            except Exception as error:
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
                 row = await db.get(
@@ -1499,7 +1530,13 @@ class ProcessingPlanScheduler:
                     row.state = "held"
                     row.progress = {
                         **_roles_freeze_progress(row),
-                        "failure_code": "processing_authorization_or_input_unavailable",
+                        "failure_code": (
+                            "processing_authorization_or_input_unavailable"
+                            if isinstance(error, (ConversationError, InferenceTaskError))
+                            else "processing_coordinator_timeout"
+                            if isinstance(error, TimeoutError)
+                            else "processing_coordinator_failed"
+                        ),
                     }
                     if plans is not None and plans.failure_diagnostic_code is not None:
                         row.progress["diagnostic_code"] = plans.failure_diagnostic_code
