@@ -366,7 +366,9 @@ it("uses the API role and shows members only their own row read-only", async () 
   expect(host.textContent).not.toContain("new@example.com");
   // Members see one quiet line instead of a form they cannot use.
   expect(host.querySelector('input[aria-label="Email to invite"]')).toBeNull();
-  expect(host.textContent).toContain("Only owners and admins can add people");
+  expect(host.textContent).toContain(
+    "Only owners and admins see everyone, add people or change roles.",
+  );
   expect(button("Remove Admin")).toBeUndefined();
 });
 it.each([

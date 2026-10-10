@@ -848,7 +848,8 @@
   }
 
   .memberRow:hover .rowActions,
-  .memberRow:focus-within .rowActions {
+  .memberRow:focus-within .rowActions,
+  .memberRow[data-you] .rowActions {
     opacity: 1;
   }
 }

@@ -1194,7 +1194,8 @@ function MembersPanel({
       <div className={styles.sectionHead}>
         <h2 id="org-members">
           People
-          {members.status === "ready" ? (
+          {/* A member's list is just them; the tab counts everyone. */}
+          {members.status === "ready" && canManage ? (
             <span className={styles.count}>{rows.length - invited}</span>
           ) : null}
         </h2>
@@ -1259,7 +1260,7 @@ function MembersPanel({
           </form>
         ) : members.status === "ready" ? (
           <p className={styles.footnote}>
-            Only owners and admins can add people or change roles.
+            Only owners and admins see everyone, add people or change roles.
           </p>
         ) : null}
 
@@ -1323,6 +1324,7 @@ function MembersPanel({
                 className={styles.memberRow}
                 role="row"
                 data-invited={member.status === "invited" ? "" : undefined}
+                data-you={isYou ? "" : undefined}
               >
                 <span role="cell" className={styles.person}>
                   <i className={styles.avatar} aria-hidden="true">
