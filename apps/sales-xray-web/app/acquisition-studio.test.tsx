@@ -1149,7 +1149,9 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
       ?.textContent,
   ).toBe("Report ready");
   expect(container.querySelector(".studio-report-summary")).toBeNull();
-  expect(container.textContent).toContain("Remaining analysis time · 1 h");
+  expect(container.textContent).toContain(
+    "Remaining analysis time · 1 h 39 min",
+  );
   expect(container.textContent).not.toContain("free audio minutes");
   expect(container.textContent).not.toContain(
     "AI draft · not yet reviewed by Dipak",
@@ -1236,7 +1238,9 @@ it.each([
       status === 401,
     );
     if (status === 403) expect(alert.textContent).not.toContain("Sign in");
-    expect(container.textContent).toContain("Remaining analysis time · 1 h");
+    expect(container.textContent).toContain(
+      "Remaining analysis time · 1 h 39 min",
+    );
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
     expect(container.querySelector("audio")?.getAttribute("src")).toContain(
       submissionId,
@@ -1796,7 +1800,7 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
 it.each([
   [0, "Remaining analysis time · 0m 00s · exhausted"],
   [45, "Remaining analysis time · 0m 45s"],
-  [600000, "Remaining analysis time · 166 h"],
+  [600000, "Remaining analysis time · 166 h 40 min"],
 ])("formats a confirmed %s-second allowance", (seconds, expected) => {
   const confirmed = {
     allowance_seconds: Math.max(allowance.allowance_seconds, seconds),
@@ -2748,7 +2752,7 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   const allowanceBefore = [...container.querySelectorAll("span")].find(
     (element) => element.textContent?.includes("Remaining analysis time"),
   )?.textContent;
-  expect(allowanceBefore).toBe("Remaining analysis time · 1 h");
+  expect(allowanceBefore).toBe("Remaining analysis time · 1 h 40 min");
   await click("Review and continue analysis");
   const alert = container.querySelector('[role="alert"]');
   expect(alert).not.toBeNull();
