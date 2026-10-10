@@ -1352,6 +1352,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  /* The loaded header's height: name line, gap, meta line. */
+  min-height: calc(20px * 1.25 + 2px + 13px * 1.45);
 }
 
 .skeletonTile,
@@ -1390,6 +1392,12 @@
 
 .bone[data-w="context"] {
   width: 58%;
+}
+
+/* Label and context bones fill the 12 px text lines they stand for. */
+.kpi .bone[data-w="label"],
+.kpi .bone[data-w="context"] {
+  margin-block: calc((12px * 1.45 - 10px) / 2);
 }
 
 .boneRow {
@@ -1717,12 +1725,17 @@
     margin-block: -10px;
   }
 
-  .page {
+  .page,
+  .skeleton {
     gap: 16px;
   }
 
   .headerCopy h1 {
     font-size: 18px;
+  }
+
+  .skeletonHeader {
+    min-height: calc(18px * 1.25 + 2px + 13px * 1.45);
   }
 
   .strip,

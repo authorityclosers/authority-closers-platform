@@ -61,7 +61,7 @@ export function SkeletonBlocks({ team = true }: { team?: boolean }) {
     </div>
   );
   return (
-    <>
+    <div className={styles.overview}>
       <div className={styles.section} aria-hidden="true">
         {head}
         <div className={styles.strip} data-columns={team ? 4 : 3}>
@@ -90,6 +90,6 @@ export function SkeletonBlocks({ team = true }: { team?: boolean }) {
           </div>
         ) : null}
       </div>
-    </>
+    </div>
   );
 }
