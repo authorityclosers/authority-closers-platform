@@ -9,6 +9,7 @@ import pytest
 from ac_platform.conversation_intelligence.acquisition_reports import (
     AcquisitionReports,
     _progress_failure_code,
+    _run_state,
     _safe_progress_failure_code,
 )
 from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
@@ -74,6 +75,40 @@ def test_progress_failure_code_clears_while_current_plan_is_active() -> None:
     )
 
     assert _progress_failure_code(current_plan, [], generation=2, has_report=False) is None
+
+
+@pytest.mark.parametrize(
+    ("report", "minutes", "plan_state", "retry", "local", "job", "expected"),
+    [
+        (True, "delivered", "completed", False, "completed", "done", "done"),
+        (False, "released", None, False, "running", "leased", "failed"),
+        (False, None, "held", False, "completed", "dead_letter", "failed"),
+        (False, "reserved", "active", True, "completed", "queued", "retrying"),
+        (False, "reserved", "active", False, "completed", "retry_wait", "retrying"),
+        (False, None, "active", False, "completed", "leased", "working"),
+        (False, None, None, False, "running", "leased", "working"),
+        (False, None, "quoted", False, "completed", "done", "queued"),
+        (False, None, None, False, "failed", "dead_letter", "failed"),
+    ],
+)
+def test_public_run_state_comes_from_persisted_facts(
+    report, minutes, plan_state, retry, local, job, expected
+) -> None:
+    plan = (
+        None
+        if plan_state is None
+        else SimpleNamespace(state=plan_state, manifest={"retry_of": str(uuid4())} if retry else {})
+    )
+    assert (
+        _run_state(
+            has_report=report,
+            minute_kind=minutes,
+            plan=plan,
+            local_state=local,
+            jobs=[SimpleNamespace(status=job)],
+        )
+        == expected
+    )
 
 
 @pytest.mark.asyncio

@@ -70,6 +70,10 @@ export type Progress = {
   has_report: boolean;
   automatic_progression: boolean;
   stages: { stage: string; state: string }[];
+  recording_id?: string;
+  run_state?: "queued" | "working" | "retrying" | "failed" | "done";
+  minute_state?: "reserved" | "released" | "delivered" | null;
+  retry_available?: boolean;
 };
 
 export class AcquisitionError extends Error {
@@ -496,7 +500,17 @@ export function parseProgress(
       item.local_state as string | null,
     ) ||
     !Array.isArray(item.stages) ||
-    item.stages.length > 128
+    item.stages.length > 128 ||
+    (item.run_state !== undefined &&
+      (!["queued", "working", "retrying", "failed", "done"].includes(
+        item.run_state as string,
+      ) ||
+        ![null, "reserved", "released", "delivered"].includes(
+          item.minute_state as string | null,
+        ) ||
+        typeof item.retry_available !== "boolean" ||
+        item.has_report !== (item.run_state === "done") ||
+        (item.retry_available && item.run_state !== "failed")))
   )
     throw new ReportContractError("acquisition_progress");
   const stages = item.stages.map((value) => {
@@ -516,6 +530,14 @@ export function parseProgress(
     has_report: item.has_report,
     automatic_progression: item.automatic_progression,
     stages,
+    ...(item.run_state !== undefined
+      ? {
+          recording_id: bound.recordingId,
+          run_state: item.run_state as Progress["run_state"],
+          minute_state: item.minute_state as Progress["minute_state"],
+          retry_available: item.retry_available as boolean,
+        }
+      : {}),
   };
 }
 export const submissionPath = (id: string) => {

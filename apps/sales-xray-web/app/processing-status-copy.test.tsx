@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Progress } from "./acquisition-client";
 import { ProcessingStatusCopy } from "./processing-status-copy";
+import { recordingId, submissionId } from "../tests/acquisition-fixture";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -79,6 +80,44 @@ it.each([
   );
   expect(container.textContent).not.toContain(code);
 });
+
+it("shows a terminal failure and safe retry after the server releases minutes", async () => {
+  await render({
+    submissionId,
+    needsAttention: true,
+    paused: true,
+    progress: {
+      ...running,
+      recording_id: recordingId,
+      run_state: "failed",
+      minute_state: "released",
+      retry_available: true,
+    },
+  });
+  expect(container.querySelector("h3")?.textContent).toBe("Analysis failed");
+  expect(container.textContent).toContain("Your minutes have been released");
+  expect(container.querySelector("button")?.textContent).toBe("Try again");
+  expect(container.textContent).not.toContain("Analysis paused");
+});
+
+it.each(["queued", "working", "retrying", "done"] as const)(
+  "shows the confirmed %s state even with superseded failed stage rows",
+  async (state) => {
+    await render({
+      needsAttention: true,
+      paused: true,
+      progress: {
+        ...running,
+        run_state: state,
+        has_report: state === "done",
+      },
+    });
+    expect(container.querySelector("h3")?.textContent.toLowerCase()).toBe(
+      state,
+    );
+    expect(container.querySelector("button")).toBeNull();
+  },
+);
 
 it("waits one minute, preserving the real stage title without a failure or percentage", async () => {
   await render();

@@ -783,10 +783,14 @@ async def admit_processing_actor(
             raise ConversationDenied("Processing identities cannot hold login credentials.")
     usage = await database.get(ConversationAcquisitionUsage, lease.usage_id)
     settlement = await database.get(ConversationAcquisitionSettlement, lease.usage_id)
+    from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
+
+    customer_outcome = await ReportMinutes(database).latest(lease.usage_id)
     if (
         usage is None
         or usage.tenant_id != actor.tenant_id
         or (settlement is not None and settlement.kind == "no_work_performed")
+        or (customer_outcome is not None and customer_outcome.kind == "released")
     ):
         raise ConversationDenied("A reserved source is required for processing.")
     if continuation_plan is not None:

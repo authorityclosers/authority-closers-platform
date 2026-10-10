@@ -269,7 +269,7 @@ def test_generation_is_atomic_with_publication_and_replay_respects_release(
             try:
                 async with AsyncSession(engine) as database:
                     report_run = await database.get(ConversationRun, captured["run_id"])
-                    assert report_run.state != "completed" and report_run.completed_at is None
+                    assert report_run.state == "failed" and report_run.completed_at is not None
                     for model in (ConversationReportDraft, ConversationSensitiveSegmentMark):
                         assert (
                             await database.scalar(

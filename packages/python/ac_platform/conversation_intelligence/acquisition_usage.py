@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
+    ConversationReportMinuteEvent,
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.canary import recording_is_canary
@@ -57,6 +58,18 @@ def _owner_filter(
     return or_(usage.person_id == person_id, usage.visitor_id.in_(claimed))
 
 
+def report_minute_value(column: Any) -> Any:
+    """Latest immutable customer outcome, correlated to the admitted source."""
+    return (
+        select(column)
+        .where(ConversationReportMinuteEvent.usage_id == ConversationAcquisitionUsage.id)
+        .order_by(ConversationReportMinuteEvent.revision.desc())
+        .limit(1)
+        .correlate(ConversationAcquisitionUsage)
+        .scalar_subquery()
+    )
+
+
 async def acquisition_seconds(
     database: AsyncSession,
     *,
@@ -68,7 +81,9 @@ async def acquisition_seconds(
     usage = ConversationAcquisitionUsage
     owner = _owner_filter(tenant_id=tenant_id, visitor_id=visitor_id, person_id=person_id)
     charged = func.coalesce(
-        ConversationAcquisitionSettlement.charged_seconds, usage.reserved_seconds
+        report_minute_value(ConversationReportMinuteEvent.seconds),
+        ConversationAcquisitionSettlement.charged_seconds,
+        usage.reserved_seconds,
     )
     total = await database.scalar(
         select(func.coalesce(func.sum(charged), 0))
@@ -130,8 +145,14 @@ async def account_usage(
                 usage.submission_id,
                 usage.created_at,
                 display_name.label("display_name"),
-                func.coalesce(settlement.charged_seconds, usage.reserved_seconds).label("seconds"),
-                settlement.kind,
+                func.coalesce(
+                    report_minute_value(ConversationReportMinuteEvent.seconds),
+                    settlement.charged_seconds,
+                    usage.reserved_seconds,
+                ).label("seconds"),
+                func.coalesce(
+                    report_minute_value(ConversationReportMinuteEvent.kind), settlement.kind
+                ).label("kind"),
             )
             .outerjoin(settlement, settlement.usage_id == usage.id)
             .where(
@@ -145,7 +166,14 @@ async def account_usage(
     earlier_seconds, _ = await existing_account_usage(
         database, tenant_id=tenant_id, person_id=person_id, operations_tenant_id=None
     )
-    states = {None: "reserved", "completed": "charged", "no_work_performed": "not_charged"}
+    states = {
+        None: "reserved",
+        "reserved": "reserved",
+        "delivered": "charged",
+        "released": "not_charged",
+        "completed": "charged",
+        "no_work_performed": "not_charged",
+    }
     return {
         "calls": [
             {

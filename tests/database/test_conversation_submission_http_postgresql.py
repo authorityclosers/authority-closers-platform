@@ -90,6 +90,7 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
+from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.reports import load_report_profile
 from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5RecoveryService,
@@ -542,11 +543,16 @@ def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         available_recordings: set[UUID] = set()
+        report_ready_at = setup.clock[0]
 
         async def retained_report(
             _service: RetainedC5RecoveryService, recording: ConversationRecording
-        ) -> object | None:
-            return object() if recording.id in available_recordings else None
+        ) -> ConversationRetainedC5Version | None:
+            return (
+                ConversationRetainedC5Version(created_at=report_ready_at)
+                if recording.id in available_recordings
+                else None
+            )
 
         monkeypatch.setattr(RetainedC5RecoveryService, "latest_for_recording", retained_report)
         try:
@@ -562,6 +568,12 @@ def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
                 assert first.status_code == 202, first.text
                 assert first.json()["earlier_report_submission_id"] is None
                 available_recordings.add(UUID(first.json()["recording_id"]))
+                ready = await client.get(first_path)
+                assert ready.status_code == 200, ready.text
+                assert ready.json()["terminal_state"] == "done"
+                assert (
+                    ready.json()["stage_progress"][6]["finished_at"] == report_ready_at.isoformat()
+                )
 
                 outsider = await seed(setup.engine, tenant_id=setup.state.tenant_id)
                 outsider_token = secrets.token_urlsafe(32)
@@ -2434,8 +2446,10 @@ def test_account_duplicate_upload_reuses_uncertain_retained_c2_without_provider_
                     ) == source_snapshot["job"]
                     assert source_plan_row.state == "held"
                     assert source_plan_row.progress == {
+                        "stage_run_ids": [str(source_run_id)],
                         "current_stage": "C2",
                         "failure_code": "stage_uncertain",
+                        "minute_outcome_checked": True,
                     }
                     source_reservations = {
                         item["reservation_id"]: item

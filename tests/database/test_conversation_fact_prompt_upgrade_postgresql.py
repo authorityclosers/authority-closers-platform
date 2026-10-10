@@ -239,6 +239,7 @@ def test_legacy_c4_hold_is_preserved_while_compact_plan_reuses_c2(
                 assert old_job.provider_receipt["validation_state"] == "provider_returned"
                 old_provider_receipt = canonical(old_job.provider_receipt)
                 assert old_plan.progress == {
+                    "stage_run_ids": [str(c2_task.run_id), str(legacy_c4_task.run_id)],
                     "current_stage": "C4",
                     "failure_code": "stage_uncertain",
                 }
@@ -339,6 +340,7 @@ def test_legacy_c4_hold_is_preserved_while_compact_plan_reuses_c2(
                 assert canonical(old_job_after.provider_receipt) == old_provider_receipt
                 assert old_job_after.last_error == "conversation_gemini_response_incomplete"
                 assert old_plan_after.progress == {
+                    "stage_run_ids": [str(c2_task.run_id), str(legacy_c4_task.run_id)],
                     "current_stage": "C4",
                     "failure_code": "stage_uncertain",
                 }
