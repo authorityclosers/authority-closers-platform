@@ -277,7 +277,10 @@
   padding: 14px 16px;
   color: inherit;
   text-decoration: none;
-  box-shadow: -1px 0 0 var(--sx-line);
+  /* Hairlines between tiles in any reflow; the panel's edge hides the outer ones. */
+  box-shadow:
+    -1px 0 0 var(--sx-line),
+    0 -1px 0 var(--sx-line);
 }
 
 a.tile:hover {
@@ -643,8 +646,16 @@ a.rowTitle:hover {
 
 .card {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding: 12px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.card > strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
 }
 
 .card + .card {
@@ -652,6 +663,11 @@ a.rowTitle:hover {
 }
 
 @media (max-width: 760px) {
+  /* Phones: tiles two across (r17 S4). */
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tableWrap[data-has-cards] {
     display: none;
   }
