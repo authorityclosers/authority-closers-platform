@@ -17,3 +17,7 @@ Verification:
 - App typecheck, changed-file ESLint and diff check pass. Full compiled acquisition/browser at `94d0807` passes in CI. Latest-head complete CI remains required.
 
 Durable route wiring details: `/home/acdev/strikes/1677/saved-report-preload-handoff.md`. Companies schema/Pulse mapping preparation: `company-schema-plan.md` and `/home/acdev/strikes/pulse-people-roles.md` Mode B. Company migration is waiting for the single shared migration slot held by PR #421; no Companies API/list/schema or live provider activation is claimed.
+
+## Latest-main integration
+
+Strike A #429 merged as `3da82d9` on 10 October at 22:00:32 UTC. The preserved Report assertion patch was applied only after that PR's ownership cleared. Latest-main acquisition/view/facts/preload tests now pass together (170 tests), with app typecheck and changed-file ESLint. Fictional Report and Prospect browser proofs pass again at 390/1440 light/dark after the branch merge, with no overflow/page errors/external requests; preview stopped. Source disclosures/links and prospect-link input controls use 32 px targets on desktop and 44 px on phones. Current Strike A #434 has no acquisition-test overlap. This clears the earlier stale-test integration dependency; server route/studio preload wiring is still a separate ownership handoff.

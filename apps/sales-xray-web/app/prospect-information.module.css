@@ -160,6 +160,15 @@
   cursor: pointer;
   padding: 4px 0;
 }
+.evidence summary {
+  min-height: 32px;
+  line-height: 24px;
+}
+.evidence a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
 .evidence blockquote {
   margin: 8px 0;
   padding: 8px;
@@ -203,6 +212,13 @@
 .linkSection input {
   width: 100%;
   max-width: 360px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--lx-ink);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-sm);
 }
 .linkSection button {
   min-height: 32px;
@@ -247,10 +263,16 @@
 }
 @media (max-width: 600px) {
   .edit button,
+  .evidence a,
+  .evidence summary,
+  .linkSection input,
   .section > summary,
   .linkSection button,
   .profileLink {
     min-height: 44px;
+  }
+  .evidence summary {
+    line-height: 36px;
   }
   .factSkeleton {
     min-height: 100px;
