@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 import httpx
 import pytest
@@ -33,8 +33,7 @@ def _organisation_name(name: str, case_id: UUID) -> str:
     return f"{case_id.hex} {name}"
 
 
-def test_organisation_fixture_names_preserve_full_case_namespace(monkeypatch):
-    monkeypatch.setattr("ac_platform.organisations.service.secrets.token_hex", lambda _: "0000")
+def test_organisation_fixture_tenant_ids_preserve_full_case_namespace():
     names = (
         "Fictional invited organisation",
         "Fictional domain organisation",
@@ -42,13 +41,17 @@ def test_organisation_fixture_names_preserve_full_case_namespace(monkeypatch):
         "Fictional claim 0",
         "Fictional claim 1",
     )
-    slugs = [
-        _tenant_slug(_organisation_name(name, case_id))
+    cases = [
+        (_organisation_name(name, case_id), uuid5(case_id, name))
         for case_id in (UUID(int=1), UUID(int=2))
         for name in names
     ]
+    slugs = [_tenant_slug(name, tenant_id) for name, tenant_id in cases]
     assert len(set(slugs)) == len(slugs)
-    assert all(len(slug.split("-", 1)[0]) == 32 for slug in slugs)
+    assert all(
+        slug.endswith(tenant_id.hex) for slug, (_, tenant_id) in zip(slugs, cases, strict=True)
+    )
+    assert all(len(slug) <= 63 for slug in slugs)
 
 
 @pytest.mark.parametrize("method", ["email", "google_authenticate", "google_register"])

@@ -31,6 +31,13 @@ safe unique handles, owner membership, person-attributed verifiable audit,
 idempotent replay/conflict, unchanged selected context and no fabricated billing
 capacity. Ruff check/format and `git diff --check` pass.
 
+CI's first create-slice shard 0 also identified a stale private-helper call in
+the sign-in fixture namespace test. It now supplies each fixture's deterministic
+tenant UUID and asserts the full UUID suffix, uniqueness and the existing
+63-character storage bound. The corrected focused test passes in 4.23s; no
+application behavior or assertion scope is relaxed. The cancelled later CI runs
+are not treated as successful validation.
+
 ## Dev check after delivery
 
 Sign in with a verified account in Personal. Submit the request above with a
