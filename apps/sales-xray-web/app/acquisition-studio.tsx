@@ -3432,6 +3432,8 @@ export function AcquisitionStudio({
                 )}
                 <ReportModes
                   label="Explore your sales report"
+                  onSelectEvidence={seek}
+                  structure="pillars"
                   lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
                   documentData={{

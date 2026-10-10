@@ -46,7 +46,10 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
       spacing: { after: 160 },
     }),
   ];
-  reportPillars(input.report).forEach((pillar, index) => {
+  reportPillars(
+    input.report,
+    input.durationMs ?? input.transcript?.duration_ms,
+  ).forEach((pillar, index) => {
     children.push(
       new Paragraph({
         children: [
@@ -99,6 +102,14 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
           }),
         );
     }
+    pillar.timeline?.forEach((phase) => {
+      children.push(
+        new Paragraph({
+          text: `${clock(phase.start_ms)}–${clock(phase.end_ms)} · ${phase.label}`,
+          spacing: { after: 60 },
+        }),
+      );
+    });
     pillar.entries.forEach((entry) => {
       children.push(
         new Paragraph({

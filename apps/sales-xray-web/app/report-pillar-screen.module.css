@@ -1,0 +1,178 @@
+.pillar {
+  min-width: 0;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+  overflow-wrap: anywhere;
+}
+.preview {
+  background: var(--lx-paper);
+  color: var(--lx-ink);
+  padding: 16px;
+  font-family: var(--lx-font-ui);
+  min-height: 100dvh;
+}
+.previewFrame {
+  max-width: 1320px;
+  margin: auto;
+}
+.previewSource {
+  background: var(--lx-paper-2);
+  padding: 12px;
+  border: 1px solid var(--lx-line);
+}
+:global([data-view="reading"]) .subtitle {
+  display: none;
+}
+.subtitle {
+  color: var(--lx-muted);
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+.entry {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+.entry h3 {
+  font-size: 15px;
+  margin: 0 0 5px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.entry p,
+.skill p {
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 0;
+}
+.entry small,
+.skill small {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.entry[data-gap] p {
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+.sources {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.sources summary {
+  color: var(--lx-teal);
+  cursor: pointer;
+  padding: 5px 0;
+}
+.evidence {
+  margin-top: 8px;
+}
+.evidence figure {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: var(--lx-paper-2);
+  border-radius: var(--lx-radius-sm);
+}
+.evidence figcaption {
+  color: var(--lx-muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.evidence button {
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  color: var(--lx-teal);
+  padding: 7px 12px;
+  cursor: pointer;
+  min-height: 36px;
+  font: inherit;
+}
+.evidence blockquote {
+  margin: 0;
+  font-size: 14px;
+}
+.metrics {
+  display: flex;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 12px 0;
+}
+.metrics dt {
+  font-size: 12px;
+  color: var(--lx-muted);
+}
+.metrics dd {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 3px 0;
+}
+.metrics small,
+.measurements p {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.timeline li {
+  border-top: 3px solid var(--lx-teal);
+  padding: 9px 10px;
+  background: var(--lx-paper-2);
+  min-width: 100px;
+  flex-basis: 100px;
+}
+.timeline strong {
+  display: block;
+  font-size: 13px;
+}
+.timeline span {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.skill {
+  border-bottom: 1px solid var(--lx-line-soft);
+  padding: 12px 0;
+}
+.skill summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 28px;
+}
+.skill summary small {
+  text-align: right;
+  flex: none;
+}
+.skill[open] summary {
+  margin-bottom: 8px;
+}
+.destination {
+  display: inline-block;
+  color: var(--lx-teal);
+  margin-top: 20px;
+  font-size: 14px;
+}
+.pillar :focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .skill summary {
+    align-items: start;
+  }
+  .skill summary small {
+    max-width: 115px;
+  }
+}

@@ -32,6 +32,7 @@ export type ReportPillar = {
   id: (typeof REPORT_PILLARS)[number]["id"];
   label: string;
   entries: PillarEntry[];
+  timeline?: { label: string; start_ms: number; end_ms: number }[];
 };
 
 const gap = (
@@ -40,8 +41,12 @@ const gap = (
 ): PillarEntry => ({ label, text, evidence: [], gap: true });
 
 /** Presentation of existing validated C5 output; no extraction or scoring. */
-export function reportPillars(report: SalesReport): ReportPillar[] {
+export function reportPillars(
+  report: SalesReport,
+  durationMs?: number,
+): ReportPillar[] {
   const overview = report.overview;
+  const story = report.story;
   const sourced = (
     label: string,
     text: string,
@@ -52,6 +57,26 @@ export function reportPillars(report: SalesReport): ReportPillar[] {
       ? { label, text, evidence, hypothesis }
       : gap(label, "No supporting quote was supplied for this observation.");
   const picture: PillarEntry[] = [
+    story?.outcome.evidence.length &&
+    ["won", "lost", "disqualified"].includes(story.outcome.kind)
+      ? {
+          label: "Call outcome",
+          text: { won: "Won", lost: "Lost", disqualified: "Disqualified" }[
+            story.outcome.kind as "won" | "lost" | "disqualified"
+          ],
+          evidence: story.outcome.evidence,
+        }
+      : story?.outcome.kind === "follow_up" &&
+          story.next_step &&
+          ["dated_call", "invite_sent", "committed"].includes(
+            story.outcome.next_step_rung,
+          )
+        ? {
+            label: "Call outcome",
+            text: "Follow-up Set",
+            evidence: story.outcome.evidence,
+          }
+        : gap("Call outcome"),
     {
       label: "Call summary",
       text: report.summary,
@@ -65,7 +90,6 @@ export function reportPillars(report: SalesReport): ReportPillar[] {
           ),
         ]
       : []),
-    gap("Call outcome"),
     ...(overview?.outcome
       ? [
           sourced(
@@ -87,14 +111,32 @@ export function reportPillars(report: SalesReport): ReportPillar[] {
       : [gap("What most affected this call")]),
     gap("Strongest part"),
     gap("Biggest concern"),
-    gap("Next agreed step"),
+    story?.next_step
+      ? { label: "Next agreed step", ...story.next_step }
+      : gap("Next agreed step"),
   ];
-  const flow: PillarEntry[] = [
-    gap(
-      "Conversation timeline",
-      "Conversation phases were not supplied for this call.",
-    ),
-  ];
+  const phaseLabels = {
+    opening: "Opening",
+    discovery: "Discovery",
+    pitch: "Offer discussion",
+    objection: "Concerns",
+    close: "Decision discussion",
+  };
+  const timeline = durationMs
+    ? story?.phases.map((phase, i) => ({
+        label: phaseLabels[phase.name],
+        start_ms: phase.start_ms,
+        end_ms: story.phases[i + 1]?.start_ms ?? durationMs,
+      }))
+    : undefined;
+  const flow: PillarEntry[] = timeline?.length
+    ? []
+    : [
+        gap(
+          "Conversation timeline",
+          "Conversation phases were not supplied for this call.",
+        ),
+      ];
   const change = overview?.conversation_change;
   if (change) {
     for (const [label, note] of [
@@ -207,8 +249,15 @@ export function reportPillars(report: SalesReport): ReportPillar[] {
     );
     if (!dimension)
       return gap(label, "No assessment was supplied for this skill.");
-    const state =
-      dimension.status === "observed" && dimension.evidence?.length
+    const state = dimension.call_state
+      ? {
+          strongly_demonstrated: "Strongly Demonstrated",
+          observed: "Observed",
+          needs_attention: "Needs Attention",
+          insufficient_evidence: "Not Enough Evidence",
+          not_applicable: "Not Applicable",
+        }[dimension.call_state]
+      : dimension.status === "observed" && dimension.evidence?.length
         ? "Observed"
         : dimension.status === "insufficient_evidence"
           ? "Not Enough Evidence"
@@ -224,19 +273,45 @@ export function reportPillars(report: SalesReport): ReportPillar[] {
       gap: state === null,
     };
   });
-  const deal = [
-    "Current status",
-    "Prospect's position",
-    "Current blocker",
-    "Prospect commitment",
-    "Seller commitment",
-    "Next event",
-    "Commitment quality",
-    "What is still unclear",
-    "Recommended deal action",
-  ].map((label) => gap(label));
+  const outcome = picture[0];
+  const deal: PillarEntry[] = [
+    { ...outcome, label: "Current status" },
+    overview?.outcome
+      ? sourced(
+          "Prospect's position",
+          overview.outcome.text,
+          overview.outcome.evidence,
+        )
+      : gap("Prospect's position"),
+    gap("Current blocker"),
+    ...(story?.prospect_commitments.length
+      ? story.prospect_commitments.map((note) => ({
+          label: "Prospect commitment",
+          text: note.text,
+          evidence: note.evidence,
+        }))
+      : [gap("Prospect commitment")]),
+    ...(story?.seller_commitments.length
+      ? story.seller_commitments.map((note) => ({
+          label: "Seller commitment",
+          text: [note.text, note.due_text].filter(Boolean).join(" · "),
+          evidence: note.evidence,
+        }))
+      : [gap("Seller commitment")]),
+    story?.outcome.next_step_when && story.outcome.evidence.length
+      ? {
+          label: "Next event timing · as stated",
+          text: story.outcome.next_step_when,
+          evidence: story.outcome.evidence,
+        }
+      : gap("Next event"),
+    gap("Commitment quality"),
+    gap("What is still unclear"),
+    gap("Recommended deal action"),
+  ];
   return REPORT_PILLARS.map((pillar, index) => ({
     ...pillar,
     entries: [picture, flow, worked, moments, skills, deal][index],
+    ...(index === 1 && timeline?.length ? { timeline } : {}),
   }));
 }

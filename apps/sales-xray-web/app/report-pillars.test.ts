@@ -3,6 +3,25 @@ import { reportPillars, REPORT_PILLARS } from "./report-pillars";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 describe("C5 six-pillar projection", () => {
+  it.each([
+    ["strongly_demonstrated", "Strongly Demonstrated"],
+    ["observed", "Observed"],
+    ["needs_attention", "Needs Attention"],
+    ["insufficient_evidence", "Not Enough Evidence"],
+    ["not_applicable", "Not Applicable"],
+  ] as const)(
+    "shows the explicit call state %s without inferring it from sufficiency",
+    (state, label) => {
+      const report = {
+        ...syntheticReport,
+        dimensions: syntheticReport.dimensions.map((d) => ({
+          ...d,
+          call_state: state,
+        })),
+      };
+      expect(reportPillars(report)[4].entries[0].label).toContain(label);
+    },
+  );
   it("does not promote legacy outcomes, coaching priorities or actions into deal facts", () => {
     const pillars = reportPillars(syntheticReport);
     expect(pillars.map((p) => p.label)).toEqual(
@@ -18,9 +37,9 @@ describe("C5 six-pillar projection", () => {
       expect(picture.find((entry) => entry.label === label)?.gap).toBe(true);
     expect(pillars[5].entries).toHaveLength(9);
     expect(
-      pillars[5].entries.every(
-        (entry) => entry.gap && entry.evidence.length === 0,
-      ),
+      pillars[5].entries
+        .filter((entry) => entry.label !== "Prospect's position")
+        .every((entry) => entry.gap && entry.evidence.length === 0),
     ).toBe(true);
     const content = JSON.stringify(pillars);
     expect(content).not.toContain(
