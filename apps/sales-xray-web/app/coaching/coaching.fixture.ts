@@ -1,4 +1,5 @@
 import type { Coaching } from "./coaching-client";
+import type { CallCoaching } from "./coaching-read";
 
 /** Invented contract fixture. Never a substitute for a real learner's history. */
 export const fictionalCoaching: Coaching & {
@@ -112,4 +113,38 @@ fictionalCoaching.lesson = {
   source: "Owner's binding Coaching specification",
   own_call: fictionalCoaching.evidence[0],
   next_call_connection: "Ask one impact question.",
+};
+
+export const fictionalCallCoaching: CallCoaching & {
+  authority: "provisional";
+  entitlement: "coaching";
+  entitlement_policy: "AUT-1678-open-access";
+  recommended_media: null;
+} = {
+  schema: "ac.sales-xray.call-coaching/1",
+  authority: "provisional",
+  entitlement: "coaching",
+  entitlement_policy: "AUT-1678-open-access",
+  person_id: fictionalCoaching.person_id,
+  tenant_id: fictionalCoaching.tenant_id,
+  submission_id: fictionalCoaching.evidence[0].submission_id,
+  recording_id: fictionalCoaching.evidence[0].recording_id,
+  source_sha256: fictionalCoaching.evidence[0].source_sha256,
+  transcript_revision: fictionalCoaching.evidence[0].transcript_revision,
+  report_revision: "b".repeat(64),
+  call_label: "Fictional call 1",
+  state: "ready",
+  basis: "skill_evidence",
+  focus: {
+    ...fictionalCoaching.focus!,
+    status: "provisional",
+    selected_reason: "Selected from this call’s report.",
+  },
+  evidence: [fictionalCoaching.evidence[0]],
+  root_cause: fictionalCoaching.root_cause,
+  lesson: fictionalCoaching.lesson,
+  practice: fictionalCoaching.practice,
+  mission: fictionalCoaching.mission,
+  limitations: ["This coaching belongs to one fictional call."],
+  recommended_media: null,
 };

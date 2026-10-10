@@ -225,6 +225,7 @@ class CoachingView(Model):
     )
     person_id: UUID
     tenant_id: UUID
+    session_id: UUID | None = None
     authority: Literal["provisional"] = "provisional"
     entitlement: Literal["coaching"] = "coaching"
     entitlement_policy: Literal["AUT-1678-open-access"] = "AUT-1678-open-access"

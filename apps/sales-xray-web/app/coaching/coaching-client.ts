@@ -57,6 +57,7 @@ export type Coaching = {
   schema: "ac.sales-xray.coaching/1";
   person_id: string;
   tenant_id: string;
+  session_id?: string | null;
   authority: "provisional";
   entitlement: "coaching";
   state: "not_enough_evidence" | "ready";
@@ -179,6 +180,7 @@ export function parseCoaching(value: unknown): Coaching {
     return invalid();
   uuid(item.person_id);
   uuid(item.tenant_id);
+  if (item.session_id != null) uuid(item.session_id);
   count(item.analysed_calls);
   count(item.pending_calls);
   count(item.unavailable_calls);

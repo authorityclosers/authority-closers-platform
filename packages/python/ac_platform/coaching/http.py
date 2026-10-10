@@ -87,7 +87,8 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     @router.get("", response_model=CoachingView, response_model_by_alias=True)
     async def coaching(request: Request, response: Response) -> CoachingView:
         async with account_library(request, response) as (library, actor):
-            return await library.read(actor)
+            view = await library.read(actor)
+            return view.model_copy(update={"session_id": actor.session_id})
 
     @router.get(
         "/calls/{submission_id}", response_model=CallCoachingView, response_model_by_alias=True
@@ -96,6 +97,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         submission_id: UUID, request: Request, response: Response
     ) -> CallCoachingView:
         async with account_library(request, response) as (library, actor):
-            return await library.read_call(actor, submission_id, call_cache)
+            view = await library.read_call(actor, submission_id, call_cache)
+            return view.model_copy(update={"session_id": actor.session_id})
 
     application.include_router(router)

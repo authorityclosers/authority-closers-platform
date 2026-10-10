@@ -29,6 +29,7 @@ class CallCoachingView(Model):
     )
     person_id: UUID
     tenant_id: UUID
+    session_id: UUID | None = None
     submission_id: UUID
     recording_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")

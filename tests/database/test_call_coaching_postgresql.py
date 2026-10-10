@@ -60,6 +60,7 @@ def test_call_coaching_one_report_private_cache_withholding_and_revocation(
                     data = response.json()
                     assert data["schema"] == "ac.sales-xray.call-coaching/1"
                     assert data["state"] == "ready" and data["submission_id"] == str(call)
+                    assert data["session_id"] is not None
                     assert data["mission"]["origin_submission_id"] == str(call)
                     assert data["lesson"]["own_call"]["submission_id"] == str(call)
                 assert reads == [call, call]  # exactly one selected report per request
