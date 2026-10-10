@@ -40,6 +40,7 @@ from ac_platform.http.learning import (
 )
 from ac_platform.http.media import install_media_http
 from ac_platform.http.media_delivery import install_media_delivery_http
+from ac_platform.http.native_devices import install_native_devices_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation_domains import install_organisation_domains_http
 from ac_platform.http.planning import install_planning_http
@@ -140,6 +141,9 @@ def create_app(
         provider=configured_identity_provider,
     )
     ctx = RouteContext(settings=settings, require_actor=require_actor, sessions=session_factory)
+    install_native_devices_http(
+        application, settings=settings, require_actor=require_actor, sessions=session_factory
+    )
     routes = discover_routes()
     install_routes(application, ctx, routes, stop=200)
     install_organisation_domains_http(application, settings=settings, require_actor=require_actor)
