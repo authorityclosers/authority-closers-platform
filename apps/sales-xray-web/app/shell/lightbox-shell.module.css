@@ -704,13 +704,6 @@
   letter-spacing: 0.01em;
 }
 
-.titleSlash {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--lx-line-strong);
-  user-select: none;
-}
-
 .titleText {
   margin: 0;
   font-size: 19px;
@@ -1196,12 +1189,24 @@
   height: 56px;
 }
 
-.titleContext {
-  font-size: 12.5px;
+/* The workspace sits over the page title, as on phones (r17): the title is
+   drawn at once and the workspace name fills its own line when it arrives,
+   so nothing moves sideways. */
+.topBarTitle {
+  display: grid;
+  gap: 1px;
+  justify-items: start;
 }
 
-.titleSlash {
+.titleContext {
+  max-width: 320px;
+  overflow: hidden;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .titleText {
@@ -1228,10 +1233,11 @@
   }
 }
 
-/* Session still loading: soft placeholders instead of guest labels. */
+/* Session still loading: soft placeholders instead of guest labels. The
+   page title is known from the address, so it is drawn for real. */
 .shell[data-loading="true"] .workspaceName,
 .shell[data-loading="true"] .workspaceSub,
-.shell[data-loading="true"] .titleText {
+.shell[data-loading="true"] .titleContext {
   width: fit-content;
   min-width: 96px;
   border-radius: 6px;
@@ -1247,10 +1253,6 @@
   background: var(--lx-sunken);
   color: transparent;
 }
-.shell[data-loading="true"] .titleText {
-  min-width: 140px;
-}
-.shell[data-loading="true"] .topBarRight > :last-child,
 .shell[data-loading="true"] .barActions > :last-child {
   visibility: hidden;
 }
@@ -1266,7 +1268,7 @@
 @media (prefers-reduced-motion: reduce) {
   .shell[data-loading="true"] .workspaceName,
   .shell[data-loading="true"] .workspaceSub,
-  .shell[data-loading="true"] .titleText {
+  .shell[data-loading="true"] .titleContext {
     animation: none;
   }
 }

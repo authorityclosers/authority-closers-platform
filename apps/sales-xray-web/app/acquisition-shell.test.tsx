@@ -266,9 +266,9 @@ it("keeps the public policy footer to the public landing", async () => {
   expect(showsPolicyFooter(null, "unauthenticated")).toBe(false);
 });
 
-it("draws no policy footer on app pages, signed in, signed out or loading", async () => {
+it("draws no policy footer on app pages, signed in or out", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-  for (const authenticated of [true, false, undefined]) {
+  for (const authenticated of [true, false]) {
     await act(async () =>
       root.render(
         <AcquisitionShell authenticated={authenticated}>

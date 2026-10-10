@@ -186,21 +186,7 @@
   }
 }
 
-/* Minutes still loading: the pill keeps its size and shimmers. */
-.skeleton {
-  width: 78px;
-  height: 10px;
-  border-radius: 5px;
-  background: linear-gradient(
-    90deg,
-    var(--lx-sunken) 0%,
-    var(--lx-line) 50%,
-    var(--lx-sunken) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s linear infinite;
-}
-.meter:not([data-level="pending"]) .text {
+.meter .text {
   animation: pill-text-in 260ms ease both;
 }
 @keyframes pill-text-in {
@@ -210,17 +196,7 @@
   }
 }
 
-@keyframes skeleton-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .skeleton,
   .text {
     animation: none;
   }

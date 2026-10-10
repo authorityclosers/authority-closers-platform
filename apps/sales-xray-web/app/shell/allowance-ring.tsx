@@ -14,14 +14,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * percentage are computed from the session's own allowance, never estimated;
  * nothing renders until the caller has an actual allowance.
  */
-export function AllowanceRing({
-  allowance,
-  pending = false,
-}: {
-  allowance?: Allowance | null;
-  /** Signed in but the minutes have not arrived: hold the pill's place. */
-  pending?: boolean;
-}) {
+export function AllowanceRing({ allowance }: { allowance?: Allowance | null }) {
   const gradient = `ring-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   // Draw the arc after mount so it sweeps in from empty.
   const [drawn, setDrawn] = useState(false);
@@ -29,15 +22,9 @@ export function AllowanceRing({
     const frame = requestAnimationFrame(() => setDrawn(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  if (!allowance)
-    return pending ? (
-      <div className={styles.meter} data-level="pending" aria-hidden="true">
-        <svg className={styles.ring} viewBox="0 0 36 36">
-          <circle className={styles.track} cx="18" cy="18" r={RADIUS} />
-        </svg>
-        <span className={styles.skeleton} />
-      </div>
-    ) : null;
+  // No placeholder while the minutes load: a ring with no value read as an
+  // empty toggle. The ring sits first in the bar, so it moves nothing in.
+  if (!allowance) return null;
 
   const ring = (share: number) => (
     <svg className={styles.ring} viewBox="0 0 36 36" aria-hidden="true">

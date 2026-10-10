@@ -607,12 +607,6 @@ function LightboxShellFrame({
     (shellAllowance && shellAllowance.key === recentContextKey
       ? shellAllowance.value
       : null);
-  const allowanceSettled =
-    hasPageAllowance || shellAllowance?.key === recentContextKey;
-  const allowancePending =
-    process.env.NODE_ENV !== "test" &&
-    !shownAllowance &&
-    (sessionPending || (authenticated && !allowanceSettled));
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -1019,9 +1013,6 @@ function LightboxShellFrame({
                   >
                     {workspaceLabel ?? "Sales Xray"}
                   </span>
-                  <span className={styles.titleSlash} aria-hidden="true">
-                    /
-                  </span>
                   {heading ? (
                     <h1 key={heading.title} className={styles.titleText}>
                       {heading.title}
@@ -1038,21 +1029,20 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
-            {(authenticated || sessionPending) && active !== "analyse" ? (
+            {/* First, so its arrival (or absence) moves nothing else. */}
+            <AllowanceRing allowance={shownAllowance} />
+            {(authenticated || sessionPending) && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
                 New analysis
               </Link>
             ) : null}
-            <AllowanceRing
-              allowance={shownAllowance}
-              pending={allowancePending}
-            />
             <ThemeToggle />
             <ProfileMenu
               authenticated={authenticated}
               accountHref={accountHref}
               variant="header"
+              pending={chromePending}
             />
           </div>
         </header>

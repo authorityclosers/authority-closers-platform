@@ -67,13 +67,10 @@ it.each(["header", "rail"] as const)(
       "button[aria-expanded]",
     )!;
     expect(trigger.getAttribute("aria-label")).toBe("Open Morgan Lee menu");
-    expect(trigger.textContent).toContain(
-      variant === "header" ? "Morgan" : "Morgan Lee",
-    );
-    if (variant === "header")
-      expect(
-        trigger.querySelector("span:not([aria-hidden])")?.textContent,
-      ).toBe("Morgan");
+    // The top bar shows the avatar alone (one fixed size, no shift when the
+    // name arrives); the name is the button's label and heads the menu.
+    if (variant === "header") expect(trigger.textContent).toBe("ML");
+    else expect(trigger.textContent).toContain("Morgan Lee");
     expect(trigger.querySelector('[aria-hidden="true"]')?.textContent).toBe(
       "ML",
     );
@@ -372,4 +369,20 @@ it("keeps the public site's pricing and policy links in Help", async () => {
       ["Refunds", "/refunds"],
     ]),
   );
+});
+
+it("draws the avatar's circle while the session is checked, never hidden", async () => {
+  vi.stubGlobal("fetch", vi.fn());
+  await act(async () =>
+    root.render(
+      <ProfileMenu authenticated={false} accountHref="/login" pending />,
+    ),
+  );
+  const menu = host.querySelector("[data-variant='header']")!;
+  expect(menu.hasAttribute("data-pending")).toBe(true);
+  expect(menu.querySelector("button[aria-expanded]")).not.toBeNull();
+  await act(async () =>
+    root.render(<ProfileMenu authenticated={false} accountHref="/login" />),
+  );
+  expect(menu.hasAttribute("data-pending")).toBe(false);
 });

@@ -485,6 +485,24 @@ function SignedOut({ onSignIn }: { onSignIn?: () => void }) {
   );
 }
 
+/** The route's loading screen: the page's own skeleton, nothing else. */
+export function OrganisationLoading() {
+  const access = useWorkspaceAccess();
+  return (
+    <AcquisitionShell
+      authenticated={access?.authenticated === true}
+      loading={!access}
+      homeHref="/"
+      active="organisation"
+      mobileFit={false}
+    >
+      <div className={styles.page} data-organisation-view>
+        <PageSkeleton />
+      </div>
+    </AcquisitionShell>
+  );
+}
+
 function PageSkeleton() {
   return (
     <div
