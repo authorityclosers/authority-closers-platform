@@ -74,8 +74,6 @@ export function discoverRoutes(root = APP) {
 export const KNOWN = {
   "/account|*":
     "Plan and billing stays on 'Loading billing details…' with no read in flight (billing code; reported by AUT-1663, 10 Oct)",
-  "/prospects|guest":
-    "a guest gets no way to sign in on Prospects (Strike B, app/prospects)",
 };
 
 export const knownFault = (route, role) =>

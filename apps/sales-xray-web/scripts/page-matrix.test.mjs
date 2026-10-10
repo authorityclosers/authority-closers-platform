@@ -78,8 +78,8 @@ describe("page matrix (AUT-1663)", () => {
       expect(key).toMatch(/^\/[^|]*\|(\*|guest|member|admin|owner|personal)$/);
       expect(reason.length).toBeGreaterThan(20);
     }
-    expect(knownFault("/prospects", "guest")).toBe(KNOWN["/prospects|guest"]);
-    expect(knownFault("/prospects", "owner")).toBeNull();
+    // Fixed by Strike B (#420): a guest on Prospects is offered sign-in.
+    expect(knownFault("/prospects", "guest")).toBeNull();
     expect(knownFault("/account", "member")).toBe(KNOWN["/account|*"]);
     expect(knownFault("/dashboard", "guest")).toBeNull();
   });
