@@ -394,8 +394,10 @@ class ConversationInferenceWorker:
         if candidate is None:
             return
         job, task, run = candidate
+        now = self.clock()
         task.state = "uncertain" if job.dispatch_started_at is not None else "failed"
         run.state = "failed"
+        run.completed_at = now
         await AuditRepository(db).append(
             tenant_id=job.tenant_id,
             actor_person_id=None,
@@ -415,7 +417,7 @@ class ConversationInferenceWorker:
                 "run_state": run.state,
             },
             reason="Terminal worker job reconciled; no provider replay or minute settlement.",
-            now=self.clock(),
+            now=now,
         )
 
     async def _locked_job(self, db: AsyncSession, work: Work) -> Job:
@@ -1065,6 +1067,8 @@ class ConversationInferenceWorker:
                     task.state = "uncertain" if ambiguous else "failed"
                 if run is not None and run.state not in {"cancelled", "completed"}:
                     run.state = "failed"
+                    if run.completed_at is None:
+                        run.completed_at = self.clock()
                 if recording is not None and quoted is not None:
                     minutes, budget = await ConversationInference(
                         ConversationApplication(db, clock=self.clock)

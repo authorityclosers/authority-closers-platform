@@ -244,6 +244,9 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                 assert job.status == (
                     "leased" if mode in {"cleanup_crash", "missing_evidence"} else "dead_letter"
                 )
+                run_row = await db.get(ConversationRun, job.payload["run_id"])
+                assert run_row is not None
+                assert (run_row.completed_at is None) == (job.status == "leased")
                 assert job.dispatch_started_at is not None
                 assert job.provider_idempotency_key is not None
                 assert job.provider_receipt is job.provider_receipt_digest is None
@@ -521,6 +524,7 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                     job.dead_lettered_at = datetime.now(UTC)
                     job.last_error = "fictional dead letter"
                 before_states = (task.state, run_row.state)
+                before_completed_at = run_row.completed_at
                 before_effect = (
                     job.dispatch_started_at,
                     job.provider_idempotency_key,
@@ -554,8 +558,10 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                 async with sessions() as db:
                     rolled_back = await db.get(Job, work.job_id)
                     task = await db.get(ConversationInferenceTask, run_id)
+                    run_row = await db.get(ConversationRun, run_id)
                     assert rolled_back is not None and rolled_back.status == "leased"
                     assert task is not None and task.state == before_states[0]
+                    assert run_row is not None and run_row.completed_at == before_completed_at
             assert await worker.claim() is None
             async with sessions() as db:
                 job = await db.get(Job, work.job_id)
@@ -593,12 +599,16 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                     )
                 )
                 assert len(events) == int(recovered)
+                assert run_row.completed_at == (
+                    events[0].occurred_at if recovered else before_completed_at
+                )
                 assert (await AuditRepository(db).verify_chain(task.tenant_id)).valid
             if recovered:
                 with pytest.raises(ConversationConflict, match="fenced"):
                     await worker._dispatch(work)
             assert await worker.claim() is None
             async with sessions() as db:
+                assert (await db.get(ConversationRun, run_id)).completed_at == run_row.completed_at
                 assert len(
                     list(
                         await db.scalars(
