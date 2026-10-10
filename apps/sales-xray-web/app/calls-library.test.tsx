@@ -1448,12 +1448,12 @@ it("keeps phone rows readable and the module on tokens only", () => {
   );
   const css = readFileSync(cssPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-  // Phone rows: the title wraps to two lines and the search never zooms.
+  // Phone rows: the title wraps to two lines; search and lists never zoom.
   expect(css).toMatch(
     /@container calls-page \(max-width: 760px\) \{[\s\S]*?-webkit-line-clamp: 2;/,
   );
   expect(css).toMatch(
-    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input \{\s*font-size: 16px;/,
+    /@container calls-page \(max-width: 760px\) \{[\s\S]*?\.search input,\s*\.repFilter select,\s*\.sort select \{\s*font-size: 16px;/,
   );
   // No raw colours: every colour is a lightbox token.
   expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);

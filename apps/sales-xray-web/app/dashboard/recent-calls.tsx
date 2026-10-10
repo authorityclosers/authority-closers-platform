@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
+import { unnamedCallName } from "../call-label";
 import { callDate, callTone, submissionState } from "../call-status";
 import { formatClock } from "../lightbox/time";
 import styles from "./recent-calls.module.css";
@@ -92,7 +93,7 @@ export function RecentCallsList({
                   className={styles.name}
                   data-untitled={name ? undefined : ""}
                 >
-                  {name ?? "Untitled call"}
+                  {name ?? unnamedCallName(call.createdAt)}
                 </span>
                 <span className={styles.date}>{callDate(call.createdAt)}</span>
                 <span

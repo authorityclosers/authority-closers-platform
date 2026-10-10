@@ -1202,8 +1202,10 @@
     min-width: 0;
   }
 
-  /* 16px stops iPhone zooming into the field. */
-  .search input {
+  /* 16px stops iPhone zooming into the field or a list. */
+  .search input,
+  .repFilter select,
+  .sort select {
     font-size: 16px;
   }
 
@@ -1375,6 +1377,7 @@
 @media (pointer: coarse) {
   .refresh,
   .tool,
+  .primary,
   .secondary,
   .search,
   .repFilter,
@@ -1383,6 +1386,12 @@
   .bulk button,
   .more {
     min-height: var(--lx-row-min-h, 44px);
+  }
+
+  /* The whole box takes the tap, not just the text line. */
+  .search input,
+  .repFilter select {
+    align-self: stretch;
   }
 
   .iconButton,
@@ -1399,12 +1408,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Match the tone selectors' specificity so this always wins. */
   .spin,
   .bulk,
   .skeleton i,
   .snippetSkeleton,
-  .metaStatus i,
-  .status i {
+  .metaStatus[data-tone] i,
+  .status[data-tone] i {
     animation: none;
   }
 }

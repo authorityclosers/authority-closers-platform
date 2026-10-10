@@ -102,36 +102,50 @@ function DashboardDetails() {
     ReadState<LibrarySubmission[]>
   >({ status: "loading" });
 
+  // A cancelled read (unmount, or a re-run of the effect) must not paint
+  // "Not loaded": only the live request may change a panel.
   const loadSummary = useCallback((signal?: AbortSignal) => {
     readCallSummary(signal)
-      .then((value) => setSummaryState({ status: "ready", value }))
-      .catch((error) =>
-        setSummaryState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setSummaryState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setSummaryState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadActivity = useCallback((signal?: AbortSignal) => {
     readCallActivity(signal)
-      .then((value) => setActivityState({ status: "ready", value }))
-      .catch((error) =>
-        setActivityState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setActivityState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setActivityState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadAllowance = useCallback((signal?: AbortSignal) => {
     readAllowance(signal)
-      .then((value) => setAllowanceState({ status: "ready", value }))
-      .catch((error) =>
-        setAllowanceState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setAllowanceState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setAllowanceState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadRecent = useCallback((signal?: AbortSignal) => {
     readRecentCalls(signal)
-      .then((value) => setRecentState({ status: "ready", value }))
-      .catch((error) =>
-        setRecentState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setRecentState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setRecentState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   useEffect(() => {
@@ -269,10 +283,10 @@ function DashboardDetails() {
                     <>
                       {minutesLeft(allowance).subtext}
                       {allowance.unlimited ? null : (
-                        <>
+                        <span className={styles.used}>
                           {" · "}
                           <MinutesUsed allowance={allowance} />
-                        </>
+                        </span>
                       )}
                     </>
                   ) : null

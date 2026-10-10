@@ -2,7 +2,11 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import { CALLS_PATH } from "../analysis-routes";
 
@@ -55,6 +59,17 @@ export function DayBars({ days }: { days: ActivityDay[] }) {
   const seconds = days.reduce((sum, day) => sum + day.analysedSeconds, 0);
   const shown = focus === null ? null : days[focus];
   const last = days.length - 1;
+  // A bar is a few pixels wide on a phone: a finger reads the day under it
+  // anywhere across the plot, so the whole plot is the touch target.
+  const scrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse") return;
+    const box = event.currentTarget.getBoundingClientRect();
+    if (box.width <= 0) return;
+    const at = Math.floor(
+      ((event.clientX - box.left) / box.width) * days.length,
+    );
+    setFocus(Math.min(last, Math.max(0, at)));
+  };
   return (
     <figure className={styles.chart} onMouseLeave={() => setFocus(null)}>
       <figcaption className={styles.readout} aria-live="polite">
@@ -82,6 +97,9 @@ export function DayBars({ days }: { days: ActivityDay[] }) {
         <div
           className={styles.bars}
           style={{ "--rows": ticks.length - 1 } as CSSProperties}
+          data-scrub=""
+          onPointerDown={scrub}
+          onPointerMove={scrub}
         >
           {days.map((day, index) => (
             <button

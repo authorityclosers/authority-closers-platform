@@ -529,7 +529,9 @@ it("reconciles every Overview figure with the calls it lists", async () => {
   expect(host.textContent).not.toContain("2 calls");
   const rows = host.querySelectorAll('[aria-label="Team calls"] a[role="row"]');
   expect(rows).toHaveLength(1);
-  expect(rows[0].textContent).toContain("Unnamed call");
+  expect(rows[0].querySelector("[data-unnamed]")?.textContent).toMatch(
+    /^Sales call · \S/,
+  );
   expect(rows[0].textContent).toContain("Report ready");
   // One sparse day is not a trend.
   expect(host.querySelector('[role="img"]')).toBeNull();

@@ -176,6 +176,8 @@ export function RecentCallItem({
     }
   }
 
+  // Until it has a saved name, the date beside it says which call it is.
+  const shown = call.name === UNTITLED ? "Sales call" : call.name;
   return (
     <div
       ref={rowRef}
@@ -224,7 +226,7 @@ export function RecentCallItem({
         <Link
           href={href}
           className={styles.link}
-          title={call.status ? `${call.name} · ${call.status}` : call.name}
+          title={call.status ? `${shown} · ${call.status}` : shown}
           data-current={current ? "" : undefined}
           aria-current={current ? "page" : undefined}
         >
@@ -243,7 +245,12 @@ export function RecentCallItem({
               <i />
             )}
           </span>
-          <span className={styles.name}>{call.name}</span>
+          <span
+            className={styles.name}
+            data-unnamed={call.name === UNTITLED ? "" : undefined}
+          >
+            {shown}
+          </span>
           {call.status && <span className={styles.srOnly}>{call.status}</span>}
           <span className={styles.date}>{call.date}</span>
         </Link>
@@ -253,7 +260,7 @@ export function RecentCallItem({
           ref={moreRef}
           type="button"
           className={styles.more}
-          aria-label={`More options for ${call.name}`}
+          aria-label={`More options for ${shown}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={() => {
@@ -266,7 +273,7 @@ export function RecentCallItem({
         </button>
       )}
       {menuOpen && (
-        <div className={styles.menu} role="menu" aria-label={call.name}>
+        <div className={styles.menu} role="menu" aria-label={shown}>
           {confirmingDelete ? (
             <div className={styles.confirm}>
               <p>Delete this call and its report?</p>

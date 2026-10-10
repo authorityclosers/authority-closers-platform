@@ -53,6 +53,33 @@ it("labels every day and scales bars against the axis top, not the busiest day",
   );
 });
 
+it("reads the day under a finger anywhere across the plot", async () => {
+  const days = Array.from({ length: 30 }, (_, index) => ({
+    date: `2026-09-${String(index + 1).padStart(2, "0")}`,
+    analysed: index === 12 ? 2 : 0,
+    analysedSeconds: index === 12 ? 900 : 0,
+  }));
+  await act(async () => root.render(<DayBars days={days} />));
+  const plot = host.querySelector<HTMLElement>("[data-scrub]")!;
+  plot.getBoundingClientRect = () =>
+    ({ left: 0, width: 300, top: 0, height: 120 }) as DOMRect;
+  const press = (type: string, pointerType: string, clientX: number) =>
+    act(async () => {
+      const event = new MouseEvent(type, { bubbles: true, clientX });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      plot.dispatchEvent(event);
+    });
+  const readout = () => host.querySelector("figcaption")?.textContent;
+  // 125 px of 300 is day 13 (index 12).
+  await press("pointerdown", "touch", 125);
+  expect(readout()).toBe("13 Sept2 calls · 15 min");
+  // A mouse keeps reading the bar it hovers, not the plot position.
+  await press("pointermove", "mouse", 295);
+  expect(readout()).toBe("13 Sept2 calls · 15 min");
+  await press("pointermove", "touch", 299);
+  expect(readout()).toBe("Today0 calls · 0 min");
+});
+
 it("lists every status in full with its count, including zeros", async () => {
   await act(async () =>
     root.render(

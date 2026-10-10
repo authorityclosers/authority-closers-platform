@@ -39,13 +39,15 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("lists each call once with its real name, or Untitled call", async () => {
+it("lists each call once with its real name, or the shared unnamed-call name", async () => {
   await act(async () => root.render(<RecentCallsList calls={calls} />));
   const rows = [...host.querySelectorAll("li a")];
   expect(rows).toHaveLength(3);
   expect(rows[0].textContent).toContain("Test");
   expect(rows[0].textContent).toContain("3:46");
-  expect(rows[1].textContent).toContain("Untitled call");
+  // The same muted fallback as Calls and Organisation: "Sales call · <date>".
+  expect(rows[1].textContent).toMatch(/Sales call · \S.*2025/);
+  expect(rows[1].querySelector("[data-untitled]")).not.toBeNull();
   expect(rows[1].textContent).toContain("—");
   expect(rows[2].textContent).toContain("24:06");
   expect(rows[0].getAttribute("href")).toContain(calls[0].id);

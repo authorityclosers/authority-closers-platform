@@ -38,7 +38,7 @@ import {
 import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
 import { newCallHref } from "./new-call-navigation";
-import { callTitle, type CallLabel } from "./call-label";
+import { callTitle, unnamedCallName, type CallLabel } from "./call-label";
 import { readCallLabel, renameCall } from "./call-label-client";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
@@ -755,10 +755,7 @@ function CallsLibraryContent({
         (filter === "all" || callTone(submission) === filter) &&
         (!selectedRep || submission.owner?.personId === selectedRep) &&
         (!needle ||
-          callTitle(
-            submission.label,
-            `Sales call · ${formatCreatedDate(submission.createdAt)}`,
-          )
+          callTitle(submission.label, unnamedCallName(submission.createdAt))
             .toLocaleLowerCase()
             .includes(needle)),
     ),
@@ -793,10 +790,7 @@ function CallsLibraryContent({
     return () => window.removeEventListener("keydown", onKey);
   }, [workspace]);
   const titleOf = (submission: LibrarySubmission) =>
-    callTitle(
-      submission.label,
-      `Sales call · ${formatCreatedDate(submission.createdAt)}`,
-    );
+    callTitle(submission.label, unnamedCallName(submission.createdAt));
   const lengthOf = (
     submission: LibrarySubmission,
     insight: CallInsight | null,

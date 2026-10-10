@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -256,4 +256,71 @@ it("says a failed read did not load instead of keeping a skeleton forever", asyn
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
     "Some dashboard numbers could not load",
   );
+});
+
+it("never paints Not loaded for reads cancelled by a re-run of the page effect", async () => {
+  // Every read waits: StrictMode's first effect run is cancelled, and only
+  // the second run's reads are answered, with a brand-new account's data.
+  const bodies: Record<string, unknown> = {
+    "/submissions/summary": {
+      total: 0,
+      processing: 0,
+      completed: 0,
+      needs_attention: 0,
+    },
+    "/submissions": { submissions: [], next_cursor: null },
+    "/session": {
+      allowance: {
+        allowance_seconds: 1800,
+        committed_seconds: 0,
+        available_seconds: 1800,
+        unlimited: false,
+      },
+    },
+  };
+  const pending: Array<() => void> = [];
+  fetchMock.mockImplementation(
+    (url: string, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError")),
+        );
+        const body = bodies[url.replace(base, "")];
+        pending.push(() =>
+          resolve(
+            body
+              ? Response.json(body)
+              : new Response(JSON.stringify({ detail: "Not Found" }), {
+                  status: 404,
+                }),
+          ),
+        );
+      }),
+  );
+  await act(async () => {
+    root.render(
+      <StrictMode>
+        <WorkspaceAccessContext.Provider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person-1",
+              sessionId: "session-1",
+              tenantId: "tenant-1",
+            },
+            retry: () => {},
+            requestAccountSignIn: signIn,
+          }}
+        >
+          <DashboardPage />
+        </WorkspaceAccessContext.Provider>
+      </StrictMode>,
+    );
+  });
+  expect(host.textContent).not.toContain("Not loaded");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => pending.forEach((answer) => answer()));
+  expect(host.textContent).not.toContain("Not loaded");
+  expect(host.querySelector("h2#get-started")).not.toBeNull();
 });

@@ -49,6 +49,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.name[data-unnamed] {
+  color: var(--lx-muted);
+}
 .date {
   flex: none;
   color: var(--lx-muted-2);
@@ -393,10 +396,11 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* Match the tone selectors' specificity so this always wins. */
   .row,
   .link[data-current]::before,
-  .mark i,
-  .mark::after {
+  .mark[data-tone] i,
+  .mark[data-tone]::after {
     animation: none;
   }
 }

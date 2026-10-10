@@ -364,6 +364,12 @@
 /* ---------- Phones ---------- */
 
 @media (max-width: 720px) {
+  /* One line on a phone, so the tile keeps its skeleton's height. The used
+     minutes are the gap between the two figures beside it. */
+  .used {
+    display: none;
+  }
+
   .page {
     gap: 16px;
   }
@@ -416,6 +422,14 @@
 @media (pointer: coarse) {
   .primaryAction {
     min-height: 44px;
+  }
+
+  /* A 44 px tap area that keeps the line height of the text around it. */
+  .textLink {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    margin-block: -12px;
   }
 }
 

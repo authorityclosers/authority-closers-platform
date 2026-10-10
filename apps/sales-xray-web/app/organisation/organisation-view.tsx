@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { callHref } from "../acquisition-client";
+import { unnamedCallName } from "../call-label";
 import { AcquisitionShell } from "../acquisition-shell";
 import { callDate, callTone, submissionState } from "../call-status";
 import { formatClock } from "../lightbox/time";
@@ -714,7 +715,7 @@ function CallsTable({
                     {call.label ? (
                       <b>{call.label}</b>
                     ) : (
-                      <b data-unnamed="">Unnamed call</b>
+                      <b data-unnamed="">{unnamedCallName(call.createdAt)}</b>
                     )}
                     <small className={styles.callMeta}>
                       {team ? `${person} · ` : ""}

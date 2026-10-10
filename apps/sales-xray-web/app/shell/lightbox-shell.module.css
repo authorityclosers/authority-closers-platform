@@ -559,6 +559,13 @@
   color: var(--lx-ink);
 }
 
+.recentsToggleBtn:focus-visible,
+.recentsViewAll:focus-visible {
+  box-shadow: var(--lx-ring-focus);
+  color: var(--lx-ink);
+  outline: none;
+}
+
 .recentsChevron {
   transition: transform 180ms ease;
   color: var(--lx-muted);
