@@ -50,13 +50,11 @@ describe("anonymous Team coaching", () => {
       expect(parseTeamCoaching(raw)).toBeNull();
   });
   it("loads the team projection in one same-account request", async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify(fictionalTeamCoaching), {
-          headers: { "content-type": "application/json" },
-        }),
-      );
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(fictionalTeamCoaching), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", fetch);
     expect((await readCoaching("team")).data?.schema).toBe(
       "ac.sales-xray.team-coaching/1",
