@@ -72,7 +72,10 @@ def build_learner(
     origin: SkillObservation | None = None
     for call in calls:
         for skill in call.skills:
-            key = (call.comparison_key, skill.skill_id)
+            key = (
+                call.comparison_key if skill.basis == "skill_evidence" else str(call.submission_id),
+                skill.skill_id,
+            )
             groups[key].append(skill)
             if selected is None and skill.improvement and skill.mission:
                 selected, origin = key, skill
@@ -110,13 +113,23 @@ def build_learner(
     count, total = len(attention), len(relevant)
     recurring = len({m.submission_id for m in evidence}) >= 2
     label = origin.label
+    suggestion = origin.basis == "report_suggestion"
+    if suggestion:
+        limitations.append(
+            "This focus comes from a call report suggestion. Its assessed skill is not linked; "
+            "it is not a recurring weakness or skill-progress measurement."
+        )
+        common["limitations"] = tuple(limitations)
     focus = Focus(
         skill_id=origin.skill_id,
         label=label,
         explanation=origin.improvement or origin.observation,
         why_it_matters=origin.why_it_matters or origin.observation,
         selected_reason=(
-            f"{count} of {total} comparable calls with evidence for this skill include a coaching "
+            "A source-linked suggestion from one call. Its assessed skill is not linked yet."
+            if suggestion
+            else f"{count} of {total} comparable calls with evidence for this skill "
+            "include a coaching "
             "suggestion. This does not establish that the same behavior recurred."
             if recurring
             else "One supported call suggestion; we are still learning your pattern."

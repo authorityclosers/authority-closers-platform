@@ -30,7 +30,13 @@ def envelope() -> dict[str, Any]:
                         "evidence": [ref],
                     }
                 ],
-                "improvements": [{"explanation": "Explore one consequence.", "evidence": [ref]}],
+                "improvements": [
+                    {
+                        "title": "Explore the consequence",
+                        "explanation": "Explore one consequence.",
+                        "evidence": [ref],
+                    }
+                ],
                 "overview": {
                     "next_call_focus": {
                         "improvement_index": 0,
@@ -70,18 +76,23 @@ def test_ambiguous_skill_link_does_not_guess_a_focus_from_prose() -> None:
     other["dimension_id"] = "discovery_deep_understanding"
     data["report"]["content"]["dimensions"].append(other)
     result = adapt(data)
-    assert len(result.skills) == 2
-    assert all(row.mission is None and row.improvement is None for row in result.skills)
+    assert len(result.skills) == 3
+    assert all(row.mission is None and row.improvement is None for row in result.skills[:2])
+    assert result.skills[-1].skill_id == "report_next_step"
+    assert result.skills[-1].basis == "report_suggestion"
 
 
 def test_unavailable_unknown_inapplicable_and_withheld_evidence_do_not_create_failures() -> None:
     for status in ("unknown", "conflicted", "not_applicable", "insufficient_evidence"):
         data = envelope()
         data["report"]["content"]["dimensions"][0]["status"] = status
-        assert adapt(data).skills == ()
+        result = adapt(data)
+        assert len(result.skills) == 1
+        assert result.skills[0].basis == "report_suggestion"
+        assert result.skills[0].skill_id == "report_next_step"
     data = envelope()
     data["report"]["content"]["dimensions"][0]["evidence"] = []
-    assert adapt(data).skills == ()
+    assert adapt(data).skills[0].basis == "report_suggestion"
     data = envelope()
     data["report"]["content"]["dimensions"][0]["evidence"][0]["quote"] = "[Withheld for privacy]"
     assert adapt(data).skills == ()
@@ -96,4 +107,52 @@ def test_guest_projection_foreign_submission_and_invalid_spans_are_rejected() ->
     assert adapt(data) is None
     data = envelope()
     data["report"]["content"]["dimensions"][0]["evidence"][0]["end_ms"] = 500
+    assert adapt(data).skills == ()
+
+
+def test_legacy_dimensions_without_call_evidence_keep_actual_finding_and_mission() -> None:
+    data = envelope()
+    del data["report"]["content"]["dimensions"][0]["evidence"]
+    result = adapt(data)
+    assert len(result.skills) == 1
+    row = result.skills[0]
+    assert row.basis == "report_suggestion" and row.skill_id == "report_next_step"
+    assert row.label == "Explore the consequence"
+    assert row.evidence[0].quote == "Handover takes time."
+    assert row.evidence[0].start_ms == 1000
+    assert row.mission.behavior == "Ask one impact question."
+    assert row.practice.exercise == "Practise one follow-up."
+
+
+def test_legacy_without_overview_uses_evidenced_report_suggestion_not_invented_diagnosis() -> None:
+    data = envelope()
+    data["report"]["content"].pop("overview")
+    data["report"]["content"]["dimensions"] = []
+    row = adapt(data).skills[0]
+    assert row.basis == "report_suggestion"
+    assert row.mission.behavior == "Try the report's suggested change: Explore one consequence."
+    assert "next call" in row.mission.done_when
+
+
+def test_each_existing_analysis_section_can_supply_source_bound_call_suggestion() -> None:
+    for section in ("missed_opportunities", "objection_analysis", "closing_analysis"):
+        data = envelope()
+        report = data["report"]["content"]
+        report[section] = report.pop("improvements")
+        report.pop("overview")
+        report["dimensions"] = []
+        row = adapt(data).skills[0]
+        assert row.evidence[0].quote == "Handover takes time."
+        assert row.basis == "report_suggestion"
+
+
+def test_missing_malformed_or_withheld_findings_never_supply_fallback_evidence() -> None:
+    for invalid in ([], None, [None], [{"title": "Example", "explanation": "Example"}]):
+        data = envelope()
+        data["report"]["content"]["dimensions"] = []
+        data["report"]["content"]["improvements"] = invalid
+        assert adapt(data).skills == ()
+    data = envelope()
+    data["report"]["content"]["dimensions"] = []
+    data["report"]["content"]["improvements"][0]["explanation"] = "[Withheld for privacy]"
     assert adapt(data).skills == ()

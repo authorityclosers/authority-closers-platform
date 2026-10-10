@@ -85,6 +85,9 @@ class SkillObservation(Model):
     why_it_matters: str | None = None
     mission: Mission | None = None
     practice: Practice | None = None
+    # A legacy finding can support a provisional next step without establishing
+    # which assessed skill it belongs to. Never group these as skill progress.
+    basis: Literal["skill_evidence", "report_suggestion"] = "skill_evidence"
 
     @model_validator(mode="after")
     def linked_mission(self) -> "SkillObservation":
