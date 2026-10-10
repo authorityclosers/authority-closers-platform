@@ -69,6 +69,7 @@ from ac_platform.conversation_intelligence.processing_actor import ProcessingAct
 from ac_platform.conversation_intelligence.provider_failure_observation import (
     ProviderFailureObservation,
 )
+from ac_platform.conversation_intelligence.provider_retry import assess_provider_retry
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.reports import PROSPECT_DIMENSION_IDS
@@ -667,6 +668,93 @@ class ConversationInferenceWorker:
                 now=self.clock(),
             )
 
+    async def _record_provider_retry_assessment(
+        self, work: Work, *, reservation: Reservation
+    ) -> None:
+        """Bind a bounded assessment to committed original failure evidence.
+
+        This separate transaction cannot roll back the original observation.
+        The current ledger permits one send per reservation, so this record
+        deliberately grants no dispatch or financial authority.
+        """
+
+        async with self.sessions() as db, db.begin():
+            job = await self._locked_job(db, work)
+            if (
+                job.tenant_id is None
+                or job.dispatch_started_at is None
+                or job.provider_receipt is not None
+                or job.provider_idempotency_key != reservation.attempt_id
+                or job.payload.get("run_id") != reservation.reservation_id
+                or str(job.tenant_id) != reservation.quote.source.tenant_id
+            ):
+                raise ConversationConflict("The retry assessment was fenced.")
+            event = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_failure_observed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if event is None:
+                raise ConversationConflict("Original provider failure evidence is required.")
+            evidence = event.payload
+            if (
+                evidence.get("schema") != "ac.sales_xray.provider_failure_evidence/1"
+                or evidence.get("job_id") != str(job.id)
+                or type(evidence.get("attempt_count")) is not int
+                or evidence["attempt_count"] != job.attempt_count
+                or type(evidence.get("recovery_generation")) is not int
+                or evidence["recovery_generation"] != work.recovery_generation
+                or evidence.get("dispatch_started_at") != job.dispatch_started_at.isoformat()
+            ):
+                raise ConversationConflict("Original provider failure evidence was fenced.")
+            observed = ProviderFailureObservation.from_dict(evidence.get("failure_observation"))
+            assessment = assess_provider_retry(
+                observed,
+                reservation,
+                observed_at=event.occurred_at,
+                claim_count=job.attempt_count,
+                claim_limit=job.max_attempts,
+            )
+            payload = {
+                "schema": "ac.sales_xray.provider_retry_assessment/1",
+                "job_id": str(job.id),
+                "failure_event_id": str(event.id),
+                "failure_event_hash": event.event_hash,
+                "claim_count": job.attempt_count,
+                "claim_limit": job.max_attempts,
+                "recovery_generation": work.recovery_generation,
+                "assessment": assessment.as_dict(),
+            }
+            prior = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_retry_assessed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                if prior.payload != payload:
+                    raise ConversationConflict("The retry assessment conflicts with history.")
+                return
+            await AuditRepository(db).append(
+                tenant_id=job.tenant_id,
+                actor_person_id=None,
+                actor_type="system",
+                action="conversation.provider_retry_assessed",
+                resource_type="job",
+                resource_id=job.id,
+                payload=payload,
+                now=self.clock(),
+            )
+
     async def _dispatch(self, work: Work) -> None:
         # Both media erasure and inference hold this fence BEFORE locking DB rows.
         async with _FencedExecutor(self.storage.root) as fenced:
@@ -764,6 +852,8 @@ class ConversationInferenceWorker:
                 await self._record_provider_failure_observation(
                     work, error=error, reservation=reservation
                 )
+                if error.failure_observation is not None:
+                    await self._record_provider_retry_assessment(work, reservation=reservation)
                 raise
 
             # Persist bounded provider-effect evidence before writing the raw

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -47,6 +47,7 @@ from tests.database.test_conversation_worker_postgresql import _postgres_harness
 from tests.database.test_conversation_worker_postgresql import _prepare as prepare_local
 
 ACTION = "conversation.provider_failure_observed"
+RETRY_ACTION = "conversation.provider_retry_assessed"
 
 
 async def seed_measured_fixture(sessions: Any, prepared: Any) -> None:
@@ -103,8 +104,19 @@ def postgres_harness() -> Any:
 
 
 class RefusalBroker:
-    def __init__(self, *, incomplete: bool = False, mismatch: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        incomplete: bool = False,
+        mismatch: bool = False,
+        nonempty: bool = False,
+        status: int = 503,
+        retry_after: int = 12,
+        missing_evidence: bool = False,
+    ) -> None:
         self.incomplete, self.mismatch = incomplete, mismatch
+        self.nonempty, self.status, self.retry_after = nonempty, status, retry_after
+        self.missing_evidence = missing_evidence
         self.calls = 0
         self.reservation: Reservation | None = None
         self.error: InferenceBrokerError | None = None
@@ -114,7 +126,7 @@ class RefusalBroker:
         self.reservation = reservation
         assert reservation.attempt_id is not None
         self.error = InferenceBrokerError(
-            "provider_http_503",
+            f"provider_http_{self.status}",
             failure_observation=ProviderFailureObservation(
                 reservation_id=reservation.reservation_id,
                 attempt_id=reservation.attempt_id,
@@ -123,19 +135,39 @@ class RefusalBroker:
                 model=reservation.quote.provider_model,
                 operation=reservation.quote.operation,
                 input_sha256=("b" * 64 if self.mismatch else hashlib.sha256(payload).hexdigest()),
-                http_status=503,
+                http_status=self.status,
                 response_body_complete=not self.incomplete,
-                response_body_observed_bytes=0,
-                response_body_sha256=(None if self.incomplete else hashlib.sha256(b"").hexdigest()),
+                response_body_observed_bytes=1 if self.nonempty else 0,
+                response_body_sha256=(
+                    None
+                    if self.incomplete
+                    else hashlib.sha256(b"x" if self.nonempty else b"").hexdigest()
+                ),
                 provider_request_id_sha256=hashlib.sha256(b"fictional-request").hexdigest(),
-                retry_after_seconds=12,
+                retry_after_seconds=self.retry_after,
                 diagnostic_category=None,
             ),
         )
+        if self.missing_evidence:
+            self.error = InferenceBrokerError(f"provider_http_{self.status}")
         raise self.error
 
 
-@pytest.mark.parametrize("mode", ["complete", "incomplete", "mismatch", "cleanup_crash"])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "complete",
+        "incomplete",
+        "mismatch",
+        "cleanup_crash",
+        "assessment_crash",
+        "nonempty",
+        "non_retryable",
+        "claim_limit",
+        "authorization_window",
+        "missing_evidence",
+    ],
+)
 def test_original_observation_is_durable_but_never_a_success_or_no_charge_receipt(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
@@ -167,14 +199,33 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                 view = await service.request_transcription(
                     prepared.state.actor, prepared.recording_id, quote_id, key=f"refusal-{mode}"
                 )
-            broker = RefusalBroker(incomplete=mode == "incomplete", mismatch=mode == "mismatch")
+                if mode == "claim_limit":
+                    queued = await db.scalar(
+                        select(Job).where(Job.payload["run_id"].as_string() == view["id"])
+                    )
+                    assert queued is not None
+                    queued.max_attempts = 1
+            broker = RefusalBroker(
+                incomplete=mode == "incomplete",
+                mismatch=mode == "mismatch",
+                nonempty=mode == "nonempty",
+                status=401 if mode == "non_retryable" else 503,
+                retry_after=3600 if mode == "authorization_window" else 12,
+                missing_evidence=mode == "missing_evidence",
+            )
             worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
-            if mode == "cleanup_crash":
+            if mode in {"cleanup_crash", "missing_evidence"}:
 
                 async def crash_cleanup(*args: Any, **kwargs: Any) -> None:
                     raise RuntimeError("fictional cleanup crash")
 
                 monkeypatch.setattr(worker, "_fail", crash_cleanup)
+            if mode == "assessment_crash":
+
+                async def crash_assessment(*args: Any, **kwargs: Any) -> None:
+                    raise RuntimeError("fictional assessment crash")
+
+                monkeypatch.setattr(worker, "_record_provider_retry_assessment", crash_assessment)
             assert await worker.run_once()
             assert broker.calls == 1
             async with sessions() as db:
@@ -186,7 +237,9 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                 lease_token = job.lease_token
                 generation = job.recovery_generation
                 assert job.attempt_count == 1
-                assert job.status == ("leased" if mode == "cleanup_crash" else "dead_letter")
+                assert job.status == (
+                    "leased" if mode in {"cleanup_crash", "missing_evidence"} else "dead_letter"
+                )
                 assert job.dispatch_started_at is not None
                 assert job.provider_idempotency_key is not None
                 assert job.provider_receipt is job.provider_receipt_digest is None
@@ -198,7 +251,7 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                         )
                     )
                 )
-                assert len(events) == (0 if mode == "mismatch" else 1)
+                assert len(events) == (0 if mode in {"mismatch", "missing_evidence"} else 1)
                 if events:
                     event = events[0]
                     original_payload = event.payload
@@ -214,6 +267,39 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                     )
                     assert "fictional-request" not in str(event.payload)
                     assert (await AuditRepository(db).verify(prepared.state.tenant_id)).valid
+                assessments = list(
+                    await db.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.action == RETRY_ACTION,
+                            AuditEvent.resource_id == str(job.id),
+                        )
+                    )
+                )
+                assert len(assessments) == (
+                    0 if mode in {"mismatch", "assessment_crash", "missing_evidence"} else 1
+                )
+                if assessments:
+                    assessed = assessments[0].payload
+                    original_assessment = assessed
+                    assert assessed["failure_event_id"] == str(event.id)
+                    assert assessed["failure_event_hash"] == event.event_hash
+                    assert assessed["claim_count"] == 1
+                    assert assessed["claim_limit"] == (1 if mode == "claim_limit" else 3)
+                    expected = {
+                        "incomplete": "reconciliation_required",
+                        "nonempty": "reconciliation_required",
+                        "non_retryable": "non_retryable",
+                        "claim_limit": "claim_limit_exhausted",
+                        "authorization_window": "authorization_window_exhausted",
+                    }.get(mode, "transport_retry_eligible")
+                    assert assessed["assessment"]["state"] == expected
+                    assert assessed["assessment"]["dispatch_authorized"] is False
+                    assert assessed["assessment"]["provider_charge_state"] == "unresolved"
+                    assert assessed["assessment"]["not_before"] == (
+                        (event.occurred_at + timedelta(seconds=12)).isoformat()
+                        if expected == "transport_retry_eligible"
+                        else None
+                    )
                 account = await db.get(
                     ConversationMinuteAccount, (prepared.state.tenant_id, prepared.state.person_id)
                 )
@@ -224,7 +310,7 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                     if r.reservation_id == view["id"]
                 )
                 assert reservation.state == (
-                    "in_flight" if mode == "cleanup_crash" else "uncertain"
+                    "in_flight" if mode in {"cleanup_crash", "missing_evidence"} else "uncertain"
                 )
             if mode == "cleanup_crash":
                 from ac_platform.conversation_intelligence.worker import Work
@@ -235,6 +321,33 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                     and broker.error is not None
                 )
                 work = Work(job_id, lease_token, generation, INFERENCE_JOB)
+                # Assessment replay reads committed original evidence, and never
+                # slides Retry-After when the caller clock advances.
+                worker.clock = lambda: datetime.now(UTC) + timedelta(minutes=1)
+                await worker._record_provider_retry_assessment(work, reservation=broker.reservation)
+                with pytest.raises(ValueError, match="provider job was fenced"):
+                    await worker._record_provider_retry_assessment(
+                        replace(work, lease_token=uuid4()), reservation=broker.reservation
+                    )
+                with pytest.raises(ReconciliationRequiredError, match="stale database"):
+                    await worker._record_provider_retry_assessment(
+                        replace(work, recovery_generation=generation + 1),
+                        reservation=broker.reservation,
+                    )
+                with pytest.raises(ValueError, match="binding mismatch"):
+                    await worker._record_provider_retry_assessment(
+                        work,
+                        reservation=replace(
+                            broker.reservation,
+                            quote=replace(broker.reservation.quote, provider_model="other-model"),
+                            permission=replace(
+                                broker.reservation.permission,
+                                quote_fingerprint=replace(
+                                    broker.reservation.quote, provider_model="other-model"
+                                ).fingerprint,
+                            ),
+                        ),
+                    )
                 # Repeated evidence is idempotent; conflicting evidence cannot replace history.
                 await worker._record_provider_failure_observation(
                     work, error=broker.error, reservation=broker.reservation
@@ -270,7 +383,29 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                         )
                     )
                     assert len(events) == 1 and events[0].payload == original_payload
+                    assessments = list(
+                        await db.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.action == RETRY_ACTION,
+                                AuditEvent.resource_id == str(job_id),
+                            )
+                        )
+                    )
+                    assert len(assessments) == 1 and assessments[0].payload == original_assessment
                     assert (await AuditRepository(db).verify(prepared.state.tenant_id)).valid
+            elif mode == "missing_evidence":
+                from ac_platform.conversation_intelligence.worker import Work
+
+                assert lease_token is not None and broker.reservation is not None
+                async with sessions() as db, db.begin():
+                    job = await db.get(Job, job_id)
+                    assert job is not None
+                    job.last_error = "conversation_provider_http_503"
+                with pytest.raises(ValueError, match="Original provider failure evidence"):
+                    await worker._record_provider_retry_assessment(
+                        Work(job_id, lease_token, generation, INFERENCE_JOB),
+                        reservation=broker.reservation,
+                    )
             else:
                 actor = replace(prepared.state.actor, permissions=frozenset({"job_retry"}))
                 async with sessions() as db, db.begin():
