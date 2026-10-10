@@ -188,44 +188,6 @@
   font-size: 12px;
 }
 
-.separator {
-  height: 1px;
-  margin: 5px 6px;
-  background: var(--lx-line);
-}
-
-.action {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--lx-control-compact-h, 32px);
-  padding: 7px 8px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--lx-ink-3);
-  font: 500 12.5px/1.2 var(--lx-font-ui, inherit);
-  text-align: left;
-}
-
-.action:disabled {
-  cursor: default;
-}
-
-.action svg {
-  color: var(--lx-muted);
-}
-
-.soon {
-  margin-left: auto;
-  padding: 1px 7px;
-  border-radius: 99px;
-  background: var(--lx-sunken);
-  color: var(--lx-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-}
-
 @keyframes menu-in {
   from {
     opacity: 0;
@@ -265,8 +227,7 @@
 
 @media (pointer: coarse) {
   .trigger,
-  .item,
-  .action {
+  .item {
     min-height: var(--lx-row-min-h, 44px);
   }
 }

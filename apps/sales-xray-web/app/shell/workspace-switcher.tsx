@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, Mail, Plus } from "lucide-react";
+import { Building2, Check, ChevronsUpDown } from "lucide-react";
 import type { RefObject } from "react";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 
@@ -17,7 +17,7 @@ function initials(name: string): string {
 
 /**
  * The sidebar's account switcher: Personal (your own account) and the
- * organisations you belong to, each clearly marked, with create and join.
+ * organisations you belong to, each clearly marked.
  */
 export function WorkspaceSwitcher({
   workspaces,
@@ -126,17 +126,8 @@ export function WorkspaceSwitcher({
           ) : (
             <p className={styles.empty}>You are not in an organisation yet.</p>
           )}
-          <span className={styles.separator} />
-          <button type="button" className={styles.action} disabled>
-            <Plus size={15} aria-hidden="true" />
-            Create an organisation
-            <span className={styles.soon}>Soon</span>
-          </button>
-          <button type="button" className={styles.action} disabled>
-            <Mail size={15} aria-hidden="true" />
-            Join with an invite
-            <span className={styles.soon}>Soon</span>
-          </button>
+          {/* Create and join appear when the server can do them (AUT-1694);
+              the menu never shows a promise it cannot keep. */}
         </div>
       )}
     </div>
