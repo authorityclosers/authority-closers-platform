@@ -3,8 +3,12 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationAcquisitionUsage,
+    ConversationVisitorClaim,
+)
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
@@ -28,13 +32,21 @@ async def read_speaker_map(
     *,
     actor: ActorContext | None,
     shared_identity_locks: bool = False,
+    allow_organisation_read: bool = False,
 ) -> dict[str, Any]:
     revision = await read_speaker_map_revision(
-        ownership, submission_id, actor=actor, shared_identity_locks=shared_identity_locks
+        ownership,
+        submission_id,
+        actor=actor,
+        shared_identity_locks=shared_identity_locks,
+        allow_organisation_read=allow_organisation_read,
     )
     reports = AcquisitionReports(ownership)
-    _, recording = await reports.recording(
-        submission_id, actor=actor, shared_identity_locks=shared_identity_locks
+    scope, recording = await reports.recording(
+        submission_id,
+        actor=actor,
+        shared_identity_locks=shared_identity_locks,
+        allow_organisation_read=allow_organisation_read,
     )
     # Only a missing transcript becomes unavailable; ownership/retention failures
     # above remain errors. Conflicting or corrupt retained C2 also stays an error.
@@ -44,7 +56,23 @@ async def read_speaker_map(
         transcript = None
     if actor is None:
         raise ConversationDenied("A signed-in call owner is required.")
-    person = await ownership.database.scalar(select(Person).where(Person.id == actor.person_id))
+    # The immutable usage owner (or explicit visitor claim) names "you" even
+    # when a manager is reading. The recording's person is a processor, not
+    # the customer; neither it nor the reader supplies the speaker identity.
+    usage, claim = ConversationAcquisitionUsage, ConversationVisitorClaim
+    person = await ownership.database.scalar(
+        select(Person)
+        .select_from(usage)
+        .outerjoin(
+            claim, and_(claim.visitor_id == usage.visitor_id, claim.tenant_id == usage.tenant_id)
+        )
+        .join(Person, Person.id == func.coalesce(usage.person_id, claim.person_id))
+        .where(
+            usage.id == scope.usage_id,
+            usage.tenant_id == scope.tenant_id,
+            usage.submission_id == scope.submission_id,
+        )
+    )
     result = resolve_speaker_map(
         transcript,
         account_holder_name=_resolved_name(person) if person is not None else None,

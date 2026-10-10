@@ -11,7 +11,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -25,10 +25,14 @@ from ac_platform.conversation_intelligence.application import ConversationNotFou
 from ac_platform.conversation_intelligence.canary_models import ConversationCanarySubmission
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.measurement_view import ConversationMeasurements
 from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
     ConversationRecording,
+    ConversationReportDraft,
 )
+from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
+from ac_platform.conversation_intelligence.storage import StorageError
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.organisation import install_organisation_http
@@ -43,6 +47,15 @@ from tests.unit.http.test_conversation_learner_acquisition import _runtime, _set
 from tests.unit.http.test_organisation_activity import seed_call
 
 PREFIX = "/v1/conversation/acquisition/submissions"
+READ_SUFFIXES = (
+    "",
+    "/report",
+    "/report.docx",
+    "/transcript",
+    "/waveform",
+    "/source",
+    "/speaker-map",
+)
 
 
 def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monkeypatch):  # noqa: F811
@@ -84,7 +97,9 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                         Person(
                             id=person,
                             email=f"fictional-{person}@example.test",
-                            display_name="Fictional Rep" if person == member else None,
+                            display_name=(
+                                "Fictional Rep" if person == member else "Fictional Manager"
+                            ),
                             email_verified_at=now,
                         )
                         for person in identities
@@ -184,13 +199,19 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                                         created_at=now,
                                     )
                                 )
-                        submission = ids[name] = seed_call(
+                        seed = seed_readable_call if name == "claimed" else seed_call
+                        options = (
+                            {}
+                            if name == "claimed"
+                            else {"recording_state": "deleted" if name == "deleted" else "ready"}
+                        )
+                        submission = ids[name] = seed(
                             sync,
                             org,
                             member,
                             created_at=now - timedelta(days=366) if name == "expired" else now,
-                            recording_state="deleted" if name == "deleted" else "ready",
                             visitor_id=visitor,
+                            **options,
                         )
                         if name == "canary":
                             sync.add(
@@ -208,9 +229,87 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                             permission = sync.get(ConversationPermission, recording.permission_id)
                             permission.revoked_at = now
                         sync.flush()
+                    for name in ("reported", "claimed"):
+                        draft = sync.scalar(
+                            select(ConversationReportDraft)
+                            .join(
+                                ConversationGuestSubmission,
+                                ConversationGuestSubmission.recording_id
+                                == ConversationReportDraft.recording_id,
+                            )
+                            .where(
+                                ConversationGuestSubmission.tenant_id == org,
+                                ConversationGuestSubmission.submission_id == ids[name],
+                            )
+                        )
+                        sync.add(
+                            ConversationSpeakerMapRevision(
+                                id=uuid4(),
+                                tenant_id=org,
+                                submission_id=ids[name],
+                                revision=1,
+                                transcript_revision=draft.transcript["normalized"]["revision"],
+                                speakers=[
+                                    {"speaker_id": "speaker_1", "role": "you", "display_name": None}
+                                ],
+                                actor_person_id=member,
+                                created_at=now,
+                            )
+                        )
+                    sync.flush()
                     return ids
 
                 ids = await db.run_sync(seed)
+                retained = {
+                    recording.id: recording
+                    for recording in (
+                        await db.scalars(
+                            select(ConversationRecording)
+                            .join(
+                                ConversationGuestSubmission,
+                                ConversationGuestSubmission.recording_id
+                                == ConversationRecording.id,
+                            )
+                            .where(
+                                ConversationGuestSubmission.tenant_id == org,
+                                ConversationGuestSubmission.submission_id.in_(
+                                    (ids["reported"], ids["claimed"])
+                                ),
+                            )
+                        )
+                    ).all()
+                }
+
+            # Media transports are fictional; cookie admission and all live
+            # ownership/claim/role/retention queries run on real PostgreSQL.
+            audio = b"f" * 1024
+
+            def stream(key, *, expected_sha256):
+                if key.recording_id not in retained:
+                    raise StorageError("fictional_source_unavailable")
+                recording = retained[key.recording_id]
+                assert key.tenant_id == recording.tenant_id
+                assert expected_sha256 == recording.source_sha256
+                return iter((audio,))
+
+            monkeypatch.setattr(intake.storage, "iter_bytes", stream, raising=False)
+            original_waveform = ConversationMeasurements.waveform_from_recording
+
+            async def retained_waveform(self, recording):
+                if recording.id not in retained:
+                    return await original_waveform(self, recording)
+                assert recording.tenant_id == org
+                assert recording.person_id == retained[recording.id].person_id
+                return {
+                    "schema": "ac.sales-xray.waveform/1",
+                    "kind": "rms_envelope",
+                    "duration_ms": 90_000,
+                    "points": [{"start_ms": 0.0, "level": None}],
+                }
+
+            monkeypatch.setattr(
+                ConversationMeasurements, "waveform_from_recording", retained_waveform
+            )
 
             def factory(database, tenant_id):
                 return AcquisitionSessions(
@@ -237,11 +336,14 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                 preflight=runtime.preflight,
             )
             writes = []
+            reads = []
 
             @event.listens_for(engine.sync_engine, "before_cursor_execute")
             def capture(_connection, _cursor, statement, _parameters, _context, _many):
                 if statement.split()[0].upper() in {"INSERT", "UPDATE", "DELETE"}:
                     writes.append(statement)
+                elif statement.split()[0].upper() == "SELECT":
+                    reads.append(statement)
 
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
@@ -297,7 +399,7 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                     ]
                     assert len(rows) == len({row["submission_id"] for row in rows}) == 26
                     counts = (await request(person, path=PREFIX + "/summary")).json()
-                    assert counts == dict(total=26, completed=1, processing=0, needs_attention=0)
+                    assert counts == dict(total=26, completed=2, processing=0, needs_attention=0)
                     assert sum(row["calls"] for row in activity["per_day"]) == counts["total"]
                     for row, call in zip(rows, activity["calls"], strict=True):
                         assert (row["owner_person_id"], row["owner_name"], row["has_report"]) == (
@@ -328,17 +430,67 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                         "revoked",
                         "expired",
                     ):
-                        for suffix in ("", "/report"):
+                        for suffix in READ_SUFFIXES:
                             denied = await request(person, path=PREFIX + f"/{ids[name]}" + suffix)
                             assert denied.status_code == 404, (name, suffix, denied.json())
-                            assert denied.json() == {"detail": "This upload is unavailable."}
+                            detail = (
+                                "This saved call is unavailable."
+                                if suffix == "/speaker-map"
+                                else "This upload is unavailable."
+                            )
+                            assert denied.json() == {"detail": detail}
+                            assert denied.headers["cache-control"] == "private, no-store"
+                            assert denied.headers["vary"] == "Cookie"
                     assert (
                         await request(person, path=PREFIX + f"?before={ids['personal']}")
                     ).status_code == 404
-                    for suffix in ("/report.docx", "/transcript", "/waveform", "/source"):
+                    for name in ("reported", "claimed"):
+                        for suffix in READ_SUFFIXES[2:]:
+                            start_reads = len(reads)
+                            response = await request(person, path=PREFIX + f"/{ids[name]}" + suffix)
+                            assert response.status_code == 200, (name, suffix, response.text)
+                            assert response.headers["cache-control"] == "private, no-store"
+                            assert response.headers["vary"] == "Cookie"
+                            # Fixed exact-call lookups, independent of the 22
+                            # additional library rows and manager identity.
+                            assert len(reads) - start_reads <= 60
+                            if suffix == "/speaker-map":
+                                assert response.headers["etag"] == '"call-label-1"'
+                                assert response.json()["status"] == "confirmed"
+                                assert (
+                                    response.json()["speakers"][0]["display_name"]
+                                    == "Fictional Rep"
+                                )
+                                assert response.json()["speakers"][0]["role"] == "you"
+                            elif suffix == "/transcript":
+                                assert response.json()["segments"][0]["text"] == "Hello buyer"
+                            elif suffix == "/waveform":
+                                assert response.json()["points"] == [
+                                    {"start_ms": 0.0, "level": None}
+                                ]
+                            elif suffix == "/source":
+                                assert response.content == audio
+                            else:
+                                assert response.content.startswith(b"PK")
+                        partial = await request(
+                            person,
+                            path=PREFIX + f"/{ids[name]}/source",
+                            headers={"Range": "bytes=10-19"},
+                        )
+                        assert partial.status_code == 206 and partial.content == audio[10:20]
+                        assert partial.headers["content-range"] == "bytes 10-19/1024"
+                    unavailable = await request(
+                        person, path=PREFIX + f"/{ids['other']}/speaker-map"
+                    )
+                    assert unavailable.status_code == 200
+                    assert unavailable.json()["status"] == "unavailable"
+                    assert unavailable.json()["speakers"] == []
+                    for suffix, status in (
+                        ("/transcript", 404), ("/waveform", 409), ("/source", 409)
+                    ):
                         assert (
-                            await request(person, path=PREFIX + f"/{ids['reported']}" + suffix)
-                        ).status_code == 404
+                            await request(person, path=PREFIX + f"/{ids['other']}" + suffix)
+                        ).status_code == status
 
                 own = (await request(member)).json()["submissions"]
                 assert str(ids["reported"]) in {row["submission_id"] for row in own}
@@ -346,7 +498,14 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                 assert (
                     await request(member, path=PREFIX + f"/{ids['reported']}/report")
                 ).status_code == 200
-                for suffix in ("", "/report"):
+                own_map = await request(member, path=PREFIX + f"/{ids['reported']}/speaker-map")
+                assert own_map.status_code == 200
+                assert own_map.json()["speakers"][0]["display_name"] == "Fictional Rep"
+                for person in (owner, admin):
+                    assert (
+                        await request(person, path=PREFIX + f"/{ids['reported']}/plan")
+                    ).status_code == 404
+                for suffix in READ_SUFFIXES:
                     assert (
                         await request(member, path=PREFIX + f"/{ids['other']}" + suffix)
                     ).status_code == 404
@@ -384,11 +543,23 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                         ),
                     ),
                     ("DELETE", "", dict(headers={"Idempotency-Key": "fictional-denied-delete"})),
+                    (
+                        "PUT",
+                        "/speaker-map",
+                        dict(
+                            headers={"If-Match": '"call-label-1"'},
+                            json={
+                                "transcript_revision": "fictional",
+                                "speakers": [{"speaker_id": "speaker_1", "role": "you"}],
+                            },
+                        ),
+                    ),
                 ):
-                    denied = await request(
-                        owner, method, PREFIX + f"/{ids['reported']}" + suffix, **kwargs
-                    )
-                    assert denied.status_code == 404, denied.json()
+                    for person in (owner, admin):
+                        denied = await request(
+                            person, method, PREFIX + f"/{ids['reported']}" + suffix, **kwargs
+                        )
+                        assert denied.status_code == 404, denied.json()
                 async with sessions() as db, db.begin():
                     ownership = GuestOwnership(factory(db, org))
                     with pytest.raises(ConversationNotFound):
@@ -401,7 +572,7 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
 
                 async with sessions() as db, db.begin():
                     (await db.get(Membership, (org, admin))).role = "member"
-                for suffix in ("", "/report"):
+                for suffix in READ_SUFFIXES:
                     assert (
                         await request(admin, path=PREFIX + f"/{ids['reported']}" + suffix)
                     ).status_code == 404
@@ -413,13 +584,18 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                     membership = await db.get(Membership, (org, admin))
                     membership.status, membership.ended_at = "inactive", now
                 assert (await request(admin)).status_code in {401, 403}
+                for suffix in READ_SUFFIXES:
+                    assert (
+                        await request(admin, path=PREFIX + f"/{ids['reported']}" + suffix)
+                    ).status_code in {401, 403}
 
                 async with sessions() as db, db.begin():
                     (await db.get(IdentitySession, identities[owner])).selected_tenant_id = personal
                 assert (await request(owner)).json()["submissions"] == []
-                assert (
-                    await request(owner, path=PREFIX + f"/{ids['personal']}/report")
-                ).status_code == 404
+                for suffix in READ_SUFFIXES:
+                    assert (
+                        await request(owner, path=PREFIX + f"/{ids['personal']}" + suffix)
+                    ).status_code == 404
                 async with sessions() as db, db.begin():
                     (
                         await db.get(IdentitySession, identities[member])
@@ -435,6 +611,9 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                         await db.get(IdentitySession, identities[owner])
                     ).selected_tenant_id = operations
                 assert (await request(owner)).status_code == 403
+                for suffix in READ_SUFFIXES:
+                    denied = await request(owner, path=PREFIX + f"/{ids['reported']}" + suffix)
+                    assert denied.status_code == (404 if suffix == "/speaker-map" else 403)
         finally:
             await engine.dispose()
 
