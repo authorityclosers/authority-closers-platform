@@ -138,6 +138,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   push.mockReset();
   localStorage.clear();
+  // Calls keeps its view in the address; each test starts from a clean one.
+  window.history.replaceState(null, "", "/analysis/calls");
 });
 afterEach(async () => {
   await act(async () => root.unmount());

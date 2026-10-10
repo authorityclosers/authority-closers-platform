@@ -857,6 +857,12 @@ function CallsLibraryContent({
       a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
   );
   const showReps = !preview && repOptions.length > 0;
+  // A rep from the address or an earlier list filters only while the loaded
+  // calls include them; otherwise the list shows everyone's calls.
+  const activeRep =
+    showReps && repOptions.some((rep) => rep.personId === selectedRep)
+      ? selectedRep
+      : "";
   const viewerId = access?.context?.personId ?? null;
   const callers = new Set(
     submissions.map((row) => row.owner?.personId ?? viewerId),
@@ -894,7 +900,7 @@ function CallsLibraryContent({
     submissions.filter(
       (submission) =>
         (filter === "all" || callTone(submission) === filter) &&
-        (!selectedRep || submission.owner?.personId === selectedRep) &&
+        (!activeRep || submission.owner?.personId === activeRep) &&
         (!needle ||
           callTitle(submission.label, unnamedCallName(submission.createdAt))
             .toLocaleLowerCase()
@@ -1719,7 +1725,7 @@ function CallsLibraryContent({
                   <Users size={14} aria-hidden="true" />
                   <span className={styles.srOnly}>Rep (loaded calls)</span>
                   <select
-                    value={selectedRep}
+                    value={activeRep}
                     onChange={(event) => setSelectedRep(event.target.value)}
                   >
                     <option value="">All reps</option>
@@ -1799,7 +1805,7 @@ function CallsLibraryContent({
                 >
                   {needle
                     ? `No loaded calls match “${query.trim()}”.`
-                    : selectedRep
+                    : activeRep
                       ? "No loaded calls match these filters."
                       : "No loaded calls match this status."}{" "}
                   <button
@@ -1815,7 +1821,7 @@ function CallsLibraryContent({
                   </button>
                 </p>
               ) : null}
-              {(filter !== "all" || selectedRep) && nextCursor ? (
+              {(filter !== "all" || activeRep) && nextCursor ? (
                 <p className={`${styles.note} calls-library-filter-note`}>
                   The filter covers loaded calls only. Load more to include
                   older calls.
