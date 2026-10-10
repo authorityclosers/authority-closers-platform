@@ -98,6 +98,7 @@ from ac_platform.http.auth import (
     _single_raw_cookie,
     require_safe_origin,
 )
+from ac_platform.http.conversation_imports import install_import_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
@@ -1270,6 +1271,7 @@ def install_submission_http(
             headers=headers,
         )
 
+    install_import_http(router, current_owner=current_owner, guard=guard, fail=fail)
     application.include_router(router)
 
     from ac_platform.http.conversation_prospects import install_prospect_http
