@@ -932,7 +932,11 @@ function CallsLibraryContent({
             (s.id === "call-5" || s.id === "call-005")),
       )
     : null;
-  /* Home preview row (New analysis page): the legacy compact row, unchanged. */
+  /*
+   * Home preview row (New analysis page): the legacy compact row, unchanged.
+   * Its "Estimated length" wording stays until Strike B's PR #420, which also
+   * changes acquisition-studio.test.tsx, has merged (single-track).
+   */
   const previewRow = (submission: LibrarySubmission) => {
     const known = hasRecordedLength(submission);
     const tone = callTone(submission);
@@ -970,12 +974,12 @@ function CallsLibraryContent({
             className="calls-library-duration"
             aria-label={
               known
-                ? `Length: ${formatDuration(submission.durationSeconds)}`
+                ? `Estimated length: About ${formatDuration(submission.durationSeconds)}`
                 : "Length unavailable"
             }
             title={
               known
-                ? "Length, compared with the longest call in this list"
+                ? "Estimated length, compared with the longest call in this list"
                 : undefined
             }
           >
@@ -990,7 +994,9 @@ function CallsLibraryContent({
               ) : null}
             </span>
             <span className="calls-library-duration-clock" aria-hidden="true">
-              {known ? formatDuration(submission.durationSeconds) : "—"}
+              {known
+                ? `About ${formatDuration(submission.durationSeconds)}`
+                : "—"}
             </span>
           </span>
           <span className="calls-library-state" data-tone={tone}>
