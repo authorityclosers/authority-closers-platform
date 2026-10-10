@@ -120,3 +120,26 @@ def test_path_is_derived_and_history_limit_is_honest() -> None:
     assert result.development_path.likely_next == "qualification"
     assert any("40 retained" in line for line in result.limitations)
     assert result.feedback_available is False
+
+
+def test_unclassified_report_suggestions_do_not_become_a_repeated_skill_pattern() -> None:
+    suggestions = []
+    for index in (1, 2):
+        original = call(index, skill="report_next_step")
+        suggestions.append(
+            original.model_copy(
+                update={
+                    "skills": (
+                        original.skills[0].model_copy(update={"basis": "report_suggestion"}),
+                    ),
+                }
+            )
+        )
+    result = view(*suggestions)
+    assert result.state == "ready"
+    assert result.focus.status == "provisional"
+    assert "assessed skill is not linked" in result.focus.selected_reason
+    assert result.pattern.relevant_call_count == 1
+    assert result.mastery.trend == "not_enough_evidence"
+    assert result.root_cause.gap_type == "uncertain"
+    assert any("assessed skill is not linked" in row for row in result.limitations)

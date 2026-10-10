@@ -1,5 +1,10 @@
-import { CoachingRoute } from "./coaching-page";
+import { Suspense } from "react";
+import { CoachingRoute, CoachingSkeleton } from "./coaching-page";
 
 export default function Page() {
-  return <CoachingRoute />;
+  return (
+    <Suspense fallback={<CoachingSkeleton />}>
+      <CoachingRoute />
+    </Suspense>
+  );
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceAccessValue } from "../workspace-access";
 import { CoachingPage, CoachingSkeleton, CoachingStory } from "./coaching-page";
 import { fictionalCoaching } from "./coaching.fixture";
+import { requestedSkill } from "./focus-request";
 
 const mocks = vi.hoisted(() => ({
   access: null as WorkspaceAccessValue | null,
@@ -69,6 +70,30 @@ describe("Coaching story", () => {
     expect(renderToStaticMarkup(<CoachingSkeleton />)).toContain(
       'aria-label="Loading Coaching"',
     );
+    expect(renderToStaticMarkup(<CoachingSkeleton />)).toContain(
+      'aria-busy="true"',
+    );
+  });
+  it("accepts a report focus as context while keeping the one active mission", () => {
+    const before = structuredClone(fictionalCoaching.mission);
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={fictionalCoaching}
+        requestedFocus="qualification"
+      />,
+    );
+    expect(html).toContain("Your report brought you here for Qualification");
+    expect(html.match(/Active mission/g)).toHaveLength(1);
+    expect(fictionalCoaching.mission).toEqual(before);
+    for (const input of [
+      "unknown",
+      "__proto__",
+      "constructor",
+      ["qualification"],
+      null,
+    ])
+      expect(requestedSkill(input)).toBeUndefined();
+    expect(requestedSkill("qualification")).toBe("qualification");
   });
   it("rejects a stale workspace response and clears prior learner data on context change", async () => {
     mocks.access = {
