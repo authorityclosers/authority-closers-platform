@@ -25,6 +25,9 @@ Commands (``ac-release <command>``):
                                     (GitHub deletes it after one day)
     prepare-native ENV SHA --previous-native-units PATH --previous-native-units-sha256 HASH
                                     pin an exact native transition, without starting it
+    recover-edge-projections --owner-release SHA [--dry-run | --apply | --rollback]
+                                    rehearse the exact AUT-1580 repair; apply and
+                                    rollback require --plan-sha256 from review
 
 Production deploys are refused unless ``/etc/ac-release/production.enabled``
 exists and the same commit already passed staging.
@@ -47,6 +50,7 @@ import os
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -143,6 +147,624 @@ UNSAFE_TEXT_RE = re.compile(
 
 class ReleaseError(RuntimeError):
     """A deploy step failed; the message is safe to show and record."""
+
+
+# AUT-1580 is an exact repair, not a general route editor. New drift requires
+# a new reviewed source change. These pins cannot be supplied by the caller.
+EDGE_REPAIR_OWNER = "99e8934ed530a67f90dd7dac76888580de57fbf9"
+EDGE_REPAIR_MANIFEST = "fd1f7b71039d78310bd19e088d2fe611f03501df9917fce6dcf712426cf9e0e0"
+EDGE_REPAIR_COUNT = 82
+EDGE_REPAIR_HASHES = {
+    "production": (
+        "0bca8c7e99ba9f51399d163df83dee785d816a63e8d78e033ed2da3a59df1e45",
+        "a9cfd450e34757994781e9fc7f414a177753422aad85405751d6dc9b9bfff7cc",
+    ),
+    "staging": (
+        "f1a3d0a39c3ea2f84e8bded510115d760fe523a777a78d7e467db51878e6f4d3",
+        "d632b5022473059d7d8a8eba46230d62faa266f908797ee8c1d53e9cf10ea4da",
+    ),
+}
+EDGE_REPAIR_UID = 0
+EDGE_REPAIR_GID = 0
+EDGE_REPAIR_ANCHOR = Path("/")
+
+
+class EdgeProjectionRecovery:
+    """Restore two pinned projections, with durable backups and compensation.
+
+    Uses existing locks opened read-only, including during rehearsal. No engine
+    history, selector, flag, service or owner release is written. Receipt files
+    are exclusive creates; an interrupted prepared receipt is recoverable only
+    with the explicit rollback mode. Neither apply nor rollback accepts new pins.
+    """
+
+    def __init__(self, engine: Engine) -> None:
+        self.engine = engine
+        self.paths = engine.paths
+        self.owner = self.paths.application / "releases" / EDGE_REPAIR_OWNER
+        self.projections = self.paths.application / "edge-route-releases" / EDGE_REPAIR_OWNER
+        self.receipts = self.paths.state / "edge-projection-recovery"
+
+    @staticmethod
+    def encoded(value: Any) -> bytes:
+        return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+    @staticmethod
+    def digest(raw: bytes) -> str:
+        return hashlib.sha256(raw).hexdigest()
+
+    @staticmethod
+    def metadata(info: os.stat_result) -> dict[str, int]:
+        return {
+            key: getattr(info, "st_" + key)
+            for key in ("dev", "ino", "uid", "gid", "mode", "size", "mtime_ns", "ctime_ns")
+        }
+
+    def parents(self, path: Path) -> dict[str, Any]:
+        if not path.is_absolute() or ".." in path.parts:
+            raise ReleaseError("edge repair path is not canonical")
+        try:
+            path.relative_to(EDGE_REPAIR_ANCHOR)
+        except ValueError:
+            raise ReleaseError("edge repair path escapes its trusted anchor") from None
+        result = {}
+        for directory in (path.parent, *path.parent.parents):
+            info = directory.lstat()
+            if (
+                not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != EDGE_REPAIR_UID
+                or info.st_mode & 0o022
+            ):
+                raise ReleaseError("edge repair has an untrusted parent directory")
+            # Directory times change when this operation creates audit receipts.
+            result[str(directory)] = {
+                key: getattr(info, "st_" + key) for key in ("dev", "ino", "uid", "gid", "mode")
+            }
+            if directory == EDGE_REPAIR_ANCHOR:
+                break
+        return result
+
+    def read(self, path: Path, *, immutable: bool = False) -> tuple[bytes, dict[str, Any]]:
+        parents = self.parents(path)
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or before.st_uid != EDGE_REPAIR_UID
+                or before.st_mode & (0o222 if immutable else 0o022)
+                or before.st_size > 32 * 1024 * 1024
+            ):
+                raise ReleaseError("edge repair input has unsafe file metadata")
+            raw = stream.read(32 * 1024 * 1024 + 1)
+            if (
+                self.metadata(before) != self.metadata(os.fstat(stream.fileno()))
+                or self.metadata(before) != self.metadata(path.lstat())
+                or parents != self.parents(path)
+            ):
+                raise ReleaseError("edge repair input changed while reading")
+        return raw, {
+            "sha256": self.digest(raw),
+            "metadata": self.metadata(before),
+            "parents": parents,
+        }
+
+    def selector(self, path: Path, expected: Path) -> dict[str, Any]:
+        parents = self.parents(path)
+        info = path.lstat()
+        if (
+            not stat.S_ISLNK(info.st_mode)
+            or info.st_uid != EDGE_REPAIR_UID
+            or os.readlink(path) != str(expected)
+        ):
+            raise ReleaseError("edge repair selectors changed or select a hold")
+        return {"target": str(expected), "metadata": self.metadata(info), "parents": parents}
+
+    def manifest(self) -> dict[str, Any]:
+        raw, record = self.read(self.owner / "RELEASE-FILES.sha256", immutable=True)
+        if record["sha256"] != EDGE_REPAIR_MANIFEST:
+            raise ReleaseError("edge repair owner manifest differs from its reviewed pin")
+        files = {}
+        for line in raw.decode().splitlines():
+            match = re.fullmatch(r"([0-9a-f]{64}) [ *]([^\\]+)", line)
+            if match is None:
+                raise ReleaseError("edge repair owner manifest is malformed")
+            name = match[2]
+            if (
+                Path(name).is_absolute()
+                or any(part in ("", ".", "..") for part in name.split("/"))
+                or name in files
+            ):
+                raise ReleaseError("edge repair owner manifest contains an unsafe path")
+            _, observed = self.read(self.owner / name, immutable=True)
+            if observed["sha256"] != match[1]:
+                raise ReleaseError("edge repair owner failed full manifest verification")
+            files[name] = observed
+        if (
+            len(files) != EDGE_REPAIR_COUNT
+            or not {
+                "RELEASE-COMMIT",
+                "release-images.env",
+                "edge-routes/production.caddy",
+                "edge-routes/staging.caddy",
+                "edge-routes/production-hold.caddy",
+                "edge-routes/staging-hold.caddy",
+            }
+            <= files.keys()
+            or self.read(self.owner / "RELEASE-COMMIT", immutable=True)[0].decode().strip()
+            != EDGE_REPAIR_OWNER
+        ):
+            raise ReleaseError("edge repair owner identity or manifest coverage is invalid")
+        return {"manifest": record, "files": files}
+
+    def bindings(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"selectors": {}, "files": {}, "native_units": {}}
+        for env in ENVIRONMENTS:
+            result["selectors"][env + "-core"] = self.selector(
+                self.paths.application / f"current-{env}", self.owner
+            )
+            result["selectors"][env + "-route"] = self.selector(
+                self.paths.application / "edge-routes" / f"{env}.caddy",
+                self.projections / f"{env}.caddy",
+            )
+            activation = self.engine.activation_path(env, EDGE_REPAIR_OWNER)
+            raw, observed = self.read(activation, immutable=True)
+            result["files"][str(activation)] = observed
+            descriptor = json.loads(raw)
+            if descriptor["release_id"] != EDGE_REPAIR_OWNER or descriptor["environment"] != env:
+                raise ReleaseError("edge repair activation binding is invalid")
+            for field_name, hash_name in (
+                ("compose_env_file", "compose_env_sha256"),
+                ("service_config_file", "service_config_sha256"),
+                ("approval_file", "approval_sha256"),
+            ):
+                path = Path(descriptor[field_name])
+                if not path.is_relative_to(self.paths.sales_xray / env):
+                    raise ReleaseError("edge repair activation reference escapes its environment")
+                _, observed = self.read(path, immutable=True)
+                if observed["sha256"] != descriptor[hash_name]:
+                    raise ReleaseError("edge repair activation reference digest changed")
+                result["files"][str(path)] = observed
+            _, native = self.engine.native_for_image(descriptor["native_image_ref"])
+            if not native.is_relative_to(self.paths.application / "artifacts"):
+                raise ReleaseError("edge repair native manifest escapes installed artifacts")
+            result["files"][str(native)] = self.read(native, immutable=True)[1]
+            unit = descriptor["helper_unit"]
+            if not re.fullmatch(r"[a-z0-9][a-z0-9@._-]{0,126}\.service", unit):
+                raise ReleaseError("edge repair native unit is invalid")
+            unit_state = self.engine.run(
+                [
+                    "systemctl",
+                    "show",
+                    unit,
+                    "--property=ActiveState,SubState,InvocationID,ExecMainPID,FragmentPath,DropInPaths",
+                ]
+            ).stdout
+            if "ActiveState=active" not in unit_state.splitlines():
+                raise ReleaseError("edge repair native helper is not active")
+            result["native_units"][env] = unit_state
+            for line in unit_state.splitlines():
+                key, _, value = line.partition("=")
+                if key in ("FragmentPath", "DropInPaths"):
+                    for name in value.split():
+                        path = Path(name)
+                        if not path.is_absolute():
+                            raise ReleaseError("edge repair native unit path is not absolute")
+                        result["files"][str(path)] = self.read(path)[1]
+        for directory in (self.paths.config, self.paths.state):
+            self.parents(directory / "unused")
+            names = {
+                p.name
+                for p in directory.iterdir()
+                if any(s in p.name.lower() for s in ("held", "paused", "failed"))
+            }
+            names |= (
+                {"production.enabled", "train.enabled"}
+                if directory == self.paths.config
+                else {
+                    "history.jsonl",
+                    "releases.jsonl",
+                    "image-releases.json",
+                    "last-train.json",
+                    "train-inflight.json",
+                }
+            )
+            for name in sorted(names):
+                path = directory / name
+                if path.is_dir() and not path.is_symlink():
+                    result["files"][str(path)] = self.parents(path / "unused")
+                    for entry in sorted(path.rglob("*")):
+                        if entry.is_dir() and not entry.is_symlink():
+                            result["files"][str(entry)] = self.parents(entry / "unused")
+                        else:
+                            result["files"][str(entry)] = self.read(entry)[1]
+                else:
+                    result["files"][str(path)] = (
+                        self.read(path)[1] if path.exists() or path.is_symlink() else None
+                    )
+        result["containers"] = {}
+        images = {}
+        for line in (
+            self.read(self.owner / "release-images.env", immutable=True)[0].decode().splitlines()
+        ):
+            key, _, value = line.partition("=")
+            if key in CORE_IMAGE_KEYS:
+                images[key] = value
+        image_keys = {
+            "api": "AC_API_IMAGE",
+            "worker": "AC_API_IMAGE",
+            "sales-xray-worker": "AC_API_IMAGE",
+            "learner-web": "AC_LEARNER_IMAGE",
+            "admin-web": "AC_ADMIN_IMAGE",
+            "coach-web": "AC_COACH_IMAGE",
+        }
+        for env in ENVIRONMENTS:
+            for service in (
+                "api",
+                "worker",
+                "learner-web",
+                "admin-web",
+                "coach-web",
+                "sales-xray-worker",
+            ):
+                name = f"ac-application-{env}-{service}-1"
+                observed = self.container(name)
+                if observed["configured_image"] != images[image_keys[service]]:
+                    raise ReleaseError("edge repair installed core differs from its owner images")
+                result["containers"][name] = observed
+            name = self.engine.web_container(env)
+            result["containers"][name] = self.container(name)
+        result["containers"]["ac-edge-router"] = self.container("ac-edge-router")
+        return result
+
+    def container(self, name: str) -> Any:
+        # Never inspect or return Config.Env: service credentials remain injected.
+        template = (
+            '{"id":{{json .Id}},"image":{{json .Image}},"configured_image":{{json .Config.Image}},'
+            '"status":{{json .State.Status}},"started":{{json .State.StartedAt}},'
+            '"restarts":{{json .RestartCount}},"mounts":{{json .Mounts}}}'
+        )
+        observed = json.loads(
+            self.engine.run(["docker", "inspect", "--format", template, name]).stdout
+        )
+        if observed["status"] != "running":
+            raise ReleaseError("edge repair requires unchanged running application containers")
+        return observed
+
+    def projection(self, env: str) -> tuple[bytes, dict[str, Any]]:
+        raw, observed = self.read(self.projections / f"{env}.caddy", immutable=True)
+        info = observed["metadata"]
+        if stat.S_IMODE(info["mode"]) != 0o444 or info["gid"] != EDGE_REPAIR_GID:
+            raise ReleaseError("edge repair projection metadata is invalid")
+        return raw, observed
+
+    def plan(self) -> dict[str, Any]:
+        plan = {
+            "schema": "ac.edge-projection-recovery/1",
+            "owner": EDGE_REPAIR_OWNER,
+            "owner_verification": self.manifest(),
+            "bindings": self.bindings(),
+            "files": {},
+        }
+        if {p.name for p in self.projections.iterdir()} != {
+            f"{env}{suffix}.caddy" for env in ENVIRONMENTS for suffix in ("", "-hold")
+        }:
+            raise ReleaseError("edge repair projection directory has unexpected entries")
+        for env, (before, after) in EDGE_REPAIR_HASHES.items():
+            _, current = self.projection(env)
+            owner_raw, owner = self.read(
+                self.owner / "edge-routes" / f"{env}.caddy", immutable=True
+            )
+            if current["sha256"] != before or owner["sha256"] != after:
+                raise ReleaseError("edge repair drift differs from its exact reviewed pins")
+            hold = self.projections / f"{env}-hold.caddy"
+            hold_raw, hold_record = self.read(hold, immutable=True)
+            if hold_raw != self.read(self.owner / "edge-routes" / hold.name, immutable=True)[0]:
+                raise ReleaseError("edge repair hold projection differs from its owner")
+            plan["files"][env] = {
+                "path": str(self.projections / f"{env}.caddy"),
+                "before": current,
+                "after_sha256": self.digest(owner_raw),
+                "hold": hold_record,
+            }
+        return plan
+
+    @contextlib.contextmanager
+    def locks(self) -> Iterator[None]:
+        if fcntl is None:
+            raise ReleaseError("edge repair requires filesystem locks")
+        with contextlib.ExitStack() as stack:
+            for path in (self.paths.lock, self.paths.application / ".deployment.lock"):
+                _, record = self.read(path)
+                handle = stack.enter_context(path.open("rb"))
+                if (
+                    self.metadata(os.fstat(handle.fileno())) != record["metadata"]
+                    or self.metadata(path.lstat()) != record["metadata"]
+                    or self.parents(path) != record["parents"]
+                ):
+                    raise ReleaseError("edge repair lock changed")
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise ReleaseError("edge repair release or deployment lock is busy") from None
+            yield
+
+    def sync_directory(self, path: Path) -> None:
+        handle = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(handle)
+        finally:
+            os.close(handle)
+
+    def save(self, path: Path, raw: bytes) -> None:
+        self.parents(path)
+        with os.fdopen(
+            os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb"
+        ) as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fchown(stream.fileno(), EDGE_REPAIR_UID, EDGE_REPAIR_GID)
+            os.fchmod(stream.fileno(), 0o444)
+            os.fsync(stream.fileno())
+        self.sync_directory(path.parent)
+        if self.read(path, immutable=True)[0] != raw:
+            raise ReleaseError("edge repair audit write did not verify")
+
+    def replace(
+        self,
+        env: str,
+        raw: bytes,
+        expected_hash: str,
+        digest: str,
+        expected_record: Mapping[str, Any] | None = None,
+    ) -> None:
+        destination = self.projections / f"{env}.caddy"
+        # Keep a crash-left stage outside the four-file projection directory.
+        # Reuse only our exact, root-owned immutable bytes on explicit recovery.
+        temp = self.projections.parent / f".edge-repair-{digest}-{env}"
+        if not temp.exists() and not temp.is_symlink():
+            self.save(temp, raw)
+        elif self.read(temp, immutable=True)[0] != raw:
+            raise ReleaseError("edge repair retained stage differs from its exact bytes")
+        current = self.projection(env)[1]
+        if current["sha256"] != expected_hash or (
+            expected_record is not None and current != expected_record
+        ):
+            raise ReleaseError("edge repair projection changed before replacement")
+        with contextlib.ExitStack() as stack:
+            handles = []
+            for parent in (temp.parent, destination.parent):
+                fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                stack.callback(os.close, fd)
+                info = os.fstat(fd)
+                planned = current["parents"][str(parent)]
+                if {key: getattr(info, "st_" + key) for key in planned} != planned:
+                    raise ReleaseError("edge repair projection parent identity changed")
+                handles.append(fd)
+            os.replace(temp.name, destination.name, src_dir_fd=handles[0], dst_dir_fd=handles[1])
+            for fd in handles:
+                os.fsync(fd)
+        if self.projection(env)[0] != raw:
+            raise ReleaseError("edge repair replacement did not verify")
+
+    def preserved(self, plan: Mapping[str, Any]) -> None:
+        if self.manifest() != plan["owner_verification"] or self.bindings() != plan["bindings"]:
+            raise ReleaseError("edge repair owner, containment or installed bindings changed")
+        for env in ENVIRONMENTS:
+            hold = self.projections / f"{env}-hold.caddy"
+            if self.read(hold, immutable=True)[1] != plan["files"][env]["hold"]:
+                raise ReleaseError("edge repair hold changed")
+
+    def receipt(self, digest: str) -> tuple[dict[str, Any], dict[str, bytes], Path]:
+        directory = self.receipts / digest
+        expected = {"plan.json", "prepared.json", *(f"{env}.before" for env in ENVIRONMENTS)}
+        names = {p.name for p in directory.iterdir()}
+        if not expected <= names or names - expected - {"completed.json", "failure.json"}:
+            raise ReleaseError("edge repair receipt is incomplete or has unexpected entries")
+        raw, _ = self.read(directory / "plan.json", immutable=True)
+        if self.digest(raw) != digest:
+            raise ReleaseError("edge repair receipt plan digest is invalid")
+        plan = json.loads(raw)
+        if plan["schema"] != "ac.edge-projection-recovery/1" or plan["owner"] != EDGE_REPAIR_OWNER:
+            raise ReleaseError("edge repair receipt identity is invalid")
+        prepared = json.loads(self.read(directory / "prepared.json", immutable=True)[0])
+        if prepared["plan_sha256"] != digest:
+            raise ReleaseError("edge repair preparation receipt is invalid")
+        backups = {}
+        for env in ENVIRONMENTS:
+            raw, _ = self.read(directory / f"{env}.before", immutable=True)
+            if (
+                self.digest(raw) != EDGE_REPAIR_HASHES[env][0]
+                or plan["files"][env]["before"]["sha256"] != EDGE_REPAIR_HASHES[env][0]
+                or plan["files"][env]["after_sha256"] != EDGE_REPAIR_HASHES[env][1]
+                or plan["files"][env]["path"] != str(self.projections / f"{env}.caddy")
+            ):
+                raise ReleaseError("edge repair backup differs from its reviewed pins")
+            backups[env] = raw
+        return plan, backups, directory
+
+    def execute(
+        self,
+        owner: str,
+        *,
+        apply: bool = False,
+        rollback: bool = False,
+        plan_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        if owner != EDGE_REPAIR_OWNER or os.geteuid() != EDGE_REPAIR_UID:
+            raise ReleaseError("edge repair requires root and its exact reviewed owner")
+        if apply and rollback:
+            raise ReleaseError("edge repair apply and rollback are mutually exclusive")
+        if (apply or rollback) and not re.fullmatch(r"[0-9a-f]{64}", plan_sha256 or ""):
+            raise ReleaseError("edge repair apply or rollback requires the reviewed plan digest")
+        if not (apply or rollback) and plan_sha256 is not None:
+            raise ReleaseError("edge repair plan digest applies only to apply or rollback")
+        with self.locks():
+            if rollback:
+                return self.rollback(plan_sha256 or "")
+            if apply and (self.receipts / str(plan_sha256)).exists():
+                plan, _, directory = self.receipt(str(plan_sha256))
+                if (
+                    not (directory / "completed.json").exists()
+                    or (directory / "failure.json").exists()
+                ):
+                    raise ReleaseError(
+                        "edge repair has an interrupted receipt; use supported rollback"
+                    )
+                completed = json.loads(self.read(directory / "completed.json", immutable=True)[0])
+                self.preserved(plan)
+                current = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+                if completed["after"] != current or any(
+                    current[env]["sha256"] != EDGE_REPAIR_HASHES[env][1] for env in ENVIRONMENTS
+                ):
+                    raise ReleaseError("edge repair completed projection identity changed")
+                return {
+                    "result": "already-applied",
+                    "plan_sha256": plan_sha256,
+                    "receipt": str(directory),
+                }
+            plan = self.plan()
+            digest = self.digest(self.encoded(plan))
+            directory = self.receipts / digest
+            if not apply:
+                return {
+                    "result": "dry-run",
+                    "plan_sha256": digest,
+                    "plan": plan,
+                    "receipt": str(directory),
+                    "rollback": "--rollback --plan-sha256 " + digest,
+                }
+            if digest != plan_sha256:
+                raise ReleaseError("edge repair plan changed since review")
+            if not self.receipts.exists():
+                self.parents(self.receipts)
+                self.receipts.mkdir(mode=0o700)
+                self.sync_directory(self.paths.state)
+            self.parents(directory)
+            directory.mkdir(mode=0o700)
+            self.sync_directory(self.receipts)
+            self.save(directory / "plan.json", self.encoded(plan))
+            for env in ENVIRONMENTS:
+                self.save(directory / f"{env}.before", self.projection(env)[0])
+            self.save(
+                directory / "prepared.json",
+                self.encoded(
+                    {
+                        "at": _now(),
+                        "plan_sha256": digest,
+                        "operator": getpass.getuser(),
+                        "run_id": os.environ.get("PAPERCLIP_RUN_ID"),
+                        "issue": "AUT-1580",
+                    }
+                ),
+            )
+            self.receipt(digest)  # Verify all durable backups before the first write.
+            changed = []
+            try:
+                if self.plan() != plan:
+                    raise ReleaseError("edge repair changed during audit preparation")
+                for env in ENVIRONMENTS:
+                    self.preserved(plan)
+                    raw = self.read(self.owner / "edge-routes" / f"{env}.caddy", immutable=True)[0]
+                    changed.append(env)  # Also compensate failure after an atomic rename.
+                    self.replace(
+                        env,
+                        raw,
+                        EDGE_REPAIR_HASHES[env][0],
+                        digest,
+                        expected_record=plan["files"][env]["before"],
+                    )
+                self.preserved(plan)
+                after = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+                if any(after[env]["sha256"] != EDGE_REPAIR_HASHES[env][1] for env in ENVIRONMENTS):
+                    raise ReleaseError("edge repair final projection differs from its owner pins")
+                self.save(
+                    directory / "completed.json", self.encoded({"at": _now(), "after": after})
+                )
+            except BaseException:
+                compensated = []
+                for env in reversed(changed):
+                    current = self.projection(env)[1]["sha256"]
+                    if current == EDGE_REPAIR_HASHES[env][1]:
+                        backup = self.read(directory / f"{env}.before", immutable=True)[0]
+                        self.replace(env, backup, current, digest + "-compensation")
+                        compensated.append(env)
+                    elif current != EDGE_REPAIR_HASHES[env][0]:
+                        raise ReleaseError(
+                            "edge repair compensation refused unexpected drift; "
+                            "containment required"
+                        ) from None
+                self.save(
+                    directory / "failure.json",
+                    self.encoded({"at": _now(), "compensated": compensated}),
+                )
+                directory.chmod(0o555)
+                self.sync_directory(directory)
+                raise ReleaseError(
+                    "edge repair failed; retained receipt requires supported rollback"
+                ) from None
+            directory.chmod(0o555)
+            self.sync_directory(directory)
+            return {
+                "result": "applied",
+                "plan_sha256": digest,
+                "receipt": str(directory),
+                "after": after,
+            }
+
+    def rollback(self, digest: str) -> dict[str, Any]:
+        plan, backups, original = self.receipt(digest)
+        self.preserved(plan)
+        directory = self.receipts / (digest + "-rollback")
+        if directory.exists() and (directory / "completed.json").exists():
+            if {p.name for p in directory.iterdir()} != {"prepared.json", "completed.json"}:
+                raise ReleaseError("edge repair rollback receipt has unexpected entries")
+            prepared = json.loads(self.read(directory / "prepared.json", immutable=True)[0])
+            completed = json.loads(self.read(directory / "completed.json", immutable=True)[0])
+            current = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+            if (
+                prepared["plan_sha256"] != digest
+                or completed["after"] != current
+                or any(current[env]["sha256"] != EDGE_REPAIR_HASHES[env][0] for env in ENVIRONMENTS)
+            ):
+                raise ReleaseError("edge repair rollback receipt or current identities changed")
+            return {"result": "already-rolled-back", "receipt": str(directory)}
+        before = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+        if any(before[env]["sha256"] not in EDGE_REPAIR_HASHES[env] for env in ENVIRONMENTS):
+            raise ReleaseError("edge repair rollback refused unexpected drift")
+        if directory.exists():
+            if {p.name for p in directory.iterdir()} != {"prepared.json"}:
+                raise ReleaseError("edge repair rollback preparation is incomplete")
+            prepared = json.loads(self.read(directory / "prepared.json", immutable=True)[0])
+            if prepared["plan_sha256"] != digest or prepared["original_receipt"] != str(original):
+                raise ReleaseError("edge repair rollback preparation differs from its owner")
+        else:
+            self.parents(directory)
+            directory.mkdir(mode=0o700)
+            self.sync_directory(self.receipts)
+            self.save(
+                directory / "prepared.json",
+                self.encoded(
+                    {
+                        "at": _now(),
+                        "original_receipt": str(original),
+                        "plan_sha256": digest,
+                        "before": before,
+                    }
+                ),
+            )
+        for env in ENVIRONMENTS:
+            self.preserved(plan)
+            if before[env]["sha256"] == EDGE_REPAIR_HASHES[env][1]:
+                self.replace(env, backups[env], EDGE_REPAIR_HASHES[env][1], digest + "-rollback")
+        self.preserved(plan)
+        after = {env: self.projection(env)[1] for env in ENVIRONMENTS}
+        if any(after[env]["sha256"] != EDGE_REPAIR_HASHES[env][0] for env in ENVIRONMENTS):
+            raise ReleaseError("edge repair rollback final projection differs from its backup pins")
+        self.save(directory / "completed.json", self.encoded({"at": _now(), "after": after}))
+        directory.chmod(0o555)
+        self.sync_directory(directory)
+        return {"result": "rolled-back", "receipt": str(directory), "after": after}
 
 
 def _version_parts(value: Any) -> tuple[int, int, int] | None:
@@ -864,6 +1486,25 @@ class Engine:
     _read_only: bool = field(default=False, init=False)
 
     # -- state ---------------------------------------------------------------
+
+    def recover_edge_projections(
+        self,
+        owner: str,
+        *,
+        apply: bool = False,
+        rollback: bool = False,
+        plan_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return EdgeProjectionRecovery(self).execute(
+                owner,
+                apply=apply,
+                rollback=rollback,
+                plan_sha256=plan_sha256,
+            )
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            # Input contents and service environment values must never enter logs.
+            raise ReleaseError("edge repair input or receipt is unreadable or invalid") from None
 
     def is_paused(self, environment: str) -> bool:
         return self.paths.paused_flag(environment).exists()
@@ -4664,12 +5305,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     preparation.add_argument("--previous-native-units", type=Path, required=True)
     preparation.add_argument("--previous-native-units-sha256", required=True)
     preparation.add_argument("--dry-run", action="store_true")
+    repair = sub.add_parser("recover-edge-projections")
+    repair.add_argument("--owner-release", required=True)
+    repair_mode = repair.add_mutually_exclusive_group()
+    repair_mode.add_argument("--dry-run", action="store_true", help="read-only rehearsal (default)")
+    repair_mode.add_argument("--apply", action="store_true")
+    repair_mode.add_argument(
+        "--rollback", action="store_true", help="restore retained before bytes"
+    )
+    repair.add_argument("--plan-sha256")
     args = parser.parse_args(argv)
 
     paths = Paths()
     engine = Engine(paths=paths)
     try:
-        if args.command == "status":
+        if args.command == "recover-edge-projections":
+            _print(
+                engine.recover_edge_projections(
+                    args.owner_release,
+                    apply=args.apply,
+                    rollback=args.rollback,
+                    plan_sha256=args.plan_sha256,
+                ),
+                True,
+            )
+        elif args.command == "status":
             engine.github = _load_github(paths, required=False)
             _print(engine.status(), args.json)
         elif args.command == "history":
