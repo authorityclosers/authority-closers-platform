@@ -6,10 +6,13 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const { openSelectedCall } = vi.hoisted(() => ({ openSelectedCall: vi.fn() }));
+const { openSelectedCall, address } = vi.hoisted(() => ({
+  openSelectedCall: vi.fn(),
+  address: { search: new URLSearchParams() },
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: openSelectedCall, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => address.search,
   usePathname: () => "/analysis/calls",
 }));
 // The shell's profile widgets load their own account summary. Keep these
@@ -451,6 +454,27 @@ it("reads as one full-width Calls page with estimated lengths and per-row openin
   expect(items.every((item) => (item as HTMLButtonElement).disabled)).toBe(
     true,
   );
+});
+
+it("starts with the sidebar search's text in the Calls search box", async () => {
+  address.search = new URLSearchParams("q=Pixel");
+  try {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(page([row(firstId, true)])), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await act(async () => renderLibrary());
+    await flush();
+    expect(
+      host.querySelector<HTMLInputElement>(
+        'input[aria-label="Search loaded calls by name"]',
+      )?.value,
+    ).toBe("Pixel");
+  } finally {
+    address.search = new URLSearchParams();
+  }
 });
 
 it("starts New analysis as a fresh call without cancelling the remembered one", async () => {

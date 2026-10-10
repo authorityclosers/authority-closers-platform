@@ -14,6 +14,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import Form from "next/form";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -32,6 +33,7 @@ import {
 
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
+import { CALLS_PATH } from "../analysis-routes";
 import { callDate, callTone, submissionState } from "../call-status";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { RecentCallItem } from "./recent-call-item";
@@ -135,6 +137,12 @@ function resolvePageTitle(
 
 const subscribeNothing = () => () => {};
 
+// Apple keyboards show ⌘; everyone else presses Ctrl (the server assumes Ctrl).
+const shortcutLabel = () =>
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+    ? "⌘K"
+    : "Ctrl K";
+
 function LightboxShellFrame({
   children,
   authenticated,
@@ -168,6 +176,11 @@ function LightboxShellFrame({
     () => false,
   );
   const collapsed = hydrated && savedCollapsed;
+  const shortcut = useSyncExternalStore(
+    subscribeNothing,
+    shortcutLabel,
+    () => "Ctrl K",
+  );
   const [, setCounts] = useState<CallSummary | null>(cached.counts);
   const workspaces = access?.workspaces ?? [];
   const workspacesSettled = access?.status === "ready";
@@ -736,7 +749,19 @@ function LightboxShellFrame({
             </button>
           </div>
 
-          <div className={`${styles.searchBox} ${styles.panelSearch}`}>
+          {/* Enter opens Calls filtered by the text; the box then clears. */}
+          <Form
+            action={CALLS_PATH}
+            role="search"
+            className={`${styles.searchBox} ${styles.panelSearch}`}
+            onSubmit={(event) => {
+              const form = event.currentTarget;
+              window.setTimeout(() => {
+                form.reset();
+                searchInputRef.current?.blur();
+              }, 0);
+            }}
+          >
             <Search
               size={15}
               className={styles.searchIcon}
@@ -745,12 +770,16 @@ function LightboxShellFrame({
             <input
               ref={searchInputRef}
               type="search"
+              name="q"
               className={styles.searchInput}
               placeholder="Search calls…"
               aria-label="Search calls"
+              enterKeyHint="search"
             />
-            <kbd className={styles.searchKbd}>⌘K</kbd>
-          </div>
+            <kbd className={styles.searchKbd} aria-hidden="true">
+              {shortcut}
+            </kbd>
+          </Form>
 
           {/* Recents Section */}
           {salesXrayEnabled && (

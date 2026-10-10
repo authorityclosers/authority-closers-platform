@@ -270,7 +270,14 @@ function CallsLibraryContent({
     return "all";
   });
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // The sidebar search opens Calls with ?q=; a new one replaces the box.
+  const urlQuery = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(urlQuery);
+  const [appliedUrlQuery, setAppliedUrlQuery] = useState(urlQuery);
+  if (urlQuery !== appliedUrlQuery) {
+    setAppliedUrlQuery(urlQuery);
+    setQuery(urlQuery);
+  }
   const [selectedRep, setSelectedRep] = useState("");
   const [sort, setSort] = useState<CallSort>("newest");
   const [picked, setPicked] = useState<Set<string>>(() => new Set());

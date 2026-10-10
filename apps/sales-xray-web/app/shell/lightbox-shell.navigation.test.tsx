@@ -94,6 +94,24 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
 });
 
+it("makes the sidebar search open Calls with the typed text", () => {
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <AcquisitionShell authenticated active="dashboard">
+      <p>Dashboard</p>
+    </AcquisitionShell>,
+  );
+  const form = host.querySelector<HTMLFormElement>('aside form[role="search"]');
+  expect(form?.getAttribute("action")).toBe("/analysis/calls");
+  expect(
+    form
+      ?.querySelector('input[type="search"][name="q"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Search calls");
+  // The server cannot know the keyboard: it assumes Ctrl, not ⌘.
+  expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
+});
+
 it("reaches every section from the phone tab bar, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
