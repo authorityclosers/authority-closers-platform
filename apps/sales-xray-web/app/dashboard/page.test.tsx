@@ -386,3 +386,60 @@ it("says which figures are the owner's own and which are the team's", async () =
   expect(host.textContent).toContain("Your calls analysed per day");
   expect(host.textContent).toContain("Everyone in the organisation");
 });
+
+it("shows a rename made elsewhere in Recent calls at once", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 1,
+        processing: 0,
+        completed: 1,
+        needs_attention: 0,
+      }),
+    "/submissions?include_owners=true": () =>
+      Response.json({
+        submissions: [
+          {
+            submission_id: id,
+            created_at: "2026-10-09T06:30:00Z",
+            duration_seconds: 300,
+            state: "completed",
+            has_report: true,
+            display_name: "Old name",
+            display_name_revision: 1,
+          },
+        ],
+        next_cursor: null,
+      }),
+  });
+  await renderPage(true);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const list = () => host.querySelector('ul[aria-label="Recent calls"]');
+  expect(list()?.textContent).toContain("Old name");
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: id,
+          label: { displayName: "New name", revision: 2 },
+        },
+      }),
+    );
+  });
+  expect(list()?.textContent).toContain("New name");
+  // An older revision arriving late never undoes it.
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: id,
+          label: { displayName: "Stale name", revision: 1 },
+        },
+      }),
+    );
+  });
+  expect(list()?.textContent).toContain("New name");
+});

@@ -37,6 +37,7 @@ import {
   StatusSplitSkeleton,
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
+import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -156,6 +157,29 @@ function DashboardDetails() {
     loadRecent(controller.signal);
     return () => controller.abort();
   }, [loadSummary, loadActivity, loadAllowance, loadRecent]);
+
+  // A rename in the sidebar or a report shows in Recent calls at once.
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      setRecentState((state) =>
+        state.status === "ready"
+          ? {
+              ...state,
+              value: state.value.map((call) =>
+                call.id === submissionId &&
+                (!call.label || call.label.revision < label.revision)
+                  ? { ...call, label }
+                  : call,
+              ),
+            }
+          : state,
+      );
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
 
   const summary = summaryState.status === "ready" ? summaryState.value : null;
   const activity =

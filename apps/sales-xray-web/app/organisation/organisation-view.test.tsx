@@ -1004,3 +1004,21 @@ it("aborts an old details write on session tenant change so it cannot rename the
   ).toBe("Other Fictional Studio");
   expect(host.textContent).not.toContain("Saved.");
 });
+
+it("shows a rename made elsewhere in Team calls at once", async () => {
+  activityRoutes();
+  await render();
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: "00000000-0000-4000-8000-000000000100",
+          label: { displayName: "Renamed in the sidebar", revision: 3 },
+        },
+      }),
+    );
+  });
+  const rows = host.querySelectorAll('[aria-label="Team calls"] a[role="row"]');
+  expect(rows[0].textContent).toContain("Renamed in the sidebar");
+  expect(rows[0].querySelector("[data-unnamed]")).toBeNull();
+});

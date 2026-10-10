@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { callHref } from "../acquisition-client";
+import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { unnamedCallName } from "../call-label";
 import { AcquisitionShell } from "../acquisition-shell";
 import { callDate, callTone, submissionState } from "../call-status";
@@ -226,7 +227,42 @@ export function OrganisationView() {
     isOrganisation && tenantId !== null,
   );
   const [members, reloadMembers] = useLive(readMembers, isOrganisation);
-  const [activity, reloadActivity] = useLive(readActivity, isOrganisation);
+  const [readActivityState, reloadActivity] = useLive(
+    readActivity,
+    isOrganisation,
+  );
+  // A rename in the sidebar or a report shows here at once.
+  const [renamed, setRenamed] = useState(
+    () => new Map<string, string | null>(),
+  );
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      setRenamed((current) =>
+        new Map(current).set(submissionId, label.displayName),
+      );
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
+  const activity = useMemo<Live<OrgActivity>>(
+    () =>
+      readActivityState.status === "ready" && renamed.size
+        ? {
+            ...readActivityState,
+            value: {
+              ...readActivityState.value,
+              calls: readActivityState.value.calls.map((call) =>
+                renamed.has(call.id)
+                  ? { ...call, label: renamed.get(call.id) ?? null }
+                  : call,
+              ),
+            },
+          }
+        : readActivityState,
+    [readActivityState, renamed],
+  );
   const live = org.status === "ready" && org.value.tenantId === tenantId;
   const myRole: OrgRole | null = live ? org.value.role : null;
   const canManage = live && (myRole === "owner" || myRole === "admin");
