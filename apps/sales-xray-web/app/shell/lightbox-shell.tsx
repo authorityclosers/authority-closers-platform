@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Ellipsis,
   FolderOpen,
+  GraduationCap,
   LayoutGrid,
   LogIn,
   PanelLeftClose,
@@ -92,7 +93,8 @@ export type LightboxShellProps = {
     | "calls"
     | "account"
     | "organisation"
-    | "prospects";
+    | "prospects"
+    | "coaching";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -137,6 +139,7 @@ function resolvePageTitle(
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "prospects") return "Prospects";
+  if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
   return null;
@@ -745,6 +748,15 @@ function LightboxShellFrame({
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.tooltip}>Prospects</span>
             </Link>
+            <Link
+              className={`${styles.stripBtn}${active === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/coaching"
+              aria-label="Coaching"
+              aria-current={active === "coaching" ? "page" : undefined}
+            >
+              <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.tooltip}>Coaching</span>
+            </Link>
             {inOrganisation || active === "organisation" ? (
               <Link
                 className={`${styles.stripBtn}${active === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -1060,6 +1072,14 @@ function LightboxShellFrame({
         >
           <Users size={20} aria-hidden="true" />
           <span>Prospects</span>
+        </Link>
+        <Link
+          className={styles.bottomLink}
+          href="/coaching"
+          aria-current={phoneTab === "coaching" ? "page" : undefined}
+        >
+          <GraduationCap size={20} aria-hidden="true" />
+          <span>Coaching</span>
         </Link>
         {/* Signed out shows Sign in; an unconfirmed session keeps More. */}
         {!authenticated && !sessionPending && !loading ? (

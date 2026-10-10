@@ -408,6 +408,7 @@ export function CoachingPage() {
   const ready = access?.status === "ready" && authenticated && access.context;
   return (
     <AcquisitionShell
+      active="coaching"
       authenticated={authenticated}
       loading={!access || access.status === "loading"}
     >
