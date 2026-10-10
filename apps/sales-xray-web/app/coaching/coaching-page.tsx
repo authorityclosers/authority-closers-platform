@@ -18,10 +18,12 @@ import {
 import { CallCoachingStory } from "./call-coaching";
 import {
   isCallCoaching,
+  isTeamCoaching,
   readCoaching,
   requestedCall,
   type CoachingResult,
 } from "./coaching-read";
+import { TeamCoachingStory } from "./team-coaching";
 import { EvidencePlayer } from "./evidence-player";
 import {
   requestedSkill,
@@ -382,6 +384,8 @@ function CoachingResultBody({
       {data ? (
         isCallCoaching(data) ? (
           <CallCoachingStory coaching={data} />
+        ) : isTeamCoaching(data) ? (
+          <TeamCoachingStory coaching={data} />
         ) : (
           <CoachingStory coaching={data} requestedFocus={requestedFocus} />
         )
@@ -422,6 +426,7 @@ function AccountCoaching({
   callId,
   initialResult,
   invalidCall,
+  team,
 }: {
   personId: string;
   tenantId: string;
@@ -430,6 +435,7 @@ function AccountCoaching({
   callId: string | null;
   initialResult: CoachingResult | null;
   invalidCall: boolean;
+  team: boolean;
 }) {
   const [result, setResult] = useState<CoachingResult | null>(initialResult);
   const [attempt, setAttempt] = useState(0);
@@ -437,7 +443,9 @@ function AccountCoaching({
     if (invalidCall) return;
     if (attempt === 0 && initialResult !== null) return;
     const controller = new AbortController();
-    void readCoaching(callId, { signal: controller.signal }).then((view) => {
+    void readCoaching(team ? "team" : callId, {
+      signal: controller.signal,
+    }).then((view) => {
       if (controller.signal.aborted) return;
       if (
         view.data &&
@@ -457,6 +465,7 @@ function AccountCoaching({
     callId,
     initialResult,
     invalidCall,
+    team,
   ]);
   return (
     <CoachingResultBody
@@ -476,11 +485,13 @@ export function CoachingPage({
   callId = null,
   initialResult = null,
   invalidCall = false,
+  team = false,
 }: {
   requestedFocus?: RequestedSkill;
   callId?: string | null;
   initialResult?: CoachingResult | null;
   invalidCall?: boolean;
+  team?: boolean;
 } = {}) {
   const access = useWorkspaceAccess();
   const ready =
@@ -512,13 +523,21 @@ export function CoachingPage({
     >
       <div className={styles.root}>
         <PageHeader
-          title={callId ? "Coaching for this call" : "My coaching"}
+          title={
+            callId
+              ? "Coaching for this call"
+              : team
+                ? "Team coaching"
+                : "My coaching"
+          }
           context={[
             callId
               ? seed?.data && isCallCoaching(seed.data)
                 ? seed.data.call_label
                 : "One focus from this call’s report."
-              : "Your pattern, progress and mission across calls.",
+              : team
+                ? "Anonymous suggestions from your team’s retained call reports."
+                : "Your pattern, progress and mission across calls.",
           ]}
           back={
             callId
@@ -530,12 +549,20 @@ export function CoachingPage({
               <Link className={styles.button} href="/coaching">
                 My coaching
               </Link>
-            ) : undefined
+            ) : team ? (
+              <Link className={styles.button} href="/coaching">
+                My coaching
+              </Link>
+            ) : (
+              <Link className={styles.button} href="/coaching?view=team">
+                Team coaching
+              </Link>
+            )
           }
         />
         {ready ? (
           <AccountCoaching
-            key={JSON.stringify([scope, callId, seed])}
+            key={JSON.stringify([scope, callId, team, seed])}
             personId={ready.personId}
             tenantId={ready.tenantId}
             sessionId={ready.sessionId}
@@ -543,6 +570,7 @@ export function CoachingPage({
             callId={callId}
             initialResult={seed}
             invalidCall={invalidCall}
+            team={team}
           />
         ) : awaitingAccess ? (
           <CoachingResultBody
@@ -577,13 +605,16 @@ export function CoachingPage({
 export function CoachingRoute({
   initialResult = null,
   initialCallId = null,
+  initialTeam = false,
 }: {
   initialResult?: CoachingResult | null;
   initialCallId?: string | null;
+  initialTeam?: boolean;
 } = {}) {
   const access = useWorkspaceAccess();
   const query = useSearchParams();
   const callId = requestedCall(query.get("call"));
+  const team = !callId && query.get("view") === "team";
   const invalidCall =
     query.has("call") && (!callId || query.getAll("call").length !== 1);
   const seed = invalidCall
@@ -591,7 +622,7 @@ export function CoachingRoute({
         data: null,
         error: "This call link is invalid. Open the call’s report again.",
       } as const)
-    : callId === initialCallId
+    : callId === initialCallId && team === initialTeam
       ? initialResult
       : null;
   const page = (
@@ -599,6 +630,7 @@ export function CoachingRoute({
       callId={callId}
       initialResult={seed}
       invalidCall={invalidCall}
+      team={team}
       requestedFocus={requestedSkill(query.get("focus"))}
     />
   );

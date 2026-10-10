@@ -10,6 +10,7 @@ from sqlalchemy import select
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.library import CoachingLibrary
+from ac_platform.coaching.team import TeamCoachingView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
@@ -98,6 +99,12 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     ) -> CallCoachingView:
         async with account_library(request, response) as (library, actor):
             view = await library.read_call(actor, submission_id, call_cache)
+            return view.model_copy(update={"session_id": actor.session_id})
+
+    @router.get("/team", response_model=TeamCoachingView, response_model_by_alias=True)
+    async def team_coaching(request: Request, response: Response) -> TeamCoachingView:
+        async with account_library(request, response) as (library, actor):
+            view = await library.read_team(actor)
             return view.model_copy(update={"session_id": actor.session_id})
 
     application.include_router(router)

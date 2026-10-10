@@ -5,6 +5,9 @@ import {
   type Evidence,
   type TextLesson,
 } from "./coaching-client";
+import { parseTeamCoaching, type TeamCoaching } from "./team-contract";
+import { requestedCall } from "./call-request";
+export { requestedCall } from "./call-request";
 
 export type CallCoaching = {
   schema: "ac.sales-xray.call-coaching/1";
@@ -32,22 +35,22 @@ export type CallCoaching = {
   limitations: string[];
 };
 export type CoachingResult =
-  | { data: Coaching | CallCoaching; error: null }
+  | { data: Coaching | CallCoaching | TeamCoaching; error: null }
   | { data: null; error: string };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function requestedCall(value: unknown): string | null {
-  return typeof value === "string" && UUID.test(value)
-    ? value.toLowerCase()
-    : null;
-}
 export function coachingPath(callId: string | null): string {
+  if (callId === "team") return "/v1/me/coaching/team";
   return callId ? `/v1/me/coaching/calls/${callId}` : "/v1/me/coaching";
 }
 export function isCallCoaching(
-  data: Coaching | CallCoaching,
+  data: Coaching | CallCoaching | TeamCoaching,
 ): data is CallCoaching {
   return data.schema === "ac.sales-xray.call-coaching/1";
+}
+export function isTeamCoaching(
+  data: Coaching | CallCoaching | TeamCoaching,
+): data is TeamCoaching {
+  return data.schema === "ac.sales-xray.team-coaching/1";
 }
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -244,7 +247,7 @@ export async function readCoaching(
   init: RequestInit = {},
   origin = "",
 ): Promise<CoachingResult> {
-  if (callId !== null && requestedCall(callId) !== callId)
+  if (callId !== null && callId !== "team" && requestedCall(callId) !== callId)
     return {
       data: null,
       error: "This call link is invalid. Open the call's report again.",
@@ -277,7 +280,12 @@ export async function readCoaching(
     if (!response.headers.get("content-type")?.includes("application/json"))
       return { data: null, error: "Coaching could not be read. Try again." };
     const raw: unknown = await response.json();
-    const data = callId ? parseCallCoaching(raw, callId) : parseCoaching(raw);
+    const data =
+      callId === "team"
+        ? parseTeamCoaching(raw)
+        : callId
+          ? parseCallCoaching(raw, callId)
+          : parseCoaching(raw);
     return data
       ? { data, error: null }
       : { data: null, error: "Coaching could not be read. Try again." };

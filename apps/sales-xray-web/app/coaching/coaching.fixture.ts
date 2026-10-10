@@ -1,5 +1,6 @@
 import type { Coaching } from "./coaching-client";
 import type { CallCoaching } from "./coaching-read";
+import type { TeamCoaching } from "./team-contract";
 
 /** Invented contract fixture. Never a substitute for a real learner's history. */
 export const fictionalCoaching: Coaching & {
@@ -147,4 +148,34 @@ export const fictionalCallCoaching: CallCoaching & {
   mission: fictionalCoaching.mission,
   limitations: ["This coaching belongs to one fictional call."],
   recommended_media: null,
+};
+
+export const fictionalTeamCoaching: TeamCoaching & {
+  entitlement: "coaching";
+  entitlement_policy: "AUT-1678-open-access";
+} = {
+  schema: "ac.sales-xray.team-coaching/1",
+  person_id: fictionalCoaching.person_id,
+  tenant_id: fictionalCoaching.tenant_id,
+  scope: "anonymous",
+  named_rep_details: false,
+  analysed_calls: 3,
+  pending_calls: 0,
+  unavailable_calls: 0,
+  history_limited: false,
+  suggestions: [
+    {
+      skill_id: "problem_impact_desire",
+      label: "Problem, Impact & Desire Clarity",
+      suggestion_calls: 2,
+    },
+    {
+      skill_id: "report_next_step",
+      label: "Other call report suggestions",
+      suggestion_calls: 1,
+    },
+  ],
+  limitations: ["Fictional anonymous counts, no private rep data."],
+  entitlement: "coaching",
+  entitlement_policy: "AUT-1678-open-access",
 };

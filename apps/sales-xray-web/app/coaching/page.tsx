@@ -16,16 +16,21 @@ export default async function Page({
     );
   const query = await searchParams;
   const callId = requestedCall(query.call);
+  const team = !callId && query.view === "team";
   const result =
     query.call !== undefined && !callId
       ? ({
           data: null,
           error: "This call link is invalid. Open the call’s report again.",
         } as const)
-      : await loadServerCoaching(callId);
+      : await loadServerCoaching(team ? "team" : callId);
   return (
     <Suspense fallback={<CoachingSkeleton />}>
-      <CoachingRoute initialCallId={callId} initialResult={result} />
+      <CoachingRoute
+        initialCallId={callId}
+        initialTeam={team}
+        initialResult={result}
+      />
     </Suspense>
   );
 }
