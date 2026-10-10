@@ -15,6 +15,7 @@ MAX_ERROR_RESPONSE_BODY_BYTES = 16_384
 MAX_RETRY_AFTER_SECONDS = 3_600
 
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$", re.ASCII)
+_ATTEMPT_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$", re.ASCII)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$", re.ASCII)
 _DIAGNOSTIC_CATEGORIES = frozenset(
     {
@@ -54,13 +55,12 @@ class ProviderFailureObservation:
     diagnostic_category: str | None
 
     def __post_init__(self) -> None:
-        for value in (
-            self.reservation_id,
-            self.attempt_id,
-            self.provider,
-            self.model,
-            self.operation,
-        ):
+        # Reservation IDs are run UUIDs and can start with a digit. Provider,
+        # model and operation names retain their stricter named-identifier rule.
+        for value in (self.reservation_id, self.attempt_id):
+            if not isinstance(value, str) or _ATTEMPT_IDENTIFIER.fullmatch(value) is None:
+                raise ValueError("invalid provider failure observation")
+        for value in (self.provider, self.model, self.operation):
             if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
                 raise ValueError("invalid provider failure observation")
         for value in (self.quote_fingerprint, self.input_sha256):

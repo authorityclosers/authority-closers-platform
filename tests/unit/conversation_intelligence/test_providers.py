@@ -414,8 +414,9 @@ def test_streaming_response_has_a_whole_execution_deadline():
     assert ticks
 
 
-def test_http_failure_observation_binds_attempt_and_complete_bounded_body():
-    source = grant(canonical(body()))
+@pytest.mark.parametrize("reservation_id", ["r", "01234567-89ab-4cde-8f01-23456789abcd"])
+def test_http_failure_observation_binds_attempt_and_complete_bounded_body(reservation_id):
+    source = replace(grant(canonical(body())), reservation_id=reservation_id)
     response_body = b'{"error":"synthetic schema rejection"}'
 
     def handler(_):

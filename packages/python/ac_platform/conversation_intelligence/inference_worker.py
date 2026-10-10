@@ -17,6 +17,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -64,6 +66,9 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    ProviderFailureObservation,
+)
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.reports import PROSPECT_DIMENSION_IDS
@@ -582,6 +587,86 @@ class ConversationInferenceWorker:
             )
             await JobRepository(db).record_receipt(job, work.lease_token, receipt)
 
+    async def _record_provider_failure_observation(
+        self,
+        work: Work,
+        *,
+        error: InferenceBrokerError,
+        reservation: Reservation,
+    ) -> None:
+        """Retain original transport evidence before failure cleanup can roll back.
+
+        This is an append-only observation, not a success or no-charge receipt.
+        It neither clears the dispatch fence nor authorizes another send.
+        """
+
+        observed = error.failure_observation
+        if observed is None:
+            return
+        # Revalidate at the durable boundary, including injected broker implementations.
+        # Do not copy arbitrary broker attributes into an audit record.
+        try:
+            if type(observed) is not ProviderFailureObservation:
+                raise ValueError("invalid observation type")
+            observed = ProviderFailureObservation.from_dict(observed.as_dict())
+        except (TypeError, ValueError):
+            raise InferenceBrokerError("broker_response_invalid") from None
+        quote = reservation.quote
+        if (
+            error.code != f"provider_http_{observed.http_status}"
+            or observed.reservation_id != reservation.reservation_id
+            or observed.attempt_id != reservation.attempt_id
+            or observed.quote_fingerprint != quote.fingerprint
+            or observed.provider != quote.provider_id
+            or observed.model != quote.provider_model
+            or observed.operation != quote.operation
+            or observed.input_sha256 != quote.input_sha256
+        ):
+            raise InferenceBrokerError("broker_response_invalid")
+        async with self.sessions() as db, db.begin():
+            job = await self._locked_job(db, work)
+            if (
+                job.tenant_id is None
+                or job.dispatch_started_at is None
+                or job.provider_idempotency_key != observed.attempt_id
+                or job.provider_receipt is not None
+                or str(job.tenant_id) != quote.source.tenant_id
+                or job.payload.get("run_id") != observed.reservation_id
+            ):
+                raise ConversationConflict("The failure observation was fenced.")
+            payload = {
+                "schema": "ac.sales_xray.provider_failure_evidence/1",
+                "job_id": str(job.id),
+                "attempt_count": job.attempt_count,
+                "recovery_generation": work.recovery_generation,
+                "dispatch_started_at": job.dispatch_started_at.isoformat(),
+                "failure_observation": observed.as_dict(),
+            }
+            prior = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_failure_observed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                if prior.payload != payload:
+                    raise ConversationConflict("The failure observation conflicts with history.")
+                return
+            await AuditRepository(db).append(
+                tenant_id=job.tenant_id,
+                actor_person_id=None,
+                actor_type="system",
+                action="conversation.provider_failure_observed",
+                resource_type="job",
+                resource_id=job.id,
+                payload=payload,
+                now=self.clock(),
+            )
+
     async def _dispatch(self, work: Work) -> None:
         # Both media erasure and inference hold this fence BEFORE locking DB rows.
         async with _FencedExecutor(self.storage.root) as fenced:
@@ -650,32 +735,36 @@ class ConversationInferenceWorker:
             # before the receipt commit so its separate transaction cannot
             # wait on the dispatch row lock. Validation must never be able to
             # roll that evidence back.
-            async with self.sessions() as db, db.begin():
-                job = await JobRepository(db).lock_for_dispatch(
-                    work.job_id,
-                    work.lease_token,
-                    recovery_generation=work.recovery_generation,
-                    provider_idempotency_key=key,
-                )
-                if self.authority is None:
-                    scope = await self._scope(db, job, allow_started_effect=True)
-                else:
-                    # lock_for_dispatch above proves our committed marker and
-                    # current lease. Only the pause check is waived for that
-                    # already-started effect; all other authority is rechecked.
-                    with already_started_effect(
-                        environment=self.authority.environment,
-                        operations_tenant_id=self.authority.operations_tenant_id,
-                    ):
+            try:
+                async with self.sessions() as db, db.begin():
+                    job = await JobRepository(db).lock_for_dispatch(
+                        work.job_id,
+                        work.lease_token,
+                        recovery_generation=work.recovery_generation,
+                        provider_idempotency_key=key,
+                    )
+                    if self.authority is None:
                         scope = await self._scope(db, job, allow_started_effect=True)
-                # The second check is the last admission immediately before
-                # the provider call. If it fails after the durable dispatch
-                # marker, the normal ambiguity path preserves the reservation.
-                await self._require_customer_profile(db, scope)
-                # Restore, revocation and deletion wait on these canonical locks
-                # across the one bounded child-process effect.
-                async with asyncio.timeout(_EFFECT_SECONDS):
-                    result = await self.broker.execute(reservation, payload)
+                    else:
+                        # Only the pause check is waived for this committed effect;
+                        # all other authority is rechecked under the current lease.
+                        with already_started_effect(
+                            environment=self.authority.environment,
+                            operations_tenant_id=self.authority.operations_tenant_id,
+                        ):
+                            scope = await self._scope(db, job, allow_started_effect=True)
+                    # The last admission before the call still checks customer identity.
+                    await self._require_customer_profile(db, scope)
+                    # Restore, revocation and deletion wait on these canonical locks.
+                    async with asyncio.timeout(_EFFECT_SECONDS):
+                        result = await self.broker.execute(reservation, payload)
+            except InferenceBrokerError as error:
+                # Exit the dispatch transaction before committing independent evidence.
+                # Keep the storage fence until the append finishes, just as for success.
+                await self._record_provider_failure_observation(
+                    work, error=error, reservation=reservation
+                )
+                raise
 
             # Persist bounded provider-effect evidence before writing the raw
             # response object.  If local storage fails after the provider has
