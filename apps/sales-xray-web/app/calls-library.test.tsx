@@ -579,7 +579,9 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(
     host.querySelector('a[href="/analysis/calls"][aria-current="page"]'),
   ).not.toBeNull();
-  expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(
+  // The rail's icon link is named by its label, not by visible text.
+  const current = host.querySelector('[aria-current="page"]');
+  expect(current?.getAttribute("aria-label") ?? current?.textContent).toContain(
     "Calls",
   );
   expect(host.textContent).toContain("Analysis in progress");

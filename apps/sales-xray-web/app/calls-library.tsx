@@ -1155,28 +1155,30 @@ function CallsLibraryContent({
               {length.text ? <span>{length.text}</span> : null}
               {rep ? <span>{rep}</span> : null}
             </small>
-            {read ? (
+            {/* The summary line shows only with something in it: a row
+                never keeps an empty line under its name. */}
+            {read && (insight?.callType || insight?.assessment) ? (
               <span className={styles.snippet}>
-                {insight ? (
-                  <>
-                    {insight.callType ? (
-                      <span className={styles.type}>
-                        {insight.callType.replace(/_/g, " ")}
-                      </span>
-                    ) : null}
-                    {insight.assessment ? (
-                      <span className={styles.assessment}>
-                        {excerpt(insight.assessment, 160)}
-                      </span>
-                    ) : null}
-                  </>
-                ) : read === "error" ? (
-                  <span className={styles.snippetQuiet}>
-                    Summary didn&apos;t load
+                {insight.callType ? (
+                  <span className={styles.type}>
+                    {insight.callType.replace(/_/g, " ")}
                   </span>
-                ) : read === "loading" ? (
-                  <span className={styles.snippetSkeleton} aria-hidden="true" />
                 ) : null}
+                {insight.assessment ? (
+                  <span className={styles.assessment}>
+                    {excerpt(insight.assessment, 160)}
+                  </span>
+                ) : null}
+              </span>
+            ) : read === "error" ? (
+              <span className={styles.snippet}>
+                <span className={styles.snippetQuiet}>
+                  Summary didn&apos;t load
+                </span>
+              </span>
+            ) : read === "loading" ? (
+              <span className={styles.snippet}>
+                <span className={styles.snippetSkeleton} aria-hidden="true" />
               </span>
             ) : null}
           </span>
