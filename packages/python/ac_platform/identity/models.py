@@ -155,10 +155,37 @@ class Person(Base):
             postgresql_where=text("email IS NOT NULL"),
             sqlite_where=text("email IS NOT NULL"),
         ),
+        Index(
+            "uq_persons_username_ci",
+            text("lower(username)"),
+            unique=True,
+            postgresql_where=text("username IS NOT NULL"),
+            sqlite_where=text("username IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "username IS NULL OR (username = lower(trim(username)) "
+            "AND length(username) BETWEEN 3 AND 60)",
+            name="username_normalized",
+        ),
+        CheckConstraint(
+            "username_verified_at IS NULL OR username IS NOT NULL",
+            name="username_verification_binding",
+        ),
+        CheckConstraint(
+            "NOT password_change_required OR "
+            "(username IS NOT NULL AND temporary_password_expires_at IS NOT NULL)",
+            name="temporary_password_binding",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    username_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_change_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    temporary_password_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     whatsapp_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
