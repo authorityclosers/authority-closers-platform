@@ -28,12 +28,7 @@
   "sales-xray-fixture-preview.module.css": 9,
   "sales-xray-preloader.module.css": 15,
   "settings-dialog.module.css": 1,
-  "shell/allowance-ring.module.css": 1,
-  "shell/lightbox-shell.module.css": 12,
-  "shell/theme-toggle.module.css": 1,
-  "shell/updates-bell.module.css": 1,
   "source-waveform.module.css": 4,
   "styles.css": 144,
-  "transcript-reader.module.css": 3,
-  "ui/metric-card.module.css": 10
+  "transcript-reader.module.css": 3
 }

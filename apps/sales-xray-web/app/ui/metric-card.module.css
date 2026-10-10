@@ -52,7 +52,7 @@
 
 .cardLink:hover {
   border-color: var(--theme-border-strong, var(--lx-line-strong));
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .cardLink:focus-visible {
@@ -82,18 +82,18 @@
 }
 
 .iconWrap[data-tone="teal"] {
-  background: rgba(13, 148, 136, 0.1);
+  background: var(--sx-accent-soft);
   color: var(--theme-action, var(--lx-teal));
 }
 
 .iconWrap[data-tone="amber"] {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
 }
 
 .iconWrap[data-tone="info"] {
-  background: rgba(14, 165, 233, 0.1);
-  color: #0284c7;
+  background: var(--lx-info-soft);
+  color: var(--lx-info);
 }
 
 .asideSlot {
@@ -206,13 +206,13 @@
 }
 
 .deltaUp {
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  background: color-mix(in oklab, var(--lx-success) 12%, transparent);
+  color: var(--lx-success);
 }
 
 .deltaDown {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
 }
 
 .deltaFlat {
