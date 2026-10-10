@@ -74,6 +74,13 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { CreateOrganisationDialog } from "./create-organisation-dialog";
+import { dropInvite, refreshInvites, useInvites } from "./invites-store";
+import {
+  acceptInvite,
+  OrgApiError,
+  type PendingInvite,
+} from "../organisation/organisation-api";
 import { SettingsMenu } from "./settings-menu";
 import { useShellUpdates } from "./updates-store";
 import { UpdatesBell } from "./updates-bell";
@@ -514,10 +521,15 @@ function LightboxShellFrame({
     };
   }, [switcherOpen]);
 
-  async function handleSelectWorkspace(tenantId: string) {
+  /** True once the page is moving into the workspace. */
+  async function handleSelectWorkspace(
+    tenantId: string,
+    next?: string,
+  ): Promise<boolean> {
     if (tenantId === effectiveTenantId) {
       setSwitcherOpen(false);
-      return;
+      if (next) window.location.assign(next);
+      return Boolean(next);
     }
     try {
       const res = await fetch("/v1/context", {
@@ -551,8 +563,9 @@ function LightboxShellFrame({
           recentFetchedAt: null,
         });
         // Every list on the page belongs to the workspace: reload into it.
-        window.location.reload();
-        return;
+        if (next) window.location.assign(next);
+        else window.location.reload();
+        return true;
       }
     } catch {}
     // Nothing changed: say so in the corner, never fail silently.
@@ -563,10 +576,46 @@ function LightboxShellFrame({
       message: "Try again in a moment.",
       action: {
         label: "Try again",
-        run: () => void handleSelectWorkspace(tenantId),
+        run: () => void handleSelectWorkspace(tenantId, next),
       },
     });
+    return false;
   }
+
+  // Joining from the menu: accept (one key per invitation, so a retry is
+  // safe), then move into the organisation.
+  const [joining, setJoining] = useState<string | null>(null);
+  const joinKeys = useRef(new Map<string, string>());
+  async function joinInvite(invite: PendingInvite) {
+    if (joining) return;
+    setJoining(invite.inviteId);
+    const key = joinKeys.current.get(invite.inviteId) ?? crypto.randomUUID();
+    joinKeys.current.set(invite.inviteId, key);
+    try {
+      const joined = await acceptInvite(invite.inviteId, key);
+      dropInvite(invite.inviteId);
+      if (await handleSelectWorkspace(joined.tenantId)) return;
+    } catch (error) {
+      // Used, expired or withdrawn: the list is read again.
+      const closed =
+        error instanceof OrgApiError && [404, 409].includes(error.status);
+      if (closed) refreshInvites();
+      notify({
+        id: "invite-join",
+        tone: "error",
+        title: `Couldn’t join ${invite.organisationName}`,
+        message:
+          error instanceof OrgApiError
+            ? error.message
+            : "Check your connection and try again.",
+        action: closed
+          ? undefined
+          : { label: "Try again", run: () => void joinInvite(invite) },
+      });
+    }
+    setJoining(null);
+  }
+  const [createOpen, setCreateOpen] = useState(false);
 
   function openAccount(event: MouseEvent<HTMLAnchorElement>) {
     if (!authenticated && access?.requestAccountSignIn) {
@@ -592,6 +641,7 @@ function LightboxShellFrame({
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
+  const invites = useInvites(authenticated && !loading);
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
@@ -680,9 +730,21 @@ function LightboxShellFrame({
   });
   useEffect(() => {
     const onSelect = (event: Event) => {
-      const tenantId = (event as CustomEvent<string>).detail;
-      if (typeof tenantId === "string")
-        void selectWorkspaceRef.current(tenantId);
+      // A tenant id, or { tenantId, next } to land on a given page.
+      const detail = (event as CustomEvent<unknown>).detail;
+      const target =
+        typeof detail === "string"
+          ? { tenantId: detail, next: undefined }
+          : detail && typeof detail === "object"
+            ? (detail as { tenantId?: unknown; next?: unknown })
+            : null;
+      if (typeof target?.tenantId === "string")
+        void selectWorkspaceRef.current(
+          target.tenantId,
+          typeof target.next === "string" && /^\/(?!\/)/.test(target.next)
+            ? target.next
+            : undefined,
+        );
     };
     window.addEventListener(SELECT_WORKSPACE_EVENT, onSelect);
     return () => window.removeEventListener(SELECT_WORKSPACE_EVENT, onSelect);
@@ -836,6 +898,17 @@ function LightboxShellFrame({
                 setOpen={setSwitcherOpen}
                 containerRef={switcherRef}
                 onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
+                invites={invites.invites}
+                joining={joining}
+                onJoin={(invite) => void joinInvite(invite)}
+                onCreate={
+                  invites.live
+                    ? () => {
+                        setSwitcherOpen(false);
+                        setCreateOpen(true);
+                      }
+                    : undefined
+                }
               />
             )}
             <button
@@ -1154,6 +1227,15 @@ function LightboxShellFrame({
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />
+      {invites.live ? (
+        <CreateOrganisationDialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(tenantId) =>
+            void handleSelectWorkspace(tenantId, "/organisation?tab=members")
+          }
+        />
+      ) : null}
       <UpdateNotices
         updates={updates}
         contextKey={updatesContextKey}
