@@ -53,6 +53,7 @@ import {
 } from "./organisation-api";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
+import { TeamPatternsSection } from "./team-patterns-section";
 
 type Base =
   | { status: "loading" }
@@ -663,6 +664,7 @@ function OverviewPanel({
           <PeopleActivity activity={activity.value} members={members} />
         ) : null}
       </div>
+      {team ? <TeamPatternsSection calls={activity.value.calls} /> : null}
       {analysed}
     </div>
   );

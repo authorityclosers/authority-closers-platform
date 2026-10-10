@@ -1463,6 +1463,230 @@
   }
 }
 
+/* ---------- What keeps coming up (AUT-1679) ---------- */
+
+.patternSurface {
+  container-type: inline-size;
+}
+
+.patterns {
+  display: grid;
+  min-width: 0;
+}
+
+.patternColumn {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.patternColumn + .patternColumn {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+@container (min-width: 760px) {
+  .patterns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .patternColumn + .patternColumn {
+    border-top: 0;
+    border-left: 1px solid var(--lx-line-soft);
+  }
+}
+
+.patternColumn h3 {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.patternQuiet {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+/* A bar list: the tint behind each row is its share; the number is exact. */
+.barList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barList li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: var(--lx-radius-xs);
+  font-size: 13px;
+}
+
+.barList li > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 3px;
+  border-radius: inherit;
+  background: var(--lx-teal-soft);
+}
+
+.barList li > span {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--lx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barList li > b {
+  position: relative;
+  flex: none;
+  color: var(--lx-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.barList li > b small {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.moreToggle {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--lx-radius-xs);
+  background: none;
+  color: var(--lx-ink-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.moreToggle:hover {
+  background: var(--lx-paper-2);
+  color: var(--lx-ink);
+}
+
+.moreToggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.moreToggle:focus-visible,
+.inlineAction:focus-visible,
+.fixList a:focus-visible {
+  box-shadow: var(--lx-ring-focus);
+  outline: none;
+}
+
+.fixList {
+  display: grid;
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+}
+
+.fixList a {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--lx-radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.fixList a:hover {
+  background: var(--lx-paper-2);
+}
+
+.fixText {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.fixMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--lx-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fixMeta .avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 8.5px;
+}
+
+.fixCall {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inlineAction {
+  padding: 0;
+  border: 0;
+  border-radius: var(--lx-radius-xs);
+  background: none;
+  color: var(--lx-teal);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.patternBoneTitle {
+  width: 42%;
+  height: 10px;
+  margin: 4px 0;
+}
+
+.patternBone {
+  height: 30px;
+}
+
+/* A first-fix item: two lines of text and a meta line. */
+.patternBone[data-fix] {
+  height: 58px;
+  margin-top: 8px;
+}
+
+@media (pointer: coarse) {
+  .moreToggle,
+  .inlineAction {
+    min-height: 44px;
+  }
+
+  .inlineAction {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+  }
+}
+
 /* ---------- Phone ---------- */
 
 @media (max-width: 720px) {
