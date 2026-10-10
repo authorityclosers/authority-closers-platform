@@ -27,6 +27,17 @@
 .workspace[data-text-size="100"] {
   --report-text-scale: 1;
 }
+.workspace[data-report-structure="pillars"] {
+  --doc-accent: var(--lx-teal);
+}
+.workspace[data-report-structure="pillars"] .section + .section {
+  margin-top: 24px;
+  padding-top: 12px;
+}
+.workspace[data-report-structure="pillars"] .chapterOpener {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
 
 .workspace[data-text-size="112.5"] {
   --report-text-scale: 1.125;
