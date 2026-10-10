@@ -160,7 +160,7 @@ describe("ProspectsListView", () => {
     });
 
     expect(host.textContent).toContain("Acme Corp Prospect");
-    expect(host.textContent).toContain("2 calls");
+    expect(host.textContent).toContain("2 visible calls");
     expect(host.textContent).toContain("Missing stage");
     // Initials for Acme Corp Prospect
     expect(host.textContent).toContain("AC");
@@ -306,7 +306,7 @@ describe("ProspectDetailView", () => {
       );
     });
 
-    expect(host.textContent).toContain("Opportunity history (2 calls)");
+    expect(host.textContent).toContain("Opportunity history (2 visible calls)");
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
     expect(host.textContent).toContain("State: report_ready");
@@ -326,6 +326,53 @@ describe("ProspectDetailView", () => {
     expect(reportLink?.getAttribute("href")).toBe(
       "/analysis/calls/33333333-3333-4333-8333-333333333333",
     );
+  });
+
+  it("hides the previous customer while the selected workspace is loading", async () => {
+    let finish: (detail: prospectsClient.ProspectDetail) => void = () => {};
+    const fetch = vi
+      .spyOn(prospectsClient, "fetchProspectDetail")
+      .mockResolvedValueOnce(detailData)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+    const render = (value: WorkspaceAccessValue) =>
+      root.render(
+        <WorkspaceAccessContext.Provider value={value}>
+          <ProspectDetailView prospectId={mockProspectSummary.prospect_id} />
+        </WorkspaceAccessContext.Provider>,
+      );
+    await act(async () => render(mockAccess));
+    expect(host.textContent).toContain("Acme Corp Prospect");
+    await act(async () =>
+      render({
+        ...mockAccess,
+        context: {
+          ...mockAccess.context!,
+          tenantId: "55555555-5555-4555-8555-555555555555",
+        },
+      }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(host.textContent).not.toContain("Acme Corp Prospect");
+    expect(
+      host.querySelector('[aria-label="Loading prospect information"]'),
+    ).not.toBeNull();
+    await act(async () =>
+      finish({
+        ...detailData,
+        calls: [],
+        prospect: {
+          ...mockProspectSummary,
+          name: "Current workspace customer",
+        },
+      }),
+    );
+    expect(host.textContent).toContain("Current workspace customer");
+    expect(host.textContent).not.toContain("Acme Corp Prospect");
   });
 
   it("renders per-call hypothesis snapshot with provenance, interpretations and evidence quotes", async () => {

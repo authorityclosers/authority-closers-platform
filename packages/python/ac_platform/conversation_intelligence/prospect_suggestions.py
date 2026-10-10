@@ -59,6 +59,7 @@ async def suggestions(
 ) -> dict[str, Any]:
     scope = await store._write_scope(actor, submission_id, read_only=True)
     current = await store._active(scope)
+    linked = await store.read(actor, current.prospect_id) if current else None
     authorized = await store.queries(actor)
     members = authorized.memberships.subquery()
     own_calls = _account_library_query(actor, utc(store.ownership.clock())).with_only_columns(
@@ -137,6 +138,14 @@ async def suggestions(
         "schema": SCHEMA,
         "submission_id": str(submission_id),
         "membership": membership_json(current),
+        "linked_prospect": {
+            "name": linked.display_name,
+            "origin": linked.origin,
+            "confirmed_at": linked.confirmed_at.isoformat() if linked.confirmed_at else None,
+            "revision": linked.revision,
+        }
+        if linked
+        else None,
         "suggestions": list(matches.values()),
         "next_offset": offset + PAGE_SIZE if len(rows) > PAGE_SIZE else None,
     }

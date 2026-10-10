@@ -95,6 +95,27 @@ def profile(
                     "submission_id": str(current.submission_id),
                     **(current.evidence or {}),
                 }
+                previous = next(
+                    (
+                        r
+                        for r in revisions
+                        if r.id == current.supersedes_id
+                        and r.basis == "heard_in_call"
+                        and r.value != current.value
+                        and r.value.get("kind") != "unknown"
+                        and r.created_at < current.created_at
+                    ),
+                    None,
+                )
+                if previous is not None:
+                    fields[key]["changed_from"] = {
+                        "value": previous.value,
+                        "evidence": {
+                            "submission_id": str(previous.submission_id),
+                            **(previous.evidence or {}),
+                        },
+                        "set_at": previous.created_at.isoformat(),
+                    }
     # Existing person-created labels remain readable even for fixtures predating field history.
     if fields["name"]["state"] == "unknown" and row.origin == "person":
         fields["name"] = {
@@ -206,6 +227,8 @@ class ProspectLibrary:
         entries = [
             {
                 **profile(row, [r for r in field_rows if r.entity_id == row.id]),
+                "can_edit": row.owner_person_id == actor.person_id,
+                "can_confirm": row.owner_person_id == actor.person_id and count > 0,
                 "call_count": count,
                 "last_call": None if last is None else last.isoformat(),
             }
@@ -465,6 +488,21 @@ class ProspectLibrary:
             }
             if include_facts:
                 facts = []
+                projected["customer_call"] = bool(
+                    report.call_map
+                    and report.call_map.call_purpose.kind == "sales"
+                    and report.call_map.call_purpose.evidence
+                    and all(
+                        ref.segment_id not in plan.segment_ids
+                        for ref in report.call_map.call_purpose.evidence
+                    )
+                    and all(
+                        ref.segment_id in segments
+                        and ref.quote in segments[ref.segment_id].get("text", "")
+                        for ref in report.call_map.call_purpose.evidence
+                    )
+                    and any(s.role == "prospect" for s in report.call_map.speakers)
+                )
                 if report.call_map is not None:
                     roles = {s.speaker_id: s.role for s in report.call_map.speakers}
                     for fact in report.call_map.prospect_facts:

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { formatClock } from "./lightbox/time";
 import type { ProspectCall, ProspectSummary } from "./prospects-client";
-import { editProspectField } from "./prospects-client";
+import { confirmDetectedProspect, editProspectField } from "./prospects-client";
 import { dismissNotice, notify } from "./notice-center";
 import {
   PROSPECT_FIELD_LABELS,
@@ -257,7 +257,44 @@ export function ProspectInformation({
   ];
   return (
     <div className={styles.information} aria-label="Prospect's Information">
-      {prospect.profile_fields && onSaved && (
+      {prospect.origin === "detected" &&
+        !prospect.confirmed_at &&
+        prospect.can_confirm !== false &&
+        onSaved && (
+          <div className={styles.edit}>
+            <span>Detected from a call · not yet confirmed</span>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                if (saving) return;
+                setSaving(true);
+                try {
+                  await confirmDetectedProspect(
+                    prospect.prospect_id,
+                    prospect.revision,
+                  );
+                  dismissNotice("prospect-confirmation");
+                  onSaved();
+                } catch (error) {
+                  notify({
+                    id: "prospect-confirmation",
+                    tone: "error",
+                    title: "Prospect wasn't confirmed",
+                    message:
+                      error instanceof Error ? error.message : "Try again.",
+                    action: { label: "Try again", run: onSaved },
+                  });
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? "Confirming…" : "Confirm prospect"}
+            </button>
+          </div>
+        )}
+      {prospect.profile_fields && prospect.can_edit !== false && onSaved && (
         <div className={styles.edit}>
           {!editing ? (
             <button type="button" onClick={() => setEditing(true)}>

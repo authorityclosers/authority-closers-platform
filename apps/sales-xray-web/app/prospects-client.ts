@@ -34,6 +34,8 @@ export type ProspectSummary = {
   profile_fields?: ProfileFields;
   origin?: "person" | "detected";
   confirmed_at?: string | null;
+  can_edit?: boolean;
+  can_confirm?: boolean;
 };
 
 export type ProspectListPage = {
@@ -104,6 +106,11 @@ function record(value: unknown): Record<string, unknown> {
 
 export function parseProspectSummary(value: unknown): ProspectSummary {
   const item = record(value);
+  for (const key of ["can_edit", "can_confirm"]) {
+    if (item[key] !== undefined && typeof item[key] !== "boolean") {
+      throw new ProspectsContractError(key);
+    }
+  }
   if (typeof item.prospect_id !== "string" || !UUID_RE.test(item.prospect_id)) {
     throw new ProspectsContractError("prospect_id");
   }
@@ -175,7 +182,8 @@ export function parseProspectSummary(value: unknown): ProspectSummary {
   if (
     item.confirmed_at !== undefined &&
     item.confirmed_at !== null &&
-    typeof item.confirmed_at !== "string"
+    (typeof item.confirmed_at !== "string" ||
+      !Number.isFinite(Date.parse(item.confirmed_at)))
   )
     throw new ProspectsContractError("confirmed_at");
   return {
@@ -199,6 +207,12 @@ export function parseProspectSummary(value: unknown): ProspectSummary {
       : {}),
     ...(item.confirmed_at !== undefined
       ? { confirmed_at: item.confirmed_at as string | null }
+      : {}),
+    ...(item.can_edit !== undefined
+      ? { can_edit: item.can_edit as boolean }
+      : {}),
+    ...(item.can_confirm !== undefined
+      ? { can_confirm: item.can_confirm as boolean }
       : {}),
   };
 }
@@ -608,4 +622,42 @@ export async function editProspectField(
   ) {
     throw new ProspectsContractError("saved_field");
   }
+}
+
+export async function confirmDetectedProspect(
+  prospectId: string,
+  expectedRevision: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (
+    !UUID_RE.test(prospectId) ||
+    !Number.isSafeInteger(expectedRevision) ||
+    expectedRevision < 1
+  )
+    throw new ProspectsContractError("confirmation_request");
+  const response = await fetch(`${PROSPECTS_API}/${prospectId}/confirm`, {
+    method: "POST",
+    credentials: "same-origin",
+    redirect: "error",
+    cache: "no-store",
+    signal,
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+  if (!response.ok)
+    throw new Error(
+      response.status === 409
+        ? "This prospect changed. Reload before confirming."
+        : "The prospect wasn't confirmed. Try again.",
+    );
+  const result = record(await response.json());
+  if (
+    result.schema !== "ac.sales-xray.prospect-confirmation/1" ||
+    result.prospect_id !== prospectId ||
+    !Number.isSafeInteger(result.revision) ||
+    (result.revision as number) < expectedRevision ||
+    typeof result.confirmed_at !== "string" ||
+    !Number.isFinite(Date.parse(result.confirmed_at))
+  )
+    throw new ProspectsContractError("confirmation_response");
 }

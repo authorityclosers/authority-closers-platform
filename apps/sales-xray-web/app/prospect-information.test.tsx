@@ -67,7 +67,9 @@ it("saves only text typed by a person, then requests a fresh server read", async
       ),
     );
     await act(async () =>
-      host.querySelector<HTMLButtonElement>("button")!.click(),
+      Array.from(host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Edit a field")!
+        .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
     expect(input.value).toBe(""); // Never copy AI text into a human-confirmed edit.
@@ -152,7 +154,9 @@ it("keeps the current value on a failed save and refreshes before an explicit re
       ),
     );
     await act(async () =>
-      host.querySelector<HTMLButtonElement>("button")!.click(),
+      Array.from(host.querySelectorAll("button"))
+        .find((b) => b.textContent === "Edit a field")!
+        .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
     await act(async () => {
@@ -187,5 +191,60 @@ it("keeps the current value on a failed save and refreshes before an explicit re
     await act(async () => root.unmount());
     edit.mockRestore();
     notice.mockRestore();
+  }
+});
+
+it("confirms a detected prospect without turning heard values into person edits", async () => {
+  const host = document.createElement("div"),
+    root = createRoot(host),
+    onSaved = vi.fn();
+  const confirm = vi
+    .spyOn(client, "confirmDetectedProspect")
+    .mockResolvedValue();
+  const edit = vi.spyOn(client, "editProspectField").mockResolvedValue();
+  try {
+    await act(async () =>
+      root.render(
+        <ProspectInformation prospect={syntheticProspect} onSaved={onSaved} />,
+      ),
+    );
+    const button = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.textContent === "Confirm prospect",
+    )!;
+    expect(confirm).not.toHaveBeenCalled();
+    await act(async () => button.click());
+    expect(confirm).toHaveBeenCalledWith(syntheticProspect.prospect_id, 3);
+    expect(edit).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledOnce();
+    // Confirmation is shown only from the refreshed server payload.
+    expect(host.textContent).toContain("not yet confirmed");
+  } finally {
+    await act(async () => root.unmount());
+    confirm.mockRestore();
+    edit.mockRestore();
+  }
+});
+
+it("keeps shared customer pages read-only when the server withholds edit and confirmation permission", async () => {
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <ProspectInformation
+          prospect={{
+            ...syntheticProspect,
+            can_edit: false,
+            can_confirm: false,
+          }}
+          onSaved={vi.fn()}
+        />,
+      ),
+    );
+    expect(host.textContent).not.toContain("Edit a field");
+    expect(host.textContent).not.toContain("Confirm prospect");
+    expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
+  } finally {
+    await act(async () => root.unmount());
   }
 });
