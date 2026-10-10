@@ -8,6 +8,10 @@ import {
   type Submission,
 } from "./acquisition-client";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
+import {
+  parseCallCoaching,
+  type CallCoaching,
+} from "./report-call-coaching-client";
 
 /** A request-scoped, authorised GET supplied by the server route owner. */
 export type SavedReportRead = (
@@ -18,6 +22,8 @@ export type SavedReportRead = (
 type ReadyResult = ReturnType<typeof parseAcquisitionReport> & {
   transcript: ReturnType<typeof parseTranscript>;
   callRecord: null;
+  recordingId: string;
+  callCoaching?: CallCoaching;
 };
 export type SavedReportPreload =
   | {
@@ -51,6 +57,7 @@ export async function preloadSavedReport(
   callId: string,
   read: SavedReportRead,
   parent?: AbortSignal,
+  options?: { coachingActor: { personId: string; tenantId: string } },
 ): Promise<SavedReportPreload> {
   if (!UUID.test(callId)) return UNAVAILABLE;
   const timeout = new AbortController();
@@ -58,18 +65,21 @@ export async function preloadSavedReport(
     ? AbortSignal.any([parent, timeout.signal])
     : timeout.signal;
   const timer = setTimeout(() => timeout.abort(), SAVED_REPORT_READ_TIMEOUT_MS);
-  async function get(path: string) {
-    if (signal.aborted) throw new Error("saved_report_read_cancelled");
+  async function get(path: string, absolute = false, readSignal = signal) {
+    if (readSignal.aborted) throw new Error("saved_report_read_cancelled");
     let cancel: () => void = () => {};
     const aborted = new Promise<never>((_, reject) => {
       cancel = () => reject(new Error("saved_report_read_cancelled"));
-      signal.addEventListener("abort", cancel, { once: true });
+      readSignal.addEventListener("abort", cancel, { once: true });
     });
     try {
       // Bound even if a defective adapter fails to honour AbortSignal.
-      return await Promise.race([read(ACQUISITION + path, signal), aborted]);
+      return await Promise.race([
+        read(absolute ? path : ACQUISITION + path, readSignal),
+        aborted,
+      ]);
     } finally {
-      signal.removeEventListener("abort", cancel);
+      readSignal.removeEventListener("abort", cancel);
     }
   }
   try {
@@ -80,21 +90,51 @@ export async function preloadSavedReport(
     const progress = parseProgress(payload, submission);
     if (!progress.has_report)
       return { state: "processing", submission, progress, result: null };
-    const [transcriptPayload, reportPayload] = await Promise.all([
-      get(`${path}/transcript`),
-      get(`${path}/report`),
-    ]);
+    const [transcriptPayload, reportPayload, coachingPayload] =
+      await Promise.all([
+        get(`${path}/transcript`),
+        get(`${path}/report`),
+        options
+          ? get(
+              `/v1/me/coaching/calls/${callId}`,
+              true,
+              AbortSignal.any([signal, AbortSignal.timeout(1500)]),
+            ).catch(() => null)
+          : Promise.resolve(null),
+      ]);
     const transcript = parseTranscript(transcriptPayload, submission.sha);
     const report = parseAcquisitionReport(
       reportPayload,
       { submissionId: submission.id, recordingId: submission.recordingId },
       transcript,
     );
+    let callCoaching: CallCoaching | undefined;
+    if (coachingPayload && options) {
+      try {
+        callCoaching = parseCallCoaching(coachingPayload, {
+          callId,
+          personId: options.coachingActor.personId,
+          tenantId: options.coachingActor.tenantId,
+          recordingId: submission.recordingId,
+          sourceSha256: transcript.source_sha256,
+          transcriptRevision: transcript.revision,
+          transcript,
+        });
+      } catch {
+        /* Optional coaching cannot prevent the retained Report opening. */
+      }
+    }
     return {
       state: "ready",
       submission,
       progress,
-      result: { ...report, transcript, callRecord: null },
+      result: {
+        ...report,
+        transcript,
+        callRecord: null,
+        recordingId: submission.recordingId,
+        ...(callCoaching ? { callCoaching } : {}),
+      },
     };
   } catch {
     return UNAVAILABLE;

@@ -1,6 +1,7 @@
 import type { CallRecord } from "./call-record-contract";
 import type { SalesReport, Transcript } from "./report-contract";
 import { REPORT_PILLARS } from "./report-pillars";
+import type { CallCoaching } from "./report-call-coaching-client";
 
 export type DocumentReportData = {
   title?: string;
@@ -17,6 +18,10 @@ export type DocumentReportData = {
     analysisVersion?: string;
   };
   report?: SalesReport;
+  /** Request-scoped, authorised per-call Coaching from the saved-call bootstrap. */
+  callCoaching?: CallCoaching;
+  recordingId?: string;
+  reportRevision?: string;
   transcript?: Transcript;
   /** Measured numbers and facts; older calls have none. */
   callRecord?: CallRecord | null;

@@ -561,6 +561,7 @@ export function ReportModes({
             content: (
               <ReportCallCoaching
                 data={documentData}
+                callId={boundCallId}
                 onSelectEvidence={onSelectEvidence}
                 onSelectContextualPlayback={onSelectContextualPlayback}
               />

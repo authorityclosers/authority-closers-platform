@@ -36,9 +36,24 @@
   font-size: 12px;
 }
 .sources,
-.practice {
+.practice,
+.lesson {
   display: grid;
   gap: 8px;
+}
+.lesson {
+  padding-top: 8px;
+}
+.coaching summary,
+.coaching > button {
+  min-height: 32px;
+  cursor: pointer;
+}
+.coaching > button {
+  color: var(--lx-teal);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 8px;
 }
 .sources button {
   min-height: 32px;
@@ -60,6 +75,10 @@
     min-height: 44px;
   }
   .sources button {
+    min-height: 44px;
+  }
+  .coaching summary,
+  .coaching > button {
     min-height: 44px;
   }
 }

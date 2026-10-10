@@ -11,6 +11,10 @@ import {
   submissionId,
   transcript,
 } from "../tests/acquisition-fixture";
+import {
+  callCoachingBinding,
+  fictionalCallCoaching,
+} from "./report-call-coaching.fixture";
 
 const completed = { ...progress, has_report: true };
 const read = (objects: Record<string, unknown> = {}) =>
@@ -24,6 +28,86 @@ const read = (objects: Record<string, unknown> = {}) =>
         : envelope;
   });
 afterEach(() => vi.useRealTimers());
+
+it("loads optional own-call coaching in parallel with C2/C5 under the route's actor", async () => {
+  const pending: Array<() => void> = [];
+  const payload = fictionalCallCoaching();
+  const port: SavedReportRead = vi.fn(async (path) => {
+    if (path.includes("/acquisition/") && path.endsWith(submissionId))
+      return completed;
+    return new Promise((resolve) =>
+      pending.push(() =>
+        resolve(
+          path.includes("/me/coaching/")
+            ? payload
+            : path.endsWith("transcript")
+              ? transcript
+              : envelope,
+        ),
+      ),
+    );
+  });
+  const running = preloadSavedReport(submissionId, port, undefined, {
+    coachingActor: {
+      personId: callCoachingBinding.personId,
+      tenantId: callCoachingBinding.tenantId,
+    },
+  });
+  await vi.waitFor(() => expect(pending).toHaveLength(3));
+  pending.forEach((complete) => complete());
+  expect(await running).toMatchObject({
+    state: "ready",
+    result: {
+      recordingId,
+      callCoaching: { state: "ready", submission_id: submissionId },
+    },
+  });
+});
+
+it.each(["missing", "wrong person", "wrong source"])(
+  "opens the retained Report when optional coaching is %s",
+  async (failure) => {
+    const payload = fictionalCallCoaching();
+    if (failure === "wrong person") payload.person_id = recordingId;
+    if (failure === "wrong source") payload.source_sha256 = "f".repeat(64);
+    const port: SavedReportRead = async (path) => {
+      if (path.includes("/me/coaching/")) {
+        if (failure === "missing") throw new Error("Private service error");
+        return payload;
+      }
+      return read()(path);
+    };
+    const view = await preloadSavedReport(submissionId, port, undefined, {
+      coachingActor: {
+        personId: callCoachingBinding.personId,
+        tenantId: callCoachingBinding.tenantId,
+      },
+    });
+    expect(view.state).toBe("ready");
+    if (view.state === "ready")
+      expect(view.result.callCoaching).toBeUndefined();
+  },
+);
+
+it("does not wait for a stalled optional Coaching service to open the Report", async () => {
+  let coachingSignal: AbortSignal | undefined;
+  const port: SavedReportRead = async (path, signal) => {
+    if (path.includes("/me/coaching/")) {
+      coachingSignal = signal;
+      return new Promise(() => {});
+    }
+    return read()(path);
+  };
+  const view = await preloadSavedReport(submissionId, port, undefined, {
+    coachingActor: {
+      personId: callCoachingBinding.personId,
+      tenantId: callCoachingBinding.tenantId,
+    },
+  });
+  expect(view.state).toBe("ready");
+  expect(coachingSignal?.aborted).toBe(true);
+  if (view.state === "ready") expect(view.result.callCoaching).toBeUndefined();
+});
 
 it("loads a finished saved call in one status read plus parallel source-verified reads", async () => {
   const pending: Array<() => void> = [];
