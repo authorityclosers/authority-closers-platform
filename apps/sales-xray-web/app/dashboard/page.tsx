@@ -4,11 +4,7 @@ import { AlertCircle, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import {
-  AcquisitionError,
-  type Allowance,
-  type LibrarySubmission,
-} from "../acquisition-client";
+import type { Allowance, LibrarySubmission } from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
 import { PolicyFooter } from "../policy-footer";
 import { LightboxShell } from "../shell/lightbox-shell";
@@ -24,8 +20,10 @@ import {
   readCallActivity,
   readCallSummary,
   readRecentCalls,
+  settle,
   type CallActivity,
   type CallSummary,
+  type ReadResult,
 } from "./dashboard-data";
 import { DashboardGreeting } from "./dashboard-greeting";
 import {
@@ -46,8 +44,11 @@ type ReadState<T> =
   | { status: "ready"; value: T }
   | { status: "error"; forbidden: boolean };
 
-const isForbidden = (error: unknown) =>
-  error instanceof AcquisitionError && error.status === 403;
+/** 403 means this workspace has no Sales Xray: said once, not per panel. */
+const toState = <T,>(result: ReadResult<T>): ReadState<T> =>
+  result.ok
+    ? { status: "ready", value: result.value }
+    : { status: "error", forbidden: result.status === 403 };
 
 export default function DashboardPage() {
   const access = useWorkspaceAccess();
@@ -106,49 +107,37 @@ function DashboardDetails() {
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
-  const loadSummary = useCallback((signal?: AbortSignal) => {
-    readCallSummary(signal)
-      .then((value) => {
-        if (!signal?.aborted) setSummaryState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setSummaryState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadSummary = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readCallSummary(signal)).then((result) => {
+        if (!signal?.aborted) setSummaryState(toState(result));
+      }),
+    [],
+  );
 
-  const loadActivity = useCallback((signal?: AbortSignal) => {
-    readCallActivity(signal)
-      .then((value) => {
-        if (!signal?.aborted) setActivityState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setActivityState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadActivity = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readCallActivity(signal)).then((result) => {
+        if (!signal?.aborted) setActivityState(toState(result));
+      }),
+    [],
+  );
 
-  const loadAllowance = useCallback((signal?: AbortSignal) => {
-    readAllowance(signal)
-      .then((value) => {
-        if (!signal?.aborted) setAllowanceState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setAllowanceState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadAllowance = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readAllowance(signal)).then((result) => {
+        if (!signal?.aborted) setAllowanceState(toState(result));
+      }),
+    [],
+  );
 
-  const loadRecent = useCallback((signal?: AbortSignal) => {
-    readRecentCalls(signal, 5, true)
-      .then((value) => {
-        if (!signal?.aborted) setRecentState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setRecentState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadRecent = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readRecentCalls(signal, 5, true)).then((result) => {
+        if (!signal?.aborted) setRecentState(toState(result));
+      }),
+    [],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
