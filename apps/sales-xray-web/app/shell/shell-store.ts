@@ -27,6 +27,8 @@ export interface ShellRecentCall {
   /** Where the call is now, for the status dot. */
   tone?: CallTone;
   status?: string;
+  /** Present when the list can include other people's calls. */
+  owner?: { personId: string; name: string };
 }
 
 export interface ShellStoreState {

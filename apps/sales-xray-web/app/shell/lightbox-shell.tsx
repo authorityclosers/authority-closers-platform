@@ -36,11 +36,18 @@ import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
 import { callDate, callTone, submissionState } from "../call-status";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
+import {
+  ownerLabel,
+  ownsCall,
+  requestWorkspace,
+  SELECT_WORKSPACE_EVENT,
+} from "../call-ownership";
 import { RecentCallItem } from "./recent-call-item";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
 import { SettingsDialogHost } from "../settings-dialog";
+import { notify } from "../notice-center";
 import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
@@ -358,7 +365,7 @@ function LightboxShellFrame({
         recentCallsContextKey: null,
         recentFetchedAt: null,
       });
-    readRecentCalls(controller.signal)
+    readRecentCalls(controller.signal, 5, true)
       .then((submissions) => {
         if (controller.signal.aborted) return;
         const mapped = submissions.map((call) => ({
@@ -368,6 +375,7 @@ function LightboxShellFrame({
           date: callDate(call.createdAt),
           tone: callTone(call),
           status: submissionState(call),
+          ...(call.owner ? { owner: call.owner } : {}),
         }));
         setRecentCalls(mapped);
         setRecentCallsContextKey(recentContextKey);
@@ -504,7 +512,7 @@ function LightboxShellFrame({
           !("tenant_id" in selected) ||
           selected.tenant_id !== tenantId
         )
-          return;
+          throw new Error("workspace_not_selected");
         // The next document reads the new context. Do not start reads here
         // between the successful context change and its reload.
         setWorkspaceReloadPending(true);
@@ -520,8 +528,20 @@ function LightboxShellFrame({
         });
         // Every list on the page belongs to the workspace: reload into it.
         window.location.reload();
+        return;
       }
     } catch {}
+    // Nothing changed: say so in the corner, never fail silently.
+    notify({
+      id: "workspace-switch",
+      tone: "error",
+      title: "Couldn’t switch workspace",
+      message: "Try again in a moment.",
+      action: {
+        label: "Try again",
+        run: () => void handleSelectWorkspace(tenantId),
+      },
+    });
   }
 
   function openAccount(event: MouseEvent<HTMLAnchorElement>) {
@@ -576,6 +596,29 @@ function LightboxShellFrame({
       ? recentCalls
       : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
+  const viewerId = access?.context?.personId ?? null;
+  // A list with owners can mix people: then every row says whose it is.
+  const recentsShowOwners = visibleRecentCalls.some((call) => call.owner);
+  // The workspace is named wherever you are, so work never looks lost.
+  const currentWorkspace = workspaces.find(
+    (workspace) => workspace.tenant_id === effectiveTenantId,
+  );
+  const workspaceLabel = currentWorkspace
+    ? currentWorkspace.kind === "personal"
+      ? "Personal"
+      : currentWorkspace.name
+    : null;
+  const personalWorkspace = workspaces.find(
+    (workspace) =>
+      workspace.kind === "personal" && workspace.sales_xray_enabled,
+  );
+  const recentsElsewhere =
+    recentsShowOwners &&
+    currentWorkspace?.kind === "organisation" &&
+    personalWorkspace &&
+    !visibleRecentCalls.some((call) => ownsCall(call.owner, viewerId))
+      ? personalWorkspace
+      : null;
 
   // Apply a rename or deletion to the sidebar list and its shared cache.
   function updateRecentCall(id: string, next: ShellRecentCall | null) {
@@ -607,6 +650,21 @@ function LightboxShellFrame({
     };
     window.addEventListener(CALL_LABEL_EVENT, onLabel);
     return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
+
+  // Pages ask the shell to switch workspace ("Switch to Personal").
+  const selectWorkspaceRef = useRef(handleSelectWorkspace);
+  useEffect(() => {
+    selectWorkspaceRef.current = handleSelectWorkspace;
+  });
+  useEffect(() => {
+    const onSelect = (event: Event) => {
+      const tenantId = (event as CustomEvent<string>).detail;
+      if (typeof tenantId === "string")
+        void selectWorkspaceRef.current(tenantId);
+    };
+    window.addEventListener(SELECT_WORKSPACE_EVENT, onSelect);
+    return () => window.removeEventListener(SELECT_WORKSPACE_EVENT, onSelect);
   }, []);
 
   return (
@@ -845,9 +903,30 @@ function LightboxShellFrame({
                       index={index}
                       call={call}
                       href={callHref(call.id)}
+                      mine={ownsCall(call.owner, viewerId)}
+                      owner={
+                        recentsShowOwners
+                          ? call.owner
+                            ? ownerLabel(call.owner, viewerId)
+                            : "You"
+                          : null
+                      }
                       onChange={(next) => updateRecentCall(call.id, next)}
                     />
                   ))}
+                  {recentsElsewhere ? (
+                    <p className={styles.recentsElsewhere}>
+                      None of these are yours.{" "}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requestWorkspace(recentsElsewhere.tenant_id)
+                        }
+                      >
+                        Switch to Personal
+                      </button>
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -858,7 +937,17 @@ function LightboxShellFrame({
       </aside>
       <div className={styles.content}>
         <header className={styles.mobileBar}>
-          <BrandLockup href={homeHref} />
+          {workspaceLabel ? (
+            <div className={styles.mobileWorkspace}>
+              <BrandLockup href={homeHref} markOnly />
+              <span title={`Workspace: ${workspaceLabel}`}>
+                <small>Workspace</small>
+                <b>{workspaceLabel}</b>
+              </span>
+            </div>
+          ) : (
+            <BrandLockup href={homeHref} />
+          )}
           {/* The account lives under More in the tab bar, not here too. */}
           <div className={styles.barActions}>
             {bell}
@@ -870,7 +959,16 @@ function LightboxShellFrame({
             {pageTitle && (
               <div className={styles.titleWrap}>
                 <div className={styles.topBarTitle}>
-                  <span className={styles.titleContext}>Sales Xray</span>
+                  <span
+                    className={styles.titleContext}
+                    title={
+                      workspaceLabel
+                        ? `Workspace: ${workspaceLabel}`
+                        : undefined
+                    }
+                  >
+                    {workspaceLabel ?? "Sales Xray"}
+                  </span>
                   <span className={styles.titleSlash} aria-hidden="true">
                     /
                   </span>
@@ -1005,6 +1103,11 @@ function LightboxShellFrame({
           photoUrl={profile?.photo_url}
           allowance={shownAllowance}
           organisation={inOrganisation}
+          workspaces={workspaces.filter(
+            (workspace) => workspace.sales_xray_enabled,
+          )}
+          currentWorkspaceId={effectiveTenantId}
+          onSelectWorkspace={(tenantId) => void handleSelectWorkspace(tenantId)}
         />
       ) : null}
     </div>

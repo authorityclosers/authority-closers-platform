@@ -58,6 +58,29 @@
   font-size: 11.5px;
   transition: opacity var(--lx-dur-quick) var(--lx-ease-quick);
 }
+/* Whose call: initials for a teammate, "You" for your own. */
+.owner {
+  display: inline-grid;
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.owner[data-mine] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
 /* The ⋯ button takes the date's place on hover. */
 .more {
   position: absolute;

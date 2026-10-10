@@ -320,3 +320,38 @@ it.each([true, false])(
     );
   },
 );
+
+it("switches workspace from the account menu, where phones have no sidebar", async () => {
+  const onSelectWorkspace = vi.fn();
+  const onClose = vi.fn();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <SettingsMenu
+        open
+        anchorRef={{ current: document.createElement("button") }}
+        onClose={onClose}
+        name="Fictional User"
+        email="fictional@example.test"
+        allowance={null}
+        workspaces={[
+          { tenant_id: "org-one", kind: "organisation", name: "AC" },
+          { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
+        ]}
+        currentWorkspaceId="org-one"
+        onSelectWorkspace={onSelectWorkspace}
+      />,
+    ),
+  );
+  const group = document.querySelector(
+    '[role="group"][aria-label="Workspace"]',
+  )!;
+  const rows = [...group.querySelectorAll("button")];
+  expect(rows.map((row) => row.textContent)).toEqual(["AC", "Personal"]);
+  expect(rows[0].getAttribute("aria-current")).toBe("true");
+  await act(async () => rows[1].click());
+  expect(onClose).toHaveBeenCalled();
+  expect(onSelectWorkspace).toHaveBeenCalledWith("personal-one");
+});

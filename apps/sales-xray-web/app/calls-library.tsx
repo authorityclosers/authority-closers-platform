@@ -39,7 +39,13 @@ import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
 import { newCallHref } from "./new-call-navigation";
 import { callTitle, unnamedCallName, type CallLabel } from "./call-label";
-import { readCallLabel, renameCall } from "./call-label-client";
+import {
+  CALL_LABEL_EVENT,
+  readCallLabel,
+  renameCall,
+  type CallLabelChange,
+} from "./call-label-client";
+import { ownsCall, requestWorkspace } from "./call-ownership";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
 import { CallsDrawer } from "./calls-drawer";
@@ -720,6 +726,25 @@ function CallsLibraryContent({
     setSubmissions(next);
   }
 
+  // A rename anywhere else (sidebar, report header) shows here at once.
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      const row = submissionsRef.current.find(
+        (item) => item.id === submissionId,
+      );
+      if (!row || (row.label && row.label.revision >= label.revision)) return;
+      const next = submissionsRef.current.map((item) =>
+        item.id === submissionId ? { ...item, label } : item,
+      );
+      submissionsRef.current = next;
+      setSubmissions(next);
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
+
   function openSubmission(submission: LibrarySubmission) {
     if (opening) return;
     setOpeningId(submission.id);
@@ -748,14 +773,36 @@ function CallsLibraryContent({
       a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
   );
   const showReps = !preview && repOptions.length > 0;
+  const viewerId = access?.context?.personId ?? null;
   // Number same-name options in UUID order; expose no additional account data.
   const repLabel = (personId: string) => {
+    if (personId === viewerId) return "You";
     const owner = repOptions.find((rep) => rep.personId === personId)!;
-    const sameName = repOptions.filter((rep) => rep.name === owner.name);
+    // The viewer reads as "You", so only teammates share a numbered name.
+    const sameName = repOptions.filter(
+      (rep) => rep.name === owner.name && rep.personId !== viewerId,
+    );
     return sameName.length > 1
       ? `${owner.name} (${sameName.findIndex((rep) => rep.personId === personId) + 1})`
       : owner.name;
   };
+  // An owner or admin sees the team's calls here. When none are theirs, say
+  // where their own work lives (the whole list is loaded, so this is certain).
+  const currentWorkspace = access?.workspaces?.find(
+    (item) => item.tenant_id === access?.context?.tenantId,
+  );
+  const personalWorkspace = access?.workspaces?.find(
+    (item) => item.kind === "personal" && item.sales_xray_enabled,
+  );
+  const elsewhere =
+    showReps &&
+    !nextCursor &&
+    currentWorkspace?.kind === "organisation" &&
+    personalWorkspace &&
+    submissions.length > 0 &&
+    !submissions.some((row) => ownsCall(row.owner, viewerId))
+      ? { tenant_id: personalWorkspace.tenant_id, name: "Personal" }
+      : null;
   const visibleSubmissions = sortCalls(
     submissions.filter(
       (submission) =>
@@ -1038,8 +1085,9 @@ function CallsLibraryContent({
         ? formatCreatedTime(submission.createdAt)
         : day;
     const fullDate = `${formatCreatedDate(submission.createdAt)}, ${formatCreatedTime(submission.createdAt)}`;
-    // Rename needs a server that supplies labels; the server enforces ownership.
-    if (renamingId === submission.id && label)
+    // Rename needs a server that supplies labels, and only the owner may.
+    const mine = ownsCall(submission.owner, viewerId);
+    if (renamingId === submission.id && label && mine)
       return (
         <div
           className={`${styles.row} calls-library-row`}
@@ -1187,7 +1235,7 @@ function CallsLibraryContent({
               <Eye size={15} aria-hidden="true" />
             </button>
           ) : null}
-          {label ? (
+          {label && mine ? (
             <span className={styles.renameSlot}>
               <RenameCallButton
                 callTitle={title}
@@ -1607,6 +1655,21 @@ function CallsLibraryContent({
                 </button>
               ) : null}
             </div>
+            {elsewhere ? (
+              <p className={`${styles.elsewhere} calls-library-elsewhere`}>
+                <span>
+                  None of these calls are yours. Calls you saved in{" "}
+                  {elsewhere.name} stay there.
+                </span>
+                <button
+                  type="button"
+                  className={styles.textButton}
+                  onClick={() => requestWorkspace(elsewhere.tenant_id)}
+                >
+                  Switch to {elsewhere.name}
+                </button>
+              </p>
+            ) : null}
             <div className={styles.table}>
               <div className={styles.head} aria-hidden="true">
                 <span className={styles.pick} />
@@ -1737,7 +1800,10 @@ function CallsLibraryContent({
           readState={statusOf(previewSubmission.id)}
           onRetry={retryInsights}
           hasReport={previewSubmission.hasReport}
-          canRename={Boolean(previewSubmission.label)}
+          canRename={Boolean(
+            previewSubmission.label &&
+              ownsCall(previewSubmission.owner, viewerId),
+          )}
           onOpen={() => openSubmission(previewSubmission)}
           onRename={() => {
             setPreviewId(null);

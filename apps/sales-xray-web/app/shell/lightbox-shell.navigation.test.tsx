@@ -19,6 +19,7 @@ vi.mock("next/link", () => ({
 import { AcquisitionShell } from "../acquisition-shell";
 import { LiveDataBanner } from "../live-data-banner";
 import { recentCallsForContext } from "./shell-store";
+import { WorkspaceAccessProvider } from "../workspace-access";
 
 it("only exposes cached recents for the matching account and workspace", () => {
   const cached = {
@@ -171,4 +172,44 @@ it("keeps More for an unconfirmed session and offers Sign in once signed out", (
       </AcquisitionShell>,
     ).at(-1),
   ).toBe("Sign in");
+});
+
+it("names the current workspace in the phone header and the desktop top bar", () => {
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <WorkspaceAccessProvider
+      value={{
+        status: "ready",
+        authenticated: true,
+        context: { personId: "p", sessionId: "s", tenantId: "org-one" },
+        workspaces: [
+          {
+            tenant_id: "org-one",
+            kind: "organisation",
+            name: "Authority Closers",
+            role: "owner",
+            sales_xray_enabled: true,
+          },
+          {
+            tenant_id: "personal-one",
+            kind: "personal",
+            name: "Fictional Owner",
+            role: null,
+            sales_xray_enabled: true,
+          },
+        ],
+        retry: () => {},
+      }}
+    >
+      <AcquisitionShell authenticated active="calls">
+        <p>Calls</p>
+      </AcquisitionShell>
+    </WorkspaceAccessProvider>,
+  );
+  expect(
+    host.querySelector('[title="Workspace: Authority Closers"]'),
+  ).not.toBeNull();
+  expect(
+    host.querySelectorAll('[title="Workspace: Authority Closers"]'),
+  ).toHaveLength(2);
 });

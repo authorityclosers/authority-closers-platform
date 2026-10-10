@@ -153,6 +153,22 @@
   outline: none;
 }
 
+/* One quiet line when none of the listed calls are the viewer's own. */
+.elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+}
+
+/* The action lines up with the sentence when it wraps on a phone. */
+.elsewhere .textButton {
+  padding-inline: 0;
+}
+
 /* ---------- Figure strip ---------- */
 
 .strip {
@@ -1422,6 +1438,10 @@
 
   .pick {
     min-width: 44px;
+  }
+
+  .elsewhere .textButton {
+    min-height: 44px;
   }
 }
 
