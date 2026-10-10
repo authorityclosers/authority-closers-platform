@@ -40,6 +40,8 @@ from ac_platform.worker import (
     EMAIL_LOGIN_REQUEST_JOB,
     ENROLLMENT_WELCOME_EVENT,
     ENROLLMENT_WELCOME_JOB,
+    ORGANISATION_INVITATION_EVENT,
+    ORGANISATION_INVITATION_JOB,
     OUTBOX_JOB_ROUTES,
     PASSWORD_EMAIL_RESET_EVENT,
     PASSWORD_EMAIL_RESET_EVENT_V2,
@@ -190,6 +192,7 @@ async def test_dispatcher_rejects_job_kinds_outside_the_exact_allowlist() -> Non
 
 def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> None:
     assert set(OUTBOX_JOB_ROUTES) == {
+        ORGANISATION_INVITATION_EVENT,
         ENROLLMENT_WELCOME_EVENT,
         EMAIL_LOGIN_REQUEST_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
@@ -203,8 +206,13 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert OUTBOX_JOB_ROUTES[EMAIL_LOGIN_REQUEST_EVENT].job_kind == EMAIL_LOGIN_REQUEST_JOB
+    invitation_route = OUTBOX_JOB_ROUTES[ORGANISATION_INVITATION_EVENT]
+    assert invitation_route.job_kind == ORGANISATION_INVITATION_JOB
+    assert invitation_route.required_payload_keys == frozenset({"invite_id"})
+    assert invitation_route.uuid_payload_keys == frozenset({"invite_id"})
     assert ENROLLMENT_WELCOME_JOB != "email.send"
     assert EMAIL_LOGIN_REQUEST_JOB in build_default_dispatcher(_settings()).allowed_kinds
+    assert ORGANISATION_INVITATION_JOB in build_default_dispatcher(_settings()).allowed_kinds
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].allowed_payload_values["source"] == {
         "free_self",
         "manual_grant",
@@ -830,6 +838,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
     assert worker.allowed_job_kinds == frozenset(
         {
             ENROLLMENT_WELCOME_JOB,
+            ORGANISATION_INVITATION_JOB,
             EMAIL_LOGIN_REQUEST_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,

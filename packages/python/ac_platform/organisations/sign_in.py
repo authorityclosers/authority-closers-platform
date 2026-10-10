@@ -11,6 +11,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person
 from ac_platform.identity.services import VerifiedProviderAssertion, normalize_email
+from ac_platform.organisations.invitations import invitation_policies
 from ac_platform.organisations.seats import seat_exempt
 from ac_platform.organisations.usage import organisation_seats
 from ac_platform.tenancy.models import (
@@ -82,7 +83,7 @@ async def _join(
     invite_tenants = set(
         await database.scalars(
             select(OrganisationInvite.tenant_id).where(
-                OrganisationInvite.email_normalized == email,
+                func.lower(OrganisationInvite.email_normalized) == email.lower(),
                 OrganisationInvite.status == "pending",
             )
         )
@@ -110,11 +111,17 @@ async def _join(
         invite = await database.scalar(
             select(OrganisationInvite).where(
                 OrganisationInvite.tenant_id == tenant_id,
-                OrganisationInvite.email_normalized == email,
+                func.lower(OrganisationInvite.email_normalized) == email.lower(),
                 OrganisationInvite.status == "pending",
             )
         )
         member = await database.get(Membership, (tenant_id, person_id))
+        if invite is not None:
+            policy = (await invitation_policies(database, [invite]))[invite.id]
+            if policy.explicit_acceptance or policy.expired(datetime.now(UTC)):
+                # The person must choose this invitation after sign-in. Domain
+                # auto-join cannot bypass that choice or its reserved seat.
+                continue
         if invite is None:
             current = await database.scalar(
                 select(OrganisationDomainSetting)
