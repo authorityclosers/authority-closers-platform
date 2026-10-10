@@ -104,3 +104,13 @@ ruff and strict module mypy passed.
 
 Final source-semantic regression checks: 28 focused Python tests (19 profile +
 9 story) and 20 frontend story/pillar/screen tests pass; app typecheck passes.
+
+CI run 38037596629 passes the compiled acquisition/browser journey, frontend
+validation and Python gates at 29ca3e6. Its Python formatter found one long
+Moments selector; the correction preserves the exact Python AST. Changed-file
+format/lint checks are repeated before pushing it.
+
+Dependency update: PR #414 merged at 2026-10-10 08:13:43 UTC as 4885aaff4bb84b0699cbb030c2bbfed835fddd3f.
+The persistence dependency is now available. Continue detected creation,
+confirmation, history and team integration from that merged implementation;
+the earlier OPEN dependency receipt records the situation at inspection time.
