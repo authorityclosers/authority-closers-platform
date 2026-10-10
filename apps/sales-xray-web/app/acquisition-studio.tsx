@@ -147,6 +147,21 @@ type ExistingCallEntryState = {
   submissionId: string;
   state: "opening" | "restored" | "failed";
 };
+// Status checks after a miss: 3 s, then longer, settling at 30 s. A call on
+// screen is never given up on because the network blinked.
+const STATUS_RETRY_MS = [3_000, 6_000, 12_000, 24_000, 30_000];
+// Misses in a row before the corner card; one blip shows only in the steps.
+const STATUS_CARD_AFTER = 3;
+// Answers no retry changes: signed out, no access, gone, or superseded.
+const isFinalStatusAnswer = (error: unknown) =>
+  error instanceof AcquisitionError &&
+  [401, 403, 404, 409].includes(error.status);
+// A blip: offline, a timed-out read, a busy or restarting server.
+const isStatusBlip = (error: unknown) =>
+  error instanceof TypeError ||
+  (error instanceof DOMException && error.name === "TimeoutError") ||
+  (error instanceof AcquisitionError &&
+    (error.status >= 500 || error.status === 408 || error.status === 429));
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -334,11 +349,20 @@ export function AcquisitionStudio({
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
-  const [checkingStatus, setCheckingStatus] = useState(false);
+  // Whether a status miss earns the corner card (see STATUS_CARD_AFTER), and
+  // the misses in a row for the call on screen.
+  const [statusCard, setStatusCard] = useState(false);
+  const statusMissRef = useRef({ id: "", count: 0 });
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // When this page saw the analysis accepted, for the progress clock. A call
+  // opened later has no known start, so it shows no clock.
+  const [analysisStart, setAnalysisStart] = useState<{
+    id: string;
+    at: string;
+  } | null>(null);
   const [deleted, setDeleted] = useState(false);
   const [deletionOnlyId, setDeletionOnlyId] = useState<string | null>(null);
   const [clientRouteResolved, setClientRouteResolved] =
@@ -363,6 +387,12 @@ export function AcquisitionStudio({
         ? existingCallEntry.state
         : "opening"
       : null;
+  // The status poll reads this: a call still opening from its link.
+  const entryOpening = useRef<string | null>(null);
+  useEffect(() => {
+    entryOpening.current =
+      requestedCallEntryState === "opening" ? activeRequestedCallId : null;
+  }, [requestedCallEntryState, activeRequestedCallId]);
   const [dragActive, setDragActive] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -656,7 +686,6 @@ export function AcquisitionStudio({
             setSavedCallNeedsSession(false);
             setError("");
             setStatusIssue("");
-            setCheckingStatus(false);
             setMoment(null);
             setPlaybackMessage("");
             setDeleteConfirm(false);
@@ -988,6 +1017,11 @@ export function AcquisitionStudio({
         });
         setPlanRequiresAction(false);
         setPlanExpired(false);
+        setAnalysisStart((current) =>
+          current?.id === bound.id
+            ? current
+            : { id: bound.id, at: new Date().toISOString() },
+        );
         setPollAttempt((n) => n + 1);
       }
     },
@@ -1045,16 +1079,23 @@ export function AcquisitionStudio({
     if (!submission || result || review.requested) return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let failures = 0;
     const bound = submission;
+    // A retry keeps counting, so its card stays until a check succeeds.
+    let failures =
+      statusMissRef.current.id === bound.id ? statusMissRef.current.count : 0;
+    const countMisses = (count: number, card: boolean) => {
+      failures = count;
+      statusMissRef.current = { id: bound.id, count };
+      setStatusCard(card);
+    };
     async function poll() {
       try {
-        setCheckingStatus(true);
         const observed = await observeSubmission(bound, abort.signal);
         if (abort.signal.aborted) return;
         const next = observed.progress;
         setProgress(next);
         setStatusIssue("");
+        countMisses(0, false);
         if (observed.result) {
           setResult(observed.result);
           setError("");
@@ -1088,15 +1129,20 @@ export function AcquisitionStudio({
           });
           return;
         }
-        failures = 0;
       } catch (error) {
         if (abort.signal.aborted) return;
-        failures += 1;
+        const misses = failures + 1;
+        // Only blips wait for the corner card; anything else shows it at once.
+        countMisses(
+          misses,
+          !isStatusBlip(error) || misses >= STATUS_CARD_AFTER,
+        );
         setStatusIssue(message(error));
+        // No retry changes a final answer. A call still opening from its link
+        // also stops after three misses, so its recovery view can take over.
         if (
-          failures >= 3 ||
-          (error instanceof AcquisitionError &&
-            [401, 403, 404, 409].includes(error.status))
+          isFinalStatusAnswer(error) ||
+          (misses >= STATUS_CARD_AFTER && entryOpening.current === bound.id)
         ) {
           setExistingCallEntry({
             submissionId: bound.id,
@@ -1104,11 +1150,14 @@ export function AcquisitionStudio({
           });
           return;
         }
-      } finally {
-        if (!abort.signal.aborted) setCheckingStatus(false);
+        // A call on screen keeps its last confirmed steps and is never given
+        // up on; after three misses the corner card offers a retry now.
       }
       if (!abort.signal.aborted)
-        timer = setTimeout(() => void poll(), failures ? 6000 : 3000);
+        timer = setTimeout(
+          () => void poll(),
+          STATUS_RETRY_MS[Math.min(failures, STATUS_RETRY_MS.length - 1)],
+        );
     }
     void poll();
     return () => {
@@ -1461,6 +1510,11 @@ export function AcquisitionStudio({
         return { state: "needs_action", message: started.message };
       if (started.plan && active.current && !signal.aborted)
         setPlan(started.plan);
+      if (active.current && !signal.aborted)
+        setAnalysisStart({
+          id: outcome.bound.id,
+          at: new Date().toISOString(),
+        });
       return { state: "accepted" };
     };
 
@@ -1628,7 +1682,6 @@ export function AcquisitionStudio({
     setSubmission(null);
     setProgress(null);
     setStatusIssue("");
-    setCheckingStatus(false);
     setPlan(null);
     setResult(null);
     clearConsent();
@@ -1921,7 +1974,6 @@ export function AcquisitionStudio({
           ? rootAnalysisMessage
           : error,
     statusIssue: review.frame ? "" : statusIssue,
-    checkingStatus: review.frame ? false : checkingStatus,
     requestedCallEntryState: review.frame
       ? "restored"
       : requestedCallEntryState,
@@ -1935,7 +1987,6 @@ export function AcquisitionStudio({
     busy,
     error,
     statusIssue,
-    checkingStatus,
     requestedCallEntryState,
   }: {
     submission: Submission | null;
@@ -1945,7 +1996,6 @@ export function AcquisitionStudio({
     busy: string;
     error: string | AcquisitionError;
     statusIssue: string | AcquisitionError;
-    checkingStatus: boolean;
     requestedCallEntryState: "opening" | "restored" | "failed" | null;
   }) {
     if (entry && !entry.enabled && requestedCallEntryState === null) {
@@ -1990,7 +2040,7 @@ export function AcquisitionStudio({
     );
     const visibleError =
       error ||
-      statusIssue ||
+      (statusCard ? statusIssue : "") ||
       (pending?.accountChanged
         ? "Your account or workspace changed. Choose your audio files again."
         : "");
@@ -2425,11 +2475,8 @@ export function AcquisitionStudio({
                   </button>
                 ) : null}
               </div>
-              {statusIssue && !error && (
-                <p>
-                  Status could not be refreshed. This does not mean analysis
-                  failed.
-                </p>
+              {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
+                <p>Your call is saved. Sales Xray keeps checking by itself.</p>
               )}
               <ErrorMessage
                 message={
@@ -2451,7 +2498,7 @@ export function AcquisitionStudio({
                     } else setAttempt((n) => n + 1);
                   }}
                 >
-                  Check again
+                  {statusIssue && !error ? "Try again" : "Check again"}
                 </button>
                 {error &&
                   submission &&
@@ -3193,18 +3240,21 @@ export function AcquisitionStudio({
                       ) ?? undefined
                     }
                     paused={processingProjection.attention}
+                    startedAt={
+                      analysisStart?.id === submission.id
+                        ? analysisStart.at
+                        : undefined
+                    }
+                    deleteConfirm={
+                      deleteConfirm
+                        ? {
+                            disabled: !!busy || analysisWriteBlocked,
+                            onDelete: () => void erase(),
+                            onKeep: () => setDeleteConfirm(false),
+                          }
+                        : undefined
+                    }
                   >
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={!!busy || checkingStatus}
-                      onClick={() => {
-                        setConsentedSubmissionId(null);
-                        setPollAttempt((n) => n + 1);
-                      }}
-                    >
-                      {checkingStatus ? "Checking status…" : "Check status"}
-                    </button>
                     <Link
                       href={callHref(
                         submission.id,
@@ -3251,9 +3301,21 @@ export function AcquisitionStudio({
                         Start analysis
                       </button>
                     )}
+                    {!deleteConfirm && (
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => setDeleteConfirm(true)}
+                      >
+                        Delete this call…
+                      </button>
+                    )}
                   </AcquisitionProcessingPanel>
                 )}
-                {(submission || deletionOnlyId) && (
+                {/* The progress screen keeps deletion in its ⋯ menu. */}
+                {(deletionOnlyId ||
+                  (submission && (report || (plan && !plan.accepted)))) && (
                   <div className={styles.callActions}>
                     <details className={styles.privacyActions}>
                       <summary>Privacy &amp; support</summary>
@@ -3674,7 +3736,8 @@ export function AcquisitionStudio({
 }
 
 function errorTitle(error: unknown, statusOnly: boolean) {
-  if (statusOnly) return "Status not refreshed";
+  if (statusOnly && !isFinalStatusAnswer(error))
+    return "Can’t refresh this call’s status";
   if (error instanceof AcquisitionError) {
     if (error.status === 401) return "You’re signed out";
     if (error.status === 403) return "Access needs a check";
