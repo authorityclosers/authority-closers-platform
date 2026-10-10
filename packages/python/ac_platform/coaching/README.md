@@ -24,7 +24,7 @@ Private strike notes, offline corpus counts and fictional local browser artifact
 
 ## Remaining activation requirements
 
-- Shared migration/model ownership is held by #414. Durable learner/skill profiles, focus revisions, diagnosis revisions, missions, practice history, relevant opportunity observations, skill evidence links, reflection/feedback and media review receipts need dedicated canonical tables and superseding audit history. Analytics and unrelated domain tables cannot substitute.
+- Shared migration/model ownership is held by another strike (see the current holder in `NOTES.md`; #414 was followed by #421). Durable learner/skill profiles, focus revisions, diagnosis revisions, missions, practice history, relevant opportunity observations, skill evidence links, reflection/feedback and media review receipts need dedicated canonical tables and superseding audit history. Analytics and unrelated domain tables cannot substitute.
 - Current report labels are not relevant-opportunity success verdicts or root-cause diagnoses. No approved threshold rules were supplied for mastery/regression. These stay unknown until reviewed comparable behavior evidence and rules exist; content completion, call count and dates cannot advance mastery.
 - #419 holds the sidebar and navigation tests. Add the single Coaching entry after Report and Prospects when ownership clears. The direct page currently inherits the shell’s default selection.
 - `/root/ac-drive/index.db` is inaccessible. A read-only export is requested through `NOTES.md`; the four required categories must retain exact Drive IDs/revisions. No fabricated media recommendation, external AI tagging, or provider activation is permitted.
