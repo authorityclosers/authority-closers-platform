@@ -147,6 +147,17 @@
   cursor: pointer;
 }
 
+/* The icon's name for text readers and tests; the visible label floats
+   above every layer on hover or focus (rail-tip.tsx). */
+.railName {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .stripBtn:hover {
   background: var(--lx-sunken);
   color: var(--lx-ink);

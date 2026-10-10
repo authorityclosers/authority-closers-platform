@@ -94,7 +94,16 @@ function argument(name, fallback) {
   return index > 0 ? process.argv[index + 1] : fallback;
 }
 
-async function visit(
+/** One retry when the page itself never arrives (a cold server), not on faults. */
+async function visit(browser, origin, view) {
+  const first = await visitOnce(browser, origin, view);
+  const cold = first.problems.some((problem) =>
+    problem.startsWith("did not load"),
+  );
+  return cold ? visitOnce(browser, origin, view) : first;
+}
+
+async function visitOnce(
   browser,
   origin,
   { route, role, width, height, scheme, out },

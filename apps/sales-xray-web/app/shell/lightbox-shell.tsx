@@ -724,6 +724,7 @@ function LightboxShellFrame({
               aria-current={active === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>Dashboard</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -733,6 +734,7 @@ function LightboxShellFrame({
               aria-current={active === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>New analysis</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -742,6 +744,7 @@ function LightboxShellFrame({
               aria-current={active === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>Calls</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -751,6 +754,7 @@ function LightboxShellFrame({
               aria-current={active === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>Prospects</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -760,6 +764,7 @@ function LightboxShellFrame({
               aria-current={active === "coaching" ? "page" : undefined}
             >
               <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>Coaching</span>
             </Link>
             {inOrganisation || active === "organisation" ? (
               <Link
@@ -771,6 +776,7 @@ function LightboxShellFrame({
                 aria-current={active === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railName}>Organisation</span>
               </Link>
             ) : null}
           </div>
@@ -788,6 +794,7 @@ function LightboxShellFrame({
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railName}>{accountLabel}</span>
             </Link>
           </div>
         </div>
