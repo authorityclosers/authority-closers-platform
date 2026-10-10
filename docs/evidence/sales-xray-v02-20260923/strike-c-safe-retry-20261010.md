@@ -26,6 +26,10 @@ commit together. Two tabs with one key recover one durable result; another key
 cannot create competing live local work or a second quoted provider plan.
 Same-timestamp local jobs use durable job creation order, with a separate guard
 against any already queued/working local job.
+The expiry case also creates a new local worker, claims the successor and
+checks its real worker admission at the resumed clock after the original source
+lease expired. The existing owner continuation admits the exact fresh run and
+quote; no native execution or provider call is fabricated by that assertion.
 
 Progress exposes queued, working, retrying, failed or done from persisted facts,
 plus the customer minute outcome and owner retry availability. Done requires a

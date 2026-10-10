@@ -1,7 +1,7 @@
 """Failed/expired local work gets one bounded source-bound owner successor."""
 
 import secrets
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -38,7 +38,7 @@ def postgres_harness() -> Any:
 
 @pytest.mark.parametrize("mode", ["failure", "expired"])
 def test_local_failure_releases_and_retry_survives_restart_and_replay(
-    postgres_harness: Any, tmp_path: Path, mode: str
+    postgres_harness: Any, tmp_path: Path, mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
@@ -172,6 +172,33 @@ def test_local_failure_releases_and_retry_survives_restart_and_replay(
                     # The owner continuation budget protects the restarted
                     # local retry when the original immutable lease expired.
                     assert not await ReportMinutes(db).release_expired_source(now=setup.clock[0])
+                if mode == "expired":
+                    import ac_platform.conversation_intelligence.worker as worker_module
+                    from ac_platform.conversation_intelligence.worker import (
+                        OfflineConversationWorker,
+                    )
+
+                    class ResumedClock(datetime):
+                        @classmethod
+                        def now(cls, tz=None):
+                            return setup.clock[0].astimezone(tz or UTC)
+
+                    restarted = OfflineConversationWorker(
+                        setup.sessions,
+                        storage=setup.runtime.storage,
+                        scratch=setup.runtime.scratch,
+                        environment="test",
+                    )
+                    work = await restarted.claim()
+                    assert work is not None
+                    with monkeypatch.context() as patch:
+                        patch.setattr(worker_module, "datetime", ResumedClock)
+                        async with setup.sessions() as db, db.begin():
+                            job = await restarted._job(db, work)
+                            recording, row, quoted, quote = await restarted._scope(db, job)
+                            assert row.id == UUID(view["run_id"])
+                            assert recording.id == UUID(view["recording_id"])
+                            assert quote.max_cost_paise == quote.entitlement_seconds == 0
                 if mode == "failure":
                     # The owner may try two local successors. A fourth attempt
                     # fails atomically with the last reservation still released.
