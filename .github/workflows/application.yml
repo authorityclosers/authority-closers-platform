@@ -153,6 +153,70 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # AUT-1663 (Pulse b.1/b.2): every page as guest, member, admin, owner and a
+  # Personal-only owner on fictional API answers, then at 390 and 1440 px in
+  # light and dark, on the production build. Fails on HTTP 500+, page errors,
+  # error screens, skeletons that never clear, missing sign-in for guests and
+  # sideways scrolling.
+  validate-sales-xray-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.7
+      - name: Install locked page-matrix dependencies
+        run: pnpm install --frozen-lockfile && uv sync --frozen
+      # The browser's system libraries come from the bounded, locked helper,
+      # as for the other browser jobs.
+      - name: Require locked browser
+        timeout-minutes: 13
+        run: uv run --frozen python scripts/ci/ci_prerequisites.py browser
+      - name: Install Playwright Chromium for the page matrix
+        timeout-minutes: 3
+        run: pnpm exec playwright install chromium --only-shell
+      - name: Build Sales Xray production standalone
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Start the production server
+        run: |
+          set -euo pipefail
+          web=apps/sales-xray-web
+          root="$web/.next/standalone/$web"
+          cp -r "$web/.next/static" "$root/.next/static"
+          if [ -d "$web/public" ]; then cp -r "$web/public" "$root/public"; fi
+          PORT=3016 HOSTNAME=127.0.0.1 nohup node "$root/server.js" > "$RUNNER_TEMP/next.log" 2>&1 &
+          for _ in $(seq 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3016/login; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/next.log"
+          exit 1
+      - name: Open every page as every role, then at 390 and 1440 in light and dark
+        timeout-minutes: 25
+        run: node apps/sales-xray-web/scripts/page-matrix.mjs --origin http://127.0.0.1:3016 --out "$RUNNER_TEMP/page-matrix"
+      - name: Upload receipts and screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sales-xray-page-matrix-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/page-matrix/receipts.json
+            ${{ runner.temp }}/page-matrix/screens/*.png
+          if-no-files-found: warn
+          retention-days: 3
+
   validate-python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -512,6 +576,7 @@ jobs:
       - validate-python-static
       - validate-frontend
       - validate-sales-xray-acquisition-browser
+      - validate-sales-xray-pages
       - validate-python-tests
       - validate-python-gates
     runs-on: ubuntu-latest
@@ -544,6 +609,7 @@ jobs:
           PYTHON_STATIC_RESULT: ${{ needs.validate-python-static.result }}
           FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
           SALES_XRAY_ACQUISITION_BROWSER_RESULT: ${{ needs.validate-sales-xray-acquisition-browser.result }}
+          SALES_XRAY_PAGES_RESULT: ${{ needs.validate-sales-xray-pages.result }}
           PYTHON_TESTS_RESULT: ${{ needs.validate-python-tests.result }}
           PYTHON_GATES_RESULT: ${{ needs.validate-python-gates.result }}
         run: |
@@ -553,6 +619,7 @@ jobs:
             "$PYTHON_STATIC_RESULT" \
             "$FRONTEND_RESULT" \
             "$SALES_XRAY_ACQUISITION_BROWSER_RESULT" \
+            "$SALES_XRAY_PAGES_RESULT" \
             "$PYTHON_TESTS_RESULT" \
             "$PYTHON_GATES_RESULT"; do
             if [ "$result" != "success" ]; then
