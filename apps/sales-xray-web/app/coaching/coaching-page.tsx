@@ -2,6 +2,7 @@
 
 import { ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
@@ -16,7 +17,11 @@ import {
   type MasteryState,
 } from "./coaching-client";
 import { EvidencePlayer } from "./evidence-player";
-import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
+import {
+  requestedSkill,
+  requestedSkillLabel,
+  type RequestedSkill,
+} from "./focus-request";
 import styles from "./coaching.module.css";
 
 const masteryLabel: Record<MasteryState, string> = {
@@ -474,10 +479,10 @@ export function CoachingPage({
 }
 
 /** New routes use the existing account bootstrap until the shared shell owns them. */
-export function CoachingRoute({
-  requestedFocus,
-}: { requestedFocus?: RequestedSkill } = {}) {
+export function CoachingRoute() {
   const access = useWorkspaceAccess();
+  const query = useSearchParams();
+  const requestedFocus = requestedSkill(query.get("focus"));
   return access ? (
     <CoachingPage requestedFocus={requestedFocus} />
   ) : (

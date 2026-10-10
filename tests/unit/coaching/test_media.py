@@ -184,6 +184,16 @@ def test_forged_approved_clip_is_revalidated_before_selection_or_playback() -> N
         select_clips((forged,), skill_id="problem_impact_desire", gap_type="judgment")
 
 
+def test_preview_cannot_accept_forged_policy_or_negative_usage() -> None:
+    clip = reviewed_clip(*media())
+    policy = PreviewAllowance(policy_revision="v1", full_access=False, preview_ms=1000)
+    usage = PreviewUsage(usage_revision="v1", played_ms=1000, clips_started=1)
+    with pytest.raises(ValidationError):
+        playback_window(clip, policy, usage.model_copy(update={"played_ms": -1000}))
+    with pytest.raises(ValidationError):
+        playback_window(clip, policy.model_copy(update={"full_access": "yes"}), usage)
+
+
 def test_preview_uses_explicit_durable_allowance_and_usage_and_never_changes_them() -> None:
     clip = reviewed_clip(*media())
     policy = PreviewAllowance(

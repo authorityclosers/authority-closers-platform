@@ -7,11 +7,10 @@ an authorized source resolver; until then Coaching retains its text lesson.
 """
 
 import re
-from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
 from ac_platform.coaching.catalogue import Category
 from ac_platform.coaching.contracts import GapType, Model
@@ -102,7 +101,7 @@ class SegmentProposal(Model):
     gap_types: tuple[GapType, ...] = Field(min_length=1, max_length=11)
     rationale: str = Field(min_length=1, max_length=2000)
     proposal_reference: str = Field(min_length=1, max_length=256)
-    created_at: datetime
+    created_at: AwareDatetime
     status: Literal["pending_review"] = "pending_review"
 
     @model_validator(mode="after")
@@ -124,7 +123,7 @@ class SegmentReview(Model):
     proposal_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     decision: Literal["approve", "reject"]
     reviewer_reference: str = Field(min_length=1, max_length=256)
-    reviewed_at: datetime
+    reviewed_at: AwareDatetime
     reason: str = Field(min_length=1, max_length=2000)
     takeaways: tuple[str, ...] = Field(min_length=1, max_length=5)
     # A later review supersedes an earlier decision; never mutate its history.
@@ -187,6 +186,9 @@ def _reviewed_spans(
 def reviewed_clip(
     transcript: MediaTranscript, proposal: SegmentProposal, review: SegmentReview
 ) -> ReviewedClip | None:
+    transcript = MediaTranscript.model_validate_json(transcript.model_dump_json(warnings=False))
+    proposal = SegmentProposal.model_validate_json(proposal.model_dump_json(warnings=False))
+    review = SegmentReview.model_validate_json(review.model_dump_json(warnings=False))
     spans = _reviewed_spans(transcript, proposal, review)
     if not spans:
         return None
@@ -220,7 +222,7 @@ def select_clips(
     eligible = []
     for clip in clips:
         # Revalidate even model_copy/construct inputs at this product boundary.
-        clip = ReviewedClip.model_validate_json(clip.model_dump_json())
+        clip = ReviewedClip.model_validate_json(clip.model_dump_json(warnings=False))
         tags = clip.proposal
         if (
             skill_id in tags.skill_ids
@@ -256,7 +258,7 @@ class PreviewAllowance(Model):
     """Already resolved entitlements/credits policy; no plan-name/payment lookup."""
 
     policy_revision: str = Field(min_length=1, max_length=256)
-    full_access: bool
+    full_access: bool = Field(strict=True)
     preview_ms: int | None = Field(default=None, ge=0, strict=True)
     clip_limit: int | None = Field(default=None, ge=0, strict=True)
 
@@ -293,7 +295,9 @@ def playback_window(
     Internal/free/unlimited open access is represented by full_access=True from
     the Coaching entitlement, never by a payment-provider status.
     """
-    clip = ReviewedClip.model_validate_json(clip.model_dump_json())
+    clip = ReviewedClip.model_validate_json(clip.model_dump_json(warnings=False))
+    allowance = PreviewAllowance.model_validate_json(allowance.model_dump_json(warnings=False))
+    usage = PreviewUsage.model_validate_json(usage.model_dump_json(warnings=False))
     common = dict(
         start_ms=clip.start_ms,
         policy_revision=allowance.policy_revision,

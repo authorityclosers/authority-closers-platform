@@ -1,11 +1,10 @@
-import { CoachingRoute } from "./coaching-page";
-import { requestedSkill } from "./focus-request";
+import { Suspense } from "react";
+import { CoachingRoute, CoachingSkeleton } from "./coaching-page";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ focus?: string | string[] }>;
-}) {
-  const query = await searchParams;
-  return <CoachingRoute requestedFocus={requestedSkill(query.focus)} />;
+export default function Page() {
+  return (
+    <Suspense fallback={<CoachingSkeleton />}>
+      <CoachingRoute />
+    </Suspense>
+  );
 }
