@@ -828,6 +828,17 @@ class ReportingPipeline:
         if isinstance(actor, ProcessingActor):
             now = utc(self.service.application.clock())
             usage = await admit_processing_actor(self.database, actor, now)
+            from ac_platform.conversation_intelligence.models import (
+                ConversationPlanStageAuthorization,
+            )
+            from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
+
+            authorization = await self.database.get(
+                ConversationPlanStageAuthorization, task.quote_id
+            )
+            await ReportMinutes(self.database).deliver(
+                usage.id, draft, plan_id=authorization.plan_id if authorization else None
+            )
             previous = await self.database.get(ConversationAcquisitionSettlement, usage.id)
             if previous is None:
                 await AcquisitionSessions(

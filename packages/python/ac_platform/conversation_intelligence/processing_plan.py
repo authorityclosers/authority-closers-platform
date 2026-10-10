@@ -72,6 +72,7 @@ from ac_platform.conversation_intelligence.qualitative_pack import (
     load_qualitative_pack_for_revision,
     supports_coaching_v6_route,
 )
+from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
@@ -1080,6 +1081,7 @@ class ConversationProcessingPlans:
         # request key cannot manufacture another consent event or reservation.
         if row.state == "active":
             await self.advance(actor, row)
+        await ReportMinutes(self.db).release_plan(row)
         return self.view(row)
 
     async def _enqueue(
@@ -1457,6 +1459,8 @@ class ProcessingPlanScheduler:
     async def step(self) -> bool:
         async with self.sessions() as db, db.begin():
             await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
+            if await ReportMinutes(db).settle_terminal_plan():
+                return True
             candidate = await db.scalar(
                 select(ConversationProcessingPlan)
                 .where(
@@ -1494,6 +1498,9 @@ class ProcessingPlanScheduler:
                     **_roles_freeze_progress(row),
                     "failure_code": "processing_budget_expired",
                 }
+                await ReportMinutes(db).release_plan(row)
+                if row.processing_lease_id is not None and row.state in {"held", "cancelled"}:
+                    row.progress = {**row.progress, "minute_outcome_checked": True}
                 return True
             actor = actor_from_row(candidate)
             plans: ConversationProcessingPlans | None = None
@@ -1517,6 +1524,9 @@ class ProcessingPlanScheduler:
                     # hung local planning step cannot occupy this worker forever.
                     async with asyncio.timeout(30):
                         await plans.advance(actor, row)
+                    await ReportMinutes(db).release_plan(row)
+                    if row.processing_lease_id is not None and row.state in {"held", "cancelled"}:
+                        row.progress = {**row.progress, "minute_outcome_checked": True}
             except Exception as error:
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
@@ -1540,4 +1550,7 @@ class ProcessingPlanScheduler:
                     }
                     if plans is not None and plans.failure_diagnostic_code is not None:
                         row.progress["diagnostic_code"] = plans.failure_diagnostic_code
+                    await ReportMinutes(db).release_plan(row)
+                    if row.processing_lease_id is not None and row.state in {"held", "cancelled"}:
+                        row.progress = {**row.progress, "minute_outcome_checked": True}
             return True
