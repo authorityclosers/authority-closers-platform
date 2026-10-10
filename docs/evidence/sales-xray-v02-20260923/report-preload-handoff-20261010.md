@@ -12,7 +12,7 @@ Verification:
 
 - 11 preload tests: parallel reads, canonical queued state, missing fields, submission/C2/C5 identity/revision/content mismatches, invalid path input, sanitized adapter errors, deadline and cancellation. All pass.
 - Customer detail fetch now verifies the returned prospect ID matches the requested ID and rejects redirects, protecting Key facts from a valid but misbound response. Its regression and the other customer/facts tests pass (23 tests).
-- Owner-corrected retained navigation and explicit Story playback assertions pass, with one fixed audio dock. The affected upload/report, dock/Story and fictional shell cases pass. Other acquisition cases passed in the focused integration run before this selector correction.
+- Owner-corrected retained navigation and explicit Story playback assertions passed locally, with one fixed audio dock. The shared acquisition test assertion patch was then removed from this PR because Strike A's newer #429 push also owns that file. The exact tested patch remains at `/home/acdev/strikes/1677/retained-report-acquisition-test.patch` for Strike A or application after its merge. Until adopted, two old assertions still expect the replaced default and frontend CI remains red; no green claim is made. The fictional shell regression passes independently.
 - The fictional shell passes a null call binding to Key facts, so its synthetic identity triggers no server prospect read. This is a one-prop fixture-only change, with no other strike PR overlap at the checkpoint.
 - App typecheck, changed-file ESLint and diff check pass. Full compiled acquisition/browser at `94d0807` passes in CI. Latest-head complete CI remains required.
 
