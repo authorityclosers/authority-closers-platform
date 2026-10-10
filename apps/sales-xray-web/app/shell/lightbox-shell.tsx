@@ -3,9 +3,10 @@
 import {
   Building2,
   ChevronDown,
-  CircleUserRound,
+  Ellipsis,
   FolderOpen,
   LayoutGrid,
+  LogIn,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -14,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -42,6 +44,7 @@ import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
+import { phoneTabFor } from "./phone-nav";
 import {
   readAllowance,
   readCallSummary,
@@ -259,6 +262,7 @@ function LightboxShellFrame({
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pageTitle = resolvePageTitle(active, heading);
+  const phoneTab = phoneTabFor(usePathname(), active);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -826,13 +830,10 @@ function LightboxShellFrame({
       <div className={styles.content}>
         <header className={styles.mobileBar}>
           <BrandLockup href={homeHref} />
+          {/* The account lives under More in the tab bar, not here too. */}
           <div className={styles.barActions}>
             {bell}
             <MinutesMeter allowance={allowance} variant="pill" />
-            <ProfileMenu
-              authenticated={authenticated}
-              accountHref={accountHref}
-            />
           </div>
         </header>
         <header className={styles.topBar}>
@@ -894,37 +895,66 @@ function LightboxShellFrame({
         <Link
           className={styles.bottomLink}
           href="/dashboard"
-          aria-current={active === "dashboard" ? "page" : undefined}
+          aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
           <span>Dashboard</span>
         </Link>
         <Link
           className={styles.bottomLink}
-          href={newAnalysisHref}
-          aria-label="New analysis"
-          aria-current={active === "analyse" ? "page" : undefined}
-        >
-          <Plus size={20} aria-hidden="true" />
-          <span>New</span>
-        </Link>
-        <Link
-          className={styles.bottomLink}
           href="/analysis/calls"
-          aria-current={active === "calls" ? "page" : undefined}
+          aria-current={phoneTab === "calls" ? "page" : undefined}
         >
           <FolderOpen size={20} aria-hidden="true" />
           <span>Calls</span>
         </Link>
         <Link
-          className={styles.bottomLink}
-          href={accountHref}
-          onClick={openAccount}
-          aria-current={active === "account" ? "page" : undefined}
+          className={`${styles.bottomLink} ${styles.bottomNew}`}
+          href={newAnalysisHref}
+          aria-label="New analysis"
+          aria-current={phoneTab === "new" ? "page" : undefined}
         >
-          <CircleUserRound size={20} aria-hidden="true" />
-          <span>{authenticated ? "Account" : "Profile"}</span>
+          <span className={styles.newMark} aria-hidden="true">
+            <Plus size={18} strokeWidth={2.25} />
+          </span>
+          <span>New</span>
         </Link>
+        <Link
+          className={styles.bottomLink}
+          href="/prospects"
+          aria-current={phoneTab === "prospects" ? "page" : undefined}
+        >
+          <Users size={20} aria-hidden="true" />
+          <span>Prospects</span>
+        </Link>
+        {/* Signed out shows Sign in; an unconfirmed session keeps More. */}
+        {!authenticated && !sessionPending && !loading ? (
+          <Link
+            className={styles.bottomLink}
+            href={accountHref}
+            onClick={openAccount}
+          >
+            <LogIn size={20} aria-hidden="true" />
+            <span>Sign in</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className={styles.bottomLink}
+            onClick={(event) => {
+              if (!authenticated) return;
+              accountAnchorRef.current = event.currentTarget;
+              setAccountView("main");
+              setAccountCardOpen((open) => !open);
+            }}
+            aria-haspopup="dialog"
+            aria-expanded={accountCardOpen && authenticated}
+            aria-current={phoneTab === "more" ? "page" : undefined}
+          >
+            <Ellipsis size={20} aria-hidden="true" />
+            <span>More</span>
+          </button>
+        )}
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />
@@ -945,6 +975,7 @@ function LightboxShellFrame({
           email={profile?.email ?? null}
           photoUrl={profile?.photo_url}
           allowance={shownAllowance}
+          organisation={inOrganisation}
         />
       ) : null}
     </div>

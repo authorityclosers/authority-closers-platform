@@ -294,3 +294,29 @@ it("has no guide switch without a signed-in person", async () => {
   );
   expect(document.querySelector('[role="switch"]')).toBeNull();
 });
+
+it.each([true, false])(
+  "links Organisation from the account menu only inside one (%s)",
+  async (organisation) => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <SettingsMenu
+          open
+          anchorRef={{ current: document.createElement("button") }}
+          onClose={() => {}}
+          name="Fictional User"
+          email="fictional@example.test"
+          allowance={null}
+          organisation={organisation}
+        />,
+      ),
+    );
+    const link = document.querySelector('a[href="/organisation"]');
+    expect(link?.textContent ?? null).toBe(
+      organisation ? "Organisation" : null,
+    );
+  },
+);

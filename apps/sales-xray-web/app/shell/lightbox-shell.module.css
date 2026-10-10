@@ -942,21 +942,52 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
+  padding: 0;
   border: 0;
   border-top: 2px solid transparent;
   background: transparent;
   color: var(--lx-muted);
   font: var(--lx-text-meta);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+/* Icons take the New mark's 26 px slot, so every label shares one line. */
+.bottomLink > svg {
+  flex: none;
+  margin-block: 3px;
 }
 
 .bottomLink[aria-current="page"] {
   border-top-color: var(--lx-teal);
   color: var(--lx-ink);
+  font-weight: 700;
+}
+
+.bottomLink[aria-current="page"] > svg {
+  color: var(--lx-teal);
+}
+
+/* New is the one filled control in the bar: the app's single teal action. */
+.newMark {
+  display: grid;
+  width: 40px;
+  height: 26px;
+  place-items: center;
+  border-radius: var(--lx-radius-sm, 8px);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+@media (hover: hover) {
+  .bottomNew:hover .newMark {
+    background: var(--lx-teal-hover);
+  }
 }
 
 /* ---------- Focus ---------- */
@@ -1003,7 +1034,7 @@
     top: 0;
     display: flex;
     box-sizing: border-box;
-    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    min-height: calc(48px + env(safe-area-inset-top, 0px));
     padding: env(safe-area-inset-top, 0px)
       max(var(--lx-space-4), env(safe-area-inset-right, 0px)) 0
       max(var(--lx-space-4), env(safe-area-inset-left, 0px));

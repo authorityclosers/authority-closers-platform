@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -127,9 +128,12 @@ export function SettingsMenu({
   email,
   photoUrl,
   allowance,
+  organisation = false,
   initialView = "main",
 }: {
   initialView?: View;
+  /** An organisation is selected: phones reach its page from here. */
+  organisation?: boolean;
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -221,7 +225,7 @@ export function SettingsMenu({
     };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
-    card.current?.querySelector<HTMLElement>("button")?.focus();
+    card.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
@@ -281,6 +285,23 @@ export function SettingsMenu({
               </button>
             ) : null}
             <div className={styles.list}>
+              {organisation ? (
+                <Link
+                  href="/organisation"
+                  className={styles.row}
+                  onClick={onClose}
+                >
+                  <span className={styles.rowIcon} aria-hidden="true">
+                    <Building2 size={16} />
+                  </span>
+                  <span className={styles.rowLabel}>Organisation</span>
+                  <ChevronRight
+                    size={15}
+                    className={styles.chev}
+                    aria-hidden="true"
+                  />
+                </Link>
+              ) : null}
               <Row
                 icon={<Settings2 size={16} />}
                 label="Settings"

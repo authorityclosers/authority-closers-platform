@@ -145,6 +145,7 @@
   color: var(--lx-ink);
   font: 500 13px/1.2 var(--lx-font-ui, inherit);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
@@ -560,4 +561,20 @@
   font-size: 10px;
   font-weight: 500;
   color: var(--lx-muted);
+}
+
+/* Phones: the card is the More sheet, full width above the tab bar. */
+@media (max-width: 720px) {
+  .card {
+    right: 8px;
+    left: 8px !important;
+    width: auto;
+    transform-origin: bottom right;
+  }
+}
+
+@media (pointer: coarse) {
+  .row {
+    min-height: 44px;
+  }
 }

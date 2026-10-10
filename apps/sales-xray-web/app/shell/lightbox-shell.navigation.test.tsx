@@ -85,15 +85,16 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     ),
   ).not.toBeNull();
 
+  // The phone bar carries no account pill: More in the tab bar opens it.
   expect(
     host.querySelectorAll(
       'button[aria-label="Open AC account menu"][aria-expanded="false"]',
     ),
-  ).toHaveLength(2);
+  ).toHaveLength(1);
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
 });
 
-it("offers four phone destinations and a fifth dev settings control", () => {
+it("reaches every section from the phone tab bar, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
       <AcquisitionShell authenticated active="dashboard">
@@ -111,12 +112,45 @@ it("offers four phone destinations and a fifth dev settings control", () => {
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Dashboard", "New", "Calls", "Account", "Settings"]
-        : ["Dashboard", "New", "Calls", "Account"],
+        ? ["Dashboard", "Calls", "New", "Prospects", "More", "Settings"]
+        : ["Dashboard", "Calls", "New", "Prospects", "More"],
     );
+    expect(nav.querySelector('a[href="/prospects"]')?.textContent?.trim()).toBe(
+      "Prospects",
+    );
+    const more = Array.from(nav.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "More",
+    );
+    expect(more?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");
     expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
   }
+});
+
+it("keeps More for an unconfirmed session and offers Sign in once signed out", () => {
+  const tabs = (shell: React.ReactElement) => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(shell);
+    return Array.from(
+      host.querySelector('nav[aria-label="Mobile Sales Xray navigation"]')!
+        .children,
+      (item) => item.textContent?.trim(),
+    );
+  };
+  expect(
+    tabs(
+      <AcquisitionShell authenticated={false} loading active="dashboard">
+        <p>Dashboard</p>
+      </AcquisitionShell>,
+    ).at(-1),
+  ).toBe("More");
+  expect(
+    tabs(
+      <AcquisitionShell authenticated={false} active="dashboard">
+        <p>Dashboard</p>
+      </AcquisitionShell>,
+    ).at(-1),
+  ).toBe("Sign in");
 });

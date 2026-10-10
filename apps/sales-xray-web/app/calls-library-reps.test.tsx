@@ -7,6 +7,7 @@ const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/analysis/calls",
 }));
 // Report fetches are verified by the existing Calls/Drawer suite. Isolate the
 // authorised library response and the local rep-filter state here.
