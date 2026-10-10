@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Building2,
+  Check,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -127,9 +129,19 @@ export function SettingsMenu({
   email,
   photoUrl,
   allowance,
+  organisation = false,
+  workspaces = [],
+  currentWorkspaceId = null,
+  onSelectWorkspace,
   initialView = "main",
 }: {
   initialView?: View;
+  /** An organisation is selected: phones reach its page from here. */
+  organisation?: boolean;
+  /** Where your calls live; phones switch here (desktop also has the sidebar). */
+  workspaces?: readonly { tenant_id: string; kind: string; name: string }[];
+  currentWorkspaceId?: string | null;
+  onSelectWorkspace?: (tenantId: string) => void;
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -221,7 +233,7 @@ export function SettingsMenu({
     };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
-    card.current?.querySelector<HTMLElement>("button")?.focus();
+    card.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
@@ -280,7 +292,64 @@ export function SettingsMenu({
                 ) : null}
               </button>
             ) : null}
+            {workspaces.length > 1 && onSelectWorkspace ? (
+              <div className={styles.list} role="group" aria-label="Workspace">
+                <p className={styles.note}>Workspace</p>
+                {workspaces.map((workspace) => {
+                  const current = workspace.tenant_id === currentWorkspaceId;
+                  const name =
+                    workspace.kind === "personal" ? "Personal" : workspace.name;
+                  return (
+                    <button
+                      key={workspace.tenant_id}
+                      type="button"
+                      className={styles.row}
+                      aria-current={current ? "true" : undefined}
+                      onClick={() => {
+                        if (current) return;
+                        onClose();
+                        onSelectWorkspace(workspace.tenant_id);
+                      }}
+                    >
+                      <span className={styles.rowIcon} aria-hidden="true">
+                        {workspace.kind === "organisation" ? (
+                          <Building2 size={16} />
+                        ) : (
+                          <CircleUserRound size={16} />
+                        )}
+                      </span>
+                      <span className={styles.rowLabel}>{name}</span>
+                      {current ? (
+                        <Check
+                          size={15}
+                          className={styles.chev}
+                          aria-label="Current"
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+                <span className={styles.divider} />
+              </div>
+            ) : null}
             <div className={styles.list}>
+              {organisation ? (
+                <Link
+                  href="/organisation"
+                  className={styles.row}
+                  onClick={onClose}
+                >
+                  <span className={styles.rowIcon} aria-hidden="true">
+                    <Building2 size={16} />
+                  </span>
+                  <span className={styles.rowLabel}>Organisation</span>
+                  <ChevronRight
+                    size={15}
+                    className={styles.chev}
+                    aria-hidden="true"
+                  />
+                </Link>
+              ) : null}
               <Row
                 icon={<Settings2 size={16} />}
                 label="Settings"

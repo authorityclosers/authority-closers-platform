@@ -3,9 +3,10 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
@@ -20,11 +21,28 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
-from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
+from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
+    ConversationRecording,
+)
+from ac_platform.conversation_intelligence.prospect_fact_contract import ProspectFactValidationError
+from ac_platform.conversation_intelligence.prospect_fields import validate_evidence, validate_fields
 from ac_platform.conversation_intelligence.prospect_models import (
     ConversationProspect,
+    ConversationProspectFieldRevision,
     ConversationProspectMembership,
 )
+from ac_platform.conversation_intelligence.sensitive_segment_models import (
+    ConversationSensitiveSegmentMark,
+)
+from ac_platform.conversation_intelligence.sensitive_segments import (
+    WITHHELD_MARKER,
+    grams,
+    withheld_plan,
+    withhold,
+)
+from ac_platform.conversation_intelligence.sensitive_segments_store import _effective_statement
 from ac_platform.kernel.authz import ActorContext
 
 
@@ -142,6 +160,9 @@ class ProspectStore:
         previous_revision = row.revision
         now = utc(self.ownership.clock())
         row.display_name, row.revision, row.updated_at = name, previous_revision + 1, now
+        await self._append_fields(
+            row, {"name": {"kind": "text", "text": name}}, actor=actor, now=now
+        )
         await self.database.flush()
         await self._audit(
             actor,
@@ -155,6 +176,411 @@ class ProspectStore:
             now,
         )
         return row
+
+    async def edit_fields(
+        self, actor: ActorContext, prospect_id: UUID, *, fields: object, expected_revision: int
+    ) -> ConversationProspect:
+        try:
+            values = validate_fields(fields)
+        except ProspectFactValidationError:
+            raise ConversationError("Supply valid prospect fields.") from None
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise ConversationError("Supply a valid prospect revision.")
+        row = await self._field_target(actor, prospect_id)
+        if row.revision != expected_revision:
+            raise ConversationConflict("The prospect changed. Reload before saving again.")
+        latest = await self._latest_fields(row, basis="person")
+        changed = {
+            key: value
+            for key, value in values.items()
+            if key not in latest or latest[key].value != value
+        }
+        if not changed:
+            return row
+        before, now = row.revision, utc(self.ownership.clock())
+        row.revision, row.updated_at = before + 1, now
+        await self._append_fields(row, changed, actor=actor, now=now)
+        if "name" in changed:
+            row.display_name = str(changed["name"]["text"])
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "fields_changed",
+            {
+                "field_count": str(len(changed)),
+                "previous_revision": str(before),
+                "current_revision": str(row.revision),
+            },
+            now,
+        )
+        return row
+
+    async def edit_fields_and_read(
+        self, actor: ActorContext, prospect_id: UUID, *, fields: object, expected_revision: int
+    ) -> tuple[ConversationProspect, Sequence[ConversationProspectFieldRevision]]:
+        """Fence detected evidence before the prospect write and tenant audit lock.
+
+        The caller keeps this transaction open through response construction.
+        After the edit, refresh only person rows: acquiring source locks after
+        audit would invert sensitive marking's recording-before-audit order.
+        A concurrent field write changes the expected revision and fails closed.
+        """
+        scope = await self.queries(actor)
+        history = await self.field_rows(actor, [prospect_id], scope)
+        row = await self.edit_fields(
+            actor, prospect_id, fields=fields, expected_revision=expected_revision
+        )
+        person_rows = await self._latest_fields(row, basis="person")
+        return row, [r for r in history if r.basis == "heard_in_call"] + list(person_rows.values())
+
+    async def _field_target(self, actor: ActorContext, prospect_id: UUID) -> ConversationProspect:
+        query = (await self.queries(actor)).prospects
+        row = await self.database.scalar(
+            query.where(
+                ConversationProspect.id == prospect_id,
+                ConversationProspect.owner_person_id == actor.person_id,
+            )
+            .with_for_update(of=ConversationProspect)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            raise ConversationNotFound("This prospect is unavailable.")
+        return row
+
+    async def _latest_fields(
+        self, row: ConversationProspect, *, basis: str | None = None
+    ) -> dict[str, ConversationProspectFieldRevision]:
+        field = ConversationProspectFieldRevision
+        ranked = select(
+            field.id,
+            func.row_number()
+            .over(partition_by=field.field_key, order_by=field.revision.desc())
+            .label("rank"),
+        ).where(field.tenant_id == row.tenant_id, field.entity_id == row.id)
+        if basis:
+            ranked = ranked.where(field.basis == basis)
+        ranked_rows = ranked.subquery()
+        rows = (
+            await self.database.scalars(
+                select(field)
+                .join(ranked_rows, ranked_rows.c.id == field.id)
+                .where(ranked_rows.c.rank == 1)
+            )
+        ).all()
+        return {r.field_key: r for r in rows}
+
+    async def _append_fields(
+        self,
+        row: ConversationProspect,
+        values: dict[str, dict[str, Any]],
+        *,
+        actor: ActorContext | None,
+        now: datetime,
+        submission_id: UUID | None = None,
+        evidence: dict[str, dict[str, Any]] | None = None,
+        extractor_revision: str | None = None,
+    ) -> None:
+        latest = await self._latest_fields(row)
+        self.database.add_all(
+            [
+                ConversationProspectFieldRevision(
+                    id=uuid4(),
+                    tenant_id=row.tenant_id,
+                    entity_id=row.id,
+                    field_key=key,
+                    revision=row.revision,
+                    value=value,
+                    basis="person" if actor else "heard_in_call",
+                    state="confirmed" if actor else "detected",
+                    created_by_person_id=actor.person_id if actor else None,
+                    created_at=now,
+                    supersedes_id=latest[key].id if key in latest else None,
+                    submission_id=submission_id,
+                    evidence=evidence[key] if evidence else None,
+                    extractor_revision=extractor_revision,
+                )
+                for key, value in values.items()
+            ]
+        )
+        await self.database.flush()
+
+    async def record_detected(
+        self,
+        actor: ActorContext,
+        prospect_id: UUID,
+        *,
+        submission_id: UUID,
+        fields: object,
+        evidence: dict[str, Any],
+        extractor_revision: str,
+    ) -> ConversationProspect:
+        """Caller owns the transaction; no extraction/provider activation here.
+
+        Hold the source fence before the prospect row, like call linking. Every
+        detection is source-verified, including detections behind a person lock.
+        """
+        try:
+            values = validate_fields(fields, detected=True)
+            if (
+                not isinstance(evidence, dict)
+                or set(evidence) != set(values)
+                or not isinstance(extractor_revision, str)
+                or not 1 <= len(extractor_revision.strip()) <= 160
+            ):
+                raise ProspectFactValidationError("invalid_detection")
+            refs = {key: validate_evidence(value) for key, value in evidence.items()}
+        except (ProspectFactValidationError, TypeError):
+            raise ConversationError("Supply supported detected prospect fields.") from None
+        scope = await self._write_scope(actor, submission_id, read_only=True)
+        member = await self._active(scope)
+        if member is None or member.prospect_id != prospect_id:
+            raise ConversationNotFound("This prospect is unavailable.")
+        recording = await self.database.get(ConversationRecording, scope.recording_id)
+        assert recording is not None
+        sources = await self._field_sources([recording])
+        if any(
+            not self._supported_field(
+                value, refs[key], sources.get((recording.tenant_id, recording.id), [])
+            )
+            for key, value in values.items()
+        ):
+            raise ConversationError("Supply supported detected prospect fields.")
+        row = await self._field_target(actor, prospect_id)
+        latest = await self._latest_fields(row, basis="heard_in_call")
+        changed = {
+            key: value
+            for key, value in values.items()
+            if key not in latest
+            or (
+                latest[key].value,
+                latest[key].evidence,
+                latest[key].submission_id,
+                latest[key].extractor_revision,
+            )
+            != (value, refs[key], submission_id, extractor_revision)
+        }
+        if not changed:
+            return row
+        before, now = row.revision, utc(self.ownership.clock())
+        row.revision, row.updated_at = before + 1, now
+        await self._append_fields(
+            row,
+            changed,
+            actor=None,
+            now=now,
+            submission_id=submission_id,
+            evidence=refs,
+            extractor_revision=extractor_revision,
+        )
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "fields_detected",
+            {
+                "field_count": str(len(changed)),
+                "previous_revision": str(before),
+                "current_revision": str(row.revision),
+            },
+            now,
+        )
+        return row
+
+    async def field_rows(
+        self, actor: ActorContext, ids: list[UUID], scope: ProspectQueries
+    ) -> Sequence[ConversationProspectFieldRevision]:
+        """Four batch reads, independent of the number of fields or prospects.
+
+        Detected rows require an active, readable source; the source lock and
+        recheck prevent content surviving an erasure/read race. Five recent
+        detections per field are enough for the bounded disagreement panel.
+        """
+        field, link, usage, recording = (
+            ConversationProspectFieldRevision,
+            ConversationGuestSubmission,
+            ConversationAcquisitionUsage,
+            ConversationRecording,
+        )
+        visible = scope.memberships.subquery()
+        source = (
+            select(visible.c.submission_id)
+            .where(visible.c.prospect_id == field.entity_id)
+            .correlate(field)
+        )
+        eligible = and_(
+            field.tenant_id == actor.tenant_id,
+            field.entity_id.in_(ids),
+            field.entity_id.in_(scope.prospects.with_only_columns(ConversationProspect.id)),
+            or_(field.basis == "person", field.submission_id.in_(source)),
+        )
+        locked = (
+            await self.database.execute(
+                select(link.submission_id, recording)
+                .join(
+                    link,
+                    and_(link.recording_id == recording.id, link.tenant_id == recording.tenant_id),
+                )
+                .where(
+                    link.tenant_id == actor.tenant_id,
+                    recording.tenant_id == actor.tenant_id,
+                    link.submission_id.in_(
+                        select(field.submission_id).where(eligible, field.basis == "heard_in_call")
+                    ),
+                )
+                .order_by(recording.id)
+                .with_for_update(of=recording, read=True)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+        recordings = [r for _, r in locked]
+        ranked = (
+            select(
+                field.id,
+                func.row_number()
+                .over(
+                    partition_by=(field.entity_id, field.field_key, field.basis),
+                    order_by=(
+                        case((field.basis == "person", None), else_=usage.created_at).desc(),
+                        field.revision.desc(),
+                    ),
+                )
+                .label("rank"),
+            )
+            .outerjoin(
+                usage,
+                and_(
+                    usage.tenant_id == field.tenant_id, usage.submission_id == field.submission_id
+                ),
+            )
+            .where(eligible)
+            .subquery()
+        )
+        rows = (
+            await self.database.scalars(
+                select(field)
+                .join(ranked, ranked.c.id == field.id)
+                .where(
+                    or_(
+                        and_(field.basis == "person", ranked.c.rank == 1),
+                        and_(field.basis == "heard_in_call", ranked.c.rank <= 5),
+                    )
+                )
+                .order_by(field.entity_id, field.field_key, field.basis.desc(), ranked.c.rank)
+            )
+        ).all()
+        sources = await self._field_sources(recordings)
+        by_submission = {(r.tenant_id, submission): (r.tenant_id, r.id) for submission, r in locked}
+        return [
+            r
+            for r in rows
+            if r.basis == "person"
+            or (
+                r.submission_id is not None
+                and (r.tenant_id, r.submission_id) in by_submission
+                and self._supported_field(
+                    r.value,
+                    r.evidence or {},
+                    sources.get(by_submission[(r.tenant_id, r.submission_id)], []),
+                )
+            )
+        ]
+
+    async def _field_sources(
+        self, recordings: Sequence[ConversationRecording]
+    ) -> dict[tuple[UUID, UUID], list[tuple[dict[str, Any], Any]]]:
+        tenant_id = self.ownership.tenant_id
+        recordings = [r for r in recordings if r.tenant_id == tenant_id]
+        checkpoints = (
+            await self.database.scalars(
+                select(ConversationCheckpoint)
+                .where(
+                    ConversationCheckpoint.tenant_id == tenant_id,
+                    ConversationCheckpoint.recording_id.in_([r.id for r in recordings]),
+                    ConversationCheckpoint.stage == "C2",
+                    ConversationCheckpoint.erased_at.is_(None),
+                )
+                .order_by(
+                    ConversationCheckpoint.created_at.desc(), ConversationCheckpoint.id.desc()
+                )
+            )
+        ).all()
+        revisions = [r.payload.get("revision") for r in checkpoints if r.payload]
+        mark = ConversationSensitiveSegmentMark
+        marks = (
+            await self.database.scalars(
+                _effective_statement(
+                    # ADR 0051: ID-only marks follow a shared transcript even
+                    # across duplicate recordings. Source content stays scoped.
+                    or_(
+                        and_(
+                            mark.tenant_id == tenant_id,
+                            mark.recording_id.in_([r.id for r in recordings]),
+                        ),
+                        mark.transcript_revision.in_(revisions),
+                    ),
+                )
+            )
+        ).all()
+        result: dict[tuple[UUID, UUID], list[tuple[dict[str, Any], Any]]] = {}
+        for recording in recordings:
+            texts = {
+                r.payload["revision"]: {
+                    s["id"]: s.get("text", "") for s in r.payload.get("segments", [])
+                }
+                for r in checkpoints
+                if r.recording_id == recording.id and r.payload
+            }
+            for checkpoint in checkpoints:
+                if checkpoint.recording_id != recording.id or not checkpoint.payload:
+                    continue
+                try:
+                    verified_checkpoint(checkpoint, binding_for(recording))
+                except ConversationError:
+                    continue
+                segments = {s["id"]: s for s in checkpoint.payload.get("segments", [])}
+                effective = [
+                    m
+                    for m in marks
+                    if m.recording_id == recording.id
+                    or m.transcript_revision == checkpoint.payload.get("revision")
+                ]
+                plan = withheld_plan(
+                    [(key, s.get("text", "")) for key, s in segments.items()],
+                    {
+                        m.segment_id
+                        for m in effective
+                        if m.transcript_revision == checkpoint.payload.get("revision")
+                    },
+                    {
+                        g
+                        for m in effective
+                        for g in grams(texts.get(m.transcript_revision, {}).get(m.segment_id, ""))
+                    },
+                )
+                result.setdefault((recording.tenant_id, recording.id), []).append((segments, plan))
+        return result
+
+    @staticmethod
+    def _supported_field(
+        value: dict[str, Any], evidence: dict[str, Any], sources: list[tuple[dict[str, Any], Any]]
+    ) -> bool:
+        segment_id = evidence.get("segment_id")
+        if not isinstance(segment_id, str):
+            return False
+        for segments, plan in sources:
+            segment = segments.get(segment_id)
+            if (
+                segment is not None
+                and evidence.get("quote")
+                and evidence["quote"] in segment.get("text", "")
+                and evidence.get("start_ms") == segment.get("start_ms")
+                and evidence.get("end_ms") == segment.get("end_ms")
+            ):
+                projected = withhold({"value": value, "evidence": evidence}, plan)
+                if WITHHELD_MARKER not in str(projected):
+                    return True
+        return False
 
     async def edit_tags(
         self, actor: ActorContext, prospect_id: UUID, *, tags: list[str], expected_revision: int
@@ -269,6 +695,12 @@ class ProspectStore:
         )
         self.database.add(prospect)
         await self.database.flush()
+        await self._append_fields(
+            prospect,
+            {"name": {"kind": "text", "text": prospect.display_name}},
+            actor=actor,
+            now=now,
+        )
         await self._audit(actor, prospect.id, "created", {}, now)
         await self._append(actor, scope, prospect.id, now)
         return prospect

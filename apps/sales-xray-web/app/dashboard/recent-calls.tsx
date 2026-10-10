@@ -11,13 +11,22 @@ import {
 } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
+import { unnamedCallName } from "../call-label";
+import { ownerLabel } from "../call-ownership";
 import { callDate, callTone, submissionState } from "../call-status";
 import { formatClock } from "../lightbox/time";
 import styles from "./recent-calls.module.css";
 
 /** Row height and gap in px; the stylesheet reads them from --row and --gap. */
-const ROW = 42;
-const GAP = 2;
+const ROW = 44;
+const GAP = 0;
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (
+    parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)
+  ).toUpperCase();
+}
 
 function callLength(seconds: number): string | null {
   if (!Number.isFinite(seconds) || seconds <= 0) return null;
@@ -32,10 +41,13 @@ function callLength(seconds: number): string | null {
 export function RecentCallsList({
   calls,
   onHiddenChange,
+  viewerId = null,
 }: {
   calls: LibrarySubmission[];
   /** How many calls did not fit, for the card header. */
   onHiddenChange?: (count: number) => void;
+  /** The signed-in person, so their own calls read "You". */
+  viewerId?: string | null;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
   const [fit, setFit] = useState<number | null>(null);
@@ -58,6 +70,8 @@ export function RecentCallsList({
   }, []);
 
   const shown = fit === null ? calls : calls.slice(0, fit);
+  // Owners and admins see the team's calls: then every row says whose.
+  const owners = calls.some((call) => call.owner);
   const hidden = calls.length - shown.length;
   useEffect(() => {
     onHiddenChange?.(hidden);
@@ -68,12 +82,18 @@ export function RecentCallsList({
       <ul
         ref={listRef}
         className={styles.list}
+        data-owners={owners ? "" : undefined}
         aria-label="Recent calls"
         style={{ "--row": `${ROW}px`, "--gap": `${GAP}px` } as CSSProperties}
       >
         {shown.map((call, index) => {
           const name = call.label?.displayName ?? null;
           const clock = callLength(call.durationSeconds);
+          const owner = owners
+            ? call.owner
+              ? ownerLabel(call.owner, viewerId)
+              : "You"
+            : null;
           return (
             <li
               key={call.id}
@@ -92,12 +112,23 @@ export function RecentCallsList({
                   className={styles.name}
                   data-untitled={name ? undefined : ""}
                 >
-                  {name ?? "Untitled call"}
+                  {name ?? unnamedCallName(call.createdAt)}
                 </span>
+                {owner ? (
+                  <span
+                    className={styles.owner}
+                    data-mine={owner === "You" ? "" : undefined}
+                  >
+                    <i aria-hidden="true">
+                      {owner === "You" ? "Y" : initials(owner)}
+                    </i>
+                    <span>{owner}</span>
+                  </span>
+                ) : null}
                 <span className={styles.date}>{callDate(call.createdAt)}</span>
                 <span
                   className={styles.length}
-                  title={clock ? `About ${clock} long` : "Length unknown"}
+                  title={clock ? `${clock} long` : "Length unknown"}
                 >
                   {clock ?? "—"}
                 </span>

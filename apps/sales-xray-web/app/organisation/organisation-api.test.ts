@@ -15,7 +15,11 @@ import {
   parseOrganisationSettings,
   readOrganisationSettings,
   saveOrganisationSettings,
+  parseReceiptActivity,
+  readReceiptActivity,
+  ReceiptActivityError,
 } from "./organisation-api";
+import { receiptFixture } from "./receipt-activity.fixture";
 
 const person = "00000000-0000-4000-8000-000000000001";
 const invite = "00000000-0000-4000-8000-000000000002";
@@ -360,5 +364,138 @@ it("preserves network errors for the settings consumer", async () => {
   await expect(readOrganisationSettings(person)).rejects.toBe(error);
   await expect(saveOrganisationSettings(person, settings, key)).rejects.toBe(
     error,
+  );
+});
+
+it("reads the complete fictional receipt response from the acquisition route", async () => {
+  const fetchMock = vi.fn(async () => json(receiptFixture()));
+  vi.stubGlobal("fetch", fetchMock);
+  const value = await readReceiptActivity();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/v1/conversation/acquisition/organisation/activity",
+    expect.objectContaining({ credentials: "same-origin", cache: "no-store" }),
+  );
+  expect(value?.days).toHaveLength(30);
+  expect(value?.days.at(-1)).toEqual({
+    date: "2026-09-29",
+    analysed: 3,
+    analysedSeconds: 65,
+  });
+  expect(value?.analysedLast30Days).toBe(6);
+  expect(value?.analysedPrevious30Days).toBe(4);
+  // The API's order is kept, including two people who share a name.
+  expect(value?.people.map((item) => [item.name, item.analysed])).toEqual([
+    ["Alex", 1],
+    ["Alex", 0],
+    ["Zoe", 5],
+    ["m***@example.test", 0],
+  ]);
+  expect(value?.people[2]).toMatchObject({
+    analysedSeconds: 305,
+    previous: 2,
+  });
+});
+
+it("reads an organisation with no analyses as zeros, not an error", () => {
+  const empty = receiptFixture();
+  empty.days = empty.days.map((day) => ({
+    ...day,
+    analysed: 0,
+    analysed_seconds: 0,
+  }));
+  empty.analysed_last_30_days = 0;
+  empty.analysed_previous_30_days = 0;
+  empty.people = [];
+  expect(parseReceiptActivity(empty)).toMatchObject({
+    analysedLast30Days: 0,
+    analysedPrevious30Days: 0,
+    people: [],
+  });
+});
+
+it("returns null when this server does not serve the receipt read", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ detail: "Not Found" }, 404)),
+  );
+  await expect(readReceiptActivity()).resolves.toBeNull();
+});
+
+it.each([401, 403, 500])(
+  "keeps receipt HTTP %i for the access and retry states",
+  async (status) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ detail: "Fictional" }, status)),
+    );
+    await expect(readReceiptActivity()).rejects.toMatchObject({ status });
+  },
+);
+
+type Fixture = ReturnType<typeof receiptFixture>;
+it.each<[string, (data: Fixture) => unknown]>([
+  ["an extra field", (data) => ({ ...data, scores: [] })],
+  [
+    "a missing field",
+    (data) =>
+      Object.fromEntries(
+        Object.entries(data).filter(([key]) => key !== "people"),
+      ),
+  ],
+  ["another timezone", (data) => ({ ...data, timezone: "UTC" })],
+  ["29 days", (data) => ({ ...data, days: data.days.slice(1) })],
+  [
+    "days out of order",
+    (data) => ({ ...data, days: [...data.days].reverse() }),
+  ],
+  [
+    "an extra day field",
+    (data) => ({
+      ...data,
+      days: data.days.map((day, index) => (index ? day : { ...day, score: 1 })),
+    }),
+  ],
+  [
+    "a negative count",
+    (data) => ({
+      ...data,
+      people: data.people.map((person, index) =>
+        index ? person : { ...person, analysed_previous_30_days: -1 },
+      ),
+    }),
+  ],
+  [
+    "a person id that is not a UUID",
+    (data) => ({
+      ...data,
+      people: data.people.map((person, index) =>
+        index ? person : { ...person, person_id: "alex" },
+      ),
+    }),
+  ],
+  [
+    "the same person twice",
+    (data) => ({ ...data, people: [...data.people, data.people[0]] }),
+  ],
+  [
+    "a total that disagrees with its days",
+    (data) => ({ ...data, analysed_last_30_days: 7 }),
+  ],
+  [
+    "people seconds that disagree with the days",
+    (data) => ({
+      ...data,
+      people: data.people.map((person, index) =>
+        index ? person : { ...person, analysed_seconds_last_30_days: 16 },
+      ),
+    }),
+  ],
+  [
+    "a previous total that disagrees with its people",
+    (data) => ({ ...data, analysed_previous_30_days: 5 }),
+  ],
+])("rejects a receipt response with %s", (_name, change) => {
+  expect(() => parseReceiptActivity(change(receiptFixture()))).toThrow(
+    ReceiptActivityError,
   );
 });

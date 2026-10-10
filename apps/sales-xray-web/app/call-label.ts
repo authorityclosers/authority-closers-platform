@@ -80,6 +80,16 @@ export function validateCallLabel(
   return { ok: true, name };
 }
 
+/**
+ * What an unnamed call is called on every screen until it has a saved name:
+ * "Sales call · 10 Oct 2026". Screens show it muted, so it never reads as a
+ * name someone chose.
+ */
+export function unnamedCallName(createdAt: string) {
+  const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+  return `Sales call · ${date.format(new Date(createdAt))}`;
+}
+
 /** A saved name, or an honest fallback that never pretends to be a name. */
 export function callTitle(
   label: CallLabel | null | undefined,

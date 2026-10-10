@@ -25,7 +25,7 @@ import {
   type InsightReadState,
 } from "./calls-insights";
 import { formatClock } from "./lightbox/time";
-import styles from "./calls-library.module.css";
+import styles from "./calls-drawer.module.css";
 
 export function CallsDrawer({
   id,

@@ -7,6 +7,7 @@ const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/analysis/calls",
 }));
 // Report fetches are verified by the existing Calls/Drawer suite. Isolate the
 // authorised library response and the local rep-filter state here.
@@ -147,7 +148,8 @@ afterEach(async () => {
 
 it("renders rep labels, distinguishes duplicate names, and filters by UUID without a server query", async () => {
   fetchMock.mockResolvedValue(ok(page([row(ids[0]), row(ids[1], repB)])));
-  await mount();
+  // An admin viewing two teammates who share a name.
+  await mount({ context: { ...context, personId: repC } });
   expect(select().closest("label")?.textContent).toContain(
     "Rep (loaded calls)",
   );
@@ -157,8 +159,10 @@ it("renders rep labels, distinguishes duplicate names, and filters by UUID witho
     [repB, "Fictional Rep (2)"],
   ]);
   expect(
-    host.querySelector(`[data-submission-id="${ids[0]}"]`)?.textContent,
-  ).toContain("Rep: Fictional Rep (1)");
+    host.querySelector(
+      `[data-submission-id="${ids[0]}"] [aria-label="Rep: Fictional Rep (1)"]`,
+    ),
+  ).not.toBeNull();
   await choose(repB);
   expect(visibleIds()).toEqual([ids[1]]);
   expect(fetchMock).toHaveBeenCalledOnce();
@@ -402,7 +406,94 @@ it("fails closed when owner metadata is partial", async () => {
     ok(page([row(ids[0], null, "", { owner_name: "Unverified rep" })])),
   );
   await mount();
-  expect(host.textContent).toContain("Saved calls need another check");
+  expect(host.textContent).toContain("Your calls didn't load");
   expect(host.textContent).not.toContain("Unverified rep");
   expect(visibleIds()).toEqual([]);
+});
+
+it("says You on the viewer's own calls and offers Rename only there", async () => {
+  fetchMock.mockResolvedValue(
+    ok(page([row(ids[0]), row(ids[1], repB, "Asha Menon")])),
+  );
+  await mount();
+  expect([...select().options].map((o) => o.text)).toEqual([
+    "All reps",
+    "Asha Menon",
+    "You",
+  ]);
+  const own = host.querySelector(
+    `[data-submission-id="${ids[0]}"]`,
+  )!.parentElement!;
+  const theirs = host.querySelector(
+    `[data-submission-id="${ids[1]}"]`,
+  )!.parentElement!;
+  expect(own.querySelector('[aria-label="Rep: You"]')).not.toBeNull();
+  // The server lets only a call's owner rename it.
+  expect(own.querySelector('[aria-label^="Rename"]')).not.toBeNull();
+  expect(theirs.querySelector('[aria-label^="Rename"]')).toBeNull();
+});
+
+it("shows a rename made elsewhere without a reload", async () => {
+  fetchMock.mockResolvedValue(ok(page([row(ids[0])])));
+  await mount();
+  await act(async () =>
+    window.dispatchEvent(
+      new CustomEvent("sales-xray:call-label", {
+        detail: {
+          submissionId: ids[0],
+          label: { displayName: "3-Day Workshop", revision: 2 },
+        },
+      }),
+    ),
+  );
+  expect(
+    host.querySelector(`[data-submission-id="${ids[0]}"]`)?.textContent,
+  ).toContain("3-Day Workshop");
+});
+
+it("points an organisation owner with no calls of their own to Personal", async () => {
+  fetchMock.mockResolvedValue(ok(page([row(ids[0], repB, "Quinn Fixture")])));
+  const switched: string[] = [];
+  const onSwitch = (event: Event) =>
+    switched.push((event as CustomEvent<string>).detail);
+  window.addEventListener("sales-xray:select-workspace", onSwitch);
+  try {
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context,
+            workspaces: [
+              {
+                tenant_id: "org-one",
+                kind: "organisation",
+                name: "Authority Closers",
+                role: "owner",
+                sales_xray_enabled: true,
+              },
+              {
+                tenant_id: "personal-one",
+                kind: "personal",
+                name: "Fictional Owner",
+                role: null,
+                sales_xray_enabled: true,
+              },
+            ],
+            retry: () => {},
+          }}
+        >
+          <CallsLibrary variant="embedded" insights />
+        </WorkspaceAccessProvider>,
+      ),
+    );
+    await flush();
+    const hint = host.querySelector(".calls-library-elsewhere");
+    expect(hint?.textContent).toContain("None of these calls are yours");
+    await act(async () => hint!.querySelector("button")!.click());
+    expect(switched).toEqual(["personal-one"]);
+  } finally {
+    window.removeEventListener("sales-xray:select-workspace", onSwitch);
+  }
 });

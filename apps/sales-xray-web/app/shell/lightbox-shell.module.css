@@ -559,6 +559,13 @@
   color: var(--lx-ink);
 }
 
+.recentsToggleBtn:focus-visible,
+.recentsViewAll:focus-visible {
+  box-shadow: var(--lx-ring-focus);
+  color: var(--lx-ink);
+  outline: none;
+}
+
 .recentsChevron {
   transition: transform 180ms ease;
   color: var(--lx-muted);
@@ -935,21 +942,52 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
+  padding: 0;
   border: 0;
   border-top: 2px solid transparent;
   background: transparent;
   color: var(--lx-muted);
   font: var(--lx-text-meta);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+/* Icons take the New mark's 26 px slot, so every label shares one line. */
+.bottomLink > svg {
+  flex: none;
+  margin-block: 3px;
 }
 
 .bottomLink[aria-current="page"] {
   border-top-color: var(--lx-teal);
   color: var(--lx-ink);
+  font-weight: 700;
+}
+
+.bottomLink[aria-current="page"] > svg {
+  color: var(--lx-teal);
+}
+
+/* New is the one filled control in the bar: the app's single teal action. */
+.newMark {
+  display: grid;
+  width: 40px;
+  height: 26px;
+  place-items: center;
+  border-radius: var(--lx-radius-sm, 8px);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+@media (hover: hover) {
+  .bottomNew:hover .newMark {
+    background: var(--lx-teal-hover);
+  }
 }
 
 /* ---------- Focus ---------- */
@@ -996,7 +1034,7 @@
     top: 0;
     display: flex;
     box-sizing: border-box;
-    min-height: calc(56px + env(safe-area-inset-top, 0px));
+    min-height: calc(48px + env(safe-area-inset-top, 0px));
     padding: env(safe-area-inset-top, 0px)
       max(var(--lx-space-4), env(safe-area-inset-right, 0px)) 0
       max(var(--lx-space-4), env(safe-area-inset-left, 0px));
@@ -1040,6 +1078,12 @@
 
   .shell[data-mobile-fit="true"] .content {
     box-sizing: border-box;
+  }
+
+  /* r17: on phones and tablets the shell owns one 16 px gutter. */
+  .main {
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) 24px
+      max(16px, env(safe-area-inset-left, 0px));
   }
 
   /* The report scroller already owns its reading margin. Nested shell
@@ -1561,4 +1605,65 @@
   margin: 4px 10px;
   color: var(--lx-muted);
   font-size: 12px;
+}
+
+/* Recents: when none of the listed calls are yours, one way to your own. */
+.recentsElsewhere {
+  margin: 6px 10px 2px;
+  color: var(--lx-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.recentsElsewhere button {
+  padding: 0;
+  border: 0;
+  border-radius: var(--lx-radius-xs, 4px);
+  background: none;
+  color: var(--lx-teal);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.recentsElsewhere button:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+/* Phone header: the lens, then the workspace you are in. */
+.mobileWorkspace {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The lens is the home link: a full 44 px target on touch screens. */
+.mobileWorkspace > a {
+  width: 44px;
+  height: 44px;
+  margin-left: -2px;
+}
+
+.mobileWorkspace > span {
+  display: grid;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.mobileWorkspace small {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mobileWorkspace b {
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
