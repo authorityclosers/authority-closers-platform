@@ -168,39 +168,41 @@ class ReportMinutes:
             .correlate(ConversationAcquisitionUsage)
             .scalar_subquery()
         )
+        eligible = (
+            select(ConversationAcquisitionUsage, ConversationRun)
+            .join(link, link.usage_id == ConversationAcquisitionUsage.id)
+            .join(ConversationRecording, ConversationRecording.id == link.recording_id)
+            .join(ConversationRun, ConversationRun.id == latest_run)
+            .join(Job, Job.id == ConversationRun.job_id)
+            .where(
+                Job.status == "dead_letter",
+                Job.lease_token.is_(None),
+                ConversationRun.state.in_(("queued", "running", "failed")),
+                ConversationRun.generation == ConversationRecording.generation,
+                ConversationRecording.state == "ready",
+                func.coalesce(latest_kind, "reserved") == "reserved",
+                ~exists(
+                    select(ConversationProcessingPlan.id).where(
+                        ConversationProcessingPlan.recording_id == ConversationRun.recording_id,
+                        ConversationProcessingPlan.state.in_(("quoted", "active")),
+                        ConversationProcessingPlan.expires_at > func.clock_timestamp(),
+                        ConversationProcessingPlan.erased_at.is_(None),
+                    )
+                ),
+                ~exists(
+                    select(ConversationAcquisitionSettlement.usage_id).where(
+                        ConversationAcquisitionSettlement.usage_id
+                        == ConversationAcquisitionUsage.id,
+                        ConversationAcquisitionSettlement.kind == "completed",
+                    )
+                ),
+            )
+            .order_by(ConversationRun.created_at)
+            .limit(1)
+        )
         candidate = (
             await self.database.execute(
-                select(ConversationAcquisitionUsage, ConversationRun)
-                .join(link, link.usage_id == ConversationAcquisitionUsage.id)
-                .join(ConversationRecording, ConversationRecording.id == link.recording_id)
-                .join(ConversationRun, ConversationRun.id == latest_run)
-                .join(Job, Job.id == ConversationRun.job_id)
-                .where(
-                    Job.status == "dead_letter",
-                    Job.lease_token.is_(None),
-                    ConversationRun.state.in_(("queued", "running", "failed")),
-                    ConversationRun.generation == ConversationRecording.generation,
-                    ConversationRecording.state == "ready",
-                    func.coalesce(latest_kind, "reserved") == "reserved",
-                    ~exists(
-                        select(ConversationProcessingPlan.id).where(
-                            ConversationProcessingPlan.recording_id == ConversationRun.recording_id,
-                            ConversationProcessingPlan.state.in_(("quoted", "active")),
-                            ConversationProcessingPlan.expires_at > func.clock_timestamp(),
-                            ConversationProcessingPlan.erased_at.is_(None),
-                        )
-                    ),
-                    ~exists(
-                        select(ConversationAcquisitionSettlement.usage_id).where(
-                            ConversationAcquisitionSettlement.usage_id
-                            == ConversationAcquisitionUsage.id,
-                            ConversationAcquisitionSettlement.kind == "completed",
-                        )
-                    ),
-                )
-                .order_by(ConversationRun.created_at)
-                .limit(1)
-                .with_for_update(
+                eligible.with_for_update(
                     of=(ConversationAcquisitionUsage, ConversationRun, Job), skip_locked=True
                 )
             )
@@ -208,6 +210,15 @@ class ReportMinutes:
         if candidate is None:
             return False
         usage, run = candidate
+        # Re-evaluate the snapshot after taking the same usage lock as owner
+        # retry admission; a just-committed successor must keep its reservation.
+        current = await self.database.execute(
+            eligible.where(
+                ConversationAcquisitionUsage.id == usage.id, ConversationRun.id == run.id
+            )
+        )
+        if current.first() is None:
+            return False
         previous = await self.latest(usage.id)
         await self._append(usage, previous, key=f"failed-local:{run.id}", kind="released")
         run.state = "failed"
