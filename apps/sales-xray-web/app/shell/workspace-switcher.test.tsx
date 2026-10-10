@@ -71,3 +71,35 @@ it("names where you are and offers only what works: no Soon items", async () => 
   await act(async () => (choices[0] as HTMLElement).click());
   expect(onSelect).toHaveBeenCalledWith(personal.tenant_id);
 });
+
+it("shows the organisation's logo in its tile, and the icon without one", async () => {
+  const logo = "/v1/organisation/logo/44444444-4444-4444-8444-444444444444";
+  const render = (logoUrl: string | null) =>
+    act(async () =>
+      root.render(
+        <WorkspaceSwitcher
+          workspaces={[personal, team]}
+          currentId={team.tenant_id}
+          personName="Asha Menon"
+          branding={{ tenantId: team.tenant_id, name: team.name, logoUrl }}
+          pending={false}
+          open
+          setOpen={() => {}}
+          containerRef={createRef()}
+          onSelect={() => {}}
+        />,
+      ),
+    );
+  await render(logo);
+  const trigger = host.querySelector("[aria-haspopup=menu]")!;
+  expect(trigger.querySelector("img")?.getAttribute("src")).toBe(logo);
+  const rows = [...host.querySelectorAll("[role=menuitemradio]")];
+  // Only the selected organisation's row: other workspaces keep their tiles.
+  expect(rows.map((row) => Boolean(row.querySelector("img")))).toEqual([
+    false,
+    true,
+  ]);
+  await render(null);
+  expect(trigger.querySelector("img")).toBeNull();
+  expect(trigger.querySelector("svg")).not.toBeNull();
+});

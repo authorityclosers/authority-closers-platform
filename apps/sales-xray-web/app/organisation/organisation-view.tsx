@@ -34,12 +34,15 @@ import {
 } from "../sales-xray-workspaces";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
+import { useBranding } from "../shell/branding-store";
+import { OrgLogo } from "../shell/org-logo";
 import {
   CALLS_SHOWN,
   OrganisationSkeleton,
   SkeletonBlocks,
 } from "./organisation-skeleton";
 import { CompanyDetailsPanel } from "./company-details-panel";
+import { CompanyLogoPanel } from "./company-logo-panel";
 import {
   addMember,
   changeRole,
@@ -175,6 +178,7 @@ function initialTab(): Tab {
 export function OrganisationView() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
+  const branding = useBranding();
   const [base, setBase] = useState<Base>({ status: "loading" });
   const [baseAttempt, setBaseAttempt] = useState(0);
   const [tab, setTabState] = useState<Tab>(initialTab);
@@ -350,7 +354,7 @@ export function OrganisationView() {
           <>
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
-                {initials(name)}
+                <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
               </span>
               <div className={styles.headerCopy}>
                 <h1>{name}</h1>
@@ -442,17 +446,26 @@ export function OrganisationView() {
                     isOwner={live && myRole === "owner"}
                     reload={reloadOrg}
                     details={
-                      <SectionBoundary name="Company details">
-                        <CompanyDetailsPanel
-                          key={`${access?.context?.sessionId}:${tenantId}`}
-                          tenantId={tenantId}
-                          role={myRole}
-                          authenticated={authenticated}
-                          refresh={refreshOrganisation}
-                          onAccessLost={refreshAccess}
-                          onPersonal={showPersonal}
-                        />
-                      </SectionBoundary>
+                      <>
+                        <SectionBoundary name="Logo">
+                          <CompanyLogoPanel
+                            key={`${access?.context?.sessionId}:${tenantId}`}
+                            name={name}
+                            canEdit={canManage}
+                          />
+                        </SectionBoundary>
+                        <SectionBoundary name="Company details">
+                          <CompanyDetailsPanel
+                            key={`${access?.context?.sessionId}:${tenantId}`}
+                            tenantId={tenantId}
+                            role={myRole}
+                            authenticated={authenticated}
+                            refresh={refreshOrganisation}
+                            onAccessLost={refreshAccess}
+                            onPersonal={showPersonal}
+                          />
+                        </SectionBoundary>
+                      </>
                     }
                   />
                 </SectionBoundary>

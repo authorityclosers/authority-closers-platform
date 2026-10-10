@@ -145,7 +145,13 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   fetchMock = vi.fn();
-  vi.stubGlobal("fetch", fetchMock);
+  // The shell's logo read (organisation workspaces) is outside these access
+  // checks; it answers "no logo" and stays out of the recorded calls.
+  vi.stubGlobal("fetch", (path: string, init?: RequestInit) =>
+    path === "/v1/organisation/branding"
+      ? Promise.resolve(response({}, 404))
+      : fetchMock(path, init),
+  );
 });
 
 function profileRecord(complete = true) {

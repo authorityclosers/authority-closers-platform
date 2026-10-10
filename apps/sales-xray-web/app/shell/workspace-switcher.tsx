@@ -3,6 +3,8 @@
 import { Building2, Check, ChevronsUpDown } from "lucide-react";
 import type { RefObject } from "react";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
+import type { Branding } from "./branding-store";
+import { OrgLogo } from "./org-logo";
 
 import styles from "./workspace-switcher.module.css";
 
@@ -23,6 +25,7 @@ export function WorkspaceSwitcher({
   workspaces,
   currentId,
   personName,
+  branding = null,
   pending,
   open,
   setOpen,
@@ -32,6 +35,8 @@ export function WorkspaceSwitcher({
   workspaces: readonly Workspace[];
   currentId: string | null;
   personName: string | null;
+  /** The selected workspace's logo, when it has one. */
+  branding?: Branding | null;
   pending: boolean;
   open: boolean;
   setOpen: (next: boolean) => void;
@@ -53,6 +58,9 @@ export function WorkspaceSwitcher({
     (workspace) => workspace.kind === "organisation",
   );
 
+  const logoFor = (tenantId: string | undefined) =>
+    branding && branding.tenantId === tenantId ? branding.logoUrl : null;
+
   const item = (workspace: Workspace, itemKind: WorkspaceKind) => {
     const selected = workspace.tenant_id === current?.tenant_id;
     const name = workspace.name;
@@ -67,11 +75,16 @@ export function WorkspaceSwitcher({
         onClick={() => onSelect(workspace.tenant_id)}
       >
         <span className={styles.tile} data-kind={itemKind} aria-hidden="true">
-          {itemKind === "organisation" ? (
-            <Building2 size={14} />
-          ) : (
-            initials(name)
-          )}
+          <OrgLogo
+            src={logoFor(workspace.tenant_id)}
+            fallback={
+              itemKind === "organisation" ? (
+                <Building2 size={14} />
+              ) : (
+                initials(name)
+              )
+            }
+          />
         </span>
         <span className={styles.itemCopy}>
           <b>{name}</b>
@@ -99,7 +112,16 @@ export function WorkspaceSwitcher({
         title={title}
       >
         <span className={styles.tile} data-kind={kind} aria-hidden="true">
-          {kind === "organisation" ? <Building2 size={15} /> : initials(title)}
+          <OrgLogo
+            src={logoFor(current?.tenant_id)}
+            fallback={
+              kind === "organisation" ? (
+                <Building2 size={15} />
+              ) : (
+                initials(title)
+              )
+            }
+          />
         </span>
         <span className={styles.copy}>
           <b>{title}</b>

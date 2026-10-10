@@ -102,7 +102,8 @@ async function call(
 ): Promise<unknown> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body) headers.set("Content-Type", "application/json");
+  if (init.body && !headers.has("Content-Type"))
+    headers.set("Content-Type", "application/json");
   if (init.method && init.method !== "GET")
     headers.set("Idempotency-Key", requestKey ?? crypto.randomUUID());
   const response = await fetch(`/v1/organisation${path}`, {
@@ -301,6 +302,34 @@ export async function saveOrganisationSettings(
       {
         method: "PUT",
         body: JSON.stringify(body),
+        signal,
+      },
+      requestKey,
+    ),
+    tenantId,
+  );
+}
+
+/** The server keeps still PNG, JPG and WebP images up to 2 MB. */
+export const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+/** Upload or replace the logo; the server keeps a 512 px centre square. */
+export async function uploadOrganisationLogo(
+  tenantId: string,
+  file: Blob,
+  requestKey: string,
+  signal?: AbortSignal,
+) {
+  if (!(LOGO_TYPES as readonly string[]).includes(file.type))
+    throw new Error("Choose a PNG, JPG or WebP image.");
+  return parseOrganisationSettings(
+    await call(
+      "/logo",
+      {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
         signal,
       },
       requestKey,

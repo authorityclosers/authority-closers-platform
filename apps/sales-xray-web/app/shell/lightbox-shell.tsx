@@ -32,6 +32,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useBranding } from "./branding-store";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
@@ -588,6 +589,7 @@ function LightboxShellFrame({
       workspace.tenant_id === effectiveTenantId &&
       workspace.kind === "organisation",
   );
+  const branding = useBranding(inOrganisation);
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
@@ -822,6 +824,7 @@ function LightboxShellFrame({
               workspaces={workspaces}
               currentId={effectiveTenantId}
               personName={profileName}
+              branding={branding}
               pending={chromePending}
               open={switcherOpen}
               setOpen={setSwitcherOpen}
