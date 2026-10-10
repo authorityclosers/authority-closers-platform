@@ -151,6 +151,7 @@ async def test_advance_carries_frozen_roles_and_marker_across_polls(case, monkey
         if request is not None and request.stage == "C5":
             requests.append(request.model_dump(mode="json"))
         return SimpleNamespace(
+            run_id=uuid4(),
             state="queued" if request is not None and request.stage == "C5" else "completed",
             checkpoint_id=uuid4(),
             stage="C2" if request is None else request.stage,

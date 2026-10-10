@@ -364,6 +364,53 @@ class AcquisitionSessions:
         await self.database.flush()
         return identifier
 
+    async def reserve_report_retry(
+        self,
+        submission_id: UUID,
+        *,
+        key: str,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+    ) -> UUID:
+        """Owner-authenticated capacity reservation; never provider permission."""
+        from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
+
+        if re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key) is None:
+            raise ConversationError("A valid Idempotency-Key is required.")
+        if actor is not None:
+            await ConversationApplication(self.database, clock=self.clock).admit(actor)
+        now = await self._admit(mutation=True)
+        visitor_id, person_id = await self._owner(token, actor, now)
+        usage = await self.database.scalar(
+            select(ConversationAcquisitionUsage)
+            .where(
+                ConversationAcquisitionUsage.tenant_id == self.tenant_id,
+                ConversationAcquisitionUsage.submission_id == submission_id,
+            )
+            .with_for_update()
+        )
+        if usage is None:
+            raise ConversationDenied("This upload is unavailable.")
+        permitted = (usage.visitor_id, usage.person_id) == (visitor_id, person_id)
+        if not permitted and usage.visitor_id is not None and person_id is not None:
+            claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
+            permitted = claim is not None and claim.person_id == person_id
+        if not permitted:
+            raise ConversationDenied("This upload is unavailable.")
+        projected = await self._project(visitor_id, person_id, now, mirror=True)
+        tester = (
+            None
+            if self.tester_policy is None or actor is None
+            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
+        )
+        await ReportMinutes(self.database).reserve_retry(
+            usage.id,
+            self.tenant_id,
+            key="retry:" + hashlib.sha256(key.encode()).hexdigest(),
+            available_seconds=(usage.reserved_seconds if tester else projected.available_seconds),
+        )
+        return usage.id
+
     async def settle(
         self, usage_id: UUID, *, charged_seconds: int, receipt_sha256: str, no_work: bool = False
     ) -> None:

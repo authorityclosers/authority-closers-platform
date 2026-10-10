@@ -30,6 +30,53 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });
+
+it("accepts additive live-stage metadata from the owner progress read", () => {
+  const live = {
+    ...progress,
+    current_stage: "C4",
+    plan_state: "active",
+    terminal_state: null,
+    stage_progress: [
+      {
+        stage: "C2",
+        state: "completed",
+        started_at: "2026-10-10T12:00:00+00:00",
+        finished_at: "2026-10-10T12:00:03+00:00",
+      },
+      { stage: "C4", state: "queued", started_at: null, finished_at: null },
+    ],
+  };
+  // The legacy client keeps its original contract while Strike A consumes the
+  // additive timeline. Missing historical timestamps do not break the read.
+  expect(parseProgress(live, parseSubmission(progress))).toEqual(
+    parseProgress(progress, parseSubmission(progress)),
+  );
+});
+
+it("binds the retry status to the saved source and rejects contradictory facts", () => {
+  const failed = {
+    ...progress,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+  };
+  expect(parseProgress(failed, parseSubmission(progress))).toMatchObject({
+    recording_id: recordingId,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+  });
+  for (const change of [
+    { run_state: "invented" },
+    { run_state: "done" },
+    { minute_state: "charged_twice" },
+    { run_state: "working", retry_available: true },
+  ])
+    expect(() =>
+      parseProgress({ ...failed, ...change }, parseSubmission(progress)),
+    ).toThrow();
+});
 describe("acquisition permission recovery", () => {
   const path = `/submissions/${submissionId}/plan`;
   const allowanceDetail =

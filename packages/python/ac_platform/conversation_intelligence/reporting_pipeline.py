@@ -150,6 +150,7 @@ class StageRequest(BaseModel):
         default="detailed", exclude_if=lambda value: value == "detailed"
     )
     profile: dict[str, Any] | None = Field(default=None, repr=False)
+    retry_of: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
     repair: C5RepairIntent | None = Field(default=None, exclude_if=lambda value: value is None)
     acquisition_c5_benchmark_approval_id: UUID | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -519,6 +520,11 @@ class ReportingPipeline:
         transcript_row, transcript_checkpoint = await self.checkpoint(
             recording, request.transcript_checkpoint_id, "C2"
         )
+        from ac_platform.conversation_intelligence.safe_stage_retry import predecessor_id
+
+        transcript_retry = predecessor_id(transcript_checkpoint.as_dict())
+        if transcript_retry is not None:
+            source = await self.service.plan_transcription(recording, retry_of=transcript_retry)
         if transcript_checkpoint.cache_key != source.checkpoint.cache_key:
             raise ConversationConflict("The saved transcript uses a different source recipe.")
         _, transcript_receipt = await self.provider_task(recording, transcript_row)
@@ -567,6 +573,26 @@ class ReportingPipeline:
                 parents,
                 "0" * 64,
             )
+            if request.retry_of is not None:
+                from ac_platform.conversation_intelligence.safe_stage_retry import successor_plan
+
+                candidate = StagePlan(
+                    prepared,
+                    template,
+                    source.duration_ms,
+                    request,
+                    transcript,
+                    native_transcript,
+                    None,
+                )
+                candidate = await successor_plan(
+                    self.database,
+                    recording,
+                    candidate,
+                    request.retry_of,
+                    now=self.service.application.clock(),
+                )
+                template = candidate.checkpoint
             return StagePlan(
                 prepared,
                 template,
@@ -685,6 +711,26 @@ class ReportingPipeline:
             (aggregate,),
             "0" * 64,
         )
+        if request.retry_of is not None:
+            from ac_platform.conversation_intelligence.safe_stage_retry import successor_plan
+
+            candidate = StagePlan(
+                prepared,
+                template,
+                source.duration_ms,
+                request,
+                transcript,
+                native_transcript,
+                profile,
+            )
+            candidate = await successor_plan(
+                self.database,
+                recording,
+                candidate,
+                request.retry_of,
+                now=self.service.application.clock(),
+            )
+            template = candidate.checkpoint
         return StagePlan(
             prepared,
             template,
@@ -828,6 +874,17 @@ class ReportingPipeline:
         if isinstance(actor, ProcessingActor):
             now = utc(self.service.application.clock())
             usage = await admit_processing_actor(self.database, actor, now)
+            from ac_platform.conversation_intelligence.models import (
+                ConversationPlanStageAuthorization,
+            )
+            from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
+
+            authorization = await self.database.get(
+                ConversationPlanStageAuthorization, task.quote_id
+            )
+            await ReportMinutes(self.database).deliver(
+                usage.id, draft, plan_id=authorization.plan_id if authorization else None
+            )
             previous = await self.database.get(ConversationAcquisitionSettlement, usage.id)
             if previous is None:
                 await AcquisitionSessions(

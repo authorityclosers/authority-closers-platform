@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.alignment import (
     project_transcript_for_playback,
 )
 from ac_platform.conversation_intelligence.application import (
+    LOCAL_JOB,
     ConversationApplication,
     ConversationConflict,
     ConversationNotFound,
@@ -46,11 +47,18 @@ from ac_platform.conversation_intelligence.report_access import (
     ReportSourceBinding,
     project_bound_report,
 )
+from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
+from ac_platform.conversation_intelligence.submission_progress import (
+    StageExecution,
+    project_stage_progress,
+    read_selected_executions,
+    read_stage_checkpoints,
+)
 from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
@@ -98,9 +106,42 @@ _PLAN_FAILURE_CODES = frozenset(
         "stage_uncertain",
         "stage_cancelled",
         "processing_authorization_or_input_unavailable",
+        "processing_budget_expired",
+        "processing_coordinator_timeout",
+        "processing_coordinator_failed",
     }
 )
 _FAILURE_CODE_PATTERN = re.compile(r"^conversation_[a-z][a-z0-9_]{0,127}$")
+
+
+def _run_state(
+    *,
+    has_report: bool,
+    minute_kind: str | None,
+    plan: ConversationProcessingPlan | None,
+    local_state: str | None,
+    jobs: list[Job],
+) -> str:
+    if has_report:
+        return "done"
+    if (
+        minute_kind == "released"
+        or (plan is not None and plan.state in {"held", "cancelled"})
+        or local_state in {"failed", "cancelled"}
+    ):
+        return "failed"
+    if (
+        plan is not None
+        and plan.state == "active"
+        and (
+            (plan.manifest is not None and plan.manifest.get("retry_of") is not None)
+            or any(job.status == "retry_wait" for job in jobs)
+        )
+    ):
+        return "retrying"
+    if local_state == "running" or any(job.status == "leased" for job in jobs):
+        return "working"
+    return "queued"
 
 
 def _safe_progress_failure_code(value: object) -> str | None:
@@ -456,19 +497,19 @@ class AcquisitionReports:
             allow_organisation_read=allow_organisation_read,
         )
         local_run = await self.database.scalar(
-            select(ConversationRun).where(
+            select(ConversationRun)
+            .join(Job, Job.id == ConversationRun.job_id)
+            .where(
                 ConversationRun.recording_id == recording.id,
                 ConversationRun.tenant_id == scope.tenant_id,
                 ConversationRun.person_id == scope.processing_person_id,
                 ConversationRun.generation == recording.generation,
-                ConversationRun.request_key
-                == self.application.command_key(
-                    ProcessingActor(
-                        scope.processing_person_id, scope.tenant_id, scope.processing_lease_id
-                    ),
-                    f"acquisition-local-run:{recording.id}",
-                ),
+                Job.kind == LOCAL_JOB,
             )
+            .order_by(
+                ConversationRun.created_at.desc(), Job.created_at.desc(), ConversationRun.id.desc()
+            )
+            .limit(1)
         )
         plan = await self.database.scalar(
             select(ConversationProcessingPlan)
@@ -486,12 +527,17 @@ class AcquisitionReports:
             )
             .limit(1)
         )
-        task_rows = [
-            (row[0], row[1])
+        executions = [
+            StageExecution(row[0], row[1], row[2])
             for row in (
                 await self.database.execute(
-                    select(ConversationInferenceTask, Job.last_error)
+                    select(ConversationInferenceTask, Job, ConversationRun)
                     .join(Job, Job.id == ConversationInferenceTask.job_id)
+                    .join(
+                        ConversationRun,
+                        (ConversationRun.id == ConversationInferenceTask.run_id)
+                        & (ConversationRun.job_id == Job.id),
+                    )
                     .where(
                         ConversationInferenceTask.recording_id == recording.id,
                         ConversationInferenceTask.tenant_id == recording.tenant_id,
@@ -508,20 +554,25 @@ class AcquisitionReports:
                 )
             ).all()
         ]
-        task_rows = list(reversed(task_rows))
+        executions = list(reversed(executions))
+        task_rows = [(item.task, item.job.last_error) for item in executions]
         tasks = [row[0] for row in task_rows]
         has_report = False
+        report_finished_at = None
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
         if recovered is not None:
             has_report = True
+            report_finished_at = recovered.created_at
         draft = await self._draft(recording)
         if draft is not None:
             try:
                 self.reports._validated(draft, recording)
                 await self.reports._canonical_draft(draft, recording)
                 has_report = True
+                if recovered is None:
+                    report_finished_at = draft.created_at
             except ConversationConflict:
                 if recovered is None:
                     has_report = False
@@ -546,7 +597,70 @@ class AcquisitionReports:
             generation=recording.generation,
             has_report=has_report,
         )
+        minute_event = await ReportMinutes(self.database).latest(scope.usage_id)
+        local_retry = (
+            minute_event is not None
+            and minute_event.kind == "reserved"
+            and minute_event.plan_id is None
+            and minute_event.key.startswith("retry:")
+            and local_run is not None
+            and local_run.request_key
+            == self.application.command_key(
+                ProcessingActor(
+                    scope.processing_person_id, scope.tenant_id, scope.processing_lease_id
+                ),
+                "local-" + minute_event.key,
+            )
+        )
+        run_state = _run_state(
+            has_report=has_report,
+            minute_kind=None if minute_event is None else minute_event.kind,
+            plan=None if local_retry else plan,
+            local_state=None if local_run is None else local_run.state,
+            jobs=held_jobs,
+        )
+        retry_available = False
+        if run_state == "failed" and scope.claimed_account:
+            try:
+                # Organisation read permission never grants owner retry. Use
+                # the existing ownership port, without its optional read grant.
+                await self.ownership.require_submission_owner(
+                    submission_id,
+                    token=token,
+                    actor=actor,
+                    shared_identity_locks=shared_identity_locks,
+                )
+                retry_available = True
+            except ConversationNotFound:
+                pass
+        timeline_executions = executions + await read_selected_executions(
+            self.database,
+            recording,
+            scope.processing_lease_id,
+            None if local_retry else plan,
+            executions,
+        )
+        stage_progress = project_stage_progress(
+            plan=None if local_retry else plan,
+            local_run=local_run,
+            local_job=next(
+                (job for job in held_jobs if local_run is not None and job.id == local_run.job_id),
+                None,
+            ),
+            executions=timeline_executions,
+            checkpoints=await read_stage_checkpoints(
+                self.database,
+                recording,
+                executions=timeline_executions,
+                plan=None if local_retry else plan,
+            ),
+            has_report=has_report,
+            run_state=run_state,
+            report_finished_at=report_finished_at,
+            local_retry=local_retry,
+        )
         return {
+            **stage_progress,
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
             "source_sha256": recording.source_sha256,
@@ -557,4 +671,7 @@ class AcquisitionReports:
             "execution_hold": execution_hold,
             "failure_code": failure_code,
             "stages": [{"stage": task.stage, "state": task.state} for task in tasks],
+            "run_state": run_state,
+            "minute_state": None if minute_event is None else minute_event.kind,
+            "retry_available": retry_available,
         }

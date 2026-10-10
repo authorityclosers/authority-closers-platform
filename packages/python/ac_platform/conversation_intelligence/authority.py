@@ -1589,6 +1589,7 @@ class ConversationAuthority:
         *,
         key: str,
         request: StageRequest | None = None,
+        retry_of: UUID | None = None,
         configuration_sha256: str | None = None,
     ) -> dict[str, Any]:
         if configuration_sha256 is not None and isinstance(actor, ProcessingActor):
@@ -1598,7 +1599,7 @@ class ConversationAuthority:
         recording = await app._recording(actor, recording_id)
         service = ConversationInference(app, authority=self)
         plan = (
-            await service.plan_transcription(recording)
+            await service.plan_transcription(recording, retry_of=retry_of)
             if request is None
             else await ReportingPipeline(service).plan(recording, request)
         )

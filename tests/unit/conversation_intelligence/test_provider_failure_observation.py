@@ -45,6 +45,19 @@ def test_observation_round_trips_exact_schema_without_remote_identifier() -> Non
     assert ProviderFailureObservation.from_dict(encoded) == observation
 
 
+@pytest.mark.parametrize("field", ["reservation_id", "attempt_id"])
+def test_digit_leading_run_uuid_round_trips(field: str) -> None:
+    identifier = "01234567-89ab-4cde-8f01-23456789abcd"
+    observation = _observation(**{field: identifier})
+    assert ProviderFailureObservation.from_dict(observation.as_dict()) == observation
+
+
+@pytest.mark.parametrize("field", ["provider", "model", "operation"])
+def test_provider_route_names_still_require_a_letter(field: str) -> None:
+    with pytest.raises(ValueError, match="invalid provider failure observation"):
+        _observation(**{field: "123"})
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
