@@ -77,6 +77,34 @@ async def invite(state, *, email="synthetic-other@example.test", role="member", 
     )
 
 
+@pytest.mark.parametrize(
+    "legacy_emails", [("Legacy@example.test",), ("Legacy@example.test", "LEGACY@example.test")]
+)
+async def test_self_serve_invite_preserves_and_detects_case_variant_legacy_pending_rows(
+    state, legacy_emails
+):
+    with Session(state.engine) as db, db.begin():
+        for email in legacy_emails:
+            db.add(
+                OrganisationInvite(
+                    tenant_id=state.tenant,
+                    email_normalized=email,
+                    role="member",
+                    command_id=uuid4(),
+                    invited_by_person_id=state.person,
+                )
+            )
+        original_audits = db.scalar(select(func.count()).select_from(AuditEvent))
+    response = await invite(state, email="legacy@example.test")
+    assert response.status_code == 409, response.text
+    with Session(state.engine) as db:
+        rows = list(db.scalars(select(OrganisationInvite)))
+        assert sorted(row.email_normalized for row in rows) == sorted(legacy_emails)
+        assert all(row.status == "pending" and row.closed_at is None for row in rows)
+        assert db.scalar(select(func.count()).select_from(OutboxEvent)) == 0
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == original_audits
+
+
 def remove_other_membership(state):
     with Session(state.engine) as db, db.begin():
         member = db.get(Membership, (state.tenant, state.other))

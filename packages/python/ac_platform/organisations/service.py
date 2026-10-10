@@ -860,28 +860,37 @@ class OrganisationService:
                     target.status == "active" and target.ended_at is None
                 ):
                     raise ResourceConflict("This person is already an organisation member.")
-        pending = await self.session.scalar(
-            select(OrganisationInvite).where(
-                OrganisationInvite.tenant_id == tenant_id,
-                OrganisationInvite.email_normalized == email,
-                OrganisationInvite.status == "pending",
+        pending = list(
+            await self.session.scalars(
+                select(OrganisationInvite)
+                .where(
+                    OrganisationInvite.tenant_id == tenant_id,
+                    (
+                        func.lower(OrganisationInvite.email_normalized) == email
+                        if require_acceptance
+                        else OrganisationInvite.email_normalized == email
+                    ),
+                    OrganisationInvite.status == "pending",
+                )
+                .order_by(OrganisationInvite.id)
             )
         )
-        if pending is not None:
-            policy = (await invitation_policies(self.session, [pending]))[pending.id]
-            if not policy.expired(now):
-                raise ResourceConflict("A pending invite already exists for this email.")
-            pending.status, pending.closed_at = "revoked", now
+        policies = await invitation_policies(self.session, pending)
+        if any(not policies[item.id].expired(now) for item in pending):
+            raise ResourceConflict("A pending invite already exists for this email.")
+        for item in pending:
+            item.status, item.closed_at = "revoked", now
             await self._audit(
                 tenant_id,
-                uuid5(pending.id, "expiry"),
+                uuid5(item.id, "expiry"),
                 "organisation.invite_expired",
                 "organisation_invite",
-                pending.id,
+                item.id,
                 {"before": {"status": "pending"}, "after": {"status": "expired"}},
                 "invitation_expired",
                 actor_person_id=actor_person_id,
             )
+        if pending:
             await self.session.flush()
         if acting != "operator":
             await self._ensure_seat_available(tenant_id)

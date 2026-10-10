@@ -1,5 +1,14 @@
 # AUT-1694: explicit organisation invitations
 
+Self-serve duplicate checks match legacy pending invitation emails
+case-insensitively. One or several valid case-variant legacy rows cause 409;
+their stored emails, pending lifecycle and audit history remain unchanged, and
+no mail is queued. Expired matched invitations are closed only after confirming
+that none of the matched invitations is still valid. Legacy operator request
+matching retains its previous behavior. The HTTP invite/write and organisation
+service suites pass together: **67 passed in 22.92s**. The four PostgreSQL
+invitation race/journey cases also pass together: **4 passed in 12.25s**.
+
 Review routing: **CTO/CEO required**, because the organisation sign-in hook now
 leaves new self-serve invitations pending until the person explicitly accepts.
 Identity core, billing, migrations and provider approval files are unchanged.
