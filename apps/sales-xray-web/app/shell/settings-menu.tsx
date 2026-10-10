@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -267,7 +268,16 @@ export function SettingsMenu({
       className={styles.card}
       role="dialog"
       aria-label="Account menu"
-      style={place ? { left: place.left, bottom: place.bottom } : undefined}
+      // Variables, not left/bottom: the phone sheet's own CSS then wins
+      // without !important (r17 S8).
+      style={
+        place
+          ? ({
+              "--card-left": `${place.left}px`,
+              "--card-bottom": `${place.bottom}px`,
+            } as CSSProperties)
+          : undefined
+      }
     >
       <div key={view} className={styles.view}>
         {view === "main" && (

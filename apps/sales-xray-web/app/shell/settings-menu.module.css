@@ -3,8 +3,8 @@
 .card {
   position: fixed;
   z-index: 360;
-  left: 74px;
-  bottom: 16px;
+  left: var(--card-left, 74px);
+  bottom: var(--card-bottom, 16px);
   width: min(300px, calc(100vw - 16px));
   max-height: min(620px, calc(100dvh - 32px));
   overflow: hidden auto;
@@ -429,14 +429,6 @@
   }
 }
 
-@media (max-width: 720px) {
-  .card {
-    right: 8px;
-    left: 8px !important;
-    width: auto;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .card,
   .view,
@@ -568,7 +560,7 @@
 @media (max-width: 720px) {
   .card {
     right: 8px;
-    left: 8px !important;
+    left: 8px;
     width: auto;
     transform-origin: bottom right;
   }

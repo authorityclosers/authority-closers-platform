@@ -80,9 +80,12 @@ it("keeps the account menu inside the mobile viewport by the active trigger", as
   const menu = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Account menu"]',
   )!;
-  expect(menu.style.left).toBe("45px");
-  expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
-  expect(Number.parseFloat(menu.style.bottom)).toBeLessThan(800);
+  expect(menu.style.getPropertyValue("--card-left")).toBe("45px");
+  const bottom = Number.parseFloat(
+    menu.style.getPropertyValue("--card-bottom"),
+  );
+  expect(bottom).toBeGreaterThan(0);
+  expect(bottom).toBeLessThan(800);
 });
 
 it.each<[Allowance, string | null]>([
