@@ -77,7 +77,7 @@
 .itemCopy small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -133,7 +133,7 @@
 .group {
   margin: 6px 8px 3px;
   color: var(--lx-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;

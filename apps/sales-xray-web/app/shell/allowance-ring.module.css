@@ -72,13 +72,13 @@
 
 .text strong {
   color: var(--lx-ink);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .text small {
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -152,7 +152,7 @@
   white-space: nowrap;
 }
 .text strong {
-  font-size: 12.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .more {
