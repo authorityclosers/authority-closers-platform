@@ -23,6 +23,11 @@
     box-shadow 160ms ease;
 }
 
+/* Signed out the trigger is a sign-in link: same row, no underline. */
+a.trigger {
+  text-decoration: none;
+}
+
 .trigger:hover,
 .trigger[aria-expanded="true"] {
   background: var(--lx-surface);
