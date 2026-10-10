@@ -184,14 +184,21 @@ const submitEditor = () =>
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
 
-it("excludes reserved durations and unknown questions from measured summaries", async () => {
+it("never passes an upload estimate off as measured, and counts report outcomes", async () => {
   routeFetch({
     [LIST]: () => ok(page([row(firstId, true), row(secondId, true)])),
     [insightPath(firstId, "call-record")]: () => ok(measuredRecord),
     [insightPath(secondId, "call-record")]: () => ok({}, 404),
-    [insightPath(firstId, "report")]: () => ok({ verdict: "Measured report" }),
+    [insightPath(firstId, "report")]: () =>
+      ok({
+        verdict: "Measured report",
+        overview: { outcome: { kind: "follow_up" } },
+      }),
     [insightPath(secondId, "report")]: () =>
-      ok({ verdict: "Report without measurements" }),
+      ok({
+        verdict: "Report without measurements",
+        overview: { outcome: { kind: "closed" } },
+      }),
   });
   await act(async () => renderLibrary({ insights: true }));
   await flush();
@@ -200,12 +207,31 @@ it("excludes reserved durations and unknown questions from measured summaries", 
     Array.from(stats.children)
       .find((child) => child.querySelector("dt")?.textContent === label)
       ?.querySelector("dd b")?.textContent;
-  expect(value("Measured call time")).toBe("2 min");
-  expect(value("Questions per call")).toBe("6");
+  // 2 min measured plus a 61 s upload estimate: approximate, and says so.
+  expect(value("Call time")).toBe("~3 min");
+  expect(stats.textContent).toContain("1 measured · 1 estimated at upload");
+  expect(value("Next step agreed")).toBe("1");
+  expect(stats.textContent).toContain("of 2 reports read · 1 closed");
   expect(value("Reports ready")).toBe("2");
-  // The reserved estimate of the second call never counts as measured.
-  expect(stats.textContent).toContain("across 1 measured call");
   expect(stats.textContent).not.toContain("—");
+});
+
+it("labels call time from upload estimates when nothing was measured", async () => {
+  routeFetch({
+    [LIST]: () => ok(page([row(firstId, true)])),
+    [insightPath(firstId, "call-record")]: () => ok({}, 404),
+    [insightPath(firstId, "report")]: () => ok({ verdict: "No outcome" }),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+  const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
+  expect(stats.querySelector("#metric-duration dd b")?.textContent).toBe(
+    "~1 min",
+  );
+  expect(stats.textContent).toContain("estimated at upload, 1 call");
+  // The report was read but records no outcome: say so, never a zero.
+  expect(stats.querySelector("#metric-next-step dd b")).toBeNull();
+  expect(stats.textContent).toContain("Not recorded");
 });
 
 it("shows unavailable summaries and lets failed report reads recover from the list", async () => {
@@ -221,7 +247,8 @@ it("shows unavailable summaries and lets failed report reads recover from the li
   await flush();
   const stats = host.querySelector('[aria-label="Calls at a glance"]')!;
   // An unknown figure says so in words; it is never a broken "—".
-  expect(stats.textContent?.match(/Not measured yet/g)).toHaveLength(2);
+  expect(stats.textContent).toContain("Not loaded");
+  expect(stats.textContent).toContain("estimated at upload");
   expect(stats.textContent).not.toContain("—");
   expect(host.textContent).toContain("Summary didn't load");
   recovered = true;
@@ -1438,7 +1465,7 @@ it("shows four figures from the loaded calls and one labelled list", async () =>
 
   const strip = host.querySelector('dl[aria-label="Calls at a glance"]')!;
   expect([...strip.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(
-    ["Calls", "Reports ready", "Measured call time", "Questions per call"],
+    ["Calls", "Reports ready", "Call time", "Next step agreed"],
   );
   expect(strip.querySelector("#metric-calls dd b")?.textContent).toBe("2");
   expect(host.querySelector("#metric-commitments")).toBeNull();

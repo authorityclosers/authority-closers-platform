@@ -15,17 +15,7 @@ import {
   submissionPath,
   UUID,
 } from "../acquisition-client";
-
-/** The report Overview's own words for each outcome kind. */
-export const OUTCOME_LABEL = {
-  follow_up: "Next step agreed",
-  closed: "Deal closed",
-  future_date: "Call back later",
-  unclear: "No clear next step",
-  no_sale: "No sale",
-  disqualified: "Not a fit",
-} as const;
-export type OutcomeKind = keyof typeof OUTCOME_LABEL;
+import { OUTCOME_LABEL, type OutcomeKind } from "../calls-insights";
 
 export type ReportPattern = {
   outcome: OutcomeKind | null;
@@ -75,7 +65,7 @@ export function extractPattern(payload: unknown): ReportPattern | null {
   const overview = obj(content.overview);
   const kind = obj(overview.outcome).kind;
   const outcome =
-    typeof kind === "string" && kind in OUTCOME_LABEL
+    typeof kind === "string" && Object.hasOwn(OUTCOME_LABEL, kind)
       ? (kind as OutcomeKind)
       : null;
   const skills = (Array.isArray(content.dimensions) ? content.dimensions : [])

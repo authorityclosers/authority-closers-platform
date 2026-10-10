@@ -819,18 +819,16 @@ function CallsLibraryContent({
     sort,
   );
   const workspace = insights && !preview;
+  // Summaries for the first screens of ready rows only, not one per call.
+  const insightIds = visibleSubmissions
+    .filter((submission) => submission.hasReport)
+    .slice(0, 24)
+    .map((submission) => submission.id);
   const {
     insightOf,
     statusOf,
     retry: retryInsights,
-  } = useCallInsights(
-    visibleSubmissions
-      .filter((submission) => submission.hasReport)
-      // Summaries for the first screens of ready rows only, not one per call.
-      .slice(0, 24)
-      .map((submission) => submission.id),
-    workspace && access?.authenticated === true,
-  );
+  } = useCallInsights(insightIds, workspace && access?.authenticated === true);
   useEffect(() => {
     if (!workspace) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1260,12 +1258,26 @@ function CallsLibraryContent({
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
   const weekAgo = loadedAt - 7 * 86_400_000;
-  const durations = loadedInsights.flatMap((insight) =>
-    insight.durationMs === null ? [] : [insight.durationMs],
+  // Call time: a measured length where a report gave one, otherwise the
+  // estimate reserved at upload, never passed off as measured.
+  const time = { measured: 0, measuredMs: 0, estimated: 0, estimatedMs: 0 };
+  for (const submission of submissions) {
+    const measuredMs = workspace ? insightOf(submission.id)?.durationMs : null;
+    if (measuredMs) {
+      time.measured += 1;
+      time.measuredMs += measuredMs;
+    } else if (hasDurationEstimate(submission)) {
+      time.estimated += 1;
+      time.estimatedMs += submission.durationSeconds * 1000;
+    }
+  }
+  // How the reports read so far say calls ended (their own labels).
+  const outcomes = loadedInsights.flatMap((insight) =>
+    insight.outcome ? [insight.outcome] : [],
   );
-  const questions = loadedInsights.flatMap((insight) =>
-    insight.questions === null ? [] : [insight.questions],
-  );
+  const readingReports = insightIds.some((id) => statusOf(id) === "loading");
+  const nextSteps = outcomes.filter((kind) => kind === "follow_up").length;
+  const closed = outcomes.filter((kind) => kind === "closed").length;
   // Calls per day over the last 14 days, from the same loaded rows.
   const days = Array.from({ length: 14 }, (_, index) => {
     const start = new Date(now);
@@ -1285,15 +1297,10 @@ function CallsLibraryContent({
         thisWeek: submissions.filter(
           (submission) => new Date(submission.createdAt).getTime() >= weekAgo,
         ).length,
-        time: durations.length
-          ? hoursLabel(durations.reduce((sum, duration) => sum + duration, 0))
-          : null,
-        questions: questions.length
-          ? Math.round(
-              questions.reduce((sum, count) => sum + count, 0) /
-                questions.length,
-            )
-          : null,
+        time:
+          time.measured + time.estimated
+            ? `${time.estimated ? "~" : ""}${hoursLabel(time.measuredMs + time.estimatedMs)}`
+            : null,
       }
     : null;
   const waiting = [
@@ -1490,33 +1497,47 @@ function CallsLibraryContent({
                 </dd>
               </div>
               <div className={styles.kpi} id="metric-duration">
-                <dt>Measured call time</dt>
+                <dt>Call time</dt>
                 <dd>
                   {stats.time ? (
                     <b>{stats.time}</b>
                   ) : (
-                    <span className={styles.unknown}>Not measured yet</span>
+                    <span className={styles.unknown}>Not known yet</span>
                   )}
                 </dd>
                 <dd className={styles.kpiContext}>
-                  {durations.length
-                    ? `across ${durations.length} measured ${durations.length === 1 ? "call" : "calls"}`
-                    : "Shown once reports are read"}
+                  {time.measured && time.estimated
+                    ? `${time.measured} measured · ${time.estimated} estimated at upload`
+                    : time.measured
+                      ? `across ${time.measured} measured ${time.measured === 1 ? "call" : "calls"}`
+                      : time.estimated
+                        ? `estimated at upload, ${time.estimated} ${time.estimated === 1 ? "call" : "calls"}`
+                        : "Shown once calls have a length"}
                 </dd>
               </div>
-              <div className={styles.kpi} id="metric-questions">
-                <dt>Questions per call</dt>
+              <div className={styles.kpi} id="metric-next-step">
+                <dt>Next step agreed</dt>
                 <dd>
-                  {stats.questions !== null ? (
-                    <b>{stats.questions}</b>
+                  {outcomes.length ? (
+                    <b>{nextSteps}</b>
                   ) : (
-                    <span className={styles.unknown}>Not measured yet</span>
+                    <span className={styles.unknown}>
+                      {readingReports
+                        ? "Reading reports"
+                        : insightErrors
+                          ? "Not loaded"
+                          : insightIds.length
+                            ? "Not recorded"
+                            : "No reports yet"}
+                    </span>
                   )}
                 </dd>
                 <dd className={styles.kpiContext}>
-                  {questions.length
-                    ? `average of ${questions.length} measured ${questions.length === 1 ? "call" : "calls"}`
-                    : "Shown once reports are read"}
+                  {outcomes.length
+                    ? `of ${outcomes.length} ${outcomes.length === 1 ? "report" : "reports"} read${closed ? ` · ${closed} closed` : ""}`
+                    : insightIds.length
+                      ? "How each report says the call ended"
+                      : "Shown once a report is ready"}
                 </dd>
               </div>
             </dl>
