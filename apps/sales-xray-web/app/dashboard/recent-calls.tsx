@@ -128,7 +128,7 @@ export function RecentCallsList({
                 <span className={styles.date}>{callDate(call.createdAt)}</span>
                 <span
                   className={styles.length}
-                  title={clock ? `About ${clock} long` : "Length unknown"}
+                  title={clock ? `${clock} long` : "Length unknown"}
                 >
                   {clock ?? "—"}
                 </span>

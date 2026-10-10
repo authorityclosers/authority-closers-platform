@@ -1080,6 +1080,12 @@
     box-sizing: border-box;
   }
 
+  /* r17: on phones and tablets the shell owns one 16 px gutter. */
+  .main {
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) 24px
+      max(16px, env(safe-area-inset-left, 0px));
+  }
+
   /* The report scroller already owns its reading margin. Nested shell
      padding was taking another 48px away from the phone viewport. */
   .shell[data-mobile-fit="true"]
@@ -1632,6 +1638,13 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+/* The lens is the home link: a full 44 px target on touch screens. */
+.mobileWorkspace > a {
+  width: 44px;
+  height: 44px;
+  margin-left: -2px;
 }
 
 .mobileWorkspace > span {

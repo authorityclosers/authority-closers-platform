@@ -61,11 +61,12 @@ const libraryReadTimeoutMs = 12_000;
 const processingRefreshIntervalMs = 15_000;
 
 /*
- * The library's duration_seconds is the reserved (estimated) length recorded
- * when the call was admitted, not a measured source duration. It is always
- * presented as approximate until the list API supplies a measured field.
+ * The library's duration_seconds is the length the server measured from the
+ * decoded audio at upload (MeasuredSource: sample count, never the browser's
+ * or the container's claim), rounded up to the second. Organisation counts the
+ * same number as "minutes recorded".
  */
-function hasDurationEstimate(submission: LibrarySubmission) {
+function hasRecordedLength(submission: LibrarySubmission) {
   return (
     Number.isFinite(submission.durationSeconds) &&
     submission.durationSeconds > 0
@@ -73,7 +74,7 @@ function hasDurationEstimate(submission: LibrarySubmission) {
 }
 
 function formatDuration(durationSeconds: number) {
-  return `About ${formatClock(durationSeconds * 1000)}`;
+  return formatClock(durationSeconds * 1000);
 }
 
 export { callTone, submissionState };
@@ -110,8 +111,8 @@ function sortCalls(rows: LibrarySubmission[], sort: CallSort) {
   else
     copy.sort(
       (a, b) =>
-        (hasDurationEstimate(b) ? b.durationSeconds : 0) -
-        (hasDurationEstimate(a) ? a.durationSeconds : 0),
+        (hasRecordedLength(b) ? b.durationSeconds : 0) -
+        (hasRecordedLength(a) ? a.durationSeconds : 0),
     );
   return copy;
 }
@@ -852,7 +853,7 @@ function CallsLibraryContent({
   ) =>
     insight?.durationMs
       ? formatClock(insight.durationMs)
-      : hasDurationEstimate(submission)
+      : hasRecordedLength(submission)
         ? formatDuration(submission.durationSeconds)
         : "—";
   function togglePicked(id: string) {
@@ -900,12 +901,10 @@ function CallsLibraryContent({
       `sales-xray-calls-${new Date().toISOString().slice(0, 10)}.csv`,
     );
   }
-  // Bars compare estimated lengths against the longest loaded estimate.
+  // Bars compare each call's length with the longest loaded call.
   const longestSeconds = Math.max(
     0,
-    ...submissions
-      .filter(hasDurationEstimate)
-      .map((row) => row.durationSeconds),
+    ...submissions.filter(hasRecordedLength).map((row) => row.durationSeconds),
   );
   const selectedSubmission = selectedId
     ? submissions.find(
@@ -935,7 +934,7 @@ function CallsLibraryContent({
     : null;
   /* Home preview row (New analysis page): the legacy compact row, unchanged. */
   const previewRow = (submission: LibrarySubmission) => {
-    const estimated = hasDurationEstimate(submission);
+    const known = hasRecordedLength(submission);
     const tone = callTone(submission);
     const isOpening = openingId === submission.id;
     const isSelected =
@@ -970,18 +969,18 @@ function CallsLibraryContent({
           <span
             className="calls-library-duration"
             aria-label={
-              estimated
-                ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
+              known
+                ? `Length: ${formatDuration(submission.durationSeconds)}`
                 : "Length unavailable"
             }
             title={
-              estimated
-                ? "Estimated length, compared with the longest call in this list"
+              known
+                ? "Length, compared with the longest call in this list"
                 : undefined
             }
           >
             <span className="calls-library-duration-track" aria-hidden="true">
-              {estimated && longestSeconds > 0 ? (
+              {known && longestSeconds > 0 ? (
                 <span
                   className="calls-library-duration-fill"
                   style={{
@@ -991,7 +990,7 @@ function CallsLibraryContent({
               ) : null}
             </span>
             <span className="calls-library-duration-clock" aria-hidden="true">
-              {estimated ? formatDuration(submission.durationSeconds) : "—"}
+              {known ? formatDuration(submission.durationSeconds) : "—"}
             </span>
           </span>
           <span className="calls-library-state" data-tone={tone}>
@@ -1047,7 +1046,7 @@ function CallsLibraryContent({
 
   const now = new Date(loadedAt);
   const grouped = workspace && sort !== "longest";
-  /** Measured length when the report has it; otherwise the upload estimate. */
+  /** The length measured from the audio at upload. */
   const lengthCell = (
     submission: LibrarySubmission,
     insight: CallInsight | null,
@@ -1058,11 +1057,11 @@ function CallsLibraryContent({
           label: `Measured call duration: ${formatClock(insight.durationMs)}`,
           title: "Measured from the recording",
         }
-      : hasDurationEstimate(submission)
+      : hasRecordedLength(submission)
         ? {
-            text: `~${formatClock(submission.durationSeconds * 1000)}`,
-            label: `Estimated length: ${formatDuration(submission.durationSeconds)}`,
-            title: "Estimated at upload; the report measures it",
+            text: formatDuration(submission.durationSeconds),
+            label: `Length: ${formatDuration(submission.durationSeconds)}`,
+            title: "Measured from the audio at upload",
           }
         : { text: "", label: "Length unavailable", title: undefined };
 
@@ -1258,17 +1257,13 @@ function CallsLibraryContent({
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
   const weekAgo = loadedAt - 7 * 86_400_000;
-  // Call time: a measured length where a report gave one, otherwise the
-  // estimate reserved at upload, never passed off as measured.
-  const time = { measured: 0, measuredMs: 0, estimated: 0, estimatedMs: 0 };
+  // Call time: the length measured at upload, as Organisation counts it.
+  const time = { calls: 0, ms: 0 };
   for (const submission of submissions) {
     const measuredMs = workspace ? insightOf(submission.id)?.durationMs : null;
-    if (measuredMs) {
-      time.measured += 1;
-      time.measuredMs += measuredMs;
-    } else if (hasDurationEstimate(submission)) {
-      time.estimated += 1;
-      time.estimatedMs += submission.durationSeconds * 1000;
+    if (measuredMs || hasRecordedLength(submission)) {
+      time.calls += 1;
+      time.ms += measuredMs || submission.durationSeconds * 1000;
     }
   }
   // How the reports read so far say calls ended (their own labels).
@@ -1297,10 +1292,7 @@ function CallsLibraryContent({
         thisWeek: submissions.filter(
           (submission) => new Date(submission.createdAt).getTime() >= weekAgo,
         ).length,
-        time:
-          time.measured + time.estimated
-            ? `${time.estimated ? "~" : ""}${hoursLabel(time.measuredMs + time.estimatedMs)}`
-            : null,
+        time: time.calls ? hoursLabel(time.ms) : null,
       }
     : null;
   const waiting = [
@@ -1506,13 +1498,9 @@ function CallsLibraryContent({
                   )}
                 </dd>
                 <dd className={styles.kpiContext}>
-                  {time.measured && time.estimated
-                    ? `${time.measured} measured · ${time.estimated} estimated at upload`
-                    : time.measured
-                      ? `across ${time.measured} measured ${time.measured === 1 ? "call" : "calls"}`
-                      : time.estimated
-                        ? `estimated at upload, ${time.estimated} ${time.estimated === 1 ? "call" : "calls"}`
-                        : "Shown once calls have a length"}
+                  {time.calls
+                    ? `length of ${time.calls}${nextCursor ? "+" : ""} ${time.calls === 1 && !nextCursor ? "call" : "calls"}`
+                    : "Shown once calls have a length"}
                 </dd>
               </div>
               <div className={styles.kpi} id="metric-next-step">

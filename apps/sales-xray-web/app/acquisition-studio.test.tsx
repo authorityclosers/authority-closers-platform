@@ -626,12 +626,12 @@ it("shows real account recent calls on home and opens the selected saved report"
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
   // The library length is the reserved estimate: always "About".
-  expect(preview?.textContent).toContain("About 01:01");
+  expect(preview?.textContent).toContain("01:01");
   expect(
     preview
       ?.querySelector(".calls-library-duration")
       ?.getAttribute("aria-label"),
-  ).toBe("Estimated length: About 01:01");
+  ).toBe("Length: 01:01");
   expect(
     preview?.querySelector('a[href="/analysis/calls"]')?.textContent,
   ).toContain("View all calls");
