@@ -12,7 +12,8 @@ from starlette.requests import ClientDisconnect
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
-from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary
+from ac_platform.conversation_intelligence.prospect_fields import field_registry, validate_fields
+from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary, profile
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore, validated_tags
 from ac_platform.conversation_intelligence.prospect_suggestions import (
     SCHEMA,
@@ -62,6 +63,17 @@ class _EditTags(BaseModel):
         return validated_tags(value)
 
 
+class _EditFields(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(gt=0)
+    fields: dict[str, Any]
+
+    @field_validator("fields")
+    @classmethod
+    def validated_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return validate_fields(value)
+
+
 async def _body(request: Request, model: type[BaseModel]) -> Any:
     if request.headers.getlist("content-type") != ["application/json"]:
         raise HTTPException(415, "Use JSON to confirm a prospect.", headers=_PRIVATE)
@@ -69,7 +81,7 @@ async def _body(request: Request, model: type[BaseModel]) -> Any:
     try:
         async with asyncio.timeout(5):
             async for chunk in request.stream():
-                if len(raw) + len(chunk) > 2048:
+                if len(raw) + len(chunk) > (40_000 if model is _EditFields else 2048):
                     raise HTTPException(413, "The prospect request is too large.", headers=_PRIVATE)
                 raw.extend(chunk)
         return model.model_validate_json(bytes(raw))
@@ -175,7 +187,12 @@ def install_prospect_http(
         return await call_link(request, response, submission_id, operation="create")
 
     async def edit(
-        prospect_id: str, request: Request, response: Response, *, tags: bool = False
+        prospect_id: str,
+        request: Request,
+        response: Response,
+        *,
+        tags: bool = False,
+        fields: bool = False,
     ) -> Any:
         response.headers.update(_PRIVATE)
         if (
@@ -193,7 +210,7 @@ def install_prospect_http(
             require_safe_origin(request, settings)
         except DomainError:
             raise HTTPException(403, "Save from this Sales Xray page.", headers=_PRIVATE) from None
-        body = await _body(request, _EditTags if tags else _Edit)
+        body = await _body(request, _EditFields if fields else _EditTags if tags else _Edit)
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
                 actor = auth.resolved.actor
@@ -203,6 +220,15 @@ def install_prospect_http(
                 if sessions.tenant_id != actor.tenant_id:
                     raise RuntimeError("Prospect edits must use the selected workspace.")
                 store = ProspectStore(GuestOwnership(sessions))
+                if fields:
+                    row, history = await store.edit_fields_and_read(
+                        actor, target, fields=body.fields, expected_revision=body.expected_revision
+                    )
+                    return {
+                        "schema": "ac.sales-xray.prospect-fields/1",
+                        "field_registry": field_registry(),
+                        "prospect": profile(row, list(history)),
+                    }
                 if tags:
                     row = await store.edit_tags(
                         actor, target, tags=body.tags, expected_revision=body.expected_revision
@@ -236,6 +262,10 @@ def install_prospect_http(
     @router.patch("/{prospect_id}/tags")
     async def edit_tags(prospect_id: str, request: Request, response: Response) -> Any:
         return await edit(prospect_id, request, response, tags=True)
+
+    @router.put("/{prospect_id}/fields")
+    async def edit_fields(prospect_id: str, request: Request, response: Response) -> Any:
+        return await edit(prospect_id, request, response, fields=True)
 
     async def read(
         request: Request,

@@ -111,6 +111,14 @@ def test_name_edit_reads_concurrency_noop_rollback_and_constant_queries(
                     **before["prospect"],
                     "name": "Mehta %_ Updated",
                     "revision": 2,
+                    "profile_fields": {
+                        **before["prospect"]["profile_fields"],
+                        "name": {
+                            **before["prospect"]["profile_fields"]["name"],
+                            "value": {"kind": "text", "text": "Mehta %_ Updated"},
+                            "set_at": setup.clock[0].isoformat(),
+                        },
+                    },
                 }
                 assert after["prospect"]["contact"] is after["prospect"]["photo_url"] is None
                 for search, total in [("%_", 1), ("Mehta Example", 0)]:
