@@ -26,7 +26,9 @@ def main():
     with sync_playwright() as runtime:
         browser = runtime.chromium.launch(headless=True)
         for width, height in [(390, 844), (1440, 900)]:
-            page = browser.new_page(viewport={"width": width, "height": height})
+            page = browser.new_page(
+                viewport={"width": width, "height": height}, reduced_motion="reduce"
+            )
             page.on("pageerror", lambda e: failures.append(str(e)))
 
             def boundary(route):
@@ -71,6 +73,30 @@ def main():
                 "href", "/coaching?focus=human_connection_trust"
             )
             skills.first.locator("summary").click()
+            page.get_by_title("Coaching view", exact=True).click()
+            coaching = page.locator("[data-call-coaching]")
+            expect(coaching).to_be_visible()
+            expect(coaching).to_contain_text("Your next-call mission")
+            expect(
+                page.get_by_role("heading", name="Coaching for this call", exact=True)
+            ).to_be_visible()
+            expect(coaching.get_by_role("link", name="My coaching across calls")).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+            page.evaluate("window.scrollTo(0, 0)")
+            if width == 390:
+                assert page.get_by_title("Coaching view", exact=True).evaluate(
+                    "el => { const r = el.getBoundingClientRect(); "
+                    "return r.height >= 44 && r.width >= 44; }"
+                )
+                assert coaching.locator("button").evaluate_all(
+                    "items => items.every(el => el.getBoundingClientRect().height >= 44)"
+                )
+            for theme in ["light", "dark"]:
+                page.locator("html").evaluate(
+                    "(element, theme) => element.setAttribute('data-theme', theme)", theme
+                )
+                page.screenshot(path=str(OUT / f"call-coaching-{width}-{theme}.png"))
+            page.get_by_title("Story view", exact=True).click()
             page.evaluate("window.scrollTo(0, 0)")
             for theme in ["light", "dark"]:
                 page.locator("html").evaluate(
@@ -84,9 +110,23 @@ def main():
                     "pillars": 6,
                     "skills": 8,
                     "source_selection": True,
+                    "call_coaching": True,
                     "no_overflow": True,
                 }
             )
+            page.goto(f"{BASE}/review-fixture/report", wait_until="networkidle")
+            page.get_by_title("Tabbed view", exact=True).click()
+            page.get_by_role("tab", name="Prospect", exact=True).click()
+            signal = page.locator("[data-prospect-index]").first
+            expect(signal).to_be_visible()
+            assert signal.locator("[data-prospect-part]").count() == 3
+            expect(signal).to_contain_text("A guess, not a fact")
+            for theme in ["light", "dark"]:
+                page.locator("html").evaluate(
+                    "(element, theme) => element.setAttribute('data-theme', theme)", theme
+                )
+                page.screenshot(path=str(OUT / f"prospect-flat-{width}-{theme}.png"))
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             page.close()
         browser.close()
     assert not failures, failures

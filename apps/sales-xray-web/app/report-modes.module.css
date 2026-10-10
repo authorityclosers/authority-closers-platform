@@ -1171,10 +1171,10 @@
   color: var(--lx-teal);
   font: 600 14px/1.5 var(--lx-font-ui);
 }
-.workspace[data-view="story"] .sections {
+.workspace:is([data-view="story"], [data-view="coaching"]) .sections {
   gap: 16px;
 }
-.workspace[data-view="story"] .section {
+.workspace:is([data-view="story"], [data-view="coaching"]) .section {
   padding: 0;
   border: 0;
   background: transparent;
@@ -1182,5 +1182,43 @@
 @media (max-width: 600px) {
   .supplement > summary {
     min-height: 44px;
+  }
+}
+
+/* Section navigation keeps its own scroll row when the view picker grows. */
+@media (max-width: 760px) {
+  .navRow {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tabNavigation,
+  .contents {
+    flex: 1 0 100%;
+    width: 100%;
+    order: 2;
+  }
+  .toolbar {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .toolbar > button {
+    width: 44px;
+    min-height: 44px;
+    flex: none;
+  }
+  .toolbar > button:not(:first-child) {
+    margin-left: 0;
+  }
+  .textSizeGroup {
+    margin-left: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .textSizeGroup > button {
+    width: 44px;
+    min-height: 44px;
+  }
+  .textSizeGroup > button:not(:first-child) {
+    margin-left: 0;
   }
 }

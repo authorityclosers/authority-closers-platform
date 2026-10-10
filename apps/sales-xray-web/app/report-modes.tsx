@@ -43,13 +43,20 @@ import {
 } from "./report-document-data";
 import { ReportDocument } from "./report-document";
 import { reportScreenPanels } from "./report-pillar-screen";
+import { ReportCallCoaching } from "./report-call-coaching";
 import type { ReportEvidence } from "./report-contract";
 import type { ContextualSourcePlayback } from "./source-playback-context";
 import { OperationalPanel } from "./ui/operational-panel";
 import { useWorkspaceAccess } from "./workspace-access";
 
-type View = "reading" | "tabs" | "document" | "story";
-const VIEWS: readonly View[] = ["reading", "tabs", "document", "story"];
+type View = "reading" | "tabs" | "document" | "story" | "coaching";
+const VIEWS: readonly View[] = [
+  "reading",
+  "tabs",
+  "document",
+  "story",
+  "coaching",
+];
 type TextSize = "100" | "112.5" | "125";
 const TEXT_SIZE_KEY = "ac:report-text-size";
 const TEXT_SIZE_CHANGE = "ac:report-text-size-change";
@@ -90,6 +97,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   "next-call-plan": Lightbulb,
   transcript: BookOpen,
   "raw-data": TableProperties,
+  "call-coaching": Lightbulb,
 };
 
 function SectionIcon({ id }: { id: string }) {
@@ -447,7 +455,7 @@ function renderReportPanels(
           hidden={view === "tabs" && selected !== panel.id}
           tabIndex={view === "tabs" ? 0 : -1}
         >
-          {view === "story" ? (
+          {view === "story" || view === "coaching" ? (
             <OperationalPanel
               title={
                 <span id={`${id}-heading-${panel.id}`} tabIndex={-1}>
@@ -484,7 +492,7 @@ function renderReportPanels(
               </p>
             </div>
           )}
-          {view !== "story" && (
+          {view !== "story" && view !== "coaching" && (
             <div className={styles.reportContent}>{panel.content}</div>
           )}
         </section>
@@ -543,6 +551,22 @@ export function ReportModes({
           onSelectContextualPlayback,
           prospectControls,
         )
+      : [];
+  const coachingPanels: ReportPanel[] =
+    documentData?.report && !documentData.report.preview
+      ? [
+          {
+            id: "call-coaching",
+            label: "Coaching for this call",
+            content: (
+              <ReportCallCoaching
+                data={documentData}
+                onSelectEvidence={onSelectEvidence}
+                onSelectContextualPlayback={onSelectContextualPlayback}
+              />
+            ),
+          },
+        ]
       : [];
   // Keep the owner's existing report; new call-level detail expands within it.
   const enrichedPanels = suppliedPanels.map((panel) => {
@@ -715,7 +739,7 @@ export function ReportModes({
         documentData?.report &&
           new URLSearchParams(search).get("view") === "document"
           ? DOCUMENT_CHAPTERS.map((chapter) => ({ ...chapter, content: null }))
-          : [...enrichedPanels, ...storyPanels],
+          : [...enrichedPanels, ...storyPanels, ...coachingPanels],
         pathname,
       )
     : null;
@@ -726,10 +750,16 @@ export function ReportModes({
     ? (linked.view ?? preferredView)
     : (scopedLocal.view ?? preferredView);
   const view =
-    requestedView === "story" && !storyPanels.length
+    (requestedView === "story" && !storyPanels.length) ||
+    (requestedView === "coaching" && !coachingPanels.length)
       ? "reading"
       : requestedView;
-  const panels = view === "story" ? storyPanels : enrichedPanels;
+  const panels =
+    view === "story"
+      ? storyPanels
+      : view === "coaching"
+        ? coachingPanels
+        : enrichedPanels;
 
   const activePanels: ReportPanel[] =
     view === "document" && documentData?.report
@@ -875,9 +905,11 @@ export function ReportModes({
     const destinations =
       nextView === "story"
         ? storyPanels
-        : nextView === "document" && documentData?.report
-          ? DOCUMENT_CHAPTERS
-          : enrichedPanels;
+        : nextView === "coaching"
+          ? coachingPanels
+          : nextView === "document" && documentData?.report
+            ? DOCUMENT_CHAPTERS
+            : enrichedPanels;
     if (!destinations.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
@@ -992,9 +1024,11 @@ export function ReportModes({
     const destinations =
       nextView === "story"
         ? storyPanels
-        : nextView === "document" && documentData?.report
-          ? DOCUMENT_CHAPTERS
-          : enrichedPanels;
+        : nextView === "coaching"
+          ? coachingPanels
+          : nextView === "document" && documentData?.report
+            ? DOCUMENT_CHAPTERS
+            : enrichedPanels;
     const origin = view !== "tabs" ? currentSection : selected;
     const section = destinations.some((panel) => panel.id === origin)
       ? origin
@@ -1066,7 +1100,10 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      {(view === "reading" || view === "document" || view === "story") && (
+      {(view === "reading" ||
+        view === "document" ||
+        view === "story" ||
+        view === "coaching") && (
         <nav
           className={styles.contents}
           aria-label={label}
@@ -1143,6 +1180,17 @@ export function ReportModes({
           >
             <BookOpen aria-hidden="true" />
             <span className={styles.toolbarLabel}>Story</span>
+          </button>
+        )}
+        {coachingPanels.length > 0 && (
+          <button
+            type="button"
+            title="Coaching view"
+            aria-pressed={view === "coaching"}
+            onClick={() => changeView("coaching")}
+          >
+            <Lightbulb aria-hidden="true" />
+            <span className={styles.toolbarLabel}>Coaching</span>
           </button>
         )}
       </div>

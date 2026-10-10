@@ -113,6 +113,68 @@ const sections = () =>
   ].filter((section) => !section.closest("[data-reading-panels][hidden]"));
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 
+it("opens call Coaching from the retained report without loading another route", async () => {
+  const onSelect = vi.fn();
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ report: syntheticReport }}
+        onSelectEvidence={onSelect}
+      />,
+    ),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Coaching view"]')!
+      .click(),
+  );
+  expect(mode().dataset.view).toBe("coaching");
+  expect(window.location.search).toContain("view=coaching");
+  expect(window.location.search).toContain("section=call-coaching");
+  expect(sections()).toHaveLength(1);
+  expect(container.textContent).toContain("Coaching for this call");
+  expect(container.textContent).toContain(
+    syntheticReport.overview!.next_call_focus!.behavior,
+  );
+  const source = container.querySelector<HTMLButtonElement>(
+    "[data-call-coaching] button",
+  )!;
+  await act(async () => source.click());
+  expect(onSelect).toHaveBeenCalledWith(
+    syntheticReport.improvements[0].evidence[0],
+    "Coaching for this call",
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .click(),
+  );
+  expect(mode().dataset.view).toBe("tabs");
+  expect(sections()).toHaveLength(6);
+});
+
+it("renders an initially chosen Coaching view without a processing screen", () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/analysis?call=${call}&view=coaching&section=call-coaching`,
+  );
+  // The URL is a browser snapshot: server output stays at the existing default.
+  const html = renderToString(
+    <ReportModes
+      panels={panels()}
+      boundCallId={call}
+      documentData={{ report: syntheticReport }}
+      initialView="coaching"
+    />,
+  );
+  expect(html).toContain('data-view="coaching"');
+  expect(html).toContain("Coaching for this call");
+  expect(html).not.toContain("Working on your call");
+});
+
 it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
