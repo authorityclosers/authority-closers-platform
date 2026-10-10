@@ -1,5 +1,5 @@
-import { CoachingPage } from "./coaching-page";
+import { CoachingRoute } from "./coaching-page";
 
 export default function Page() {
-  return <CoachingPage />;
+  return <CoachingRoute />;
 }
