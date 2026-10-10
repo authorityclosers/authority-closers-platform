@@ -7,6 +7,7 @@ accepted as playback authority. No JSON/file path is returned to the browser.
 """
 
 import hashlib
+import json
 import os
 from collections.abc import Generator
 from functools import lru_cache
@@ -153,11 +154,16 @@ def _revision(file: Path) -> tuple[int, int, int, int, int]:
     return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
-@lru_cache(maxsize=100)
-def _read_topic(file: Path, revision: tuple[int, int, int, int, int]) -> DatasetTopic:
-    topic = DatasetTopic.model_validate_json(file.read_bytes())
+@lru_cache(maxsize=150)
+def _read_topic(file: Path, revision: tuple[int, int, int, int, int]) -> DatasetTopic | None:
+    raw = json.loads(file.read_bytes())
     if _revision(file) != revision:
         raise ValueError("Topic export changed during the read.")
+    # Draft exports share this directory. Cache their exclusion by current file
+    # revision rather than rebuilding 115 validation errors on every page read.
+    if not isinstance(raw, dict) or raw.get("schema") != "ac.sales-xray.coaching-dataset-topic/1":
+        return None
+    topic = DatasetTopic.model_validate(raw)
     topic.clips()
     return topic
 
@@ -166,14 +172,18 @@ def read_topics(root: Path = DATASET_ROOT) -> tuple[DatasetTopic, ...]:
     """Bounded local export read; a bad topic cannot crash account Coaching."""
     topics = []
     try:
-        files = sorted(root.glob("*.json"))[:100]
+        files = sorted(root.glob("*.json"))[:150]
         for file in files:
             try:
                 revision = _revision(file)
                 if file.is_symlink() or revision[2] > 512 * 1024:
                     continue
                 topic = _read_topic(file, revision)
-                if file.name != f"{topic.topic_id}.json" or narration_path(root, topic) is None:
+                if (
+                    topic is None
+                    or file.name != f"{topic.topic_id}.json"
+                    or narration_path(root, topic) is None
+                ):
                     continue
                 topics.append(topic)
             except (OSError, ValueError):

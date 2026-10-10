@@ -175,3 +175,10 @@ def test_dataset_sources_must_remain_labelled_neutral_placeholders(tmp_path: Pat
     raw["placeholder"] = False
     with pytest.raises(ValidationError):
         DatasetTopic.model_validate(raw)
+
+
+def test_full_115_topic_library_does_not_hide_the_last_reviewed_topic(tmp_path: Path):
+    record = topic(tmp_path)
+    for number in range(115):
+        (tmp_path / f"_draft-{number:03}.json").write_text("{}")
+    assert read_topics(tmp_path) == (record,)

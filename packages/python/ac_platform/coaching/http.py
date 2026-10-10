@@ -147,7 +147,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         # Full access is the explicit current Coaching entitlement policy.
         # Do not expose a future limited stream until durable credits/usage
         # enforcement exists. A browser timeupdate is not a paywall.
-        async with account_library(request, response):
+        async with account_library(request, response) as (library, actor):
+            now = await library.ownership.sessions._admit()
+            await library.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
             if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,99}", topic_id) or not re.fullmatch(
                 r"[0-9a-f]{64}", revision
             ):

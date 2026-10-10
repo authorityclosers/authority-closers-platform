@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from ac_platform.coaching.dataset import read_topics
+from ac_platform.tenancy.models import Tenant
 from tests.database.test_coaching_postgresql import draft_for, install
 from tests.database.test_coaching_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -86,6 +87,12 @@ def test_reviewed_placeholder_clips_same_request_and_private_source(
                 assert (await client.get(f"/v1/me/coaching/calls/{call}")).json()[
                     "media_clips"
                 ] == []
+                (root / f"{record.topic_id}.json").write_text(record.model_dump_json(by_alias=True))
+                async with setup.sessions() as database, database.begin():
+                    tenant = await database.get(Tenant, setup.state.tenant_id)
+                    tenant.status = "suspended"
+                denied = await client.get(source)
+                assert denied.status_code in {401, 403} and AUDIO not in denied.content
         finally:
             await setup.engine.dispose()
 
