@@ -160,9 +160,14 @@ export async function readAllowance(signal?: AbortSignal): Promise<Allowance> {
 export async function readRecentCalls(
   signal?: AbortSignal,
   limit = 5,
+  /** Ask for each call's owner (sent only to organisation owners/admins). */
+  owners = false,
 ): Promise<LibrarySubmission[]> {
   const page = parseSubmissionLibraryPage(
-    await acquisition("/submissions", { signal }),
+    await acquisition(
+      owners ? "/submissions?include_owners=true" : "/submissions",
+      { signal },
+    ),
   );
   return page.submissions.slice(0, limit);
 }

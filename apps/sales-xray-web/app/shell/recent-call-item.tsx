@@ -20,23 +20,37 @@ import type { ShellRecentCall } from "./shell-store";
 import styles from "./recent-call-item.module.css";
 
 const UNTITLED = "Untitled call";
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters =
+    parts.length > 1 ? parts[0][0] + parts[1][0] : name.trim().slice(0, 2);
+  return letters.toUpperCase() || "·";
+}
 const noSubscription = () => () => {};
 
 /**
  * One call in the sidebar's Recents: hover reveals a ⋯ menu (rename, copy
  * link, open in a new tab, delete). Rename opens an inline editor.
- * Rename and delete use the same owner-scoped API as the rest of the app.
+ * Only the call's owner may rename or delete it, so others' calls offer
+ * just the link actions.
  */
 export function RecentCallItem({
   call,
   href,
   onChange,
   index = 0,
+  mine = true,
+  owner = null,
 }: {
   call: ShellRecentCall;
   href: string;
   /** Position in the list, for the staggered entrance. */
   index?: number;
+  /** The viewer owns this call, so it may be renamed or deleted. */
+  mine?: boolean;
+  /** "You" or the owner's name, when the list can mix people. */
+  owner?: string | null;
   /** The updated call, or null once it has been deleted. */
   onChange: (next: ShellRecentCall | null) => void;
 }) {
@@ -176,6 +190,8 @@ export function RecentCallItem({
     }
   }
 
+  // Until it has a saved name, the date beside it says which call it is.
+  const shown = call.name === UNTITLED ? "Sales call" : call.name;
   return (
     <div
       ref={rowRef}
@@ -224,7 +240,9 @@ export function RecentCallItem({
         <Link
           href={href}
           className={styles.link}
-          title={call.status ? `${call.name} · ${call.status}` : call.name}
+          title={[shown, owner && !mine ? `${owner}'s call` : null, call.status]
+            .filter(Boolean)
+            .join(" · ")}
           data-current={current ? "" : undefined}
           aria-current={current ? "page" : undefined}
         >
@@ -243,8 +261,25 @@ export function RecentCallItem({
               <i />
             )}
           </span>
-          <span className={styles.name}>{call.name}</span>
+          <span
+            className={styles.name}
+            data-unnamed={call.name === UNTITLED ? "" : undefined}
+          >
+            {shown}
+          </span>
           {call.status && <span className={styles.srOnly}>{call.status}</span>}
+          {owner ? (
+            <span
+              className={styles.owner}
+              data-mine={mine ? "" : undefined}
+              title={mine ? "Your call" : `${owner}'s call`}
+            >
+              <span aria-hidden="true">{mine ? "You" : initials(owner)}</span>
+              <span className={styles.srOnly}>
+                {mine ? "Your call" : `${owner}'s call`}
+              </span>
+            </span>
+          ) : null}
           <span className={styles.date}>{call.date}</span>
         </Link>
       )}
@@ -253,7 +288,7 @@ export function RecentCallItem({
           ref={moreRef}
           type="button"
           className={styles.more}
-          aria-label={`More options for ${call.name}`}
+          aria-label={`More options for ${shown}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           onClick={() => {
@@ -266,7 +301,7 @@ export function RecentCallItem({
         </button>
       )}
       {menuOpen && (
-        <div className={styles.menu} role="menu" aria-label={call.name}>
+        <div className={styles.menu} role="menu" aria-label={shown}>
           {confirmingDelete ? (
             <div className={styles.confirm}>
               <p>Delete this call and its report?</p>
@@ -292,10 +327,12 @@ export function RecentCallItem({
             </div>
           ) : (
             <>
-              <button type="button" role="menuitem" onClick={startRename}>
-                <Pencil size={14} aria-hidden="true" />
-                Rename
-              </button>
+              {mine ? (
+                <button type="button" role="menuitem" onClick={startRename}>
+                  <Pencil size={14} aria-hidden="true" />
+                  Rename
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
@@ -314,16 +351,20 @@ export function RecentCallItem({
                 <ExternalLink size={14} aria-hidden="true" />
                 Open in new tab
               </a>
-              <span className={styles.separator} aria-hidden="true" />
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.dangerItem}
-                onClick={() => setConfirmingDelete(true)}
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                Delete…
-              </button>
+              {mine ? (
+                <>
+                  <span className={styles.separator} aria-hidden="true" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.dangerItem}
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete…
+                  </button>
+                </>
+              ) : null}
             </>
           )}
         </div>

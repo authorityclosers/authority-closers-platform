@@ -18,6 +18,17 @@ import { parseCallRecord, type CallRecord } from "./call-record-contract";
 
 export type CallMoment = { label: string; startMs: number };
 
+/** The report Overview's own words for each outcome kind it may give. */
+export const OUTCOME_LABEL = {
+  follow_up: "Next step agreed",
+  closed: "Deal closed",
+  future_date: "Call back later",
+  unclear: "No clear next step",
+  no_sale: "No sale",
+  disqualified: "Not a fit",
+} as const;
+export type OutcomeKind = keyof typeof OUTCOME_LABEL;
+
 export type CallInsight = {
   durationMs: number | null;
   speakers: { share: number; questions: number }[];
@@ -33,6 +44,8 @@ export type CallInsight = {
   nextFocus: string | null;
   strengths: number | null;
   missed: number | null;
+  /** How the report says the call ended; null when it doesn't say. */
+  outcome: OutcomeKind | null;
   moments: CallMoment[];
 };
 
@@ -90,6 +103,11 @@ function firstStart(value: unknown): number | null {
   }
   return null;
 }
+
+const outcomeOf = (kind: unknown): OutcomeKind | null =>
+  typeof kind === "string" && Object.hasOwn(OUTCOME_LABEL, kind)
+    ? (kind as OutcomeKind)
+    : null;
 
 export function extractInsight(
   callRecord: unknown,
@@ -168,6 +186,7 @@ export function extractInsight(
     missed: Array.isArray(content.missed_opportunities)
       ? content.missed_opportunities.length
       : null,
+    outcome: outcomeOf(obj(overview.outcome).kind),
     moments,
   };
 }

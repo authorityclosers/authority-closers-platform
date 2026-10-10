@@ -1,8 +1,8 @@
 "use client";
 
-import { AlertCircle, Clock, FolderOpen, Plus } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
   AcquisitionError,
@@ -29,18 +29,15 @@ import {
 import { DashboardGreeting } from "./dashboard-greeting";
 import {
   AttentionAction,
-  MonthWaveSkeleton,
-  StatusRingSkeleton,
+  DayBars,
+  DayBarsSkeleton,
   MinutesRing,
   MinutesUsed,
-  MonthWave,
-  ShareRing,
-  StatusRing,
-  TrendChip,
+  StatusSplit,
+  StatusSplitSkeleton,
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
-import { OperationalEmpty, OperationalPanel } from "../ui/operational-panel";
-import { MetricBand, MetricCard } from "../ui/metric-card";
+import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -106,36 +103,50 @@ function DashboardDetails() {
     ReadState<LibrarySubmission[]>
   >({ status: "loading" });
 
+  // A cancelled read (unmount, or a re-run of the effect) must not paint
+  // "Not loaded": only the live request may change a panel.
   const loadSummary = useCallback((signal?: AbortSignal) => {
     readCallSummary(signal)
-      .then((value) => setSummaryState({ status: "ready", value }))
-      .catch((error) =>
-        setSummaryState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setSummaryState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setSummaryState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadActivity = useCallback((signal?: AbortSignal) => {
     readCallActivity(signal)
-      .then((value) => setActivityState({ status: "ready", value }))
-      .catch((error) =>
-        setActivityState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setActivityState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setActivityState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadAllowance = useCallback((signal?: AbortSignal) => {
     readAllowance(signal)
-      .then((value) => setAllowanceState({ status: "ready", value }))
-      .catch((error) =>
-        setAllowanceState({ status: "error", forbidden: isForbidden(error) }),
-      );
+      .then((value) => {
+        if (!signal?.aborted) setAllowanceState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setAllowanceState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   const loadRecent = useCallback((signal?: AbortSignal) => {
-    readRecentCalls(signal)
-      .then((value) => setRecentState({ status: "ready", value }))
-      .catch((error) =>
-        setRecentState({ status: "error", forbidden: isForbidden(error) }),
-      );
+    readRecentCalls(signal, 5, true)
+      .then((value) => {
+        if (!signal?.aborted) setRecentState({ status: "ready", value });
+      })
+      .catch((error) => {
+        if (!signal?.aborted)
+          setRecentState({ status: "error", forbidden: isForbidden(error) });
+      });
   }, []);
 
   useEffect(() => {
@@ -146,6 +157,29 @@ function DashboardDetails() {
     loadRecent(controller.signal);
     return () => controller.abort();
   }, [loadSummary, loadActivity, loadAllowance, loadRecent]);
+
+  // A rename in the sidebar or a report shows in Recent calls at once.
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      setRecentState((state) =>
+        state.status === "ready"
+          ? {
+              ...state,
+              value: state.value.map((call) =>
+                call.id === submissionId &&
+                (!call.label || call.label.revision < label.revision)
+                  ? { ...call, label }
+                  : call,
+              ),
+            }
+          : state,
+      );
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
 
   const summary = summaryState.status === "ready" ? summaryState.value : null;
   const activity =
@@ -202,232 +236,195 @@ function DashboardDetails() {
     );
   }
 
+  const shell = getShellState();
+  const workspaceName =
+    shell.workspaces.find(
+      (item) => item.tenant_id === access?.context?.tenantId,
+    )?.name ?? null;
+  // Owners and admins: saved-call counts and the list cover the whole team,
+  // while analysed-per-day is the viewer's own. Each label says which.
+  const current = access?.workspaces?.find(
+    (item) => item.tenant_id === access?.context?.tenantId,
+  );
+  const team =
+    current?.kind === "organisation" &&
+    (current.role === "owner" || current.role === "admin");
+  const settled =
+    summaryState.status !== "loading" &&
+    activityState.status !== "loading" &&
+    recentState.status === "ready";
+  const showGetStarted = settled && !failing && isAccountEmpty;
+  const allowance =
+    allowanceState.status === "ready" ? allowanceState.value : null;
+
   return (
     <LightboxShell
       active="dashboard"
       authenticated={access?.authenticated === true}
       homeHref="/dashboard"
     >
-      <div className={styles.dashboardRoot}>
-        {/* Top greeting / actions */}
-        <div className={styles.dashboardHeader}>
-          <DashboardGreeting />
-          <Link href="/analysis/new" className={styles.primaryAction}>
-            <Plus size={16} aria-hidden="true" />
-            <span>New analysis</span>
-          </Link>
-        </div>
-
-        {/* 1. Metric band with explicit units and context */}
-        <MetricBand label="Operational call and allowance summary" columns={4}>
-          <MetricCard
-            id="metric-analysed"
-            label="Calls analysed"
-            value={activity?.analysedLast30Days}
-            unit={activity !== null ? "calls" : undefined}
-            context={
-              activityState.status === "loading"
-                ? undefined
-                : activityState.status === "error"
-                  ? undefined
-                  : activity === null
-                    ? "Not available yet"
-                    : "Last 30 days, India time"
-            }
-            status={activityState.status}
-            icon={FolderOpen}
-            iconTone="teal"
-            aside={
-              trend ? (
-                <TrendChip direction={trend.direction} text={trend.text} />
-              ) : null
+      <div className={styles.page}>
+        {/* One steady heading; New analysis lives in the shell, not here too. */}
+        <header className={styles.header}>
+          <DashboardGreeting
+            subtitle={
+              workspaceName
+                ? `${workspaceName} · last 30 days, India time`
+                : "Last 30 days, India time"
             }
           />
+        </header>
 
-          <MetricCard
-            id="metric-reports-ready"
-            label="Reports ready"
-            value={summary?.completed}
-            unit={summary !== null ? "reports" : undefined}
-            context={
-              summaryState.status === "loading"
-                ? undefined
-                : summaryState.status === "error"
-                  ? undefined
-                  : summary === null
-                    ? "Not available yet"
-                    : `of ${summary.total} saved calls`
-            }
-            status={summaryState.status}
-            icon={FolderOpen}
-            aside={
-              summary && summary.total > 0 ? (
-                <ShareRing part={summary.completed} total={summary.total} />
-              ) : null
-            }
-          />
-
-          <MetricCard
-            id="metric-minutes-left"
-            label="Minutes left"
-            value={
-              allowanceState.status === "ready"
-                ? minutesLeft(allowanceState.value).value
-                : null
-            }
-            context={
-              allowanceState.status === "loading"
-                ? undefined
-                : allowanceState.status === "error"
-                  ? undefined
-                  : minutesLeft(allowanceState.value).subtext
-            }
-            status={allowanceState.status}
-            icon={
-              allowanceState.status === "ready" &&
-              !allowanceState.value.unlimited
-                ? undefined
-                : Clock
-            }
-            visual={
-              allowanceState.status === "ready" &&
-              !allowanceState.value.unlimited ? (
-                <MinutesRing allowance={allowanceState.value} />
-              ) : undefined
-            }
-            aside={
-              allowanceState.status === "ready" ? (
-                <MinutesUsed allowance={allowanceState.value} />
-              ) : null
-            }
-          />
-
-          <MetricCard
-            id="metric-needs-attention"
-            label="Needs attention"
-            value={summary?.needsAttention}
-            unit={summary !== null ? "calls" : undefined}
-            context={
-              summaryState.status === "loading"
-                ? undefined
-                : summaryState.status === "error"
-                  ? undefined
-                  : summary === null
-                    ? "Not available yet"
-                    : "Calls to check"
-            }
-            status={summaryState.status}
-            icon={AlertCircle}
-            iconTone="amber"
-            aside={
-              summary ? (
-                <AttentionAction count={summary.needsAttention} />
-              ) : null
-            }
-          />
-        </MetricBand>
-
-        {/* 2. Left 2/3 Calls analysed per day + Right 1/3 Call status */}
-        <div className={styles.analyticsGrid}>
-          {/* Left 2/3: Calls analysed per day */}
-          <OperationalPanel
-            id="panel-last-30-days"
-            title="Last 30 days"
-            sub="Calls and call time analysed each day, India time"
-            className={styles.chartCard}
-          >
-            {activityState.status === "loading" ? (
-              <MonthWaveSkeleton />
-            ) : activityState.status === "error" ? (
-              <MonthWaveSkeleton />
-            ) : activity === null ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>
-                  Not available yet.
-                </span>
-              </div>
-            ) : activityAllZero ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>
-                  No analysed calls in the last 30 days.
-                </span>
-              </div>
-            ) : (
-              <MonthWave days={activity.days} />
-            )}
-          </OperationalPanel>
-
-          {/* Right 1/3: Call status */}
-          <OperationalPanel
-            id="panel-call-status"
-            title="Call status"
-            sub="Where your saved calls are now"
-            className={styles.skillsCard}
-          >
-            {summaryState.status === "loading" ? (
-              <StatusRingSkeleton />
-            ) : summaryState.status === "error" ? (
-              <StatusRingSkeleton />
-            ) : summary === null ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>
-                  Not available yet.
-                </span>
-              </div>
-            ) : summary.total === 0 ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>
-                  No saved calls yet.
-                </span>
-              </div>
-            ) : (
-              <StatusRing summary={summary} />
-            )}
-          </OperationalPanel>
-        </div>
-
-        {/* 3. Full width Recent Calls Table / Empty State */}
-        <OperationalPanel
-          id="panel-recent-calls"
-          title="Recent calls"
-          sub="Latest processed audio recordings and evaluations"
-          action={
-            recent && recent.length > 0
-              ? {
-                  href: "/analysis/calls",
-                  label: "View all calls",
-                  badge: hiddenRecent > 0 ? `+${hiddenRecent}` : undefined,
+        {showGetStarted ? (
+          <GetStarted allowance={allowance} />
+        ) : (
+          <>
+            <dl className={styles.strip} aria-label="Dashboard figures">
+              <Figure
+                id="metric-analysed"
+                label={team ? "Your calls analysed" : "Calls analysed"}
+                status={activityState.status}
+                value={activity?.analysedLast30Days}
+                context={
+                  activity === null
+                    ? null
+                    : trend
+                      ? trend.text
+                      : "in the last 30 days"
                 }
-              : undefined
-          }
-          className={styles.tableCard}
-        >
-          {recentState.status === "loading" ? (
-            <RecentCallsSkeleton />
-          ) : recentState.status === "error" ? (
-            <RecentCallsSkeleton />
-          ) : recent === null || recent.length === 0 ? (
-            <OperationalEmpty
-              icon={FolderOpen}
-              title={
-                isAccountEmpty ? "Analyse your first call" : "No calls yet"
-              }
-              description={
-                isAccountEmpty
-                  ? "Upload a sales call to start your analysis."
-                  : "No calls yet"
-              }
-              action={
-                <Link href="/analysis/new" className={styles.primaryAction}>
-                  <Plus size={16} aria-hidden="true" />
-                  <span>New analysis</span>
-                </Link>
-              }
-            />
-          ) : (
-            <RecentCallsList calls={recent} onHiddenChange={setHiddenRecent} />
-          )}
-        </OperationalPanel>
+                tone={trend?.direction}
+              />
+              <Figure
+                id="metric-reports-ready"
+                label="Reports ready"
+                status={summaryState.status}
+                value={summary?.completed}
+                context={
+                  summary === null
+                    ? null
+                    : `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+                }
+              />
+              <Figure
+                id="metric-minutes-left"
+                label="Minutes left"
+                status={allowanceState.status}
+                value={allowance ? minutesLeft(allowance).value : null}
+                context={
+                  allowance ? (
+                    <>
+                      {minutesLeft(allowance).subtext}
+                      {allowance.unlimited ? null : (
+                        <span className={styles.used}>
+                          {" · "}
+                          <MinutesUsed allowance={allowance} />
+                        </span>
+                      )}
+                    </>
+                  ) : null
+                }
+                accessory={
+                  allowance ? <MinutesRing allowance={allowance} /> : null
+                }
+              />
+              <Figure
+                id="metric-needs-attention"
+                label="Needs attention"
+                status={summaryState.status}
+                value={summary?.needsAttention}
+                context={
+                  summary === null ? null : (
+                    <AttentionAction count={summary.needsAttention} />
+                  )
+                }
+              />
+            </dl>
+
+            <div className={styles.columns}>
+              <section
+                className={styles.section}
+                aria-labelledby="panel-last-30-days"
+              >
+                <div className={styles.sectionHead}>
+                  <h2 id="panel-last-30-days">
+                    {team
+                      ? "Your calls analysed per day"
+                      : "Calls analysed per day"}
+                  </h2>
+                  <span>Last 30 days, India time</span>
+                </div>
+                <div className={styles.surface}>
+                  {activityState.status === "loading" ? (
+                    <DayBarsSkeleton />
+                  ) : activityState.status === "error" ? (
+                    <NotLoaded />
+                  ) : activity === null ? (
+                    <Quiet text="Daily numbers are not available yet." />
+                  ) : activityAllZero ? (
+                    <Quiet text="No calls analysed in the last 30 days." />
+                  ) : (
+                    <DayBars days={activity.days} />
+                  )}
+                </div>
+              </section>
+
+              <section
+                className={styles.section}
+                aria-labelledby="panel-call-status"
+              >
+                <div className={styles.sectionHead}>
+                  <h2 id="panel-call-status">Call status</h2>
+                  <span>
+                    {team ? "Everyone in the organisation" : "All saved calls"}
+                  </span>
+                </div>
+                <div className={styles.surface}>
+                  {summaryState.status === "loading" ? (
+                    <StatusSplitSkeleton />
+                  ) : summaryState.status === "error" ? (
+                    <NotLoaded />
+                  ) : summary === null ? (
+                    <Quiet text="Call status is not available yet." />
+                  ) : summary.total === 0 ? (
+                    <Quiet text="No saved calls yet." />
+                  ) : (
+                    <StatusSplit summary={summary} />
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <section
+              className={styles.section}
+              aria-labelledby="panel-recent-calls"
+            >
+              <div className={styles.sectionHead}>
+                <h2 id="panel-recent-calls">Recent calls</h2>
+                {recent && recent.length > 0 ? (
+                  <Link className={styles.textLink} href="/analysis/calls">
+                    View all calls
+                    {hiddenRecent > 0 ? ` (+${hiddenRecent})` : ""}
+                  </Link>
+                ) : null}
+              </div>
+              <div className={styles.surface} data-flush="">
+                {recentState.status === "loading" ? (
+                  <RecentCallsSkeleton />
+                ) : recentState.status === "error" ? (
+                  <NotLoaded />
+                ) : recent === null || recent.length === 0 ? (
+                  <Quiet text="No calls yet." />
+                ) : (
+                  <RecentCallsList
+                    calls={recent}
+                    viewerId={access?.context?.personId ?? null}
+                    onHiddenChange={setHiddenRecent}
+                  />
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </div>
       {failing ? (
         <ConnectionNotice
@@ -441,5 +438,114 @@ function DashboardDetails() {
         />
       ) : null}
     </LightboxShell>
+  );
+}
+
+/** One figure: label, value (or why there is none), one line of context. */
+function Figure({
+  id,
+  label,
+  status,
+  value,
+  context,
+  accessory,
+  tone,
+}: {
+  id: string;
+  label: string;
+  status: "loading" | "ready" | "error";
+  value: number | string | null | undefined;
+  context: ReactNode;
+  accessory?: ReactNode;
+  tone?: "up" | "down" | "flat";
+}) {
+  return (
+    <div className={styles.kpi} id={id}>
+      <dt>{label}</dt>
+      <dd>
+        {status === "loading" ? (
+          <i className={styles.skeletonValue} aria-hidden="true" />
+        ) : status === "error" ? (
+          <span className={styles.unknown}>Not loaded</span>
+        ) : value === null || value === undefined ? (
+          <span className={styles.unknown}>Not available yet</span>
+        ) : (
+          <b>{value}</b>
+        )}
+        {status === "ready" ? accessory : null}
+      </dd>
+      <dd className={styles.kpiContext} data-tone={tone}>
+        {status === "loading" ? (
+          <i className={styles.skeletonContext} aria-hidden="true" />
+        ) : status === "ready" ? (
+          context
+        ) : null}
+      </dd>
+    </div>
+  );
+}
+
+function Quiet({ text }: { text: string }) {
+  return <p className={styles.quiet}>{text}</p>;
+}
+
+/** A failed read says so in place; the corner card offers the retry. */
+function NotLoaded() {
+  return (
+    <p className={styles.quiet}>
+      <AlertCircle size={14} aria-hidden="true" /> Not loaded. It retries by
+      itself.
+    </p>
+  );
+}
+
+/** A brand-new account: one panel in place of zero figures and empty charts. */
+function GetStarted({ allowance }: { allowance: Allowance | null }) {
+  return (
+    <section className={styles.getStarted} aria-labelledby="get-started">
+      <div className={styles.getStartedCopy}>
+        <h2 id="get-started">Analyse your first call</h2>
+        <p>
+          Upload a recording of a real sales call. Sales Xray transcribes it and
+          writes a report on what happened and what to do next.
+        </p>
+      </div>
+      <ol className={styles.steps}>
+        <li>
+          <b>1</b>
+          <span>
+            <strong>Upload a recording</strong>
+            An audio file from your phone or computer.
+          </span>
+        </li>
+        <li>
+          <b>2</b>
+          <span>
+            <strong>We analyse it</strong>
+            The call is transcribed and read for you.
+          </span>
+        </li>
+        <li>
+          <b>3</b>
+          <span>
+            <strong>Read your report</strong>
+            What happened on the call and the next step.
+          </span>
+        </li>
+      </ol>
+      <div className={styles.getStartedFoot}>
+        <Link className={styles.primaryAction} href="/analysis/new">
+          <Plus size={16} aria-hidden="true" />
+          <span>Analyse a call</span>
+        </Link>
+        {allowance ? (
+          <span className={styles.muted}>
+            {allowance.unlimited
+              ? "Unlimited analysis time"
+              : `${minutesLeft(allowance).value} ${minutesLeft(allowance).subtext}`}
+          </span>
+        ) : null}
+      </div>
+    </section>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { Building2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -21,13 +20,15 @@ import styles from "./organisation.module.css";
 const fields = [
   ["name", "Company name", 80],
   ["legal_name", "Legal name", 200],
-  ["gstin", "GSTIN", 32],
-  ["address", "Address", 1000],
   ["industry", "Industry", 100],
   ["team_size", "Team size", 80],
-  ["website", "Website", 500],
+  ["gstin", "GSTIN", 32],
   ["city", "City", 100],
+  ["website", "Website", 500],
+  ["address", "Address", 1000],
 ] as const;
+// Long values take the full row so the two columns always line up.
+const WIDE = new Set<string>(["website", "address"]);
 type Props = {
   tenantId: string | null;
   role: OrgRole | null;
@@ -41,21 +42,24 @@ type Props = {
 export function CompanyDetailsPanel(props: Props) {
   if (!props.authenticated || !props.tenantId) return null;
   return (
-    <section className={styles.card}>
-      <h2>
-        <Building2 size={16} aria-hidden="true" /> Company details
-      </h2>
-      {props.role !== "owner" && props.role !== "admin" ? (
-        <p className={styles.cardNote}>
-          Only owners and admins can view and edit company details.
-        </p>
-      ) : (
-        <DetailsEditor
-          key={`${props.tenantId}:${props.role}`}
-          {...props}
-          tenantId={props.tenantId}
-        />
-      )}
+    <section className={styles.setting} aria-labelledby="org-details">
+      <div className={styles.settingIntro}>
+        <h2 id="org-details">Company details</h2>
+        <p>Your company&apos;s name and registration details.</p>
+      </div>
+      <div className={styles.settingBody}>
+        {props.role !== "owner" && props.role !== "admin" ? (
+          <p className={styles.muted}>
+            Only owners and admins can view and edit company details.
+          </p>
+        ) : (
+          <DetailsEditor
+            key={`${props.tenantId}:${props.role}`}
+            {...props}
+            tenantId={props.tenantId}
+          />
+        )}
+      </div>
     </section>
   );
 }
@@ -172,16 +176,28 @@ function DetailsEditor({
 
   if (denied)
     return (
-      <p className={styles.cardNote}>
+      <p className={styles.muted}>
         Company details are unavailable. Your access has changed.
       </p>
     );
   if (!draft)
     return (
-      <div>
-        <p className={styles.cardNote} role={readFailed ? "alert" : "status"}>
-          {readFailed ? message : "Loading company details…"}
-        </p>
+      <div className={styles.formState}>
+        {readFailed ? (
+          <p className={styles.muted} role="alert">
+            {message}
+          </p>
+        ) : (
+          <div
+            className={styles.formSkeleton}
+            role="status"
+            aria-label="Loading company details…"
+          >
+            {fields.map(([key]) => (
+              <span key={key} data-wide={WIDE.has(key) ? "" : undefined} />
+            ))}
+          </div>
+        )}
         {readFailed ? (
           <button
             type="button"
@@ -205,7 +221,7 @@ function DetailsEditor({
       aria-label="Company details"
     >
       {fields.map(([key, label, limit]) => (
-        <label key={key}>
+        <label key={key} data-wide={WIDE.has(key) ? "" : undefined}>
           <span>{label}</span>
           <input
             name={key}
@@ -223,13 +239,14 @@ function DetailsEditor({
           />
         </label>
       ))}
-      <div className={`${styles.saveRow} ${styles.detailsActions}`}>
+      <div className={`${styles.saveRow} ${styles.formActions}`}>
         <button type="submit" className={styles.primary} disabled={saving}>
           {saving ? "Saving…" : conflict ? "Retry save" : "Save details"}
         </button>
         <small
           className={styles.hint}
           role={message && message !== "Saved." ? "alert" : "status"}
+          data-tone={message && message !== "Saved." ? "error" : undefined}
         >
           {message}
         </small>

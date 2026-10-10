@@ -159,7 +159,11 @@ const smallTextPairs: [string, string][] = [
 
 describe("Lightbox token derivative", () => {
   it("keeps every source token except the documented corrections", () => {
-    const changedLight = new Map([["muted-2", "#646d7f"]]);
+    const changedLight = new Map([
+      ["muted-2", "#646d7f"],
+      // r17 phone shell: a 56 px tab bar, as in Pulse (was 76 px).
+      ["bottom-nav-h", "56px"],
+    ]);
     const addedLight = new Set([
       "strength-ink",
       "objection-ink",

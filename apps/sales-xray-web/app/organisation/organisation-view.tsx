@@ -1,37 +1,33 @@
 "use client";
 
 import {
-  Activity,
   Building2,
-  Coins,
+  ChevronDown,
   Crown,
-  Gauge,
-  Globe,
-  Mail,
   Plus,
   RefreshCw,
-  ShieldCheck,
   Trash2,
   UserPlus,
-  Users,
-  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
-  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from "react";
 
-import { callHref, type Allowance } from "../acquisition-client";
+import { callHref } from "../acquisition-client";
+import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
+import { unnamedCallName } from "../call-label";
 import { AcquisitionShell } from "../acquisition-shell";
-import { callDate } from "../call-status";
-import { readAllowance } from "../dashboard/dashboard-data";
+import { callDate, callTone, submissionState } from "../call-status";
 import { formatClock } from "../lightbox/time";
+import { newCallHref } from "../new-call-navigation";
+import { dismissNotice, notify } from "../notice-center";
 import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
@@ -57,6 +53,8 @@ import {
   type Organisation,
 } from "./organisation-api";
 import styles from "./organisation.module.css";
+import { ReceiptActivitySection } from "./receipt-activity";
+import { TeamPatternsSection } from "./team-patterns-section";
 
 type Base =
   | { status: "loading" }
@@ -74,28 +72,48 @@ type Live<T> =
   | { status: "ready"; value: T };
 
 const TABS = [
-  { id: "overview", label: "Overview", icon: Building2 },
-  { id: "members", label: "Members", icon: Users },
-  { id: "activity", label: "Activity", icon: Activity },
-  { id: "teams", label: "Teams", icon: UsersRound },
-  { id: "usage", label: "Usage & credits", icon: Gauge },
-  { id: "company", label: "Company", icon: ShieldCheck },
+  { id: "overview", label: "Overview" },
+  { id: "members", label: "Members" },
+  { id: "company", label: "Company" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+const isTab = (value: string | null): value is Tab =>
+  TABS.some((item) => item.id === value);
 
-const NOT_LIVE = "Coming soon.";
 const ROLES: OrgRole[] = ["owner", "admin", "member"];
 const ROLE_LABEL: Record<OrgRole, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
 };
+const CALLS_SHOWN = 8;
+const WEEK_MS = 7 * 86_400_000;
+const ORG_NOTICE = "organisation-load";
+const ACTION_NOTICE = "organisation-action";
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return (
     parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)
   ).toUpperCase();
+}
+
+/** Reserved test domains (RFC 2606/6761) only; never guessed from names. */
+export function isTestEmail(email: string | null) {
+  const domain = email?.split("@")[1]?.toLowerCase() ?? "";
+  return (
+    /\.(test|example|invalid|localhost)$/.test(domain) ||
+    /^example\.(com|net|org)$/.test(domain)
+  );
+}
+
+const memberName = (member: OrgMember) =>
+  member.name || member.email || "Unnamed member";
+
+/** Whole minutes; a call shorter than a minute is "<1", not zero. */
+function minutes(value: number) {
+  if (value > 0 && value < 1) return "<1";
+  return Math.round(value).toLocaleString();
 }
 
 async function readBase(signal: AbortSignal): Promise<Base> {
@@ -142,55 +160,28 @@ function useLive<T>(
   ];
 }
 
-function Pending({
-  icon,
-  title,
-  text,
-  note = NOT_LIVE,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-  note?: string;
-}) {
-  return (
-    <div className={styles.pending}>
-      <span className={styles.pendingIcon} aria-hidden="true">
-        {icon}
-      </span>
-      <b>{title}</b>
-      <p>{text}</p>
-      <small>{note}</small>
-    </div>
-  );
+function initialTab(): Tab {
+  if (typeof window === "undefined") return "overview";
+  const value = new URLSearchParams(window.location.search).get("tab");
+  return isTab(value) ? value : "overview";
 }
 
-function Stat({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: ReactNode;
-  note?: string;
-}) {
-  return (
-    <div className={styles.stat} data-pending={note ? "" : undefined}>
-      <span>{label}</span>
-      <b>{value}</b>
-      {note ? <small>{note}</small> : null}
-    </div>
-  );
-}
-
-/** Company, members, company-wide activity, teams, usage and credits. */
+/** Company, members and the organisation's calls in the last 30 days. */
 export function OrganisationView() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   const [base, setBase] = useState<Base>({ status: "loading" });
-  const [allowance, setAllowance] = useState<Allowance | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [baseAttempt, setBaseAttempt] = useState(0);
+  const [tab, setTabState] = useState<Tab>(initialTab);
   const [missing, setMissing] = useState(false);
+
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next);
+    const url = new URL(window.location.href);
+    if (next === "overview") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -202,11 +193,13 @@ export function OrganisationView() {
       .catch(() => {
         if (!controller.signal.aborted) setBase({ status: "error" });
       });
-    readAllowance(controller.signal)
-      .then(setAllowance)
-      .catch(() => {});
     return () => controller.abort();
-  }, [authenticated, access?.context?.tenantId, access?.context?.sessionId]);
+  }, [
+    authenticated,
+    access?.context?.tenantId,
+    access?.context?.sessionId,
+    baseAttempt,
+  ]);
 
   const current =
     base.status === "ready"
@@ -234,7 +227,42 @@ export function OrganisationView() {
     isOrganisation && tenantId !== null,
   );
   const [members, reloadMembers] = useLive(readMembers, isOrganisation);
-  const [activity] = useLive(readActivity, isOrganisation);
+  const [readActivityState, reloadActivity] = useLive(
+    readActivity,
+    isOrganisation,
+  );
+  // A rename in the sidebar or a report shows here at once.
+  const [renamed, setRenamed] = useState(
+    () => new Map<string, string | null>(),
+  );
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      setRenamed((current) =>
+        new Map(current).set(submissionId, label.displayName),
+      );
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
+  const activity = useMemo<Live<OrgActivity>>(
+    () =>
+      readActivityState.status === "ready" && renamed.size
+        ? {
+            ...readActivityState,
+            value: {
+              ...readActivityState.value,
+              calls: readActivityState.value.calls.map((call) =>
+                renamed.has(call.id)
+                  ? { ...call, label: renamed.get(call.id) ?? null }
+                  : call,
+              ),
+            },
+          }
+        : readActivityState,
+    [readActivityState, renamed],
+  );
   const live = org.status === "ready" && org.value.tenantId === tenantId;
   const myRole: OrgRole | null = live ? org.value.role : null;
   const canManage = live && (myRole === "owner" || myRole === "admin");
@@ -243,6 +271,38 @@ export function OrganisationView() {
     access?.retry();
   }, [refreshOrganisation, access]);
   const showPersonal = useCallback(() => setMissing(true), []);
+  const personal =
+    base.status === "ready" &&
+    (!isOrganisation ||
+      missing ||
+      org.status === "missing" ||
+      members.status === "missing");
+  const orgFailed =
+    base.status === "ready" &&
+    !personal &&
+    !live &&
+    (org.status === "error" || org.status === "off" || tenantId === null);
+
+  // A failed organisation read is a corner card, never a banner over the page.
+  useEffect(() => {
+    if (!orgFailed) return;
+    notify({
+      id: ORG_NOTICE,
+      tone: "error",
+      title: "The organisation could not be loaded.",
+      message: "Names, roles and actions stay locked until it loads.",
+      action: { label: "Try again", run: reloadOrg },
+    });
+    return () => dismissNotice(ORG_NOTICE);
+  }, [orgFailed, reloadOrg]);
+
+  const memberCount =
+    org.status === "ready"
+      ? org.value.memberCount
+      : members.status === "ready"
+        ? members.value.filter((member) => member.status === "active").length
+        : null;
+  const name = live ? org.value.name : (current?.name ?? "");
 
   return (
     <AcquisitionShell
@@ -253,20 +313,28 @@ export function OrganisationView() {
     >
       <div className={styles.page} data-organisation-view>
         {base.status === "loading" || !authenticated ? (
-          <div className={styles.skeleton} aria-label="Loading organisation">
-            <span />
-            <span />
-            <span />
-          </div>
+          <PageSkeleton />
         ) : base.status === "error" ? (
-          <p className={styles.note} role="alert">
-            The organisation could not be loaded. Refresh to try again.
-          </p>
-        ) : !isOrganisation ||
-          missing ||
-          org.status === "missing" ||
-          members.status === "missing" ? (
-          <PersonalCard
+          <section className={styles.state} role="alert">
+            <span className={styles.stateIcon} aria-hidden="true">
+              <Building2 size={20} />
+            </span>
+            <h1>The organisation could not be loaded</h1>
+            <p>Check your connection, then try again.</p>
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => {
+                setBase({ status: "loading" });
+                setBaseAttempt((count) => count + 1);
+              }}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+              Try again
+            </button>
+          </section>
+        ) : personal ? (
+          <PersonalState
             organisations={base.workspaces.filter(
               (item) => item.kind === "organisation",
             )}
@@ -275,84 +343,70 @@ export function OrganisationView() {
           <>
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
-                {initials(live ? org.value.name : current.name)}
+                {initials(name)}
               </span>
               <div className={styles.headerCopy}>
-                <h1>{live ? org.value.name : current.name}</h1>
+                <h1>{name}</h1>
                 <p>
-                  Organisation
-                  {org.status === "ready"
-                    ? ` · ${org.value.memberCount} ${org.value.memberCount === 1 ? "person" : "people"}`
-                    : ""}{" "}
-                  · you are{" "}
-                  <b className={styles.role}>
-                    {myRole ? ROLE_LABEL[myRole] : "—"}
-                  </b>
+                  <span>Organisation</span>
+                  {memberCount !== null ? (
+                    <span>
+                      {memberCount} {memberCount === 1 ? "person" : "people"}
+                    </span>
+                  ) : null}
+                  {myRole ? (
+                    <span>
+                      Your role: <b>{ROLE_LABEL[myRole]}</b>
+                    </span>
+                  ) : null}
                 </p>
               </div>
-              <button
-                type="button"
-                className={styles.primary}
-                disabled={!canManage}
-                title={live ? undefined : NOT_LIVE}
-                onClick={() => setTab("members")}
-              >
-                <UserPlus size={15} aria-hidden="true" /> Add people
-              </button>
             </header>
 
-            {!live && org.status !== "loading" ? (
-              <p className={styles.banner} role="alert">
-                The organisation could not be loaded.
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  onClick={reloadOrg}
-                >
-                  <RefreshCw size={13} aria-hidden="true" />
-                  Try again
-                </button>
-              </p>
-            ) : null}
-
             <nav className={styles.tabs} aria-label="Organisation sections">
-              {TABS.map(({ id, label, icon: Icon }) => (
+              {TABS.map(({ id, label }) => (
                 <button
                   key={id}
                   type="button"
                   className={styles.tab}
+                  aria-label={label}
                   aria-pressed={tab === id}
                   onClick={() => setTab(id)}
                 >
-                  <Icon size={15} aria-hidden="true" />
                   {label}
+                  {id === "members" && memberCount !== null ? (
+                    <span className={styles.tabCount} aria-hidden="true">
+                      {memberCount}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </nav>
 
             <div key={tab} className={styles.panel}>
               {tab === "overview" && (
-                <div className={styles.grid}>
-                  <Stat
-                    label="Your role"
-                    value={myRole ? ROLE_LABEL[myRole] : "—"}
-                  />
-                  <Stat
-                    label="People"
-                    value={org.status === "ready" ? org.value.memberCount : "—"}
-                    note={live ? undefined : NOT_LIVE}
-                  />
-                  <Stat
-                    label="Calls, last 30 days"
-                    value={
-                      activity.status === "ready"
-                        ? activity.value.calls.length
-                        : "—"
-                    }
-                    note={activity.status === "ready" ? undefined : NOT_LIVE}
-                  />
-                  <Stat label="Shared credits" value="—" note="Coming soon." />
-                </div>
+                <OverviewPanel
+                  activity={activity}
+                  members={members}
+                  memberCount={memberCount}
+                  team={canManage}
+                  retry={reloadActivity}
+                  analysed={
+                    canManage && tenantId !== null ? (
+                      <ReceiptActivitySection
+                        key={tenantId}
+                        members={
+                          members.status === "ready"
+                            ? members.value.filter(
+                                (member) => member.status === "active",
+                              )
+                            : null
+                        }
+                        onAccessLost={refreshAccess}
+                      />
+                    ) : null
+                  }
+                />
               )}
 
               {tab === "members" && (
@@ -367,65 +421,6 @@ export function OrganisationView() {
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
                 />
-              )}
-
-              {tab === "activity" && (
-                <ActivityPanel activity={activity} members={members} />
-              )}
-
-              {tab === "teams" && (
-                <Pending
-                  icon={<UsersRound size={22} />}
-                  title="Teams"
-                  text="Group people into teams, like inside sales or field sales, and see each team's calls, progress and minutes."
-                  note="Coming soon."
-                />
-              )}
-
-              {tab === "usage" && (
-                <div className={styles.usage}>
-                  <div className={styles.stat}>
-                    <span>Your minutes</span>
-                    <b>
-                      {allowance?.unlimited
-                        ? "Unlimited"
-                        : allowance
-                          ? `${Math.floor(allowance.available_seconds / 60)} left`
-                          : "—"}
-                    </b>
-                    {allowance?.unlimited ? (
-                      <span>
-                        {Math.floor(allowance.committed_seconds / 60)} min used
-                        or reserved by analyses.
-                      </span>
-                    ) : null}
-                    {allowance && !allowance.unlimited ? (
-                      <span className={styles.bar} aria-hidden="true">
-                        <i
-                          style={{
-                            width: `${Math.min(100, (allowance.available_seconds / Math.max(1, allowance.allowance_seconds)) * 100)}%`,
-                          }}
-                        />
-                      </span>
-                    ) : null}
-                  </div>
-                  <Pending
-                    icon={<Coins size={22} />}
-                    title="Shared credits"
-                    text="One pool of minutes for the whole organisation, with a limit for each person if you want one."
-                    note="Coming soon."
-                  />
-                  <Pending
-                    icon={<Gauge size={22} />}
-                    title="Usage by person"
-                    text="Minutes and calls for every member, so owners and admins see who is using what."
-                    note={
-                      activity.status === "ready"
-                        ? "See the Activity tab."
-                        : NOT_LIVE
-                    }
-                  />
-                </div>
               )}
 
               {tab === "company" && (
@@ -455,34 +450,579 @@ export function OrganisationView() {
   );
 }
 
-function PersonalCard({ organisations }: { organisations: Workspace[] }) {
+function PageSkeleton() {
   return (
-    <section className={styles.personal}>
-      <span className={styles.bigTile} aria-hidden="true">
-        <Building2 size={26} />
+    <div className={styles.skeleton} aria-label="Loading organisation">
+      <div className={styles.skeletonHeader}>
+        <span className={styles.skeletonTile} />
+        <span className={styles.skeletonLines}>
+          <i />
+          <i />
+        </span>
+      </div>
+      <span className={styles.skeletonTabs} />
+      <SkeletonBlocks />
+    </div>
+  );
+}
+
+/** The loaded Overview's own surfaces with placeholder lines, so nothing jumps. */
+function SkeletonBlocks({ team = true }: { team?: boolean }) {
+  const lines = (count: number) =>
+    Array.from({ length: count }, (_, index) => (
+      <span key={index} className={styles.boneRow}>
+        <i className={styles.bone} data-w="name" />
+        <i className={styles.bone} data-w="meta" />
+      </span>
+    ));
+  return (
+    <>
+      <div
+        className={styles.strip}
+        data-columns={team ? 4 : 3}
+        aria-hidden="true"
+      >
+        {Array.from({ length: team ? 4 : 3 }, (_, index) => (
+          <span key={index} className={styles.kpi}>
+            <i className={styles.bone} data-w="label" />
+            <i className={styles.bone} data-w="value" />
+            <i className={styles.bone} data-w="context" />
+          </span>
+        ))}
+      </div>
+      <div
+        className={styles.columns}
+        data-team={team ? "" : undefined}
+        aria-hidden="true"
+      >
+        <div className={styles.surface}>{lines(CALLS_SHOWN)}</div>
+        {team ? <div className={styles.surface}>{lines(4)}</div> : null}
+      </div>
+    </>
+  );
+}
+
+function PersonalState({ organisations }: { organisations: Workspace[] }) {
+  return (
+    <section className={styles.state}>
+      <span className={styles.stateIcon} aria-hidden="true">
+        <Building2 size={20} />
       </span>
       <h1>You are on your personal account</h1>
       <p>
-        Organisations bring your sales team together: people, teams, shared
-        minutes and everyone&apos;s calls in one place.
+        An organisation brings your sales team together: its people, their calls
+        and their reports in one place.
       </p>
       {organisations.length > 0 ? (
-        <p className={styles.note}>
-          Switch to {organisations.map((item) => item.name).join(", ")} from the
-          account switcher at the top of the sidebar.
+        <p className={styles.stateHint}>
+          To open {organisations.map((item) => item.name).join(", ")}, switch
+          workspace from the menu at the top of the sidebar.
         </p>
       ) : null}
-      <div className={styles.actions}>
-        <button type="button" disabled>
-          <Plus size={15} aria-hidden="true" /> Create an organisation
-          <span className={styles.soon}>Soon</span>
-        </button>
-        <button type="button" disabled>
-          <Mail size={15} aria-hidden="true" /> Join with an invite
-          <span className={styles.soon}>Soon</span>
-        </button>
+    </section>
+  );
+}
+
+type ActivityCall = OrgActivity["calls"][number];
+
+/** Every figure comes from the same permitted calls that the table lists. */
+function summarise(activity: OrgActivity) {
+  const { calls, perDay, perRep } = activity;
+  const fromDays = perDay.length > 0;
+  const total = fromDays
+    ? perDay.reduce(
+        (sum, day) => ({
+          calls: sum.calls + day.calls,
+          minutes: sum.minutes + day.recordedMinutes,
+          reports: sum.reports + day.reportsReady,
+        }),
+        { calls: 0, minutes: 0, reports: 0 },
+      )
+    : {
+        calls: calls.length,
+        minutes:
+          calls.reduce((sum, call) => sum + call.durationSeconds, 0) / 60,
+        reports: calls.filter((call) => call.hasReport).length,
+      };
+  const people =
+    perRep.length > 0
+      ? perRep.filter((rep) => rep.calls > 0).length
+      : new Set(calls.map((call) => call.ownerPersonId)).size;
+  const byDay = new Map(perDay.map((day) => [day.date, day.calls]));
+  const today = new Date();
+  const series = Array.from({ length: 30 }, (_, index) => {
+    const day = new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate() - (29 - index),
+      ),
+    );
+    return byDay.get(day.toISOString().slice(0, 10)) ?? 0;
+  });
+  return { ...total, people, series };
+}
+
+function Kpi({
+  label,
+  value,
+  context,
+  series,
+}: {
+  label: string;
+  value: ReactNode;
+  context: ReactNode;
+  series?: number[];
+}) {
+  // One or two busy days do not make a trend: show the number alone.
+  const spark =
+    series && series.filter((count) => count > 0).length >= 3 ? series : null;
+  const top = spark ? Math.max(...spark) : 1;
+  return (
+    <div className={styles.kpi}>
+      <dt>{label}</dt>
+      <dd>
+        <b>{value}</b>
+        {spark ? (
+          <span
+            className={styles.spark}
+            role="img"
+            aria-label={`${label} per day over the last 30 days`}
+          >
+            {spark.map((count, index) => (
+              <i
+                key={index}
+                data-empty={count === 0 ? "" : undefined}
+                style={{ height: `${Math.max(8, (count / top) * 100)}%` }}
+              />
+            ))}
+          </span>
+        ) : null}
+      </dd>
+      <dd className={styles.kpiContext}>{context}</dd>
+    </div>
+  );
+}
+
+function OverviewPanel({
+  activity,
+  members,
+  memberCount,
+  team,
+  retry,
+  analysed,
+}: {
+  activity: Live<OrgActivity>;
+  members: Live<OrgMember[]>;
+  memberCount: number | null;
+  team: boolean;
+  retry: () => void;
+  /** Calls analysed across the organisation; owners and admins only. */
+  analysed: ReactNode;
+}) {
+  if (activity.status === "loading")
+    return (
+      <div className={styles.skeleton} aria-label="Loading activity">
+        <SkeletonBlocks team={team} />
+      </div>
+    );
+  if (activity.status !== "ready")
+    return (
+      <div className={styles.overview}>
+        <section className={styles.state}>
+          <h2>
+            {activity.status === "off"
+              ? "Activity is not available on this server yet"
+              : "Activity could not be loaded"}
+          </h2>
+          <p>Calls, minutes and reports for the last 30 days appear here.</p>
+          {activity.status === "error" ? (
+            <button type="button" className={styles.secondary} onClick={retry}>
+              <RefreshCw size={14} aria-hidden="true" />
+              Try again
+            </button>
+          ) : null}
+        </section>
+        {analysed}
+      </div>
+    );
+
+  const totals = summarise(activity.value);
+  return (
+    <div className={styles.overview}>
+      <section className={styles.section} aria-labelledby="org-period">
+        <div className={styles.sectionHead}>
+          <h2 id="org-period">Last 30 days</h2>
+          <span>
+            {team
+              ? "Everyone in the organisation"
+              : "Your calls in this organisation"}
+          </span>
+        </div>
+        <dl className={styles.strip} data-columns={team ? 4 : 3}>
+          <Kpi
+            label="Calls"
+            value={totals.calls}
+            context={totals.calls === 1 ? "call saved" : "calls saved"}
+            series={totals.series}
+          />
+          <Kpi
+            label="Minutes recorded"
+            value={minutes(totals.minutes)}
+            context="length of those calls"
+          />
+          <Kpi
+            label="Reports ready"
+            value={totals.reports}
+            context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
+          />
+          {team ? (
+            <Kpi
+              label="People with calls"
+              value={totals.people}
+              context={
+                memberCount !== null
+                  ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
+                  : "members"
+              }
+            />
+          ) : null}
+        </dl>
+      </section>
+
+      <div className={styles.columns} data-team={team ? "" : undefined}>
+        <CallsTable
+          calls={activity.value.calls}
+          total={totals.calls}
+          team={team}
+        />
+        {team ? (
+          <PeopleActivity activity={activity.value} members={members} />
+        ) : null}
+      </div>
+      {team ? <TeamPatternsSection calls={activity.value.calls} /> : null}
+      {analysed}
+    </div>
+  );
+}
+
+function CallsTable({
+  calls,
+  total,
+  team,
+}: {
+  calls: ActivityCall[];
+  total: number;
+  team: boolean;
+}) {
+  const [all, setAll] = useState(false);
+  const shown = all ? calls : calls.slice(0, CALLS_SHOWN);
+  const title = team ? "Team calls" : "Your calls";
+  return (
+    <section className={styles.section} aria-labelledby="org-calls">
+      <div className={styles.sectionHead}>
+        <h2 id="org-calls">
+          {title}
+          <span className={styles.count}>{total}</span>
+        </h2>
+        <Link className={styles.textLink} href="/calls" prefetch={false}>
+          Open Calls
+        </Link>
+      </div>
+      {calls.length === 0 ? (
+        <div className={styles.empty}>
+          <b>No calls in the last 30 days</b>
+          <p>
+            {team
+              ? "Calls saved by anyone in the organisation appear here with their report status."
+              : "Your calls in this organisation appear here with their report status."}
+          </p>
+          <Link className={styles.secondary} href={newCallHref("/")}>
+            <Plus size={14} aria-hidden="true" />
+            Analyse a call
+          </Link>
+        </div>
+      ) : (
+        <div className={styles.surface}>
+          <div className={styles.callTable} role="table" aria-label={title}>
+            <div
+              className={styles.callHead}
+              role="row"
+              data-team={team ? "" : undefined}
+            >
+              <span role="columnheader">Call</span>
+              {team ? <span role="columnheader">Person</span> : null}
+              <span role="columnheader">Date</span>
+              <span role="columnheader" className={styles.num}>
+                Length
+              </span>
+              <span role="columnheader">Report</span>
+            </div>
+            {shown.map((call) => {
+              const submission = {
+                id: call.id,
+                createdAt: call.createdAt,
+                durationSeconds: call.durationSeconds,
+                state: call.state,
+                hasReport: call.hasReport,
+                label: null,
+              };
+              const person = call.ownerName ?? "Member";
+              return (
+                <Link
+                  key={call.id}
+                  href={callHref(call.id)}
+                  prefetch={false}
+                  className={styles.callRow}
+                  role="row"
+                  data-team={team ? "" : undefined}
+                >
+                  <span role="cell" className={styles.callName}>
+                    {call.label ? (
+                      <b>{call.label}</b>
+                    ) : (
+                      <b data-unnamed="">{unnamedCallName(call.createdAt)}</b>
+                    )}
+                    <small className={styles.callMeta}>
+                      {team ? `${person} · ` : ""}
+                      {callDate(call.createdAt)}
+                      {call.durationSeconds > 0
+                        ? ` · ${formatClock(call.durationSeconds * 1000)}`
+                        : ""}
+                    </small>
+                  </span>
+                  {team ? (
+                    <span role="cell" className={styles.callPerson}>
+                      <i aria-hidden="true">{initials(person)}</i>
+                      <span>{person}</span>
+                    </span>
+                  ) : null}
+                  <span
+                    role="cell"
+                    className={styles.callDate}
+                    title={new Date(call.createdAt).toLocaleString()}
+                  >
+                    {callDate(call.createdAt)}
+                  </span>
+                  <span
+                    role="cell"
+                    className={`${styles.num} ${styles.callLength}`}
+                  >
+                    {call.durationSeconds > 0
+                      ? formatClock(call.durationSeconds * 1000)
+                      : "—"}
+                  </span>
+                  <span
+                    role="cell"
+                    className={styles.callStatus}
+                    data-tone={callTone(submission)}
+                  >
+                    <i aria-hidden="true" />
+                    {submissionState(submission)}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          {calls.length > CALLS_SHOWN ? (
+            <button
+              type="button"
+              className={styles.more}
+              aria-expanded={all}
+              onClick={() => setAll(!all)}
+            >
+              {all ? "Show fewer" : `Show all ${calls.length} calls`}
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+          {total > calls.length ? (
+            <p className={styles.footnote}>
+              Showing the latest {calls.length} of {total} calls.
+            </p>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PeopleActivity({
+  activity,
+  members,
+}: {
+  activity: OrgActivity;
+  members: Live<OrgMember[]>;
+}) {
+  const [open, setOpen] = useState(false);
+  // Weekly bars need every call; the server lists up to 500 in 30 days.
+  const complete =
+    activity.calls.length >=
+    activity.perRep.reduce((sum, rep) => sum + rep.calls, 0);
+  const weekly = useMemo(() => callsPerWeek(activity.calls), [activity]);
+  const rows = useMemo(() => {
+    const directory = members.status === "ready" ? members.value : [];
+    const reps = new Map(activity.perRep.map((rep) => [rep.personId, rep]));
+    const last = new Map<string, string>();
+    for (const call of activity.calls)
+      if (!last.has(call.ownerPersonId))
+        last.set(call.ownerPersonId, call.createdAt);
+    const people = directory
+      .filter((member) => member.status === "active")
+      .map((member) => {
+        const rep = reps.get(member.personId ?? "");
+        return {
+          id: member.personId as string,
+          name: memberName(member),
+          email: member.email,
+          test: isTestEmail(member.email),
+          calls: rep?.calls ?? 0,
+          minutes: rep?.recordedMinutes ?? 0,
+          reports: rep?.reportsReady ?? 0,
+          lastCall: last.get(member.personId ?? "") ?? null,
+        };
+      });
+    // Reps whose directory row is not readable still count; never drop calls.
+    for (const rep of activity.perRep)
+      if (!people.some((person) => person.id === rep.personId))
+        people.push({
+          id: rep.personId,
+          name: rep.name || "Member",
+          email: null,
+          test: false,
+          calls: rep.calls,
+          minutes: rep.recordedMinutes,
+          reports: rep.reportsReady,
+          lastCall: last.get(rep.personId) ?? null,
+        });
+    const names = new Map<string, number>();
+    for (const person of people)
+      names.set(person.name, (names.get(person.name) ?? 0) + 1);
+    return people
+      .map((person) => ({
+        ...person,
+        duplicate: (names.get(person.name) ?? 0) > 1,
+      }))
+      .sort(
+        (a, b) =>
+          Number(a.test) - Number(b.test) ||
+          b.calls - a.calls ||
+          b.minutes - a.minutes ||
+          a.name.localeCompare(b.name),
+      );
+  }, [activity, members]);
+  const active = rows.filter((row) => row.calls > 0 && !row.test);
+  const quiet = rows.filter((row) => row.calls === 0 || row.test);
+  const top = Math.max(1, ...rows.map((row) => row.calls));
+  const topWeek = Math.max(1, ...[...weekly.values()].flat());
+  const shown = open ? [...active, ...quiet] : active;
+
+  return (
+    <section className={styles.section} aria-labelledby="org-people">
+      <div className={styles.sectionHead}>
+        <h2 id="org-people">Calls by person</h2>
+        {complete ? <span>Bars: each of the last 4 weeks</span> : null}
+      </div>
+      <div className={styles.surface}>
+        {members.status === "loading" ? (
+          <p className={styles.footnote}>Loading people…</p>
+        ) : null}
+        {active.length === 0 && members.status !== "loading" ? (
+          <p className={styles.footnote}>
+            Nobody has saved a call in the last 30 days.
+          </p>
+        ) : null}
+        <ul className={styles.people}>
+          {shown.map((row) => (
+            <li key={row.id} data-quiet={row.calls === 0 ? "" : undefined}>
+              <i className={styles.avatar} aria-hidden="true">
+                {initials(row.name)}
+              </i>
+              <span className={styles.personName}>
+                <b>
+                  <span className={styles.nameText}>{row.name}</span>
+                  {row.test ? <span className={styles.tag}>Test</span> : null}
+                </b>
+                {row.duplicate && row.email ? <small>{row.email}</small> : null}
+              </span>
+              {complete ? (
+                <WeekBars
+                  name={row.name}
+                  weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
+                  top={topWeek}
+                />
+              ) : (
+                <span className={styles.personBar} aria-hidden="true">
+                  <i style={{ width: `${(row.calls / top) * 100}%` }} />
+                </span>
+              )}
+              <span className={styles.personFigures}>
+                <b>
+                  {row.calls} {row.calls === 1 ? "call" : "calls"}
+                </b>
+                <small>
+                  {row.calls > 0
+                    ? `${minutes(row.minutes)} min · ${row.reports} ${row.reports === 1 ? "report" : "reports"}`
+                    : "No calls"}
+                </small>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {quiet.length > 0 ? (
+          <button
+            type="button"
+            className={styles.more}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open
+              ? "Show only people with calls"
+              : `${quiet.length} more ${quiet.length === 1 ? "person" : "people"} with no calls or test accounts`}
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+/** Each person's calls in the last four 7-day weeks, oldest first. */
+function callsPerWeek(calls: ActivityCall[]) {
+  const now = Date.now();
+  const out = new Map<string, number[]>();
+  for (const call of calls) {
+    const age = Math.floor((now - Date.parse(call.createdAt)) / WEEK_MS);
+    if (age > 3) continue;
+    const weeks = out.get(call.ownerPersonId) ?? [0, 0, 0, 0];
+    weeks[3 - Math.max(0, age)] += 1;
+    out.set(call.ownerPersonId, weeks);
+  }
+  return out;
+}
+
+/** Calls in each of the last four 7-day weeks, oldest first; this week solid. */
+function WeekBars({
+  name,
+  weeks,
+  top,
+}: {
+  name: string;
+  weeks: number[];
+  top: number;
+}) {
+  const label = `${name}: ${weeks.join(", ")} calls per week, oldest first; this week ${weeks[3]}`;
+  return (
+    <span className={styles.weeks} role="img" aria-label={label} title={label}>
+      {weeks.map((count, index) => (
+        <i
+          key={index}
+          data-zero={count === 0 ? "" : undefined}
+          style={{
+            height: `${count === 0 ? 0 : Math.max(18, (count / top) * 100)}%`,
+          }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -504,9 +1044,11 @@ function MembersPanel({
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState("");
+  const [invalid, setInvalid] = useState("");
   const [confirming, setConfirming] = useState<{
     message: string;
+    verb: string;
+    danger?: boolean;
     action: () => Promise<unknown>;
     added?: boolean;
   } | null>(null);
@@ -514,7 +1056,7 @@ function MembersPanel({
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
-    setProblem("");
+    dismissNotice(ACTION_NOTICE);
     try {
       await action();
       reload();
@@ -522,11 +1064,15 @@ function MembersPanel({
     } catch (error) {
       if (noOrganisationSelected(error)) onMissing();
       else
-        setProblem(
-          error instanceof OrgApiError
-            ? error.message
-            : "That change was not saved. Try again.",
-        );
+        notify({
+          id: ACTION_NOTICE,
+          tone: "error",
+          title: "That change was not saved.",
+          message:
+            error instanceof OrgApiError
+              ? error.message
+              : "Check your connection and try again.",
+        });
       return false;
     } finally {
       setBusy(false);
@@ -537,12 +1083,13 @@ function MembersPanel({
     event.preventDefault();
     const address = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      setProblem("Enter a full email address.");
+      setInvalid("Enter a full email address.");
       return;
     }
-    setProblem("");
+    setInvalid("");
     setConfirming({
       message: `Add ${address} as ${ROLE_LABEL[additionRole]}?`,
+      verb: "Add",
       action: () => addMember(address, additionRole),
       added: true,
     });
@@ -550,339 +1097,306 @@ function MembersPanel({
 
   const rows =
     members.status === "ready"
-      ? members.value.filter(
-          (member) => canManage || member.personId === yourPersonId,
-        )
+      ? members.value
+          .filter((member) => canManage || member.personId === yourPersonId)
+          .sort(
+            (a, b) =>
+              Number(isTestEmail(a.email)) - Number(isTestEmail(b.email)) ||
+              ROLES.indexOf(a.role) - ROLES.indexOf(b.role) ||
+              Number(a.status === "invited") - Number(b.status === "invited") ||
+              memberName(a).localeCompare(memberName(b)),
+          )
       : [];
   const disabled =
     !canManage || busy || confirming !== null || members.status !== "ready";
+  const invited = rows.filter((member) => member.status === "invited").length;
 
   return (
-    <div className={styles.members}>
-      <form className={styles.addRow} onSubmit={add}>
-        <label className={styles.emailField}>
-          <Mail size={15} aria-hidden="true" />
-          <input
-            type="email"
-            placeholder="name@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={disabled}
-            aria-label="Email to add"
-          />
-        </label>
-        <select
-          value={additionRole}
-          onChange={(event) => setNewRole(event.target.value as OrgRole)}
-          disabled={disabled}
-          aria-label="Role for the new person"
-        >
-          {ROLES.filter(
-            (item) => item === "member" || (isOwner && item === "admin"),
-          ).map((item) => (
-            <option key={item} value={item}>
-              {ROLE_LABEL[item]}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className={styles.primary} disabled={disabled}>
-          <UserPlus size={15} aria-hidden="true" /> Add
-        </button>
-        {!canManage ? (
-          <small className={styles.hint}>
-            {members.status === "off" || members.status === "loading"
-              ? NOT_LIVE
-              : "Only owners and admins can add people."}
-          </small>
+    <section className={styles.section} aria-labelledby="org-members">
+      <div className={styles.sectionHead}>
+        <h2 id="org-members">
+          People
+          {members.status === "ready" ? (
+            <span className={styles.count}>{rows.length - invited}</span>
+          ) : null}
+        </h2>
+        {invited > 0 ? (
+          <span>
+            {invited} {invited === 1 ? "invite" : "invites"} waiting
+          </span>
         ) : null}
-      </form>
-      {confirming ? (
-        <div
-          className={styles.card}
-          role="dialog"
-          aria-label="Confirm member change"
-        >
-          <p>{confirming.message}</p>
-          <div className={styles.actions}>
+      </div>
+      <div className={styles.surface}>
+        {canManage ? (
+          <form className={styles.addRow} onSubmit={add} noValidate>
+            <label
+              className={styles.field}
+              data-invalid={invalid ? "" : undefined}
+            >
+              <UserPlus size={15} aria-hidden="true" />
+              <input
+                type="email"
+                placeholder="Add people by email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setInvalid("");
+                }}
+                disabled={disabled}
+                aria-label="Email to add"
+                aria-describedby={invalid ? "org-add-error" : undefined}
+              />
+            </label>
+            <select
+              className={styles.select}
+              value={additionRole}
+              onChange={(event) => setNewRole(event.target.value as OrgRole)}
+              disabled={disabled}
+              aria-label="Role for the new person"
+            >
+              {ROLES.filter(
+                (item) => item === "member" || (isOwner && item === "admin"),
+              ).map((item) => (
+                <option key={item} value={item}>
+                  {ROLE_LABEL[item]}
+                </option>
+              ))}
+            </select>
             <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(confirming.action).then((saved) => {
-                  if (saved) {
-                    if (confirming.added) setEmail("");
-                    setConfirming(null);
-                  }
-                })
-              }
+              type="submit"
+              className={styles.primary}
+              disabled={disabled}
             >
-              Confirm
+              Add
             </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setConfirming(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {problem ? (
-        <p className={styles.problem} role="alert">
-          {problem}
-        </p>
-      ) : null}
-
-      <div className={styles.table} role="table" aria-label="People">
-        <div className={styles.thead} role="row">
-          <span role="columnheader">Person</span>
-          <span role="columnheader">Role</span>
-          <span role="columnheader">Calls · 30 days</span>
-          <span role="columnheader">Minutes · 30 days</span>
-          <span role="columnheader">Status</span>
-          <span role="columnheader" aria-label="Actions" />
-        </div>
-        {rows.map((member, index) => {
-          const isYou =
-            member.personId !== null && member.personId === yourPersonId;
-          const name =
-            member.name || member.email?.split("@")[0] || "Unnamed member";
-          return (
-            <div
-              key={`${member.status}:${member.personId ?? member.inviteId}`}
-              className={styles.tr}
-              role="row"
-              style={{ "--i": index } as CSSProperties}
-            >
-              <span role="cell" className={styles.person}>
-                <i aria-hidden="true">{initials(name)}</i>
-                <span>
-                  <b>
-                    {name}
-                    {isYou ? " (you)" : ""}
-                  </b>
-                  <small>{member.email}</small>
-                  <small>
-                    Joined {member.joinedAt ? callDate(member.joinedAt) : "—"} ·
-                    Last active{" "}
-                    {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
-                  </small>
-                </span>
-              </span>
-              <span role="cell">
-                {isOwner &&
-                member.status === "active" &&
-                !isYou &&
-                member.role !== "owner" ? (
-                  <select
-                    className={styles.roleSelect}
-                    value={member.role}
-                    disabled={busy || confirming !== null}
-                    onChange={(event) => {
-                      const nextRole = event.target.value as OrgRole;
-                      setConfirming({
-                        message: `Change ${name} to ${ROLE_LABEL[nextRole]}?`,
-                        action: () => changeRole(member.personId, nextRole),
-                      });
-                    }}
-                    aria-label={`Role for ${name}`}
-                  >
-                    {ROLES.filter((item) => item !== "owner").map((item) => (
-                      <option key={item} value={item}>
-                        {ROLE_LABEL[item]}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <b className={styles.role} data-role={member.role}>
-                    {member.role === "owner" ? (
-                      <Crown size={11} aria-hidden="true" />
-                    ) : null}
-                    {ROLE_LABEL[member.role]}
-                  </b>
-                )}
-              </span>
-              <span role="cell" className={styles.num}>
-                {member.calls30d}
-              </span>
-              <span role="cell" className={styles.num}>
-                {member.minutesUsed30d}
-              </span>
-              <span
-                role="cell"
-                className={styles.status}
-                data-status={member.status}
+            {invalid ? (
+              <small
+                id="org-add-error"
+                className={styles.fieldError}
+                role="alert"
               >
-                <i aria-hidden="true" />
-                {member.status === "invited" ? "Invited" : "Active"}
-              </span>
-              <span role="cell" className={styles.rowActions}>
-                {canManage &&
-                !isYou &&
-                member.role !== "owner" &&
-                (member.status === "invited" ||
-                  isOwner ||
-                  member.role === "member") ? (
-                  <>
-                    {isOwner && member.status === "active" ? (
+                {invalid}
+              </small>
+            ) : null}
+          </form>
+        ) : members.status === "ready" ? (
+          <p className={styles.footnote}>
+            Only owners and admins can add people or change roles.
+          </p>
+        ) : null}
+
+        {confirming ? (
+          <div
+            className={styles.confirm}
+            role="dialog"
+            aria-label="Confirm member change"
+          >
+            <p>{confirming.message}</p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.ghost}
+                disabled={busy}
+                onClick={() => setConfirming(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={confirming.danger ? styles.danger : styles.primary}
+                disabled={busy}
+                onClick={() =>
+                  void run(confirming.action).then((saved) => {
+                    if (saved) {
+                      if (confirming.added) setEmail("");
+                      setConfirming(null);
+                    }
+                  })
+                }
+              >
+                {busy ? "Saving…" : confirming.verb}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className={styles.memberTable} role="table" aria-label="People">
+          <div className={styles.memberHead} role="row">
+            <span role="columnheader">Person</span>
+            <span role="columnheader">Role</span>
+            <span role="columnheader">Joined</span>
+            <span role="columnheader">Last active</span>
+            <span role="columnheader" aria-label="Actions" />
+          </div>
+          {rows.map((member) => {
+            const isYou =
+              member.personId !== null && member.personId === yourPersonId;
+            const name = memberName(member);
+            const manageable =
+              canManage &&
+              !isYou &&
+              member.role !== "owner" &&
+              (member.status === "invited" ||
+                isOwner ||
+                member.role === "member");
+            return (
+              <div
+                key={`${member.status}:${member.personId ?? member.inviteId}`}
+                className={styles.memberRow}
+                role="row"
+                data-invited={member.status === "invited" ? "" : undefined}
+              >
+                <span role="cell" className={styles.person}>
+                  <i className={styles.avatar} aria-hidden="true">
+                    {initials(name)}
+                  </i>
+                  <span className={styles.personName}>
+                    <b>
+                      <span className={styles.nameText}>{name}</span>
+                      {isYou ? (
+                        <span className={styles.you}> (you)</span>
+                      ) : null}
+                      {member.status === "invited" ? (
+                        <span className={styles.tag} data-tone="info">
+                          Invited
+                        </span>
+                      ) : null}
+                      {isTestEmail(member.email) ? (
+                        <span className={styles.tag}>Test</span>
+                      ) : null}
+                    </b>
+                    <small>
+                      {member.status === "invited" && !member.name
+                        ? "Has not joined yet"
+                        : member.email}
+                    </small>
+                  </span>
+                </span>
+                <span role="cell" className={styles.roleCell}>
+                  {isOwner &&
+                  member.status === "active" &&
+                  !isYou &&
+                  member.role !== "owner" ? (
+                    <select
+                      className={styles.roleSelect}
+                      value={member.role}
+                      disabled={busy || confirming !== null}
+                      onChange={(event) => {
+                        const nextRole = event.target.value as OrgRole;
+                        setConfirming({
+                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}?`,
+                          verb: "Change role",
+                          action: () => changeRole(member.personId, nextRole),
+                        });
+                      }}
+                      aria-label={`Role for ${name}`}
+                    >
+                      {ROLES.filter((item) => item !== "owner").map((item) => (
+                        <option key={item} value={item}>
+                          {ROLE_LABEL[item]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={styles.role} data-role={member.role}>
+                      {member.role === "owner" ? (
+                        <Crown size={12} aria-hidden="true" />
+                      ) : null}
+                      {ROLE_LABEL[member.role]}
+                    </span>
+                  )}
+                </span>
+                <span role="cell" className={styles.dateCell}>
+                  <span className={styles.cellLabel}>Joined </span>
+                  {member.joinedAt ? callDate(member.joinedAt) : "—"}
+                </span>
+                <span role="cell" className={styles.dateCell}>
+                  <span className={styles.cellLabel}>Last active </span>
+                  {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
+                </span>
+                <span role="cell" className={styles.rowActions}>
+                  {manageable ? (
+                    <>
+                      {isOwner && member.status === "active" ? (
+                        <button
+                          type="button"
+                          className={styles.icon}
+                          title="Make owner"
+                          aria-label={`Make ${name} the owner`}
+                          disabled={busy || confirming !== null}
+                          onClick={() =>
+                            setConfirming({
+                              message: `Make ${name} the owner? You will become an admin.`,
+                              verb: "Transfer ownership",
+                              action: () => transferOwnership(member.personId),
+                            })
+                          }
+                        >
+                          <Crown size={15} />
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className={styles.icon}
-                        title="Make owner"
-                        aria-label={`Make ${name} the owner`}
+                        title={
+                          member.status === "invited"
+                            ? "Revoke invite"
+                            : "Remove"
+                        }
+                        aria-label={`${member.status === "invited" ? "Revoke invite for" : "Remove"} ${name}`}
                         disabled={busy || confirming !== null}
                         onClick={() =>
-                          setConfirming({
-                            message: `Transfer ownership to ${name}? You will become an admin.`,
-                            action: () => transferOwnership(member.personId),
-                          })
+                          setConfirming(
+                            member.status === "invited"
+                              ? {
+                                  message: `Revoke the invite for ${name}?`,
+                                  verb: "Revoke invite",
+                                  danger: true,
+                                  action: () => revokeInvite(member.inviteId),
+                                }
+                              : {
+                                  message: `Remove ${name} from the organisation?`,
+                                  verb: "Remove",
+                                  danger: true,
+                                  action: () => removeMember(member.personId),
+                                },
+                          )
                         }
                       >
-                        <Crown size={14} />
+                        {member.status === "invited" ? (
+                          <X size={15} />
+                        ) : (
+                          <Trash2 size={15} />
+                        )}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={styles.icon}
-                      title={
-                        member.status === "invited" ? "Revoke invite" : "Remove"
-                      }
-                      aria-label={`${member.status === "invited" ? "Revoke invite for" : "Remove"} ${name}`}
-                      disabled={busy || confirming !== null}
-                      onClick={() =>
-                        setConfirming({
-                          message:
-                            member.status === "invited"
-                              ? `Revoke the invite for ${name}?`
-                              : `Remove ${name} from the organisation?`,
-                          action: () =>
-                            member.status === "invited"
-                              ? revokeInvite(member.inviteId)
-                              : removeMember(member.personId),
-                        })
-                      }
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </>
-                ) : null}
-              </span>
+                    </>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
+          {members.status === "loading" ? (
+            <div className={styles.rowSkeleton} aria-label="Loading members">
+              <span />
+              <span />
+              <span />
             </div>
-          );
-        })}
-        {members.status !== "ready" ? (
-          <p className={styles.tableNote}>
-            {members.status === "loading"
-              ? "Loading members…"
-              : "Members could not be loaded."}
-            {members.status !== "loading" ? (
+          ) : members.status !== "ready" ? (
+            <div className={styles.tableNote}>
+              <span>Members could not be loaded.</span>
               <button
                 type="button"
                 className={styles.secondary}
                 onClick={reload}
               >
-                <RefreshCw size={13} aria-hidden="true" />
+                <RefreshCw size={14} aria-hidden="true" />
                 Try again
               </button>
-            ) : null}
-          </p>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function ActivityPanel({
-  activity,
-  members,
-}: {
-  activity: Live<OrgActivity>;
-  members: Live<OrgMember[]>;
-}) {
-  if (activity.status !== "ready")
-    return (
-      <Pending
-        icon={<Activity size={22} />}
-        title="Company-wide activity"
-        text="Every member's calls, minutes, reports and test activity for the last 30 days, in one view for owners and admins."
-        note={activity.status === "loading" ? "Checking…" : NOT_LIVE}
-      />
-    );
-  const nameOf = (personId: string) =>
-    (members.status === "ready"
-      ? members.value.find((member) => member.personId === personId)
-      : null) ?? null;
-  const people = [...activity.value.members].sort(
-    (a, b) => b.minutes - a.minutes,
-  );
-  const top = Math.max(1, ...people.map((person) => person.minutes));
-  const totals = people.reduce(
-    (sum, person) => ({
-      calls: sum.calls + person.calls,
-      minutes: sum.minutes + person.minutes,
-      reports: sum.reports + person.reportsReady,
-      active: sum.active + (person.calls > 0 ? 1 : 0),
-    }),
-    { calls: 0, minutes: 0, reports: 0, active: 0 },
-  );
-  return (
-    <div className={styles.activity}>
-      <div className={styles.grid}>
-        <Stat label="Calls · 30 days" value={totals.calls} />
-        <Stat label="Minutes analysed" value={Math.round(totals.minutes)} />
-        <Stat label="Reports ready" value={totals.reports} />
-        <Stat label="People active" value={totals.active} />
-      </div>
-      <div className={styles.split}>
-        <section className={styles.card}>
-          <h2>Minutes by person</h2>
-          <ul className={styles.bars}>
-            {people.map((person, index) => {
-              const member = nameOf(person.personId);
-              const label = member?.name || member?.email || "Member";
-              return (
-                <li
-                  key={person.personId}
-                  style={{ "--i": index } as CSSProperties}
-                >
-                  <span>{label}</span>
-                  <span className={styles.barTrack} aria-hidden="true">
-                    <i style={{ width: `${(person.minutes / top) * 100}%` }} />
-                  </span>
-                  <b>{Math.round(person.minutes)}</b>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-        <section className={styles.card}>
-          <h2>Latest calls across the organisation</h2>
-          <ul className={styles.calls}>
-            {activity.value.calls.slice(0, 8).map((call) => (
-              <li key={call.id}>
-                <Link href={callHref(call.id)} prefetch={false}>
-                  <b>{call.label ?? "Untitled call"}</b>
-                  <small>
-                    {call.ownerName ?? "Member"} · {callDate(call.createdAt)} ·{" "}
-                    {call.durationSeconds > 0
-                      ? formatClock(call.durationSeconds * 1000)
-                      : "—"}
-                  </small>
-                  <span
-                    className={styles.status}
-                    data-status={call.hasReport ? "active" : "invited"}
-                  >
-                    <i aria-hidden="true" />
-                    {call.hasReport ? "Report ready" : "In progress"}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -910,6 +1424,7 @@ function CompanyPanel({
       return;
     setDomains([...domains, domain]);
     setDraft("");
+    setState("idle");
   };
 
   const save = async () => {
@@ -924,101 +1439,115 @@ function CompanyPanel({
   };
 
   return (
-    <div className={styles.company}>
-      <section className={styles.card}>
-        <h2>
-          <Globe size={16} aria-hidden="true" /> Company email domains
-        </h2>
-        <p className={styles.cardNote}>
-          Your organisation owns these domains. Anyone who signs in with an
-          email on them is recognised as your staff.
-        </p>
-        <div className={styles.chips}>
-          {domains.map((domain) => (
-            <span key={domain} className={styles.chip}>
-              @{domain}
-              {isOwner ? (
-                <button
-                  type="button"
-                  aria-label={`Remove ${domain}`}
-                  onClick={() =>
-                    setDomains(domains.filter((item) => item !== domain))
-                  }
-                >
-                  <X size={12} />
-                </button>
-              ) : null}
-            </span>
-          ))}
-          {domains.length === 0 ? (
-            <span className={styles.cardNote}>No domains yet.</span>
-          ) : null}
+    <div className={styles.settings}>
+      {details}
+      <section className={styles.setting} aria-labelledby="org-domains">
+        <div className={styles.settingIntro}>
+          <h2 id="org-domains">Email domains</h2>
+          <p>
+            People who sign in with an email on these domains are recognised as
+            your staff.
+          </p>
         </div>
-        <div className={styles.addRow}>
-          <label className={styles.emailField}>
-            <Globe size={15} aria-hidden="true" />
+        <div className={styles.settingBody}>
+          <div className={styles.chips}>
+            {domains.map((domain) => (
+              <span key={domain} className={styles.chip}>
+                @{domain}
+                {isOwner ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${domain}`}
+                    onClick={() => {
+                      setDomains(domains.filter((item) => item !== domain));
+                      setState("idle");
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                ) : null}
+              </span>
+            ))}
+            {domains.length === 0 ? (
+              <span className={styles.muted}>No domains yet.</span>
+            ) : null}
+          </div>
+          {isOwner ? (
+            <div className={styles.addRow}>
+              <label className={styles.field}>
+                <span className={styles.at} aria-hidden="true">
+                  @
+                </span>
+                <input
+                  placeholder="company.com"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addDomain();
+                    }
+                  }}
+                  aria-label="Domain to add"
+                />
+              </label>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={addDomain}
+              >
+                <Plus size={14} aria-hidden="true" /> Add domain
+              </button>
+            </div>
+          ) : null}
+          <label className={styles.toggle}>
             <input
-              placeholder="company.com"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addDomain();
-                }
+              type="checkbox"
+              checked={autoJoin}
+              onChange={(event) => {
+                setAutoJoin(event.target.checked);
+                setState("idle");
               }}
               disabled={!isOwner}
-              aria-label="Domain to add"
             />
+            <span className={styles.switch} aria-hidden="true" />
+            <span>
+              <b>Join automatically</b>
+              <small>
+                People who sign in with these domains join as members without an
+                invite.
+              </small>
+            </span>
           </label>
-          <button
-            type="button"
-            className={styles.ghost}
-            onClick={addDomain}
-            disabled={!isOwner}
-          >
-            <Plus size={14} aria-hidden="true" /> Add domain
-          </button>
-        </div>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={autoJoin}
-            onChange={(event) => setAutoJoin(event.target.checked)}
-            disabled={!isOwner}
-          />
-          <span className={styles.switch} aria-hidden="true" />
-          <span>
-            <b>Join automatically</b>
-            <small>
-              People who sign in with these domains join as members without an
-              invite.
+          <div className={styles.saveRow}>
+            {isOwner ? (
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={state === "saving"}
+                onClick={() => void save()}
+              >
+                {state === "saving" ? "Saving…" : "Save domains"}
+              </button>
+            ) : null}
+            <small
+              className={styles.hint}
+              role={state === "error" ? "alert" : "status"}
+              data-tone={state === "error" ? "error" : undefined}
+            >
+              {!org
+                ? "Domains appear once the organisation loads."
+                : !isOwner
+                  ? "Only the owner can change domains."
+                  : state === "saved"
+                    ? "Saved."
+                    : state === "error"
+                      ? "Not saved. Try again."
+                      : ""}
             </small>
-          </span>
-        </label>
-        <div className={styles.saveRow}>
-          <button
-            type="button"
-            className={styles.primary}
-            disabled={!isOwner || state === "saving"}
-            onClick={() => void save()}
-          >
-            {state === "saving" ? "Saving…" : "Save"}
-          </button>
-          <small className={styles.hint} role="status">
-            {!org
-              ? NOT_LIVE
-              : !isOwner
-                ? "Only the owner can change domains."
-                : state === "saved"
-                  ? "Saved."
-                  : state === "error"
-                    ? "Not saved. Try again."
-                    : ""}
-          </small>
+          </div>
         </div>
       </section>
-      {details}
     </div>
   );
 }
