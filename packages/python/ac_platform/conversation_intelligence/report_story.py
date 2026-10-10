@@ -26,7 +26,9 @@ def report_story(report: ReportDraft) -> dict[str, Any] | None:
             ),
             None,
         ),
-        "prospect_commitments": [item.model_dump(mode="json") for item in call_map.prospect_tasks],
+        # Task assignment does not establish the prospect's agreement.
+        "prospect_commitments": [],
+        "prospect_tasks": [item.model_dump(mode="json") for item in call_map.prospect_tasks],
         "seller_commitments": [
             {
                 "text": item.text,

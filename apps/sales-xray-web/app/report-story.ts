@@ -39,6 +39,7 @@ export type ReportStory = {
   };
   next_step: Note | null;
   prospect_commitments: (Note & { effort_ms: number | null })[];
+  prospect_tasks?: (Note & { effort_ms: number | null })[];
   seller_commitments: (Note & { due_text: string | null })[];
 };
 
@@ -79,14 +80,21 @@ export function parseReportStory(
   value: unknown,
   transcript: Transcript,
 ): ReportStory {
-  const item = object(value, [
+  const keys = [
     "version",
     "phases",
     "outcome",
     "next_step",
     "prospect_commitments",
     "seller_commitments",
-  ]);
+  ];
+  if (
+    value &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "prospect_tasks")
+  )
+    keys.push("prospect_tasks");
+  const item = object(value, keys);
   check(item.version === "report-story/1");
   const byId = new Map(transcript.segments.map((s) => [s.id, s]));
   const squash = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -178,6 +186,17 @@ export function parseReportStory(
       ? null
       : object(item.next_step, ["text", "evidence"]);
   const nextRefs = next ? evidence(next.evidence, 2) : [];
+  const tasks = (input: unknown) =>
+    list(input, 4)
+      .map((value) => {
+        const note = object(value, ["text", "effort_ms", "evidence"]);
+        return {
+          text: text(note.text),
+          effort_ms: note.effort_ms === null ? null : number(note.effort_ms),
+          evidence: evidence(note.evidence, 1),
+        };
+      })
+      .filter((note) => available(note.evidence));
   return {
     version: "report-story/1",
     phases,
@@ -189,16 +208,10 @@ export function parseReportStory(
             evidence: nextRefs,
           }
         : null,
-    prospect_commitments: list(item.prospect_commitments, 4)
-      .map((value) => {
-        const note = object(value, ["text", "effort_ms", "evidence"]);
-        return {
-          text: text(note.text),
-          effort_ms: note.effort_ms === null ? null : number(note.effort_ms),
-          evidence: evidence(note.evidence, 1),
-        };
-      })
-      .filter((note) => available(note.evidence)),
+    prospect_commitments: tasks(item.prospect_commitments),
+    ...(item.prospect_tasks !== undefined
+      ? { prospect_tasks: tasks(item.prospect_tasks) }
+      : {}),
     seller_commitments: list(item.seller_commitments, 6)
       .map((value) => {
         const note = object(value, ["text", "due_text", "evidence"]);

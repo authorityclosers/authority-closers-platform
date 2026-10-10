@@ -3435,6 +3435,15 @@ export function AcquisitionStudio({
                   onSelectEvidence={seek}
                   onSelectContextualPlayback={seekWithContext}
                   structure={report.preview ? "custom" : "pillars"}
+                  prospectControls={
+                    submission && !embedded ? (
+                      <ProspectLinkControl
+                        submissionId={submission.id}
+                        transcript={result.transcript}
+                        onSelectEvidence={seek}
+                      />
+                    ) : undefined
+                  }
                   lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
                   documentData={{

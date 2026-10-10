@@ -3123,7 +3123,11 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       ?.hasAttribute("hidden"),
   ).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).toBeNull();
-  expect(container.querySelector("[data-prospect-card]")).toBeNull();
+  expect(
+    container.querySelector(
+      '[data-report-mode-section="facts"] [data-prospect-card]',
+    ),
+  ).not.toBeNull();
   expect(container.querySelector('a[href="/prospects"]')).not.toBeNull();
   const prospectSource = envelope.report.content.strengths[0].evidence[0];
   // The clip shows its time; its accessible name says what it plays.

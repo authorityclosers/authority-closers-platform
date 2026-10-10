@@ -904,7 +904,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     tabbed_view = library_page.get_by_role("button", name="Tabbed view", exact=True)
                     await tabbed_view.click()
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
-                    await library_page.get_by_role("tab", name="Moments", exact=True).click()
+                    await library_page.get_by_role("tab", name="Moments That Mattered", exact=True).click()
                     player = library_page.locator("audio")
                     await expect(player).to_have_count(1)
                     assert (

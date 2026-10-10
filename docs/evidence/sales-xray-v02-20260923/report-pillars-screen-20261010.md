@@ -74,3 +74,10 @@ focused acquisition-studio + pillar-screen run passed 110 tests. Deterministic
 transcript metrics fill the speaker rows when a saved numbers packet is absent;
 no roles or acoustic facts are inferred. A withheld supporting story quote
 removes its dependent date/commitment instead of blocking the entire report.
+
+Source-semantic audit: C5 prospect_tasks does not establish agreement. The
+transport now keeps those as optional task mentions and leaves prospect
+commitments empty/Unknown. Seller tasks retain the promise meaning explicitly
+defined in ADR 0044. Existing report-story/1 responses without prospect_tasks
+remain accepted. The separate profile adapter final focused run passed 19 tests;
+ruff and strict module mypy passed.

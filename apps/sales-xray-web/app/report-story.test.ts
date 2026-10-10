@@ -42,6 +42,23 @@ const wire = () => ({
 });
 
 describe("Report story source binding", () => {
+  it("shows a supplied task without promoting it into a prospect commitment", () => {
+    const candidate = {
+      ...wire(),
+      prospect_commitments: [],
+      prospect_tasks: [
+        { text: "Talk on Friday", effort_ms: null, evidence: refs },
+      ],
+    };
+    const story = parseReportStory(candidate, transcript);
+    const entries = reportPillars({ ...syntheticReport, story })[5].entries;
+    expect(
+      entries.find((e) => e.label === "Task for the prospect mentioned")?.text,
+    ).toBe("Talk on Friday");
+    expect(entries.find((e) => e.label === "Prospect commitment")?.gap).toBe(
+      true,
+    );
+  });
   it("opens a privacy-withheld report with dependent dates and commitments unavailable", () => {
     const marker = "[Withheld for privacy]";
     const candidate = wire();

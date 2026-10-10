@@ -498,6 +498,7 @@ export function ReportModes({
   initialView,
   onSelectEvidence,
   onSelectContextualPlayback,
+  prospectControls,
   structure = "custom",
 }: {
   label?: string;
@@ -515,6 +516,7 @@ export function ReportModes({
     title: string,
   ) => void;
   structure?: "custom" | "pillars";
+  prospectControls?: ReactNode;
 }) {
   const panels =
     structure === "pillars" && documentData?.report
@@ -523,6 +525,7 @@ export function ReportModes({
             documentData,
             onSelectEvidence,
             onSelectContextualPlayback,
+            prospectControls,
           ),
           ...suppliedPanels.filter(
             (panel) => panel.id === "transcript" || panel.id === "raw-data",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 import { formatClock } from "./lightbox/time";
 import type { DocumentReportData } from "./report-document-data";
@@ -192,12 +192,14 @@ function PillarScreen({
   data,
   onSelect,
   onContext,
+  prospectControls,
 }: {
   pillar: ReportPillar;
   index: number;
   data: DocumentReportData;
   onSelect?: Select;
   onContext?: SelectContext;
+  prospectControls?: ReactNode;
 }) {
   return (
     <PlaybackContext.Provider value={{ data, onContext }}>
@@ -263,9 +265,17 @@ function PillarScreen({
           </details>
         )}
         {index === 5 && (
-          <Link className={styles.destination} href="/prospects">
-            View Prospect&apos;s Information
-          </Link>
+          <>
+            {prospectControls && (
+              <details className={styles.sources}>
+                <summary>Link this call to a prospect</summary>
+                {prospectControls}
+              </details>
+            )}
+            <Link className={styles.destination} href="/prospects">
+              View Prospect&apos;s Information
+            </Link>
+          </>
         )}
       </div>
     </PlaybackContext.Provider>
@@ -277,6 +287,7 @@ export function reportScreenPanels(
   data: DocumentReportData,
   onSelect?: Select,
   onContext?: SelectContext,
+  prospectControls?: ReactNode,
 ): ReportPanel[] {
   if (!data.report) return [];
   return reportPillars(data.report, data.transcript?.duration_ms).map(
@@ -299,6 +310,7 @@ export function reportScreenPanels(
           data={data}
           onSelect={onSelect}
           onContext={onContext}
+          prospectControls={prospectControls}
         />
       ),
     }),

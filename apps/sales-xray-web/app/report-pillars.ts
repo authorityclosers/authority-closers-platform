@@ -284,6 +284,11 @@ export function reportPillars(
         )
       : gap("Prospect's position"),
     gap("Current blocker"),
+    ...(story?.prospect_tasks ?? []).map((note) => ({
+      label: "Task for the prospect mentioned",
+      text: note.text,
+      evidence: note.evidence,
+    })),
     ...(story?.prospect_commitments.length
       ? story.prospect_commitments.map((note) => ({
           label: "Prospect commitment",

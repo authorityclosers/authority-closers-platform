@@ -36,8 +36,11 @@ def test_account_story_preserves_source_refs_and_literal_timing_without_coaching
         "next_step",
         "seller_commitments",
         "prospect_commitments",
+        "prospect_tasks",
     }
     assert report.model_dump_json() == before
+    assert story["prospect_commitments"] == []
+    assert story["prospect_tasks"] == _call_map()["prospect_tasks"]
 
 
 def test_guest_does_not_receive_full_account_story_or_private_c5_fields():
