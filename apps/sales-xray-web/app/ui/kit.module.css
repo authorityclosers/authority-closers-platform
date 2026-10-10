@@ -219,6 +219,8 @@
 
 .meter {
   display: block;
+  width: 100%;
+  min-width: 48px;
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
@@ -577,6 +579,10 @@ a.rowTitle:hover {
   content: "·";
 }
 
+.rowEnd > .meter {
+  width: 72px;
+}
+
 .rowEnd {
   display: inline-flex;
   flex: none;
@@ -725,6 +731,8 @@ a.rowTitle:hover {
   display: grid;
   min-width: 0;
   gap: 5px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
 }
 
 .fieldLabel {

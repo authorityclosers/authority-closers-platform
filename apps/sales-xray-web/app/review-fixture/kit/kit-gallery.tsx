@@ -175,7 +175,10 @@ export function KitGallery() {
                 key={call.rep}
                 icon={<Avatar name={call.rep} />}
                 title={call.rep}
-                meta={[`${3 - index} calls`, `${(3 - index) * 40} min`]}
+                meta={[
+                  `${3 - index} ${3 - index === 1 ? "call" : "calls"}`,
+                  `${(3 - index) * 40} min`,
+                ]}
                 end={<Meter value={3 - index} max={3} />}
               />
             ))}
