@@ -2,6 +2,7 @@
 
 import { ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
@@ -16,6 +17,11 @@ import {
   type MasteryState,
 } from "./coaching-client";
 import { EvidencePlayer } from "./evidence-player";
+import {
+  requestedSkill,
+  requestedSkillLabel,
+  type RequestedSkill,
+} from "./focus-request";
 import styles from "./coaching.module.css";
 
 const masteryLabel: Record<MasteryState, string> = {
@@ -34,6 +40,7 @@ export function CoachingSkeleton() {
     <div
       className={styles.skeleton}
       role="status"
+      aria-busy="true"
       aria-label="Loading Coaching"
     >
       <span className={styles.skeletonTitle} />
@@ -44,7 +51,13 @@ export function CoachingSkeleton() {
   );
 }
 
-export function CoachingStory({ coaching }: { coaching: Coaching }) {
+export function CoachingStory({
+  coaching,
+  requestedFocus,
+}: {
+  coaching: Coaching;
+  requestedFocus?: RequestedSkill;
+}) {
   const { focus, mission, lesson, evidence, practice } = coaching;
   if (!focus || !mission || !lesson || !practice) {
     return (
@@ -92,6 +105,13 @@ export function CoachingStory({ coaching }: { coaching: Coaching }) {
           <span>{masteryLabel[coaching.mastery.state]}</span>
         </div>
         <h3 className={styles.focus}>{focus.label}</h3>
+        {requestedFocus && requestedFocus !== focus.skill_id ? (
+          <p className={styles.muted}>
+            Your report brought you here for{" "}
+            {requestedSkillLabel(requestedFocus)}. Your current next-call
+            mission stays active.
+          </p>
+        ) : null}
         <p>{focus.explanation}</p>
         <p>
           <strong>Why it matters</strong> {focus.why_it_matters}
@@ -338,9 +358,11 @@ export function CoachingStory({ coaching }: { coaching: Coaching }) {
 function AccountCoaching({
   personId,
   tenantId,
+  requestedFocus,
 }: {
   personId: string;
   tenantId: string;
+  requestedFocus?: RequestedSkill;
 }) {
   const [coaching, setCoaching] = useState<Coaching | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -368,7 +390,7 @@ function AccountCoaching({
   return (
     <>
       {coaching ? (
-        <CoachingStory coaching={coaching} />
+        <CoachingStory coaching={coaching} requestedFocus={requestedFocus} />
       ) : error ? (
         <OperationalEmpty
           title="Coaching is temporarily unavailable"
@@ -402,7 +424,9 @@ function AccountCoaching({
   );
 }
 
-export function CoachingPage() {
+export function CoachingPage({
+  requestedFocus,
+}: { requestedFocus?: RequestedSkill } = {}) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   const ready = access?.status === "ready" && authenticated && access.context;
@@ -428,6 +452,7 @@ export function CoachingPage() {
             ])}
             personId={ready.personId}
             tenantId={ready.tenantId}
+            requestedFocus={requestedFocus}
           />
         ) : !access || access.status === "loading" ? (
           <CoachingSkeleton />
@@ -456,11 +481,13 @@ export function CoachingPage() {
 /** New routes use the existing account bootstrap until the shared shell owns them. */
 export function CoachingRoute() {
   const access = useWorkspaceAccess();
+  const query = useSearchParams();
+  const requestedFocus = requestedSkill(query.get("focus"));
   return access ? (
-    <CoachingPage />
+    <CoachingPage requestedFocus={requestedFocus} />
   ) : (
     <StandaloneStudio>
-      <CoachingPage />
+      <CoachingPage requestedFocus={requestedFocus} />
     </StandaloneStudio>
   );
 }

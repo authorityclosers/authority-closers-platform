@@ -28,7 +28,7 @@ from ac_platform.conversation_intelligence.reports import load_report_profile, p
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.http.routes import RouteContext
 from ac_platform.outbox.models import Job
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation
 from tests.conversation_overview_fixtures import overview_for
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -45,13 +45,18 @@ def postgres_harness() -> Any:
     yield from cast(Any, _postgres_harness).__wrapped__()
 
 
-def install(setup: Any) -> None:
-    install_coaching_http(
-        setup.app, RouteContext(setup.settings, setup.require_actor, setup.sessions)
+def install(setup: Any, *, organisation: bool = False) -> None:
+    settings = (
+        setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+        if organisation
+        else setup.settings
     )
+    install_coaching_http(setup.app, RouteContext(settings, setup.require_actor, setup.sessions))
 
 
-async def draft_for(setup: Any, submission: UUID) -> tuple[UUID, str]:
+async def draft_for(
+    setup: Any, submission: UUID, *, dimension_evidence: bool = True
+) -> tuple[UUID, str]:
     """A valid private legacy draft, intentionally not linked to other evaluators."""
     async with setup.sessions() as db, db.begin():
         link = await db.scalar(
@@ -96,14 +101,20 @@ async def draft_for(setup: Any, submission: UUID) -> tuple[UUID, str]:
                 "dimension_id": row["id"],
                 "status": "observed" if row["id"] == "problem_impact_desire" else "unknown",
                 "observation": "The fictional barrier remains unclear.",
-                "evidence": payload["improvements"][0]["evidence"]
-                if row["id"] == "problem_impact_desire"
-                else [],
+                **(
+                    {
+                        "evidence": payload["improvements"][0]["evidence"]
+                        if row["id"] == "problem_impact_desire"
+                        else []
+                    }
+                    if dimension_evidence
+                    else {}
+                ),
             }
             for row in profile["dimensions"]
         ]
-        # This inspected private draft explicitly retains source-bound dimension
-        # evidence. Ordinary old v4 outputs omit it and cannot establish a focus.
+        # Legacy v4 reports omit dimension evidence but still retain finding
+        # quotes. They support a call suggestion, not a named skill diagnosis.
         report = parse_report_draft(payload, normalized, canonical_read=True).model_dump(
             mode="json"
         )
@@ -208,15 +219,30 @@ def test_coaching_cookie_host_selector_and_read_only_empty_state(
     run(exercise())
 
 
+@pytest.mark.parametrize(
+    "dimension_evidence,organisation", [(True, False), (False, False), (False, True)]
+)
 def test_coaching_own_report_withholding_and_revocation(
-    postgres_harness: Any, tmp_path: Path
+    postgres_harness: Any, tmp_path: Path, dimension_evidence: bool, organisation: bool
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
-        install(setup)
+        if organisation:
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    Organisation(
+                        tenant_id=setup.state.tenant_id,
+                        created_by_person_id=setup.state.person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token=uuid4().hex + uuid4().hex,
+                    )
+                )
+        install(setup, organisation=organisation)
         try:
             call = await direct_call(setup)
-            recording_id, revision = await draft_for(setup, call)
+            recording_id, revision = await draft_for(
+                setup, call, dimension_evidence=dimension_evidence
+            )
             async with setup.sessions() as db, db.begin():
                 await AcquisitionReports(GuestOwnership(setup.factory(db))).report(
                     call, actor=setup.state.actor
@@ -234,7 +260,9 @@ def test_coaching_own_report_withholding_and_revocation(
                 assert result.status_code == 200, result.text
                 data = result.json()
                 assert data["state"] == "ready" and data["analysed_calls"] == 1, data
-                assert data["focus"]["skill_id"] == "problem_impact_desire"
+                assert data["focus"]["skill_id"] == (
+                    "problem_impact_desire" if dimension_evidence else "report_next_step"
+                )
                 assert data["evidence"][0]["submission_id"] == str(call)
                 assert data["mastery"]["state"] == "not_enough_evidence"
                 assert data["mission"]["behavior"] == "Ask before presenting."

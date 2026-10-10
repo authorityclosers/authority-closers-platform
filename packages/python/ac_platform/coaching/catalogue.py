@@ -6,14 +6,13 @@ queue until an attributable review approves their exact source revision. This
 module does not open root's index, fetch guessed filenames, or invoke paid AI.
 """
 
-import re
-from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
 from ac_platform.coaching.contracts import GapType, LearningAsset, Model
 from ac_platform.coaching.report_adapter import SKILLS
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 
 Category = Literal["Courses", "Sales training recordings", "Content library", "Coach content"]
 
@@ -26,7 +25,7 @@ class CatalogueItem(Model):
     kind: Literal["audio", "video"]
     duration_seconds: int | None = Field(default=None, gt=0)
     # Metadata alone must not invent creator identity or permission to teach.
-    dipak_confirmed: bool = False
+    dipak_confirmed: bool = Field(default=False, strict=True)
 
 
 class TagProposal(Model):
@@ -49,11 +48,17 @@ class TagProposal(Model):
 class TagReview(Model):
     drive_id: str
     source_revision: str
+    subject_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     decision: Literal["approve", "reject"]
     reviewer_reference: str = Field(min_length=1, max_length=256)
-    reviewed_at: datetime
+    reviewed_at: AwareDatetime
     reason: str = Field(min_length=1, max_length=1000)
     takeaways: tuple[str, ...] = Field(min_length=1, max_length=5)
+
+
+def review_subject_sha256(item: CatalogueItem, proposal: TagProposal) -> str:
+    """Bind item metadata and exact proposed tags, not just a source revision."""
+    return content_hash([item.model_dump(mode="json"), proposal.model_dump(mode="json")])
 
 
 def reviewed_asset(
@@ -61,6 +66,11 @@ def reviewed_asset(
     proposal: TagProposal,
     review: TagReview,
 ) -> LearningAsset | None:
+    # Copied/constructed models bypass Pydantic field checks. This boundary
+    # revalidates them before an approval can produce a teaching asset.
+    item = CatalogueItem.model_validate_json(item.model_dump_json(warnings=False))
+    proposal = TagProposal.model_validate_json(proposal.model_dump_json(warnings=False))
+    review = TagReview.model_validate_json(review.model_dump_json(warnings=False))
     if (
         item.drive_id != proposal.drive_id
         or item.drive_id != review.drive_id
@@ -68,10 +78,12 @@ def reviewed_asset(
         or item.source_revision != review.source_revision
     ):
         raise ValueError("Review must bind the exact Drive item revision.")
-    if review.decision != "approve" or not item.dipak_confirmed or item.duration_seconds is None:
+    if review.decision != "approve":
         return None
-    if re.fullmatch(r"[A-Za-z0-9_-]{10,200}", item.drive_id) is None:
-        raise ValueError("A stable Drive ID is required.")
+    if review.subject_sha256 != review_subject_sha256(item, proposal):
+        raise ValueError("Review must bind the exact catalogue item and tag proposal.")
+    if not item.dipak_confirmed or item.duration_seconds is None:
+        return None
     return LearningAsset(
         asset_id=item.drive_id,
         title=item.title,
