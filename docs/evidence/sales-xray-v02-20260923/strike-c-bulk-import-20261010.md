@@ -32,6 +32,34 @@ strict source hashes. Ruff/format and targeted mypy of both new modules and the
 composing submission module passed. All data is fictional; no audio/provider
 request or hosted data mutation occurred.
 
+## Folder client and explicit confirmation
+
+The additive `BulkImportPreview` island uses the existing page kit. Strike A
+can mount it without a new page/shell layout. It strips exactly the selected
+directory-picker root, preserves salesperson subfolders and extensionless
+files, skips other extensions visibly and hashes one bounded file at a time.
+Actual completed hashes drive the displayed count. Reads have a 60-second
+per-file budget and cancellation; the private preview fetch has 15 seconds.
+Preview responses must match the local canonical UTF-8 manifest digest and
+folder counts. Sparse responses yield an unavailable corner card and clear
+the busy skeleton. Selection never uploads recording bytes.
+
+Twenty-two focused frontend cases pass, including exact native WebCrypto
+hashes, Devanagari canonical digest agreement, source/aggregate bounds,
+normalised duplicate paths, cancellation during a stalled file read, private
+request options, invalid member proposals and malformed/API failure responses.
+Component proof covers real inventory-to-preview wiring, honest proposed
+states and stale completion after cancel. No page mount or deployed journey
+is claimed. Typecheck and changed-file ESLint pass.
+
+`ImportConfirmation` is an input contract for the next server slice; it is not
+an activated grant or write route. Fifteen Python cases pass. Explicit `true`
+rights confirmation, the exact manifest digest and one choice per folder are
+required. Boolean/numeric/name coercion cannot supply member identity or
+consent. Different member assignments for the same source hash are rejected
+rather than choosing an owner implicitly. Nullable unmatched choices remain
+inventory metadata; no unassigned call is admitted.
+
 ## Source and remaining scope
 
 The exact manifest Drive IDs for the required first seven controlled sources
