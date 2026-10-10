@@ -8,6 +8,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date, String, and_, cast, func, literal_column, select
 
+from ac_platform.conversation_intelligence.acquisition_activity_contracts import (
+    AccountAcquisitionActivity,
+    OrganisationAcquisitionActivity,
+)
 from ac_platform.conversation_intelligence.acquisition_library import _submission_owner_filter
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
@@ -75,7 +79,7 @@ async def account_activity(
         date = first + timedelta(days=offset)
         count, seconds = by_day.get(date, (0, 0))
         days.append({"date": date.isoformat(), "analysed": count, "analysed_seconds": seconds})
-    return {
+    response: dict[str, Any] = {
         "timezone": TIMEZONE,
         "days": days,
         "analysed_last_30_days": sum(entry["analysed"] for entry in days),
@@ -83,6 +87,7 @@ async def account_activity(
             count for date, (count, _) in by_day.items() if date < first
         ),
     }
+    return AccountAcquisitionActivity.model_validate(response).model_dump(mode="json")
 
 
 async def organisation_acquisition_activity(
@@ -153,7 +158,7 @@ async def organisation_acquisition_activity(
             entry = days[(date - first).days]
             entry["analysed"] += int(count)
             entry["analysed_seconds"] += int(seconds)
-    return {
+    response: dict[str, Any] = {
         "timezone": TIMEZONE,
         "days": days,
         "analysed_last_30_days": sum(person["analysed_last_30_days"] for person in people.values()),
@@ -162,3 +167,4 @@ async def organisation_acquisition_activity(
         ),
         "people": sorted(people.values(), key=lambda person: (person["name"], person["person_id"])),
     }
+    return OrganisationAcquisitionActivity.model_validate(response).model_dump(mode="json")

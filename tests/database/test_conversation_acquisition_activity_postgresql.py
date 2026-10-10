@@ -13,6 +13,10 @@ from ac_platform.conversation_intelligence.acquisition_activity import (
     account_activity,
     organisation_acquisition_activity,
 )
+from ac_platform.conversation_intelligence.acquisition_activity_contracts import (
+    AccountAcquisitionActivity,
+    OrganisationAcquisitionActivity,
+)
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
@@ -117,7 +121,12 @@ def test_activity_buckets_owned_completed_receipts_by_kolkata_day(postgres_harne
                         )
                     )
                     if statements is None:
-                        return await account_activity(ownership, actor)
+                        body = await account_activity(ownership, actor)
+                        assert (
+                            AccountAcquisitionActivity.model_validate(body).model_dump(mode="json")
+                            == body
+                        )
+                        return body
                     await ownership.sessions._owner(None, actor, await ownership.sessions._admit())
 
                     def capture(conn, cursor, statement, parameters, context, executemany):
@@ -135,6 +144,10 @@ def test_activity_buckets_owned_completed_receipts_by_kolkata_day(postgres_harne
                         event.remove(engine.sync_engine, "before_cursor_execute", capture)
                     assert len(statements) == admission + 1
                     assert all(s.lstrip().upper().startswith("SELECT") for s in statements)
+                    assert (
+                        AccountAcquisitionActivity.model_validate(result).model_dump(mode="json")
+                        == result
+                    )
                     return result
 
             empty = await read(state.actor)
@@ -308,6 +321,10 @@ def test_organisation_receipts_authority_windows_attribution_and_fixed_queries(
                     ]
                     assert len(receipts) == 1 and "GROUP BY" in receipts[0]
                     counts.append(len(statements))
+                    assert (
+                        OrganisationAcquisitionActivity.model_validate(body).model_dump(mode="json")
+                        == body
+                    )
                     return body
 
             empty = await read(owner.actor)
@@ -465,3 +482,52 @@ def account_empty_body():
         analysed_last_30_days=0,
         analysed_previous_30_days=0,
     )
+
+
+@pytest.mark.parametrize("organisation", [False, True])
+def test_previous_only_receipt_contract_round_trip(postgres_harness, organisation):  # noqa: F811
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            state = await seed(engine, role="owner")
+            async with sessions() as db, db.begin():
+                if organisation:
+                    db.add(
+                        Organisation(
+                            tenant_id=state.tenant_id,
+                            creation_command_id=uuid4(),
+                            domain_verification_token="fictional-organisation-" + "x" * 43,
+                        )
+                    )
+                await _receipt(
+                    db, state.tenant_id, _at("2026-08-15T12:00:00"), person_id=state.person_id
+                )
+            async with sessions() as db, db.begin():
+                ownership = GuestOwnership(
+                    AcquisitionSessions(
+                        db,
+                        tenant_id=state.tenant_id,
+                        policy_revision="guest-processing-v1",
+                        clock=lambda: NOW,
+                    )
+                )
+                read = organisation_acquisition_activity if organisation else account_activity
+                body = await read(ownership, state.actor)
+            contract = (
+                OrganisationAcquisitionActivity if organisation else AccountAcquisitionActivity
+            )
+            assert contract.model_validate(body).model_dump(mode="json") == body
+            assert contract.model_validate_json(json.dumps(body)).model_dump(mode="json") == body
+            assert body["days"] == account_empty_body()["days"]
+            assert body["analysed_last_30_days"] == 0
+            assert body["analysed_previous_30_days"] == 1
+            if organisation:
+                assert len(body["people"]) == 1
+                assert body["people"][0]["person_id"] == str(state.person_id)
+                assert body["people"][0]["analysed_seconds_last_30_days"] == 0
+                assert body["people"][0]["analysed_previous_30_days"] == 1
+        finally:
+            await engine.dispose()
+
+    run(exercise())
