@@ -119,7 +119,7 @@ def build_learner(
             f"{count} of {total} comparable calls with evidence for this skill include a coaching "
             "suggestion. This does not establish that the same behavior recurred."
             if recurring
-            else "Latest-call suggestion only; we are still learning your pattern."
+            else "One supported call suggestion; we are still learning your pattern."
         ),
         selected_at=mission.active_since,
         status="active" if recurring else "provisional",

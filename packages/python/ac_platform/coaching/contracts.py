@@ -86,6 +86,18 @@ class SkillObservation(Model):
     mission: Mission | None = None
     practice: Practice | None = None
 
+    @model_validator(mode="after")
+    def linked_mission(self) -> "SkillObservation":
+        if self.mission is not None and (
+            self.mission.skill_id != self.skill_id
+            or any(
+                moment.submission_id != self.mission.origin_submission_id
+                for moment in self.evidence
+            )
+        ):
+            raise ValueError("A skill mission must link to its own call evidence.")
+        return self
+
 
 class CallHistory(Model):
     submission_id: UUID
@@ -93,6 +105,16 @@ class CallHistory(Model):
     created_at: datetime
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
+
+    @model_validator(mode="after")
+    def bound_evidence(self) -> "CallHistory":
+        if len({skill.skill_id for skill in self.skills}) != len(self.skills) or any(
+            moment.submission_id != self.submission_id or moment.source_sha256 != self.source_sha256
+            for skill in self.skills
+            for moment in skill.evidence
+        ):
+            raise ValueError("Call evidence cannot cross a source or duplicate a skill.")
+        return self
 
 
 class RootCause(Model):

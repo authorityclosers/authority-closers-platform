@@ -4,6 +4,7 @@ Never widen to an organisation administrator's readable teammates. Reading this
 projection does not renew a claim, write progress, charge credits or call AI.
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -19,7 +20,9 @@ from ac_platform.conversation_intelligence.acquisition_reports import Acquisitio
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
     ConversationRecording,
     ConversationReportDraft,
     ConversationRun,
@@ -66,9 +69,8 @@ class CoachingLibrary:
                     shared_identity_locks=True,
                 )
                 recording_id = UUID(envelope["recording_id"])
-                # Only canonical drafts with identical evaluation profile + recipe
-                # are compared. Recovered/unlinked versions stay separate until a
-                # reviewed linking policy exists (AC-SVAL §16).
+                # Comparable suggestions need the canonical evaluator receipt;
+                # a shared candidate profile alone does not link revisions.
                 draft = await self.database.scalar(
                     select(ConversationReportDraft)
                     .join(ConversationRun, ConversationRun.id == ConversationReportDraft.run_id)
@@ -99,11 +101,20 @@ class CoachingLibrary:
                     if draft is not None
                     else None
                 )
-                comparison = (
-                    content_hash([draft.profile_sha256, recipe])
-                    if draft is not None and recipe
-                    else f"unlinked:{usage.submission_id}"
-                )
+                comparison = f"unlinked:{usage.submission_id}"
+                proof = draft.evidence_receipt if draft is not None else None
+                if (
+                    isinstance(proof, dict)
+                    and proof.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
+                    and recipe
+                ):
+                    checkpoint = await self.database.get(
+                        ConversationCheckpoint, UUID(proof["coaching_checkpoint_id"])
+                    )
+                    recording = await self.database.get(ConversationRecording, recording_id)
+                    if checkpoint is not None and recording is not None:
+                        verified = verified_checkpoint(checkpoint, binding_for(recording))
+                        comparison = evaluator_key(verified.as_dict(), recipe)
                 call = from_report(
                     envelope,
                     submission_id=usage.submission_id,
@@ -124,3 +135,15 @@ class CoachingLibrary:
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
         )
+
+
+def evaluator_key(manifest: dict[str, Any], recipe: str) -> str:
+    """Exclude only the call input hash; retain all evaluator/version boundaries.
+
+    Caller supplies a verified canonical C5, never an arbitrary saved manifest.
+    Different prompts, models, languages, qualitative packs, repair conditions
+    and one-off benchmark approvals therefore stay separate (AC-SVAL §16).
+    This links provisional suggestions, never validates latent skill scores.
+    """
+    config = {key: value for key, value in manifest["config"].items() if key != "input_sha256"}
+    return content_hash([recipe, manifest["revision"], config])
