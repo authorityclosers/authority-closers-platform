@@ -266,7 +266,8 @@
   margin: 0;
 }
 
-.danger {
+.danger,
+.keep {
   min-height: var(--sx-control-h);
   padding: 0 12px;
   border: 1px solid var(--sx-bad);
@@ -279,12 +280,19 @@
   cursor: pointer;
 }
 
+.keep {
+  border-color: var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
 .danger:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.danger:focus-visible {
+.danger:focus-visible,
+.keep:focus-visible {
   outline: 2px solid var(--sx-focus-ring);
   outline-offset: 2px;
 }

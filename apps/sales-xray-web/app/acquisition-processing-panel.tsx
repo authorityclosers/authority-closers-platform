@@ -445,7 +445,7 @@ export function AcquisitionProcessingPanel({
             </button>
             <button
               type="button"
-              className="secondary-button"
+              className={styles.keep}
               onClick={deleteConfirm.onKeep}
             >
               Keep call

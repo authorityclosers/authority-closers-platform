@@ -74,7 +74,7 @@ async function mount(
           fileMeta="12.4 MB"
           {...props}
         >
-          <button type="button">Check status</button>
+          <button type="button">Delete this call…</button>
           <Link href={`/analysis/calls/${callId}`}>This call’s link</Link>
         </AcquisitionProcessingPanel>
       </WorkspaceAccessProvider>,
@@ -153,12 +153,40 @@ it("keeps the call's link and other actions in a ⋯ menu while it works", async
     "More actions",
   );
   expect(menu.textContent).toContain("This call’s link");
-  expect(menu.textContent).toContain("Check status");
+  expect(menu.textContent).toContain("Delete this call…");
   expect(host.textContent).toContain("My call.m4a");
   expect(host.textContent).toContain("12.4 MB");
   expect(host.textContent).toContain(
     "You can leave this page. Your report will appear in Calls when it’s ready.",
   );
+});
+
+it("closes the ⋯ menu when an item is chosen", async () => {
+  await mount();
+  const menu = host.querySelector("details")!;
+  menu.open = true;
+  const item = [...menu.querySelectorAll("button")].find(
+    (button) => button.textContent === "Delete this call…",
+  )!;
+  await act(async () => item.click());
+  expect(menu.open).toBe(false);
+});
+
+it("asks once before deleting, in the panel, and runs the chosen answer", async () => {
+  const onDelete = vi.fn();
+  const onKeep = vi.fn();
+  await mount({ deleteConfirm: { disabled: false, onDelete, onKeep } });
+  const confirm = host.querySelector('[role="alert"]')!;
+  expect(confirm.textContent).toContain(
+    "Remove this recording and its report? This cannot be undone.",
+  );
+  const [remove, keep] = [...confirm.querySelectorAll("button")];
+  expect(remove.textContent).toBe("Delete call");
+  expect(keep.textContent).toBe("Keep call");
+  await act(async () => keep.click());
+  expect(onKeep).toHaveBeenCalledTimes(1);
+  await act(async () => remove.click());
+  expect(onDelete).toHaveBeenCalledTimes(1);
 });
 
 it("tells a guest to keep the call's link instead of promising Calls", async () => {
@@ -199,7 +227,7 @@ it("pauses calmly: saved work, the reason and the recovery actions in view", asy
   expect(
     host.querySelector('[role="group"][aria-label="Call actions"]')
       ?.textContent,
-  ).toContain("Check status");
+  ).toContain("Delete this call…");
   expect(host.textContent).not.toContain("You can leave this page");
 });
 
@@ -231,12 +259,12 @@ it("renders a static example with no live claim, read or action", () => {
       statusText="Example"
       fileName="Example call.wav"
     >
-      <button type="button">Check status</button>
+      <button type="button">Delete this call…</button>
     </AcquisitionProcessingPanel>,
   );
   expect(markup).toContain("Example processing state");
   expect(markup).toContain("No call was uploaded or analysed");
-  expect(markup).not.toContain("Check status");
+  expect(markup).not.toContain("Delete this call");
   expect(markup).not.toContain("You can leave this page");
   expect(fetchMock).not.toHaveBeenCalled();
 });
