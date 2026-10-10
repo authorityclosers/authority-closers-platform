@@ -48,8 +48,8 @@ it("renders the six Report pillars, eight expandable skills and exact clickable 
     );
     expect(host.textContent).toContain("Not established in this report");
     const source = syntheticReport.strengths[0].evidence[0];
-    const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.getAttribute("aria-label")?.startsWith("Play What worked"),
+    const button = host.querySelector<HTMLButtonElement>(
+      '[data-report-pillar="moments"] button[aria-label^="Play source moment"]',
     )!;
     await act(async () => button.click());
     expect(select).toHaveBeenCalledWith(source, expect.any(String));

@@ -154,6 +154,13 @@ export function parseReportStory(
     next_step_when: nullableText(outcome.next_step_when),
     evidence: evidence(outcome.evidence, 2, 0),
   };
+  const available = (refs: ReportEvidence[]) =>
+    refs.some((e) => e.quote !== "[Withheld for privacy]");
+  if (parsedOutcome.evidence.length && !available(parsedOutcome.evidence)) {
+    parsedOutcome.kind = "none";
+    parsedOutcome.next_step_rung = "none";
+    parsedOutcome.next_step_when = null;
+  }
   if (
     parsedOutcome.kind !== "none" ||
     parsedOutcome.next_step_rung !== "none" ||
@@ -170,29 +177,37 @@ export function parseReportStory(
     item.next_step === null
       ? null
       : object(item.next_step, ["text", "evidence"]);
+  const nextRefs = next ? evidence(next.evidence, 2) : [];
   return {
     version: "report-story/1",
     phases,
     outcome: parsedOutcome,
-    next_step: next && {
-      text: text(next.text),
-      evidence: evidence(next.evidence, 2),
-    },
-    prospect_commitments: list(item.prospect_commitments, 4).map((value) => {
-      const note = object(value, ["text", "effort_ms", "evidence"]);
-      return {
-        text: text(note.text),
-        effort_ms: note.effort_ms === null ? null : number(note.effort_ms),
-        evidence: evidence(note.evidence, 1),
-      };
-    }),
-    seller_commitments: list(item.seller_commitments, 6).map((value) => {
-      const note = object(value, ["text", "due_text", "evidence"]);
-      const refs = evidence(note.evidence, 1);
-      const due = nullableText(note.due_text);
-      if (due !== null)
-        check(refs.some((e) => squash(e.quote).includes(squash(due))));
-      return { text: text(note.text), due_text: due, evidence: refs };
-    }),
+    next_step:
+      next && available(nextRefs)
+        ? {
+            text: text(next.text),
+            evidence: nextRefs,
+          }
+        : null,
+    prospect_commitments: list(item.prospect_commitments, 4)
+      .map((value) => {
+        const note = object(value, ["text", "effort_ms", "evidence"]);
+        return {
+          text: text(note.text),
+          effort_ms: note.effort_ms === null ? null : number(note.effort_ms),
+          evidence: evidence(note.evidence, 1),
+        };
+      })
+      .filter((note) => available(note.evidence)),
+    seller_commitments: list(item.seller_commitments, 6)
+      .map((value) => {
+        const note = object(value, ["text", "due_text", "evidence"]);
+        const refs = evidence(note.evidence, 1);
+        const due = nullableText(note.due_text);
+        if (due !== null && available(refs))
+          check(refs.some((e) => squash(e.quote).includes(squash(due))));
+        return { text: text(note.text), due_text: due, evidence: refs };
+      })
+      .filter((note) => available(note.evidence)),
   };
 }

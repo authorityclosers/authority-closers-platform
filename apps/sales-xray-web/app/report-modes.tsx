@@ -44,6 +44,7 @@ import {
 import { ReportDocument } from "./report-document";
 import { reportScreenPanels } from "./report-pillar-screen";
 import type { ReportEvidence } from "./report-contract";
+import type { ContextualSourcePlayback } from "./source-playback-context";
 
 type View = "reading" | "tabs" | "document";
 type TextSize = "100" | "112.5" | "125";
@@ -496,6 +497,7 @@ export function ReportModes({
   documentData,
   initialView,
   onSelectEvidence,
+  onSelectContextualPlayback,
   structure = "custom",
 }: {
   label?: string;
@@ -508,12 +510,20 @@ export function ReportModes({
   /** Optional custom document report data */
   documentData?: DocumentReportData;
   onSelectEvidence?: (evidence: ReportEvidence, title: string) => void;
+  onSelectContextualPlayback?: (
+    playback: ContextualSourcePlayback,
+    title: string,
+  ) => void;
   structure?: "custom" | "pillars";
 }) {
   const panels =
     structure === "pillars" && documentData?.report
       ? [
-          ...reportScreenPanels(documentData, onSelectEvidence),
+          ...reportScreenPanels(
+            documentData,
+            onSelectEvidence,
+            onSelectContextualPlayback,
+          ),
           ...suppliedPanels.filter(
             (panel) => panel.id === "transcript" || panel.id === "raw-data",
           ),

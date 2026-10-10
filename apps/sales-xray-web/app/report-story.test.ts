@@ -42,6 +42,27 @@ const wire = () => ({
 });
 
 describe("Report story source binding", () => {
+  it("opens a privacy-withheld report with dependent dates and commitments unavailable", () => {
+    const marker = "[Withheld for privacy]";
+    const candidate = wire();
+    const redactedRefs = [{ segment_id: "s1", quote: marker }];
+    candidate.outcome.evidence = redactedRefs;
+    candidate.next_step.evidence = redactedRefs;
+    candidate.prospect_commitments[0].evidence = redactedRefs;
+    const source = {
+      ...transcript,
+      segments: transcript.segments.map((s) => ({ ...s, text: marker })),
+    };
+    const story = parseReportStory(candidate, source);
+    expect(story.outcome).toMatchObject({
+      kind: "none",
+      next_step_rung: "none",
+      next_step_when: null,
+    });
+    expect(story.next_step).toBeNull();
+    expect(story.prospect_commitments).toEqual([]);
+    expect(() => parseReportStory(candidate, transcript)).toThrow();
+  });
   it("resolves native timing, keeps literal dates and preserves a return to discovery", () => {
     const story = parseReportStory(wire(), transcript);
     expect(story.outcome.next_step_when).toBe("Friday at four");

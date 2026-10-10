@@ -816,7 +816,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await tabbed_view.click()
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
                     assert "view=tabs" in page.url
-                    await page.get_by_role("tab", name="Moments", exact=True).click()
+                    await page.get_by_role("tab", name="Moments That Mattered", exact=True).click()
                     assert (
                         await page.locator("audio").get_attribute("src")
                         == PREFIX + f"/submissions/{submission_id}/source"

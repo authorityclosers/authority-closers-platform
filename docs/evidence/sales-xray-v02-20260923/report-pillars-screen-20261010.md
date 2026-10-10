@@ -64,3 +64,13 @@ Final Python run passed 169 tests covering report drafts, access, story and fail
 provenance. Final corpus/screen/Document/OOXML run passed 14 frontend tests after
 adding the optional skill state. The source hash check was deliberately updated
 with validator /10; generated legacy prompt/fixture hashes continue to pass.
+
+CI integration follow-up: the six-pillar adapter now reuses the existing Clip
+and contextual playback builder, so play/pause, sub-second wording, the exact
+stop boundary and context revalidation continue through the single audio dock.
+Guest preview reports retain their established unlock/count interface. The
+account journey expectations now follow the required six-pillar names. The
+focused acquisition-studio + pillar-screen run passed 110 tests. Deterministic
+transcript metrics fill the speaker rows when a saved numbers packet is absent;
+no roles or acoustic facts are inferred. A withheld supporting story quote
+removes its dependent date/commitment instead of blocking the entire report.
