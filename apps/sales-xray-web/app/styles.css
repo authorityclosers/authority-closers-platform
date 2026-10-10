@@ -1,4 +1,5 @@
 @import "./ui/pulse-tokens.css";
+@import "./ui/sx-tokens.css";
 
 /* AC's existing Clarity Grid geometry, cobalt/academy tokens and editorial
    headings, scoped to this standalone app. No remote font or media request. */

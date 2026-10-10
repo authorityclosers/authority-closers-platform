@@ -4,10 +4,10 @@
   z-index: 2147483000;
   padding: 4px 8px;
   border-radius: 6px;
-  background: var(--lx-ink);
+  background: var(--sx-ink);
   box-shadow: var(--lx-shadow-2);
-  color: var(--lx-surface);
-  font: 500 12px/1.4 var(--lx-font-ui);
+  color: var(--sx-surface);
+  font: 500 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
   white-space: nowrap;
   pointer-events: none;
   transform: translateY(-50%);
