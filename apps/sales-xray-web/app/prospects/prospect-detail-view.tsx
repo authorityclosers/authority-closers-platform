@@ -205,7 +205,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
             <details className={styles.callsContainer}>
               <summary className={styles.callsSectionTitle}>
                 <Phone size={18} aria-hidden="true" />
-                Opportunity history ({prospect.call_count} calls)
+                Opportunity history ({prospect.call_count} visible calls)
               </summary>
               <p className={informationStyles.note}>
                 <HelpCircle size={14} aria-hidden="true" /> Call interpretations

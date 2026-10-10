@@ -18,7 +18,7 @@ import { fetchProspectsList, type ProspectSummary } from "../prospects-client";
 import styles from "./prospects.module.css";
 
 function formatCreatedDate(createdAt: string | null) {
-  if (!createdAt) return "No calls yet";
+  if (!createdAt) return "Not available";
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
       new Date(createdAt),
@@ -254,7 +254,9 @@ export function ProspectsListView() {
                       <div className={styles.prospectSub}>
                         <span>
                           {prospect.call_count}{" "}
-                          {prospect.call_count === 1 ? "call" : "calls"}
+                          {prospect.call_count === 1
+                            ? "visible call"
+                            : "visible calls"}
                         </span>
                         <span>•</span>
                         <span>
@@ -308,7 +310,7 @@ export function ProspectsListView() {
                         </div>
                         <div className={styles.hoverCardRow}>
                           <span className={styles.hoverCardLabel}>
-                            Call count
+                            Visible calls
                           </span>
                           <span className={styles.hoverCardValue}>
                             {prospect.call_count}
@@ -316,7 +318,7 @@ export function ProspectsListView() {
                         </div>
                         <div className={styles.hoverCardRow}>
                           <span className={styles.hoverCardLabel}>
-                            Last call
+                            Last visible call
                           </span>
                           <span className={styles.hoverCardValue}>
                             {formatCreatedDate(prospect.last_call)}

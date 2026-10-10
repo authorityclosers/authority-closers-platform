@@ -160,7 +160,7 @@ describe("ProspectsListView", () => {
     });
 
     expect(host.textContent).toContain("Acme Corp Prospect");
-    expect(host.textContent).toContain("2 calls");
+    expect(host.textContent).toContain("2 visible calls");
     expect(host.textContent).toContain("Missing stage");
     // Initials for Acme Corp Prospect
     expect(host.textContent).toContain("AC");
@@ -306,7 +306,7 @@ describe("ProspectDetailView", () => {
       );
     });
 
-    expect(host.textContent).toContain("Opportunity history (2 calls)");
+    expect(host.textContent).toContain("Opportunity history (2 visible calls)");
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
     expect(host.textContent).toContain("State: report_ready");

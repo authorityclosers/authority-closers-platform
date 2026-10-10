@@ -41,7 +41,9 @@ Personal and operations workspaces retain their prior scope. Call/audio/quote
 rights and owner-only person editing remain governed by the existing checks.
 Shared reads therefore withhold inaccessible call facts instead of granting
 new source access. `can_edit`/`can_confirm` control the interface. Workspace
-switching clears the previous customer's display and cancels pending requests.
+switching clears the previous customer's display and cancels pending reads.
+Call counts and last-call labels explicitly describe visible history; unavailable
+colleague calls are not described as a customer having no calls.
 
 ## Verification
 
@@ -62,6 +64,17 @@ switching clears the previous customer's display and cancels pending requests.
   needs latest-head CI before watchdog eligibility.
 
 ## Remaining boundary
+
+Rollover: PR #420 merged at 08:52:58 UTC as 73614f5. The carried integration is
+e4abe94 on a fresh gate-started branch, in nondraft PR #427. Latest-main focused
+reruns pass: 156 frontend tests, four detection PostgreSQL cases and app
+typecheck. Report and Prospect browser proofs also pass at 390/1440 in light/dark
+after the shell update; fictional screenshots are in shots/report-latest-main
+and shots/prospects-latest-main under the strike folder. No page errors,
+external/API requests or overflow. Hosted verification returned a Cloudflare
+Access login redirect; no authorized browser session or bypass is used.
+The visible-history wording correction passes the nine Prospect screen tests
+and changed-file ESLint. This receipt supplements the earlier merged-head proof.
 
 The view-time fallback is not universal post-C5 dispatch. Strike C PR #421 owns
 `reporting_pipeline.py`, `inference_worker.py` and processing/provider scheduling.
