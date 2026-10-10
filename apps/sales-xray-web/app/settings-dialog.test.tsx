@@ -230,15 +230,13 @@ it("hides the guide switch until the signed-in account identity is known", async
 it("replaces the settings entry with an internal destination", async () => {
   await render(true);
   const initialLength = window.history.length;
-  await act(async () => openSettings("profile"));
+  await act(async () => openSettings("usage"));
   await flush();
   expect(window.history.length).toBe(initialLength + 1);
-  const link = host.querySelector<HTMLAnchorElement>(
-    'a[href="/analysis/calls"]',
-  )!;
+  const link = host.querySelector<HTMLAnchorElement>('a[href="/dashboard"]')!;
   await act(async () => link.click());
   await flush();
-  expect(window.location.pathname).toBe("/analysis/calls");
+  expect(window.location.pathname).toBe("/dashboard");
   expect(window.location.hash).toBe("");
   expect(window.history.length).toBe(initialLength + 1);
   expect(host.querySelector("dialog")).toBeNull();
@@ -248,11 +246,9 @@ it.each(["ctrl", "meta", "shift", "blank", "download"])(
   "preserves the open settings entry for a %s link click",
   async (kind) => {
     await render(true);
-    await act(async () => openSettings("profile"));
+    await act(async () => openSettings("usage"));
     await flush();
-    const link = host.querySelector<HTMLAnchorElement>(
-      'a[href="/analysis/calls"]',
-    )!;
+    const link = host.querySelector<HTMLAnchorElement>('a[href="/dashboard"]')!;
     if (kind === "blank") link.target = "_blank";
     if (kind === "download") link.download = "report";
     await act(async () =>
@@ -267,7 +263,7 @@ it.each(["ctrl", "meta", "shift", "blank", "download"])(
       ),
     );
     expect(window.location.pathname).toBe("/dashboard");
-    expect(window.location.hash).toBe("#settings/profile");
+    expect(window.location.hash).toBe("#settings/usage");
     expect(host.querySelector("dialog")).not.toBeNull();
   },
 );
