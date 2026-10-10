@@ -2581,7 +2581,7 @@ it("keeps one steady headline through a long wait without changing progress, ide
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
-    "Complete",
+    "Done",
   );
   expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
     "In progress",
@@ -2633,7 +2633,7 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "The completed transcript stays attached",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
-    "Complete",
+    "Done",
   );
   expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
     "Paused · needs attention",
@@ -2692,7 +2692,7 @@ it("lets a reloaded held call request one quote, then requires explicit approval
   await mount();
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
-    "Complete",
+    "Done",
   );
   await act(async () => vi.advanceTimersByTimeAsync(12000));
   await flush();

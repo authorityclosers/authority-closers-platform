@@ -176,11 +176,8 @@ function stepStatus(
 ) {
   if (state === "done") {
     if (duration !== null) return `Done · ${formatElapsed(duration)}`;
-    return row?.state === "completed"
-      ? "Complete"
-      : row?.state === "saved"
-        ? "Work saved"
-        : "Done";
+    // Part of the work is saved, not the whole step: say exactly that.
+    return row?.state === "saved" ? "Work saved" : "Done";
   }
   if (state === "active") return "In progress";
   if (state === "attention")

@@ -364,6 +364,11 @@
     min-height: 0;
     padding-top: 8px;
   }
+
+  /* Phones wrap the step's description instead of cutting it off. */
+  .stepCopy span {
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
