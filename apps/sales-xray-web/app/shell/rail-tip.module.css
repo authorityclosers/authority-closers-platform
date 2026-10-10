@@ -1,0 +1,28 @@
+/* Above every layer the app draws: bars, panels, menus and corner cards. */
+.tip {
+  position: fixed;
+  z-index: 2147483000;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--lx-ink);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-surface);
+  font: 500 12px/1.4 var(--lx-font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: tip-in 150ms ease-out both;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    animation: none;
+  }
+}

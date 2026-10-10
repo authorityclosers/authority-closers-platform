@@ -54,6 +54,7 @@ import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import { phoneTabFor } from "./phone-nav";
+import { RailTip } from "./rail-tip";
 import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
@@ -221,6 +222,7 @@ function LightboxShellFrame({
   const [accountView, setAccountView] = useState<"main" | "news">("main");
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
   const accountAnchorRef = useRef<HTMLElement | null>(null);
+  const railRef = useRef<HTMLDivElement | null>(null);
   const updates = useShellUpdates(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -690,7 +692,7 @@ function LightboxShellFrame({
         aria-label="Sales Xray navigation"
       >
         {/* 64px Icon Strip */}
-        <div className={styles.iconStrip}>
+        <div className={styles.iconStrip} ref={railRef}>
           <div className={styles.stripTop}>
             <div className={styles.logoSlot}>
               <BrandLockup href={homeHref} markOnly={true} />
@@ -715,37 +717,37 @@ function LightboxShellFrame({
               className={`${styles.stripBtn}${active === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Dashboard"
+              data-rail-tip="Dashboard"
               aria-current={active === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Dashboard</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
+              data-rail-tip="New analysis"
               aria-current={active === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>New analysis</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/analysis/calls"
               aria-label="Calls"
+              data-rail-tip="Calls"
               aria-current={active === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Calls</span>
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
               aria-label="Prospects"
+              data-rail-tip="Prospects"
               aria-current={active === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Prospects</span>
             </Link>
             {inOrganisation || active === "organisation" ? (
               <Link
@@ -753,10 +755,10 @@ function LightboxShellFrame({
                 href="/organisation"
                 prefetch={false}
                 aria-label="Organisation"
+                data-rail-tip="Organisation"
                 aria-current={active === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.tooltip}>Organisation</span>
               </Link>
             ) : null}
           </div>
@@ -767,16 +769,18 @@ function LightboxShellFrame({
               href={accountHref}
               onClick={openAccount}
               aria-label={accountLabel}
+              data-rail-tip={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
               aria-current={active === "account" ? "page" : undefined}
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>{accountLabel}</span>
             </Link>
           </div>
         </div>
+
+        <RailTip rail={railRef} />
 
         {/* 248px Panel */}
         <div
