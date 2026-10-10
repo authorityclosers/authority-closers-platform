@@ -313,7 +313,9 @@ export function OrganisationView() {
       mobileFit={false}
     >
       <div className={styles.page} data-organisation-view>
-        {base.status === "loading" || !authenticated ? (
+        {access?.authenticated === false ? (
+          <SignedOut onSignIn={access.requestAccountSignIn} />
+        ) : base.status === "loading" || !authenticated ? (
           <PageSkeleton />
         ) : base.status === "error" ? (
           <section className={styles.state} role="alert">
@@ -459,9 +461,38 @@ export function OrganisationView() {
   );
 }
 
+/** A signed-out visitor is told what this page is and how to get in. */
+function SignedOut({ onSignIn }: { onSignIn?: () => void }) {
+  return (
+    <section className={styles.state}>
+      <span className={styles.stateIcon} aria-hidden="true">
+        <Building2 size={20} />
+      </span>
+      <h1>Sign in to see your organisation</h1>
+      <p>Your team, its calls and their reports appear after you sign in.</p>
+      <Link
+        className={styles.primary}
+        href="/login"
+        onClick={(event) => {
+          if (!onSignIn) return;
+          event.preventDefault();
+          onSignIn();
+        }}
+      >
+        Sign in
+      </Link>
+    </section>
+  );
+}
+
 function PageSkeleton() {
   return (
-    <div className={styles.skeleton} aria-label="Loading organisation">
+    <div
+      className={styles.skeleton}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading organisation"
+    >
       <div className={styles.skeletonHeader}>
         <span className={styles.skeletonTile} />
         <span className={styles.skeletonLines}>
@@ -637,7 +668,12 @@ function OverviewPanel({
 }) {
   if (activity.status === "loading")
     return (
-      <div className={styles.skeleton} aria-label="Loading activity">
+      <div
+        className={styles.skeleton}
+        role="status"
+        aria-busy="true"
+        aria-label="Loading activity"
+      >
         <SkeletonBlocks team={team} />
       </div>
     );
@@ -1419,7 +1455,12 @@ function MembersPanel({
             );
           })}
           {members.status === "loading" ? (
-            <div className={styles.rowSkeleton} aria-label="Loading members">
+            <div
+              className={styles.rowSkeleton}
+              role="status"
+              aria-busy="true"
+              aria-label="Loading members"
+            >
               <span />
               <span />
               <span />
