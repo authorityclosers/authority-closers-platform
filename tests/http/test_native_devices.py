@@ -10,12 +10,12 @@ import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
@@ -27,12 +27,11 @@ from ac_platform.db.models import companion_credentials as credentials
 from ac_platform.db.models import companion_devices as devices
 from ac_platform.db.models import companion_pairings as pairings
 from ac_platform.db.models import companion_refresh_families as families
-from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.auth import install_identity_http
 from ac_platform.http.native_devices import install_native_devices_http
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import Person
-from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.native_devices import NativeDevices, digest
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
@@ -51,8 +50,16 @@ async def native(postgres_harness, monkeypatch) -> AsyncIterator[Any]:
             [
                 Tenant(id=tenant, slug=tenant.hex, name="Fictional workspace"),
                 Tenant(id=other_tenant, slug=other_tenant.hex, name="Other fictional workspace"),
-                Person(id=person, email=f"{person.hex}@example.test"),
-                Person(id=other_person, email=f"{other_person.hex}@example.test"),
+                Person(
+                    id=person,
+                    email=f"{person.hex}@example.test",
+                    email_verified_at=datetime.now(UTC),
+                ),
+                Person(
+                    id=other_person,
+                    email=f"{other_person.hex}@example.test",
+                    email_verified_at=datetime.now(UTC),
+                ),
             ]
         )
         db.flush()
@@ -65,46 +72,29 @@ async def native(postgres_harness, monkeypatch) -> AsyncIterator[Any]:
         )
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    actor = ActorContext(person_id=person, tenant_id=tenant, session_id=uuid4())
-    actors = {
-        "fictional-owner": actor,
-        "fictional-other": ActorContext(other_person, uuid4(), tenant),
-        "fictional-workspace": ActorContext(person, uuid4(), other_tenant),
-    }
-    # Preserve the real audit/session FK while using a bounded cookie-resolver
-    # seam; the application's established resolver is wired in app.py.
-    with Session(postgres_harness) as db, db.begin():
-        for context in actors.values():
-            db.add(
-                IdentitySession(
-                    id=context.session_id,
-                    person_id=context.person_id,
-                    selected_tenant_id=context.tenant_id,
-                    token_hash=bytes.fromhex(digest(str(context.session_id))),
-                    expires_at=datetime.now(UTC) + timedelta(days=1),
-                )
-            )
-
-    async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
-        resolved = actors.get(request.cookies.get("fictional-session", ""))
-        if resolved is None:
-            raise HTTPException(401, "Cookie session required.")
-        async with sessions() as db, db.begin():
-            yield cast(
-                AuthenticatedTransaction,
-                SimpleNamespace(
-                    database=db,
-                    resolved=SimpleNamespace(actor=resolved),
-                ),
-            )
-
-    application = FastAPI()
-    register_problem_handlers(application)
     settings = Settings(
+        _env_file=None,
         environment="test",
         sales_xray_app_url=ORIGIN,
         allowed_origins=[ORIGIN],
     )
+    cookies, actors = {}, {}
+    for label, person_id, tenant_id in [
+        ("fictional-owner", person, tenant),
+        ("fictional-other", other_person, tenant),
+        ("fictional-workspace", person, other_tenant),
+    ]:
+        async with sessions() as db, db.begin():
+            identity = AsyncIdentityApplication(
+                db, token_pepper=settings.session_token_pepper.get_secret_value()
+            )
+            issued = await identity.issue_authenticated_session(person_id)
+            resolved = await identity.select_tenant(issued.token, tenant_id)
+            cookies[label], actors[label] = issued.token, resolved.actor
+    actor = actors["fictional-owner"]
+    application = FastAPI()
+    register_problem_handlers(application)
+    require_actor = install_identity_http(application, settings=settings, sessions=sessions)
     install_native_devices_http(
         application,
         settings=settings,
@@ -114,7 +104,7 @@ async def native(postgres_harness, monkeypatch) -> AsyncIterator[Any]:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=application),
         base_url=ORIGIN,
-        cookies={"fictional-session": "fictional-owner"},
+        cookies={settings.session_cookie_name: cookies["fictional-owner"]},
         headers={"Origin": ORIGIN},
     ) as client:
         yield SimpleNamespace(
@@ -125,6 +115,8 @@ async def native(postgres_harness, monkeypatch) -> AsyncIterator[Any]:
             person=person,
             tenant=tenant,
             engine=engine,
+            cookies=cookies,
+            cookie_name=settings.session_cookie_name,
         )
     await engine.dispose()
 
@@ -368,14 +360,14 @@ async def test_cookie_revoke_scope_and_bearer_own_device_only(native):
     )
     assert wrong.status_code == 404  # Cookie for the same person cannot broaden bearer scope.
     for cookie in ["fictional-other", "fictional-workspace"]:
-        native.client.cookies.set("fictional-session", cookie)
+        native.client.cookies.set(native.cookie_name, native.cookies[cookie])
         assert (await native.client.get(PREFIX + "/devices")).json()["devices"] == []
         assert (
             await native.client.post(
                 PREFIX + f"/devices/{tokens['device_id']}/revoke",
             )
         ).status_code == 404
-    native.client.cookies.set("fictional-session", "fictional-owner")
+    native.client.cookies.set(native.cookie_name, native.cookies["fictional-owner"])
     assert (
         await native.client.post(
             PREFIX + f"/devices/{tokens['device_id']}/revoke",
@@ -440,6 +432,69 @@ async def test_membership_removal_revokes_binding_on_next_request(native):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("eligibility", ["unverified", "missing_email", "invalid_email", "role"])
+async def test_native_credentials_recheck_canonical_person_eligibility(native, eligibility):
+    tokens = await paired(native)  # Approval uses the shipped cookie resolver.
+    async with native.sessions() as db, db.begin():
+        assert await NativeDevices(db).authenticate(tokens["access_token"]) is not None
+        if eligibility == "role":
+            await db.execute(
+                update(Membership)
+                .where(Membership.tenant_id == native.tenant, Membership.person_id == native.person)
+                .values(role="processing")
+            )
+        else:
+            change = {
+                "unverified": {"email_verified_at": None},
+                "missing_email": {"email": None},
+                "invalid_email": {"email": "invalid"},
+            }[eligibility]
+            await db.execute(update(Person).where(Person.id == native.person).values(**change))
+    async with native.sessions() as db, db.begin():
+        assert await NativeDevices(db).authenticate(tokens["access_token"]) is None
+    assert (await refresh(native, tokens["refresh_token"])).status_code == 401
+    assert (
+        await native.client.post(
+            PREFIX + f"/devices/{tokens['device_id']}/revoke",
+            headers={"Authorization": "Bearer " + tokens["access_token"]},
+        )
+    ).status_code == 401
+    cookie_status = 403 if eligibility == "role" else 401
+    assert (await native.client.get(PREFIX + "/devices")).status_code == cookie_status
+    pairing = await start(native)
+    assert (
+        await native.client.post(
+            PREFIX + "/pair/decide", json={"code": pairing["code"], "decision": "approve"}
+        )
+    ).status_code == cookie_status
+    async with native.sessions() as db:
+        assert (
+            await db.scalar(
+                select(devices.c.revoked_at).where(devices.c.id == UUID(tokens["device_id"]))
+            )
+            is None
+        )
+        assert (
+            await db.scalar(
+                select(families.c.revoked_at).where(
+                    families.c.device_id == UUID(tokens["device_id"])
+                )
+            )
+            is None
+        )
+        assert (
+            await db.scalar(
+                select(AuditEvent.id).where(
+                    AuditEvent.tenant_id == native.tenant,
+                    AuditEvent.action == "native.membership.revoke",
+                )
+            )
+            is None
+        )
+        assert (await verify_audit_chain(db, native.tenant)).valid
+
+
+@pytest.mark.asyncio
 async def test_cookie_origin_and_browser_bearer_separation(native):
     tokens = await paired(native)
     assert (
@@ -467,7 +522,7 @@ async def test_cookie_origin_and_browser_bearer_separation(native):
         await native.client.post(PREFIX + "/pair/decide", json=data, headers=bearer)
     ).status_code == 401
     assert (await native.client.get(PREFIX + "/devices", headers=bearer)).status_code == 401
-    native.client.cookies.set("fictional-session", "fictional-owner")
+    native.client.cookies.set(native.cookie_name, native.cookies["fictional-owner"])
     assert (
         await native.client.post(
             PREFIX + "/pair/decide", json=data, headers={"Authorization": "Bearer invalid"}
@@ -553,7 +608,7 @@ async def test_device_list_has_bounded_query_count_and_validated_cursor(native):
     finally:
         event.remove(native.engine.sync_engine, "before_cursor_execute", track)
     assert result.status_code == 200
-    assert len(statements) == 3  # Binding, latest immutable removal and bounded device read.
+    assert len(statements) == 9  # Six shipped cookie-resolver queries plus three native reads.
     cursor = result.json()["devices"][0]["id"]
     assert (await native.client.get(PREFIX + "/devices", params={"after": cursor})).json()[
         "devices"

@@ -12,6 +12,7 @@ import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -25,8 +26,14 @@ from ac_platform.db.models import companion_devices as devices
 from ac_platform.db.models import companion_pairings as pairings
 from ac_platform.db.models import companion_refresh_families as families
 from ac_platform.identity.models import Person
+from ac_platform.identity.services import (
+    EmailVerificationRequiredError,
+    PersonSnapshot,
+    require_verified_person,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.services import SUPPORTED_CONTEXT_ROLES
 
 CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
@@ -47,6 +54,12 @@ class NativeOutcome:
 
 def failure(code: str, status: int) -> NativeOutcome:
     return NativeOutcome({"code": code}, status)
+
+
+class _Admission(Enum):
+    ALLOWED = "allowed"
+    MEMBERSHIP_INACTIVE = "membership_inactive"
+    IDENTITY_DENIED = "identity_denied"
 
 
 class NativeDevices:
@@ -90,19 +103,47 @@ class NativeDevices:
             201,
         )
 
-    async def _membership(self, tenant_id: UUID, person_id: UUID) -> bool:
+    async def _admission(self, tenant_id: UUID, person_id: UUID) -> _Admission:
         # Current canonical person, tenant and membership state, held through
         # the transition. Shared locks fence removal without serializing reads.
         row = (
-            await self.db.execute(
-                select(Membership.status, Person.status, Tenant.status)
-                .join(Person, Person.id == Membership.person_id)
-                .join(Tenant, Tenant.id == Membership.tenant_id)
-                .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
-                .with_for_update(read=True)
+            (
+                await self.db.execute(
+                    select(
+                        Membership.status.label("membership_status"),
+                        Membership.ended_at,
+                        Membership.role,
+                        Person.status.label("person_status"),
+                        Person.email,
+                        Person.email_verified_at,
+                        Tenant.status.label("tenant_status"),
+                    )
+                    .join(Person, Person.id == Membership.person_id)
+                    .join(Tenant, Tenant.id == Membership.tenant_id)
+                    .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
+                    .with_for_update(read=True)
+                )
             )
-        ).first()
-        return row is not None and all(value == "active" for value in row)
+            .mappings()
+            .first()
+        )
+        if row is None or row["membership_status"] != "active" or row["ended_at"] is not None:
+            return _Admission.MEMBERSHIP_INACTIVE
+        if (
+            row["person_status"] != "active"
+            or row["tenant_status"] != "active"
+            or row["role"] not in SUPPORTED_CONTEXT_ROLES
+        ):
+            return _Admission.IDENTITY_DENIED
+        try:
+            require_verified_person(
+                PersonSnapshot(
+                    id=person_id, email=row["email"], email_verified_at=row["email_verified_at"]
+                )
+            )
+        except EmailVerificationRequiredError:
+            return _Admission.IDENTITY_DENIED
+        return _Admission.ALLOWED
 
     async def _audit(
         self,
@@ -125,7 +166,10 @@ class NativeDevices:
         )
 
     async def decide(self, code: str, approve: bool, actor: ActorContext) -> NativeOutcome:
-        if actor.tenant_id is None or not await self._membership(actor.tenant_id, actor.person_id):
+        if (
+            actor.tenant_id is None
+            or await self._admission(actor.tenant_id, actor.person_id) is not _Admission.ALLOWED
+        ):
             return failure("workspace_membership_required", 403)
         row = (
             (
@@ -182,10 +226,14 @@ class NativeDevices:
         )
         if reference is None:
             return None
-        if not await self._membership(reference["tenant_id"], reference["person_id"]):
+        admission = await self._admission(reference["tenant_id"], reference["person_id"])
+        if admission is _Admission.MEMBERSHIP_INACTIVE:
             # Lazy materialization in this card's service; admission is denied
             # immediately, regardless of unexpired credentials.
             await self._revoke_binding(reference)
+            return None
+        if admission is not _Admission.ALLOWED:
+            # Email/role eligibility loss is not a membership-removal fact.
             return None
         removed_at = await self._last_removal(reference["tenant_id"], reference["person_id"])
         if removed_at is not None and utc(reference["created_at"]) <= removed_at:
@@ -456,7 +504,10 @@ class NativeDevices:
         return device if utc(credential["expires_at"]) > self.clock() else None
 
     async def list_devices(self, actor: ActorContext, after: UUID | None = None) -> NativeOutcome:
-        if actor.tenant_id is None or not await self._membership(actor.tenant_id, actor.person_id):
+        if (
+            actor.tenant_id is None
+            or await self._admission(actor.tenant_id, actor.person_id) is not _Admission.ALLOWED
+        ):
             return failure("workspace_membership_required", 403)
         removed_at = await self._last_removal(actor.tenant_id, actor.person_id)
         stmt = (
@@ -494,7 +545,10 @@ class NativeDevices:
         )
 
     async def revoke(self, device_id: UUID, actor: ActorContext) -> NativeOutcome:
-        if actor.tenant_id is None or not await self._membership(actor.tenant_id, actor.person_id):
+        if (
+            actor.tenant_id is None
+            or await self._admission(actor.tenant_id, actor.person_id) is not _Admission.ALLOWED
+        ):
             return failure("workspace_membership_required", 403)
         device = (
             (
