@@ -1,4 +1,6 @@
 /** Organisation reads and changes against the selected session workspace. */
+import { acquisition, AcquisitionError } from "../acquisition-client";
+import type { ActivityDay } from "../dashboard/dashboard-data";
 
 export type OrgRole = "owner" | "admin" | "member";
 
@@ -356,6 +358,125 @@ export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
       };
     }),
   };
+}
+
+/**
+ * Finished analyses from durable receipts (AUT-1392), for live owners and
+ * admins. These count former members and claimed uploads, so they can differ
+ * from the saved calls that `readActivity` lists.
+ */
+export type ReceiptActivity = {
+  /** Exactly 30 India calendar days, oldest first; the last is today. */
+  days: ActivityDay[];
+  analysedLast30Days: number;
+  analysedPrevious30Days: number;
+  /** In the API's order. */
+  people: Array<{
+    personId: string;
+    name: string;
+    analysed: number;
+    analysedSeconds: number;
+    previous: number;
+  }>;
+};
+
+export class ReceiptActivityError extends Error {}
+
+const DAY_KEYS = ["date", "analysed", "analysed_seconds"];
+const PERSON_KEYS = [
+  "person_id",
+  "name",
+  "analysed_last_30_days",
+  "analysed_seconds_last_30_days",
+  "analysed_previous_30_days",
+];
+const whole = (value: unknown) => {
+  if (!Number.isSafeInteger(value) || (value as number) < 0)
+    throw new ReceiptActivityError();
+  return value as number;
+};
+const sum = <T>(items: T[], pick: (item: T) => number) =>
+  items.reduce((total, item) => total + pick(item), 0);
+
+/** Exact fields only, and every total must agree across days and people. */
+export function parseReceiptActivity(value: unknown): ReceiptActivity {
+  const data = obj(value);
+  if (
+    !exact(value, [
+      "timezone",
+      "days",
+      "analysed_last_30_days",
+      "analysed_previous_30_days",
+      "people",
+    ]) ||
+    data.timezone !== "Asia/Kolkata" ||
+    !Array.isArray(data.days) ||
+    data.days.length !== 30 ||
+    !Array.isArray(data.people)
+  )
+    throw new ReceiptActivityError();
+  const days = data.days.map((raw: unknown): ActivityDay => {
+    const day = obj(raw);
+    if (
+      !exact(raw, DAY_KEYS) ||
+      typeof day.date !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(day.date)
+    )
+      throw new ReceiptActivityError();
+    return {
+      date: day.date,
+      analysed: whole(day.analysed),
+      analysedSeconds: whole(day.analysed_seconds),
+    };
+  });
+  days.forEach((day, index) => {
+    if (index > 0 && day.date <= days[index - 1].date)
+      throw new ReceiptActivityError();
+  });
+  const seen = new Set<string>();
+  const people = data.people.map((raw: unknown) => {
+    const person = obj(raw);
+    if (
+      !exact(raw, PERSON_KEYS) ||
+      !id(person.person_id) ||
+      seen.has(person.person_id) ||
+      typeof person.name !== "string"
+    )
+      throw new ReceiptActivityError();
+    seen.add(person.person_id);
+    return {
+      personId: person.person_id,
+      name: person.name,
+      analysed: whole(person.analysed_last_30_days),
+      analysedSeconds: whole(person.analysed_seconds_last_30_days),
+      previous: whole(person.analysed_previous_30_days),
+    };
+  });
+  const analysedLast30Days = whole(data.analysed_last_30_days);
+  const analysedPrevious30Days = whole(data.analysed_previous_30_days);
+  if (
+    sum(days, (day) => day.analysed) !== analysedLast30Days ||
+    sum(people, (person) => person.analysed) !== analysedLast30Days ||
+    sum(days, (day) => day.analysedSeconds) !==
+      sum(people, (person) => person.analysedSeconds) ||
+    sum(people, (person) => person.previous) !== analysedPrevious30Days
+  )
+    throw new ReceiptActivityError();
+  return { days, analysedLast30Days, analysedPrevious30Days, people };
+}
+
+/** Null when this server does not serve the read yet (404). */
+export async function readReceiptActivity(
+  signal?: AbortSignal,
+): Promise<ReceiptActivity | null> {
+  try {
+    return parseReceiptActivity(
+      await acquisition("/organisation/activity", { signal }),
+    );
+  } catch (error) {
+    if (error instanceof AcquisitionError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export const addMember = (email: string, memberRole: OrgRole) =>

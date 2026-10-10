@@ -539,6 +539,90 @@
   color: var(--lx-muted);
 }
 
+/* ---------- Calls analysed (finished-analysis receipts) ---------- */
+
+.receipts {
+  display: grid;
+  min-width: 0;
+}
+
+.receiptChart {
+  min-width: 0;
+  padding: 14px 16px 12px;
+}
+
+.receiptQuiet,
+.quietLine {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+.receiptQuiet {
+  padding: 14px 16px;
+}
+
+.receipts > .receiptQuiet:last-child {
+  border-top: 1px solid var(--lx-line);
+}
+
+.receiptTable {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border-top: 1px solid var(--lx-line);
+}
+
+.receiptHead,
+.receiptRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 72px 60px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.receiptHead {
+  height: 34px;
+  border-bottom: 1px solid var(--lx-line);
+  background: var(--lx-paper-2);
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.receiptRow {
+  min-height: 32px;
+  padding-block: 4px;
+}
+
+.receiptRow + .receiptRow {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+.receiptRow[data-quiet] {
+  color: var(--lx-muted);
+}
+
+.receiptPerson {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (min-width: 1180px) {
+  .receipts {
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+
+  .receiptTable,
+  .receipts > .receiptQuiet:last-child {
+    border-top: 0;
+    border-left: 1px solid var(--lx-line);
+  }
+}
+
 /* ---------- People with calls ---------- */
 
 .people {
@@ -1389,6 +1473,16 @@
 
   .people li {
     grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+
+  .receiptHead,
+  .receiptRow {
+    grid-template-columns: minmax(0, 1fr) 32px 64px 56px;
+    gap: 8px;
+  }
+
+  .receiptPerson .avatar {
+    display: none;
   }
 
   .personBar {

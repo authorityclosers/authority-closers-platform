@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { OrganisationView } from "./organisation-view";
+import { receiptFixture } from "./receipt-activity.fixture";
 
 vi.mock("../acquisition-shell", () => ({
   AcquisitionShell: ({ children }: { children: ReactNode }) => (
@@ -579,6 +580,191 @@ it("explains an activity route that this server does not have", async () => {
     "Activity is not available on this server yet",
   );
   expect(host.textContent).not.toMatch(/coming soon/i);
+});
+
+const RECEIPTS = "/v1/conversation/acquisition/organisation/activity";
+const alexId = "024f088d-0a56-4a14-9b20-8030bca6df9a";
+const zoeId = "017e41d8-11bc-4e5e-8fb0-9f054b6faded";
+function receiptRoutes() {
+  activityRoutes();
+  const directory = routes["/v1/organisation/members"] as {
+    members: Array<Record<string, unknown>>;
+  };
+  directory.members.push(
+    {
+      ...active,
+      person_id: alexId,
+      name: "Alex",
+      email: "alex@fictional-studio.in",
+      role: "member",
+    },
+    {
+      ...active,
+      person_id: zoeId,
+      name: "Zoe",
+      email: "zoe@fictional-studio.in",
+      role: "member",
+    },
+  );
+  routes[RECEIPTS] = receiptFixture();
+}
+const receiptRows = () =>
+  [
+    ...host.querySelectorAll(
+      '[aria-label="Calls analysed by person"] [role="row"]',
+    ),
+  ]
+    .slice(1)
+    .map((row) =>
+      [...row.querySelectorAll('[role="cell"]')].map((cell) =>
+        cell.textContent?.trim(),
+      ),
+    );
+const analysed = () => host.querySelector('[aria-labelledby="org-analysed"]');
+
+it("shows owners the organisation's calls analysed with each person in API order", async () => {
+  receiptRoutes();
+  await render();
+  expect(analysed()?.querySelector("h2")?.textContent).toBe("Calls analysed6");
+  expect(analysed()?.textContent).toContain("+2 on the previous 30 days (4)");
+  expect(analysed()?.querySelector("figcaption")?.textContent).toBe(
+    "6 calls5 min of calls analysed",
+  );
+  expect(analysed()?.querySelectorAll('button[aria-label*=": "]')).toHaveLength(
+    30,
+  );
+  // Same-name people are told apart: a current member by email, a former
+  // member by that label. Minutes come only from the response's seconds.
+  expect(receiptRows()).toEqual([
+    ["ALAlexalex@fictional-studio.in", "1", "<1 min", "0"],
+    ["ALAlexFormer member", "0", "0 min", "1"],
+    ["ZOZoe", "5", "5 min", "2"],
+    ["M*m***@example.test", "0", "0 min", "1"],
+  ]);
+  expect(analysed()?.textContent).toContain("including people who have left");
+  // The saved-call figures above keep their own definition.
+  expect(kpi("Calls")).toBe("Calls1call saved");
+});
+
+it("shows zero analyses and no people for a quiet organisation", async () => {
+  receiptRoutes();
+  const empty = receiptFixture();
+  empty.days = empty.days.map((day) => ({
+    ...day,
+    analysed: 0,
+    analysed_seconds: 0,
+  }));
+  empty.analysed_last_30_days = 0;
+  empty.analysed_previous_30_days = 0;
+  empty.people = [];
+  routes[RECEIPTS] = empty;
+  await render();
+  expect(analysed()?.querySelector("h2")?.textContent).toBe("Calls analysed0");
+  expect(analysed()?.textContent).toContain(
+    "No calls analysed in the last 30 days.",
+  );
+  expect(analysed()?.textContent).toContain(
+    "Nobody in the organisation has a finished analysis in the last 60 days.",
+  );
+  expect(analysed()?.querySelector("figure")).toBeNull();
+});
+
+it("never reads organisation receipts for a member", async () => {
+  receiptRoutes();
+  org().role = "member";
+  await render();
+  expect(fetchMock.mock.calls.some(([path]) => path === RECEIPTS)).toBe(false);
+  expect(analysed()).toBeNull();
+  expect(host.textContent).not.toContain("Calls analysed");
+});
+
+it("gives a server without the receipt read one quiet line", async () => {
+  activityRoutes();
+  await render();
+  expect(analysed()).toBeNull();
+  expect(host.textContent).toContain(
+    "Calls analysed across the organisation show here once this server has the latest update.",
+  );
+  expect(host.textContent).not.toMatch(/coming soon/i);
+});
+
+it("rejects inconsistent receipts and recovers with Try again", async () => {
+  receiptRoutes();
+  routes[RECEIPTS] = { ...receiptFixture(), analysed_last_30_days: 7 };
+  await render();
+  expect(analysed()?.textContent).toContain(
+    "Calls analysed could not be loaded",
+  );
+  expect(receiptRows()).toEqual([]);
+  routes[RECEIPTS] = receiptFixture();
+  await act(async () =>
+    analysed()!.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(receiptRows()).toHaveLength(4);
+});
+
+it("hides receipts and refreshes access when the role is gone", async () => {
+  receiptRoutes();
+  const serve = fetchMock.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  fetchMock.mockImplementation(async (path: string, init?: RequestInit) =>
+    path === RECEIPTS
+      ? json(
+          { detail: "An active organisation owner or admin is required." },
+          403,
+        )
+      : serve(path, init),
+  );
+  await render();
+  expect(analysed()).toBeNull();
+  expect(accessRetry).toHaveBeenCalledTimes(1);
+  expect(
+    fetchMock.mock.calls.filter(([path]) => path === RECEIPTS),
+  ).toHaveLength(1);
+});
+
+it("drops the old organisation's late receipts after a workspace switch", async () => {
+  receiptRoutes();
+  const serve = fetchMock.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  let resolveOld: ((response: Response) => void) | null = null;
+  fetchMock.mockImplementation((path: string, init?: RequestInit) =>
+    path === RECEIPTS && resolveOld === null
+      ? new Promise<Response>((done) => {
+          resolveOld = done;
+        })
+      : serve(path, init),
+  );
+  await render();
+  const signal = fetchMock.mock.calls.find(([path]) => path === RECEIPTS)![1]
+    .signal as AbortSignal;
+  const directory = routes["/v1/me/sales-xray-workspaces"] as {
+    selected_tenant_id: string;
+    workspaces: Array<{ tenant_id: string; name: string }>;
+  };
+  directory.selected_tenant_id = inviteId;
+  directory.workspaces[1].tenant_id = inviteId;
+  routes["/v1/organisation"] = {
+    ...(routes["/v1/organisation"] as object),
+    tenant_id: inviteId,
+    name: "Other Fictional Studio",
+  };
+  const other = receiptFixture();
+  other.people = other.people.map((person) => ({
+    ...person,
+    name: person.name === "Zoe" ? "Other Rep" : person.name,
+  }));
+  routes[RECEIPTS] = other;
+  await render(inviteId);
+  expect(signal.aborted).toBe(true);
+  await act(async () => resolveOld!(json(receiptFixture())));
+  expect(host.querySelector("h1")?.textContent).toBe("Other Fictional Studio");
+  expect(analysed()?.textContent).toContain("Other Rep");
+  expect(analysed()?.textContent).not.toContain("Zoe");
 });
 
 it("keeps the selected section in the address for reloads and links", async () => {

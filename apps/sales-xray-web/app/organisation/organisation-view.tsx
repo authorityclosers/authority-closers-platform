@@ -51,6 +51,7 @@ import {
   type Organisation,
 } from "./organisation-api";
 import styles from "./organisation.module.css";
+import { ReceiptActivitySection } from "./receipt-activity";
 
 type Base =
   | { status: "loading" }
@@ -351,6 +352,21 @@ export function OrganisationView() {
                   memberCount={memberCount}
                   team={canManage}
                   retry={reloadActivity}
+                  analysed={
+                    canManage && tenantId !== null ? (
+                      <ReceiptActivitySection
+                        key={tenantId}
+                        members={
+                          members.status === "ready"
+                            ? members.value.filter(
+                                (member) => member.status === "active",
+                              )
+                            : null
+                        }
+                        onAccessLost={refreshAccess}
+                      />
+                    ) : null
+                  }
                 />
               )}
 
@@ -528,12 +544,15 @@ function OverviewPanel({
   memberCount,
   team,
   retry,
+  analysed,
 }: {
   activity: Live<OrgActivity>;
   members: Live<OrgMember[]>;
   memberCount: number | null;
   team: boolean;
   retry: () => void;
+  /** Calls analysed across the organisation; owners and admins only. */
+  analysed: ReactNode;
 }) {
   if (activity.status === "loading")
     return (
@@ -543,20 +562,23 @@ function OverviewPanel({
     );
   if (activity.status !== "ready")
     return (
-      <section className={styles.state}>
-        <h2>
-          {activity.status === "off"
-            ? "Activity is not available on this server yet"
-            : "Activity could not be loaded"}
-        </h2>
-        <p>Calls, minutes and reports for the last 30 days appear here.</p>
-        {activity.status === "error" ? (
-          <button type="button" className={styles.secondary} onClick={retry}>
-            <RefreshCw size={14} aria-hidden="true" />
-            Try again
-          </button>
-        ) : null}
-      </section>
+      <div className={styles.overview}>
+        <section className={styles.state}>
+          <h2>
+            {activity.status === "off"
+              ? "Activity is not available on this server yet"
+              : "Activity could not be loaded"}
+          </h2>
+          <p>Calls, minutes and reports for the last 30 days appear here.</p>
+          {activity.status === "error" ? (
+            <button type="button" className={styles.secondary} onClick={retry}>
+              <RefreshCw size={14} aria-hidden="true" />
+              Try again
+            </button>
+          ) : null}
+        </section>
+        {analysed}
+      </div>
     );
 
   const totals = summarise(activity.value);
@@ -612,6 +634,7 @@ function OverviewPanel({
           <PeopleActivity activity={activity.value} members={members} />
         ) : null}
       </div>
+      {analysed}
     </div>
   );
 }
