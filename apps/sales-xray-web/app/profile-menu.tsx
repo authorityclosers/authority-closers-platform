@@ -12,9 +12,11 @@ import {
   Moon,
   MoreHorizontal,
   Palette,
+  ReceiptText,
   Settings,
   ShieldCheck,
   Sun,
+  Tag,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -387,6 +389,14 @@ export function ProfileMenu({
               <Mail size={16} aria-hidden="true" />
               <span>Email the AC team</span>
             </a>
+            <Link
+              href="/pricing"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <Tag size={16} aria-hidden="true" />
+              <span>Pricing</span>
+            </Link>
             <a
               href="https://app.authorityclosers.com/privacy"
               target="_blank"
@@ -417,6 +427,14 @@ export function ProfileMenu({
                 className={styles.external}
               />
             </a>
+            <Link
+              href="/refunds"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <ReceiptText size={16} aria-hidden="true" />
+              <span>Refunds</span>
+            </Link>
           </div>
           {authenticated ? (
             <>

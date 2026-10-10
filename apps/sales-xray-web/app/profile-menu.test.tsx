@@ -349,3 +349,27 @@ it.each([
     }
   },
 );
+it("keeps the public site's pricing and policy links in Help", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+  );
+  await act(async () =>
+    root.render(<ProfileMenu authenticated accountHref="/calls" />),
+  );
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+  );
+  const help = [...host.querySelectorAll<HTMLAnchorElement>("a")].map(
+    (link) => [link.textContent?.trim(), link.getAttribute("href")],
+  );
+  expect(help).toEqual(
+    expect.arrayContaining([
+      ["Email the AC team", expect.stringMatching(/^mailto:/)],
+      ["Pricing", "/pricing"],
+      ["Privacy", "https://app.authorityclosers.com/privacy"],
+      ["Terms", "https://app.authorityclosers.com/terms"],
+      ["Refunds", "/refunds"],
+    ]),
+  );
+});

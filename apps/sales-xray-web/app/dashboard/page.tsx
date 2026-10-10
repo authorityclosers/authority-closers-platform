@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
-import { PolicyFooter } from "../policy-footer";
 import { LightboxShell } from "../shell/lightbox-shell";
 import { getShellState } from "../shell/shell-store";
 import { WorkspaceNoAccess } from "../workspace-no-access";
@@ -82,7 +81,6 @@ export default function DashboardPage() {
           Or analyse a call without an account
         </Link>
       </section>
-      <PolicyFooter />
     </LightboxShell>
   );
 }
