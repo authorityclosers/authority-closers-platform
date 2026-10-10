@@ -137,6 +137,22 @@ export function fixtureFor(role, now = Date.now()) {
       analysed_last_30_days: analysed,
       analysed_previous_30_days: 2,
     },
+    // The Personal-only owner has one invitation waiting; others have none.
+    "/v1/organisation/invites": {
+      invites:
+        role === "personal"
+          ? [
+              {
+                invite_id: uuid(900),
+                tenant_id: uuid(901),
+                organisation_name: "Northwind Sales",
+                role: "member",
+                invited_at: ago(1, 6),
+                expires_at: new Date(now + 6 * 86_400_000).toISOString(),
+              },
+            ]
+          : [],
+    },
   };
   if (!inOrg) return table;
 

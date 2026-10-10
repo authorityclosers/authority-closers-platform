@@ -1266,6 +1266,10 @@ function LightboxShellFrame({
           )}
           currentWorkspaceId={effectiveTenantId}
           onSelectWorkspace={(tenantId) => void handleSelectWorkspace(tenantId)}
+          invitesWaiting={invites.invites.length}
+          onCreateOrganisation={
+            invites.live ? () => setCreateOpen(true) : undefined
+          }
         />
       ) : null}
     </div>

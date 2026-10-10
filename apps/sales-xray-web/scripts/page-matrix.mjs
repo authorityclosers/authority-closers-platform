@@ -33,6 +33,7 @@ export const PROTECTED = [
   "/analysis/calls",
   `/analysis/calls/${CALL_ID}`,
   "/organisation",
+  "/organisation/invites",
   "/account",
   "/prospects",
 ];
