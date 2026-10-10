@@ -150,7 +150,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", (path: string, init?: RequestInit) =>
     path === "/v1/organisation/branding"
       ? Promise.resolve(response({}, 404))
-      : fetchMock(path, init),
+      : (fetchMock as unknown as typeof fetch)(path, init),
   );
 });
 
