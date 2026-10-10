@@ -12,16 +12,20 @@ the component displays its allowance/provider/privacy terms before explicit
 acceptance. Acceptance must return the exact displayed source, plan id and
 fingerprint. Confirmed local retries need no external-provider consent. A 20s
 network budget returns control to the user; errors go to existing corner cards.
-If acceptance ends with the exact displayed plan held/cancelled, its command
-is cleared and Try again returns. A 403/409 approval refusal uses a bounded
-read to confirm that same plan and fingerprint before clearing it. Unmatched
-or ambiguous acceptance/read responses keep the original command, preventing
-a new retry from duplicating an unconfirmed acceptance.
+If acceptance ends with the exact displayed terminal plan, its command is
+cleared and Try again returns. A 403/409 approval refusal uses a bounded read
+to confirm that same plan and fingerprint. An accepted account_profile_required
+hold is the existing server view of an active plan; it reloads the call status
+without preparing another attempt. Confirmed terminal holds/cancellations clear
+the failed plan; unmatched or ambiguous acceptance/read responses keep the
+original command, preventing a new retry from duplicating an unconfirmed
+acceptance. Tests cover profile holds on acceptance, reopening and refused
+duplicate acceptance separately from terminal expiry/failure.
 The new button uses only existing --lx theme/teal/font tokens. The requested
 app/ui/sx-tokens.css does not exist in this source; app/lightbox/tokens.css is
 the existing layout-imported token source. No new raw colour values were added.
 
-Validation: 82 focused Vitest checks; Sales Xray typecheck; changed-file ESLint
+Validation: 85 focused Vitest checks; Sales Xray typecheck; changed-file ESLint
 and Prettier. An isolated local Vite/Playwright harness in
 /home/acdev/strikes/1676/status-browser imports the real status, call-processing
 panel, existing styles/fonts and fictional plan. It passes all 20 combinations

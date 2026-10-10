@@ -318,3 +318,63 @@ it("reuses an ambiguous acceptance command without issuing a fresh retry", async
   );
   expect(reload).toHaveBeenCalledTimes(1);
 });
+
+const profileHold = {
+  ...plan,
+  accepted: true,
+  state: "held",
+  failure_code: "account_profile_required",
+};
+
+it("reloads a confirmed acceptance waiting for profile details without a fresh retry", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+    .mockResolvedValueOnce(new Response(JSON.stringify(profileHold)));
+  vi.stubGlobal("fetch", fetch);
+  const reload = vi
+    .spyOn(window.location, "reload")
+    .mockImplementation(() => undefined);
+  await render();
+  await click();
+  await click();
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(notify).not.toHaveBeenCalled();
+  expect(button().textContent).toBe("Accept and retry analysis");
+  expect(sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`)).toBeNull();
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("reconciles an accepted profile hold after reopening the call", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response(JSON.stringify(profileHold))),
+  );
+  const reload = vi
+    .spyOn(window.location, "reload")
+    .mockImplementation(() => undefined);
+  await render();
+  await click();
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(notify).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Review this retry");
+});
+
+it("reconciles a refused duplicate acceptance against an already accepted profile hold", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(plan)))
+    .mockResolvedValueOnce(new Response("", { status: 403 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(profileHold)));
+  vi.stubGlobal("fetch", fetch);
+  const reload = vi
+    .spyOn(window.location, "reload")
+    .mockImplementation(() => undefined);
+  await render();
+  await click();
+  await click();
+  expect(fetch.mock.calls[2][1].method).toBeUndefined();
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(notify).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem(`ac.xray.retry.v1:${submissionId}`)).toBeNull();
+});

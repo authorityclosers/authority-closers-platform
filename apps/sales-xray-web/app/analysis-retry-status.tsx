@@ -13,6 +13,22 @@ import {
 } from "./processing-plan-contract";
 import styles from "./analysis-retry-status.module.css";
 
+function acceptedPlan(plan: ProcessingPlan): boolean {
+  return (
+    plan.accepted &&
+    (["active", "completed"].includes(plan.state) ||
+      (plan.state === "held" &&
+        plan.failure_code === "account_profile_required"))
+  );
+}
+
+function terminalPlan(plan: ProcessingPlan): boolean {
+  return (
+    plan.state === "cancelled" ||
+    (plan.state === "held" && plan.failure_code !== "account_profile_required")
+  );
+}
+
 function retryKey(submissionId: string): string {
   const storageKey = `ac.xray.retry.v1:${submissionId}`;
   let saved: string | null = null;
@@ -114,29 +130,25 @@ export function AnalysisRetryAction({
           saved.plan_fingerprint !== plan.plan_fingerprint
         )
           throw new Error("Retry was not accepted.");
-        if (["held", "cancelled"].includes(saved.state)) {
+        if (terminalPlan(saved)) {
           clearTerminalPlan();
           throw new AcquisitionError(409);
         }
-        if (!saved.accepted || !["active", "completed"].includes(saved.state))
-          throw new Error("Retry was not accepted.");
+        if (!acceptedPlan(saved)) throw new Error("Retry was not accepted.");
         try {
           sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
         } catch {
           /* The server receipt owns idempotency. */
         }
         window.location.reload();
-      } else if (
-        saved.accepted &&
-        ["active", "completed"].includes(saved.state)
-      ) {
+      } else if (acceptedPlan(saved)) {
         try {
           sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
         } catch {
           /* Optional cache. */
         }
         window.location.reload();
-      } else if (["held", "cancelled"].includes(saved.state)) {
+      } else if (terminalPlan(saved)) {
         clearTerminalPlan();
         throw new AcquisitionError(409);
       } else {
@@ -159,10 +171,19 @@ export function AnalysisRetryAction({
           );
           if (
             latest.id === plan.id &&
-            latest.plan_fingerprint === plan.plan_fingerprint &&
-            ["held", "cancelled"].includes(latest.state)
-          )
-            clearTerminalPlan();
+            latest.plan_fingerprint === plan.plan_fingerprint
+          ) {
+            if (acceptedPlan(latest)) {
+              try {
+                sessionStorage.removeItem(`ac.xray.retry.v1:${submissionId}`);
+              } catch {
+                /* The matching server view confirms the acceptance. */
+              }
+              window.location.reload();
+              return;
+            }
+            if (terminalPlan(latest)) clearTerminalPlan();
+          }
         } catch {
           /* An ambiguous read must retain the exact acceptance command. */
         }
