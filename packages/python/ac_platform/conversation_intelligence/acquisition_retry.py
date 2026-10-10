@@ -23,7 +23,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
-from ac_platform.conversation_intelligence.processing_plan import ConversationProcessingPlans
+from ac_platform.conversation_intelligence.processing_plan import (
+    ConversationProcessingPlans,
+    manifest_for,
+)
 from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
 from ac_platform.conversation_intelligence.safe_stage_retry import require_retry_predecessor
@@ -195,6 +198,7 @@ async def prepare_analysis_retry(
         key="retry-plan:" + hashlib.sha256(key.encode()).hexdigest(),
         continuation_grant_id=grant,
         retry_of=None if predecessor is None else predecessor.run_id,
+        report_language=None if plan is None else manifest_for(plan).report_language,
     )
     # Validate the existing source/provider cap before committing a renewed
     # customer reservation. This prepares a quote, never a provider dispatch;

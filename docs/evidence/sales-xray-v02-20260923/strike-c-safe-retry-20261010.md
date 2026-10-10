@@ -69,3 +69,16 @@ The PR remains sensitive (customer accounting, migration and backup parity),
 requiring CTO/CEO review under the owner strike rules. No manual merge,
 deployment, staging/production data write, provider setting change or new paid
 credential was performed.
+
+The retry quote also retains the failed plan's report language, rather than
+substituting the current default and invalidating a bound C5 retry. Current
+provider/analysis settings gates still apply. Two additional real owner HTTP
+PostgreSQL cases cover Hindi and Marathi: advance the coordinator's test clock
+past the immutable quote deadline, observe released minutes, refuse expired
+stage authority without a renewed hold, then prepare under a new validated
+synthetic authority with identical routes/caps. The fresh quote retains the
+language, renews one source-bound reservation and creates no provider task.
+The old manifest remains intact. Seven existing provider/local retry cases
+also passed on the modified service; Ruff and targeted mypy pass. Native and
+language-output quality are outside this fictional lifecycle proof. The later
+status/action verification is 85 frontend cases in the run-state evidence.

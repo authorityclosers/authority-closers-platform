@@ -3,11 +3,11 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import literal, select
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.acquisition_usage import acquisition_seconds
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import (
+    ConversationAnalysisSettings,
     ConversationInferenceTask,
     ConversationProcessingPlan,
 )
@@ -213,6 +214,143 @@ def test_owner_retry_preserves_source_cap_and_captures_one_delivered_report(
                     assert retained.intent == original_intent and retained.state == "uncertain"
                     assert job.dispatch_started_at == dispatch and job.attempt_count == 1
                 assert broker.calls == 3 and refusal.calls == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("language", ["hi-Deva+en", "mr-Deva+en"])
+def test_expired_quote_retry_retains_its_language_without_provider_dispatch(
+    postgres_harness: Any, tmp_path: Path, language: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
+    from types import SimpleNamespace
+
+    from ac_platform.conversation_intelligence import processing_plan
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.authority.operations_tenant_id,
+                        person_id=setup.state.person_id,
+                        session_id=setup.state.session_id,
+                        revision=1,
+                        c4_max_requests=1,
+                        c4_max_completion_tokens=1_400,
+                        c5_max_completion_tokens=3_200,
+                        c5_output_profile="detailed",
+                        c5_coaching_prompt_revision="coaching-v4",
+                        report_language_default="en",
+                        created_at=setup.state.now,
+                    )
+                )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                _sign_in(setup, client)
+                path, submission = await _upload_for_read_test(setup, client)
+                await _reconcile(setup.sessions, setup.state)
+                recording_id = UUID((await client.get(path)).json()["recording_id"])
+                await seed_measured_fixture(
+                    setup.sessions,
+                    SimpleNamespace(recording_id=recording_id),
+                    signal_payload=_signal(
+                        source_sha256=hashlib.sha256(_wav_one_second_48k()).hexdigest()
+                    ),
+                )
+                quoted = await client.post(
+                    path + "/plan/quote",
+                    json={"report_language": language},
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "language-original"},
+                )
+                assert quoted.status_code == 201, quoted.text
+                first = quoted.json()
+                assert first["report_language"] == language
+                async with setup.sessions() as db:
+                    row = await db.get(ConversationProcessingPlan, UUID(first["id"]))
+                    original_manifest = dict(row.manifest)
+                after_budget = datetime.fromtimestamp(first["expires_at_epoch"], UTC) + timedelta(
+                    seconds=1
+                )
+                # Advance this coordinator's SQL clock, preserving the actual
+                # immutable deadline, manifest, consent and database guards.
+                with monkeypatch.context() as patch:
+                    patch.setattr(
+                        processing_plan,
+                        "func",
+                        SimpleNamespace(clock_timestamp=lambda: literal(after_budget)),
+                    )
+                    assert await ProcessingPlanScheduler(setup.sessions, setup.authority).step()
+                setup.clock[0] = after_budget
+                failed = (await client.get(path)).json()
+                assert (failed["run_state"], failed["minute_state"], failed["retry_available"]) == (
+                    "failed",
+                    "released",
+                    True,
+                )
+                refused = await client.post(
+                    path + "/retry",
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "language-retry"},
+                )
+                assert refused.status_code == 403
+                assert (await client.get(path)).json()["minute_state"] == "released"
+                # The original synthetic stage authority also expired. Supply
+                # a new validated fixture policy with identical route/caps;
+                # production never renews provider approval through retry.
+                bundle = setup.bundle_box["bundle"]
+                policy = bundle.acquisition_policy
+                renewed = policy.model_copy(
+                    update={
+                        "id": uuid4(),
+                        "stages": tuple(
+                            item.model_copy(update={"expires_at_epoch": bundle.expires_at_epoch})
+                            for item in policy.stages
+                        ),
+                    }
+                )
+                setup.bundle_box["bundle"] = type(bundle).model_validate_json(
+                    bundle.model_copy(update={"acquisition_policy": renewed}).model_dump_json()
+                )
+                prepared = await client.post(
+                    path + "/retry",
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "language-retry"},
+                )
+                assert prepared.status_code == 201, prepared.text
+                fresh = prepared.json()
+                assert fresh["id"] != first["id"]
+                assert fresh["state"] == "quoted" and not fresh["accepted"]
+                assert fresh["report_language"] == language
+                async with setup.sessions() as db:
+                    old = await db.get(ConversationProcessingPlan, UUID(first["id"]))
+                    assert old.manifest == original_manifest and old.state == "held"
+                    assert (
+                        await db.scalar(
+                            select(ConversationInferenceTask.run_id).where(
+                                ConversationInferenceTask.recording_id == recording_id
+                            )
+                        )
+                        is None
+                    )
+                    usage = await db.scalar(
+                        select(ConversationAcquisitionUsage).where(
+                            ConversationAcquisitionUsage.submission_id == submission
+                        )
+                    )
+                    events = list(
+                        await db.scalars(
+                            select(ConversationReportMinuteEvent)
+                            .where(ConversationReportMinuteEvent.usage_id == usage.id)
+                            .order_by(ConversationReportMinuteEvent.revision)
+                        )
+                    )
+                    assert [event.kind for event in events] == ["released", "reserved", "reserved"]
+                    assert events[-1].plan_id == UUID(fresh["id"])
         finally:
             await setup.engine.dispose()
 
