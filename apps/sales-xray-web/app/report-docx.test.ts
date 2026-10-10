@@ -44,7 +44,7 @@ print(json.dumps({
  'fixedTables': len(d.findall('.//w:tblLayout',ns)),
  'tables': len(d.findall('.//w:tbl',ns)),
  'footer': ''.join(E.fromstring(z.read(footer[0])).itertext()) if footer else '',
- 'cs': sorted({attr(f,'cs') for f in d.findall('.//w:rFonts',ns) if attr(f,'cs')}),
+ 'cs': sorted({attr(f,'cs') for tree in (d, E.fromstring(z.read('word/styles.xml'))) for f in tree.findall('.//w:rFonts',ns) if attr(f,'cs')}),
 }))
 `,
       ],

@@ -52,17 +52,37 @@ checkout's loopback preview returned HTTP 200 at
 authenticated hosted/staging journeys are not claimed.
 
 Before edits, the existing Document browser check failed its requirement for
-both Calibri and Arial in every rendered span. The check now verifies the
-actual Calibri run font and the new pillar headings, source quote, gap states,
+both Calibri and Arial in every rendered span. The changed renderer produced
+`Calibri, Arial, sans-serif` at both widths. The check retains both font names
+and verifies the new pillar headings, source quote, gap states,
 absence of coaching/full facts, unchanged zoom behavior, viewport bounds and
-exact preview/download bytes. Browser artifacts are run-owned and will be
-attached to the task after successful verification.
+exact preview/download bytes.
 
-Changed web files were formatted with Prettier. Focused projection, DOCX,
-Document, navigation and owner-surface tests, changed-file lint and browser
-verification are in progress; no pass or CI result is claimed in this receipt
-yet. No external provider calls, customer-data activation, merge or production
-promotion occurred.
+At first pushed commit `88d0ced`, changed-file lint passed. The focused suite
+passed 57/58 tests across projection, DOCX, Document, navigation and owner
+surfaces. The remaining font assertion inspected inline run declarations only;
+the test now also inspects the shared Word style that declares Nirmala UI.
+That corrected assertion has not yet completed a rerun.
+
+The browser check passed at 390×844 and 1440×900: six headings in order, original
+quotes, explicit gaps, no coaching/full facts, preview/download byte equality,
+zoom without regeneration, bounded viewport, no page errors and no external
+requests. Each file had 12,460 bytes. The run-owned browser-proof JSON and the
+fictional Word file are task artifacts. Screenshot inspection found the old
+loading status still visible after rendering because CSS overrides `hidden`;
+the component now removes that paragraph when ready, with a unit/browser
+regression assertion. These follow-up edits await final verification.
+
+The queued DOCX rerun and typecheck both stopped with exit 143 before results.
+Subsequent bounded attempts remained at `ac-heavy: waiting for the shared slot`
+and were cancelled, without bypassing the guard. The lock was held by guardian
+PID 350029 in `/home/acdev/scratch/design-lead/acceptance` at 01:26 UTC. Root owns
+host recovery under AUT-63; no foreign process or service was changed. The gate
+check still returned `ok: task/sx-report/1677-strike-report may be worked on`.
+
+Changed web files were formatted with Prettier. Typecheck and the final changed
+Document/DOCX checks are unverified; CI status was not polled. No external
+provider calls, customer-data activation, merge or production promotion occurred.
 
 The Windows AC Orchestra skill/authorized Pro browser and a matching
 source-pinned Report artifact were unavailable in this runtime. Existing
