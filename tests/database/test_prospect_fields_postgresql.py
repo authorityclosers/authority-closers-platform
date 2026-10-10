@@ -5,12 +5,13 @@ import subprocess
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import MetaData, Table, delete, event, select, text, update
+from sqlalchemy import MetaData, Table, delete, event, literal, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import registry
 
@@ -485,14 +486,24 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
         with monkeypatch.context() as patch:
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
+            # Seed the real 0077 schema using its pre-journal projections.
+            # These scoped overrides end before upgrading to the current head.
+            patch.setattr(
+                "ac_platform.conversation_intelligence.report_minutes.ReportMinutes.latest",
+                AsyncMock(return_value=None),
+            )
+            patch.setattr(
+                "ac_platform.conversation_intelligence.acquisition_usage.report_minute_value",
+                lambda *args, **kwargs: literal(None),
+            )
             _setup_result, identifier, preserved = run(populate())
         migrated = original(invocation[0], **invocation[1])
         if migrated.returncode:
             pytest.fail(
-                "Isolated 0079 migration failed; environment/output withheld.", pytrace=False
+                "Isolated prior-schema upgrade failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261009_0079"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261010_0080"
             assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             row = dict(
                 db.execute(

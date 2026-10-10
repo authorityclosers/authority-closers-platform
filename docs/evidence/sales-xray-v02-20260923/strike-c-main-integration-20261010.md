@@ -22,3 +22,13 @@ The final merged source needs its own CI receipt. The shared-file gate is still
 blocked by #424 (AGENTS.md) as of the recorded local pr-check; it is not bypassed.
 The expired unaccepted-quote page mount remains an explicit Strike A integration
 item in strike-c-run-state-20261010.md.
+
+The bounded full dispatch 38043662596 at 13c0d33 completed all jobs and found
+one historical fixture failure in shard 0 (3,030 passed in that shard): the
+populated 0077 prospect fixture uses current intake, which now reads the journal
+that did not exist at 0077. Its two legacy minute projections are scoped to
+fixture population and removed before the real upgrade. No production runtime
+fallback or missing-table tolerance was added. The current-head assertion is
+0080; the focused PostgreSQL case passes and still verifies complete metadata,
+prospect/link/tag preservation and unchanged audit hashes. This is a migration
+compatibility repair to a test fixture, with no prospect rendering change.
