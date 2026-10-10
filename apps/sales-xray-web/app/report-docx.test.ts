@@ -13,6 +13,7 @@ import {
   talkSlices,
   voices,
 } from "./report-docx";
+import { REPORT_PILLARS } from "./report-pillars";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 // Validate ZIP checksums and parse every OOXML part, rather than checking only a magic header.
@@ -122,7 +123,7 @@ const callRecord: CallRecord = {
 };
 
 describe("report DOCX", () => {
-  it("produces valid A4 OOXML with every section bookmarked and one page break", async () => {
+  it("produces valid A4 OOXML in six-pillar order with stable bookmarks", async () => {
     const blob = await createReportDocx({
       title: "Fictional call <&> report",
       report: syntheticReport,
@@ -147,24 +148,25 @@ describe("report DOCX", () => {
       "skills",
       "facts",
     ]);
-    expect(xml.pageBreaks).toBe(1);
+    expect(xml.pageBreaks).toBe(0);
     expect(xml.fixedTables).toBe(xml.tables);
     expect(xml.text).toContain("Fictional call <&> report");
     expect(xml.text).toContain(syntheticReport.summary);
-    for (const label of [
-      "Keep doing",
-      "Fix first",
-      "Who spoke, and when",
-      "Moments to replay",
-      "Missed chances",
-      "Skills checked",
-      "Facts heard on the call",
-    ])
-      expect(xml.text.toUpperCase()).toContain(label.toUpperCase());
+    let previous = -1;
+    for (const [index, pillar] of REPORT_PILLARS.entries()) {
+      const position = xml.text.indexOf(`${index + 1}. ${pillar.label}`);
+      expect(position).toBeGreaterThan(previous);
+      previous = position;
+    }
     expect(xml.text).toContain("Fictional seller");
-    expect(xml.text).toContain("Fictional promise to send a brochure");
-    expect(xml.text).toContain("Draft coaching");
-    expect(xml.footer).toMatch(/PAGE/);
+    expect(xml.text).not.toContain("Fictional promise to send a brochure");
+    expect(xml.text).toContain("Draft call analysis");
+    expect(xml.text).not.toContain("Practice before the next call");
+    expect(xml.text).not.toContain(
+      syntheticReport.overview!.practice!.instructions,
+    );
+    expect(xml.text).not.toContain("Facts heard on the call");
+    expect(xml.footer).toContain("Times are recording times");
     expect(xml.cs).toEqual(["Nirmala UI"]);
   });
 
@@ -174,7 +176,11 @@ describe("report DOCX", () => {
       report: syntheticReport,
     });
     const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    for (const status of ["Observed", "Not enough evidence", "Unknown"])
+    for (const status of [
+      "Observed",
+      "Not Enough Evidence",
+      "State not established",
+    ])
       expect(xml.text).toContain(status);
     expect(xml.text).toContain(syntheticReport.dimensions[1].observation);
     expect(xml.text).not.toMatch(/\bof\s+\d+\s+observed\b/i);
@@ -196,9 +202,9 @@ describe("report DOCX", () => {
       "skills",
       "facts",
     ]);
-    expect(xml.text.toUpperCase()).toContain("VERDICT");
-    expect(xml.text).toContain("Skills were not checked for this call.");
-    expect(xml.text).toContain("No facts were recorded for this call.");
+    expect(xml.text).toContain("Call outcome");
+    expect(xml.text).toContain("No assessment was supplied for this skill.");
+    expect(xml.text).toContain("Not established in this report.");
     expect(xml.text).not.toContain("Who spoke, and when");
   });
 
