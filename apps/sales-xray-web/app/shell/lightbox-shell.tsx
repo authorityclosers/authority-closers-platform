@@ -109,7 +109,7 @@ export type LightboxShellProps = {
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
-  heroStage?: "welcome" | "ready" | "processing";
+  heroStage?: "welcome" | "ready" | "processing" | "attention";
   /** Kept for API compatibility; the shell shows no greeting banner. */
   displayName?: string | null;
   /** Label the explicit local review fixture without implying a real job. */
@@ -138,6 +138,8 @@ function pageHeading(
             "A read-only preview of how your call moves from upload to report.",
         }
       : { title: "Analysing your call" };
+  // The panel names what happened (failed, paused, needs attention).
+  if (stage === "attention") return { title: "Your call" };
   if (stage === "welcome") return { title: "New analysis" };
   return null;
 }

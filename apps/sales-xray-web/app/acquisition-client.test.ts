@@ -47,11 +47,47 @@ it("accepts additive live-stage metadata from the owner progress read", () => {
       { stage: "C4", state: "queued", started_at: null, finished_at: null },
     ],
   };
-  // The legacy client keeps its original contract while Strike A consumes the
-  // additive timeline. Missing historical timestamps do not break the read.
-  expect(parseProgress(live, parseSubmission(progress))).toEqual(
-    parseProgress(progress, parseSubmission(progress)),
+  // The original contract is unchanged; the additive timeline is kept for the
+  // progress screen. Missing historical timestamps do not break the read.
+  expect(parseProgress(live, parseSubmission(progress))).toEqual({
+    ...parseProgress(progress, parseSubmission(progress)),
+    current_stage: "C4",
+    terminal_state: null,
+    stage_progress: [
+      {
+        stage: "C2",
+        state: "completed",
+        started_at: "2026-10-10T12:00:00+00:00",
+        finished_at: "2026-10-10T12:00:03+00:00",
+      },
+      { stage: "C4", state: "queued", started_at: null, finished_at: null },
+    ],
+  });
+});
+
+it("drops malformed live-stage fields instead of failing the read", () => {
+  const odd = parseProgress(
+    {
+      ...progress,
+      current_stage: "C9",
+      terminal_state: "maybe",
+      stage_progress: [
+        { stage: "C2", state: "completed", started_at: "yesterday" },
+        { stage: "X", state: "completed" },
+        "not a row",
+      ],
+    },
+    parseSubmission(progress),
   );
+  expect(odd.current_stage).toBeUndefined();
+  expect(odd.terminal_state).toBeUndefined();
+  expect(odd.stage_progress).toEqual([
+    { stage: "C2", state: "completed", started_at: null, finished_at: null },
+  ]);
+  // Older servers send none of them.
+  expect(
+    parseProgress(progress, parseSubmission(progress)).stage_progress,
+  ).toBeUndefined();
 });
 
 it("binds the retry status to the saved source and rejects contradictory facts", () => {
