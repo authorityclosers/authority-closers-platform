@@ -337,6 +337,7 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
             )
             writes = []
             reads = []
+            read_counts = {}
 
             @event.listens_for(engine.sync_engine, "before_cursor_execute")
             def capture(_connection, _cursor, statement, _parameters, _context, _many):
@@ -451,9 +452,16 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                             assert response.status_code == 200, (name, suffix, response.text)
                             assert response.headers["cache-control"] == "private, no-store"
                             assert response.headers["vary"] == "Cookie"
-                            # Fixed exact-call lookups, independent of the 22
-                            # additional library rows and manager identity.
-                            assert len(reads) - start_reads <= 60
+                            read_counts[person, name, suffix] = len(reads) - start_reads
+                            # Speaker reads retain two ownership checks plus
+                            # transcript/report attribution. A visitor claim
+                            # adds one lookup to each ownership check.
+                            budget = 66 if suffix == "/speaker-map" else 60
+                            assert read_counts[person, name, suffix] <= budget, (
+                                name,
+                                suffix,
+                                read_counts[person, name, suffix],
+                            )
                             if suffix == "/speaker-map":
                                 assert response.headers["etag"] == '"call-label-1"'
                                 assert response.json()["status"] == "confirmed"
@@ -486,7 +494,9 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                     assert unavailable.json()["status"] == "unavailable"
                     assert unavailable.json()["speakers"] == []
                     for suffix, status in (
-                        ("/transcript", 404), ("/waveform", 409), ("/source", 409)
+                        ("/transcript", 404),
+                        ("/waveform", 409),
+                        ("/source", 409),
                     ):
                         assert (
                             await request(person, path=PREFIX + f"/{ids['other']}" + suffix)
@@ -513,6 +523,27 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                     await request(owner, path=PREFIX + "?include_owners=true&include_owners=false")
                 ).status_code == 422
                 assert (await client.get(PREFIX)).status_code == 401
+                assert writes == []
+
+                # Grow the library from 26 to 48 calls and prove that the
+                # exact-call read cost does not grow with unrelated calls.
+                async with sessions() as db, db.begin():
+
+                    def grow_library(sync):
+                        for index in range(22):
+                            seed_call(
+                                sync, org, member, created_at=now - timedelta(days=3, seconds=index)
+                            )
+
+                    await db.run_sync(grow_library)
+                writes.clear()  # Only the explicit fixture writes above.
+                for person in (owner, admin):
+                    for name in ("reported", "claimed"):
+                        for suffix in READ_SUFFIXES[2:]:
+                            start_reads = len(reads)
+                            response = await request(person, path=PREFIX + f"/{ids[name]}" + suffix)
+                            assert response.status_code == 200
+                            assert len(reads) - start_reads == read_counts[person, name, suffix]
                 assert writes == []
                 original_progress = AcquisitionReports.progress
                 attempts = 0
