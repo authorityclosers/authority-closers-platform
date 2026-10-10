@@ -127,6 +127,9 @@ function Field({
   );
 }
 
+/** Shared presentation only; callers supply authorised, entity-specific facts. */
+export { Field as ProfileFact };
+
 /** Six buyer-focused sections. No opportunity/qualification state is inferred. */
 export function ProspectInformation({
   prospect,

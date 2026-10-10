@@ -471,6 +471,7 @@ export async function fetchProspectsList({
     method: "GET",
     credentials: "same-origin",
     cache: "no-store",
+    redirect: "error",
     headers: { accept: "application/json" },
     signal,
   });

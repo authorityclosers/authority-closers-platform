@@ -29,6 +29,7 @@ it("reads one private own-call result with native evidence and one mission", asy
 it.each([
   "person_id",
   "tenant_id",
+  "session_id",
   "submission_id",
   "recording_id",
   "source_sha256",
@@ -61,6 +62,15 @@ it("checks the native source window and the optional pinned report revision", ()
       ...binding,
       reportRevision: "c".repeat(64),
     }),
+  ).toThrow();
+});
+it("rejects an unbound old API result when the caller pins its current session", () => {
+  const payload = fictionalCallCoaching();
+  expect(() =>
+    parseCallCoaching({ ...payload, session_id: undefined }, binding),
+  ).toThrow();
+  expect(() =>
+    parseCallCoaching({ ...payload, session_id: null }, binding),
   ).toThrow();
 });
 it("keeps the lesson and mission on this one source and skill", () => {

@@ -51,6 +51,7 @@ it("loads optional own-call coaching in parallel with C2/C5 under the route's ac
     coachingActor: {
       personId: callCoachingBinding.personId,
       tenantId: callCoachingBinding.tenantId,
+      sessionId: callCoachingBinding.sessionId,
     },
   });
   await vi.waitFor(() => expect(pending).toHaveLength(3));
@@ -81,6 +82,7 @@ it.each(["missing", "wrong person", "wrong source"])(
       coachingActor: {
         personId: callCoachingBinding.personId,
         tenantId: callCoachingBinding.tenantId,
+        sessionId: callCoachingBinding.sessionId,
       },
     });
     expect(view.state).toBe("ready");
@@ -102,6 +104,7 @@ it("does not wait for a stalled optional Coaching service to open the Report", a
     coachingActor: {
       personId: callCoachingBinding.personId,
       tenantId: callCoachingBinding.tenantId,
+      sessionId: callCoachingBinding.sessionId,
     },
   });
   expect(view.state).toBe("ready");

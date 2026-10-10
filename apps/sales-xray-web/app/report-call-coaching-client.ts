@@ -11,6 +11,7 @@ export type CallCoachingBinding = {
   callId: string;
   personId: string;
   tenantId: string;
+  sessionId?: string;
   sourceSha256: string;
   transcriptRevision: string;
   recordingId?: string;
@@ -21,6 +22,7 @@ export type CallCoaching = {
   schema: "ac.sales-xray.call-coaching/1";
   person_id: string;
   tenant_id: string;
+  session_id?: string | null;
   submission_id: string;
   recording_id: string;
   source_sha256: string;
@@ -99,6 +101,7 @@ export function parseCallCoaching(
     row.entitlement_policy !== "AUT-1678-open-access" ||
     row.person_id !== binding.personId ||
     row.tenant_id !== binding.tenantId ||
+    (binding.sessionId !== undefined && row.session_id !== binding.sessionId) ||
     row.submission_id !== binding.callId ||
     row.source_sha256 !== binding.sourceSha256 ||
     row.transcript_revision !== binding.transcriptRevision ||
@@ -112,6 +115,7 @@ export function parseCallCoaching(
     ![binding.callId, binding.personId, binding.tenantId].every((id) =>
       UUID.test(id),
     ) ||
+    (binding.sessionId !== undefined && !UUID.test(binding.sessionId)) ||
     row.recommended_media !== null ||
     !["ready", "unavailable"].includes(text(row.state)) ||
     ![

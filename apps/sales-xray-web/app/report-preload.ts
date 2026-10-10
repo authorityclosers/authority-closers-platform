@@ -57,7 +57,9 @@ export async function preloadSavedReport(
   callId: string,
   read: SavedReportRead,
   parent?: AbortSignal,
-  options?: { coachingActor: { personId: string; tenantId: string } },
+  options?: {
+    coachingActor: { personId: string; tenantId: string; sessionId?: string };
+  },
 ): Promise<SavedReportPreload> {
   if (!UUID.test(callId)) return UNAVAILABLE;
   const timeout = new AbortController();
@@ -115,6 +117,7 @@ export async function preloadSavedReport(
           callId,
           personId: options.coachingActor.personId,
           tenantId: options.coachingActor.tenantId,
+          sessionId: options.coachingActor.sessionId,
           recordingId: submission.recordingId,
           sourceSha256: transcript.source_sha256,
           transcriptRevision: transcript.revision,

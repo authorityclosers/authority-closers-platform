@@ -30,7 +30,7 @@ const access: WorkspaceAccessValue = {
   context: {
     personId: binding.personId,
     tenantId: binding.tenantId,
-    sessionId: "00000000-0000-0000-0000-000000000008",
+    sessionId: binding.sessionId!,
   },
   retry: vi.fn(),
 };
@@ -101,6 +101,26 @@ it("uses a source-checked server bootstrap without another read", async () => {
   await render(access, true);
   expect(container.textContent).toContain("Fictional API focus");
   expect(fetcher).not.toHaveBeenCalled();
+});
+it("does not reuse a bootstrap from the previous session of the same person", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise(() => {})),
+  );
+  await render(access, true);
+  expect(container.textContent).toContain("Fictional API focus");
+  await render(
+    {
+      ...access,
+      context: {
+        ...access.context!,
+        sessionId: "00000000-0000-0000-0000-000000000009",
+      },
+    },
+    true,
+  );
+  expect(container.textContent).not.toContain("Fictional API focus");
+  expect(container.textContent).not.toContain(transcript.segments[0].text);
 });
 it("keeps the report focus available if this API has not deployed", async () => {
   vi.stubGlobal(
