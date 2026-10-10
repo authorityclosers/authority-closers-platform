@@ -603,6 +603,24 @@ it("scopes Overview to the member's own calls without team figures", async () =>
   expect(host.querySelector('[aria-labelledby="org-people"]')).toBeNull();
 });
 
+it("keeps the Overview's shape while activity loads", async () => {
+  activityRoutes();
+  const serve = fetchMock.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  fetchMock.mockImplementation((path: string, init?: RequestInit) =>
+    path === "/v1/organisation/activity?days=30"
+      ? new Promise<Response>(() => {})
+      : serve(path, init),
+  );
+  await render();
+  const loading = host.querySelector('[aria-label="Loading activity"]')!;
+  // Four figure tiles, eight call rows and four people, as when loaded.
+  expect(loading.querySelectorAll('[class*="kpi"]')).toHaveLength(4);
+  expect(loading.querySelectorAll('[class*="boneRow"]')).toHaveLength(12);
+});
+
 it("explains an activity route that this server does not have", async () => {
   await render();
   expect(host.textContent).toContain(

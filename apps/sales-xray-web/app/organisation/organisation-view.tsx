@@ -429,11 +429,38 @@ function PageSkeleton() {
   );
 }
 
-function SkeletonBlocks() {
+/** The loaded Overview's own surfaces with placeholder lines, so nothing jumps. */
+function SkeletonBlocks({ team = true }: { team?: boolean }) {
+  const lines = (count: number) =>
+    Array.from({ length: count }, (_, index) => (
+      <span key={index} className={styles.boneRow}>
+        <i className={styles.bone} data-w="name" />
+        <i className={styles.bone} data-w="meta" />
+      </span>
+    ));
   return (
     <>
-      <span className={styles.skeletonStrip} />
-      <span className={styles.skeletonTable} />
+      <div
+        className={styles.strip}
+        data-columns={team ? 4 : 3}
+        aria-hidden="true"
+      >
+        {Array.from({ length: team ? 4 : 3 }, (_, index) => (
+          <span key={index} className={styles.kpi}>
+            <i className={styles.bone} data-w="label" />
+            <i className={styles.bone} data-w="value" />
+            <i className={styles.bone} data-w="context" />
+          </span>
+        ))}
+      </div>
+      <div
+        className={styles.columns}
+        data-team={team ? "" : undefined}
+        aria-hidden="true"
+      >
+        <div className={styles.surface}>{lines(CALLS_SHOWN)}</div>
+        {team ? <div className={styles.surface}>{lines(4)}</div> : null}
+      </div>
     </>
   );
 }
@@ -559,7 +586,7 @@ function OverviewPanel({
   if (activity.status === "loading")
     return (
       <div className={styles.skeleton} aria-label="Loading activity">
-        <SkeletonBlocks />
+        <SkeletonBlocks team={team} />
       </div>
     );
   if (activity.status !== "ready")

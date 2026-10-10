@@ -6,6 +6,7 @@
   bottom: 20px;
   display: grid;
   width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 4px 12px;
   overflow: hidden;
@@ -115,6 +116,16 @@
 @keyframes timer {
   to {
     transform: scaleX(0);
+  }
+}
+
+/* Phone: full width, above the bottom tab bar, like the notice centre. */
+@media (max-width: 760px) {
+  .card {
+    right: 12px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    width: auto;
   }
 }
 
