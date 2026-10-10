@@ -77,6 +77,12 @@ No page/layout, report/prospect rendering or coaching code was edited here.
   Prettier pass.
 - All six PostgreSQL plan-budget and local-retry/restart cases pass.
 - Final targeted three-module mypy and changed-file Ruff lint pass.
+- The retained earlier-report owner-isolation HTTP case passes locally, including
+  `terminal_state=done` and the exact recovered-report completion timestamp.
+  Its fictional recovery stub now uses the mapped return type and a fixed
+  `created_at`, replacing the bare `object()` uncovered by CI at 474ef74. The
+  stub is not persisted and does not replace the real recovery service outside
+  this test. This adds one passing PostgreSQL case (13 total for this continuation).
 - The native retained-C2 reupload fixture failed at upload admission (422: audio
   length could not be verified), before the changed coordinator assertion or
   progress query ran. This is not a passing native proof. The explicitly
@@ -89,7 +95,9 @@ No page/layout, report/prospect rendering or coaching code was edited here.
 
 This is fictional local test evidence. No deployed authenticated journey,
 staging/production data change, provider replay, deployment or merge is claimed.
-The shared-file gate currently conflicts with #429; it is not bypassed.
+Single-track at 474ef74 passed after #429 removed its shared workflow diff;
+the gate remains in use. Application CI at that head passed all jobs except the
+older bare-object recovery fixture above; final-head CI after its fix is required.
 The companion expired unaccepted-quote patch still applies cleanly to the
 integrated page, but its application and journey verification belong to Strike
 A. The watchdog alarm implementation and operations handoff are unchanged.
