@@ -35,9 +35,11 @@ from tests.unit.http.test_organisation_activity import seed_call
 from tests.unit.http.test_workspaces import HttpDatabase, workspace_state  # noqa: F401
 
 
-def seed_readable_call(db, tenant, owner, *, created_at):
+def seed_readable_call(db, tenant, owner, *, created_at, visitor_id=None):
     """Use the existing call fixture with a valid, wholly fictional private draft."""
-    submission = seed_call(db, tenant, owner, created_at=created_at, label="Fictional call")
+    submission = seed_call(
+        db, tenant, owner, created_at=created_at, label="Fictional call", visitor_id=visitor_id
+    )
     link = db.get(ConversationGuestSubmission, (tenant, submission))
     recording = db.get(ConversationRecording, link.recording_id)
     intent = _intent(recording.source_sha256)
