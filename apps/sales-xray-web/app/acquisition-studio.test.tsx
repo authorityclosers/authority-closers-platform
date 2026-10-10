@@ -1201,7 +1201,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await clickReportSection("What Worked & What Didn't");
+  await clickReportSection("Moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 
@@ -3142,6 +3142,30 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
+  expect(
+    [
+      ...container.querySelectorAll<HTMLAnchorElement>(
+        '[aria-label="Explore your sales report"] a',
+      ),
+    ].map((link) => link.getAttribute("aria-label")),
+  ).toEqual([
+    "Overview",
+    "Moments",
+    "Prospect",
+    "Next-call plan",
+    "Sales skills",
+    "Call signals",
+    "Raw data",
+  ]);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
+      .click(),
+  );
+  await flush();
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("story");
   const reportSections = [
     "The Big Picture",
     "How the Call Played Out",
@@ -3149,7 +3173,6 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     "Moments That Mattered",
     "Your Skills on This Call",
     "Where the Deal Stands",
-    "Raw data",
   ];
   expect(
     [

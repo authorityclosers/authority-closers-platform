@@ -528,6 +528,7 @@ export async function fetchProspectDetail({
     method: "GET",
     credentials: "same-origin",
     cache: "no-store",
+    redirect: "error",
     headers: { accept: "application/json" },
     signal,
   });
@@ -562,7 +563,10 @@ export async function fetchProspectDetail({
   }
 
   const json = await response.json();
-  return parseProspectDetail(json);
+  const detail = parseProspectDetail(json);
+  if (detail.prospect.prospect_id !== prospectId)
+    throw new ProspectsContractError("prospect_detail_binding");
+  return detail;
 }
 
 /** Save only a person's typed value; the server appends and locks the revision. */

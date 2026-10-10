@@ -1,3 +1,4 @@
+import { syntheticProspect } from "./review-fixture/prospects/synthetic-prospect";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -319,6 +320,35 @@ describe("prospects-client fetchers", () => {
     );
     expect(result.prospect.name).toBe("Test Person");
     fetchSpy.mockRestore();
+  });
+
+  it("withholds a valid detail response for a different customer identity", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          schema: "ac.sales-xray.prospects/1",
+          prospect: syntheticProspect,
+          calls: [],
+          next_offset: null,
+          promises: [],
+          next_steps: [],
+          buyer_intent_history: [],
+        }),
+      ),
+    );
+    try {
+      await expect(
+        fetchProspectDetail({
+          prospectId: "33333333-3333-4333-8333-333333333333",
+        }),
+      ).rejects.toThrow("prospect_detail_binding");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ redirect: "error", cache: "no-store" }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("rejects non-UUID prospect id before fetching", async () => {
