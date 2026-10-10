@@ -31,7 +31,7 @@ git diff --check
 - Unit checks reject every missing field, extras at every level, wrong measurement types, negative measurements, invalid dates/UUID strings, wrong day counts/order, inconsistent totals, duplicate people and incorrect person ordering. Named schemas retain the exact required field sets and constraints. Standalone final contract run: **61 passed**.
 - Existing database proofs preserve one grouped receipt SELECT plus fixed admission overhead, live owner/admin and demotion checks, claimed/unclaimed/foreign/canary attribution, masked names and former-owner history. HTTP regressions preserve existing 401/403, private/no-store, Cookie headers, selected workspace, shared identity locks, query rejection and POST 405 behavior. Retained organisation database/HTTP checks pass.
 - Format: four files already formatted. Ruff lint: passed. Mypy: no issues in the two changed source files. Diff whitespace: passed. An initial mypy inference failure after extracting the response variable was corrected with an explicit `dict[str, Any]` annotation; the final checks above passed.
-- Remote CI is verified at the final PR SHA through the PR/watchdog path; local results are not a claim that remote checks or deployment have passed.
+- Remote CI has not yet been checked in this receipt. Its result must be recorded at the final PR SHA through the PR/watchdog path; local results are not a claim that remote checks or deployment have passed.
 
 ## Actual dev inspection and limits
 
