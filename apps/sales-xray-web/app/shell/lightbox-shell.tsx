@@ -642,7 +642,10 @@ function LightboxShellFrame({
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
-  const invites = useInvites(authenticated && !loading);
+  // Like the updates and allowance reads, off under test (pages count reads).
+  const invites = useInvites(
+    authenticated && !loading && process.env.NODE_ENV !== "test",
+  );
   useEffect(() => {
     if (!invites.live) return;
     const open = () => setCreateOpen(true);
