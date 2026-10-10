@@ -533,8 +533,8 @@ it("reconciles every Overview figure with the calls it lists", async () => {
     /^Sales call · \S/,
   );
   expect(rows[0].textContent).toContain("Report ready");
-  // One sparse day is not a trend.
-  expect(host.querySelector('[role="img"]')).toBeNull();
+  // One sparse day is not a trend in the figure strip.
+  expect(host.querySelector('dl [role="img"]')).toBeNull();
 });
 
 it("lists active people first and folds quiet and test accounts away", async () => {
@@ -565,6 +565,33 @@ it("draws a 30-day bar only with at least three active days", async () => {
   ).toHaveLength(30);
   expect(kpi("Reports ready")).toBe("Reports ready1of 3 calls");
   expect(host.textContent).toContain("Analysis in progress");
+});
+
+it("shows each person's calls in each of the last four weeks, oldest first", async () => {
+  activityRoutes([0, 3, 9]);
+  await render();
+  const bars = host.querySelector(
+    '[aria-labelledby="org-people"] [role="img"]',
+  );
+  expect(bars?.getAttribute("aria-label")).toBe(
+    "Admin: 0, 0, 1, 2 calls per week, oldest first; this week 2",
+  );
+  expect(bars?.querySelectorAll("i")).toHaveLength(4);
+  expect(bars?.querySelectorAll("i[data-zero]")).toHaveLength(2);
+  expect(host.textContent).toContain("Bars: each of the last 4 weeks");
+});
+
+it("keeps the share bar when the server lists fewer calls than it counts", async () => {
+  activityRoutes([0, 3, 9]);
+  const activity = routes["/v1/organisation/activity?days=30"] as {
+    calls: unknown[];
+  };
+  activity.calls = activity.calls.slice(0, 2);
+  await render();
+  expect(
+    host.querySelector('[aria-labelledby="org-people"] [role="img"]'),
+  ).toBeNull();
+  expect(host.textContent).not.toContain("Bars: each of the last 4 weeks");
 });
 
 it("scopes Overview to the member's own calls without team figures", async () => {

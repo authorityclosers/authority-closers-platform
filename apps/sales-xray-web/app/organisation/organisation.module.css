@@ -688,6 +688,26 @@
   background: var(--lx-teal);
 }
 
+.weeks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 3px;
+  height: 22px;
+  border-bottom: 1px solid var(--lx-line-strong);
+}
+
+.weeks i {
+  display: block;
+  border-radius: 2px 2px 0 0;
+  background: var(--lx-teal);
+  opacity: 0.4;
+}
+
+.weeks i:last-child {
+  opacity: 1;
+}
+
 .personFigures {
   display: grid;
   justify-items: end;
@@ -1493,7 +1513,12 @@
   }
 
   .people li {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-columns: 24px minmax(0, 1fr) 40px auto;
+  }
+
+  /* The last column even when the share bar is hidden. */
+  .personFigures {
+    grid-column: -2;
   }
 
   .receiptHead,

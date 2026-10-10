@@ -85,6 +85,7 @@ const ROLE_LABEL: Record<OrgRole, string> = {
   member: "Member",
 };
 const CALLS_SHOWN = 8;
+const WEEK_MS = 7 * 86_400_000;
 const ORG_NOTICE = "organisation-load";
 const ACTION_NOTICE = "organisation-action";
 
@@ -788,6 +789,11 @@ function PeopleActivity({
   members: Live<OrgMember[]>;
 }) {
   const [open, setOpen] = useState(false);
+  // Weekly bars need every call; the server lists up to 500 in 30 days.
+  const complete =
+    activity.calls.length >=
+    activity.perRep.reduce((sum, rep) => sum + rep.calls, 0);
+  const weekly = useMemo(() => callsPerWeek(activity.calls), [activity]);
   const rows = useMemo(() => {
     const directory = members.status === "ready" ? members.value : [];
     const reps = new Map(activity.perRep.map((rep) => [rep.personId, rep]));
@@ -842,12 +848,14 @@ function PeopleActivity({
   const active = rows.filter((row) => row.calls > 0 && !row.test);
   const quiet = rows.filter((row) => row.calls === 0 || row.test);
   const top = Math.max(1, ...rows.map((row) => row.calls));
+  const topWeek = Math.max(1, ...[...weekly.values()].flat());
   const shown = open ? [...active, ...quiet] : active;
 
   return (
     <section className={styles.section} aria-labelledby="org-people">
       <div className={styles.sectionHead}>
         <h2 id="org-people">Calls by person</h2>
+        {complete ? <span>Bars: each of the last 4 weeks</span> : null}
       </div>
       <div className={styles.surface}>
         {members.status === "loading" ? (
@@ -871,9 +879,17 @@ function PeopleActivity({
                 </b>
                 {row.duplicate && row.email ? <small>{row.email}</small> : null}
               </span>
-              <span className={styles.personBar} aria-hidden="true">
-                <i style={{ width: `${(row.calls / top) * 100}%` }} />
-              </span>
+              {complete ? (
+                <WeekBars
+                  name={row.name}
+                  weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
+                  top={topWeek}
+                />
+              ) : (
+                <span className={styles.personBar} aria-hidden="true">
+                  <i style={{ width: `${(row.calls / top) * 100}%` }} />
+                </span>
+              )}
               <span className={styles.personFigures}>
                 <b>
                   {row.calls} {row.calls === 1 ? "call" : "calls"}
@@ -902,6 +918,46 @@ function PeopleActivity({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/** Each person's calls in the last four 7-day weeks, oldest first. */
+function callsPerWeek(calls: ActivityCall[]) {
+  const now = Date.now();
+  const out = new Map<string, number[]>();
+  for (const call of calls) {
+    const age = Math.floor((now - Date.parse(call.createdAt)) / WEEK_MS);
+    if (age > 3) continue;
+    const weeks = out.get(call.ownerPersonId) ?? [0, 0, 0, 0];
+    weeks[3 - Math.max(0, age)] += 1;
+    out.set(call.ownerPersonId, weeks);
+  }
+  return out;
+}
+
+/** Calls in each of the last four 7-day weeks, oldest first; this week solid. */
+function WeekBars({
+  name,
+  weeks,
+  top,
+}: {
+  name: string;
+  weeks: number[];
+  top: number;
+}) {
+  const label = `${name}: ${weeks.join(", ")} calls per week, oldest first; this week ${weeks[3]}`;
+  return (
+    <span className={styles.weeks} role="img" aria-label={label} title={label}>
+      {weeks.map((count, index) => (
+        <i
+          key={index}
+          data-zero={count === 0 ? "" : undefined}
+          style={{
+            height: `${count === 0 ? 0 : Math.max(18, (count / top) * 100)}%`,
+          }}
+        />
+      ))}
+    </span>
   );
 }
 
