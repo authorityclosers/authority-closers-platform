@@ -262,6 +262,23 @@ it("does not announce a confirmed session while access is still pending", async 
   expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
 });
 
+it("draws the page's own skeleton while access is checked", async () => {
+  for (const [path, label] of [
+    ["/organisation", "Loading organisation"],
+    ["/dashboard", "Loading your dashboard"],
+  ] as const) {
+    pathname = path;
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    await mount();
+    expect(
+      container.querySelector(`[role="status"][aria-label="${label}"]`),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="page-skeleton"]')).toBeNull();
+    await act(async () => root.render(<></>));
+  }
+});
+
 it("keeps a requested saved call on a neutral access-check surface", async () => {
   const pending = deferred<Response>();
   fetchMock.mockReturnValueOnce(pending.promise);

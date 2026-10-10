@@ -34,6 +34,11 @@ import {
 } from "../sales-xray-workspaces";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
+import {
+  CALLS_SHOWN,
+  OrganisationSkeleton,
+  SkeletonBlocks,
+} from "./organisation-skeleton";
 import { CompanyDetailsPanel } from "./company-details-panel";
 import {
   addMember,
@@ -87,7 +92,6 @@ const ROLE_LABEL: Record<OrgRole, string> = {
   admin: "Admin",
   member: "Member",
 };
-const CALLS_SHOWN = 8;
 const WEEK_MS = 7 * 86_400_000;
 const ORG_NOTICE = "organisation-load";
 const ACTION_NOTICE = "organisation-action";
@@ -316,7 +320,7 @@ export function OrganisationView() {
         {access?.authenticated === false ? (
           <SignedOut onSignIn={access.requestAccountSignIn} />
         ) : base.status === "loading" || !authenticated ? (
-          <PageSkeleton />
+          <OrganisationSkeleton />
         ) : base.status === "error" ? (
           <section className={styles.state} role="alert">
             <span className={styles.stateIcon} aria-hidden="true">
@@ -482,81 +486,6 @@ function SignedOut({ onSignIn }: { onSignIn?: () => void }) {
         Sign in
       </Link>
     </section>
-  );
-}
-
-/** The route's loading screen: the page's own skeleton, nothing else. */
-export function OrganisationLoading() {
-  const access = useWorkspaceAccess();
-  return (
-    <AcquisitionShell
-      authenticated={access?.authenticated === true}
-      loading={!access}
-      homeHref="/"
-      active="organisation"
-      mobileFit={false}
-    >
-      <div className={styles.page} data-organisation-view>
-        <PageSkeleton />
-      </div>
-    </AcquisitionShell>
-  );
-}
-
-function PageSkeleton() {
-  return (
-    <div
-      className={styles.skeleton}
-      role="status"
-      aria-busy="true"
-      aria-label="Loading organisation"
-    >
-      <div className={styles.skeletonHeader}>
-        <span className={styles.skeletonTile} />
-        <span className={styles.skeletonLines}>
-          <i />
-          <i />
-        </span>
-      </div>
-      <span className={styles.skeletonTabs} />
-      <SkeletonBlocks />
-    </div>
-  );
-}
-
-/** The loaded Overview's own surfaces with placeholder lines, so nothing jumps. */
-function SkeletonBlocks({ team = true }: { team?: boolean }) {
-  const lines = (count: number) =>
-    Array.from({ length: count }, (_, index) => (
-      <span key={index} className={styles.boneRow}>
-        <i className={styles.bone} data-w="name" />
-        <i className={styles.bone} data-w="meta" />
-      </span>
-    ));
-  return (
-    <>
-      <div
-        className={styles.strip}
-        data-columns={team ? 4 : 3}
-        aria-hidden="true"
-      >
-        {Array.from({ length: team ? 4 : 3 }, (_, index) => (
-          <span key={index} className={styles.kpi}>
-            <i className={styles.bone} data-w="label" />
-            <i className={styles.bone} data-w="value" />
-            <i className={styles.bone} data-w="context" />
-          </span>
-        ))}
-      </div>
-      <div
-        className={styles.columns}
-        data-team={team ? "" : undefined}
-        aria-hidden="true"
-      >
-        <div className={styles.surface}>{lines(CALLS_SHOWN)}</div>
-        {team ? <div className={styles.surface}>{lines(4)}</div> : null}
-      </div>
-    </>
   );
 }
 

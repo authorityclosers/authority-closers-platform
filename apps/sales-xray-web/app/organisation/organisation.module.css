@@ -1356,7 +1356,6 @@
 
 .skeletonTile,
 .skeletonLines i,
-.skeletonTabs,
 .rowSkeleton span,
 .bone {
   display: block;
@@ -1369,7 +1368,8 @@
    hairline there. Inside surfaces it reads like the Calls skeleton. */
 .skeletonTile,
 .skeletonLines i,
-.skeletonTabs {
+.tabs .bone,
+.sectionHead .bone {
   background: var(--lx-line);
 }
 
@@ -1435,9 +1435,15 @@
   height: 12px;
 }
 
-.skeletonTabs {
-  height: 32px;
-  max-width: 280px;
+.bone[data-w="tab"] {
+  width: 56px;
+  height: 11px;
+}
+
+.bone[data-w="head"] {
+  width: 96px;
+  height: 11px;
+  align-self: center;
 }
 
 .rowSkeleton {
@@ -1853,7 +1859,6 @@
   .panel,
   .skeletonTile,
   .skeletonLines i,
-  .skeletonTabs,
   .rowSkeleton span,
   .bone,
   .formSkeleton span {
