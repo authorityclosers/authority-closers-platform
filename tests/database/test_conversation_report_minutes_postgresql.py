@@ -33,6 +33,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
+from ac_platform.conversation_intelligence.run_budget_alarm import overdue_processing_plans
 from ac_platform.db.models import model_metadata
 from ac_platform.outbox.repository import JobRepository
 from tests.database.test_conversation_guest_ownership_postgresql import (
@@ -50,7 +51,7 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
-async def setup_case(engine: Any) -> Any:
+async def setup_case(engine: Any, *, plan_hours: int = 1) -> Any:
     from types import SimpleNamespace
 
     state = await seed(engine)
@@ -79,7 +80,7 @@ async def setup_case(engine: Any) -> Any:
             state="held",
             progress={"failure_code": "stage_uncertain"},
             created_at=state.now,
-            expires_at=state.now + timedelta(hours=1),
+            expires_at=state.now + timedelta(hours=plan_hours),
             next_check_at=state.now,
         )
         db.add(plan)
@@ -140,6 +141,77 @@ async def setup_case(engine: Any) -> Any:
 def test_migration_matches_registry(postgres_harness: Any) -> None:
     with postgres_harness.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
+
+
+def test_preplan_budget_releases_but_live_plan_preserves_minutes(postgres_harness: Any) -> None:
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            case = await setup_case(engine, plan_hours=3)
+            now = case.state.now + timedelta(hours=2)
+            async with case.sessions() as db, db.begin():
+                plan = await db.get(ConversationProcessingPlan, case.plan.id)
+                plan.state = "quoted"
+            async with case.sessions() as db, db.begin():
+                assert not await ReportMinutes(db).release_expired_source(now=now)
+                assert (await overdue_processing_plans(db, now=now))["overdue_sources"] == []
+                plan = await db.get(ConversationProcessingPlan, case.plan.id)
+                plan.state = "held"
+            async with case.sessions() as db, db.begin():
+                alarm = await overdue_processing_plans(db, now=now)
+                assert any(
+                    row["usage_id"] == str(case.usage_id) for row in alarm["overdue_sources"]
+                )
+                assert (await ReportMinutes(db).latest(case.usage_id)) is None
+                assert await ReportMinutes(db).release_expired_source(now=now)
+                assert not await ReportMinutes(db).release_expired_source(now=now)
+                assert (await ReportMinutes(db).latest(case.usage_id)).kind == "released"
+                assert (await overdue_processing_plans(db, now=now))["overdue_sources"] == []
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_successor_reservation_fences_old_delivery(postgres_harness: Any) -> None:
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            case = await setup_case(engine)
+            async with case.sessions() as db, db.begin():
+                minutes = ReportMinutes(db)
+                assert await minutes.release_plan(case.plan)
+                await minutes.reserve_retry(
+                    case.usage_id, case.actor.tenant_id, key="bound-retry", available_seconds=120
+                )
+                fresh = ConversationProcessingPlan(
+                    id=uuid4(),
+                    tenant_id=case.plan.tenant_id,
+                    person_id=case.plan.person_id,
+                    recording_id=case.plan.recording_id,
+                    processing_lease_id=case.plan.processing_lease_id,
+                    generation=1,
+                    manifest={},
+                    plan_sha256="f" * 64,
+                    state="quoted",
+                    progress={},
+                    created_at=case.state.now + timedelta(seconds=1),
+                    expires_at=case.plan.expires_at,
+                    next_check_at=case.state.now,
+                )
+                db.add(fresh)
+                await db.flush()
+                await minutes.bind_retry_plan(case.usage_id, fresh)
+                with pytest.raises(ConversationConflict, match="earlier analysis"):
+                    async with db.begin_nested():
+                        await minutes.deliver(case.usage_id, case.draft, plan_id=case.plan.id)
+                await minutes.deliver(case.usage_id, case.draft, plan_id=fresh.id)
+                await minutes.deliver(case.usage_id, case.draft, plan_id=fresh.id)
+                assert not await minutes.release_plan(case.plan)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
 
 
 def test_failed_report_releases_and_retry_delivers_once(postgres_harness: Any) -> None:

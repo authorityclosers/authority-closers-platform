@@ -271,6 +271,7 @@ class PlanManifest(BaseModel):
     max_entitlement_seconds: int = Field(strict=True, ge=0, le=86400)
     analysis_settings_revision: int | None = Field(default=None, strict=True, ge=1)
     output_profile: Literal["standard", "detailed"] = "detailed"
+    retry_of: UUID | None = None
 
     @model_validator(mode="after")
     def bounded(self) -> PlanManifest:
@@ -332,6 +333,8 @@ class PlanManifest(BaseModel):
 
     def as_dict(self) -> dict[str, Any]:
         value = self.model_dump(mode="json")
+        if self.retry_of is None:
+            value.pop("retry_of", None)
         if self.processing_lease_id is None:
             value.pop("processing_lease_id", None)
         if self.continuation_grant_id is None:
@@ -564,7 +567,8 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         raise ConversationDenied("The derived stage is unavailable.")
     approval = next(item for item in value.stages if item.stage == plan.checkpoint.stage)
     if (
-        plan.request.provider != approval.provider_id
+        (plan.request.retry_of is not None and plan.request.retry_of != value.retry_of)
+        or plan.request.provider != approval.provider_id
         or plan.request.model != approval.model_id
         or plan.request.max_input_chars != value.max_input_chars
         or plan.request.max_completion_tokens
@@ -777,6 +781,7 @@ class ConversationProcessingPlans:
         key: str,
         continuation_grant_id: UUID | None = None,
         report_language: ReportLanguage | None = None,
+        retry_of: UUID | None = None,
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
@@ -792,13 +797,43 @@ class ConversationProcessingPlans:
             if grant is None:
                 raise ConversationDenied("This continuation grant is unavailable.")
             continuation_expires_at = utc(grant.expires_at)
-        source = await self.inference.plan_transcription(recording)
+        retry_task = None
+        if retry_of is not None:
+            from ac_platform.conversation_intelligence.safe_stage_retry import (
+                require_retry_predecessor,
+            )
+
+            retry_task = await require_retry_predecessor(self.db, recording, retry_of, now=now)
+        source = await self.inference.plan_transcription(
+            recording,
+            retry_of=retry_of if retry_task is not None and retry_task.stage == "C2" else None,
+        )
+        if retry_task is not None and retry_task.stage != "C2":
+            retained_c2 = await self.db.scalar(
+                select(ConversationInferenceTask)
+                .where(
+                    ConversationInferenceTask.recording_id == recording.id,
+                    ConversationInferenceTask.generation == recording.generation,
+                    ConversationInferenceTask.stage == "C2",
+                    ConversationInferenceTask.state == "completed",
+                    ConversationInferenceTask.erased_at.is_(None),
+                )
+                .order_by(ConversationInferenceTask.created_at.desc())
+                .limit(1)
+            )
+            if retained_c2 is not None:
+                retained_source = await self.inference.plan_task(recording, retained_c2)
+                if not isinstance(retained_source, TranscriptionPlan):
+                    raise ConversationConflict("The saved transcript is unavailable.")
+                source = retained_source
         bundle, c2 = await self.authority.approval(self.app, actor, recording, source, now)
         command = {
             "recording_id": str(recording_id),
             **actor_binding(actor),
             "authority_sha256": bundle.digest,
         }
+        if retry_of is not None:
+            command["retry_of"] = str(retry_of)
         if report_language is not None:
             if not isinstance(report_language, str) or report_language not in {
                 "en",
@@ -967,6 +1002,7 @@ class ConversationProcessingPlans:
                 person_id=recording.person_id,
                 **actor_columns(actor),
                 continuation_grant_id=continuation_grant_id,
+                retry_of=retry_of,
                 generation=recording.generation,
                 source_sha256=recording.source_sha256,
                 source_revision=recording.source_revision,
@@ -1092,11 +1128,39 @@ class ConversationProcessingPlans:
         request: StageRequest | None,
     ) -> ConversationInferenceTask:
         recording = await self.app._recording(actor, row.recording_id)
+        saved_c2 = None
+        if request is None:
+            saved_c2 = await self.db.scalar(
+                select(ConversationInferenceTask).where(
+                    ConversationInferenceTask.recording_id == recording.id,
+                    ConversationInferenceTask.cache_key == value.transcription_cache_key,
+                )
+            )
         stage = (
-            await self.inference.plan_transcription(recording)
+            await self.inference.plan_task(recording, saved_c2)
+            if saved_c2 is not None
+            else await self.inference.plan_transcription(recording)
             if request is None
             else await ReportingPipeline(self.inference).plan(recording, request)
         )
+        retry_of = None
+        if value.retry_of is not None:
+            from ac_platform.conversation_intelligence.safe_stage_retry import base_cache_key
+
+            original = await self.db.get(ConversationInferenceTask, value.retry_of)
+            if original is None or original.intent is None:
+                raise ConversationConflict("The retry predecessor is unavailable.")
+            if base_cache_key(original.intent["checkpoint"]) == stage.checkpoint.cache_key:
+                retry_of = value.retry_of
+                if request is None:
+                    stage = await self.inference.plan_transcription(recording, retry_of=retry_of)
+                else:
+                    request = request.model_copy(update={"retry_of": retry_of})
+                    stage = await ReportingPipeline(self.inference).plan(recording, request)
+        if request is None:
+            from ac_platform.conversation_intelligence.safe_stage_retry import predecessor_id
+
+            retry_of = predecessor_id(stage.checkpoint.as_dict())
         require_derived_input(value, stage)
         selected_configuration_sha256 = next(
             item.configuration_sha256
@@ -1165,7 +1229,12 @@ class ConversationProcessingPlans:
         quote_view = await self._diagnosed_processing_call(
             "quote_usage_reservation",
             lambda: self.authority.issue(
-                self.app, actor, row.recording_id, key=key, request=request
+                self.app,
+                actor,
+                row.recording_id,
+                key=key,
+                request=request,
+                retry_of=retry_of if request is None else None,
             ),
         )
         quote_id = UUID(quote_view["id"])
@@ -1191,6 +1260,7 @@ class ConversationProcessingPlans:
                 quote_id,
                 key=f"run:{row.id}:{stage.checkpoint.cache_key}",
                 request=request,
+                retry_of=retry_of if request is None else None,
             ),
         )
         task = await self.db.get(ConversationInferenceTask, UUID(run["id"]))
@@ -1458,8 +1528,18 @@ class ProcessingPlanScheduler:
 
     async def step(self) -> bool:
         async with self.sessions() as db, db.begin():
-            await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
+            recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
+            from ac_platform.conversation_intelligence.released_run_recovery import (
+                stop_released_run,
+            )
+
             if await ReportMinutes(db).settle_terminal_plan():
+                return True
+            if await ReportMinutes(db).release_failed_local():
+                return True
+            if await stop_released_run(db, generation=recovery.generation):
+                return True
+            if await ReportMinutes(db).release_expired_source():
                 return True
             candidate = await db.scalar(
                 select(ConversationProcessingPlan)

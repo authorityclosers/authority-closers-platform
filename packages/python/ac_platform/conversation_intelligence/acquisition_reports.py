@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.alignment import (
     project_transcript_for_playback,
 )
 from ac_platform.conversation_intelligence.application import (
+    LOCAL_JOB,
     ConversationApplication,
     ConversationConflict,
     ConversationNotFound,
@@ -46,6 +47,7 @@ from ac_platform.conversation_intelligence.report_access import (
     ReportSourceBinding,
     project_bound_report,
 )
+from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
@@ -98,9 +100,42 @@ _PLAN_FAILURE_CODES = frozenset(
         "stage_uncertain",
         "stage_cancelled",
         "processing_authorization_or_input_unavailable",
+        "processing_budget_expired",
+        "processing_coordinator_timeout",
+        "processing_coordinator_failed",
     }
 )
 _FAILURE_CODE_PATTERN = re.compile(r"^conversation_[a-z][a-z0-9_]{0,127}$")
+
+
+def _run_state(
+    *,
+    has_report: bool,
+    minute_kind: str | None,
+    plan: ConversationProcessingPlan | None,
+    local_state: str | None,
+    jobs: list[Job],
+) -> str:
+    if has_report:
+        return "done"
+    if (
+        minute_kind == "released"
+        or (plan is not None and plan.state in {"held", "cancelled"})
+        or local_state in {"failed", "cancelled"}
+    ):
+        return "failed"
+    if (
+        plan is not None
+        and plan.state == "active"
+        and (
+            (plan.manifest is not None and plan.manifest.get("retry_of") is not None)
+            or any(job.status == "retry_wait" for job in jobs)
+        )
+    ):
+        return "retrying"
+    if local_state == "running" or any(job.status == "leased" for job in jobs):
+        return "working"
+    return "queued"
 
 
 def _safe_progress_failure_code(value: object) -> str | None:
@@ -452,19 +487,19 @@ class AcquisitionReports:
             allow_organisation_read=allow_organisation_read,
         )
         local_run = await self.database.scalar(
-            select(ConversationRun).where(
+            select(ConversationRun)
+            .join(Job, Job.id == ConversationRun.job_id)
+            .where(
                 ConversationRun.recording_id == recording.id,
                 ConversationRun.tenant_id == scope.tenant_id,
                 ConversationRun.person_id == scope.processing_person_id,
                 ConversationRun.generation == recording.generation,
-                ConversationRun.request_key
-                == self.application.command_key(
-                    ProcessingActor(
-                        scope.processing_person_id, scope.tenant_id, scope.processing_lease_id
-                    ),
-                    f"acquisition-local-run:{recording.id}",
-                ),
+                Job.kind == LOCAL_JOB,
             )
+            .order_by(
+                ConversationRun.created_at.desc(), Job.created_at.desc(), ConversationRun.id.desc()
+            )
+            .limit(1)
         )
         plan = await self.database.scalar(
             select(ConversationProcessingPlan)
@@ -542,6 +577,28 @@ class AcquisitionReports:
             generation=recording.generation,
             has_report=has_report,
         )
+        minute_event = await ReportMinutes(self.database).latest(scope.usage_id)
+        local_retry = (
+            minute_event is not None
+            and minute_event.kind == "reserved"
+            and minute_event.plan_id is None
+            and minute_event.key.startswith("retry:")
+            and local_run is not None
+            and local_run.request_key
+            == self.application.command_key(
+                ProcessingActor(
+                    scope.processing_person_id, scope.tenant_id, scope.processing_lease_id
+                ),
+                "local-" + minute_event.key,
+            )
+        )
+        run_state = _run_state(
+            has_report=has_report,
+            minute_kind=None if minute_event is None else minute_event.kind,
+            plan=None if local_retry else plan,
+            local_state=None if local_run is None else local_run.state,
+            jobs=held_jobs,
+        )
         return {
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
@@ -553,4 +610,7 @@ class AcquisitionReports:
             "execution_hold": execution_hold,
             "failure_code": failure_code,
             "stages": [{"stage": task.stage, "state": task.state} for task in tasks],
+            "run_state": run_state,
+            "minute_state": None if minute_event is None else minute_event.kind,
+            "retry_available": run_state == "failed" and scope.claimed_account,
         }

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -68,6 +68,24 @@ class ReportMinutes:
             raise ConversationConflict("Your remaining minutes are not enough to retry this call.")
         await self._append(usage, previous, key=key, kind="reserved")
 
+    async def bind_retry_plan(self, usage_id: UUID, plan: ConversationProcessingPlan) -> None:
+        """Fence old workers to the fresh attempt in the preparation transaction."""
+        usage = await self._lock(usage_id, plan.tenant_id)
+        link = await self.database.get(
+            ConversationGuestSubmission, (plan.tenant_id, usage.submission_id)
+        )
+        if link is None or (link.recording_id, link.processing_lease_id) != (
+            plan.recording_id,
+            plan.processing_lease_id,
+        ):
+            raise ConversationConflict("The retry plan does not match this source.")
+        previous = await self.latest(usage.id)
+        if previous is not None and previous.kind != "reserved":
+            raise ConversationConflict("This retry has no minute reservation.")
+        await self._append(
+            usage, previous, key=f"retry-plan:{plan.id}", kind="reserved", plan_id=plan.id
+        )
+
     async def settle_terminal_plan(self) -> bool:
         """Sweep one pre-existing terminal plan after a coordinator restart."""
         row = await self.database.scalar(
@@ -88,6 +106,114 @@ class ReportMinutes:
             return False
         await self.release_plan(row)
         row.progress = {**row.progress, "minute_outcome_checked": True}
+        return True
+
+    async def release_expired_source(self, *, now: datetime | None = None) -> bool:
+        """Release abandoned uploads/local work even if no plan was accepted."""
+        from ac_platform.conversation_intelligence.source_run_budget import (
+            expired_source_reservations,
+        )
+
+        now = now or await self.database.scalar(select(func.clock_timestamp()))
+        assert now is not None
+        usage = await self.database.scalar(
+            expired_source_reservations(now)
+            .with_for_update(of=ConversationAcquisitionUsage, skip_locked=True)
+            .limit(1)
+        )
+        if usage is None:
+            return False
+        # Recheck under the same usage lock as delivery and renewed admission.
+        # A committed successor plan must protect its own immutable budget.
+        eligible = await self.database.scalar(
+            expired_source_reservations(now).where(ConversationAcquisitionUsage.id == usage.id)
+        )
+        if eligible is None:
+            return False
+        previous = await self.latest(usage.id)
+        await self._append(
+            usage,
+            previous,
+            key=f"source-budget:{0 if previous is None else previous.revision}",
+            kind="released",
+        )
+        return True
+
+    async def release_failed_local(self) -> bool:
+        """An exhausted local job releases minutes before the lease deadline."""
+        from ac_platform.conversation_intelligence.application import LOCAL_JOB
+        from ac_platform.conversation_intelligence.models import (
+            ConversationRecording,
+            ConversationRun,
+        )
+        from ac_platform.outbox.models import Job
+
+        link = ConversationGuestSubmission
+        latest_run = (
+            select(ConversationRun.id)
+            .join(Job, Job.id == ConversationRun.job_id)
+            .where(ConversationRun.recording_id == link.recording_id, Job.kind == LOCAL_JOB)
+            .order_by(
+                ConversationRun.created_at.desc(), Job.created_at.desc(), ConversationRun.id.desc()
+            )
+            .limit(1)
+            .correlate(link)
+            .scalar_subquery()
+        )
+        latest_kind = (
+            select(ConversationReportMinuteEvent.kind)
+            .where(ConversationReportMinuteEvent.usage_id == ConversationAcquisitionUsage.id)
+            .order_by(ConversationReportMinuteEvent.revision.desc())
+            .limit(1)
+            .correlate(ConversationAcquisitionUsage)
+            .scalar_subquery()
+        )
+        candidate = (
+            await self.database.execute(
+                select(ConversationAcquisitionUsage, ConversationRun)
+                .join(link, link.usage_id == ConversationAcquisitionUsage.id)
+                .join(ConversationRecording, ConversationRecording.id == link.recording_id)
+                .join(ConversationRun, ConversationRun.id == latest_run)
+                .join(Job, Job.id == ConversationRun.job_id)
+                .where(
+                    Job.status == "dead_letter",
+                    Job.lease_token.is_(None),
+                    ConversationRun.state.in_(("queued", "running", "failed")),
+                    ConversationRun.generation == ConversationRecording.generation,
+                    ConversationRecording.state == "ready",
+                    func.coalesce(latest_kind, "reserved") == "reserved",
+                    ~exists(
+                        select(ConversationProcessingPlan.id).where(
+                            ConversationProcessingPlan.recording_id == ConversationRun.recording_id,
+                            ConversationProcessingPlan.state.in_(("quoted", "active")),
+                            ConversationProcessingPlan.expires_at > func.clock_timestamp(),
+                            ConversationProcessingPlan.erased_at.is_(None),
+                        )
+                    ),
+                    ~exists(
+                        select(ConversationAcquisitionSettlement.usage_id).where(
+                            ConversationAcquisitionSettlement.usage_id
+                            == ConversationAcquisitionUsage.id,
+                            ConversationAcquisitionSettlement.kind == "completed",
+                        )
+                    ),
+                )
+                .order_by(ConversationRun.created_at)
+                .limit(1)
+                .with_for_update(
+                    of=(ConversationAcquisitionUsage, ConversationRun, Job), skip_locked=True
+                )
+            )
+        ).first()
+        if candidate is None:
+            return False
+        usage, run = candidate
+        previous = await self.latest(usage.id)
+        await self._append(usage, previous, key=f"failed-local:{run.id}", kind="released")
+        run.state = "failed"
+        run.completed_at = run.completed_at or await self.database.scalar(
+            select(func.clock_timestamp())
+        )
         return True
 
     async def _append(

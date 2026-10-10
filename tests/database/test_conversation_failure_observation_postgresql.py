@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPE,
     ConversationApplication,
     ConversationConflict,
@@ -54,7 +55,9 @@ RETRY_ACTION = "conversation.provider_retry_assessed"
 RECOVERY_ACTION = "conversation.provider_job_recovery_required"
 
 
-async def seed_measured_fixture(sessions: Any, prepared: Any) -> None:
+async def seed_measured_fixture(
+    sessions: Any, prepared: Any, *, signal_payload: dict[str, Any] | None = None
+) -> None:
     """Seed the known one-second WAV's checkpoint lineage, without native execution.
 
     Native decoding is covered by the local-worker suite. These cases exercise
@@ -74,12 +77,22 @@ async def seed_measured_fixture(sessions: Any, prepared: Any) -> None:
             "permission_reference": str(recording.permission_id),
         }
         c0 = build_checkpoint(binding, "C0", "recording-v1", {}, (), content_hash(c0_payload))
-        c1_payload = {"source_sha256": recording.source_sha256, "media_duration_ms": 1000}
+        c1_payload = signal_payload or {
+            "source_sha256": recording.source_sha256,
+            "media_duration_ms": 1000,
+        }
+        if signal_payload is not None:
+            c1_payload = {**signal_payload, "source_bytes": recording.source_bytes}
         c1 = build_checkpoint(
             binding,
             "C1",
-            AUDIOATLAS_RECIPE,
-            {"decode_rate": 48000, "window_profile": "audioatlas-40ms-10ms"},
+            AUDIOATLAS_RECIPE if signal_payload is None else AUDIOATLAS_HOSTED_RECIPE,
+            {
+                "decode_rate": 48000
+                if signal_payload is None
+                else signal_payload["acoustics"]["rate"],
+                "window_profile": "audioatlas-40ms-10ms",
+            },
             (c0,),
             content_hash(c1_payload),
         )
@@ -100,6 +113,25 @@ async def seed_measured_fixture(sessions: Any, prepared: Any) -> None:
                     created_at=datetime.now(UTC),
                 )
             )
+        if signal_payload is not None:
+            # Explicit fictional completion for full report/retry fixtures.
+            # This does not stand in for native decoder implementation proof.
+            local = (
+                await db.execute(
+                    select(ConversationRun, Job)
+                    .join(Job, Job.id == ConversationRun.job_id)
+                    .where(
+                        ConversationRun.recording_id == recording.id,
+                        Job.kind == "conversation.inspect_local.v1",
+                        Job.status == "queued",
+                        ConversationRun.state == "queued",
+                    )
+                )
+            ).first()
+            if local is not None:
+                run, job = local
+                run.state, run.completed_at = "completed", datetime.now(UTC)
+                job.status, job.updated_at = "succeeded", datetime.now(UTC)
 
 
 @pytest.fixture(scope="module")
