@@ -164,7 +164,7 @@ function excerpt(text: string | null, max = 96) {
  * The list's view lives in the address (status, rep, sort, q), so a reload or
  * a shared link opens the same view. Unknown values read as the default.
  */
-const STATUS_PARAM: Record<CallTone, string> = {
+const STATUS_PARAM: Partial<Record<CallTone, string>> = {
   active: "processing",
   ready: "completed",
   attention: "attention",
@@ -193,7 +193,7 @@ export function callsViewSearch(
   const params = new URLSearchParams(search);
   const put = (key: string, value: string) =>
     value ? params.set(key, value) : params.delete(key);
-  put("status", view.filter === "all" ? "" : STATUS_PARAM[view.filter]);
+  put("status", view.filter === "all" ? "" : (STATUS_PARAM[view.filter] ?? ""));
   put("rep", view.rep);
   put("sort", view.sort === "newest" ? "" : view.sort);
   put("q", view.q);

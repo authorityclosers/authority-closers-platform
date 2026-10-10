@@ -20,11 +20,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
 
 import { AccountNavigation } from "./account-navigation";
-import {
-  CallsLibrary,
-  callsViewSearch,
-  readCallsView,
-} from "./calls-library";
+import { CallsLibrary, callsViewSearch, readCallsView } from "./calls-library";
 import {
   UploadSessionProvider,
   useUploadSession,
