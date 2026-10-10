@@ -98,6 +98,49 @@ These rules supersede older delivery wording where they conflict.
 - **Managers:** CEO and CTO are woken only for decisions and reviews. Each posts
   at most one comment per run and creates at most three new cards per day.
 
+# PULSE MODE AND OWNER DECISIONS (owner orders, 10 Oct 2026)
+
+These rules supersede older wording where they conflict, including rule 1's
+one-small-change limit for strikes. They were recorded on [AUT-1701](/AUT/issues/AUT-1701).
+
+- **Strikes (until 17 Oct 2026, 24:00 IST; then reviewed with the owner):** each
+  owner-listed feature runs as one long direct session on the server
+  (`ac-strike@<card>`), on one branch `task/<lane>/<card>-strike-<name>` with one
+  open PR. The features are AUT-1663 (screens), AUT-1677 (report and prospect),
+  AUT-1676 (stuck analyses and charges), AUT-1678 (coaching) and AUT-1694
+  (organisations). A strike is a whole feature, not a small change, and not a
+  bypass.
+- **Strike merges:** the watchdog squash-merges a strike PR on green CI at most
+  every 2 hours, with no review, unless it touches billing, payments, sign-in,
+  database migrations, secrets, dependencies, `.github/`, `infra/` or this file.
+  Staging deploys `main` automatically, and dev takes `main` every 10 minutes.
+  Production promotes only on the owner's explicit "ship it".
+- **Owner decisions are final and fast.** Each of these is a full sign-off for
+  that PR's green head for 48 hours, and it lifts earlier CEO/CTO holds:
+  - a board comment by the owner or the owner's session reading
+    `Owner approved merge: PR #n` (optionally `@ <sha>`);
+  - a Telegram reply `approve #n`;
+  - the Telegram Approve button.
+
+  `Owner: hold PR #n` stops it.
+- **Sign-off deadline:** a green PR that needs a sign-off goes to its reviewer.
+  After 30 minutes without a verdict, the watchdog sends it to the owner on
+  Telegram with Approve and Hold buttons. Silence never blocks for longer.
+- **Holds:**
+  - Every CEO/CTO `Merge hold` names what clears it.
+  - A hold expires after 4 hours unless it is renewed with new evidence.
+  - A hold that would block an owner order goes to the owner the same hour, as
+    one decision. Agents never contain an owner order on their own.
+- **One rulebook:** an owner decision made in chat is written into this file
+  within the hour, by the owner's session or the CEO. Until it lands, the
+  owner's recorded order on the board binds every agent.
+- **Next: machine gates ([AUT-1741](/AUT/issues/AUT-1741)).** A migration-safety
+  check (upgrade and downgrade on a copy of the staging schema) and an
+  authorization diff test replace human review of routine risk. When they pass,
+  migrations and access-rule changes merge like ordinary changes. Only billing,
+  payments, secrets and the core sign-in keep a person's sign-off. Database
+  changes ship first, as tiny PRs.
+
 # OWNER-APPROVED DATA CHANGES
 
 Purpose: make urgent account, workspace and access changes in minutes, without
