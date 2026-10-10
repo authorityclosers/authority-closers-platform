@@ -78,13 +78,13 @@ export function ProspectReportFacts({
     !!context &&
     !!callId &&
     UUID_RE.test(callId);
-  const scope = `${context?.personId}:${context?.tenantId}:${context?.sessionId}:${callId}`;
   const [loaded, setLoaded] = useState<{
     scope: string;
     prospect: ProspectSummary | null;
     error?: string;
   } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const scope = `${context?.personId}:${context?.tenantId}:${context?.sessionId}:${callId}:${attempt}`;
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   useEffect(() => {
@@ -131,11 +131,18 @@ export function ProspectReportFacts({
     return <p className={styles.note}>Sign in to save prospect facts.</p>;
   if (loaded?.scope !== scope)
     return (
-      <div
-        role="status"
-        aria-label="Loading key facts"
-        className={styles.factSkeleton}
-      />
+      <div role="status" aria-label="Loading key facts">
+        <dl className={styles.facts} aria-hidden="true">
+          {KEYS.map((key) => (
+            <div key={key} className={`${styles.fact} ${styles.factSkeleton}`}>
+              <dt />
+              <dd />
+              <small />
+            </div>
+          ))}
+        </dl>
+        <div className={styles.profileSkeleton} aria-hidden="true" />
+      </div>
     );
   if (!prospect)
     return (

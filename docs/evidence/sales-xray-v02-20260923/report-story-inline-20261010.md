@@ -26,3 +26,7 @@ Owner correction: 10 October 2026, 15:58 IST. Keep the existing Report and defau
 ## Boundaries still awaiting integration
 
 This change does not claim universal post-C5 scheduling, hosted provider activation, instant server-loaded saved calls, or a Companies identity/list. Detailed Root/Strike A/Strike C handoffs are in `/home/acdev/strikes/1677/NOTES.md`. C5 candidates remain behind AC-SVAL gates. Company schema needs the shared migration slot. Hosted authenticated proof is unavailable behind Cloudflare Access; local fictional/corpus proof is not deployed evidence.
+
+## Server-fact refresh follow-up
+
+Key facts immediately withhold the old prospect's values and edit controls when a link-change/refresh event occurs; the refreshed link and profile must be read before edits return. The stale-link regression passes. Loading uses the same six-field grid rather than a short block, with 32/44 px placeholders and confirmation controls. Transcript-search gaps say no supported mention was found; they do not claim that an undetected price, time or number was never spoken. Fourteen focused facts/profile tests, typecheck, changed-file ESLint and the repeated 390/1440 light/dark browser proofs pass. The temporary preview was stopped.

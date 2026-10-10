@@ -220,6 +220,21 @@ it("keeps shared customer and document fields read-only", async () => {
   await render(access, true);
   expect(host.querySelector("button, input, select, form")).toBeNull();
 });
+it("withholds old prospect edits immediately when the call link refreshes", async () => {
+  await render();
+  expect(
+    host.querySelector("[data-server-prospect-facts] button"),
+  ).not.toBeNull();
+  vi.mocked(client.fetchProspectDetail).mockImplementationOnce(
+    () => new Promise(() => {}),
+  );
+  await act(async () =>
+    window.dispatchEvent(new Event("ac:prospect-facts-changed")),
+  );
+  expect(host.textContent).not.toContain("अदिती");
+  expect(host.querySelector("[data-server-prospect-facts] button")).toBeNull();
+  expect(host.querySelector('[aria-label="Loading key facts"]')).not.toBeNull();
+});
 it("withholds the previous workspace data as soon as account access is lost", async () => {
   await render();
   expect(host.textContent).toContain("अदिती");

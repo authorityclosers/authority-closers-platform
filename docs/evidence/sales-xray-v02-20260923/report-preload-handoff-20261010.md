@@ -16,4 +16,4 @@ Verification:
 - The fictional shell passes a null call binding to Key facts, so its synthetic identity triggers no server prospect read. This is a one-prop fixture-only change, with no other strike PR overlap at the checkpoint.
 - App typecheck, changed-file ESLint and diff check pass. Full compiled acquisition/browser at `94d0807` passes in CI. Latest-head complete CI remains required.
 
-Durable route wiring details: `/home/acdev/strikes/1677/saved-report-preload-handoff.md`. Companies schema/Pulse mapping preparation: `company-schema-plan.md` and `/home/acdev/strikes/pulse-people-roles.md` Mode B. Company migration is waiting for the single shared-file slot held by PR #429; no Companies API/list/schema or live provider activation is claimed.
+Durable route wiring details: `/home/acdev/strikes/1677/saved-report-preload-handoff.md`. Companies schema/Pulse mapping preparation: `company-schema-plan.md` and `/home/acdev/strikes/pulse-people-roles.md` Mode B. Company migration is waiting for the single shared migration slot held by PR #421; no Companies API/list/schema or live provider activation is claimed.

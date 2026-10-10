@@ -61,7 +61,7 @@ export function KeyFacts({
       <header className={styles.head}>
         <div>
           <h3>Key facts</h3>
-          <p>Saved to the prospect profile. A person’s edit stays locked.</p>
+          <p>Edit the linked prospect profile. A person’s edit stays locked.</p>
         </div>
       </header>
       <ProspectReportFacts callId={callId} readOnly={documentView} />
@@ -84,7 +84,7 @@ export function KeyFacts({
                   ))}
                 </>
               ) : (
-                "No time agreed at the start"
+                "No supported time request was found."
               )}
             </dd>
           </div>
@@ -99,7 +99,7 @@ export function KeyFacts({
                   ))}
                 </>
               ) : (
-                "Never came up"
+                "No supported price mention was found."
               )}
             </dd>
           </div>
@@ -114,7 +114,7 @@ export function KeyFacts({
             </div>
           ))
         ) : (
-          <p>No currency amount or percentage was said.</p>
+          <p>No supported currency or percentage mention was found.</p>
         )}
       </details>
     </section>
