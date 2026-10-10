@@ -17,6 +17,7 @@ from ac_platform.tenancy.models import Membership, OrganisationInvite
 from tests.unit.conversation_intelligence.test_activation_contract import _bundle
 from tests.unit.conversation_intelligence.test_organisation_seat_exemptions import exemption
 from tests.unit.http.test_organisation import call, state  # noqa: F401
+from tests.unit.http.test_organisation_invites import identity_cookie, person_call
 from tests.unit.http.test_workspaces import OTHER_TOKEN, workspace_state  # noqa: F401
 
 
@@ -50,9 +51,7 @@ def install_approval(state, tmp_path, *, tenant_id=None, **updates):  # noqa: F8
     return path
 
 
-async def test_unpaid_exempt_owner_invites_admin_adds_and_pending_invite_is_accepted(
-    unpaid, tmp_path
-):
+async def test_unpaid_exempt_owner_and_admin_invite_then_verified_people_accept(unpaid, tmp_path):
     install_approval(unpaid, tmp_path)
     assert (await call(unpaid, path="/billing")).json()["paid_seats"] == 0
     billing_reads = []
@@ -75,15 +74,32 @@ async def test_unpaid_exempt_owner_invites_admin_adds_and_pending_invite_is_acce
         token=OTHER_TOKEN,
     )
     assert added.status_code == 200, added.text
-    assert added.json()["person_id"] == str(unpaid.member)
-    assert added.json()["status"] == "active"
+    assert added.json()["person_id"] is None
+    assert added.json()["status"] == "invited"
+    cookie = identity_cookie(unpaid, unpaid.member)
+    joined = await person_call(
+        unpaid,
+        f"/invites/{added.json()['invite_id']}/accept",
+        method="POST",
+        key=uuid4(),
+        token=cookie,
+    )
+    assert joined.status_code == 200, joined.text
+    assert joined.json()["person_id"] == str(unpaid.member)
     person_id = uuid4()
     with Session(unpaid.engine) as db, db.begin():
         db.add(Person(id=person_id, email=body["email"], email_verified_at=datetime.now(UTC)))
-    accepted = await call(unpaid, "POST", "/members", body=body, key=uuid4())
+    cookie = identity_cookie(unpaid, person_id)
+    accepted = await person_call(
+        unpaid,
+        f"/invites/{invited.json()['invite_id']}/accept",
+        method="POST",
+        key=uuid4(),
+        token=cookie,
+    )
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["person_id"] == str(person_id)
-    assert accepted.json()["status"] == "active"
+    assert accepted.json()["status"] == "accepted"
     with Session(unpaid.engine) as db:
         invite = db.get(OrganisationInvite, UUID(invited.json()["invite_id"]))
         assert invite.status == "accepted" and invite.accepted_person_id == person_id
