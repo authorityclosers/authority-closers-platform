@@ -167,16 +167,19 @@
   gap: 8px;
 }
 
+/* A narrow screen keeps the title on one line; its note moves below it. */
 .sectionHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 2px 12px;
   min-height: 24px;
   color: var(--lx-muted);
 }
 
 .sectionHead h2 {
+  white-space: nowrap;
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
@@ -1704,6 +1707,12 @@
   color: var(--lx-muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.fixCount {
+  flex: none;
+  color: var(--lx-teal);
+  font-weight: 650;
 }
 
 .fixMeta .avatar {
