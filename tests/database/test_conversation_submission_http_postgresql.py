@@ -2434,6 +2434,7 @@ def test_account_duplicate_upload_reuses_uncertain_retained_c2_without_provider_
                     ) == source_snapshot["job"]
                     assert source_plan_row.state == "held"
                     assert source_plan_row.progress == {
+                        "stage_run_ids": [str(source_run_id)],
                         "current_stage": "C2",
                         "failure_code": "stage_uncertain",
                         "minute_outcome_checked": True,

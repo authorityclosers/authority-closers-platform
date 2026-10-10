@@ -53,6 +53,11 @@ from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
+from ac_platform.conversation_intelligence.submission_progress import (
+    StageExecution,
+    project_stage_progress,
+    read_stage_checkpoints,
+)
 from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
@@ -521,12 +526,17 @@ class AcquisitionReports:
             )
             .limit(1)
         )
-        task_rows = [
-            (row[0], row[1])
+        executions = [
+            StageExecution(row[0], row[1], row[2])
             for row in (
                 await self.database.execute(
-                    select(ConversationInferenceTask, Job.last_error)
+                    select(ConversationInferenceTask, Job, ConversationRun)
                     .join(Job, Job.id == ConversationInferenceTask.job_id)
+                    .join(
+                        ConversationRun,
+                        (ConversationRun.id == ConversationInferenceTask.run_id)
+                        & (ConversationRun.job_id == Job.id),
+                    )
                     .where(
                         ConversationInferenceTask.recording_id == recording.id,
                         ConversationInferenceTask.tenant_id == recording.tenant_id,
@@ -543,20 +553,25 @@ class AcquisitionReports:
                 )
             ).all()
         ]
-        task_rows = list(reversed(task_rows))
+        executions = list(reversed(executions))
+        task_rows = [(item.task, item.job.last_error) for item in executions]
         tasks = [row[0] for row in task_rows]
         has_report = False
+        report_finished_at = None
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
         if recovered is not None:
             has_report = True
+            report_finished_at = recovered.created_at
         draft = await self._draft(recording)
         if draft is not None:
             try:
                 self.reports._validated(draft, recording)
                 await self.reports._canonical_draft(draft, recording)
                 has_report = True
+                if recovered is None:
+                    report_finished_at = draft.created_at
             except ConversationConflict:
                 if recovered is None:
                     has_report = False
@@ -617,7 +632,22 @@ class AcquisitionReports:
                 retry_available = True
             except ConversationNotFound:
                 pass
+        stage_progress = project_stage_progress(
+            plan=None if local_retry else plan,
+            local_run=local_run,
+            local_job=next(
+                (job for job in held_jobs if local_run is not None and job.id == local_run.job_id),
+                None,
+            ),
+            executions=executions,
+            checkpoints=await read_stage_checkpoints(self.database, recording),
+            has_report=has_report,
+            run_state=run_state,
+            report_finished_at=report_finished_at,
+            local_retry=local_retry,
+        )
         return {
+            **stage_progress,
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
             "source_sha256": recording.source_sha256,

@@ -1576,7 +1576,11 @@ def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
                 stored = await database.get(ConversationProcessingPlan, plan_id)
                 assert stored is not None
                 assert stored.progress == {
-                    "failure_code": "processing_authorization_or_input_unavailable"
+                    "current_stage": "C2",
+                    "stage_run_ids": [
+                        str(await database.scalar(select(ConversationInferenceTask.run_id)))
+                    ],
+                    "failure_code": "processing_authorization_or_input_unavailable",
                 }
             # The failed scheduler attempt must not append another task.
             assert await _count(setup, ConversationInferenceTask) == before_tasks
@@ -1613,6 +1617,9 @@ def test_scheduler_persists_bounded_enqueue_diagnostic_and_rolls_back_partial_wo
             await _make_due(setup, plan_id)
 
             async with setup.sessions() as database:
+                before_plan_progress = (
+                    await database.get(ConversationProcessingPlan, plan_id)
+                ).progress
                 before_budget = (
                     await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
                 ).snapshot
@@ -1683,6 +1690,7 @@ def test_scheduler_persists_bounded_enqueue_diagnostic_and_rolls_back_partial_wo
                 assert stored is not None
                 assert stored.state == "held"
                 assert stored.progress == {
+                    **before_plan_progress,
                     "failure_code": "processing_authorization_or_input_unavailable",
                     "diagnostic_code": expected_diagnostic,
                 }

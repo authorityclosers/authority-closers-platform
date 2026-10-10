@@ -122,10 +122,19 @@ _PROCESSING_DIAGNOSTIC_PHASES = frozenset(
 _LOGGER = logging.getLogger(__name__)
 
 
-def _roles_freeze_progress(row: ConversationProcessingPlan) -> dict[str, bool]:
-    return (
+def _retained_progress(row: ConversationProcessingPlan) -> dict[str, Any]:
+    """Keep selected execution evidence when the coordinator terminalizes a plan."""
+
+    result: dict[str, Any] = (
         {"speaker_roles_frozen": True} if row.progress.get("speaker_roles_frozen") is True else {}
     )
+    current = row.progress.get("current_stage")
+    if isinstance(current, str) and current in {"C0", "C1", "C2", "C3", "C4", "C5", "C6"}:
+        result["current_stage"] = current
+    runs = row.progress.get("stage_run_ids")
+    if isinstance(runs, list) and len(runs) <= 128 and all(isinstance(run, str) for run in runs):
+        result["stage_run_ids"] = runs
+    return result
 
 
 def _processing_failure_diagnostic(phase: str, error: BaseException) -> str | None:
@@ -1310,7 +1319,7 @@ class ConversationProcessingPlans:
 
         if revision not in reports.SPEAKER_ROLE_PROMPT_REVISIONS:
             return None
-        if row.speaker_roles is None and not _roles_freeze_progress(row):
+        if row.speaker_roles is None and row.progress.get("speaker_roles_frozen") is not True:
             # Callers hold the plan lock. Even a null fallback is frozen;
             # a confirmation committed later belongs to a new plan.
             owner = await _customer_person_id(self.db, recording, now=utc(self.app.clock()))
@@ -1480,7 +1489,8 @@ class ConversationProcessingPlans:
                         raise ConversationConflict("The completed coaching report is unavailable.")
                     row.state = "completed"
                     row.progress = {
-                        **_roles_freeze_progress(row),
+                        **_retained_progress(row),
+                        "stage_run_ids": [str(task.run_id) for task in tasks],
                         "current_stage": "C6",
                         "report_run_id": str(judge.run_id),
                     }
@@ -1490,7 +1500,8 @@ class ConversationProcessingPlans:
         profile_hold_stage = await self._account_profile_hold_stage(row, tasks)
         if profile_hold_stage is not None:
             row.progress = {
-                **_roles_freeze_progress(row),
+                **_retained_progress(row),
+                "stage_run_ids": [str(task.run_id) for task in tasks],
                 "current_stage": profile_hold_stage,
                 "failure_code": "account_profile_required",
             }
@@ -1504,12 +1515,17 @@ class ConversationProcessingPlans:
         if bad is not None:
             row.state = "held"
             row.progress = {
-                **_roles_freeze_progress(row),
+                **_retained_progress(row),
+                "stage_run_ids": [str(task.run_id) for task in tasks],
                 "current_stage": bad.stage,
                 "failure_code": f"stage_{bad.state}",
             }
         else:
-            row.progress = {**_roles_freeze_progress(row), "current_stage": current}
+            row.progress = {
+                **_retained_progress(row),
+                "stage_run_ids": [str(task.run_id) for task in tasks],
+                "current_stage": current,
+            }
         if repair_progress is not None:
             row.progress["c5_repair"] = repair_progress
         row.next_check_at = min(utc(row.expires_at), utc(self.app.clock()) + timedelta(seconds=2))
@@ -1575,7 +1591,7 @@ class ProcessingPlanScheduler:
                     return False
                 row.state = "held"
                 row.progress = {
-                    **_roles_freeze_progress(row),
+                    **_retained_progress(row),
                     "failure_code": "processing_budget_expired",
                 }
                 await ReportMinutes(db).release_plan(row)
@@ -1619,7 +1635,7 @@ class ProcessingPlanScheduler:
                 if row is not None and row.state == "active":
                     row.state = "held"
                     row.progress = {
-                        **_roles_freeze_progress(row),
+                        **_retained_progress(row),
                         "failure_code": (
                             "processing_authorization_or_input_unavailable"
                             if isinstance(error, (ConversationError, InferenceTaskError))

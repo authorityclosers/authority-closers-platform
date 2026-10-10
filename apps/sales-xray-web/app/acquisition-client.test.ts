@@ -31,6 +31,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("accepts additive live-stage metadata from the owner progress read", () => {
+  const live = {
+    ...progress,
+    current_stage: "C4",
+    plan_state: "active",
+    terminal_state: null,
+    stage_progress: [
+      {
+        stage: "C2",
+        state: "completed",
+        started_at: "2026-10-10T12:00:00+00:00",
+        finished_at: "2026-10-10T12:00:03+00:00",
+      },
+      { stage: "C4", state: "queued", started_at: null, finished_at: null },
+    ],
+  };
+  // The legacy client keeps its original contract while Strike A consumes the
+  // additive timeline. Missing historical timestamps do not break the read.
+  expect(parseProgress(live, parseSubmission(progress))).toEqual(
+    parseProgress(progress, parseSubmission(progress)),
+  );
+});
+
 it("binds the retry status to the saved source and rejects contradictory facts", () => {
   const failed = {
     ...progress,

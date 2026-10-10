@@ -104,6 +104,24 @@ def test_owner_retry_preserves_source_cap_and_captures_one_delivered_report(
                     )
 
                 assert (await accept(first, "original:accept")).status_code == 202
+                queued = await client.get(path)
+                assert queued.status_code == 200
+                queued_body = queued.json()
+                assert queued_body["current_stage"] == "C2"
+                assert queued_body["plan_state"] == "active"
+                assert queued_body["terminal_state"] is None
+                assert [row["stage"] for row in queued_body["stage_progress"]] == [
+                    f"C{index}" for index in range(7)
+                ]
+                queued_c2 = queued_body["stage_progress"][2]
+                assert queued_c2 == {
+                    "stage": "C2",
+                    "state": "queued",
+                    "started_at": None,
+                    "finished_at": None,
+                }
+                # Existing clients keep the original bounded task rows.
+                assert queued_body["stages"] == [{"stage": "C2", "state": "queued"}]
                 refusal = RefusalBroker(retry_after=0)
                 worker = ConversationInferenceWorker(
                     setup.sessions, setup.runtime.storage, refusal, authority=setup.authority
@@ -138,6 +156,17 @@ def test_owner_retry_preserves_source_cap_and_captures_one_delivered_report(
                     "released",
                 )
                 assert failed.json()["retry_available"] is True
+                assert failed.json()["terminal_state"] == "failed"
+                assert failed.json()["current_stage"] == "C2"
+                assert failed.json()["plan_state"] == "held"
+                failed_c2 = failed.json()["stage_progress"][2]
+                assert failed_c2["state"] == "uncertain"
+                assert failed_c2["started_at"] == dispatch.isoformat()
+                assert failed_c2["finished_at"] is not None
+                client.cookies.clear()
+                client.cookies.set("ac_xray_guest", setup.stranger.token)
+                assert (await client.get(path)).status_code == 404
+                _sign_in(setup, client)
                 setup.clock[0] = datetime.now(UTC)
 
                 async def prepare(key):
@@ -181,14 +210,43 @@ def test_owner_retry_preserves_source_cap_and_captures_one_delivered_report(
                 accepted = await accept(fresh, "retry:owner:accept")
                 assert accepted.status_code == 202
                 assert (await accept(fresh, "retry:owner:accept")).status_code == 202
+                retrying = (await client.get(path)).json()
+                assert retrying["current_stage"] == "C2"
+                assert retrying["terminal_state"] is None
+                assert retrying["stage_progress"][2] == {
+                    "stage": "C2",
+                    "state": "queued",
+                    "started_at": None,
+                    "finished_at": None,
+                }
                 broker = ReportingBroker(_wav_one_second_48k())
                 worker.broker = broker
+                observed_stages = set()
                 for _ in range(8):
                     await worker.run_once()
                     await _make_due(setup, UUID(fresh["id"]))
                     await scheduler.step()
+                    live = (await client.get(path)).json()
+                    observed_stages.add(live["current_stage"])
+                    assert live["has_report"] == (live["terminal_state"] == "done")
+                assert {"C4", "C5", "C6"} <= observed_stages
                 progress = (await client.get(path)).json()
                 assert (progress["run_state"], progress["minute_state"]) == ("done", "delivered")
+                assert progress["current_stage"] == "C6"
+                assert progress["terminal_state"] == "done"
+                assert progress["plan_state"] == "completed"
+                assert all(row["state"] == "completed" for row in progress["stage_progress"])
+                assert all(row["finished_at"] is not None for row in progress["stage_progress"])
+                assert all(
+                    row["started_at"] is not None
+                    for row in progress["stage_progress"]
+                    if row["stage"] in {"C2", "C4", "C5"}
+                )
+                assert all(
+                    row["started_at"] is None
+                    for row in progress["stage_progress"]
+                    if row["stage"] in {"C0", "C3", "C6"}
+                )
                 assert (await client.get(path + "/report")).status_code == 200
                 async with setup.sessions() as db:
                     events = list(
