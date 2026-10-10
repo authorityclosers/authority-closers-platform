@@ -171,7 +171,7 @@ class TextLesson(Model):
     when_not: str
     checklist: tuple[str, ...]
     source: str
-    own_call: Moment
+    own_call: Moment | None
     next_call_connection: str
 
 

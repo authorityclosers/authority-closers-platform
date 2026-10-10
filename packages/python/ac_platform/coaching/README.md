@@ -4,6 +4,14 @@ This strike starts at `b6033ad3d3d55f928547e2901785e6e239357bdc`. Its binding de
 
 ## Current behavior
 
+### Call-specific slice (11 Oct owner request)
+
+`GET /v1/me/coaching/calls/{submission_id}` is API ready. It uses the same private account/workspace admission and narrows the retained library to exactly the signed-in person's selected call. Admin and manager report access cannot bypass Coaching privacy. Each request reads exactly one authorized report, then builds one focus, supporting call moments, a structured lesson, one practice and a next-call mission. The across-call learner focus is not changed. One call suffices; sparse or clean reports have an explicitly labeled general practice when no source recommendation exists, rather than an unsupported weakness or a "not enough evidence" dead end. Withheld evidence remains unavailable.
+
+The derived result has a bounded two-minute process cache keyed by person, tenant, submission, creation time and the freshly authorized report envelope. Membership, source ownership, retention, revocation and withholding are checked before every cache lookup. Changed report/source/withholding data changes the key. Responses and errors remain `private, no-store`; the cache never grants access. No canonical state, jobs, audit history, providers or credits are written by this read.
+
+Local API proof: 74 Coaching unit cases and 6 disposable PostgreSQL cases passed, including exact selected-call reads, admin exclusion, cached withholding and revocation. Ruff and mypy pass. New coverage is in `test_call.py` and `test_call_coaching_postgresql.py`.
+
 `GET /v1/me/coaching` uses the signed-in account/workspace on the exact Sales Xray host. It accepts no person, workspace or call selector. Coaching is open under AUT-1678 to Personal and human organisation memberships; operations and processing identities are excluded. It does not inspect payment providers, charge credits, call AI, write progress, or renew claims. Responses and errors are private and uncached.
 
 Own retained acquisition history is read through the existing call-library scope and `AcquisitionReports.report`. An organisation administrator’s teammate access never becomes personal learner history. Canonical source, proof, report, ownership, live membership, retention and withholding checks remain authoritative. Withheld references cannot produce playable Coaching evidence.

@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CoachingView
 from ac_platform.coaching.learner import build_learner
 from ac_platform.coaching.report_adapter import from_report
@@ -17,7 +18,10 @@ from ac_platform.conversation_intelligence.acquisition_library import (
     _report_columns,
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
-from ac_platform.conversation_intelligence.application import ConversationError
+from ac_platform.conversation_intelligence.application import (
+    ConversationError,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
@@ -35,6 +39,33 @@ HISTORY_LIMIT = 40
 class CoachingLibrary:
     def __init__(self, ownership: GuestOwnership) -> None:
         self.ownership, self.database = ownership, ownership.database
+
+    async def read_call(
+        self, actor: ActorContext, submission_id: UUID, cache: CallCoachingCache
+    ) -> CallCoachingView:
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+
+        usage = await self.database.scalar(
+            _account_library_query(actor, now).where(Usage.submission_id == submission_id)
+        )
+        if usage is None:
+            raise ConversationNotFound("This call's coaching is unavailable.")
+        # Always reauthorize the retained report before consulting the derived
+        # cache. Managers/admins have no private-coaching bypass.
+        envelope = await AcquisitionReports(self.ownership).report(
+            submission_id, actor=actor, shared_identity_locks=True
+        )
+        return cache.read(
+            envelope,
+            submission_id=submission_id,
+            created_at=usage.created_at,
+            person_id=actor.person_id,
+            tenant_id=self.ownership.tenant_id,
+        )
 
     async def read(self, actor: ActorContext) -> CoachingView:
         now = await self.ownership.sessions._admit()

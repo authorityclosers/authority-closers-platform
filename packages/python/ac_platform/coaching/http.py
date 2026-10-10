@@ -1,10 +1,13 @@
 """Private Coaching reads on the existing Sales Xray account session only."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from sqlalchemy import select
 
+from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.library import CoachingLibrary
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
@@ -12,6 +15,7 @@ from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.http.routes import RouteContext
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation
 
@@ -21,9 +25,12 @@ PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     router = APIRouter(prefix="/v1/me/coaching", tags=["coaching"])
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
+    call_cache = CallCoachingCache()
 
-    @router.get("", response_model=CoachingView, response_model_by_alias=True)
-    async def coaching(request: Request, response: Response) -> CoachingView:
+    @asynccontextmanager
+    async def account_library(
+        request: Request, response: Response
+    ) -> AsyncIterator[tuple[CoachingLibrary, ActorContext]]:
         response.headers.update(PRIVATE)
         settings = ctx.settings
         if (
@@ -71,10 +78,24 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                     policy_revision="AUT-1678-open-access",
                     operations_tenant_id=settings.operations_tenant_id,
                 )
-                return await CoachingLibrary(GuestOwnership(sessions)).read(actor)
+                yield CoachingLibrary(GuestOwnership(sessions)), actor
         except ConversationError as error:
             raise HTTPException(error.status, str(error), headers=PRIVATE) from None
         except DomainError:
             raise HTTPException(401, "Sign in to see your Coaching.", headers=PRIVATE) from None
+
+    @router.get("", response_model=CoachingView, response_model_by_alias=True)
+    async def coaching(request: Request, response: Response) -> CoachingView:
+        async with account_library(request, response) as (library, actor):
+            return await library.read(actor)
+
+    @router.get(
+        "/calls/{submission_id}", response_model=CallCoachingView, response_model_by_alias=True
+    )
+    async def call_coaching(
+        submission_id: UUID, request: Request, response: Response
+    ) -> CallCoachingView:
+        async with account_library(request, response) as (library, actor):
+            return await library.read_call(actor, submission_id, call_cache)
 
     application.include_router(router)
