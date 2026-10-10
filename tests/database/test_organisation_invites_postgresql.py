@@ -265,9 +265,11 @@ def test_http_create_invite_durable_mail_and_explicit_accept_journey(postgres_ha
                         routes={ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE},
                         limit=10,
                     )
-                    assert len(jobs) == 1
+                    matching = [job for job in jobs if job.payload == {"invite_id": str(invite_id)}]
+                    assert len(matching) == 1
+                    job = matching[0]
                     message = await resolve_organisation_invitation_message(
-                        database, settings, jobs[0], provider_key=f"outbox:{jobs[0].id}"
+                        database, settings, job, provider_key=f"outbox:{job.id}"
                     )
                     mail = FakeEmailAdapter()
                     first_receipt = await mail.send(message)
