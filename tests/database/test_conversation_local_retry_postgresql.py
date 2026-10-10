@@ -1,9 +1,10 @@
 """Failed/expired local work gets one bounded source-bound owner successor."""
 
+import secrets
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -19,7 +20,7 @@ from ac_platform.conversation_intelligence.released_run_recovery import stop_rel
 from ac_platform.conversation_intelligence.report_minutes import ReportMinutes
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository
-from tests.database.test_conversation_postgresql import run
+from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import (
     ORIGIN,
     _setup,
@@ -84,6 +85,43 @@ def test_local_failure_releases_and_retry_survives_restart_and_replay(
                 failed = (await client.get(path)).json()
                 assert failed["run_state"] == "failed" and failed["minute_state"] == "released"
                 headers = {"Origin": ORIGIN, "Idempotency-Key": "retry:local"}
+                if mode == "failure":
+                    from hashlib import sha256
+                    from hmac import digest
+
+                    from ac_platform.identity.models import Session as IdentitySession
+                    from ac_platform.tenancy.models import Organisation
+
+                    manager = await seed(
+                        setup.engine, tenant_id=setup.state.tenant_id, role="admin"
+                    )
+                    manager_token = secrets.token_urlsafe(32)
+                    async with setup.sessions() as db, db.begin():
+                        if await db.get(Organisation, setup.state.tenant_id) is None:
+                            db.add(
+                                Organisation(
+                                    tenant_id=setup.state.tenant_id,
+                                    creation_command_id=uuid4(),
+                                    domain_verification_token="f" * 43,
+                                )
+                            )
+                        manager_session = await db.get(IdentitySession, manager.session_id)
+                        manager_session.token_hash = digest(
+                            setup.settings.session_token_pepper.get_secret_value().encode(),
+                            manager_token.encode(),
+                            sha256,
+                        )
+                    async with httpx.AsyncClient(
+                        transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+                    ) as reader:
+                        reader.cookies.set(setup.settings.session_cookie_name, manager_token)
+                        read = await reader.get(path)
+                        assert read.status_code == 200, read.text
+                        assert read.json()["run_state"] == "failed"
+                        assert read.json()["retry_available"] is False
+                        assert (
+                            await reader.post(path + "/retry", headers=headers)
+                        ).status_code == 404
                 assert (
                     await client.post(
                         path + "/retry",

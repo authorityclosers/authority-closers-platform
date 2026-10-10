@@ -29,7 +29,11 @@ against any already queued/working local job.
 
 Progress exposes queued, working, retrying, failed or done from persisted facts,
 plus the customer minute outcome and owner retry availability. Done requires a
-validated saved report. The small existing status component consumes those
+validated saved report. Retry availability uses the existing strict ownership
+port; organisation read permission never grants retry. A real admin-cookie
+PostgreSQL case can read another owner's failure, receives retry_available=false
+and a 404 from retry, while the original owner can prepare its successor.
+The small existing status component consumes those
 fields and prepares/reviews/accepts the safe retry. Network waits end after 20s;
 ambiguous responses preserve the command key for reconciliation. Error copy
 uses the existing corner notice cards. No page/layout or report rendering edits.

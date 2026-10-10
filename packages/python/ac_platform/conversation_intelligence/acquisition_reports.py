@@ -599,6 +599,20 @@ class AcquisitionReports:
             local_state=None if local_run is None else local_run.state,
             jobs=held_jobs,
         )
+        retry_available = False
+        if run_state == "failed" and scope.claimed_account:
+            try:
+                # Organisation read permission never grants owner retry. Use
+                # the existing ownership port, without its optional read grant.
+                await self.ownership.require_submission_owner(
+                    submission_id,
+                    token=token,
+                    actor=actor,
+                    shared_identity_locks=shared_identity_locks,
+                )
+                retry_available = True
+            except ConversationNotFound:
+                pass
         return {
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
@@ -612,5 +626,5 @@ class AcquisitionReports:
             "stages": [{"stage": task.stage, "state": task.state} for task in tasks],
             "run_state": run_state,
             "minute_state": None if minute_event is None else minute_event.kind,
-            "retry_available": run_state == "failed" and scope.claimed_account,
+            "retry_available": retry_available,
         }
