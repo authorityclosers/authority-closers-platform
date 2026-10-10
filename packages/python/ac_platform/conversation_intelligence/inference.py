@@ -165,6 +165,7 @@ class ConversationInference:
         *,
         signal_recipe: str | None = None,
         route: tuple[str, str] | None = None,
+        retry_of: UUID | None = None,
     ) -> TranscriptionPlan:
         """Internal only: caller must already lock and authorize this recording."""
         binding = binding_for(recording)
@@ -268,7 +269,15 @@ class ConversationInference:
             (c0,),
             "0" * 64,
         )
-        return TranscriptionPlan(prepared, template, duration, by_stage["C1"].id)
+        result = TranscriptionPlan(prepared, template, duration, by_stage["C1"].id)
+        if retry_of is not None:
+            from ac_platform.conversation_intelligence.safe_stage_retry import successor_plan
+
+            result = await successor_plan(
+                self.database, recording, result, retry_of, now=self.application.clock()
+            )
+            assert isinstance(result, TranscriptionPlan)
+        return result
 
     async def plan_task(
         self, recording: ConversationRecording, task: ConversationInferenceTask
@@ -283,7 +292,13 @@ class ConversationInference:
                     model = config.get("model")
                     if isinstance(provider, str) and isinstance(model, str):
                         frozen_route = (provider, model)
-            return await self.plan_transcription(recording, route=frozen_route)
+            from ac_platform.conversation_intelligence.safe_stage_retry import predecessor_id
+
+            return await self.plan_transcription(
+                recording,
+                route=frozen_route,
+                retry_of=predecessor_id(task.intent["checkpoint"]) if task.intent else None,
+            )
         if task.intent is None:
             raise ConversationConflict("The saved provider intent is unavailable.")
         try:
@@ -514,6 +529,7 @@ class ConversationInference:
         *,
         key: str,
         request: StageRequest | None = None,
+        retry_of: UUID | None = None,
     ) -> dict[str, Any]:
         now = await self.application.admit(actor)
         if self.authority is not None:
@@ -530,7 +546,7 @@ class ConversationInference:
         if recording.state != "ready":
             raise ConversationConflict("The recording is not ready.")
         plan: ServicePlan = (
-            await self.plan_transcription(recording)
+            await self.plan_transcription(recording, retry_of=retry_of)
             if request is None
             else await ReportingPipeline(self).plan(recording, request)
         )

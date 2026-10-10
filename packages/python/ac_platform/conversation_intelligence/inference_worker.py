@@ -14,9 +14,11 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -64,6 +66,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    ProviderFailureObservation,
+)
+from ac_platform.conversation_intelligence.provider_retry import assess_provider_retry
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.reports import PROSPECT_DIMENSION_IDS
@@ -330,12 +336,89 @@ class ConversationInferenceWorker:
                 return None
             recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
             jobs = await JobRepository(db).claim(kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE)
+            await self._recover_terminal_job(db, recovery.generation)
             if not jobs:
                 return None
             job = jobs[0]
             if job.lease_token is None:
                 raise ConversationConflict("The provider job has no lease.")
             return Work(job.id, job.lease_token, recovery.generation, job.kind)
+
+    async def _recover_terminal_job(self, db: AsyncSession, generation: int) -> None:
+        """Reconcile one quarantined job without replaying its external effect.
+
+        Claim already applies database-clock lease/claim-budget expiry. Lock the
+        exact job, task and run together; skip competing workers and preserve
+        completed/cancelled/erased results and older recovery generations.
+        Customer settlement and provider-cost reconciliation remain separate.
+        """
+        candidate = (
+            await db.execute(
+                select(Job, ConversationInferenceTask, ConversationRun)
+                .join(
+                    ConversationInferenceTask,
+                    (ConversationInferenceTask.job_id == Job.id)
+                    & (ConversationInferenceTask.tenant_id == Job.tenant_id),
+                )
+                .join(
+                    ConversationRun,
+                    (ConversationRun.id == ConversationInferenceTask.run_id)
+                    & (ConversationRun.job_id == Job.id)
+                    & (ConversationRun.tenant_id == ConversationInferenceTask.tenant_id)
+                    & (ConversationRun.person_id == ConversationInferenceTask.person_id)
+                    & (ConversationRun.recording_id == ConversationInferenceTask.recording_id)
+                    & (ConversationRun.generation == ConversationInferenceTask.generation),
+                )
+                .where(
+                    Job.kind == INFERENCE_JOB,
+                    Job.external_side_effect.is_(True),
+                    Job.status == "dead_letter",
+                    Job.recovery_generation == generation,
+                    ConversationInferenceTask.state.in_(("queued", "running")),
+                    ConversationInferenceTask.erased_at.is_(None),
+                    ConversationInferenceTask.checkpoint_id.is_(None),
+                    ConversationRun.state.in_(("queued", "running")),
+                    or_(
+                        Job.provider_receipt.is_(None),
+                        Job.provider_receipt["validation_state"].as_string() == "provider_returned",
+                    ),
+                )
+                .order_by(Job.updated_at, Job.id)
+                .limit(1)
+                .with_for_update(
+                    of=(Job, ConversationInferenceTask, ConversationRun), skip_locked=True
+                )
+                .execution_options(populate_existing=True)
+            )
+        ).first()
+        if candidate is None:
+            return
+        job, task, run = candidate
+        now = self.clock()
+        task.state = "uncertain" if job.dispatch_started_at is not None else "failed"
+        run.state = "failed"
+        run.completed_at = now
+        await AuditRepository(db).append(
+            tenant_id=job.tenant_id,
+            actor_person_id=None,
+            actor_type="system",
+            action="conversation.provider_job_recovery_required",
+            resource_type="job",
+            resource_id=job.id,
+            payload={
+                "schema": "ac.sales_xray.provider_job_recovery/1",
+                "run_id": str(run.id),
+                "stage": task.stage,
+                "claim_count": job.attempt_count,
+                "claim_limit": job.max_attempts,
+                "recovery_generation": generation,
+                "dispatch_started": job.dispatch_started_at is not None,
+                "task_state": task.state,
+                "run_state": run.state,
+            },
+            reason="Terminal worker job reconciled; no provider replay or minute settlement.",
+            now=now,
+        )
 
     async def _locked_job(self, db: AsyncSession, work: Work) -> Job:
         await RecoveryStateRepository(db).require_ready(
@@ -582,6 +665,173 @@ class ConversationInferenceWorker:
             )
             await JobRepository(db).record_receipt(job, work.lease_token, receipt)
 
+    async def _record_provider_failure_observation(
+        self,
+        work: Work,
+        *,
+        error: InferenceBrokerError,
+        reservation: Reservation,
+    ) -> None:
+        """Retain original transport evidence before failure cleanup can roll back.
+
+        This is an append-only observation, not a success or no-charge receipt.
+        It neither clears the dispatch fence nor authorizes another send.
+        """
+
+        observed = error.failure_observation
+        if observed is None:
+            return
+        # Revalidate at the durable boundary, including injected broker implementations.
+        # Do not copy arbitrary broker attributes into an audit record.
+        try:
+            if type(observed) is not ProviderFailureObservation:
+                raise ValueError("invalid observation type")
+            observed = ProviderFailureObservation.from_dict(observed.as_dict())
+        except (TypeError, ValueError):
+            raise InferenceBrokerError("broker_response_invalid") from None
+        quote = reservation.quote
+        if (
+            error.code != f"provider_http_{observed.http_status}"
+            or observed.reservation_id != reservation.reservation_id
+            or observed.attempt_id != reservation.attempt_id
+            or observed.quote_fingerprint != quote.fingerprint
+            or observed.provider != quote.provider_id
+            or observed.model != quote.provider_model
+            or observed.operation != quote.operation
+            or observed.input_sha256 != quote.input_sha256
+        ):
+            raise InferenceBrokerError("broker_response_invalid")
+        async with self.sessions() as db, db.begin():
+            job = await self._locked_job(db, work)
+            if (
+                job.tenant_id is None
+                or job.dispatch_started_at is None
+                or job.provider_idempotency_key != observed.attempt_id
+                or job.provider_receipt is not None
+                or str(job.tenant_id) != quote.source.tenant_id
+                or job.payload.get("run_id") != observed.reservation_id
+            ):
+                raise ConversationConflict("The failure observation was fenced.")
+            payload = {
+                "schema": "ac.sales_xray.provider_failure_evidence/1",
+                "job_id": str(job.id),
+                "attempt_count": job.attempt_count,
+                "recovery_generation": work.recovery_generation,
+                "dispatch_started_at": job.dispatch_started_at.isoformat(),
+                "failure_observation": observed.as_dict(),
+            }
+            prior = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_failure_observed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                if prior.payload != payload:
+                    raise ConversationConflict("The failure observation conflicts with history.")
+                return
+            await AuditRepository(db).append(
+                tenant_id=job.tenant_id,
+                actor_person_id=None,
+                actor_type="system",
+                action="conversation.provider_failure_observed",
+                resource_type="job",
+                resource_id=job.id,
+                payload=payload,
+                now=self.clock(),
+            )
+
+    async def _record_provider_retry_assessment(
+        self, work: Work, *, reservation: Reservation
+    ) -> None:
+        """Bind a bounded assessment to committed original failure evidence.
+
+        This separate transaction cannot roll back the original observation.
+        The current ledger permits one send per reservation, so this record
+        deliberately grants no dispatch or financial authority.
+        """
+
+        async with self.sessions() as db, db.begin():
+            job = await self._locked_job(db, work)
+            if (
+                job.tenant_id is None
+                or job.dispatch_started_at is None
+                or job.provider_receipt is not None
+                or job.provider_idempotency_key != reservation.attempt_id
+                or job.payload.get("run_id") != reservation.reservation_id
+                or str(job.tenant_id) != reservation.quote.source.tenant_id
+            ):
+                raise ConversationConflict("The retry assessment was fenced.")
+            event = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_failure_observed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if event is None:
+                raise ConversationConflict("Original provider failure evidence is required.")
+            evidence = event.payload
+            if (
+                evidence.get("schema") != "ac.sales_xray.provider_failure_evidence/1"
+                or evidence.get("job_id") != str(job.id)
+                or type(evidence.get("attempt_count")) is not int
+                or evidence["attempt_count"] != job.attempt_count
+                or type(evidence.get("recovery_generation")) is not int
+                or evidence["recovery_generation"] != work.recovery_generation
+                or evidence.get("dispatch_started_at") != job.dispatch_started_at.isoformat()
+            ):
+                raise ConversationConflict("Original provider failure evidence was fenced.")
+            observed = ProviderFailureObservation.from_dict(evidence.get("failure_observation"))
+            assessment = assess_provider_retry(
+                observed,
+                reservation,
+                observed_at=event.occurred_at,
+                claim_count=job.attempt_count,
+                claim_limit=job.max_attempts,
+            )
+            payload = {
+                "schema": "ac.sales_xray.provider_retry_assessment/1",
+                "job_id": str(job.id),
+                "failure_event_id": str(event.id),
+                "failure_event_hash": event.event_hash,
+                "claim_count": job.attempt_count,
+                "claim_limit": job.max_attempts,
+                "recovery_generation": work.recovery_generation,
+                "assessment": assessment.as_dict(),
+            }
+            prior = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == job.tenant_id,
+                    AuditEvent.action == "conversation.provider_retry_assessed",
+                    AuditEvent.resource_type == "job",
+                    AuditEvent.resource_id == str(job.id),
+                )
+                .limit(1)
+            )
+            if prior is not None:
+                if prior.payload != payload:
+                    raise ConversationConflict("The retry assessment conflicts with history.")
+                return
+            await AuditRepository(db).append(
+                tenant_id=job.tenant_id,
+                actor_person_id=None,
+                actor_type="system",
+                action="conversation.provider_retry_assessed",
+                resource_type="job",
+                resource_id=job.id,
+                payload=payload,
+                now=self.clock(),
+            )
+
     async def _dispatch(self, work: Work) -> None:
         # Both media erasure and inference hold this fence BEFORE locking DB rows.
         async with _FencedExecutor(self.storage.root) as fenced:
@@ -650,32 +900,38 @@ class ConversationInferenceWorker:
             # before the receipt commit so its separate transaction cannot
             # wait on the dispatch row lock. Validation must never be able to
             # roll that evidence back.
-            async with self.sessions() as db, db.begin():
-                job = await JobRepository(db).lock_for_dispatch(
-                    work.job_id,
-                    work.lease_token,
-                    recovery_generation=work.recovery_generation,
-                    provider_idempotency_key=key,
-                )
-                if self.authority is None:
-                    scope = await self._scope(db, job, allow_started_effect=True)
-                else:
-                    # lock_for_dispatch above proves our committed marker and
-                    # current lease. Only the pause check is waived for that
-                    # already-started effect; all other authority is rechecked.
-                    with already_started_effect(
-                        environment=self.authority.environment,
-                        operations_tenant_id=self.authority.operations_tenant_id,
-                    ):
+            try:
+                async with self.sessions() as db, db.begin():
+                    job = await JobRepository(db).lock_for_dispatch(
+                        work.job_id,
+                        work.lease_token,
+                        recovery_generation=work.recovery_generation,
+                        provider_idempotency_key=key,
+                    )
+                    if self.authority is None:
                         scope = await self._scope(db, job, allow_started_effect=True)
-                # The second check is the last admission immediately before
-                # the provider call. If it fails after the durable dispatch
-                # marker, the normal ambiguity path preserves the reservation.
-                await self._require_customer_profile(db, scope)
-                # Restore, revocation and deletion wait on these canonical locks
-                # across the one bounded child-process effect.
-                async with asyncio.timeout(_EFFECT_SECONDS):
-                    result = await self.broker.execute(reservation, payload)
+                    else:
+                        # Only the pause check is waived for this committed effect;
+                        # all other authority is rechecked under the current lease.
+                        with already_started_effect(
+                            environment=self.authority.environment,
+                            operations_tenant_id=self.authority.operations_tenant_id,
+                        ):
+                            scope = await self._scope(db, job, allow_started_effect=True)
+                    # The last admission before the call still checks customer identity.
+                    await self._require_customer_profile(db, scope)
+                    # Restore, revocation and deletion wait on these canonical locks.
+                    async with asyncio.timeout(_EFFECT_SECONDS):
+                        result = await self.broker.execute(reservation, payload)
+            except InferenceBrokerError as error:
+                # Exit the dispatch transaction before committing independent evidence.
+                # Keep the storage fence until the append finishes, just as for success.
+                await self._record_provider_failure_observation(
+                    work, error=error, reservation=reservation
+                )
+                if error.failure_observation is not None:
+                    await self._record_provider_retry_assessment(work, reservation=reservation)
+                raise
 
             # Persist bounded provider-effect evidence before writing the raw
             # response object.  If local storage fails after the provider has
@@ -811,6 +1067,8 @@ class ConversationInferenceWorker:
                     task.state = "uncertain" if ambiguous else "failed"
                 if run is not None and run.state not in {"cancelled", "completed"}:
                     run.state = "failed"
+                    if run.completed_at is None:
+                        run.completed_at = self.clock()
                 if recording is not None and quoted is not None:
                     minutes, budget = await ConversationInference(
                         ConversationApplication(db, clock=self.clock)

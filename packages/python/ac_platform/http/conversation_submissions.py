@@ -971,6 +971,27 @@ def install_submission_http(
         guard(request, response, write=True)
         return await owner.ownership.request_deletion(submission_id, key=key, **owner.arguments)
 
+    @router.post("/submissions/{submission_id}/retry", status_code=201)
+    async def prepare_retry(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+        from ac_platform.conversation_intelligence.acquisition_retry import prepare_analysis_retry
+
+        return await prepare_analysis_retry(
+            owner.ownership,
+            runtime,
+            submission_id,
+            key=key,
+            token=owner.token,
+            actor=owner.actor,
+        )
+
     @router.post("/submissions/{submission_id}/plan/quote", status_code=201)
     async def quote_plan(
         submission_id: UUID,

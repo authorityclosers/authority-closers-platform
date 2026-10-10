@@ -30,6 +30,30 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });
+
+it("binds the retry status to the saved source and rejects contradictory facts", () => {
+  const failed = {
+    ...progress,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+  };
+  expect(parseProgress(failed, parseSubmission(progress))).toMatchObject({
+    recording_id: recordingId,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+  });
+  for (const change of [
+    { run_state: "invented" },
+    { run_state: "done" },
+    { minute_state: "charged_twice" },
+    { run_state: "working", retry_available: true },
+  ])
+    expect(() =>
+      parseProgress({ ...failed, ...change }, parseSubmission(progress)),
+    ).toThrow();
+});
 describe("acquisition permission recovery", () => {
   const path = `/submissions/${submissionId}/plan`;
   const allowanceDetail =

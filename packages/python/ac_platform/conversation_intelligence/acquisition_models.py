@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -115,5 +116,41 @@ class ConversationAcquisitionSettlement(Base):
     )
     charged_seconds: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(32))
+    receipt_sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReportMinuteEvent(Base):
+    """Append-only customer reservation outcomes, independent of provider cost."""
+
+    __tablename__ = "conversation_report_minute_events"
+    __table_args__ = (
+        UniqueConstraint("usage_id", "key"),
+        CheckConstraint("revision >= 1", name="positive_revision"),
+        CheckConstraint("kind IN ('reserved','released','delivered')", name="kind"),
+        CheckConstraint("seconds BETWEEN 0 AND 6000", name="duration_bound"),
+        CheckConstraint("(kind = 'released') = (seconds = 0)", name="release_zero"),
+        CheckConstraint("(kind = 'delivered') = (report_draft_id IS NOT NULL)", name="delivery"),
+        CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),
+        Index(
+            "uq_conversation_report_minute_events_delivery",
+            "usage_id",
+            unique=True,
+            postgresql_where=text("kind = 'delivered'"),
+        ),
+    )
+    usage_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_acquisition_usage.id"), primary_key=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[str] = mapped_column(String(16))
+    seconds: Mapped[int] = mapped_column(Integer)
+    plan_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_processing_plans.id")
+    )
+    report_draft_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_report_drafts.id")
+    )
     receipt_sha256: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
