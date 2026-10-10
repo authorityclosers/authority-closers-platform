@@ -37,8 +37,48 @@
   text-decoration: none;
 }
 
+.list[data-owners] .row {
+  grid-template-columns: minmax(0, 1fr) 128px 96px 64px 156px 16px;
+}
+
 .row:hover {
   background: var(--lx-paper-2);
+}
+
+/* Whose call, as in the Calls table's Rep column. */
+.owner {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--lx-ink-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.owner > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner i {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.owner[data-mine] i {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
 }
 
 .row:focus-visible {
@@ -161,9 +201,24 @@
 }
 
 @media (max-width: 720px) {
-  .row {
+  .row,
+  .list[data-owners] .row {
     grid-template-columns: minmax(0, 1fr) auto 16px;
     column-gap: 10px;
+  }
+
+  /* Phones: the owner's initials sit before the status. */
+  .list[data-owners] .row {
+    grid-template-columns: minmax(0, 1fr) auto auto 16px;
+  }
+
+  .owner > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .date,

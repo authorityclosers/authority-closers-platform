@@ -93,7 +93,13 @@ it("starts the four account reads after sign-in and preserves missing-route erro
   await renderPage(false);
   await renderPage(true);
   expect(fetchMock.mock.calls.map(([path]) => path).sort()).toEqual(
-    ["/submissions/summary", "/activity", "/session", "/submissions"]
+    [
+      "/submissions/summary",
+      "/activity",
+      "/session",
+      // Owners and admins get each call's owner; others' lists are unchanged.
+      "/submissions?include_owners=true",
+    ]
       .map((path) => base + path)
       .sort(),
   );
@@ -220,7 +226,8 @@ it("shows one Get started panel for a brand-new account instead of zero figures"
         completed: 0,
         needs_attention: 0,
       }),
-    "/submissions": () => Response.json({ submissions: [], next_cursor: null }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
     "/session": () =>
       Response.json({
         allowance: {
@@ -246,7 +253,8 @@ it("says a failed read did not load instead of keeping a skeleton forever", asyn
   routeReads({
     "/submissions/summary": () =>
       new Response(JSON.stringify({ detail: "Unavailable" }), { status: 503 }),
-    "/submissions": () => Response.json({ submissions: [], next_cursor: null }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
   });
   await renderPage(true);
   const ready = host.querySelector("#metric-reports-ready")!;
@@ -268,7 +276,7 @@ it("never paints Not loaded for reads cancelled by a re-run of the page effect",
       completed: 0,
       needs_attention: 0,
     },
-    "/submissions": { submissions: [], next_cursor: null },
+    "/submissions?include_owners=true": { submissions: [], next_cursor: null },
     "/session": {
       allowance: {
         allowance_seconds: 1800,
@@ -323,4 +331,58 @@ it("never paints Not loaded for reads cancelled by a re-run of the page effect",
   await act(async () => pending.forEach((answer) => answer()));
   expect(host.textContent).not.toContain("Not loaded");
   expect(host.querySelector("h2#get-started")).not.toBeNull();
+});
+
+it("says which figures are the owner's own and which are the team's", async () => {
+  routeReads({
+    "/submissions/summary": () =>
+      Response.json({
+        total: 9,
+        processing: 1,
+        completed: 7,
+        needs_attention: 1,
+      }),
+    "/submissions?include_owners=true": () =>
+      Response.json({ submissions: [], next_cursor: null }),
+  });
+  await act(async () => {
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: {
+            personId: "person-1",
+            sessionId: "session-1",
+            tenantId: "org-1",
+          },
+          workspaces: [
+            {
+              tenant_id: "org-1",
+              kind: "organisation",
+              name: "Fictional Org",
+              role: "owner",
+              sales_xray_enabled: true,
+            },
+          ],
+          retry: () => {},
+          requestAccountSignIn: signIn,
+        }}
+      >
+        <DashboardPage />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  // /activity is the viewer's own; /submissions/summary is everyone's.
+  expect(host.querySelector("#metric-analysed dt")?.textContent).toBe(
+    "Your calls analysed",
+  );
+  expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
+    "of 9 team calls",
+  );
+  expect(host.textContent).toContain("Your calls analysed per day");
+  expect(host.textContent).toContain("Everyone in the organisation");
 });

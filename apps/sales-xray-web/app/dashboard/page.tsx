@@ -138,7 +138,7 @@ function DashboardDetails() {
   }, []);
 
   const loadRecent = useCallback((signal?: AbortSignal) => {
-    readRecentCalls(signal)
+    readRecentCalls(signal, 5, true)
       .then((value) => {
         if (!signal?.aborted) setRecentState({ status: "ready", value });
       })
@@ -217,6 +217,14 @@ function DashboardDetails() {
     shell.workspaces.find(
       (item) => item.tenant_id === access?.context?.tenantId,
     )?.name ?? null;
+  // Owners and admins: saved-call counts and the list cover the whole team,
+  // while analysed-per-day is the viewer's own. Each label says which.
+  const current = access?.workspaces?.find(
+    (item) => item.tenant_id === access?.context?.tenantId,
+  );
+  const team =
+    current?.kind === "organisation" &&
+    (current.role === "owner" || current.role === "admin");
   const settled =
     summaryState.status !== "loading" &&
     activityState.status !== "loading" &&
@@ -250,7 +258,7 @@ function DashboardDetails() {
             <dl className={styles.strip} aria-label="Dashboard figures">
               <Figure
                 id="metric-analysed"
-                label="Calls analysed"
+                label={team ? "Your calls analysed" : "Calls analysed"}
                 status={activityState.status}
                 value={activity?.analysedLast30Days}
                 context={
@@ -270,7 +278,7 @@ function DashboardDetails() {
                 context={
                   summary === null
                     ? null
-                    : `of ${summary.total} saved ${summary.total === 1 ? "call" : "calls"}`
+                    : `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
                 }
               />
               <Figure
@@ -314,7 +322,11 @@ function DashboardDetails() {
                 aria-labelledby="panel-last-30-days"
               >
                 <div className={styles.sectionHead}>
-                  <h2 id="panel-last-30-days">Calls analysed per day</h2>
+                  <h2 id="panel-last-30-days">
+                    {team
+                      ? "Your calls analysed per day"
+                      : "Calls analysed per day"}
+                  </h2>
                   <span>Last 30 days, India time</span>
                 </div>
                 <div className={styles.surface}>
@@ -338,7 +350,9 @@ function DashboardDetails() {
               >
                 <div className={styles.sectionHead}>
                   <h2 id="panel-call-status">Call status</h2>
-                  <span>All saved calls</span>
+                  <span>
+                    {team ? "Everyone in the organisation" : "All saved calls"}
+                  </span>
                 </div>
                 <div className={styles.surface}>
                   {summaryState.status === "loading" ? (
@@ -379,6 +393,7 @@ function DashboardDetails() {
                 ) : (
                   <RecentCallsList
                     calls={recent}
+                    viewerId={access?.context?.personId ?? null}
                     onHiddenChange={setHiddenRecent}
                   />
                 )}

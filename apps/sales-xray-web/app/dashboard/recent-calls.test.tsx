@@ -83,3 +83,28 @@ it("shows only the rows that fit and reports how many did not", async () => {
   expect(onHiddenChange).toHaveBeenLastCalledWith(0);
   height.mockRestore();
 });
+
+it("says whose call each row is when the list mixes people", async () => {
+  const me = "00000000-0000-4000-8000-000000000001";
+  const team = [
+    { ...calls[0], owner: { personId: me, name: "Asha Menon" } },
+    {
+      ...calls[1],
+      owner: {
+        personId: "00000000-0000-4000-8000-000000000002",
+        name: "Rahul Verma",
+      },
+    },
+  ];
+  await act(async () =>
+    root.render(<RecentCallsList calls={team} viewerId={me} />),
+  );
+  const rows = [...host.querySelectorAll("li a")];
+  expect(rows[0].textContent).toContain("You");
+  expect(rows[1].textContent).toContain("RVRahul Verma");
+  expect(host.querySelector("ul[data-owners]")).not.toBeNull();
+  // A list of only your own calls stays as it was: no owner column.
+  await act(async () => root.render(<RecentCallsList calls={calls} />));
+  expect(host.querySelector("ul[data-owners]")).toBeNull();
+  expect(host.textContent).not.toContain("You");
+});
