@@ -20,6 +20,7 @@ from ac_platform.tenancy.models import (
     OrganisationInvite,
 )
 from tests.unit.http.test_organisation import call, state  # noqa: F401
+from tests.unit.http.test_organisation_invites import identity_cookie, person_call
 from tests.unit.http.test_workspaces import (  # noqa: F401
     OTHER_TOKEN,
     TOKEN,
@@ -69,7 +70,7 @@ async def test_invite_replay_conflict_revoke_and_audit(state):  # noqa: F811 - i
         assert verify_audit_chain_sync(db, tenant_id=state.tenant).valid
 
 
-async def test_verified_add_reactivation_and_stable_response(state):  # noqa: F811 - imported pytest fixture
+async def test_verified_invite_explicit_reactivation_and_stable_response(state):  # noqa: F811
     with Session(state.engine) as db, db.begin():
         membership = db.get(Membership, (state.tenant, state.member))
         membership.status, membership.ended_at = "inactive", datetime.now(UTC)
@@ -79,18 +80,21 @@ async def test_verified_add_reactivation_and_stable_response(state):  # noqa: F8
     response = await call(state, "POST", "/members", body=body, key=key)
     assert response.status_code == 200, response.text
     row = response.json()
-    assert (
-        row["person_id"] == str(state.member)
-        and row["invite_id"] is None
-        and row["status"] == "active"
+    assert row["person_id"] is None and row["invite_id"] is not None and row["status"] == "invited"
+    with Session(state.engine) as db:
+        assert db.get(Membership, (state.tenant, state.member)).status == "inactive"
+    cookie = identity_cookie(state, state.member)
+    accepted = await person_call(
+        state, f"/invites/{row['invite_id']}/accept", method="POST", key=uuid4(), token=cookie
     )
-    assert datetime.fromisoformat(row["joined_at"]) > datetime.now(UTC) - timedelta(minutes=1)
+    assert accepted.status_code == 200, accepted.text
     listed = next(
         r
         for r in (await call(state, path="/members")).json()["members"]
         if r["person_id"] == str(state.member)
     )
-    assert listed == row
+    assert listed["person_id"] == str(state.member) and listed["status"] == "active"
+    assert datetime.fromisoformat(listed["joined_at"]) > datetime.now(UTC) - timedelta(minutes=1)
     with Session(state.engine) as db, db.begin():
         membership = db.get(Membership, (state.tenant, state.member))
         assert (
@@ -127,8 +131,8 @@ async def test_verified_add_reactivation_and_stable_response(state):  # noqa: F8
     [
         ("new@example.test", "admin", OTHER_TOKEN, 403),
         ("synthetic-owner@example.test", "member", OTHER_TOKEN, 403),
-        ("synthetic-owner@example.test", "member", TOKEN, 422),
-        ("rep@example.test", "admin", TOKEN, 200),
+        ("synthetic-owner@example.test", "member", TOKEN, 409),
+        ("rep@example.test", "admin", TOKEN, 409),
         ("new@example.test", "member", OTHER_TOKEN, 200),
     ],
 )
@@ -165,7 +169,7 @@ async def test_strict_input(state, body):  # noqa: F811 - imported pytest fixtur
     assert (await call(state, "POST", "/members", body=body, key=uuid4())).status_code == 422
 
 
-async def test_known_unverified_person_is_not_invited(state):  # noqa: F811 - imported pytest fixture
+async def test_active_member_cannot_be_reinvited_to_bypass_roles(state):  # noqa: F811
     with Session(state.engine) as db, db.begin():
         db.get(Person, state.member).email_verified_at = None
     assert (
@@ -176,7 +180,7 @@ async def test_known_unverified_person_is_not_invited(state):  # noqa: F811 - im
             body={"email": "rep@example.test", "role": "member"},
             key=uuid4(),
         )
-    ).status_code == 422
+    ).status_code == 409
     with Session(state.engine) as db:
         assert db.scalar(select(func.count()).select_from(OrganisationInvite)) == 0
 
@@ -250,12 +254,15 @@ async def test_invite_wrong_tenant_member_and_changed_key_are_denied(state):  # 
 async def test_verified_email_lookup_matches_identity_case_insensitively(state):  # noqa: F811
     with Session(state.engine) as db, db.begin():
         db.get(Person, state.member).email = "Rep@Example.Test"
+        member = db.get(Membership, (state.tenant, state.member))
+        member.status, member.ended_at = "inactive", datetime.now(UTC)
     response = await call(
         state, "POST", "/members", body={"email": "REP@example.test", "role": "member"}, key=uuid4()
     )
     assert response.status_code == 200
-    assert response.json()["person_id"] == str(state.member)
-    assert response.json()["invite_id"] is None
+    assert response.json()["person_id"] is None
+    assert response.json()["invite_id"] is not None
+    assert response.json()["email"] == "rep@example.test"
 
 
 @pytest.mark.parametrize("method", ["POST", "DELETE"])

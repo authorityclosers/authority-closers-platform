@@ -1,0 +1,82 @@
+import type { ProspectSummary } from "../../prospects-client";
+
+/** Invented display values only. No account, customer or recording exists. */
+export const syntheticProspect: ProspectSummary = {
+  prospect_id: "11111111-1111-4111-8111-111111111111",
+  owner_person_id: "22222222-2222-4222-8222-222222222222",
+  name: "अदिती · fictional prospect",
+  revision: 3,
+  origin: "detected",
+  confirmed_at: null,
+  stage: null,
+  tags: [],
+  photo_url: null,
+  contact: null,
+  fields: [],
+  buyer_intent: null,
+  next_step: null,
+  last_promise: null,
+  call_count: 1,
+  last_call: null,
+  profile_fields: {
+    name: {
+      state: "known",
+      value: { kind: "text", text: "अदिती" },
+      basis: "heard_in_call",
+      locked: false,
+      set_at: "2026-10-10T00:00:00Z",
+      evidence: {
+        submission_id: "33333333-3333-4333-8333-333333333333",
+        segment_id: "s1",
+        quote: "माझं नाव अदिती आहे.",
+        start_ms: 1000,
+        end_ms: 2400,
+      },
+    },
+    business: {
+      state: "known",
+      value: { kind: "text", text: "Example company" },
+      basis: "person",
+      locked: true,
+      set_at: "2026-10-10T00:00:00Z",
+      heard_differently: [
+        {
+          value: { kind: "text", text: "Example company two" },
+          set_at: "2026-10-10T00:05:00Z",
+          evidence: {
+            submission_id: "33333333-3333-4333-8333-333333333333",
+            segment_id: "s2",
+            quote: "Example company two.",
+            start_ms: 2400,
+            end_ms: 5000,
+          },
+        },
+      ],
+    },
+    budget: {
+      state: "known",
+      value: {
+        kind: "numeric",
+        interval_shape: "range",
+        approximation: "approximate",
+        lower: "2",
+        upper: "3",
+        lower_inclusive: true,
+        upper_inclusive: false,
+        currency_code: "INR",
+        scale_as_stated: "lakh",
+        period: "year",
+      },
+      basis: "heard_in_call",
+      locked: false,
+      set_at: "2026-10-10T00:00:00Z",
+      evidence: {
+        submission_id: "33333333-3333-4333-8333-333333333333",
+        segment_id: "s3",
+        quote: "About two to less than three lakh INR per year.",
+        start_ms: 5000,
+        end_ms: 9000,
+      },
+    },
+  },
+};

@@ -1022,3 +1022,13 @@ it("shows a rename made elsewhere in Team calls at once", async () => {
   expect(rows[0].textContent).toContain("Renamed in the sidebar");
   expect(rows[0].querySelector("[data-unnamed]")).toBeNull();
 });
+
+it("tells a signed-out visitor how to get in, instead of loading forever", async () => {
+  await render(tenantId, false);
+  expect(host.querySelector("h1")?.textContent).toBe(
+    "Sign in to see your organisation",
+  );
+  expect(host.querySelector('a[href="/login"]')?.textContent).toBe("Sign in");
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(fetchMock).not.toHaveBeenCalled();
+});

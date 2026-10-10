@@ -41,6 +41,8 @@ export function submissionState(submission: LibrarySubmission) {
 /** A call's date in lists: Today, Yesterday, 24 Sep, or 24 Sep 2025. */
 export function callDate(createdAt: string, now = new Date()): string {
   const date = new Date(createdAt);
+  // Intl throws on an invalid date; a list row must never take a screen down.
+  if (Number.isNaN(date.getTime())) return "Date unknown";
   const day = (value: Date) =>
     new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
   const days = Math.round((day(now) - day(date)) / 86_400_000);

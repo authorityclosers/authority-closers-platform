@@ -1,0 +1,241 @@
+.root {
+  box-sizing: border-box;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px;
+  overflow-wrap: anywhere;
+}
+.header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.header h1 {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+.header p,
+.muted {
+  color: var(--lx-muted);
+}
+.header p {
+  margin: 0;
+}
+.header > .meta {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.story {
+  display: grid;
+  gap: 16px;
+}
+.story h3 {
+  font-size: 17px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.story h4 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.story p {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.story strong {
+  display: block;
+  font-weight: 600;
+}
+.story section {
+  scroll-margin-top: 72px;
+}
+.hero {
+  border-top: 3px solid var(--lx-teal);
+}
+.story .focus {
+  font-size: clamp(21px, 3vw, 28px);
+}
+.meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--lx-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.meta a {
+  color: var(--lx-teal);
+  text-decoration: underline;
+}
+.verdict {
+  border-inline-start: 3px solid var(--lx-teal);
+  padding-inline-start: 12px;
+  font-weight: 600;
+}
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface);
+  color: var(--lx-teal);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.button:disabled {
+  color: var(--lx-muted);
+  cursor: default;
+}
+.button:focus-visible,
+.disclosure summary:focus-visible,
+.meta a:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 3px;
+}
+.evidence {
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-sm);
+  padding: 14px;
+  margin-top: 14px;
+}
+.evidence blockquote {
+  margin: 12px 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.evidence audio {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+.disclosure {
+  border-top: 1px solid var(--lx-line);
+  margin-top: 14px;
+  padding-top: 6px;
+}
+.disclosure summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--lx-teal);
+}
+.disclosure li {
+  font-size: 14px;
+  line-height: 1.65;
+  margin-bottom: 6px;
+}
+.framework {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding-inline-start: 24px;
+  color: var(--lx-teal);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.mission {
+  border-top: 1px solid var(--lx-line);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+.mastery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  padding-inline-start: 24px;
+  color: var(--lx-muted);
+}
+.mastery [aria-current="step"] {
+  color: var(--lx-teal);
+  font-weight: 700;
+}
+.path {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.path dt {
+  color: var(--lx-muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.path dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.responses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.error {
+  box-sizing: border-box;
+  position: fixed;
+  bottom: 84px;
+  right: 16px;
+  z-index: 30;
+  width: min(320px, calc(100vw - 32px));
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  border: 1px solid var(--lx-line-strong);
+  border-radius: var(--lx-radius-sm);
+  box-shadow: var(--lx-shadow-1);
+  padding: 14px;
+}
+.error p {
+  margin-top: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.skeleton {
+  display: grid;
+  gap: 16px;
+  min-height: 820px;
+}
+.skeletonTitle,
+.skeletonPanel {
+  display: block;
+  background: var(--lx-sunken);
+  border-radius: var(--lx-radius-sm);
+}
+.skeletonTitle {
+  height: 32px;
+  max-width: 320px;
+}
+.skeletonPanel {
+  height: 180px;
+  border: 1px solid var(--lx-line);
+}
+@media (max-width: 600px) {
+  .root {
+    padding: 14px 12px;
+  }
+  .header {
+    margin-bottom: 14px;
+  }
+  .story {
+    gap: 12px;
+  }
+  .path {
+    grid-template-columns: 1fr;
+  }
+  .story p {
+    margin: 10px 0;
+  }
+}

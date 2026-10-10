@@ -1,4 +1,5 @@
 import { parseCallLabel, type CallLabel } from "./call-label";
+import { parseReportStory, type ReportStory } from "./report-story";
 import {
   parseDetailedOverview,
   type DetailedOverview,
@@ -48,6 +49,12 @@ export type ReportDimension = {
   observation: string;
   citations: ReportCitation[];
   evidence?: ReportEvidence[];
+  call_state?:
+    | "strongly_demonstrated"
+    | "observed"
+    | "needs_attention"
+    | "insufficient_evidence"
+    | "not_applicable";
 };
 export type ReportSection = {
   number: number;
@@ -60,6 +67,7 @@ export type SalesReport = {
   /** Server projection counts only; withheld findings are never supplied here. */
   preview?: GuestReportPreview;
   overview?: DetailedOverview;
+  story?: ReportStory;
   summary: string;
   summary_evidence?: ReportEvidence[];
   strengths: Finding[];
@@ -362,6 +370,7 @@ function parseDimensions(
         "observation",
         "citations",
         "evidence",
+        "call_state",
       ],
       `report_dimension_${index}`,
     );
@@ -435,6 +444,32 @@ function parseDimensions(
         ),
       ),
     };
+    if (dimension.call_state !== undefined) {
+      const state = text(dimension.call_state, "report_call_state", 32);
+      if (
+        ![
+          "strongly_demonstrated",
+          "observed",
+          "needs_attention",
+          "insufficient_evidence",
+          "not_applicable",
+        ].includes(state) ||
+        (["strongly_demonstrated", "observed", "needs_attention"].includes(
+          state,
+        ) &&
+          (status !== "observed" || !evidence?.length)) ||
+        (state === "not_applicable" && status !== "not_applicable") ||
+        (state === "insufficient_evidence" &&
+          ![
+            "insufficient_evidence",
+            "unknown",
+            "conflicted",
+            "partial",
+          ].includes(status))
+      )
+        throw new ReportContractError("report_call_state_invalid");
+      parsed.call_state = state as ReportDimension["call_state"];
+    }
     if (evidence !== undefined) parsed.evidence = evidence;
     return parsed;
   });
@@ -544,6 +579,7 @@ function parseReport(
       "report_sections",
       "overview",
       "provider_extras",
+      "story",
     ],
     "report",
   );
@@ -644,6 +680,15 @@ function parseReport(
     ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
+  if (report.story !== undefined) {
+    if (!binding.transcript)
+      throw new ReportContractError("report_story_source_required");
+    try {
+      parsed.story = parseReportStory(report.story, binding.transcript);
+    } catch {
+      throw new ReportContractError("report_story_invalid");
+    }
+  }
   for (const field of ["summary_evidence", "verdict_evidence"] as const) {
     if (Object.hasOwn(report, field)) {
       parsed[field] = array(report[field], `report_${field}`, 1, 3).map(
@@ -774,6 +819,9 @@ export function parseAcquisitionReport(
       "missed_opportunities",
       "dimensions",
       "next_action",
+      "summary_evidence",
+      "verdict_evidence",
+      "story",
       "improvements",
       "objection_analysis",
       "closing_analysis",

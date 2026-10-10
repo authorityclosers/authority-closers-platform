@@ -108,9 +108,18 @@ ENROLLMENT_WELCOME_ROUTE = OutboxJobRoute(
     ),
     allowed_payload_values={"source": frozenset({"free_self", "manual_grant"})},
 )
+# Bootstrap safe before the organisation producer/resolver is integrated.
+ORGANISATION_INVITATION_EVENT = "organisation.invitation.requested.v1"
+ORGANISATION_INVITATION_JOB = "email.organisation_invitation.v1"
+ORGANISATION_INVITATION_ROUTE = OutboxJobRoute(
+    job_kind=ORGANISATION_INVITATION_JOB,
+    required_payload_keys=frozenset({"invite_id"}),
+    uuid_payload_keys=frozenset({"invite_id"}),
+)
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
+        ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
         REVIEWER_AUTH_EVENT: OutboxJobRoute(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
@@ -508,6 +517,7 @@ def build_default_dispatcher(
     return AllowlistedDispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
+            ORGANISATION_INVITATION_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             EMAIL_LOGIN_REQUEST_JOB: handler,
@@ -673,6 +683,7 @@ class DurableWorker:
                 raise LeaseLostError("job no longer exists")
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
+                ORGANISATION_INVITATION_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 EMAIL_LOGIN_REQUEST_JOB,
@@ -762,6 +773,14 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
+        if job.kind == ORGANISATION_INVITATION_JOB:
+            from ac_platform.organisations.invite_email import (
+                resolve_organisation_invitation_message,
+            )
+
+            return await resolve_organisation_invitation_message(
+                session, self._settings, job, provider_key=provider_key
+            )
         if job.kind == EMAIL_LOGIN_REQUEST_JOB:
             return await resolve_email_login_code_message(
                 session,

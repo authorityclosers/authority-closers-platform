@@ -4,16 +4,12 @@ import { AlertCircle, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import {
-  AcquisitionError,
-  type Allowance,
-  type LibrarySubmission,
-} from "../acquisition-client";
+import type { Allowance, LibrarySubmission } from "../acquisition-client";
 import { ConnectionNotice } from "../connection-notice";
-import { PolicyFooter } from "../policy-footer";
 import { LightboxShell } from "../shell/lightbox-shell";
 import { getShellState } from "../shell/shell-store";
 import { WorkspaceNoAccess } from "../workspace-no-access";
+import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   analysedTrend,
@@ -23,8 +19,10 @@ import {
   readCallActivity,
   readCallSummary,
   readRecentCalls,
+  settle,
   type CallActivity,
   type CallSummary,
+  type ReadResult,
 } from "./dashboard-data";
 import { DashboardGreeting } from "./dashboard-greeting";
 import {
@@ -38,6 +36,7 @@ import {
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
+import { PolicyFooter } from "../policy-footer";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -45,8 +44,11 @@ type ReadState<T> =
   | { status: "ready"; value: T }
   | { status: "error"; forbidden: boolean };
 
-const isForbidden = (error: unknown) =>
-  error instanceof AcquisitionError && error.status === 403;
+/** 403 means this workspace has no Sales Xray: said once, not per panel. */
+const toState = <T,>(result: ReadResult<T>): ReadState<T> =>
+  result.ok
+    ? { status: "ready", value: result.value }
+    : { status: "error", forbidden: result.status === 403 };
 
 export default function DashboardPage() {
   const access = useWorkspaceAccess();
@@ -80,6 +82,7 @@ export default function DashboardPage() {
           Or analyse a call without an account
         </Link>
       </section>
+      {/* The public landing ("/" sends visitors here): the site's footer. */}
       <PolicyFooter />
     </LightboxShell>
   );
@@ -105,49 +108,37 @@ function DashboardDetails() {
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
-  const loadSummary = useCallback((signal?: AbortSignal) => {
-    readCallSummary(signal)
-      .then((value) => {
-        if (!signal?.aborted) setSummaryState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setSummaryState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadSummary = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readCallSummary(signal)).then((result) => {
+        if (!signal?.aborted) setSummaryState(toState(result));
+      }),
+    [],
+  );
 
-  const loadActivity = useCallback((signal?: AbortSignal) => {
-    readCallActivity(signal)
-      .then((value) => {
-        if (!signal?.aborted) setActivityState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setActivityState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadActivity = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readCallActivity(signal)).then((result) => {
+        if (!signal?.aborted) setActivityState(toState(result));
+      }),
+    [],
+  );
 
-  const loadAllowance = useCallback((signal?: AbortSignal) => {
-    readAllowance(signal)
-      .then((value) => {
-        if (!signal?.aborted) setAllowanceState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setAllowanceState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadAllowance = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readAllowance(signal)).then((result) => {
+        if (!signal?.aborted) setAllowanceState(toState(result));
+      }),
+    [],
+  );
 
-  const loadRecent = useCallback((signal?: AbortSignal) => {
-    readRecentCalls(signal, 5, true)
-      .then((value) => {
-        if (!signal?.aborted) setRecentState({ status: "ready", value });
-      })
-      .catch((error) => {
-        if (!signal?.aborted)
-          setRecentState({ status: "error", forbidden: isForbidden(error) });
-      });
-  }, []);
+  const loadRecent = useCallback(
+    (signal?: AbortSignal) =>
+      void settle(readRecentCalls(signal, 5, true)).then((result) => {
+        if (!signal?.aborted) setRecentState(toState(result));
+      }),
+    [],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -363,7 +354,9 @@ function DashboardDetails() {
                   ) : activityAllZero ? (
                     <Quiet text="No calls analysed in the last 30 days." />
                   ) : (
-                    <DayBars days={activity.days} />
+                    <SectionBoundary name="The daily chart">
+                      <DayBars days={activity.days} />
+                    </SectionBoundary>
                   )}
                 </div>
               </section>
@@ -388,7 +381,9 @@ function DashboardDetails() {
                   ) : summary.total === 0 ? (
                     <Quiet text="No saved calls yet." />
                   ) : (
-                    <StatusSplit summary={summary} />
+                    <SectionBoundary name="Call status">
+                      <StatusSplit summary={summary} />
+                    </SectionBoundary>
                   )}
                 </div>
               </section>
@@ -415,11 +410,13 @@ function DashboardDetails() {
                 ) : recent === null || recent.length === 0 ? (
                   <Quiet text="No calls yet." />
                 ) : (
-                  <RecentCallsList
-                    calls={recent}
-                    viewerId={access?.context?.personId ?? null}
-                    onHiddenChange={setHiddenRecent}
-                  />
+                  <SectionBoundary name="Recent calls">
+                    <RecentCallsList
+                      calls={recent}
+                      viewerId={access?.context?.personId ?? null}
+                      onHiddenChange={setHiddenRecent}
+                    />
+                  </SectionBoundary>
                 )}
               </div>
             </section>

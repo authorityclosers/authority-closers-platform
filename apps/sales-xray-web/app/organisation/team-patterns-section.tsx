@@ -87,7 +87,12 @@ export function TeamPatternsSection({
       </div>
       <div className={`${styles.surface} ${styles.patternSurface}`}>
         {!settled ? (
-          <div className={styles.patterns} aria-label="Loading reports">
+          <div
+            className={styles.patterns}
+            role="status"
+            aria-busy="true"
+            aria-label="Loading reports"
+          >
             {[0, 1, 2].map((column) => (
               <div key={column} className={styles.patternColumn}>
                 <i className={`${styles.bone} ${styles.patternBoneTitle}`} />

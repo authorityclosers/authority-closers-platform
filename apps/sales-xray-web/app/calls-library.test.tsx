@@ -20,7 +20,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
 
 import { AccountNavigation } from "./account-navigation";
-import { CallsLibrary } from "./calls-library";
+import { CallsLibrary, callsViewSearch, readCallsView } from "./calls-library";
 import {
   UploadSessionProvider,
   useUploadSession,
@@ -565,6 +565,103 @@ it("filters loaded calls by their saved status only", async () => {
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(3);
 });
 
+it("reads and writes the list's view in the address", () => {
+  expect(readCallsView("?status=attention&rep=p-1&sort=longest")).toEqual({
+    filter: "attention",
+    rep: "p-1",
+    sort: "longest",
+  });
+  expect(readCallsView("?status=weird&sort=sideways")).toEqual({
+    filter: "all",
+    rep: "",
+    sort: "newest",
+  });
+  expect(
+    callsViewSearch("?id=abc&q=old", {
+      filter: "ready",
+      rep: "",
+      sort: "newest",
+      q: "Pixel ",
+    }),
+  ).toBe("?id=abc&q=Pixel+&status=completed");
+  expect(
+    callsViewSearch("?status=processing", {
+      filter: "all",
+      rep: "",
+      sort: "newest",
+      q: "",
+    }),
+  ).toBe("");
+});
+
+it("keeps the status, sort and search in the address across a reload", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/analysis/calls?status=attention&sort=longest",
+  );
+  try {
+    const held = { ...row(thirdId), state: "held" };
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(page([row(firstId), row(secondId, true), held])),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await act(async () => renderLibrary());
+    await flush();
+    const filters = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        ".calls-library-filters button",
+      ),
+    ];
+    expect(filters[3].getAttribute("aria-pressed")).toBe("true");
+    expect(
+      host.querySelector<HTMLSelectElement>('select[aria-label="Sort calls"]')
+        ?.value,
+    ).toBe("longest");
+    await act(async () => filters[0].click());
+    expect(window.location.search).toBe("?sort=longest");
+    const search = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Search loaded calls by name"]',
+    )!;
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!;
+      setValue.call(search, "Pixel D");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(search.value).toBe("Pixel D");
+    expect(new URLSearchParams(window.location.search).get("q")).toBe(
+      "Pixel D",
+    );
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!;
+      setValue.call(search, "Pixel Di");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // The router catches up late with an earlier write: typing is kept.
+    address.search = new URLSearchParams("q=Pixel D");
+    await act(async () => renderLibrary());
+    expect(search.value).toBe("Pixel Di");
+    address.search = new URLSearchParams("q=Pixel Di");
+    await act(async () => renderLibrary());
+    expect(search.value).toBe("Pixel Di");
+    // A new search from the sidebar replaces the box.
+    address.search = new URLSearchParams("q=Asha");
+    await act(async () => renderLibrary());
+    expect(search.value).toBe("Asha");
+  } finally {
+    address.search = new URLSearchParams();
+    window.history.replaceState(null, "", "/");
+  }
+});
+
 it("loads every server listed state without auto claiming or processing", async () => {
   fetchMock.mockResolvedValueOnce(
     new Response(JSON.stringify(page([row(firstId), row(secondId, true)])), {
@@ -579,7 +676,9 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(
     host.querySelector('a[href="/analysis/calls"][aria-current="page"]'),
   ).not.toBeNull();
-  expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(
+  // The rail's icon link is named by its label, not by visible text.
+  const current = host.querySelector('[aria-current="page"]');
+  expect(current?.getAttribute("aria-label") ?? current?.textContent).toContain(
     "Calls",
   );
   expect(host.textContent).toContain("Analysis in progress");

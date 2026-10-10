@@ -144,6 +144,22 @@ async function servedRead<T>(
   }
 }
 
+/** A read's outcome as a value: it never rejects, so a panel shows what it can. */
+export type ReadResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; status: number | null };
+
+export async function settle<T>(read: Promise<T>): Promise<ReadResult<T>> {
+  try {
+    return { ok: true, value: await read };
+  } catch (error) {
+    return {
+      ok: false,
+      status: error instanceof AcquisitionError ? error.status : null,
+    };
+  }
+}
+
 export const readCallSummary = (signal?: AbortSignal) =>
   servedRead("/submissions/summary", parseCallSummary, signal);
 

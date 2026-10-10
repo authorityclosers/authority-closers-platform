@@ -116,7 +116,12 @@ export function ReceiptActivitySection({
       </div>
       <div className={styles.surface}>
         {state.status === "loading" ? (
-          <div className={styles.receipts} aria-label="Loading calls analysed">
+          <div
+            className={styles.receipts}
+            role="status"
+            aria-busy="true"
+            aria-label="Loading calls analysed"
+          >
             <div className={styles.receiptChart}>
               <DayBarsSkeleton />
             </div>

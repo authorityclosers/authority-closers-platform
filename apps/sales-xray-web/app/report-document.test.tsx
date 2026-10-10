@@ -62,6 +62,7 @@ it("previews and downloads the same Blob, and zoom does not regenerate it", asyn
   await render();
   expect(mocks.render.mock.calls[0][0]).toBe(blob);
   expect(url.mock.calls[0][0]).toBe(blob);
+  expect(container.querySelector('[role="status"]')).toBeNull();
   expect(container.querySelector("a[download]")?.getAttribute("href")).toBe(
     "blob:generated-report",
   );
@@ -104,6 +105,9 @@ it("disables a stale download and ignores a previous report that finishes late",
     await vi.waitFor(() => expect(mocks.generate).toHaveBeenCalledOnce());
   });
   expect(container.querySelector("button")?.disabled).toBe(true);
+  expect(container.querySelector('[role="status"]')?.textContent).toContain(
+    "Preparing your document",
+  );
   await render({ title: "New call" });
   await act(async () => finish(new Blob(["stale file"])));
   expect(mocks.render).toHaveBeenCalledOnce();

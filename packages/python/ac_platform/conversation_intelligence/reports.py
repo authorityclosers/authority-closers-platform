@@ -418,6 +418,35 @@ class ReportDimension(_StrictModel):
         max_length=8,
         exclude_if=lambda value: value is None,
     )
+    # Optional call-level reading, separate from evidence sufficiency. Older
+    # C5 drafts omit it. No prompt/provider or official scoring is activated.
+    call_state: (
+        Literal[
+            "strongly_demonstrated",
+            "observed",
+            "needs_attention",
+            "insufficient_evidence",
+            "not_applicable",
+        ]
+        | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def supported_call_state(self) -> Self:
+        if self.call_state in {"strongly_demonstrated", "observed", "needs_attention"} and (
+            self.status != "observed" or not self.evidence
+        ):
+            raise ValueError("report_call_state_evidence_required")
+        if self.call_state == "not_applicable" and self.status != "not_applicable":
+            raise ValueError("report_call_state_status_mismatch")
+        if self.call_state == "insufficient_evidence" and self.status not in {
+            "insufficient_evidence",
+            "unknown",
+            "conflicted",
+            "partial",
+        }:
+            raise ValueError("report_call_state_status_mismatch")
+        return self
 
 
 class ReportSection(_StrictModel):
@@ -1802,7 +1831,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/9"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/10"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:

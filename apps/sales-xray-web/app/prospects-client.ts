@@ -1,3 +1,9 @@
+import {
+  PROSPECT_FIELD_LABELS,
+  parseProfileFields,
+  type ProfileFields,
+  type ProfileKey,
+} from "./prospect-profile-contract";
 export const PROSPECTS_PATH = "/prospects";
 export const PROSPECTS_API = "/v1/conversation/prospects";
 export const UUID_RE =
@@ -25,6 +31,9 @@ export type ProspectSummary = {
   last_promise: string | null;
   call_count: number;
   last_call: string | null;
+  profile_fields?: ProfileFields;
+  origin?: "person" | "detected";
+  confirmed_at?: string | null;
 };
 
 export type ProspectListPage = {
@@ -149,6 +158,26 @@ export function parseProspectSummary(value: unknown): ProspectSummary {
     throw new ProspectsContractError("last_call");
   }
 
+  let profileFields: ProfileFields | undefined;
+  if (item.profile_fields !== undefined) {
+    try {
+      profileFields = parseProfileFields(item.profile_fields);
+    } catch {
+      throw new ProspectsContractError("profile_fields");
+    }
+  }
+  if (
+    item.origin !== undefined &&
+    item.origin !== "person" &&
+    item.origin !== "detected"
+  )
+    throw new ProspectsContractError("origin");
+  if (
+    item.confirmed_at !== undefined &&
+    item.confirmed_at !== null &&
+    typeof item.confirmed_at !== "string"
+  )
+    throw new ProspectsContractError("confirmed_at");
   return {
     prospect_id: item.prospect_id,
     name: item.name,
@@ -164,6 +193,13 @@ export function parseProspectSummary(value: unknown): ProspectSummary {
     last_promise: item.last_promise,
     call_count: item.call_count,
     last_call: item.last_call,
+    ...(profileFields ? { profile_fields: profileFields } : {}),
+    ...(item.origin !== undefined
+      ? { origin: item.origin as "person" | "detected" }
+      : {}),
+    ...(item.confirmed_at !== undefined
+      ? { confirmed_at: item.confirmed_at as string | null }
+      : {}),
   };
 }
 
@@ -513,4 +549,63 @@ export async function fetchProspectDetail({
 
   const json = await response.json();
   return parseProspectDetail(json);
+}
+
+/** Save only a person's typed value; the server appends and locks the revision. */
+export async function editProspectField(
+  prospectId: string,
+  revision: number,
+  key: ProfileKey,
+  typedText: string,
+): Promise<void> {
+  const max =
+    key === "name" || key === "phone" ? 160 : key === "email" ? 320 : 2048;
+  if (
+    !UUID_RE.test(prospectId) ||
+    !Number.isSafeInteger(revision) ||
+    revision < 1 ||
+    !Object.hasOwn(PROSPECT_FIELD_LABELS, key) ||
+    !typedText.trim() ||
+    typedText.length > max
+  ) {
+    throw new Error("Enter a value within the field's limit.");
+  }
+  const response = await fetch(`${PROSPECTS_API}/${prospectId}/fields`, {
+    method: "PUT",
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({
+      expected_revision: revision,
+      fields: { [key]: { kind: "text", text: typedText } },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      response.status === 409
+        ? "This prospect changed. Reload it before saving your edit."
+        : "Your edit could not be saved. Try again.",
+    );
+  }
+  const item = record(await response.json());
+  const prospect = record(item.prospect);
+  if (
+    item.schema !== "ac.sales-xray.prospect-fields/1" ||
+    prospect.prospect_id !== prospectId ||
+    !Number.isSafeInteger(prospect.revision) ||
+    (prospect.revision as number) < revision
+  ) {
+    throw new ProspectsContractError("saved_field");
+  }
+  const saved = parseProfileFields(prospect.profile_fields)[key];
+  if (
+    saved?.state !== "known" ||
+    saved.basis !== "person" ||
+    !saved.locked ||
+    saved.value.kind !== "text" ||
+    saved.value.text !== typedText
+  ) {
+    throw new ProspectsContractError("saved_field");
+  }
 }

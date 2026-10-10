@@ -1,0 +1,56 @@
+/*
+ * Sales Xray screen tokens: the one small set of colours, sizes and floors
+ * that screens use (strikes/RULES.md, pulse-ui-notes a.6-a.8).
+ *
+ * Colours alias the Lightbox palette (lightbox/tokens.css), which stays the
+ * only place with raw values, so light and dark come for free. Tints are
+ * color-mix() of a token, never a new hex. One accent: teal.
+ */
+:root {
+  /* ---------- Colour ---------- */
+  --sx-paper: var(--lx-paper);
+  --sx-surface: var(--lx-surface);
+  --sx-sunken: var(--lx-sunken);
+  --sx-ink: var(--lx-ink);
+  --sx-ink-2: var(--lx-ink-2);
+  --sx-muted: var(--lx-muted);
+  --sx-line: var(--lx-line);
+  --sx-line-strong: var(--lx-line-strong);
+  --sx-accent: var(--lx-teal);
+  --sx-accent-ink: var(--lx-on-teal);
+  --sx-accent-soft: color-mix(in oklab, var(--lx-teal) 12%, transparent);
+  --sx-good: var(--lx-success);
+  --sx-warn: var(--lx-warning);
+  --sx-bad: var(--lx-danger);
+  --sx-bad-soft: color-mix(in oklab, var(--lx-danger) 10%, transparent);
+  --sx-focus-ring: var(--lx-ring-focus);
+
+  /* ---------- Text: 12/13/14 for everything; titles and figures only ---------- */
+  --sx-text-xs: 12px; /* meta, captions, table heads */
+  --sx-text-sm: 13px; /* body, rows, controls */
+  --sx-text-md: 14px; /* emphasis, section titles */
+  --sx-text-panel: 600 15px / 1.35 var(--lx-font-ui);
+  --sx-text-title: 650 20px / 1.25 var(--lx-font-ui);
+  --sx-text-kpi: 650 24px / 1.1 var(--lx-font-ui);
+
+  /* ---------- Floors (minimums, not suggestions) ---------- */
+  --sx-control-h: 32px; /* buttons and inputs; 44 px on touch below */
+  --sx-row-h: 40px;
+  --sx-table-head-h: 32px;
+  --sx-panel-head-h: 42px;
+  --sx-badge-h: 20px;
+  --sx-tile-min-h: 96px;
+  --sx-bottom-nav-h: var(--lx-bottom-nav-h);
+
+  /* ---------- Shape and space ---------- */
+  --sx-radius-sm: var(--lx-radius-sm);
+  --sx-radius-md: var(--lx-radius-md);
+  --sx-gap: 16px; /* between surfaces */
+  --sx-gutter: 16px; /* phone page edge */
+}
+
+@media (pointer: coarse) {
+  :root {
+    --sx-control-h: 44px;
+  }
+}

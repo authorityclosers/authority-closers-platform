@@ -92,7 +92,7 @@ it.each<[Allowance, string | null]>([
       available_seconds: 600000,
       committed_seconds: 0,
     },
-    "166 h of 166 h left",
+    "166 h 40 min of 166 h 40 min left",
   ],
   [
     {

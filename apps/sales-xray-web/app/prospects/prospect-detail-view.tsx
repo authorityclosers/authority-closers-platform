@@ -7,7 +7,6 @@ import {
   ExternalLink,
   FileText,
   HelpCircle,
-  LoaderCircle,
   Phone,
   RefreshCw,
 } from "lucide-react";
@@ -24,6 +23,9 @@ import {
   type ProspectDetail,
 } from "../prospects-client";
 import styles from "./prospects.module.css";
+import { ProspectInformation } from "../prospect-information";
+import { PageSkeleton } from "../shell/page-skeleton";
+import informationStyles from "../prospect-information.module.css";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Never";
@@ -134,7 +136,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
         </Link>
 
         {error ? (
-          <div className={styles.errorBanner} role="alert">
+          <div className={informationStyles.cornerError} role="alert">
             <span>{error}</span>
             <button
               type="button"
@@ -148,16 +150,8 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
         ) : null}
 
         {showLoading ? (
-          <div className={styles.empty}>
-            <LoaderCircle
-              size={24}
-              style={{
-                animation: "spin 1s linear infinite",
-                margin: "0 auto 12px",
-              }}
-              aria-hidden="true"
-            />
-            <p className={styles.emptyText}>Loading prospect details...</p>
+          <div aria-busy="true" aria-label="Loading prospect information">
+            <PageSkeleton variant="list" />
           </div>
         ) : !prospect ? (
           <div className={styles.empty}>
@@ -174,95 +168,31 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                 <div className={styles.profileInfo}>
                   <h1 className={styles.prospectHeaderName}>{prospect.name}</h1>
                   <div className={styles.profileIdText}>
-                    ID: {prospect.prospect_id} • Revision {prospect.revision}
-                  </div>
-                </div>
-              </div>
-
-              {/* Visibly missing fields grid */}
-              <div className={styles.missingGrid}>
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Photo</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.photo_url
-                      ? "Provided"
-                      : "Missing (using initials)"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Contact</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.contact ? prospect.contact : "No contact details"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>
-                    Confirmed profile
-                  </div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.fields.length > 0
-                      ? `${prospect.fields.length} confirmed`
-                      : "No confirmed profile fields"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Stage</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.stage ? prospect.stage : "Unassigned"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Tags</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.tags.length > 0
-                      ? prospect.tags.join(", ")
-                      : "No tags"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Next step</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.next_step ? prospect.next_step : "None recorded"}
-                  </div>
-                </div>
-
-                <div className={styles.missingItem}>
-                  <div className={styles.missingItemLabel}>Last promise</div>
-                  <div className={styles.missingItemValue}>
-                    {prospect.last_promise
-                      ? prospect.last_promise
-                      : "None recorded"}
+                    Prospect’s Information{" "}
+                    {prospect.origin === "detected" && !prospect.confirmed_at
+                      ? " · Detected"
+                      : ""}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Hypothesis boundary notice */}
-            <div className={styles.hypothesisBanner} role="note">
-              <HelpCircle
-                size={18}
-                aria-hidden="true"
-                style={{ flexShrink: 0, marginTop: 2 }}
-              />
-              <div>
-                <strong>Per-call hypothesis boundary:</strong> Each snapshot
-                shown below is an interpretation from that specific call.
-                Snapshots remain separate from confirmed profile fields; no
-                unverified facts or scores are manufactured.
-              </div>
-            </div>
+            <ProspectInformation
+              prospect={prospect}
+              calls={calls}
+              onSaved={() => setAttempt((a) => a + 1)}
+            />
 
             {/* Authorized calls list */}
-            <div className={styles.callsContainer}>
-              <h2 className={styles.callsSectionTitle}>
+            <details className={styles.callsContainer}>
+              <summary className={styles.callsSectionTitle}>
                 <Phone size={18} aria-hidden="true" />
-                Authorized Calls ({prospect.call_count})
-              </h2>
+                Opportunity history ({prospect.call_count} calls)
+              </summary>
+              <p className={informationStyles.note}>
+                <HelpCircle size={14} aria-hidden="true" /> Call interpretations
+                are Inferred. Confirm them with the prospect.
+              </p>
 
               {calls.length === 0 ? (
                 <div className={styles.listPanel}>
@@ -392,7 +322,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                   ) : null}
                 </div>
               )}
-            </div>
+            </details>
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Ellipsis,
   FolderOpen,
+  GraduationCap,
   LayoutGrid,
   LogIn,
   PanelLeftClose,
@@ -31,6 +32,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useBranding } from "./branding-store";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { CALLS_PATH } from "../analysis-routes";
@@ -53,7 +55,9 @@ import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
-import { phoneTabFor } from "./phone-nav";
+import { phoneTabFor, shellActiveFor } from "./phone-nav";
+import { RailTip } from "./rail-tip";
+import { SectionBoundary } from "../ui/section-boundary";
 import {
   readAllowance,
   readCallSummary,
@@ -69,7 +73,7 @@ import {
   type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
-import { WorkspaceSwitcher } from "./workspace-switcher";
+import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
 import { SettingsMenu } from "./settings-menu";
 import { useShellUpdates } from "./updates-store";
 import { UpdatesBell } from "./updates-bell";
@@ -92,7 +96,8 @@ export type LightboxShellProps = {
     | "calls"
     | "account"
     | "organisation"
-    | "prospects";
+    | "prospects"
+    | "coaching";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -137,12 +142,28 @@ function resolvePageTitle(
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "prospects") return "Prospects";
+  if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
   return null;
 }
 
 const subscribeNothing = () => () => {};
+
+// A rail icon's name for text readers and tests. Hidden inline, so it stays
+// hidden even when the page draws before its stylesheet (dev recompiles);
+// the visible label floats above every layer on hover or focus (rail-tip.tsx).
+const RAIL_NAME_STYLE: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+};
 
 // Apple keyboards show ⌘; everyone else presses Ctrl (the server assumes Ctrl).
 const shortcutLabel = () =>
@@ -220,6 +241,7 @@ function LightboxShellFrame({
   const [accountView, setAccountView] = useState<"main" | "news">("main");
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
   const accountAnchorRef = useRef<HTMLElement | null>(null);
+  const railRef = useRef<HTMLDivElement | null>(null);
   const updates = useShellUpdates(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -281,8 +303,10 @@ function LightboxShellFrame({
   const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
-  const pageTitle = resolvePageTitle(active, heading);
-  const phoneTab = phoneTabFor(usePathname(), active);
+  const pathname = usePathname();
+  const place = shellActiveFor(pathname, active);
+  const pageTitle = resolvePageTitle(place, heading);
+  const phoneTab = phoneTabFor(pathname, active);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
@@ -565,6 +589,9 @@ function LightboxShellFrame({
       workspace.tenant_id === effectiveTenantId &&
       workspace.kind === "organisation",
   );
+  const branding = useBranding(inOrganisation);
+  // Confirmed signed out (not merely unknown yet): nothing personal to show.
+  const guest = !authenticated && !sessionPending && !loading;
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
@@ -584,12 +611,6 @@ function LightboxShellFrame({
     (shellAllowance && shellAllowance.key === recentContextKey
       ? shellAllowance.value
       : null);
-  const allowanceSettled =
-    hasPageAllowance || shellAllowance?.key === recentContextKey;
-  const allowancePending =
-    process.env.NODE_ENV !== "test" &&
-    !shownAllowance &&
-    (sessionPending || (authenticated && !allowanceSettled));
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -688,7 +709,7 @@ function LightboxShellFrame({
         aria-label="Sales Xray navigation"
       >
         {/* 64px Icon Strip */}
-        <div className={styles.iconStrip}>
+        <div className={styles.iconStrip} ref={railRef}>
           <div className={styles.stripTop}>
             <div className={styles.logoSlot}>
               <BrandLockup href={homeHref} markOnly={true} />
@@ -710,71 +731,90 @@ function LightboxShellFrame({
           </div>
           <div className={styles.stripNav}>
             <Link
-              className={`${styles.stripBtn}${active === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Dashboard"
-              aria-current={active === "dashboard" ? "page" : undefined}
+              data-rail-tip="Dashboard"
+              aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Dashboard</span>
+              <span style={RAIL_NAME_STYLE}>Dashboard</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
               href={newAnalysisHref}
               aria-label="New analysis"
-              aria-current={active === "analyse" ? "page" : undefined}
+              data-rail-tip="New analysis"
+              aria-current={place === "analyse" ? "page" : undefined}
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>New analysis</span>
+              <span style={RAIL_NAME_STYLE}>New analysis</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/analysis/calls"
               aria-label="Calls"
-              aria-current={active === "calls" ? "page" : undefined}
+              data-rail-tip="Calls"
+              aria-current={place === "calls" ? "page" : undefined}
             >
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Calls</span>
+              <span style={RAIL_NAME_STYLE}>Calls</span>
             </Link>
             <Link
-              className={`${styles.stripBtn}${active === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
               aria-label="Prospects"
-              aria-current={active === "prospects" ? "page" : undefined}
+              data-rail-tip="Prospects"
+              aria-current={place === "prospects" ? "page" : undefined}
             >
               <Users size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Prospects</span>
+              <span style={RAIL_NAME_STYLE}>Prospects</span>
             </Link>
-            {inOrganisation || active === "organisation" ? (
+            <Link
+              className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/coaching"
+              prefetch={false}
+              aria-label="Coaching"
+              data-rail-tip="Coaching"
+              aria-current={place === "coaching" ? "page" : undefined}
+            >
+              <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span style={RAIL_NAME_STYLE}>Coaching</span>
+            </Link>
+            {inOrganisation || place === "organisation" ? (
               <Link
-                className={`${styles.stripBtn}${active === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
+                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
                 prefetch={false}
                 aria-label="Organisation"
-                aria-current={active === "organisation" ? "page" : undefined}
+                data-rail-tip="Organisation"
+                aria-current={place === "organisation" ? "page" : undefined}
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.tooltip}>Organisation</span>
+                <span style={RAIL_NAME_STYLE}>Organisation</span>
               </Link>
             ) : null}
           </div>
           <div className={styles.stripBottom}>
             {bell}
             <Link
-              className={`${styles.stripBtn}${active === "account" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
               aria-label={accountLabel}
+              data-rail-tip={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
-              aria-current={active === "account" ? "page" : undefined}
+              aria-current={place === "account" ? "page" : undefined}
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>{accountLabel}</span>
+              <span style={RAIL_NAME_STYLE}>{accountLabel}</span>
             </Link>
           </div>
         </div>
+
+        <RailTip rail={railRef} />
 
         {/* 248px Panel */}
         <div
@@ -783,16 +823,21 @@ function LightboxShellFrame({
           inert={collapsed}
         >
           <div className={styles.panelHeader}>
-            <WorkspaceSwitcher
-              workspaces={workspaces}
-              currentId={effectiveTenantId}
-              personName={profileName}
-              pending={chromePending}
-              open={switcherOpen}
-              setOpen={setSwitcherOpen}
-              containerRef={switcherRef}
-              onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
-            />
+            {guest ? (
+              <GuestSwitcher href={accountHref} onSignIn={openAccount} />
+            ) : (
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                currentId={effectiveTenantId}
+                personName={profileName}
+                branding={branding}
+                pending={chromePending}
+                open={switcherOpen}
+                setOpen={setSwitcherOpen}
+                containerRef={switcherRef}
+                onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
+              />
+            )}
             <button
               type="button"
               ref={collapseButtonRef}
@@ -807,40 +852,43 @@ function LightboxShellFrame({
             </button>
           </div>
 
-          {/* Enter opens Calls filtered by the text; the box then clears. */}
-          <Form
-            action={CALLS_PATH}
-            role="search"
-            className={`${styles.searchBox} ${styles.panelSearch}`}
-            onSubmit={(event) => {
-              const form = event.currentTarget;
-              window.setTimeout(() => {
-                form.reset();
-                searchInputRef.current?.blur();
-              }, 0);
-            }}
-          >
-            <Search
-              size={15}
-              className={styles.searchIcon}
-              aria-hidden="true"
-            />
-            <input
-              ref={searchInputRef}
-              type="search"
-              name="q"
-              className={styles.searchInput}
-              placeholder="Search calls…"
-              aria-label="Search calls"
-              enterKeyHint="search"
-            />
-            <kbd className={styles.searchKbd} aria-hidden="true">
-              {shortcut}
-            </kbd>
-          </Form>
+          {/* Enter opens Calls filtered by the text; the box then clears.
+              Signed out there are no calls to search. */}
+          {!guest && (
+            <Form
+              action={CALLS_PATH}
+              role="search"
+              className={`${styles.searchBox} ${styles.panelSearch}`}
+              onSubmit={(event) => {
+                const form = event.currentTarget;
+                window.setTimeout(() => {
+                  form.reset();
+                  searchInputRef.current?.blur();
+                }, 0);
+              }}
+            >
+              <Search
+                size={15}
+                className={styles.searchIcon}
+                aria-hidden="true"
+              />
+              <input
+                ref={searchInputRef}
+                type="search"
+                name="q"
+                className={styles.searchInput}
+                placeholder="Search calls…"
+                aria-label="Search calls"
+                enterKeyHint="search"
+              />
+              <kbd className={styles.searchKbd} aria-hidden="true">
+                {shortcut}
+              </kbd>
+            </Form>
+          )}
 
           {/* Recents Section */}
-          {salesXrayEnabled && (
+          {salesXrayEnabled && !guest && (
             <div className={styles.recentsSection}>
               <div className={styles.recentsHeader}>
                 <button
@@ -872,62 +920,64 @@ function LightboxShellFrame({
                 </Link>
               </div>
               {recentsOpen && (
-                <div className={styles.recentsList}>
-                  {recentsPending && visibleRecentCalls.length === 0
-                    ? [62, 44, 72].map((width, index) => (
-                        <div
-                          key={width}
-                          className={styles.recentSkeleton}
-                          style={
-                            {
-                              "--i": index,
-                              "--w": `${width}%`,
-                            } as CSSProperties
-                          }
-                          aria-hidden="true"
-                        >
-                          <i />
-                          <span />
-                          <em />
-                        </div>
-                      ))
-                    : null}
-                  {!recentsPending &&
-                  recentsReady &&
-                  visibleRecentCalls.length === 0 ? (
-                    <p className={styles.recentsEmpty}>No calls here yet</p>
-                  ) : null}
-                  {visibleRecentCalls.map((call, index) => (
-                    <RecentCallItem
-                      key={call.id}
-                      index={index}
-                      call={call}
-                      href={callHref(call.id)}
-                      mine={ownsCall(call.owner, viewerId)}
-                      owner={
-                        recentsShowOwners
-                          ? call.owner
-                            ? ownerLabel(call.owner, viewerId)
-                            : "You"
-                          : null
-                      }
-                      onChange={(next) => updateRecentCall(call.id, next)}
-                    />
-                  ))}
-                  {recentsElsewhere ? (
-                    <p className={styles.recentsElsewhere}>
-                      None of these are yours.{" "}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          requestWorkspace(recentsElsewhere.tenant_id)
+                <SectionBoundary name="Recents">
+                  <div className={styles.recentsList}>
+                    {recentsPending && visibleRecentCalls.length === 0
+                      ? [62, 44, 72].map((width, index) => (
+                          <div
+                            key={width}
+                            className={styles.recentSkeleton}
+                            style={
+                              {
+                                "--i": index,
+                                "--w": `${width}%`,
+                              } as CSSProperties
+                            }
+                            aria-hidden="true"
+                          >
+                            <i />
+                            <span />
+                            <em />
+                          </div>
+                        ))
+                      : null}
+                    {!recentsPending &&
+                    recentsReady &&
+                    visibleRecentCalls.length === 0 ? (
+                      <p className={styles.recentsEmpty}>No calls here yet</p>
+                    ) : null}
+                    {visibleRecentCalls.map((call, index) => (
+                      <RecentCallItem
+                        key={call.id}
+                        index={index}
+                        call={call}
+                        href={callHref(call.id)}
+                        mine={ownsCall(call.owner, viewerId)}
+                        owner={
+                          recentsShowOwners
+                            ? call.owner
+                              ? ownerLabel(call.owner, viewerId)
+                              : "You"
+                            : null
                         }
-                      >
-                        Switch to Personal
-                      </button>
-                    </p>
-                  ) : null}
-                </div>
+                        onChange={(next) => updateRecentCall(call.id, next)}
+                      />
+                    ))}
+                    {recentsElsewhere ? (
+                      <p className={styles.recentsElsewhere}>
+                        None of these are yours.{" "}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            requestWorkspace(recentsElsewhere.tenant_id)
+                          }
+                        >
+                          Switch to Personal
+                        </button>
+                      </p>
+                    ) : null}
+                  </div>
+                </SectionBoundary>
               )}
             </div>
           )}
@@ -976,9 +1026,6 @@ function LightboxShellFrame({
                   >
                     {workspaceLabel ?? "Sales Xray"}
                   </span>
-                  <span className={styles.titleSlash} aria-hidden="true">
-                    /
-                  </span>
                   {heading ? (
                     <h1 key={heading.title} className={styles.titleText}>
                       {heading.title}
@@ -995,21 +1042,20 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
-            {(authenticated || sessionPending) && active !== "analyse" ? (
+            {/* First, so its arrival (or absence) moves nothing else. */}
+            <AllowanceRing allowance={shownAllowance} />
+            {(authenticated || sessionPending) && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
                 New analysis
               </Link>
             ) : null}
-            <AllowanceRing
-              allowance={shownAllowance}
-              pending={allowancePending}
-            />
             <ThemeToggle />
             <ProfileMenu
               authenticated={authenticated}
               accountHref={accountHref}
               variant="header"
+              pending={chromePending}
             />
           </div>
         </header>
@@ -1019,7 +1065,14 @@ function LightboxShellFrame({
           </div>
         ) : null}
         <main id="main-content" className={styles.main}>
-          {children}
+          {/* A page that fails leaves the shell working: navigation, Recents. */}
+          <SectionBoundary
+            name="This screen"
+            note="Your calls and reports are safe."
+            resetKey={pathname}
+          >
+            {children}
+          </SectionBoundary>
         </main>
       </div>
       <nav
@@ -1061,8 +1114,17 @@ function LightboxShellFrame({
           <Users size={20} aria-hidden="true" />
           <span>Prospects</span>
         </Link>
+        <Link
+          className={styles.bottomLink}
+          href="/coaching"
+          prefetch={false}
+          aria-current={phoneTab === "coaching" ? "page" : undefined}
+        >
+          <GraduationCap size={20} aria-hidden="true" />
+          <span>Coaching</span>
+        </Link>
         {/* Signed out shows Sign in; an unconfirmed session keeps More. */}
-        {!authenticated && !sessionPending && !loading ? (
+        {guest ? (
           <Link
             className={styles.bottomLink}
             href={accountHref}

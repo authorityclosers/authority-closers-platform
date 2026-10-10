@@ -7,6 +7,7 @@ import {
   revokeInvite,
   parseOrganisation,
   parseMembers,
+  readActivity,
   readMembers,
   readOrganisation,
   OrgApiError,
@@ -498,4 +499,37 @@ it.each<[string, (data: Fixture) => unknown]>([
   expect(() => parseReceiptActivity(change(receiptFixture()))).toThrow(
     ReceiptActivityError,
   );
+});
+
+it("lists only calls it can open: a real call id and date", async () => {
+  const call = {
+    id: "AAAAAAAA-0000-4000-8000-000000000001",
+    owner_person_id: person,
+    owner_name: "Alex",
+    label: null,
+    created_at: "2026-10-09T10:15:00.123456+00:00",
+    duration_seconds: 300,
+    state: "report_ready",
+    has_report: true,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json({
+        members: [],
+        per_day: [],
+        per_rep: [],
+        calls: [
+          call,
+          { ...call, id: "not-a-call" },
+          { ...call, id: invite, created_at: "yesterday" },
+          { ...call, id: undefined },
+        ],
+      }),
+    ),
+  );
+  const activity = await readActivity();
+  expect(activity.calls.map((item) => item.id)).toEqual([
+    "aaaaaaaa-0000-4000-8000-000000000001",
+  ]);
 });

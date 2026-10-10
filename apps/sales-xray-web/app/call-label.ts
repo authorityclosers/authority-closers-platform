@@ -86,8 +86,10 @@ export function validateCallLabel(
  * name someone chose.
  */
 export function unnamedCallName(createdAt: string) {
+  const when = new Date(createdAt);
+  if (Number.isNaN(when.getTime())) return "Sales call";
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-  return `Sales call · ${date.format(new Date(createdAt))}`;
+  return `Sales call · ${date.format(when)}`;
 }
 
 /** A saved name, or an honest fallback that never pretends to be a name. */

@@ -47,19 +47,20 @@ def main() -> None:
             preview = page.get_by_role("region", name="Sales Xray document preview")
             expect(preview).to_be_visible()
             expect(preview).to_contain_text(SUMMARY)
+            expect(page.get_by_text("Preparing your document…", exact=True)).to_have_count(0)
             # DOCX run styles must retain the requested browser fallback.
             fonts = preview.locator("section.report-docx span").evaluate_all(
                 "spans => [...new Set(spans.map(span => getComputedStyle(span).fontFamily))]"
             )
-            assert fonts and all("Calibri" in font and "Arial" in font for font in fonts)
+            assert fonts and all("Calibri" in font and "Arial" in font for font in fonts), fonts
             headings = preview.locator("[data-report-mode-section]")
             assert headings.all_text_contents() == [
-                "Fictional seller — sample call report",
-                "Coaching",
-                "Moments to replay",
-                "Missed chances",
-                "Skills checked",
-                "Facts heard on the call",
+                "1. The Big Picture",
+                "2. How the Call Played Out",
+                "3. What Worked & What Didn't",
+                "4. Moments That Mattered",
+                "5. Your Skills on This Call",
+                "6. Where the Deal Stands",
             ]
             link = page.get_by_role("link", name="Download .docx", exact=True)
             url = link.get_attribute("href")
@@ -88,7 +89,9 @@ def main() -> None:
                 text = "".join(t.text or "" for t in xml.findall(".//w:t", ns))
                 assert SUMMARY in text
                 assert "I don't want to set another step today. Please don't follow up." in text
-                assert xml.findall(".//w:tbl", ns)
+                assert "Practice before the next call" not in text
+                assert "Facts heard on the call" not in text
+                assert "Information gap" in text
             page.screenshot(path=str(OUT / f"document-{width}.png"))
             sheet = preview.locator("section.report-docx").first
             base_width = sheet.bounding_box()["width"]

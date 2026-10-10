@@ -199,12 +199,26 @@ def test_two_seat_purchase_invites_pool_and_renewal(postgres_harness):  # noqa: 
                 email = ["first@example.test", "second@example.test"][winner]
                 assert (await add(email, keys[winner])).json() == responses[winner].json()
                 assert (await add("third@example.test")).json()["code"] == "seats_full"
-                # Registering the invited person consumes the pending seat, not an extra seat.
+                # Explicit acceptance replaces the pending seat, not an extra seat.
                 member = await seed(engine, tenant_id=world.public_tenant_id)
                 async with sessions() as db, db.begin():
                     (await db.get(Person, member.person_id)).email = email
-                accepted = await add(email)
-                assert accepted.status_code == 200 and accepted.json()["status"] == "active"
+                    identity = await db.get(IdentitySession, member.session_id)
+                    identity.selected_tenant_id = None
+                    identity.token_hash = digest(
+                        settings.session_token_pepper.get_secret_value().encode(),
+                        member_token.encode(),
+                        sha256,
+                    )
+                accepted = await client.post(
+                    f"/v1/organisation/invites/{responses[winner].json()['invite_id']}/accept",
+                    headers={
+                        "Cookie": f"ac_session={member_token}",
+                        "Origin": str(settings.public_app_url).rstrip("/"),
+                        "Idempotency-Key": str(uuid4()),
+                    },
+                )
+                assert accepted.status_code == 200 and accepted.json()["status"] == "accepted"
                 async with sessions() as db, db.begin():
                     identity = await db.get(IdentitySession, member.session_id)
                     identity.selected_tenant_id = org.tenant_id

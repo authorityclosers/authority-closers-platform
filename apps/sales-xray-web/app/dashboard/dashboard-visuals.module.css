@@ -19,13 +19,13 @@
   min-height: 20px;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .readout b {
   color: var(--lx-ink);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -45,7 +45,7 @@
   margin: -7px 0 -7px;
   padding: 0;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 14px;
   list-style: none;
@@ -117,7 +117,7 @@
   margin: 0;
   padding: 0;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   list-style: none;
   white-space: nowrap;
 }
@@ -146,12 +146,12 @@
   min-height: 20px;
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .statusTotal b {
   color: var(--lx-ink);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 650;
 }
 

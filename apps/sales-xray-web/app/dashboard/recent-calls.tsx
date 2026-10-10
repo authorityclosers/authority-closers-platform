@@ -153,7 +153,12 @@ export function RecentCallsList({
 /** Recent calls while the list loads: three rows with the final shape. */
 export function RecentCallsSkeleton() {
   return (
-    <div className={styles.root} aria-label="Loading recent calls">
+    <div
+      className={styles.root}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading recent calls"
+    >
       <ul className={styles.list} aria-hidden="true">
         {[46, 30, 58].map((width, index) => (
           <li

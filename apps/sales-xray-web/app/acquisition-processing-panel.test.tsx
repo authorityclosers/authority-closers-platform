@@ -1,180 +1,234 @@
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import Link from "next/link";
+
+import type { Progress } from "./acquisition-client";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { WorkspaceAccessProvider } from "./workspace-access";
 
-it("shows only stage completion supplied by confirmed processing rows", () => {
-  const markup = renderToStaticMarkup(
-    <AcquisitionProcessingPanel
-      stageRows={[
-        { stage: "C2", state: "completed", label: "Complete" },
-        { stage: "C4", state: "running", label: "In progress" },
-        { stage: "C5", state: null, label: "Not started" },
-      ]}
-      statusText="Checking the conversation"
-      fileName="My call.m4a"
-      fileMeta="M4A · 12.4 MB"
-    />,
-  );
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-  expect(markup).toContain('aria-label="Transcribing your call: Complete"');
-  expect(markup).toContain(
-    'aria-label="Checking the conversation: In progress"',
-  );
-  expect(markup).toContain('aria-current="step"');
-  expect(markup).toContain('data-state="completed"');
-  expect(markup).toContain('data-state="running"');
-  expect(markup).toContain('data-stage="C4"');
-  expect(markup).toContain("My call.m4a");
-  expect(markup).toContain("M4A · 12.4 MB");
-  expect(markup).toContain("Checking the conversation");
-  expect(markup).not.toContain("1–3 minutes");
+const callId = "0b6e7c52-3f0e-4a8e-9a55-2d4f1c9e8b10";
+const running: Progress = {
+  state: "active",
+  local_state: "completed",
+  failure_code: null,
+  has_report: false,
+  automatic_progression: true,
+  stages: [{ stage: "C2", state: "running" }],
+};
+let root: Root;
+let host: HTMLDivElement;
+let stages: string[];
+let fetchMock: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  stages = ["C1"];
+  fetchMock = vi.fn(async () => {
+    const stage = stages.length > 1 ? stages.shift()! : stages[0];
+    return Response.json(
+      stage === "done"
+        ? { state: "completed", current_stage: "C6", report_ready: true }
+        : { state: "active", current_stage: stage, report_ready: false },
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
 });
 
-it("halts activity treatment for a held state and does not invent allowance or file details", () => {
-  const markup = renderToStaticMarkup(
-    <AcquisitionProcessingPanel
-      stageRows={[
-        { stage: "C2", state: "completed", label: "Complete" },
-        { stage: "C4", state: "uncertain", label: "Paused · needs attention" },
-      ]}
-      statusText="Analysis paused"
-      paused
-      submissionId="call-one"
-      progress={{
-        state: "held",
-        local_state: "completed",
-        failure_code: null,
-        has_report: false,
-        automatic_progression: false,
-        stages: [
-          { stage: "C2", state: "completed" },
-          { stage: "C4", state: "uncertain" },
-        ],
-      }}
-    />,
-  );
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
-  expect(markup).toContain('data-paused="true"');
-  expect(markup).toContain('data-animated="false"');
-  expect(markup).toContain("Needs attention");
-  expect(markup).toContain("Your recording");
-  expect(markup).toContain("The completed transcript stays attached");
-  expect(markup).toContain(
+async function mount(
+  props: Partial<Parameters<typeof AcquisitionProcessingPanel>[0]> = {},
+  authenticated = true,
+) {
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessProvider
+        value={{
+          status: authenticated ? "ready" : "unauthenticated",
+          authenticated,
+          context: null,
+          retry: () => {},
+        }}
+      >
+        <AcquisitionProcessingPanel
+          stageRows={[{ stage: "C2", state: "running" }]}
+          statusText="Transcribing your call"
+          submissionId={callId}
+          progress={running}
+          accepted
+          fileName="My call.m4a"
+          fileMeta="12.4 MB"
+          {...props}
+        >
+          <button type="button">Check status</button>
+          <Link href={`/analysis/calls/${callId}`}>This call’s link</Link>
+        </AcquisitionProcessingPanel>
+      </WorkspaceAccessProvider>,
+    ),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
+const stepState = (id: string) =>
+  host.querySelector(`[data-stage="${id}"]`)?.getAttribute("data-state");
+const stepStatus = (id: string) =>
+  host.querySelector(`[data-stage="${id}"] small`)?.textContent;
+const poll = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(3_000);
+  });
+
+it("says one true thing and moves the steps with the plan's live stage", async () => {
+  await mount();
+  expect(fetchMock.mock.calls[0][0]).toBe(
+    `/v1/conversation/acquisition/submissions/${callId}/plan`,
+  );
+  expect(host.querySelector("h2")?.textContent).toBe("Analysing your call");
+  expect(host.textContent).toContain("Usually about 2–4 minutes");
+  expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
+    "active",
+    "waiting",
+    "waiting",
+  ]);
+  expect(stepStatus("C2")).toBe("In progress");
+  expect(stepStatus("C5")).toBe("");
+  // None of the old clutter.
+  expect(host.textContent).not.toContain("LAST CONFIRMED STATUS");
+  expect(host.textContent).not.toContain("Not started");
+  expect(host.textContent).not.toContain(
+    "confirming that analysis has started",
+  );
+  expect(host.textContent).not.toMatch(/\b\d+%/);
+});
+
+it("marks each step done with the time it took once it is seen to finish", async () => {
+  stages = ["C1", "C3", "C3", "C5", "done"];
+  await mount();
+  await poll();
+  expect(stepState("C2")).toBe("done");
+  // Listening was already running when the screen opened: no guessed time.
+  expect(stepStatus("C2")).toBe("Done");
+  expect(stepState("C4")).toBe("active");
+  await poll();
+  await poll();
+  expect(stepStatus("C4")).toBe("Done · 0:06");
+  expect(stepState("C5")).toBe("active");
+  await poll();
+  expect(host.querySelector("h2")?.textContent).toBe("Your report is ready");
+  expect(stepStatus("C5")).toBe("Done · 0:03");
+  const calls = fetchMock.mock.calls.length;
+  await poll();
+  expect(fetchMock.mock.calls.length).toBe(calls);
+  // If the page hasn't opened the report by itself, offer it.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(8_000);
+  });
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (button) => button.textContent === "Open report",
+    ),
+  ).toBe(true);
+});
+
+it("keeps the call's link and other actions in a ⋯ menu while it works", async () => {
+  await mount();
+  const menu = host.querySelector("details")!;
+  expect(menu.querySelector("summary")?.getAttribute("aria-label")).toBe(
+    "More actions",
+  );
+  expect(menu.textContent).toContain("This call’s link");
+  expect(menu.textContent).toContain("Check status");
+  expect(host.textContent).toContain("My call.m4a");
+  expect(host.textContent).toContain("12.4 MB");
+  expect(host.textContent).toContain(
+    "You can leave this page. Your report will appear in Calls when it’s ready.",
+  );
+});
+
+it("tells a guest to keep the call's link instead of promising Calls", async () => {
+  await mount({}, false);
+  expect(host.textContent).toContain(
+    "Keep this call’s link to come back while your session and call remain available.",
+  );
+  expect(host.textContent).not.toContain("appear in Calls");
+});
+
+it("pauses calmly: saved work, the reason and the recovery actions in view", async () => {
+  stages = ["C3"];
+  await mount({
+    paused: true,
+    stageRows: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "uncertain" },
+    ],
+    progress: {
+      ...running,
+      state: "held",
+      stages: [
+        { stage: "C2", state: "completed" },
+        { stage: "C4", state: "uncertain" },
+      ],
+    },
+  });
+  expect(host.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Analysis paused",
+  );
+  expect(host.textContent).toContain(
     "This stage needs checking before analysis can continue",
   );
-  expect(markup).not.toContain("Unlimited testing");
-  expect(markup).not.toContain("12.4 MB");
-  expect(markup).not.toContain('aria-current="step"');
+  expect(stepState("C4")).toBe("attention");
+  expect(stepStatus("C4")).toBe("Paused · needs attention");
+  expect(host.textContent).toContain("The completed transcript stays attached");
+  expect(host.querySelector("details")).toBeNull();
+  expect(
+    host.querySelector('[role="group"][aria-label="Call actions"]')
+      ?.textContent,
+  ).toContain("Check status");
+  expect(host.textContent).not.toContain("You can leave this page");
 });
 
-it("puts the confirmed status and recovery actions before stage and file details", () => {
-  const markup = renderToStaticMarkup(
-    <AcquisitionProcessingPanel
-      stageRows={[
-        { stage: "C2", state: "queued", label: "Queued" },
-        { stage: "C4", state: null, label: "Not started" },
-        { stage: "C5", state: null, label: "Not started" },
-      ]}
-      statusText="Ready to start"
-      waitingForApproval
-      accepted={false}
-      fileName="Synthetic full recording filename.m4a"
-    >
-      <button type="button">Check status</button>
-      <Link href="/?call=synthetic-id">This call’s link</Link>
-      <button type="button">Start analysis</button>
-    </AcquisitionProcessingPanel>,
+it("falls back to the task rows on a server without a plan for the call", async () => {
+  fetchMock.mockImplementation(async () =>
+    Response.json({ detail: "Not found" }, { status: 404 }),
   );
-
-  expect(markup).toContain(">Ready to analyse</h2>");
-  expect(markup).not.toContain(">Processing your call</h2>");
-  const latestStatus = markup.indexOf("Ready to start");
-  const guidance = markup.indexOf("Start analysis here");
-  const checkStatus = markup.indexOf("Check status");
-  const callLink = markup.indexOf("This call’s link");
-  const recoveryAction = markup.indexOf(">Start analysis</button>");
-  const stageTrail = markup.indexOf('aria-label="Processing stages"');
-  const fileDetails = markup.indexOf(">Uploaded file</h3>");
-  expect(latestStatus).toBeGreaterThan(-1);
-  expect(guidance).toBeGreaterThan(latestStatus);
-  expect(checkStatus).toBeGreaterThan(guidance);
-  expect(callLink).toBeGreaterThan(checkStatus);
-  expect(recoveryAction).toBeGreaterThan(callLink);
-  expect(stageTrail).toBeGreaterThan(recoveryAction);
-  expect(fileDetails).toBeGreaterThan(stageTrail);
-  expect(markup).toContain("Synthetic full recording filename.m4a");
-  expect(markup.match(/>Start analysis<\/button>/g)).toHaveLength(1);
+  await mount({
+    stageRows: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "running" },
+    ],
+  });
+  expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
+    "done",
+    "active",
+    "waiting",
+  ]);
+  const calls = fetchMock.mock.calls.length;
+  await poll();
+  expect(fetchMock.mock.calls.length).toBe(calls);
 });
 
-it("keeps paused C5 recovery actions and the uploaded-file card in distinct flow sections", () => {
-  const markup = renderToStaticMarkup(
-    <AcquisitionProcessingPanel
-      stageRows={[
-        { stage: "C2", state: "completed", label: "Complete" },
-        { stage: "C4", state: "completed", label: "Complete" },
-        { stage: "C5", state: "uncertain", label: "Paused · needs attention" },
-      ]}
-      statusText="Analysis paused"
-      paused
-      fileName="Discovery call.m4a"
-      fileMeta="42 min · 28.4 MB"
-      submissionId="call-c5"
-      progress={{
-        state: "held",
-        local_state: "completed",
-        failure_code: null,
-        has_report: false,
-        automatic_progression: true,
-        stages: [
-          { stage: "C2", state: "completed" },
-          { stage: "C4", state: "completed" },
-          { stage: "C5", state: "uncertain" },
-        ],
-      }}
-    >
-      <button type="button">Check status</button>
-      <button type="button">Review and continue analysis</button>
-    </AcquisitionProcessingPanel>,
-  );
-
-  expect(markup).toContain(
-    'aria-label="Writing your coaching report: Paused · needs attention"',
-  );
-  expect(markup).toContain("Uploaded file");
-  expect(markup).toContain("Discovery call.m4a");
-  expect(markup).toContain("Check status");
-  expect(markup).toContain("Review and continue analysis");
-  expect(markup).toContain('role="group" aria-label="Recovery actions"');
-  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
-    markup.indexOf("Uploaded file"),
-  );
-  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
-    markup.indexOf("Review and continue analysis"),
-  );
-});
-
-it("renders a static fixture with no live-call timer, saved-work claim, or action", () => {
+it("renders a static example with no live claim, read or action", () => {
   const markup = renderToStaticMarkup(
     <AcquisitionProcessingPanel
       staticPreview
-      stageRows={[
-        { stage: "C2", state: "completed", label: "Complete" },
-        { stage: "C4", state: "running", label: "In progress" },
-      ]}
-      statusText="Checking the conversation"
-      submissionId="00000000-0000-4000-8000-000000000001"
-      progress={{
-        state: "active",
-        local_state: "completed",
-        failure_code: null,
-        has_report: false,
-        automatic_progression: true,
-        stages: [
-          { stage: "C2", state: "completed" },
-          { stage: "C4", state: "running" },
-        ],
-      }}
+      stageRows={[{ stage: "C2", state: "completed" }]}
+      statusText="Example"
       fileName="Example call.wav"
     >
       <button type="button">Check status</button>
@@ -182,11 +236,7 @@ it("renders a static fixture with no live-call timer, saved-work claim, or actio
   );
   expect(markup).toContain("Example processing state");
   expect(markup).toContain("No call was uploaded or analysed");
-  expect(markup).toContain("Example audio");
-  expect(markup).toContain('data-animated="false"');
-  expect(markup).toContain('data-fixture="true"');
-  expect(markup).not.toContain("LAST CONFIRMED STATUS");
-  expect(markup).not.toContain("Uploaded file");
-  expect(markup).not.toContain("Your recording is saved");
   expect(markup).not.toContain("Check status");
+  expect(markup).not.toContain("You can leave this page");
+  expect(fetchMock).not.toHaveBeenCalled();
 });

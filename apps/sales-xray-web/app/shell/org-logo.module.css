@@ -1,0 +1,12 @@
+/* The logo fills its tile edge to edge; the tile's own radius clips it. A
+   quiet surface sits behind transparent logos, in light and dark. */
+.logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lx-surface);
+  outline: 1px solid var(--lx-line);
+  outline-offset: -1px;
+  object-fit: cover;
+}

@@ -42,6 +42,9 @@ import {
   type DocumentReportData,
 } from "./report-document-data";
 import { ReportDocument } from "./report-document";
+import { reportScreenPanels } from "./report-pillar-screen";
+import type { ReportEvidence } from "./report-contract";
+import type { ContextualSourcePlayback } from "./source-playback-context";
 
 type View = "reading" | "tabs" | "document";
 type TextSize = "100" | "112.5" | "125";
@@ -488,11 +491,15 @@ function panelsForView(panels: ReportPanel[], view: View) {
 
 export function ReportModes({
   label = "Report sections",
-  panels,
+  panels: suppliedPanels,
   boundCallId,
   lightSurface = true,
   documentData,
   initialView,
+  onSelectEvidence,
+  onSelectContextualPlayback,
+  prospectControls,
+  structure = "custom",
 }: {
   label?: string;
   initialView?: View;
@@ -503,7 +510,28 @@ export function ReportModes({
   boundCallId?: string;
   /** Optional custom document report data */
   documentData?: DocumentReportData;
+  onSelectEvidence?: (evidence: ReportEvidence, title: string) => void;
+  onSelectContextualPlayback?: (
+    playback: ContextualSourcePlayback,
+    title: string,
+  ) => void;
+  structure?: "custom" | "pillars";
+  prospectControls?: ReactNode;
 }) {
+  const panels =
+    structure === "pillars" && documentData?.report
+      ? [
+          ...reportScreenPanels(
+            documentData,
+            onSelectEvidence,
+            onSelectContextualPlayback,
+            prospectControls,
+          ),
+          ...suppliedPanels.filter(
+            (panel) => panel.id === "transcript" || panel.id === "raw-data",
+          ),
+        ]
+      : suppliedPanels;
   const id = useId();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const navRowRef = useRef<HTMLDivElement | null>(null);
@@ -1052,6 +1080,7 @@ export function ReportModes({
       ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
+      data-report-structure={structure}
       data-lx-surface={
         lightSurface || view === "document" ? "light" : undefined
       }

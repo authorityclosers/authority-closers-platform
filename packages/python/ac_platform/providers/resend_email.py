@@ -305,6 +305,44 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "organisation-invitation":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError(
+                "organisation invitation has the wrong communication class"
+            )
+        organisation = _required_text(message.variables, "organisation_name", maximum=80)
+        safe_organisation = html.escape(organisation)
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        return RenderedEmail(
+            subject="Organisation invitation — Authority Closers",
+            text=(
+                f"Hi {first_name},\n\nYou’re invited to join {organisation} on Sales Xray. "
+                f"Sign in with this email address, then review and accept the invitation.\n\n"
+                f"Review invitation:\n{link}\n\nThis invitation expires {expires}. "
+                "The email link alone does not grant membership. If you were not expecting "
+                "this invitation, you can ignore it."
+            ),
+            html=_email_layout(
+                preheader="Review and accept your organisation invitation.",
+                eyebrow="Organisation invitation",
+                heading="You’re invited to join an organisation.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    f"You’re invited to join <strong>{safe_organisation}</strong> on Sales Xray.",
+                    "Sign in with this email address, then review and accept the invitation.",
+                    f"This invitation expires on <strong>{html.escape(expires)}</strong>.",
+                ),
+                action_label="Review invitation",
+                action_link=safe_link,
+                security_note=(
+                    "The link alone does not grant membership. If you were not expecting "
+                    "this invitation, you can ignore it."
+                ),
+            ),
+        )
+
     if message.template == "sales-xray-review-invitation":
         if message.communication_class != "verification_security":
             raise PermanentProviderError(

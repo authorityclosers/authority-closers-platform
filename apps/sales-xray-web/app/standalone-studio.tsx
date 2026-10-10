@@ -19,6 +19,8 @@ import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
+import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
+import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -662,7 +664,14 @@ function StandaloneStudioView({
             loading
             active={activeFor(pathname)}
           >
-            <PageSkeleton variant={skeletonVariant(pathname)} />
+            {/* The page's own skeleton where it has one, so nothing moves. */}
+            {pathname === "/organisation" ? (
+              <OrganisationPageSkeleton />
+            ) : pathname === "/dashboard" ? (
+              <DashboardSkeleton />
+            ) : (
+              <PageSkeleton variant={skeletonVariant(pathname)} />
+            )}
           </AcquisitionShell>
           {view.kind === "unavailable" ? (
             <ConnectionNotice

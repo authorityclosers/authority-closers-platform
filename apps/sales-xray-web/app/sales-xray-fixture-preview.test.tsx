@@ -82,7 +82,7 @@ it("mounts the real static processing panel after local health with no operation
   ).not.toBeNull();
   expect(
     container.querySelector('[data-stage="C4"]')?.getAttribute("data-state"),
-  ).toBe("running");
+  ).toBe("active");
   expect(container.textContent).toContain("Example processing state");
   expect(container.textContent).toContain("No call was uploaded or analysed");
   const rail = container.querySelector(

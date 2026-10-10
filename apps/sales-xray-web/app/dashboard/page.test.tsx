@@ -72,6 +72,8 @@ it("skips all dashboard reads for guests and uses the existing sign-in action", 
   expect(fetchMock).not.toHaveBeenCalled();
   expect(host.textContent).toContain("Sign in to see your dashboard");
   expect(host.textContent).not.toContain("Couldn't load");
+  // Signed out, this is the public landing ("/" redirects here): the site's
+  // footer stays. Signed-in pages never show it (owner, 10 Oct).
   const policyLinks = host.querySelectorAll<HTMLAnchorElement>(
     'nav[aria-label="Sales Xray policy pages"] a',
   );
@@ -92,6 +94,9 @@ it("skips all dashboard reads for guests and uses the existing sign-in action", 
 it("starts the four account reads after sign-in and preserves missing-route errors", async () => {
   await renderPage(false);
   await renderPage(true);
+  expect(
+    host.querySelector('nav[aria-label="Sales Xray policy pages"]'),
+  ).toBeNull();
   expect(fetchMock.mock.calls.map(([path]) => path).sort()).toEqual(
     [
       "/submissions/summary",

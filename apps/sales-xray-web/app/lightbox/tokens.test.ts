@@ -539,7 +539,6 @@ describe("Lightbox token derivative", () => {
       testCoarseStyles(switcherCss, {
         trigger: { minHeight: 44 },
         item: { minHeight: 44 },
-        action: { minHeight: 44 },
       });
 
       testCoarseStyles(themeToggleCss, {

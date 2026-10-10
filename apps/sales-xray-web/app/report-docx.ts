@@ -14,7 +14,6 @@ import {
   Document,
   Footer,
   HeightRule,
-  Packer,
   PageNumber,
   Paragraph,
   ShadingType,
@@ -34,6 +33,7 @@ import type {
   Transcript,
 } from "./report-contract";
 import type { DocumentReportData } from "./report-document-data";
+import { buildPillarReportDocx } from "./report-pillar-docx";
 
 export { DOCUMENT_CHAPTERS } from "./report-document-data";
 
@@ -1652,7 +1652,7 @@ export function buildReportDocument(input: ReportDocxInput) {
 
 /** The one file the app previews and downloads. */
 export function buildReportDocx(input: ReportDocxInput): Promise<Blob> {
-  return Packer.toBlob(buildReportDocument(input));
+  return buildPillarReportDocx(input);
 }
 
 export function documentInput(data: DocumentReportData): ReportDocxInput {

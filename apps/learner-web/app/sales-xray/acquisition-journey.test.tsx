@@ -173,6 +173,9 @@ beforeEach(() => {
       }
       if (path.endsWith("/plan/quote")) return json(plan, 201);
       if (path.endsWith("/plan")) {
+        // Reading the plan (the progress panel does, for its live stage)
+        // never accepts it; only the acceptance POST does.
+        if (init.method !== "POST") return json({}, 404);
         accepted = true;
         return json(
           { ...plan, accepted: true, state: "active", current_stage: "C2" },
@@ -280,7 +283,11 @@ it("runs the actual learner upload and report journey under one Academy main and
       .slice(0, sourceUploadIndex)
       .some(({ path }) => path.endsWith(`/submissions/${submissionId}`)),
   ).toBe(true);
-  expect(requests.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
+  expect(
+    requests.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
   expect(requests.filter(({ path }) => path.endsWith("/session"))).toHaveLength(
     1,
   );

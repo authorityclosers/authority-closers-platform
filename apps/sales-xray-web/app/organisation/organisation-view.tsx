@@ -32,8 +32,17 @@ import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
+import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
+import { useBranding } from "../shell/branding-store";
+import { OrgLogo } from "../shell/org-logo";
+import {
+  CALLS_SHOWN,
+  OrganisationSkeleton,
+  SkeletonBlocks,
+} from "./organisation-skeleton";
 import { CompanyDetailsPanel } from "./company-details-panel";
+import { CompanyLogoPanel } from "./company-logo-panel";
 import {
   addMember,
   changeRole,
@@ -86,7 +95,6 @@ const ROLE_LABEL: Record<OrgRole, string> = {
   admin: "Admin",
   member: "Member",
 };
-const CALLS_SHOWN = 8;
 const WEEK_MS = 7 * 86_400_000;
 const ORG_NOTICE = "organisation-load";
 const ACTION_NOTICE = "organisation-action";
@@ -170,6 +178,7 @@ function initialTab(): Tab {
 export function OrganisationView() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
+  const branding = useBranding();
   const [base, setBase] = useState<Base>({ status: "loading" });
   const [baseAttempt, setBaseAttempt] = useState(0);
   const [tab, setTabState] = useState<Tab>(initialTab);
@@ -312,8 +321,10 @@ export function OrganisationView() {
       mobileFit={false}
     >
       <div className={styles.page} data-organisation-view>
-        {base.status === "loading" || !authenticated ? (
-          <PageSkeleton />
+        {access?.authenticated === false ? (
+          <SignedOut onSignIn={access.requestAccountSignIn} />
+        ) : base.status === "loading" || !authenticated ? (
+          <OrganisationSkeleton />
         ) : base.status === "error" ? (
           <section className={styles.state} role="alert">
             <span className={styles.stateIcon} aria-hidden="true">
@@ -343,7 +354,7 @@ export function OrganisationView() {
           <>
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
-                {initials(name)}
+                <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />
               </span>
               <div className={styles.headerCopy}>
                 <h1>{name}</h1>
@@ -393,54 +404,71 @@ export function OrganisationView() {
                   retry={reloadActivity}
                   analysed={
                     canManage && tenantId !== null ? (
-                      <ReceiptActivitySection
-                        key={tenantId}
-                        members={
-                          members.status === "ready"
-                            ? members.value.filter(
-                                (member) => member.status === "active",
-                              )
-                            : null
-                        }
-                        onAccessLost={refreshAccess}
-                      />
+                      <SectionBoundary name="Calls analysed">
+                        <ReceiptActivitySection
+                          key={tenantId}
+                          members={
+                            members.status === "ready"
+                              ? members.value.filter(
+                                  (member) => member.status === "active",
+                                )
+                              : null
+                          }
+                          onAccessLost={refreshAccess}
+                        />
+                      </SectionBoundary>
                     ) : null
                   }
                 />
               )}
 
               {tab === "members" && (
-                <MembersPanel
-                  members={members}
-                  reload={() => {
-                    reloadMembers();
-                    reloadOrg();
-                  }}
-                  canManage={canManage}
-                  isOwner={live && myRole === "owner"}
-                  yourPersonId={access?.context?.personId ?? null}
-                  onMissing={() => setMissing(true)}
-                />
+                <SectionBoundary name="Members">
+                  <MembersPanel
+                    members={members}
+                    reload={() => {
+                      reloadMembers();
+                      reloadOrg();
+                    }}
+                    canManage={canManage}
+                    isOwner={live && myRole === "owner"}
+                    yourPersonId={access?.context?.personId ?? null}
+                    onMissing={() => setMissing(true)}
+                  />
+                </SectionBoundary>
               )}
 
               {tab === "company" && (
-                <CompanyPanel
-                  key={`${tenantId}:${org.status}`}
-                  org={live ? org.value : null}
-                  isOwner={live && myRole === "owner"}
-                  reload={reloadOrg}
-                  details={
-                    <CompanyDetailsPanel
-                      key={`${access?.context?.sessionId}:${tenantId}`}
-                      tenantId={tenantId}
-                      role={myRole}
-                      authenticated={authenticated}
-                      refresh={refreshOrganisation}
-                      onAccessLost={refreshAccess}
-                      onPersonal={showPersonal}
-                    />
-                  }
-                />
+                <SectionBoundary name="Company">
+                  <CompanyPanel
+                    key={`${tenantId}:${org.status}`}
+                    org={live ? org.value : null}
+                    isOwner={live && myRole === "owner"}
+                    reload={reloadOrg}
+                    details={
+                      <>
+                        <SectionBoundary name="Logo">
+                          <CompanyLogoPanel
+                            key={`${access?.context?.sessionId}:${tenantId}`}
+                            name={name}
+                            canEdit={canManage}
+                          />
+                        </SectionBoundary>
+                        <SectionBoundary name="Company details">
+                          <CompanyDetailsPanel
+                            key={`${access?.context?.sessionId}:${tenantId}`}
+                            tenantId={tenantId}
+                            role={myRole}
+                            authenticated={authenticated}
+                            refresh={refreshOrganisation}
+                            onAccessLost={refreshAccess}
+                            onPersonal={showPersonal}
+                          />
+                        </SectionBoundary>
+                      </>
+                    }
+                  />
+                </SectionBoundary>
               )}
             </div>
           </>
@@ -450,55 +478,27 @@ export function OrganisationView() {
   );
 }
 
-function PageSkeleton() {
+/** A signed-out visitor is told what this page is and how to get in. */
+function SignedOut({ onSignIn }: { onSignIn?: () => void }) {
   return (
-    <div className={styles.skeleton} aria-label="Loading organisation">
-      <div className={styles.skeletonHeader}>
-        <span className={styles.skeletonTile} />
-        <span className={styles.skeletonLines}>
-          <i />
-          <i />
-        </span>
-      </div>
-      <span className={styles.skeletonTabs} />
-      <SkeletonBlocks />
-    </div>
-  );
-}
-
-/** The loaded Overview's own surfaces with placeholder lines, so nothing jumps. */
-function SkeletonBlocks({ team = true }: { team?: boolean }) {
-  const lines = (count: number) =>
-    Array.from({ length: count }, (_, index) => (
-      <span key={index} className={styles.boneRow}>
-        <i className={styles.bone} data-w="name" />
-        <i className={styles.bone} data-w="meta" />
+    <section className={styles.state}>
+      <span className={styles.stateIcon} aria-hidden="true">
+        <Building2 size={20} />
       </span>
-    ));
-  return (
-    <>
-      <div
-        className={styles.strip}
-        data-columns={team ? 4 : 3}
-        aria-hidden="true"
+      <h1>Sign in to see your organisation</h1>
+      <p>Your team, its calls and their reports appear after you sign in.</p>
+      <Link
+        className={styles.primary}
+        href="/login"
+        onClick={(event) => {
+          if (!onSignIn) return;
+          event.preventDefault();
+          onSignIn();
+        }}
       >
-        {Array.from({ length: team ? 4 : 3 }, (_, index) => (
-          <span key={index} className={styles.kpi}>
-            <i className={styles.bone} data-w="label" />
-            <i className={styles.bone} data-w="value" />
-            <i className={styles.bone} data-w="context" />
-          </span>
-        ))}
-      </div>
-      <div
-        className={styles.columns}
-        data-team={team ? "" : undefined}
-        aria-hidden="true"
-      >
-        <div className={styles.surface}>{lines(CALLS_SHOWN)}</div>
-        {team ? <div className={styles.surface}>{lines(4)}</div> : null}
-      </div>
-    </>
+        Sign in
+      </Link>
+    </section>
   );
 }
 
@@ -524,6 +524,12 @@ function PersonalState({ organisations }: { organisations: Workspace[] }) {
 }
 
 type ActivityCall = OrgActivity["calls"][number];
+
+/** Calls in the period: the server's daily counts, else the calls listed. */
+const totalCalls = ({ perDay, calls }: OrgActivity) =>
+  perDay.length > 0
+    ? perDay.reduce((sum, day) => sum + day.calls, 0)
+    : calls.length;
 
 /** Every figure comes from the same permitted calls that the table lists. */
 function summarise(activity: OrgActivity) {
@@ -622,7 +628,12 @@ function OverviewPanel({
 }) {
   if (activity.status === "loading")
     return (
-      <div className={styles.skeleton} aria-label="Loading activity">
+      <div
+        className={styles.skeleton}
+        role="status"
+        aria-busy="true"
+        aria-label="Loading activity"
+      >
         <SkeletonBlocks team={team} />
       </div>
     );
@@ -647,62 +658,90 @@ function OverviewPanel({
       </div>
     );
 
-  const totals = summarise(activity.value);
   return (
     <div className={styles.overview}>
-      <section className={styles.section} aria-labelledby="org-period">
-        <div className={styles.sectionHead}>
-          <h2 id="org-period">Last 30 days</h2>
-          <span>
-            {team
-              ? "Everyone in the organisation"
-              : "Your calls in this organisation"}
-          </span>
-        </div>
-        <dl className={styles.strip} data-columns={team ? 4 : 3}>
-          <Kpi
-            label="Calls"
-            value={totals.calls}
-            context={totals.calls === 1 ? "call saved" : "calls saved"}
-            series={totals.series}
-          />
-          <Kpi
-            label="Minutes recorded"
-            value={minutes(totals.minutes)}
-            context="length of those calls"
-          />
-          <Kpi
-            label="Reports ready"
-            value={totals.reports}
-            context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
-          />
-          {team ? (
-            <Kpi
-              label="People with calls"
-              value={totals.people}
-              context={
-                memberCount !== null
-                  ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
-                  : "members"
-              }
-            />
-          ) : null}
-        </dl>
-      </section>
-
-      <div className={styles.columns} data-team={team ? "" : undefined}>
-        <CallsTable
-          calls={activity.value.calls}
-          total={totals.calls}
+      <SectionBoundary name="Last 30 days">
+        <PeriodStrip
+          activity={activity.value}
+          memberCount={memberCount}
           team={team}
         />
+      </SectionBoundary>
+
+      <div className={styles.columns} data-team={team ? "" : undefined}>
+        <SectionBoundary name={team ? "Team calls" : "Your calls"}>
+          <CallsTable
+            calls={activity.value.calls}
+            total={totalCalls(activity.value)}
+            team={team}
+          />
+        </SectionBoundary>
         {team ? (
-          <PeopleActivity activity={activity.value} members={members} />
+          <SectionBoundary name="Calls by person">
+            <PeopleActivity activity={activity.value} members={members} />
+          </SectionBoundary>
         ) : null}
       </div>
-      {team ? <TeamPatternsSection calls={activity.value.calls} /> : null}
+      {team ? (
+        <SectionBoundary name="What keeps coming up">
+          <TeamPatternsSection calls={activity.value.calls} />
+        </SectionBoundary>
+      ) : null}
       {analysed}
     </div>
+  );
+}
+
+function PeriodStrip({
+  activity,
+  memberCount,
+  team,
+}: {
+  activity: OrgActivity;
+  memberCount: number | null;
+  team: boolean;
+}) {
+  const totals = summarise(activity);
+  return (
+    <section className={styles.section} aria-labelledby="org-period">
+      <div className={styles.sectionHead}>
+        <h2 id="org-period">Last 30 days</h2>
+        <span>
+          {team
+            ? "Everyone in the organisation"
+            : "Your calls in this organisation"}
+        </span>
+      </div>
+      <dl className={styles.strip} data-columns={team ? 4 : 3}>
+        <Kpi
+          label="Calls"
+          value={totals.calls}
+          context={totals.calls === 1 ? "call saved" : "calls saved"}
+          series={totals.series}
+        />
+        <Kpi
+          label="Minutes recorded"
+          value={minutes(totals.minutes)}
+          context="length of those calls"
+        />
+        <Kpi
+          label="Reports ready"
+          value={totals.reports}
+          context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
+        />
+        {team ? (
+          <Kpi
+            label="People with calls"
+            value={totals.people}
+            context={
+              memberCount !== null
+                ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
+                : "members"
+            }
+          />
+        ) : null}
+      </dl>
+    </section>
   );
 }
 
@@ -1376,7 +1415,12 @@ function MembersPanel({
             );
           })}
           {members.status === "loading" ? (
-            <div className={styles.rowSkeleton} aria-label="Loading members">
+            <div
+              className={styles.rowSkeleton}
+              role="status"
+              aria-busy="true"
+              aria-label="Loading members"
+            >
               <span />
               <span />
               <span />

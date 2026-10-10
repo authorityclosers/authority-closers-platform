@@ -116,23 +116,25 @@ export function ReportDocument({
         )}
         <span>A4 · {textSize}% zoom</span>
       </div>
-      <p role={failed ? "alert" : "status"} hidden={Boolean(ready)}>
-        {failed
-          ? "The document could not be prepared. Please try again."
-          : "Preparing your document…"}
-        {failed && (
-          <button
-            type="button"
-            className={styles.retry}
-            onClick={() => {
-              setResult(undefined);
-              setAttempt((value) => value + 1);
-            }}
-          >
-            <RefreshCw aria-hidden="true" /> Try again
-          </button>
-        )}
-      </p>
+      {!ready && (
+        <p role={failed ? "alert" : "status"}>
+          {failed
+            ? "The document could not be prepared. Please try again."
+            : "Preparing your document…"}
+          {failed && (
+            <button
+              type="button"
+              className={styles.retry}
+              onClick={() => {
+                setResult(undefined);
+                setAttempt((value) => value + 1);
+              }}
+            >
+              <RefreshCw aria-hidden="true" /> Try again
+            </button>
+          )}
+        </p>
+      )}
       <div
         ref={viewport}
         className={styles.scroll}

@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.organisations.invitations import active_pending_invites
 from ac_platform.tenancy.models import Membership, OrganisationInvite
 
 
@@ -86,16 +87,7 @@ async def organisation_seats(database: AsyncSession, tenant_id: UUID) -> dict[st
         )
         or 0
     )
-    pending = (
-        await database.scalar(
-            select(func.count())
-            .select_from(OrganisationInvite)
-            .where(
-                OrganisationInvite.tenant_id == tenant_id, OrganisationInvite.status == "pending"
-            )
-        )
-        or 0
-    )
+    pending = len(await active_pending_invites(database, tenant_id=tenant_id))
     paid = await paid_seats(database, tenant_id, datetime.now(UTC))
     return dict(
         paid_seats=paid,
@@ -163,7 +155,7 @@ async def member_rows(
         select(AuditEvent)
         .where(
             AuditEvent.tenant_id == tenant_id,
-            AuditEvent.action == "organisation.member_added",
+            AuditEvent.action.in_(["organisation.member_added", "organisation.member_joined"]),
             AuditEvent.payload["before"]["status"].as_string() == "inactive",
         )
         .order_by(AuditEvent.sequence_no)
@@ -213,14 +205,7 @@ async def member_rows(
     if person_id is None:
         rows.extend(
             invite_row(invite)
-            for invite in await database.scalars(
-                select(OrganisationInvite)
-                .where(
-                    OrganisationInvite.tenant_id == tenant_id,
-                    OrganisationInvite.status == "pending",
-                )
-                .order_by(OrganisationInvite.email_normalized)
-            )
+            for invite in await active_pending_invites(database, tenant_id=tenant_id)
         )
     return rows
 
