@@ -2436,6 +2436,7 @@ def test_account_duplicate_upload_reuses_uncertain_retained_c2_without_provider_
                     assert source_plan_row.progress == {
                         "current_stage": "C2",
                         "failure_code": "stage_uncertain",
+                        "minute_outcome_checked": True,
                     }
                     source_reservations = {
                         item["reservation_id"]: item

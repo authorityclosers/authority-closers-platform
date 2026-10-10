@@ -157,6 +157,12 @@ async def _finish(database, source, monkeypatch, *, outcome="follow_up"):
         "ac_platform.conversation_intelligence.guest_ownership.admit_processing_actor",
         AsyncMock(return_value=usage),
     )
+    # This fixture deliberately stubs source ownership. Customer delivery's
+    # exact owner/journal boundary is exercised by the report-minute PG suite.
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.report_minutes.ReportMinutes.deliver",
+        AsyncMock(),
+    )
     job = Job(
         tenant_id=state.tenant_id, kind="synthetic-metrics", dedupe_key=uuid4().hex, payload={}
     )

@@ -6,12 +6,13 @@ import subprocess
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import MetaData, Table, event, select, text, update
+from sqlalchemy import MetaData, Table, event, literal, select, text, update
 from sqlalchemy.orm import registry
 from starlette.requests import Request
 
@@ -555,6 +556,16 @@ def test_populated_0076_upgrade_preserves_identity_history_and_model(
         with monkeypatch.context() as patch:
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
+            # Populate the actual 0076 schema before its journal exists. These
+            # scoped legacy projections are removed before the real upgrade.
+            patch.setattr(
+                "ac_platform.conversation_intelligence.report_minutes.ReportMinutes.latest",
+                AsyncMock(return_value=None),
+            )
+            patch.setattr(
+                "ac_platform.conversation_intelligence.acquisition_usage.report_minute_value",
+                lambda *args, **kwargs: literal(None),
+            )
             setup, identifier, preserved = run(populate())
         if not invocation:
             pytest.fail("The isolated parent migration was not captured.", pytrace=False)
