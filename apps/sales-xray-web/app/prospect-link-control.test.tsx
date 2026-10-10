@@ -350,3 +350,49 @@ it("keeps a person's edit when the speaker map arrives later", async () => {
     "Name heard in this call: Fictional Mehta",
   );
 });
+
+it("creates the detected fallback once per load and confirms only after one explicit tap", async () => {
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith(`/${prospect}/confirm`)) {
+      expect(JSON.parse(init!.body as string)).toEqual({
+        expected_revision: 2,
+      });
+      return new Response(
+        JSON.stringify({
+          schema: "ac.sales-xray.prospect-confirmation/1",
+          prospect_id: prospect,
+          revision: 3,
+          confirmed_at: "2026-10-10T08:00:00Z",
+        }),
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        ...page,
+        membership: { prospect_id: prospect, membership_id: membership },
+        linked_prospect: {
+          name: "Name not heard",
+          origin: "detected",
+          revision: 2,
+          confirmed_at: null,
+        },
+        suggestions: [],
+      }),
+    );
+  });
+  await render(access, { autoDetect: true });
+  expect(
+    fetcher.mock.calls.some(
+      ([url, init]) => url.endsWith("/detect") && init.method === "POST",
+    ),
+  ).toBe(true);
+  expect(host.textContent).toContain("Detected prospect · not yet confirmed");
+  expect(host.textContent).not.toContain("Confirmed link.");
+  expect(
+    fetcher.mock.calls.some(([url]) => url.endsWith(`/${prospect}/confirm`)),
+  ).toBe(false);
+  await click("Confirm prospect");
+  expect(
+    fetcher.mock.calls.filter(([url]) => url.endsWith(`/${prospect}/confirm`)),
+  ).toHaveLength(1);
+});

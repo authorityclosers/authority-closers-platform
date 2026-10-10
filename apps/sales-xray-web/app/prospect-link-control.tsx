@@ -9,7 +9,12 @@ import type { ReportEvidence, Transcript } from "./report-contract";
 import styles from "./report-kit.module.css";
 import factStyles from "./key-facts.module.css";
 
-import { PROSPECTS_API, UUID_RE } from "./prospects-client";
+import {
+  confirmDetectedProspect,
+  PROSPECTS_API,
+  UUID_RE,
+} from "./prospects-client";
+import { dismissNotice, notify } from "./notice-center";
 import { useWorkspaceAccess } from "./workspace-access";
 
 type Membership = { membership_id: string; prospect_id: string };
@@ -38,6 +43,12 @@ type Page = {
   membership: Membership | null;
   suggestions: Suggestion[];
   next_offset: number | null;
+  linked_prospect?: {
+    name: string;
+    origin: "person" | "detected";
+    confirmed_at: string | null;
+    revision: number;
+  } | null;
 };
 
 async function request(
@@ -106,6 +117,19 @@ async function request(
   ) {
     throw new Error("Prospect suggestions could not be verified.");
   }
+  if (
+    page.linked_prospect !== undefined &&
+    page.linked_prospect !== null &&
+    (!page.membership ||
+      typeof page.linked_prospect.name !== "string" ||
+      !["person", "detected"].includes(page.linked_prospect.origin) ||
+      !Number.isSafeInteger(page.linked_prospect.revision) ||
+      page.linked_prospect.revision < 1 ||
+      (page.linked_prospect.confirmed_at !== null &&
+        (typeof page.linked_prospect.confirmed_at !== "string" ||
+          !Number.isFinite(Date.parse(page.linked_prospect.confirmed_at)))))
+  )
+    throw new Error("The linked prospect could not be verified.");
   return body
     ? { membership: page.membership, suggestions: [], next_offset: null }
     : page;
@@ -117,6 +141,7 @@ type Props = {
   onSelectEvidence?: (evidence: ReportEvidence, title: string) => void;
   /** Reserved for Card D2's server-backed detected state. */
   statusSlot?: ReactNode;
+  autoDetect?: boolean;
 };
 type HeardName = { name: string; evidence: ReportEvidence[] };
 
@@ -191,6 +216,7 @@ function Control({
   transcript,
   onSelectEvidence,
   statusSlot,
+  autoDetect = false,
 }: Props) {
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -217,7 +243,10 @@ function Control({
   }, [submissionId, transcript]);
   useEffect(() => {
     const load = new AbortController();
-    void request(submissionId, `suggestions?offset=${offset}`, load.signal)
+    void (async () => {
+      if (autoDetect) await request(submissionId, "detect", load.signal, {});
+      return request(submissionId, `suggestions?offset=${offset}`, load.signal);
+    })()
       .then((result) => {
         if (!load.signal.aborted) {
           setPage(result);
@@ -231,7 +260,7 @@ function Control({
           );
       });
     return () => load.abort();
-  }, [submissionId, offset, attempt]);
+  }, [submissionId, offset, attempt, autoDetect]);
 
   async function save(action: "create" | "confirm", body: object) {
     if (busy) return;
@@ -301,12 +330,53 @@ function Control({
       {!page && !error && <p role="status">Loading prospect links…</p>}
       {page?.membership && (
         <p>
-          Confirmed link.{" "}
+          {page.linked_prospect?.origin === "detected" &&
+          !page.linked_prospect.confirmed_at
+            ? "Detected prospect · not yet confirmed. "
+            : "Confirmed link. "}
           <Link href={`/prospects/${page.membership.prospect_id}`}>
             Open prospect history
           </Link>
         </p>
       )}
+      {page?.membership &&
+        page.linked_prospect?.origin === "detected" &&
+        !page.linked_prospect.confirmed_at && (
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={busy}
+            onClick={async () => {
+              if (busy || !page.membership || !page.linked_prospect) return;
+              setBusy(true);
+              try {
+                await confirmDetectedProspect(
+                  page.membership.prospect_id,
+                  page.linked_prospect.revision,
+                );
+                dismissNotice("prospect-confirmation");
+                setPage(null);
+                setAttempt((a) => a + 1);
+              } catch (error) {
+                notify({
+                  id: "prospect-confirmation",
+                  tone: "error",
+                  title: "Prospect wasn't confirmed",
+                  message:
+                    error instanceof Error ? error.message : "Try again.",
+                  action: {
+                    label: "Try again",
+                    run: () => setAttempt((a) => a + 1),
+                  },
+                });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Confirming…" : "Confirm prospect"}
+          </button>
+        )}
       {!!page?.suggestions.length && (
         <p>
           These stated details match an earlier call. Confirm only if this is

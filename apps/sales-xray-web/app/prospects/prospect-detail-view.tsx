@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { formatClock } from "../lightbox/time";
@@ -49,13 +49,17 @@ function formatDuration(durationSeconds: number) {
 export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
+  const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}:${prospectId}`;
 
   const [detail, setDetail] = useState<ProspectDetail | null>(null);
+  const [loadedContext, setLoadedContext] = useState<string | null>(null);
   const [calls, setCalls] = useState<ProspectCall[]>([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorContext, setErrorContext] = useState<string | null>(null);
+  const pagination = useRef<AbortController | null>(null);
 
   const [attempt, setAttempt] = useState(0);
 
@@ -71,10 +75,12 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
       .then((data) => {
         if (controller.signal.aborted) return;
         setDetail(data);
+        setLoadedContext(contextKey);
         setCalls(data.calls);
         setNextOffset(data.next_offset);
         setError(null);
         setLoading(false);
+        setLoadingMore(false);
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
@@ -83,13 +89,15 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
             ? err.message
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);
+        setErrorContext(contextKey);
         setLoading(false);
       });
 
     return () => {
       controller.abort();
+      pagination.current?.abort();
     };
-  }, [authenticated, prospectId, attempt]);
+  }, [authenticated, prospectId, attempt, contextKey]);
 
   const handleRetry = () => {
     setLoading(true);
@@ -100,28 +108,37 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const handleLoadMoreCalls = () => {
     if (nextOffset === null || loadingMore) return;
     setLoadingMore(true);
+    const controller = new AbortController();
+    pagination.current = controller;
     void fetchProspectDetail({
       prospectId,
       offset: nextOffset,
+      signal: controller.signal,
     })
       .then((data) => {
+        if (controller.signal.aborted) return;
         setCalls((prev) => [...prev, ...data.calls]);
         setNextOffset(data.next_offset);
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
         const msg =
           err instanceof Error
             ? err.message
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);
+        setErrorContext(contextKey);
       })
       .finally(() => {
-        setLoadingMore(false);
+        if (!controller.signal.aborted) setLoadingMore(false);
       });
   };
 
-  const prospect = detail?.prospect;
-  const showLoading = authenticated && loading;
+  const prospect = loadedContext === contextKey ? detail?.prospect : undefined;
+  const visibleError = errorContext === contextKey ? error : null;
+  const showLoading =
+    authenticated &&
+    (loading || (loadedContext !== contextKey && !visibleError));
 
   return (
     <AcquisitionShell
@@ -135,9 +152,9 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
           Back to Prospects
         </Link>
 
-        {error ? (
+        {visibleError ? (
           <div className={informationStyles.cornerError} role="alert">
-            <span>{error}</span>
+            <span>{visibleError}</span>
             <button
               type="button"
               className={styles.retryBtn}
@@ -178,6 +195,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
             </div>
 
             <ProspectInformation
+              key={contextKey}
               prospect={prospect}
               calls={calls}
               onSaved={() => setAttempt((a) => a + 1)}

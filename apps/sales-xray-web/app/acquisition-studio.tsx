@@ -3438,6 +3438,7 @@ export function AcquisitionStudio({
                   prospectControls={
                     submission && !embedded ? (
                       <ProspectLinkControl
+                        autoDetect
                         submissionId={submission.id}
                         transcript={result.transcript}
                         onSelectEvidence={seek}
