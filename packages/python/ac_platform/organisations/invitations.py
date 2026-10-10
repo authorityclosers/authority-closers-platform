@@ -2,6 +2,7 @@
 
 Legacy operator invitations have no policy and retain their existing semantics.
 The versioned self-serve policy has a fixed expiry, independent of later defaults.
+New owner-approved operator invitations join at verified sign-in and also expire.
 """
 
 from collections.abc import Sequence
@@ -17,6 +18,7 @@ from ac_platform.kernel.errors import ResourceConflict
 from ac_platform.tenancy.models import OrganisationInvite
 
 INVITATION_POLICY_SCHEMA = "ac.organisation.invitation-policy/1"
+OPERATOR_INVITATION_POLICY_SCHEMA = "ac.organisation.operator-invitation-policy/1"
 INVITATION_LIFETIME = timedelta(days=7)
 
 
@@ -52,8 +54,12 @@ async def invitation_policies(
             if (
                 audit.tenant_id != tenants[invite_id]
                 or not isinstance(policy, dict)
-                or policy.get("schema") != INVITATION_POLICY_SCHEMA
-                or policy.get("explicit_acceptance") is not True
+                or type(policy.get("explicit_acceptance")) is not bool
+                or (policy.get("schema"), policy.get("explicit_acceptance"))
+                not in {
+                    (INVITATION_POLICY_SCHEMA, True),
+                    (OPERATOR_INVITATION_POLICY_SCHEMA, False),
+                }
             ):
                 raise ValueError
             expires_at = datetime.fromisoformat(policy["expires_at"])
@@ -61,7 +67,9 @@ async def invitation_policies(
                 raise ValueError
         except (ValueError, TypeError, KeyError) as error:
             raise ResourceConflict("Invitation policy is unavailable.") from error
-        policies[invite_id] = InvitationPolicy(True, expires_at.astimezone(UTC))
+        policies[invite_id] = InvitationPolicy(
+            policy["explicit_acceptance"], expires_at.astimezone(UTC)
+        )
     return policies
 
 
