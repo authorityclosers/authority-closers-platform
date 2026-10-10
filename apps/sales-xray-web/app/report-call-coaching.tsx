@@ -196,6 +196,7 @@ export function ReportCallCoaching({
       )}
       <div className={styles.links}>
         <Link
+          prefetch={false}
           href={
             focus?.skillId ? `/coaching?focus=${focus.skillId}` : "/coaching"
           }
@@ -204,7 +205,7 @@ export function ReportCallCoaching({
         </Link>
         {!focus &&
           REPORT_SKILLS.map(([id, label]) => (
-            <Link key={id} href={`/coaching?focus=${id}`}>
+            <Link key={id} prefetch={false} href={`/coaching?focus=${id}`}>
               {label}
             </Link>
           ))}
