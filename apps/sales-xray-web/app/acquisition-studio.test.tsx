@@ -1151,7 +1151,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(container.textContent).toContain("The coach’s verdict");
+  expect(container.textContent).toContain("The Big Picture");
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
@@ -1195,7 +1195,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await clickReportSection("Moments");
+  await clickReportSection("What Worked & What Didn't");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 
@@ -3098,12 +3098,12 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
   const reportSections = [
-    "Overview",
-    "Moments",
-    "Prospect",
-    "Next-call plan",
-    "Sales skills",
-    "Call signals",
+    "The Big Picture",
+    "How the Call Played Out",
+    "What Worked & What Didn't",
+    "Moments That Mattered",
+    "Your Skills on This Call",
+    "Where the Deal Stands",
     "Raw data",
   ];
   expect(
@@ -3116,34 +3116,25 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
-  await clickReportSection("Prospect");
+  await clickReportSection("Where the Deal Stands");
   expect(
     container
-      .querySelector('[data-report-mode-section="prospect"]')
+      .querySelector('[data-report-mode-section="facts"]')
       ?.hasAttribute("hidden"),
   ).toBe(false);
-  expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
-  const prospectPanel = container.querySelector(
-    '[data-report-mode-section="prospect"]',
-  )!;
-  expect(prospectPanel.querySelector("[data-prospect-card]")).not.toBeNull();
-  expect(container.querySelectorAll("[data-prospect-card]")).toHaveLength(1);
+  expect(container.querySelector("[data-prospect-snapshot]")).toBeNull();
   expect(
-    prospectPanel
-      .querySelectorAll("[data-prospect-card], [data-prospect-snapshot]")[0]
-      ?.hasAttribute("data-prospect-card"),
-  ).toBe(true);
-  const prospectSource =
-    envelope.report.content.overview.prospect_interpretations[0].source
-      .evidence[0];
-  expect(
-    container.querySelector('[data-prospect-part="verbatim"]')?.textContent,
-  ).toContain(prospectSource.quote);
+    container.querySelector(
+      '[data-report-mode-section="facts"] [data-prospect-card]',
+    ),
+  ).not.toBeNull();
+  expect(container.querySelector('a[href="/prospects"]')).not.toBeNull();
+  const prospectSource = envelope.report.content.strengths[0].evidence[0];
   // The clip shows its time; its accessible name says what it plays.
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        '[data-prospect-part="verbatim"] button[aria-label^="Play source moment"]',
+        `[aria-label="Play source moment, ${spokenClipRange(prospectSource.start_ms, prospectSource.end_ms)}"]`,
       )!
       .click(),
   );
@@ -3152,7 +3143,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
-  await clickReportSection("Next-call plan");
+  await clickReportSection("How the Call Played Out");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).toBe(savedAudio);
@@ -3227,7 +3218,7 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   expect(pause).toHaveBeenCalledOnce();
 
   const contextual = container.querySelector<HTMLButtonElement>(
-    'button[aria-label^="Play with context,"]',
+    'button[aria-label^="Play with context, 00:01 to 00:03"]',
   );
   expect(contextual?.getAttribute("aria-label")).toContain("00:01 to 00:03");
   await act(async () => contextual?.click());

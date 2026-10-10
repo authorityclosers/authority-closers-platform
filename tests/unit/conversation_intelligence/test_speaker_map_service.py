@@ -66,7 +66,12 @@ async def test_read_default_profile_revision_and_error_boundaries(monkeypatch, s
             ConversationNotFound if state == "unavailable" else ConversationConflict
         )("No C2")
     reports = SimpleNamespace(
-        recording=AsyncMock(return_value=(None, object())),
+        recording=AsyncMock(
+            return_value=(
+                SimpleNamespace(usage_id=uuid4(), tenant_id=uuid4(), submission_id=uuid4()),
+                object(),
+            )
+        ),
         render_transcript=render,
         render_report=AsyncMock(side_effect=ConversationNotFound("No report")),
     )

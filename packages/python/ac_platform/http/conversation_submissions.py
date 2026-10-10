@@ -863,6 +863,7 @@ def install_submission_http(
                 submission_id,
                 actor=owner.actor,
                 shared_identity_locks=owner.shared_identity_locks,
+                allow_organisation_read=True,
             )
         except ConversationError as error:
             raise speaker_map_failure(error) from None
@@ -924,7 +925,7 @@ def install_submission_http(
         guard(request, response)
         try:
             envelope = await AcquisitionReports(owner.ownership).report(
-                submission_id, **owner.arguments
+                submission_id, **owner.arguments, allow_organisation_read=True
             )
             document = report_docx_bytes(envelope)
         except ConversationError as error:
@@ -947,7 +948,7 @@ def install_submission_http(
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).transcript(
-            submission_id, **owner.arguments
+            submission_id, **owner.arguments, allow_organisation_read=True
         )
 
     @router.get("/submissions/{submission_id}/waveform")
@@ -955,7 +956,9 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        return await AcquisitionReports(owner.ownership).waveform(submission_id, **owner.arguments)
+        return await AcquisitionReports(owner.ownership).waveform(
+            submission_id, **owner.arguments, allow_organisation_read=True
+        )
 
     @router.delete("/submissions/{submission_id}", status_code=202)
     async def delete_submission(
@@ -1200,7 +1203,7 @@ def install_submission_http(
     ) -> StreamingResponse:
         guard(request, response)
         _scope, recording = await AcquisitionReports(owner.ownership).recording(
-            submission_id, **owner.arguments
+            submission_id, **owner.arguments, allow_organisation_read=True
         )
         ranges = request.headers.getlist("range")
         try:

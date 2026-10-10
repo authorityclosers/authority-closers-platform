@@ -137,7 +137,7 @@ describe("ProspectsListView", () => {
     ).not.toBeNull();
     expect(host.textContent).toContain("No prospects recorded yet");
     expect(host.textContent).toContain(
-      "Open an analysed call’s Prospect tab to save a new prospect",
+      "Open an analysed call’s Where the Deal Stands section to save a new prospect",
     );
     expect(host.textContent).not.toContain("appear here automatically");
   });
@@ -284,18 +284,13 @@ describe("ProspectDetailView", () => {
     });
 
     expect(host.textContent).toContain("Acme Corp Prospect");
-    expect(host.textContent).toContain(
-      "ID: 11111111-1111-4111-8111-111111111111",
-    );
-    expect(host.textContent).toContain("Revision 2");
-    expect(host.textContent).toContain("Missing (using initials)");
-    expect(host.textContent).toContain("No contact details");
-    expect(host.textContent).toContain("No confirmed profile fields");
-    expect(host.textContent).toContain("Unassigned");
-    expect(host.textContent).toContain("No tags");
+    expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
+    expect(host.textContent).toContain("Prospect’s Information");
+    expect(host.textContent).toContain("Ability to investUnknown");
+    expect(host.textContent).toContain("Unknown");
+    expect(host.textContent).not.toContain("Revision 2");
     expect(host.textContent).not.toContain("Buyer readiness");
     expect(host.textContent).not.toContain("Score");
-    expect(host.textContent).toContain("None recorded");
   });
 
   it("renders authorized calls with status, duration and call links without score or readiness slots", async () => {
@@ -311,7 +306,7 @@ describe("ProspectDetailView", () => {
       );
     });
 
-    expect(host.textContent).toContain("Authorized Calls (2)");
+    expect(host.textContent).toContain("Opportunity history (2 calls)");
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
     expect(host.textContent).toContain("State: report_ready");
