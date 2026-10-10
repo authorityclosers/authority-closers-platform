@@ -430,7 +430,9 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
     "mode",
     [
         "dispatched",
+        "provisional",
         "exhausted",
+        "backoff",
         "live",
         "erased",
         "cancelled",
@@ -478,7 +480,7 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
             worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
             work = await worker.claim()
             assert work is not None
-            if mode == "dispatched":
+            if mode in {"dispatched", "provisional"}:
                 with pytest.raises(InferenceBrokerError):
                     await worker._dispatch(work)
             async with sessions() as db, db.begin():
@@ -505,6 +507,14 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                     job.provider_receipt = {"validation_state": "validated"}
                     job.provider_receipt_digest = content_hash(job.provider_receipt)
                     job.receipt_recorded_at = datetime.now(UTC)
+                if mode == "provisional":
+                    job.provider_receipt = {"validation_state": "provider_returned"}
+                    job.provider_receipt_digest = content_hash(job.provider_receipt)
+                    job.receipt_recorded_at = datetime.now(UTC)
+                if mode == "backoff":
+                    job.status = "retry_wait"
+                    job.lease_token = job.leased_until = None
+                    job.available_at = datetime.now(UTC) + timedelta(minutes=5)
                 if mode in {"generation", "validated"}:
                     job.status = "dead_letter"
                     job.lease_token = job.leased_until = None
@@ -552,9 +562,15 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                 task = await db.get(ConversationInferenceTask, run_id)
                 run_row = await db.get(ConversationRun, run_id)
                 assert job is not None and task is not None and run_row is not None
-                recovered = mode in {"dispatched", "exhausted", "locked", "audit_crash"}
+                recovered = mode in {
+                    "dispatched",
+                    "provisional",
+                    "exhausted",
+                    "locked",
+                    "audit_crash",
+                }
                 assert (task.state, run_row.state) == (
-                    ("uncertain" if mode == "dispatched" else "failed", "failed")
+                    ("uncertain" if mode in {"dispatched", "provisional"} else "failed", "failed")
                     if recovered
                     else before_states
                 )
@@ -564,6 +580,8 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                     job.provider_receipt,
                     job.attempt_count,
                 ) == before_effect
+                if mode == "backoff":
+                    assert job.status == "retry_wait" and job.available_at > datetime.now(UTC)
                 minutes = await db.get(ConversationMinuteAccount, (task.tenant_id, task.person_id))
                 assert minutes is not None and minutes.snapshot == before_minutes
                 events = list(
@@ -591,7 +609,7 @@ def test_terminal_job_recovery_preserves_effects_and_settlement(
                         )
                     )
                 ) == int(recovered)
-            assert broker.calls == int(mode == "dispatched")
+            assert broker.calls == int(mode in {"dispatched", "provisional"})
         finally:
             await engine.dispose()
 
