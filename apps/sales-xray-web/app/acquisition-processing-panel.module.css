@@ -327,17 +327,25 @@
   box-shadow: var(--lx-shadow-2, var(--lx-shadow-1));
 }
 
-/* The studio's buttons become quiet menu rows here. */
-.menu > :global(*) {
+/* The studio's buttons become quiet menu rows here (scoped strongly enough
+   to win over the app's global button styles). */
+.panel .more .menu > :global(*) {
   justify-content: flex-start;
+  gap: 8px;
   width: 100%;
   min-height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
   border: 0;
+  border-radius: var(--lx-radius-sm);
   background: transparent;
   box-shadow: none;
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.menu > :global(*):hover {
+.panel .more .menu > :global(*):hover {
   background: var(--lx-sunken);
 }
 
@@ -353,7 +361,7 @@
     height: 44px;
   }
 
-  .menu > :global(*) {
+  .panel .more .menu > :global(*) {
     min-height: 44px;
   }
 }
