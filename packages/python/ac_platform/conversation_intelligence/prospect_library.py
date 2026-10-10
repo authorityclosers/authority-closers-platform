@@ -23,7 +23,11 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
 )
-from ac_platform.conversation_intelligence.prospect_models import ConversationProspect
+from ac_platform.conversation_intelligence.prospect_fields import FIELD_REGISTRY, field_registry
+from ac_platform.conversation_intelligence.prospect_models import (
+    ConversationProspect,
+    ConversationProspectFieldRevision,
+)
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.reports import ReportDraft
@@ -41,7 +45,69 @@ PAGE_SIZE = 20
 SCHEMA = "ac.sales-xray.prospects/1"
 
 
-def profile(row: ConversationProspect) -> dict[str, Any]:
+def profile(
+    row: ConversationProspect, history: list[ConversationProspectFieldRevision] | None = None
+) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in FIELD_REGISTRY:
+        revisions = [r for r in history or [] if r.field_key == key]
+        person = next((r for r in revisions if r.basis == "person"), None)
+        current = person or next(iter(revisions), None)
+        if current is None:
+            fields[key] = {
+                "state": "unknown",
+                "reason": "not_mentioned" if row.origin == "detected" else "not_asked",
+            }
+        elif current.value["kind"] == "unknown":
+            fields[key] = {"state": "unknown", "reason": current.value["reason"]}
+        else:
+            fields[key] = {
+                "state": "known",
+                "value": current.value,
+                "basis": current.basis,
+                "locked": person is not None,
+                "set_at": current.created_at.isoformat(),
+            }
+            if person:
+                fields[key]["set_by"] = str(person.created_by_person_id)
+                different = [
+                    r
+                    for r in revisions
+                    if r.basis == "heard_in_call"
+                    and r.revision > person.revision
+                    and r.value != person.value
+                    and r.value.get("kind") != "unknown"
+                ]
+                if different:
+                    fields[key]["heard_differently"] = [
+                        {
+                            "value": r.value,
+                            "evidence": {
+                                "submission_id": str(r.submission_id),
+                                **(r.evidence or {}),
+                            },
+                            "set_at": r.created_at.isoformat(),
+                        }
+                        for r in different
+                    ]
+            else:
+                fields[key]["evidence"] = {
+                    "submission_id": str(current.submission_id),
+                    **(current.evidence or {}),
+                }
+    # Existing person-created labels remain readable even for fixtures predating field history.
+    if fields["name"]["state"] == "unknown" and row.origin == "person":
+        fields["name"] = {
+            "state": "known",
+            "value": {"kind": "text", "text": row.display_name},
+            "basis": "person",
+            "locked": True,
+            "set_by": str(row.created_by_person_id),
+            "set_at": row.created_at.isoformat(),
+        }
+    contacts = [
+        str(fields[k]["value"]["text"]) for k in ("phone", "email") if fields[k]["state"] == "known"
+    ]
     return {
         "prospect_id": str(row.id),
         "name": row.display_name,
@@ -50,10 +116,19 @@ def profile(row: ConversationProspect) -> dict[str, Any]:
         "stage": None,
         "tags": row.tags,
         "photo_url": None,
-        "contact": None,
-        "fields": [],
+        "contact": " · ".join(contacts) or None,
+        "fields": [
+            {"key": key, **value}
+            for key, value in fields.items()
+            if key != "name" and value["state"] == "known" and value["basis"] == "person"
+        ],
+        "profile_fields": fields,
+        "origin": row.origin,
+        "confirmed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
         "buyer_intent": None,
-        "next_step": None,
+        "next_step": fields["next_step"]["value"].get("text")
+        if fields["next_step"]["state"] == "known"
+        else None,
         "last_promise": None,
     }
 
@@ -127,9 +202,10 @@ class ProspectLibrary:
                 .limit(1 if prospect_id is not None else PAGE_SIZE)
             )
         ).all()
+        field_rows = await self.store.field_rows(actor, [row.id for row, _, _ in selected], scope)
         entries = [
             {
-                **profile(row),
+                **profile(row, [r for r in field_rows if r.entity_id == row.id]),
                 "call_count": count,
                 "last_call": None if last is None else last.isoformat(),
             }
@@ -138,6 +214,7 @@ class ProspectLibrary:
         if prospect_id is None:
             return {
                 "schema": SCHEMA,
+                "field_registry": field_registry(),
                 "prospects": entries,
                 "total": total,
                 "stage_filters": [],
@@ -203,6 +280,7 @@ class ProspectLibrary:
         ]
         return {
             "schema": SCHEMA,
+            "field_registry": field_registry(),
             "prospect": entries[0],
             "calls": history,
             "next_offset": offset + PAGE_SIZE

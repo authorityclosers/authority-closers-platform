@@ -1,0 +1,223 @@
+{
+  "schema": "ac.sales-xray.prospect-fields/1",
+  "field_registry": [
+    {
+      "key": "name",
+      "label": "Name",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 160
+    },
+    {
+      "key": "business",
+      "label": "Business",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "industry",
+      "label": "Industry",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "city",
+      "label": "City",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "role",
+      "label": "Role",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "team_size",
+      "label": "Team size",
+      "numeric": true,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "turnover",
+      "label": "Turnover",
+      "numeric": true,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "main_pain",
+      "label": "Main pain",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "budget",
+      "label": "Budget",
+      "numeric": true,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "timeline",
+      "label": "Timeline",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "decision_maker",
+      "label": "Decision maker",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "next_step",
+      "label": "Next step",
+      "numeric": false,
+      "person_only": false,
+      "max_length": 2048
+    },
+    {
+      "key": "phone",
+      "label": "Phone",
+      "numeric": false,
+      "person_only": true,
+      "max_length": 160
+    },
+    {
+      "key": "email",
+      "label": "Email",
+      "numeric": false,
+      "person_only": true,
+      "max_length": 320
+    }
+  ],
+  "prospect": {
+    "prospect_id": "22222222-2222-4222-8222-222222222222",
+    "name": "Fictional Person",
+    "revision": 2,
+    "owner_person_id": "11111111-1111-4111-8111-111111111111",
+    "stage": null,
+    "tags": [],
+    "photo_url": null,
+    "contact": null,
+    "fields": [
+      {
+        "key": "business",
+        "state": "known",
+        "value": {
+          "kind": "text",
+          "text": "Fictional Ltd"
+        },
+        "basis": "person",
+        "locked": true,
+        "set_at": "2026-10-08T22:00:00+00:00",
+        "set_by": "11111111-1111-4111-8111-111111111111"
+      },
+      {
+        "key": "city",
+        "state": "known",
+        "value": {
+          "kind": "text",
+          "text": "Jaipur"
+        },
+        "basis": "person",
+        "locked": true,
+        "set_at": "2026-10-08T22:00:00+00:00",
+        "set_by": "11111111-1111-4111-8111-111111111111"
+      }
+    ],
+    "profile_fields": {
+      "name": {
+        "state": "known",
+        "value": {
+          "kind": "text",
+          "text": "Fictional Person"
+        },
+        "basis": "person",
+        "locked": true,
+        "set_by": "11111111-1111-4111-8111-111111111111",
+        "set_at": "2026-10-08T22:00:00+00:00"
+      },
+      "business": {
+        "state": "known",
+        "value": {
+          "kind": "text",
+          "text": "Fictional Ltd"
+        },
+        "basis": "person",
+        "locked": true,
+        "set_at": "2026-10-08T22:00:00+00:00",
+        "set_by": "11111111-1111-4111-8111-111111111111"
+      },
+      "industry": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "city": {
+        "state": "known",
+        "value": {
+          "kind": "text",
+          "text": "Jaipur"
+        },
+        "basis": "person",
+        "locked": true,
+        "set_at": "2026-10-08T22:00:00+00:00",
+        "set_by": "11111111-1111-4111-8111-111111111111"
+      },
+      "role": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "team_size": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "turnover": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "main_pain": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "budget": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "timeline": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "decision_maker": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "next_step": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "phone": {
+        "state": "unknown",
+        "reason": "not_asked"
+      },
+      "email": {
+        "state": "unknown",
+        "reason": "not_asked"
+      }
+    },
+    "origin": "person",
+    "confirmed_at": null,
+    "buyer_intent": null,
+    "next_step": null,
+    "last_promise": null
+  }
+}

@@ -9,7 +9,7 @@ import {
   readShellProfile,
 } from "../shell/profile-store";
 import { firstNameOf } from "../profile-first-name";
-import { DashboardGreeting, greetingLines } from "./dashboard-greeting";
+import { DashboardGreeting, greetingFor } from "./dashboard-greeting";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -23,7 +23,7 @@ describe("greeting lines", () => {
     [23, "Working late"],
     [3, "Working late"],
   ])("opens with the time of day at %i:00", (hour, lead) => {
-    expect(greetingLines(hour)[0].lead).toBe(lead);
+    expect(greetingFor(hour)).toBe(lead);
   });
 
   it("uses only the first name", () => {
@@ -36,7 +36,7 @@ describe("greeting lines", () => {
 describe("dashboard greeting", () => {
   let root: Root | undefined;
   let host: HTMLDivElement;
-  const title = () => host.querySelector("h2")?.textContent;
+  const title = () => host.querySelector("h1")?.textContent;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -54,7 +54,7 @@ describe("dashboard greeting", () => {
     vi.unstubAllEnvs();
   });
 
-  it("greets the signed-in person by first name and rotates", async () => {
+  it("greets the signed-in person by first name and never rotates", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubGlobal(
       "fetch",
@@ -72,34 +72,40 @@ describe("dashboard greeting", () => {
     await readShellProfile("document");
     const mountedRoot = createRoot(host);
     root = mountedRoot;
-    await act(async () => mountedRoot.render(<DashboardGreeting />));
-    expect(title()).toBe("Good morning, Suyash👋");
+    await act(async () =>
+      mountedRoot.render(<DashboardGreeting subtitle="Last 30 days" />),
+    );
+    expect(title()).toBe("Good morning, Suyash");
+    // A steady line: nothing below it jumps every few seconds.
     await act(async () => {
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(15_000);
     });
-    expect(title()).toBe("Welcome back, Suyash👋");
-    await act(async () => {
-      vi.advanceTimersByTime(5000);
-    });
-    expect(title()).toBe("Ready for your next call, Suyash?👋");
+    expect(title()).toBe("Good morning, Suyash");
   });
 
   it("leaves the name out when the profile has none", async () => {
     const mountedRoot = createRoot(host);
     root = mountedRoot;
-    await act(async () => mountedRoot.render(<DashboardGreeting />));
-    expect(title()).toBe("Good morning👋");
+    await act(async () =>
+      mountedRoot.render(<DashboardGreeting subtitle="Last 30 days" />),
+    );
+    expect(title()).toBe("Good morning");
   });
 
   it("keeps the fallback greeting through hydration, then uses local time", async () => {
-    host.innerHTML = renderToString(<DashboardGreeting />);
-    expect(title()).toBe("Welcome back👋");
+    host.innerHTML = renderToString(
+      <DashboardGreeting subtitle="Last 30 days" />,
+    );
+    expect(title()).toBe("Welcome back");
 
     await act(async () => {
-      const hydratedRoot = hydrateRoot(host, <DashboardGreeting />);
+      const hydratedRoot = hydrateRoot(
+        host,
+        <DashboardGreeting subtitle="Last 30 days" />,
+      );
       root = hydratedRoot;
     });
 
-    expect(title()).toBe("Good morning👋");
+    expect(title()).toBe("Good morning");
   });
 });

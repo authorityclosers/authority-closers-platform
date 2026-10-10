@@ -149,3 +149,67 @@ it("opens Rename from its button without navigating the call link", async () => 
   expect(document.activeElement).toBe(input);
   expect(navigate).not.toHaveBeenCalled();
 });
+
+it("shows an unnamed call as a muted Sales call beside its date", async () => {
+  await act(async () =>
+    root.render(
+      <RecentCallItem
+        call={{ ...call, name: "Untitled call" }}
+        href={href}
+        onChange={onChange}
+      />,
+    ),
+  );
+  const name = host.querySelector("[data-unnamed]");
+  expect(name?.textContent).toBe("Sales call");
+  expect(host.textContent).not.toContain("Untitled call");
+  expect(host.textContent).toContain("Sep 29, 2026");
+  expect(
+    host.querySelector('[aria-label="More options for Sales call"]'),
+  ).not.toBeNull();
+});
+
+it("offers only link actions on a teammate's call and says whose it is", async () => {
+  await act(async () =>
+    root.render(
+      <RecentCallItem
+        call={call}
+        href={href}
+        onChange={onChange}
+        mine={false}
+        owner="Quinn Fixture"
+      />,
+    ),
+  );
+  expect(host.querySelector("a")?.textContent).toContain("QF");
+  expect(host.querySelector("a")?.textContent).toContain(
+    "Quinn Fixture's call",
+  );
+  await click("More options for Fictional call");
+  const items = Array.from(host.querySelectorAll('[role="menuitem"]'), (item) =>
+    item.textContent?.trim(),
+  );
+  // The server refuses rename and delete for anyone but the owner.
+  expect(items).toEqual(["Copy link", "Open in new tab"]);
+});
+
+it("marks the viewer's own call as theirs and keeps rename and delete", async () => {
+  await act(async () =>
+    root.render(
+      <RecentCallItem
+        call={call}
+        href={href}
+        onChange={onChange}
+        mine
+        owner="You"
+      />,
+    ),
+  );
+  expect(host.querySelector("[data-mine]")?.textContent).toContain("You");
+  await click("More options for Fictional call");
+  expect(
+    Array.from(host.querySelectorAll('[role="menuitem"]'), (item) =>
+      item.textContent?.trim(),
+    ),
+  ).toEqual(["Rename", "Copy link", "Open in new tab", "Delete…"]);
+});

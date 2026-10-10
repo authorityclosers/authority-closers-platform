@@ -149,7 +149,9 @@
 @media (max-width: 760px) {
   .stack {
     right: 12px;
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(
+      var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
+    );
     left: 12px;
     width: auto;
   }

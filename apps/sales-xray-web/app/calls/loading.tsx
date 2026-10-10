@@ -1,7 +1,7 @@
 "use client";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { PageSkeleton } from "../shell/page-skeleton";
+import { CallsSkeleton } from "../calls-library";
 import { useWorkspaceAccess } from "../workspace-access";
 
 export default function CallsLoading() {
@@ -12,8 +12,9 @@ export default function CallsLoading() {
       authenticated={authenticated}
       loading={!access}
       active="calls"
+      mobileFit={false}
     >
-      <PageSkeleton variant="list" />
+      <CallsSkeleton />
     </AcquisitionShell>
   );
 }

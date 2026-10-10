@@ -366,7 +366,7 @@ it("saves details only after the server reread confirms them", async () => {
   )!;
   await act(async () => edit.click());
   const [nameInput, phoneInput] = [
-    ...host.querySelectorAll<HTMLInputElement>("form input"),
+    ...host.querySelectorAll<HTMLInputElement>("main form input"),
   ];
   const setValue = (input: HTMLInputElement, value: string) => {
     const setter = Object.getOwnPropertyDescriptor(
@@ -380,7 +380,7 @@ it("saves details only after the server reread confirms them", async () => {
   await act(async () => setValue(phoneInput, "98765 43210"));
   await act(async () =>
     host
-      .querySelector("form")!
+      .querySelector("main form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
   await flush();
@@ -391,7 +391,7 @@ it("saves details only after the server reread confirms them", async () => {
     expected_revision: 3,
   });
   // The shown values are the reread server values, including verification.
-  expect(host.querySelector("form")).toBeNull();
+  expect(host.querySelector("main form")).toBeNull();
   expect(host.textContent).toContain("Asha R. Rao");
   expect(host.textContent).toContain("+919876543210");
   expect(host.textContent).toContain("Not verified");
@@ -427,11 +427,11 @@ it("refreshes a conflicting profile before allowing another revision-bound save"
   );
   await act(async () =>
     host
-      .querySelector("form")!
+      .querySelector("main form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
   await flush();
-  expect(host.querySelector("form")).not.toBeNull();
+  expect(host.querySelector("main form")).not.toBeNull();
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
     "Your details changed elsewhere",
   );
@@ -444,7 +444,7 @@ it("refreshes a conflicting profile before allowing another revision-bound save"
       .click(),
   );
   await flush();
-  expect(host.querySelector("form")).toBeNull();
+  expect(host.querySelector("main form")).toBeNull();
   expect(
     [...host.querySelectorAll("button")].some(
       (button) => button.textContent?.trim() === "Edit details",
@@ -465,13 +465,13 @@ it("refreshes a conflicting profile before allowing another revision-bound save"
   );
   await act(async () =>
     host
-      .querySelector("form")!
+      .querySelector("main form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
   await flush();
   expect(writes).toHaveLength(2);
   expect(writes[1]).toMatchObject({ expected_revision: 4 });
-  expect(host.querySelector("form")).toBeNull();
+  expect(host.querySelector("main form")).toBeNull();
   expect(
     calls.filter(
       ({ path, init }) =>
@@ -506,7 +506,7 @@ it("preserves an accepted save draft and blocks resubmission until a reread", as
       .click(),
   );
   const [nameInput, phoneInput] = [
-    ...host.querySelectorAll<HTMLInputElement>("form input"),
+    ...host.querySelectorAll<HTMLInputElement>("main form input"),
   ];
   const setValue = (input: HTMLInputElement, value: string) => {
     const setter = Object.getOwnPropertyDescriptor(
@@ -520,11 +520,11 @@ it("preserves an accepted save draft and blocks resubmission until a reread", as
   await act(async () => setValue(phoneInput, "98765 43210"));
   await act(async () =>
     host
-      .querySelector("form")!
+      .querySelector("main form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
   await flush();
-  expect(host.querySelector("form")).not.toBeNull();
+  expect(host.querySelector("main form")).not.toBeNull();
   expect(host.textContent).toContain("Your update was accepted");
   expect(
     host.querySelector<HTMLInputElement>('input[autocomplete="name"]')?.value,
@@ -542,7 +542,7 @@ it("preserves an accepted save draft and blocks resubmission until a reread", as
       .click(),
   );
   await flush();
-  expect(host.querySelector("form")).toBeNull();
+  expect(host.querySelector("main form")).toBeNull();
   expect(host.textContent).toContain("Asha R. Rao");
   expect(host.textContent).toContain("Not verified");
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);

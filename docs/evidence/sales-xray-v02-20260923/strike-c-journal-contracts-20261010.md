@@ -1,6 +1,6 @@
 # AUT-1676: minute journal backup and validation contracts
 
-The 0079 append-only journal is part of the exact v50 backup/restore parity
+The 0080 append-only journal is part of the exact v51 backup/restore parity
 inventory in all three consumers. No backup, restore or server change was run.
 Registry and legacy-upgrade fixtures account for the new table; the legacy
 0076 population uses scoped pre-journal projections only before upgrading.
@@ -17,4 +17,6 @@ already committed worker behavior. A retained held-plan assertion includes the
 coordinator's minute-outcome recovery marker.
 
 This is part of the single sensitive strike PR #421, requiring CTO and CEO
-review. The shared migration gate is still held by open PR #414.
+review. PR #414 has merged: its prospect-fields 0079/v50 contract remains
+intact; the unreleased journal follows it as 0080/v51. The final shared-file
+gate is rechecked against the current open PRs.

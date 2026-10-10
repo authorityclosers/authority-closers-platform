@@ -5,7 +5,7 @@ Owner AUT-1701 authorizes one strike PR, including minimal necessary charging ch
 Source pin: 81ca252. Exact-ID controlled intake and relevant UXA/GOV-AUD receipt
 are retained in strike-c-provider-failure-evidence-20261010.md.
 
-Migration 0079 adds an append-only customer report-minute journal. It preserves
+Migration 0080 adds an append-only customer report-minute journal. It preserves
 all acquisition usage/settlement rows and provider reservations/observations.
 One usage-row lock serializes release, retry reservation and report delivery.
 A unique partial index permits exactly one delivery charge for the source.

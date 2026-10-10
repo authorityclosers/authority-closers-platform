@@ -1,4 +1,7 @@
-/* Dashboard Recent calls: one quiet list that fits the space left on screen. */
+/*
+ * Dashboard Recent calls (AUT-1663): the Calls table's rows, five at most,
+ * inside one flush surface. Tokens only.
+ */
 .root {
   display: flex;
   min-height: 0;
@@ -17,74 +20,95 @@
   list-style: none;
 }
 
-.item {
-  animation: rowIn var(--lx-dur-reveal, 260ms) var(--lx-ease-move, ease) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
+.item + .item,
+.skeletonRow + .skeletonRow {
+  border-top: 1px solid var(--lx-line-soft);
 }
 
 .row {
   display: grid;
+  box-sizing: border-box;
   height: var(--row);
-  grid-template-columns: 30px minmax(0, 1fr) 84px 52px 148px 16px;
+  grid-template-columns: minmax(0, 1fr) 96px 64px 156px 16px;
   align-items: center;
-  column-gap: 12px;
-  padding: 0 10px 0 8px;
-  border-radius: var(--lx-radius-md, 10px);
+  column-gap: 16px;
+  padding: 0 14px 0 16px;
   color: var(--lx-ink);
   text-decoration: none;
-  transition:
-    background-color var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease),
-    transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease);
+}
+
+.list[data-owners] .row {
+  grid-template-columns: minmax(0, 1fr) 128px 96px 64px 156px 16px;
 }
 
 .row:hover {
-  background: var(--lx-sunken);
+  background: var(--lx-paper-2);
 }
 
-.row:active {
-  transform: scale(0.995);
+/* Whose call, as in the Calls table's Rep column. */
+.owner {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--lx-ink-3);
+  font-size: 12.5px;
+  white-space: nowrap;
 }
 
-.row:focus-visible {
-  outline: 2px solid var(--lx-focus);
-  outline-offset: -2px;
+.owner > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.icon {
+.owner i {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 20px;
+  height: 20px;
+  flex: none;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 50%;
   background: var(--lx-sunken);
   color: var(--lx-ink-3);
-  transition:
-    background-color var(--lx-dur-quick, 140ms) ease,
-    color var(--lx-dur-quick, 140ms) ease;
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.row:hover .icon {
+.owner[data-mine] i {
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
 
+.row:focus-visible {
+  position: relative;
+  border-radius: var(--lx-radius-xs);
+  box-shadow: var(--lx-ring-focus);
+  outline: none;
+}
+
+/* The Calls table has no row icon; neither does its dashboard excerpt. */
+.icon {
+  display: none;
+}
+
 .name {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .name[data-untitled] {
-  color: var(--lx-muted);
+  color: var(--lx-ink-3);
   font-weight: 500;
 }
 
 .date,
 .length {
-  color: var(--lx-muted);
-  font-size: 13px;
+  color: var(--lx-ink-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -95,80 +119,108 @@
 
 .status {
   display: inline-flex;
-  justify-self: start;
+  min-width: 0;
   align-items: center;
   gap: 7px;
-  padding: 3px 10px 3px 8px;
-  border-radius: var(--lx-radius-pill, 99px);
-  background: var(--lx-sunken);
-  color: var(--lx-muted);
-  font-size: 12px;
-  font-weight: 600;
+  overflow: hidden;
+  color: var(--lx-ink-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .status i {
   width: 7px;
   height: 7px;
+  flex: none;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--lx-muted-2);
 }
 
 .status[data-tone="ready"] {
-  background: var(--lx-teal-soft);
-  color: var(--lx-teal);
+  color: var(--lx-ink);
 }
 
-.status[data-tone="active"] {
-  background: var(--lx-info-soft);
-  color: var(--lx-info);
+.status[data-tone="ready"] i {
+  background: var(--lx-teal);
 }
 
 .status[data-tone="active"] i {
+  background: var(--lx-info);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.status[data-tone="attention"] {
-  background: var(--lx-warning-soft);
-  color: var(--lx-warning);
+.status[data-tone="attention"] i {
+  background: var(--lx-warning);
 }
 
 .chevron {
-  color: var(--lx-muted-2, var(--lx-muted));
-  transition:
-    transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease),
-    color var(--lx-dur-quick, 140ms) ease;
+  color: var(--lx-muted-2);
 }
 
 .row:hover .chevron {
   color: var(--lx-teal);
-  transform: translateX(3px);
 }
 
-.more {
-  flex: none;
-  margin: 6px 0 0 50px;
-  color: var(--lx-muted);
-  font-size: 12px;
+/* ---------- Loading rows ---------- */
+
+.skeletonRow {
+  display: grid;
+  box-sizing: border-box;
+  height: 44px;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  align-items: center;
+  column-gap: 16px;
+  padding: 0 14px 0 16px;
 }
 
-@keyframes rowIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+.skeletonRow i {
+  display: none;
+}
+
+.skeletonRow span,
+.skeletonRow em {
+  height: 10px;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.skeletonRow span {
+  width: var(--w);
+}
+
+.skeletonRow em {
+  width: 100px;
 }
 
 @keyframes pulse {
   50% {
-    opacity: 0.35;
+    opacity: 0.45;
   }
 }
 
 @media (max-width: 720px) {
-  .row {
-    grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  .row,
+  .list[data-owners] .row {
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    column-gap: 10px;
   }
+
+  /* Phones: the owner's initials sit before the status. */
+  .list[data-owners] .row {
+    grid-template-columns: minmax(0, 1fr) auto auto 16px;
+  }
+
+  .owner > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .date,
   .length {
     display: none;
@@ -176,123 +228,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .item,
-  .status[data-tone="active"] i {
-    animation: none;
-  }
-  .row,
-  .chevron {
-    transition: none;
-  }
-}
-
-/* Living status dots, matching the sidebar marks. */
-.status[data-tone="ready"] i {
-  animation: dot-pop 520ms var(--lx-ease-pop, ease)
-    calc(var(--i, 0) * 45ms + 200ms) both;
-}
-.status[data-tone="attention"] i {
-  animation: dot-nudge 4s ease-in-out infinite;
-}
-.row[data-tone="active"] .icon {
-  background: var(--lx-info-soft);
-  color: var(--lx-info);
-}
-.row[data-tone="active"] .icon path {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: eq 900ms ease-in-out infinite;
-}
-.row[data-tone="active"] .icon path:nth-child(2n) {
-  animation-delay: -300ms;
-}
-.row[data-tone="active"] .icon path:nth-child(3n) {
-  animation-delay: -600ms;
-}
-@keyframes dot-pop {
-  0% {
-    transform: scale(0);
-  }
-  60% {
-    transform: scale(1.4);
-  }
-}
-@keyframes dot-nudge {
-  0%,
-  80%,
-  100% {
-    transform: none;
-  }
-  85% {
-    transform: scale(1.35);
-  }
-  90% {
-    transform: scale(0.9);
-  }
-  95% {
-    transform: scale(1.15);
-  }
-}
-@keyframes eq {
-  50% {
-    transform: scaleY(0.45);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .status i,
-  .row[data-tone="active"] .icon path {
-    animation: none;
-  }
-}
-
-/* ---------- Loading rows ---------- */
-.skeletonRow {
-  display: grid;
-  height: 42px;
-  grid-template-columns: 30px minmax(0, 1fr) 148px;
-  align-items: center;
-  column-gap: 12px;
-  padding: 0 10px 0 8px;
-  animation: rowIn var(--lx-dur-reveal, 260ms) ease both;
-  animation-delay: calc(var(--i, 0) * 60ms);
-}
-.skeletonRow i {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--lx-sunken);
-}
-.skeletonRow span,
-.skeletonRow em {
-  height: 10px;
-  border-radius: 5px;
-  background: linear-gradient(
-    90deg,
-    var(--lx-sunken) 0%,
-    var(--lx-line) 50%,
-    var(--lx-sunken) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s linear infinite;
-}
-.skeletonRow span {
-  width: var(--w);
-}
-.skeletonRow em {
-  width: 100px;
-}
-
-@keyframes skeleton-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: -100% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeletonRow,
+  .status[data-tone="active"] i,
   .skeletonRow span,
   .skeletonRow em {
     animation: none;

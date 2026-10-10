@@ -87,11 +87,16 @@ async def _owner_scope(
     submission_id: UUID,
     actor: ActorContext | None,
     shared_identity_locks: bool,
+    *,
+    allow_organisation_read: bool = False,
 ) -> SubmissionScope:
     if actor is None:
         raise ConversationDenied("Sign in and claim this saved call before choosing speakers.")
     scope = await ownership.require_submission_owner(
-        submission_id, actor=actor, shared_identity_locks=shared_identity_locks
+        submission_id,
+        actor=actor,
+        shared_identity_locks=shared_identity_locks,
+        allow_organisation_read=allow_organisation_read,
     )
     if (
         not scope.claimed_account
@@ -127,8 +132,15 @@ async def read_speaker_map_revision(
     *,
     actor: ActorContext | None,
     shared_identity_locks: bool = False,
+    allow_organisation_read: bool = False,
 ) -> SpeakerMapRevision | None:
-    scope = await _owner_scope(ownership, submission_id, actor, shared_identity_locks)
+    scope = await _owner_scope(
+        ownership,
+        submission_id,
+        actor,
+        shared_identity_locks,
+        allow_organisation_read=allow_organisation_read,
+    )
     return await _latest(ownership.database, scope)
 
 

@@ -50,6 +50,9 @@ class Bundle:
         git(self.repo, "config", "user.name", "Synthetic test")
         git(self.repo, "config", "user.email", "synthetic@example.invalid")
         git(self.repo, "config", "core.autocrlf", "false")
+        # Snapshot proofs must not race a detached maintenance process after commits.
+        git(self.repo, "config", "gc.auto", "0")
+        git(self.repo, "config", "maintenance.auto", "false")
         self.files = {}
         for name in MODULE.INPUT_FILES:
             raw = (

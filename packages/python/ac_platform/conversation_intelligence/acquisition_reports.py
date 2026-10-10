@@ -387,12 +387,14 @@ class AcquisitionReports:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> dict[str, Any]:
         _, recording = await self.recording(
             submission_id,
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         return await self.render_transcript(recording)
 
@@ -461,12 +463,14 @@ class AcquisitionReports:
         token: str | None = None,
         actor: ActorContext | None = None,
         shared_identity_locks: bool = False,
+        allow_organisation_read: bool = False,
     ) -> dict[str, Any]:
         _, recording = await self.recording(
             submission_id,
             token=token,
             actor=actor,
             shared_identity_locks=shared_identity_locks,
+            allow_organisation_read=allow_organisation_read,
         )
         return await ConversationMeasurements(self.application).waveform_from_recording(recording)
 

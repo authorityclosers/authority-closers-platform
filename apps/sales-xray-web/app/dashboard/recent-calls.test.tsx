@@ -39,13 +39,15 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-it("lists each call once with its real name, or Untitled call", async () => {
+it("lists each call once with its real name, or the shared unnamed-call name", async () => {
   await act(async () => root.render(<RecentCallsList calls={calls} />));
   const rows = [...host.querySelectorAll("li a")];
   expect(rows).toHaveLength(3);
   expect(rows[0].textContent).toContain("Test");
   expect(rows[0].textContent).toContain("3:46");
-  expect(rows[1].textContent).toContain("Untitled call");
+  // The same muted fallback as Calls and Organisation: "Sales call · <date>".
+  expect(rows[1].textContent).toMatch(/Sales call · \S.*2025/);
+  expect(rows[1].querySelector("[data-untitled]")).not.toBeNull();
   expect(rows[1].textContent).toContain("—");
   expect(rows[2].textContent).toContain("24:06");
   expect(rows[0].getAttribute("href")).toContain(calls[0].id);
@@ -80,4 +82,29 @@ it("shows only the rows that fit and reports how many did not", async () => {
   expect(host.querySelectorAll("li")).toHaveLength(3);
   expect(onHiddenChange).toHaveBeenLastCalledWith(0);
   height.mockRestore();
+});
+
+it("says whose call each row is when the list mixes people", async () => {
+  const me = "00000000-0000-4000-8000-000000000001";
+  const team = [
+    { ...calls[0], owner: { personId: me, name: "Asha Menon" } },
+    {
+      ...calls[1],
+      owner: {
+        personId: "00000000-0000-4000-8000-000000000002",
+        name: "Rahul Verma",
+      },
+    },
+  ];
+  await act(async () =>
+    root.render(<RecentCallsList calls={team} viewerId={me} />),
+  );
+  const rows = [...host.querySelectorAll("li a")];
+  expect(rows[0].textContent).toContain("You");
+  expect(rows[1].textContent).toContain("RVRahul Verma");
+  expect(host.querySelector("ul[data-owners]")).not.toBeNull();
+  // A list of only your own calls stays as it was: no owner column.
+  await act(async () => root.render(<RecentCallsList calls={calls} />));
+  expect(host.querySelector("ul[data-owners]")).toBeNull();
+  expect(host.textContent).not.toContain("You");
 });

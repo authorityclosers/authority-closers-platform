@@ -1,0 +1,323 @@
+/*
+ * Call preview drawer (AUT-999). Split from the Calls page module (AUT-1663)
+ * so the page can change without touching the drawer. Tokens only.
+ */
+
+.typeChip {
+  padding: 2px 8px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  font: 600 11px/1.4 var(--lx-font-ui);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* ---------- Drawer ---------- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: color-mix(in srgb, var(--lx-film) 45%, transparent);
+  animation: fadeIn var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 401;
+  display: flex;
+  width: min(460px, 100vw);
+  flex-direction: column;
+  border-left: 1px solid var(--lx-line);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-ink);
+  animation: slideIn var(--lx-dur-move) var(--lx-ease-move);
+}
+
+.drawerHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+
+.drawerTitle {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drawerTitle strong {
+  font: 700 17px/1.25 var(--lx-font-display);
+}
+
+.drawerTitle span {
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+.iconButton {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  cursor: pointer;
+}
+
+.drawerBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.drawerStatus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusChip {
+  padding: 3px 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  font: 600 12px/1.3 var(--lx-font-ui);
+}
+
+.statusChip[data-tone="ready"] {
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.statusChip[data-tone="active"] {
+  background: var(--lx-info-soft);
+  color: var(--lx-info);
+}
+
+.statusChip[data-tone="attention"] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+/* The app hides native players globally; the preview needs one. */
+.drawer audio.audio {
+  display: block;
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  color-scheme: inherit;
+}
+
+.drawerBlock {
+  padding: 12px 14px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-paper);
+}
+
+.drawerBlock[data-kind="fix"] {
+  border-color: var(--lx-warning-soft);
+}
+
+.drawerBlock[data-kind="next"] {
+  border-color: var(--lx-teal-edge);
+}
+
+.drawerBlock h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--lx-muted);
+  font: 700 11.5px/1 var(--lx-font-ui);
+  letter-spacing: var(--lx-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.drawerBlock p {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.moments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.momentButton {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.momentButton:hover {
+  border-color: var(--lx-teal-edge);
+}
+
+.momentTime {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font: 700 11.5px/1.4 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.momentLabel {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.split {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  gap: 2px;
+  border-radius: var(--lx-radius-pill);
+}
+
+.split span[data-index="0"],
+.splitLegend li[data-index="0"]::before {
+  background: var(--lx-teal);
+}
+
+.split span[data-index="1"],
+.splitLegend li[data-index="1"]::before {
+  background: var(--lx-info);
+}
+
+.split span[data-index="2"],
+.splitLegend li[data-index="2"]::before {
+  background: var(--lx-warning);
+}
+
+.split span[data-index="3"],
+.splitLegend li[data-index="3"]::before {
+  background: var(--lx-muted);
+}
+
+.splitLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--lx-ink-2);
+  font-size: 12px;
+}
+
+.splitLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.splitLegend li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.signalsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signalsRow > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+  font: 600 12px/1.3 var(--lx-font-ui);
+}
+
+.drawerLoading {
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+.drawerFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-pill);
+  background: transparent;
+  color: var(--lx-ink-2);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.ghostButton:hover {
+  border-color: var(--lx-teal-edge);
+  color: var(--lx-teal);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .scrim {
+    animation: none;
+  }
+}
