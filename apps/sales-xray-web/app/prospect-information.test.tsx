@@ -68,11 +68,11 @@ it("saves only text typed by a person, then requests a fresh server read", async
     );
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((b) => b.textContent === "Edit a field")!
+        .find((b) => b.getAttribute("aria-label")?.startsWith("Name:"))!
         .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
-    expect(input.value).toBe(""); // Never copy AI text into a human-confirmed edit.
+    expect(input.value).toBe("अदिती"); // Inline editing starts from the displayed value.
     const setter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",
@@ -82,11 +82,13 @@ it("saves only text typed by a person, then requests a fresh server read", async
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () =>
-      host
-        .querySelector<HTMLFormElement>("form")!
-        .dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }),
-        ),
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
     );
     expect(edit).toHaveBeenCalledWith(
       syntheticProspect.prospect_id,
@@ -155,7 +157,7 @@ it("keeps the current value on a failed save and refreshes before an explicit re
     );
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((b) => b.textContent === "Edit a field")!
+        .find((b) => b.getAttribute("aria-label")?.startsWith("Name:"))!
         .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
@@ -167,16 +169,22 @@ it("keeps the current value on a failed save and refreshes before an explicit re
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () =>
-      host
-        .querySelector("form")!
-        .dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }),
-        ),
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
     );
-    expect(
-      host.querySelector('[data-prospect-section="1"] dd')?.textContent,
-    ).toBe("अदिती");
+    expect(host.querySelector('[data-prospect-section="1"] dd input')).toBe(
+      input,
+    );
+    expect(syntheticProspect.profile_fields!.name).toEqual(
+      expect.objectContaining({ state: "known" }),
+    );
     expect(onSaved).not.toHaveBeenCalled();
+    expect(input.value).toBe("Typed edit");
     expect(notice).toHaveBeenCalledWith(
       expect.objectContaining({
         tone: "error",
@@ -241,7 +249,7 @@ it("keeps shared customer pages read-only when the server withholds edit and con
         />,
       ),
     );
-    expect(host.textContent).not.toContain("Edit a field");
+    expect(host.querySelector('[aria-label^="Name:"]')).toBeNull();
     expect(host.textContent).not.toContain("Confirm prospect");
     expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
   } finally {

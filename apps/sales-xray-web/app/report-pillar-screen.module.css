@@ -42,7 +42,7 @@
 }
 .entry p,
 .skill p {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.55;
   margin: 0;
 }
@@ -149,7 +149,7 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  min-height: 28px;
+  min-height: 40px;
 }
 .skill summary small {
   text-align: right;
@@ -169,6 +169,11 @@
   outline-offset: 3px;
 }
 @media (max-width: 480px) {
+  .sources summary,
+  .destination,
+  .skill summary {
+    min-height: 44px;
+  }
   .skill summary {
     align-items: start;
   }

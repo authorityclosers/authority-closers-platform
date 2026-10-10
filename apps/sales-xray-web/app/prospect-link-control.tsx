@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ACQUISITION, record } from "./acquisition-client";
 import { Clip } from "./report-kit";
 import type { ReportEvidence, Transcript } from "./report-contract";
-import styles from "./report-kit.module.css";
+import styles from "./prospect-information.module.css";
+import { PROSPECT_FACTS_CHANGED } from "./prospect-report-facts";
 import factStyles from "./key-facts.module.css";
 
 import {
@@ -244,7 +245,11 @@ function Control({
   useEffect(() => {
     const load = new AbortController();
     void (async () => {
-      if (autoDetect) await request(submissionId, "detect", load.signal, {});
+      if (autoDetect) {
+        await request(submissionId, "detect", load.signal, {});
+        if (!load.signal.aborted)
+          window.dispatchEvent(new Event(PROSPECT_FACTS_CHANGED));
+      }
       return request(submissionId, `suggestions?offset=${offset}`, load.signal);
     })()
       .then((result) => {
@@ -275,7 +280,10 @@ function Control({
         controller.signal,
         body,
       );
-      if (!controller.signal.aborted) setPage(result);
+      if (!controller.signal.aborted) {
+        setPage(result);
+        window.dispatchEvent(new Event(PROSPECT_FACTS_CHANGED));
+      }
     } catch (err) {
       if (!controller.signal.aborted)
         setError(err instanceof Error ? err.message : "Reload prospect links.");
@@ -287,7 +295,7 @@ function Control({
   return (
     <section
       aria-label="Prospect"
-      className={`${styles.card} ${styles.tone}`}
+      className={styles.linkSection}
       data-tone="info"
       data-prospect-card
     >

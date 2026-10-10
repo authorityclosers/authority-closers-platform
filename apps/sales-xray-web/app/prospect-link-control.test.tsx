@@ -125,7 +125,11 @@ async function render(
     root.render(
       <StrictMode>
         <WorkspaceAccessContext.Provider value={value}>
-          <ProspectLinkControl submissionId={call} autoDetect={false} {...props} />
+          <ProspectLinkControl
+            submissionId={call}
+            autoDetect={false}
+            {...props}
+          />
         </WorkspaceAccessContext.Provider>
       </StrictMode>,
     ),

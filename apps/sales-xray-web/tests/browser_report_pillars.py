@@ -59,10 +59,18 @@ def main():
                 "Understood. I won't schedule a follow-up."
             )
             page.get_by_title("Tabbed view", exact=True).click()
-            page.get_by_role("tab", name="Your Skills on This Call", exact=True).click()
+            page.get_by_role("tab", name="Sales skills", exact=True).click()
             expect(page.locator('[data-report-mode-section="skills"]')).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             page.get_by_title("Reading view", exact=True).click()
+            expect(page.locator("[data-report-modes]")).to_contain_text("Synthetic call:")
+            page.get_by_title("Story view", exact=True).click()
+            assert headings.all_text_contents() == LABELS
+            skills.first.locator("summary").click()
+            expect(skills.first.get_by_role("link", name="Get coaching on this")).to_have_attribute(
+                "href", "/coaching?focus=human_connection_trust"
+            )
+            skills.first.locator("summary").click()
             page.evaluate("window.scrollTo(0, 0)")
             for theme in ["light", "dark"]:
                 page.locator("html").evaluate(

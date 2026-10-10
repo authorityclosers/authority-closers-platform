@@ -4,6 +4,10 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportModes } from "./report-modes";
 import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
+import {
   DOCUMENT_CHAPTERS,
   type DocumentReportData,
 } from "./report-document-data";
@@ -1365,4 +1369,81 @@ it("keeps the same mounted panel state across all three report views", async () 
     expect(note.value).toBe("unsaved fictional note");
     expect(container.querySelector('[data-review-point="14"]')).toBe(point);
   }
+});
+
+it("adds Story with the six pillars while keeping the current tabs and default", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?call=${call}&view=tabs&section=overview`,
+  );
+  await render(call);
+  expect(mode().dataset.view).toBe("tabs");
+  expect(container.textContent).toContain("Summary point");
+  const tabsBefore = [...container.querySelectorAll('[role="tab"]')].map(
+    (tab) => tab.textContent,
+  );
+  const story = container.querySelector<HTMLButtonElement>(
+    'button[title="Story view"]',
+  )!;
+  await act(async () => story.click());
+  expect(mode().dataset.view).toBe("story");
+  expect(window.location.search).toContain("view=story");
+  expect(
+    container.querySelectorAll('[data-pulse-adapted="true"]'),
+  ).toHaveLength(6);
+  expect(
+    container.querySelectorAll('a[href^="/coaching?focus="]'),
+  ).toHaveLength(8);
+  expect(container.textContent).not.toContain("Summary point");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .click(),
+  );
+  expect(
+    [...container.querySelectorAll('[role="tab"]')].map(
+      (tab) => tab.textContent,
+    ),
+  ).toEqual(tabsBefore);
+  expect(container.textContent).toContain("Summary point");
+});
+
+it("remembers the chosen view per person and workspace, with explicit URLs taking priority", async () => {
+  const person = (id: string): WorkspaceAccessValue => ({
+    status: "ready",
+    authenticated: true,
+    context: { personId: id, tenantId: "tenant-one", sessionId: "session" },
+    retry: () => {},
+  });
+  const show = async (id: string, key: string) =>
+    act(async () =>
+      root.render(
+        <WorkspaceAccessContext.Provider value={person(id)}>
+          <ReportModes
+            key={key}
+            panels={panels()}
+            boundCallId={call}
+            documentData={{ report: syntheticReport }}
+          />
+        </WorkspaceAccessContext.Provider>,
+      ),
+    );
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await show("first", "first");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
+      .click(),
+  );
+  expect(localStorage.getItem("ac:report-view:tenant-one:first")).toBe("story");
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await show("first", "reopened");
+  expect(mode().dataset.view).toBe("story");
+  await show("second", "second");
+  expect(mode().dataset.view).toBe("reading");
+  window.history.replaceState(null, "", `/?call=${call}&view=tabs`);
+  await show("first", "explicit");
+  expect(mode().dataset.view).toBe("tabs");
+  localStorage.removeItem("ac:report-view:tenant-one:first");
 });

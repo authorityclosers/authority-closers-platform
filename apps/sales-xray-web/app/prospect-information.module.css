@@ -125,7 +125,7 @@
   color: var(--lx-muted);
 }
 .fact dt small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--lx-teal);
 }
 .fact[data-fact-label="Unknown"] dt small {
@@ -144,6 +144,11 @@
   font-size: 12px;
   color: var(--lx-muted);
   margin: 6px 0;
+}
+.lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .evidence {
   font-size: 12px;
@@ -183,5 +188,42 @@
   .section > summary small {
     max-width: 100%;
     text-align: left;
+  }
+}
+
+.linkSection {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--lx-line-soft);
+  font-size: 13px;
+}
+.linkSection h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+.linkSection input {
+  width: 100%;
+  max-width: 360px;
+}
+.linkSection button {
+  min-height: 32px;
+  font: inherit;
+}
+.profileLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 8px;
+  color: var(--lx-teal);
+  font-size: 13px;
+}
+.factSkeleton {
+  min-height: 160px;
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-paper-2);
+}
+@media (max-width: 600px) {
+  .linkSection button,
+  .profileLink {
+    min-height: 44px;
   }
 }

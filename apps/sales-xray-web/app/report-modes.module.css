@@ -1159,3 +1159,28 @@
     min-width: var(--lx-row-min-h, 44px);
   }
 }
+
+.supplement {
+  margin-top: 16px;
+  border-top: 1px solid var(--lx-line-soft);
+  padding-top: 8px;
+}
+.supplement > summary {
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--lx-teal);
+  font: 600 14px/1.5 var(--lx-font-ui);
+}
+.workspace[data-view="story"] .sections {
+  gap: 16px;
+}
+.workspace[data-view="story"] .section {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+@media (max-width: 600px) {
+  .supplement > summary {
+    min-height: 44px;
+  }
+}

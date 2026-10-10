@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { LockKeyhole } from "lucide-react";
+import { InlineEdit } from "./ui/kit";
 import { formatClock } from "./lightbox/time";
 import type { ProspectCall, ProspectSummary } from "./prospects-client";
 import { confirmDetectedProspect, editProspectField } from "./prospects-client";
@@ -35,11 +37,15 @@ function Field({
   field,
   text,
   state = "Unknown",
+  onSave,
+  disabled,
 }: {
   label: string;
   field?: ProfileField;
   text?: string | null;
   state?: FactLabel;
+  onSave?: (value: string) => Promise<void>;
+  disabled?: boolean;
 }) {
   const known = field?.state === "known" ? field : null;
   const factLabel = known
@@ -57,9 +63,25 @@ function Field({
         {label}
         <small>{factLabel}</small>
       </dt>
-      <dd>{known ? profileValueText(known.value) : text || "Unknown"}</dd>
+      <dd>
+        {onSave ? (
+          <InlineEdit
+            label={label}
+            value={known ? profileValueText(known.value) : text || ""}
+            placeholder="Unknown · add"
+            disabled={disabled}
+            onSave={onSave}
+          />
+        ) : known ? (
+          profileValueText(known.value)
+        ) : (
+          text || "Unknown"
+        )}
+      </dd>
       {known?.locked && (
-        <small className={styles.lock}>Person edit · locked</small>
+        <small className={styles.lock}>
+          <LockKeyhole size={12} aria-hidden="true" /> Person edit · locked
+        </small>
       )}
       {known?.evidence && (
         <details className={styles.evidence}>
@@ -115,15 +137,51 @@ export function ProspectInformation({
   calls?: ProspectCall[];
   onSaved?: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editKey, setEditKey] = useState<ProfileKey>("name");
-  const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const pending = useRef(false);
   const fields = prospect.profile_fields ?? {};
+  const canEdit =
+    !!prospect.profile_fields && prospect.can_edit !== false && !!onSaved;
+  async function save(key: ProfileKey, value: string) {
+    if (pending.current)
+      throw new Error("Another field is being saved. Try again.");
+    pending.current = true;
+    setSaving(true);
+    try {
+      await editProspectField(
+        prospect.prospect_id,
+        prospect.revision,
+        key,
+        value,
+      );
+      dismissNotice("prospect-field-edit");
+      onSaved?.();
+    } catch (error) {
+      notify({
+        id: "prospect-field-edit",
+        tone: "error",
+        title: "Edit wasn't saved",
+        message: error instanceof Error ? error.message : "Try again.",
+        action: { label: "Try again", run: () => onSaved?.() },
+      });
+      throw error;
+    } finally {
+      pending.current = false;
+      setSaving(false);
+    }
+  }
   const field = (
     key: ProfileKey,
     label: string = PROSPECT_FIELD_LABELS[key],
-  ) => <Field key={key} label={label} field={fields[key]} />;
+  ) => (
+    <Field
+      key={key}
+      label={label}
+      field={fields[key]}
+      disabled={saving}
+      onSave={canEdit ? (value) => save(key, value) : undefined}
+    />
+  );
   const unknowns = (labels: string[]) =>
     labels.map((label) => <Field key={label} label={label} />);
   const content = [
@@ -133,6 +191,8 @@ export function ProspectInformation({
         field={fields.name}
         text={prospect.profile_fields ? null : prospect.name}
         state="Observed"
+        disabled={saving}
+        onSave={canEdit ? (value) => save("name", value) : undefined}
       />
       {field("role")}
       {field("business")}
@@ -294,102 +354,6 @@ export function ProspectInformation({
             </button>
           </div>
         )}
-      {prospect.profile_fields && prospect.can_edit !== false && onSaved && (
-        <div className={styles.edit}>
-          {!editing ? (
-            <button type="button" onClick={() => setEditing(true)}>
-              Edit a field
-            </button>
-          ) : (
-            <form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (saving) return;
-                setSaving(true);
-                try {
-                  await editProspectField(
-                    prospect.prospect_id,
-                    prospect.revision,
-                    editKey,
-                    draft,
-                  );
-                  dismissNotice("prospect-field-edit");
-                  setEditing(false);
-                  setDraft("");
-                  onSaved();
-                } catch (error) {
-                  notify({
-                    id: "prospect-field-edit",
-                    tone: "error",
-                    title: "Edit wasn't saved",
-                    message:
-                      error instanceof Error ? error.message : "Try again.",
-                    action: {
-                      label: "Try again",
-                      run: () => {
-                        onSaved();
-                        setEditing(true);
-                      },
-                    },
-                  });
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            >
-              <label>
-                Field
-                <select
-                  value={editKey}
-                  disabled={saving}
-                  onChange={(event) => {
-                    setEditKey(event.target.value as ProfileKey);
-                    setDraft("");
-                  }}
-                >
-                  {Object.entries(PROSPECT_FIELD_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Your value
-                <input
-                  value={draft}
-                  disabled={saving}
-                  required
-                  maxLength={
-                    editKey === "name" || editKey === "phone"
-                      ? 160
-                      : editKey === "email"
-                        ? 320
-                        : 2048
-                  }
-                  onChange={(event) => setDraft(event.target.value)}
-                />
-              </label>
-              <p className={styles.note}>
-                Your edit stays locked. Phone and email are entered by people
-                only.
-              </p>
-              <div className={styles.actions}>
-                <button type="submit" disabled={saving || !draft.trim()}>
-                  {saving ? "Saving…" : "Save and lock"}
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => setEditing(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
       {PROSPECT_SECTIONS.map(([title, subtitle], i) =>
         i === 0 ? (
           <section

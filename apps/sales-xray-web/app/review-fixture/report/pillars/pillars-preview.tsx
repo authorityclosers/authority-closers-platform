@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { ReportModes } from "../../../report-modes";
+import { DipakOverview } from "../../../dipak-overview";
+import { SalesSkills } from "../../../sales-skills";
 import type { ReportEvidence } from "../../../report-contract";
 import { syntheticReport, syntheticCallRecord } from "../synthetic-report";
 import styles from "../../../report-pillar-screen.module.css";
@@ -17,7 +19,7 @@ export function PillarsPreview() {
         </p>
         <ReportModes
           structure="pillars"
-          initialView="reading"
+          initialView="story"
           lightSurface={false}
           documentData={{
             report: syntheticReport,
@@ -25,7 +27,30 @@ export function PillarsPreview() {
             callLength: "00:35",
             title: "Fictional Report pillars",
           }}
-          panels={[]}
+          panels={[
+            {
+              id: "overview",
+              label: "Overview",
+              content: (
+                <DipakOverview
+                  showHeading={false}
+                  report={syntheticReport}
+                  onSelectEvidence={setSource}
+                  callRecord={syntheticCallRecord}
+                />
+              ),
+            },
+            {
+              id: "skills",
+              label: "Sales skills",
+              content: (
+                <SalesSkills
+                  dimensions={syntheticReport.dimensions}
+                  onSelectEvidence={setSource}
+                />
+              ),
+            },
+          ]}
           onSelectEvidence={setSource}
         />
         <aside role="status" className={styles.previewSource}>
