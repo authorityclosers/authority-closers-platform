@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.audit.models import AuditEvent
@@ -336,12 +336,87 @@ class ConversationInferenceWorker:
                 return None
             recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
             jobs = await JobRepository(db).claim(kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE)
+            await self._recover_terminal_job(db, recovery.generation)
             if not jobs:
                 return None
             job = jobs[0]
             if job.lease_token is None:
                 raise ConversationConflict("The provider job has no lease.")
             return Work(job.id, job.lease_token, recovery.generation, job.kind)
+
+    async def _recover_terminal_job(self, db: AsyncSession, generation: int) -> None:
+        """Reconcile one quarantined job without replaying its external effect.
+
+        Claim already applies database-clock lease/claim-budget expiry. Lock the
+        exact job, task and run together; skip competing workers and preserve
+        completed/cancelled/erased results and older recovery generations.
+        Customer settlement and provider-cost reconciliation remain separate.
+        """
+        candidate = (
+            await db.execute(
+                select(Job, ConversationInferenceTask, ConversationRun)
+                .join(
+                    ConversationInferenceTask,
+                    (ConversationInferenceTask.job_id == Job.id)
+                    & (ConversationInferenceTask.tenant_id == Job.tenant_id),
+                )
+                .join(
+                    ConversationRun,
+                    (ConversationRun.id == ConversationInferenceTask.run_id)
+                    & (ConversationRun.job_id == Job.id)
+                    & (ConversationRun.tenant_id == ConversationInferenceTask.tenant_id)
+                    & (ConversationRun.person_id == ConversationInferenceTask.person_id)
+                    & (ConversationRun.recording_id == ConversationInferenceTask.recording_id)
+                    & (ConversationRun.generation == ConversationInferenceTask.generation),
+                )
+                .where(
+                    Job.kind == INFERENCE_JOB,
+                    Job.external_side_effect.is_(True),
+                    Job.status == "dead_letter",
+                    Job.recovery_generation == generation,
+                    ConversationInferenceTask.state.in_(("queued", "running")),
+                    ConversationInferenceTask.erased_at.is_(None),
+                    ConversationInferenceTask.checkpoint_id.is_(None),
+                    ConversationRun.state.in_(("queued", "running")),
+                    or_(
+                        Job.provider_receipt.is_(None),
+                        Job.provider_receipt["validation_state"].as_string() == "provider_returned",
+                    ),
+                )
+                .order_by(Job.updated_at, Job.id)
+                .limit(1)
+                .with_for_update(
+                    of=(Job, ConversationInferenceTask, ConversationRun), skip_locked=True
+                )
+                .execution_options(populate_existing=True)
+            )
+        ).first()
+        if candidate is None:
+            return
+        job, task, run = candidate
+        task.state = "uncertain" if job.dispatch_started_at is not None else "failed"
+        run.state = "failed"
+        await AuditRepository(db).append(
+            tenant_id=job.tenant_id,
+            actor_person_id=None,
+            actor_type="system",
+            action="conversation.provider_job_recovery_required",
+            resource_type="job",
+            resource_id=job.id,
+            payload={
+                "schema": "ac.sales_xray.provider_job_recovery/1",
+                "run_id": str(run.id),
+                "stage": task.stage,
+                "claim_count": job.attempt_count,
+                "claim_limit": job.max_attempts,
+                "recovery_generation": generation,
+                "dispatch_started": job.dispatch_started_at is not None,
+                "task_state": task.state,
+                "run_state": run.state,
+            },
+            reason="Terminal worker job reconciled; no provider replay or minute settlement.",
+            now=self.clock(),
+        )
 
     async def _locked_job(self, db: AsyncSession, work: Work) -> Job:
         await RecoveryStateRepository(db).require_ready(

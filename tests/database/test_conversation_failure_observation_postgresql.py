@@ -18,6 +18,7 @@ from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
     ConversationApplication,
+    ConversationConflict,
 )
 from ac_platform.conversation_intelligence.checkpoints import (
     SourceBinding,
@@ -31,8 +32,10 @@ from ac_platform.conversation_intelligence.inference_broker import InferenceBrok
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
+    ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationRecording,
+    ConversationRun,
 )
 from ac_platform.conversation_intelligence.provider_failure_observation import (
     ProviderFailureObservation,
@@ -48,6 +51,7 @@ from tests.database.test_conversation_worker_postgresql import _prepare as prepa
 
 ACTION = "conversation.provider_failure_observed"
 RETRY_ACTION = "conversation.provider_retry_assessed"
+RECOVERY_ACTION = "conversation.provider_job_recovery_required"
 
 
 async def seed_measured_fixture(sessions: Any, prepared: Any) -> None:
@@ -416,6 +420,178 @@ def test_original_observation_is_durable_but_never_a_success_or_no_charge_receip
                             reason="Fictional retry must remain guarded",
                             audit=AuditRepository(db),
                         )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "dispatched",
+        "exhausted",
+        "live",
+        "erased",
+        "cancelled",
+        "generation",
+        "validated",
+        "locked",
+        "audit_crash",
+    ],
+)
+def test_terminal_job_recovery_preserves_effects_and_settlement(
+    postgres_harness: Any, tmp_path: Path, mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            await seed_measured_fixture(sessions, prepared)
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+            )
+            async with sessions() as db, db.begin():
+                service = ConversationInference(ConversationApplication(db))
+                await service.accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                await service.request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key=f"terminal-recovery-{mode}",
+                )
+            broker = RefusalBroker()
+            worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
+            work = await worker.claim()
+            assert work is not None
+            if mode == "dispatched":
+                with pytest.raises(InferenceBrokerError):
+                    await worker._dispatch(work)
+            async with sessions() as db, db.begin():
+                job = await db.get(Job, work.job_id)
+                task = await db.scalar(
+                    select(ConversationInferenceTask).where(
+                        ConversationInferenceTask.job_id == work.job_id
+                    )
+                )
+                assert job is not None and task is not None
+                run_row = await db.get(ConversationRun, task.run_id)
+                assert run_row is not None
+                if mode != "live":
+                    job.leased_until = datetime.now(UTC) - timedelta(seconds=1)
+                    job.max_attempts = job.attempt_count
+                if mode == "erased":
+                    task.erased_at = datetime.now(UTC)
+                    task.intent = None
+                if mode == "cancelled":
+                    task.state = run_row.state = "cancelled"
+                if mode == "generation":
+                    job.recovery_generation += 1
+                if mode == "validated":
+                    job.provider_receipt = {"validation_state": "validated"}
+                    job.provider_receipt_digest = content_hash(job.provider_receipt)
+                    job.receipt_recorded_at = datetime.now(UTC)
+                if mode in {"generation", "validated"}:
+                    job.status = "dead_letter"
+                    job.lease_token = job.leased_until = None
+                    job.dead_lettered_at = datetime.now(UTC)
+                    job.last_error = "fictional dead letter"
+                before_states = (task.state, run_row.state)
+                before_effect = (
+                    job.dispatch_started_at,
+                    job.provider_idempotency_key,
+                    job.provider_receipt,
+                    job.attempt_count,
+                )
+                minutes = await db.get(ConversationMinuteAccount, (task.tenant_id, task.person_id))
+                assert minutes is not None
+                before_minutes = minutes.snapshot
+                run_id = task.run_id
+            if mode == "locked":
+                async with sessions() as locker, locker.begin():
+                    locked = await locker.scalar(
+                        select(ConversationInferenceTask)
+                        .where(ConversationInferenceTask.run_id == run_id)
+                        .with_for_update()
+                    )
+                    assert locked is not None
+                    assert await worker.claim() is None
+                    assert locked.state == before_states[0]
+            if mode == "audit_crash":
+                original_append = AuditRepository.append
+
+                async def crash_append(*args: Any, **kwargs: Any) -> None:
+                    raise RuntimeError("fictional recovery audit crash")
+
+                monkeypatch.setattr(AuditRepository, "append", crash_append)
+                with pytest.raises(RuntimeError, match="fictional recovery audit crash"):
+                    await worker.claim()
+                monkeypatch.setattr(AuditRepository, "append", original_append)
+                async with sessions() as db:
+                    rolled_back = await db.get(Job, work.job_id)
+                    task = await db.get(ConversationInferenceTask, run_id)
+                    assert rolled_back is not None and rolled_back.status == "leased"
+                    assert task is not None and task.state == before_states[0]
+            assert await worker.claim() is None
+            async with sessions() as db:
+                job = await db.get(Job, work.job_id)
+                task = await db.get(ConversationInferenceTask, run_id)
+                run_row = await db.get(ConversationRun, run_id)
+                assert job is not None and task is not None and run_row is not None
+                recovered = mode in {"dispatched", "exhausted", "locked", "audit_crash"}
+                assert (task.state, run_row.state) == (
+                    ("uncertain" if mode == "dispatched" else "failed", "failed")
+                    if recovered
+                    else before_states
+                )
+                assert (
+                    job.dispatch_started_at,
+                    job.provider_idempotency_key,
+                    job.provider_receipt,
+                    job.attempt_count,
+                ) == before_effect
+                minutes = await db.get(ConversationMinuteAccount, (task.tenant_id, task.person_id))
+                assert minutes is not None and minutes.snapshot == before_minutes
+                events = list(
+                    await db.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.action == RECOVERY_ACTION,
+                            AuditEvent.resource_id == str(work.job_id),
+                        )
+                    )
+                )
+                assert len(events) == int(recovered)
+                assert (await AuditRepository(db).verify_chain(task.tenant_id)).valid
+            if recovered:
+                with pytest.raises(ConversationConflict, match="fenced"):
+                    await worker._dispatch(work)
+            assert await worker.claim() is None
+            async with sessions() as db:
+                assert len(
+                    list(
+                        await db.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.action == RECOVERY_ACTION,
+                                AuditEvent.resource_id == str(work.job_id),
+                            )
+                        )
+                    )
+                ) == int(recovered)
+            assert broker.calls == int(mode == "dispatched")
         finally:
             await engine.dispose()
 
