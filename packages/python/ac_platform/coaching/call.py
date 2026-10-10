@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from ac_platform.coaching.contracts import (
+    ClipSuggestion,
     Focus,
     Mission,
     Model,
@@ -47,6 +48,7 @@ class CallCoachingView(Model):
     lesson: TextLesson | None
     practice: Practice | None
     mission: Mission | None
+    media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: None = None
     limitations: tuple[str, ...]
 
@@ -75,7 +77,14 @@ class CallCoachingView(Model):
                 or self.lesson.next_call_connection != self.mission.behavior
             ):
                 raise ValueError("Call coaching must keep one source-bound mission.")
-        elif self.focus or self.evidence or self.lesson or self.practice or self.mission:
+        elif (
+            self.focus
+            or self.evidence
+            or self.lesson
+            or self.practice
+            or self.mission
+            or self.media_clips
+        ):
             raise ValueError("Unavailable coaching must not retain private evidence.")
         return self
 

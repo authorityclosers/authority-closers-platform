@@ -246,3 +246,10 @@
     margin: 10px 0;
   }
 }
+
+.mediaSlide {
+  padding: 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+}

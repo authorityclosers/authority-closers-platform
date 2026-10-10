@@ -1,3 +1,4 @@
+import type { CoachingClip } from "./media-contract";
 import type { Coaching } from "./coaching-client";
 import type { CallCoaching } from "./coaching-read";
 import type { TeamCoaching } from "./team-contract";
@@ -178,4 +179,29 @@ export const fictionalTeamCoaching: TeamCoaching & {
   limitations: ["Fictional anonymous counts, no private rep data."],
   entitlement: "coaching",
   entitlement_policy: "AUT-1678-open-access",
+};
+
+export const fictionalClip: CoachingClip = {
+  topic_id: "fictional-impact",
+  revision: "a".repeat(64),
+  review_id: "00000000-0000-0000-0000-000000000065",
+  title: "Fictional impact lesson",
+  kind: "video",
+  placeholder: true,
+  voice: "neutral",
+  access: "full",
+  entitlement_policy: "AUT-1678-open-access",
+  start_ms: 1000,
+  end_ms: 5000,
+  reason: "This fictional reviewed cut shows one consequence question.",
+  takeaways: ["Check the buyer’s consequence."],
+  transcript_excerpt: "समस्या का असर क्या है?",
+  slides: [
+    {
+      segment_id: "a",
+      title: "Find the consequence",
+      bullets: ["Ask one question."],
+    },
+    { segment_id: "b", title: "Listen", bullets: ["Wait for their answer."] },
+  ],
 };

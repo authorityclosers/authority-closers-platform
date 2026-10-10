@@ -5,6 +5,7 @@ import { FileSearch } from "lucide-react";
 import { Empty, Panel } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { EvidencePlayer } from "./evidence-player";
+import { CoachingMedia } from "./media-player";
 import styles from "./coaching.module.css";
 
 export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
@@ -67,6 +68,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
       </Panel>
       <Panel title="Here’s What Better Looks Like">
         <div className={styles.panelBody}>
+          <CoachingMedia clips={coaching.media_clips} />
           <h3>{lesson.title}</h3>
           <p>{lesson.quick_idea}</p>
           <ol className={styles.framework}>

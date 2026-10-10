@@ -67,3 +67,62 @@ Private strike notes, offline corpus counts and fictional local browser artifact
 - Strike A's shared page kit and `app/ui/sx-tokens.css` exist at this continuation's base. This strike reuses them without editing them. The Windows AC Orchestra skill and authorized normal Pro browser remain unavailable on this server; installed browser automation is metered and excluded by the subscription-only rule. Bounded local work continues.
 
 The initial private read-only slice merged in #423 on 2026-10-10. This follow-up preserves that access rule and repairs legacy report display. This session does not merge, deploy, read secrets, or mutate staging/production. After the approved merge and normal ui-lane sync, open `/coaching` while signed in; inspect the evidence, lesson and mission, then change workspace. Full strike acceptance still needs the requirements above.
+
+Owner placeholder-media handoff (11 Oct): `dataset.py` reads optional, read-only
+`/home/acdev/datasets/synthetic-v1/coaching-media/<topic_id>.json` exports under
+`ac.sales-xray.coaching-dataset-topic/1`. The topic ID is stable for replacement
+by Dipak's real recording later; this version accepts only explicitly labelled
+neutral placeholders. It does not generate speech or alter the dataset/spool.
+The owner script remains the provenance reference; the neutral narrator must
+never be identified as Dipak's recorded voice.
+
+Each normalized export carries the existing `MediaTranscript` (exact source
+hash/revision/duration, timestamped spans, route/activation/cost references and
+an attributable quality review), proposals and exactly their current human
+`SegmentReview` records. A changed proposal or transcript invalidates approval.
+`Narration` supplies a safe relative MP3 path inside this root, exact SHA-256,
+byte count (maximum 20 MiB), duration and `verified` timing receipt. Pending,
+failed, missing or unreviewed audio produces no clip recommendation. An attributable `PresentationReview` approves the exact whole export hash
+(excluding the review itself), binding narration receipts, current tag reviews
+and slide content. Missing/rejected or changed presentation approval remains
+unavailable. A slide references a retained transcript segment and contains title/bullets; only slides
+from the selected segment IDs are returned. JSON files are bounded at 512 KiB
+and the read at 100 topics. Parsed topic snapshots use a bounded 100-entry
+cache keyed by device/inode/size/mtime/ctime; every read checks current file
+revisions and narration existence again, so a replaced/revoked export is not
+served from an old snapshot. Symlink JSONs and escaping media paths are excluded.
+This export is a reviewed source handoff, not an invented canonical queue or a
+substitute for future database history. Exporters must retain review history
+and publish immutable media bytes and atomic current topic snapshots.
+
+Call and My Coaching include up to three exact skill/gap matches in the same
+account read. Malformed/missing files leave the structured text lesson intact;
+no dataset path or arbitrary media URL reaches the browser. Source playback
+uses `/v1/me/coaching/media/<topic>/<transcript_hash>/<current_review_id>/source`,
+with fresh current Sales Xray account/workspace admission and exact current
+review checks. Source bytes are hashed before the first byte and streamed from
+the same open descriptor; single byte ranges are supported. Replaced exports,
+revoked reviews and wrong hashes cannot reuse an old route. Responses are
+private/no-store. This current route exposes only the explicit
+`AUT-1678-open-access` Coaching entitlement. Limited playback must wait for
+server-enforced durable usage/credits policy; browser segment pausing is only
+navigation, never access control.
+
+The player marks `Placeholder · neutral narration`, says why the reviewed cut
+fits, supports slide navigation, exposes transcript/takeaways, fetches audio
+only on Play, stops at the selected cut, pauses other Coaching audio and offers
+Try again on errors. It does not infer mission completion from listening.
+Actual playback proof awaits Strike F's verified artifacts; local test media
+and browser fixtures are deliberately fictional. No paid API, deployed source
+or database change is introduced by this adapter.
+
+Current placeholder-slice evidence: 93 Coaching unit cases and the three
+focused PostgreSQL Call/Media cases pass (96 together); the final Media case
+also proves My coaching returns clips and rejects changed reviews/bytes. Across
+completed slices there are eight focused PostgreSQL cases. All 33 Coaching
+Vitest cases, ruff/mypy, ESLint/TypeScript, Prettier and static-preview production
+export pass. Final fictional Call/Team proofs at 390/1440 light/dark verify
+placeholder labels, slide navigation, source retry, no eager audio, exactly one
+server Coaching read, no hydration refetch, no overflow/page errors and corner
+retry. Browser/server processes are closed. The actual placeholder directory is
+absent; these proofs do not certify Dipak content, source timing or deployment.

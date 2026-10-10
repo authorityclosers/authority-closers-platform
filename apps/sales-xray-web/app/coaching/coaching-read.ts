@@ -1,3 +1,4 @@
+import { parseClips, type CoachingClip } from "./media-contract";
 import {
   parseCoaching,
   parseEvidence,
@@ -32,6 +33,7 @@ export type CallCoaching = {
   lesson: (Omit<TextLesson, "own_call"> & { own_call: Evidence | null }) | null;
   practice: Coaching["practice"];
   mission: Coaching["mission"];
+  media_clips?: CoachingClip[];
   limitations: string[];
 };
 export type CoachingResult =
@@ -155,6 +157,7 @@ export function parseCallCoaching(
     state: item.state as CallCoaching["state"],
     basis: item.basis as CallCoaching["basis"],
     evidence,
+    media_clips: item.state === "ready" ? parseClips(item.media_clips) : [],
     root_cause: {
       hypothesis: text(
         cause.hypothesis,

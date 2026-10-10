@@ -30,6 +30,7 @@ import {
   requestedSkillLabel,
   type RequestedSkill,
 } from "./focus-request";
+import { CoachingMedia } from "./media-player";
 import styles from "./coaching.module.css";
 
 const masteryLabel: Record<MasteryState, string> = {
@@ -180,6 +181,7 @@ export function CoachingStory({
         title="Here’s What Better Looks Like"
         headingLevel="h2"
       >
+        <CoachingMedia clips={coaching.media_clips} />
         <span className={styles.meta}>Recommended text lesson</span>
         <h3>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
