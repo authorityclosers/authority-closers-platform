@@ -139,7 +139,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   text-align: center;
@@ -233,7 +233,7 @@
 .footnote {
   padding: 10px 14px;
   border-top: 1px solid var(--lx-line-soft);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .surface > .footnote:first-child {
@@ -460,7 +460,7 @@
   align-items: center;
   gap: 7px;
   color: var(--lx-ink-3);
-  font-size: 12.5px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -501,7 +501,7 @@
   color: var(--lx-ink-3);
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -529,7 +529,7 @@
 }
 
 .empty b {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -555,7 +555,7 @@
 .quietLine {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .receiptQuiet {
@@ -730,7 +730,7 @@
   border-radius: var(--lx-radius-xs);
   background: var(--lx-sunken);
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 18px;
 }
@@ -1077,7 +1077,7 @@
 
 .settingIntro p {
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .settingBody {
@@ -1173,11 +1173,68 @@
 
 .hint {
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .hint[data-tone="error"] {
   color: var(--lx-danger);
+}
+
+/* ---------- Logo ---------- */
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* The square every logo becomes: what the header tile and the sidebar show. */
+.logoTile {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.logoTile > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--lx-surface);
+  object-fit: cover;
+}
+
+.logoTile[data-preview] {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+
+.logoCopy {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.logoActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The result line keeps its height, so a message never moves the card. */
+.logoCopy [role="status"],
+.logoCopy [role="alert"] {
+  min-height: 18px;
 }
 
 .chips {
@@ -1197,7 +1254,7 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-pill);
   background: var(--lx-paper-2);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1291,7 +1348,7 @@
 
 .toggle small {
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 /* ---------- Page states ---------- */
@@ -1305,7 +1362,7 @@
 }
 
 .state h1 {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -1352,11 +1409,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  /* The loaded header's height: name line, gap, meta line. */
+  min-height: calc(20px * 1.25 + 2px + 13px * 1.45);
 }
 
 .skeletonTile,
 .skeletonLines i,
-.skeletonTabs,
 .rowSkeleton span,
 .bone {
   display: block;
@@ -1369,7 +1427,8 @@
    hairline there. Inside surfaces it reads like the Calls skeleton. */
 .skeletonTile,
 .skeletonLines i,
-.skeletonTabs {
+.tabs .bone,
+.sectionHead .bone {
   background: var(--lx-line);
 }
 
@@ -1390,6 +1449,12 @@
 
 .bone[data-w="context"] {
   width: 58%;
+}
+
+/* Label and context bones fill the 12 px text lines they stand for. */
+.kpi .bone[data-w="label"],
+.kpi .bone[data-w="context"] {
+  margin-block: calc((12px * 1.45 - 10px) / 2);
 }
 
 .boneRow {
@@ -1435,9 +1500,15 @@
   height: 12px;
 }
 
-.skeletonTabs {
-  height: 32px;
-  max-width: 280px;
+.bone[data-w="tab"] {
+  width: 56px;
+  height: 11px;
+}
+
+.bone[data-w="head"] {
+  width: 96px;
+  height: 11px;
+  align-self: center;
 }
 
 .rowSkeleton {
@@ -1500,14 +1571,14 @@
 .patternColumn h3 {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .patternQuiet {
   margin: 0;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 /* A bar list: the tint behind each row is its share; the number is exact. */
@@ -1575,7 +1646,7 @@
   color: var(--lx-ink-3);
   cursor: pointer;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1711,12 +1782,17 @@
     margin-block: -10px;
   }
 
-  .page {
+  .page,
+  .skeleton {
     gap: 16px;
   }
 
   .headerCopy h1 {
-    font-size: 18px;
+    font-size: 20px;
+  }
+
+  .skeletonHeader {
+    min-height: calc(18px * 1.25 + 2px + 13px * 1.45);
   }
 
   .strip,
@@ -1745,7 +1821,7 @@
   }
 
   .kpi dd b {
-    font-size: 22px;
+    font-size: 20px;
   }
 
   .spark {
@@ -1853,7 +1929,6 @@
   .panel,
   .skeletonTile,
   .skeletonLines i,
-  .skeletonTabs,
   .rowSkeleton span,
   .bone,
   .formSkeleton span {

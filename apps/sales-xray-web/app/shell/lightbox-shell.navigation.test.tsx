@@ -74,6 +74,17 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
       'a[aria-label="Prospects"][href="/prospects"][data-next-client-link="true"]',
     ),
   ).not.toBeNull();
+  // Coaching sits right after Prospects in the rail (AUT-1678).
+  const rail = Array.from(
+    desktopNav?.querySelectorAll<HTMLAnchorElement>("a[data-rail-tip]") ?? [],
+    (link) => link.dataset.railTip,
+  );
+  expect(
+    rail.slice(rail.indexOf("Prospects"), rail.indexOf("Prospects") + 2),
+  ).toEqual(["Prospects", "Coaching"]);
+  expect(
+    desktopNav?.querySelector('a[aria-label="Coaching"][href="/coaching"]'),
+  ).not.toBeNull();
   const mobileCalls = Array.from(
     mobileNav?.querySelectorAll<HTMLAnchorElement>(
       'a[data-next-client-link="true"]',
@@ -131,8 +142,16 @@ it("reaches every section from the phone tab bar, plus a dev settings control", 
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Dashboard", "Calls", "New", "Prospects", "More", "Settings"]
-        : ["Dashboard", "Calls", "New", "Prospects", "More"],
+        ? [
+            "Dashboard",
+            "Calls",
+            "New",
+            "Prospects",
+            "Coaching",
+            "More",
+            "Settings",
+          ]
+        : ["Dashboard", "Calls", "New", "Prospects", "Coaching", "More"],
     );
     expect(nav.querySelector('a[href="/prospects"]')?.textContent?.trim()).toBe(
       "Prospects",

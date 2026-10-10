@@ -35,6 +35,7 @@ import {
   rememberSubmission,
   type LibrarySubmission,
 } from "./acquisition-client";
+import { SectionBoundary } from "./ui/section-boundary";
 import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
 import { newCallHref } from "./new-call-navigation";
@@ -159,6 +160,47 @@ function excerpt(text: string | null, max = 96) {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
+/**
+ * The list's view lives in the address (status, rep, sort, q), so a reload or
+ * a shared link opens the same view. Unknown values read as the default.
+ */
+const STATUS_PARAM: Partial<Record<CallTone, string>> = {
+  active: "processing",
+  ready: "completed",
+  attention: "attention",
+};
+
+export function readCallsView(search: string) {
+  const params = new URLSearchParams(search);
+  const status = params.get("status");
+  const sort = params.get("sort");
+  return {
+    filter: ((Object.keys(STATUS_PARAM) as CallTone[]).find(
+      (tone) => STATUS_PARAM[tone] === status,
+    ) ?? "all") as "all" | CallTone,
+    rep: params.get("rep") ?? "",
+    sort: (SORTS.some((option) => option.id === sort)
+      ? sort
+      : "newest") as CallSort,
+  };
+}
+
+/** The address for a view; other parameters (an open call) are kept. */
+export function callsViewSearch(
+  search: string,
+  view: { filter: "all" | CallTone; rep: string; sort: CallSort; q: string },
+) {
+  const params = new URLSearchParams(search);
+  const put = (key: string, value: string) =>
+    value ? params.set(key, value) : params.delete(key);
+  put("status", view.filter === "all" ? "" : (STATUS_PARAM[view.filter] ?? ""));
+  put("rep", view.rep);
+  put("sort", view.sort === "newest" ? "" : view.sort);
+  put("q", view.q);
+  const next = params.toString();
+  return next ? `?${next}` : "";
+}
+
 const FILTERS: { id: "all" | CallTone; label: string }[] = [
   { id: "all", label: "All" },
   { id: "ready", label: "Report ready" },
@@ -268,25 +310,66 @@ function CallsLibraryContent({
   // Only the call being opened says so; the others are just unavailable.
   const [openingId, setOpeningId] = useState<string | null>(null);
   const opening = openingId !== null;
-  const [filter, setFilter] = useState<"all" | CallTone>(() => {
-    if (typeof window === "undefined") return "all";
-    const status = new URLSearchParams(window.location.search).get("status");
-    if (status === "processing") return "active";
-    if (status === "completed") return "ready";
-    if (status === "attention") return "attention";
-    return "all";
-  });
+  const [filter, setFilter] = useState<"all" | CallTone>(() =>
+    typeof window === "undefined"
+      ? "all"
+      : readCallsView(window.location.search).filter,
+  );
   const [renamingId, setRenamingId] = useState<string | null>(null);
   // The sidebar search opens Calls with ?q=; a new one replaces the box.
+  // The box writes ?q= too: those writes are acknowledged, never re-applied,
+  // so the address catching up can't overwrite what is being typed.
   const urlQuery = searchParams.get("q") ?? "";
   const [query, setQuery] = useState(urlQuery);
-  const [appliedUrlQuery, setAppliedUrlQuery] = useState(urlQuery);
-  if (urlQuery !== appliedUrlQuery) {
-    setAppliedUrlQuery(urlQuery);
-    setQuery(urlQuery);
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  const [boxWrites, setBoxWrites] = useState<string[]>([]);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    const acknowledged = boxWrites.indexOf(urlQuery);
+    if (acknowledged >= 0) setBoxWrites(boxWrites.slice(acknowledged + 1));
+    else setQuery(urlQuery);
   }
-  const [selectedRep, setSelectedRep] = useState("");
-  const [sort, setSort] = useState<CallSort>("newest");
+  // A rep from the address stays only if the loaded calls include them.
+  const [selectedRep, setSelectedRep] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : readCallsView(window.location.search).rep,
+  );
+  const [sort, setSort] = useState<CallSort>(() =>
+    typeof window === "undefined"
+      ? "newest"
+      : readCallsView(window.location.search).sort,
+  );
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    const next = callsViewSearch(search, {
+      filter,
+      rep: selectedRep,
+      sort,
+      q: new URLSearchParams(search).get("q") ?? "",
+    });
+    if (next !== search)
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${pathname}${next}${hash}`,
+      );
+  }, [filter, selectedRep, sort]);
+  // The search box writes ?q= itself (see boxWrites above).
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    setBoxWrites((writes) => [...writes, value].slice(-50));
+    const { pathname, search, hash } = window.location;
+    const params = new URLSearchParams(search);
+    if (value) params.set("q", value);
+    else params.delete("q");
+    const next = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${pathname}${next ? `?${next}` : ""}${hash}`,
+    );
+  };
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [previewId, setPreviewId] = useState<string | null>(null);
   // Phones show row checkboxes only in Select mode; desktops always do.
@@ -774,6 +857,12 @@ function CallsLibraryContent({
       a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
   );
   const showReps = !preview && repOptions.length > 0;
+  // A rep from the address or an earlier list filters only while the loaded
+  // calls include them; otherwise the list shows everyone's calls.
+  const activeRep =
+    showReps && repOptions.some((rep) => rep.personId === selectedRep)
+      ? selectedRep
+      : "";
   const viewerId = access?.context?.personId ?? null;
   const callers = new Set(
     submissions.map((row) => row.owner?.personId ?? viewerId),
@@ -811,7 +900,7 @@ function CallsLibraryContent({
     submissions.filter(
       (submission) =>
         (filter === "all" || callTone(submission) === filter) &&
-        (!selectedRep || submission.owner?.personId === selectedRep) &&
+        (!activeRep || submission.owner?.personId === activeRep) &&
         (!needle ||
           callTitle(submission.label, unnamedCallName(submission.createdAt))
             .toLocaleLowerCase()
@@ -1154,28 +1243,30 @@ function CallsLibraryContent({
               {length.text ? <span>{length.text}</span> : null}
               {rep ? <span>{rep}</span> : null}
             </small>
-            {read ? (
+            {/* The summary line shows only with something in it: a row
+                never keeps an empty line under its name. */}
+            {read && (insight?.callType || insight?.assessment) ? (
               <span className={styles.snippet}>
-                {insight ? (
-                  <>
-                    {insight.callType ? (
-                      <span className={styles.type}>
-                        {insight.callType.replace(/_/g, " ")}
-                      </span>
-                    ) : null}
-                    {insight.assessment ? (
-                      <span className={styles.assessment}>
-                        {excerpt(insight.assessment, 160)}
-                      </span>
-                    ) : null}
-                  </>
-                ) : read === "error" ? (
-                  <span className={styles.snippetQuiet}>
-                    Summary didn&apos;t load
+                {insight.callType ? (
+                  <span className={styles.type}>
+                    {insight.callType.replace(/_/g, " ")}
                   </span>
-                ) : read === "loading" ? (
-                  <span className={styles.snippetSkeleton} aria-hidden="true" />
                 ) : null}
+                {insight.assessment ? (
+                  <span className={styles.assessment}>
+                    {excerpt(insight.assessment, 160)}
+                  </span>
+                ) : null}
+              </span>
+            ) : read === "error" ? (
+              <span className={styles.snippet}>
+                <span className={styles.snippetQuiet}>
+                  Summary didn&apos;t load
+                </span>
+              </span>
+            ) : read === "loading" ? (
+              <span className={styles.snippet}>
+                <span className={styles.snippetSkeleton} aria-hidden="true" />
               </span>
             ) : null}
           </span>
@@ -1585,7 +1676,7 @@ function CallsLibraryContent({
                   ref={searchInput}
                   type="search"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => changeQuery(event.target.value)}
                   placeholder="Search calls"
                   aria-label="Search loaded calls by name"
                 />
@@ -1593,7 +1684,7 @@ function CallsLibraryContent({
                   <button
                     type="button"
                     className={styles.searchClear}
-                    onClick={() => setQuery("")}
+                    onClick={() => changeQuery("")}
                     aria-label="Clear search"
                   >
                     <X size={13} aria-hidden="true" />
@@ -1634,7 +1725,7 @@ function CallsLibraryContent({
                   <Users size={14} aria-hidden="true" />
                   <span className={styles.srOnly}>Rep (loaded calls)</span>
                   <select
-                    value={selectedRep}
+                    value={activeRep}
                     onChange={(event) => setSelectedRep(event.target.value)}
                   >
                     <option value="">All reps</option>
@@ -1714,7 +1805,7 @@ function CallsLibraryContent({
                 >
                   {needle
                     ? `No loaded calls match “${query.trim()}”.`
-                    : selectedRep
+                    : activeRep
                       ? "No loaded calls match these filters."
                       : "No loaded calls match this status."}{" "}
                   <button
@@ -1722,7 +1813,7 @@ function CallsLibraryContent({
                     className={styles.textButton}
                     onClick={() => {
                       setFilter("all");
-                      setQuery("");
+                      changeQuery("");
                       setSelectedRep("");
                     }}
                   >
@@ -1730,7 +1821,7 @@ function CallsLibraryContent({
                   </button>
                 </p>
               ) : null}
-              {(filter !== "all" || selectedRep) && nextCursor ? (
+              {(filter !== "all" || activeRep) && nextCursor ? (
                 <p className={`${styles.note} calls-library-filter-note`}>
                   The filter covers loaded calls only. Load more to include
                   older calls.
@@ -1810,28 +1901,33 @@ function CallsLibraryContent({
         </>
       )}
       {workspace && previewSubmission ? (
-        <CallsDrawer
-          key={previewSubmission.id}
-          id={previewSubmission.id}
-          title={titleOf(previewSubmission)}
-          meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
-          status={submissionState(previewSubmission)}
-          tone={callTone(previewSubmission)}
-          insight={insightOf(previewSubmission.id)}
-          readState={statusOf(previewSubmission.id)}
-          onRetry={retryInsights}
-          hasReport={previewSubmission.hasReport}
-          canRename={Boolean(
-            previewSubmission.label &&
-              ownsCall(previewSubmission.owner, viewerId),
-          )}
-          onOpen={() => openSubmission(previewSubmission)}
-          onRename={() => {
-            setPreviewId(null);
-            setRenamingId(previewSubmission.id);
-          }}
-          onClose={() => setPreviewId(null)}
-        />
+        <SectionBoundary
+          name="The call preview"
+          resetKey={previewSubmission.id}
+        >
+          <CallsDrawer
+            key={previewSubmission.id}
+            id={previewSubmission.id}
+            title={titleOf(previewSubmission)}
+            meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
+            status={submissionState(previewSubmission)}
+            tone={callTone(previewSubmission)}
+            insight={insightOf(previewSubmission.id)}
+            readState={statusOf(previewSubmission.id)}
+            onRetry={retryInsights}
+            hasReport={previewSubmission.hasReport}
+            canRename={Boolean(
+              previewSubmission.label &&
+                ownsCall(previewSubmission.owner, viewerId),
+            )}
+            onOpen={() => openSubmission(previewSubmission)}
+            onRename={() => {
+              setPreviewId(null);
+              setRenamingId(previewSubmission.id);
+            }}
+            onClose={() => setPreviewId(null)}
+          />
+        </SectionBoundary>
       ) : null}
     </div>
   );

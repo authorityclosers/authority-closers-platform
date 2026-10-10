@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { AcquisitionShell } from "./acquisition-shell";
+import { AcquisitionShell, showsPolicyFooter } from "./acquisition-shell";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { updateShellState } from "./shell/shell-store";
 
@@ -252,10 +252,40 @@ it("shows hours in both shell pills and retains exact minutes for readers", () =
   expect(shell.textContent).toContain("100%");
 });
 
-it("shows the public policy footer on signed-out shells", async () => {
+it("keeps the public policy footer to the public landing", async () => {
+  // Only a visitor the server has confirmed as signed out, on the landing.
+  expect(showsPolicyFooter("/", "unauthenticated")).toBe(true);
+  // Never while the page is still finding out who is signed in.
+  expect(showsPolicyFooter("/", "loading")).toBe(false);
+  expect(showsPolicyFooter("/", undefined)).toBe(false);
+  // Never inside the app, signed in or not.
+  expect(showsPolicyFooter("/", "ready")).toBe(false);
+  expect(showsPolicyFooter("/organisation", "ready")).toBe(false);
+  expect(showsPolicyFooter("/organisation", "unauthenticated")).toBe(false);
+  expect(showsPolicyFooter("/dashboard", "unauthenticated")).toBe(false);
+  expect(showsPolicyFooter(null, "unauthenticated")).toBe(false);
+});
+
+it("draws no policy footer on app pages, signed in or out", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  for (const authenticated of [true, false]) {
+    await act(async () =>
+      root.render(
+        <AcquisitionShell authenticated={authenticated}>
+          <p>App page</p>
+        </AcquisitionShell>,
+      ),
+    );
+    expect(
+      host.querySelector('nav[aria-label="Sales Xray policy pages"]'),
+    ).toBeNull();
+  }
+});
+
+it("still draws the policy footer where a page asks for it", async () => {
   await act(async () =>
     root.render(
-      <AcquisitionShell authenticated={false}>
+      <AcquisitionShell authenticated={false} showPolicyLinks>
         <p>Signed-out entry</p>
       </AcquisitionShell>,
     ),
@@ -332,7 +362,10 @@ it("collapses the rail from its own toggle and keeps focus on the visible toggle
   expect(expand).not.toBeNull();
   // DOM coverage of the native keyboard exclusion; browser Tab proof is separate.
   expect(panel.hasAttribute("inert")).toBe(true);
-  expect(panel.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
+  // Signed out, the panel offers sign-in where the workspace would be.
+  expect(panel.querySelector('a[href="/login"]')?.textContent).toContain(
+    "Sign in",
+  );
   expect(expand.getAttribute("aria-controls")).toBe(panel.id);
   expect(expand.closest("[inert]")).toBeNull();
   expect.soft(expand.getAttribute("aria-expanded")).toBe("false");
@@ -393,4 +426,27 @@ it("offers the theme control in the account menu only when the theme is released
       (input) => (input as HTMLInputElement).value,
     ),
   ).toEqual(["system", "light", "dark"]);
+});
+
+it("signed out, offers sign-in instead of a made-up workspace, Recents or initials", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  await act(async () =>
+    root.render(
+      <AcquisitionShell authenticated={false}>
+        <p>Signed-out entry</p>
+      </AcquisitionShell>,
+    ),
+  );
+  const panel = host.querySelector("#sales-xray-sidebar-panel")!;
+  expect(panel.querySelector('a[href="/login"]')?.textContent).toBe(
+    "Sign into see your calls",
+  );
+  expect(panel.textContent).not.toContain("Your account");
+  expect(panel.textContent).not.toContain("Recents");
+  expect(panel.querySelector('[role="search"]')).toBeNull();
+  const avatar = host.querySelector(
+    'header button[aria-label="Open profile menu"]',
+  )!;
+  expect(avatar.textContent).toBe("");
+  expect(avatar.querySelector("svg")).not.toBeNull();
 });

@@ -2,7 +2,6 @@
 
 import {
   ArrowUpRight,
-  ChevronDown,
   CircleUserRound,
   FileText,
   FolderOpen,
@@ -12,9 +11,11 @@ import {
   Moon,
   MoreHorizontal,
   Palette,
+  ReceiptText,
   Settings,
   ShieldCheck,
   Sun,
+  Tag,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -46,18 +47,6 @@ function initials(name: string | null): string {
     .map((part) => Array.from(part)[0])
     .join("")
     .toLocaleUpperCase();
-}
-
-function getFirstName(name: string | null, email: string | null): string {
-  if (name && name.trim().length > 0) {
-    const first = name.trim().split(/\s+/)[0];
-    if (first) return first;
-  }
-  if (email && email.includes("@")) {
-    const prefix = email.split("@")[0]?.trim();
-    if (prefix) return prefix;
-  }
-  return "Account";
 }
 
 const THEME_CHOICES = [
@@ -103,6 +92,7 @@ export function ProfileMenu({
   placement = "below",
   compact = false,
   variant = "header",
+  pending = false,
 }: {
   authenticated: boolean;
   accountHref: string;
@@ -111,6 +101,8 @@ export function ProfileMenu({
   /** Avatar only, for the collapsed rail. */
   compact?: boolean;
   variant?: "rail" | "header";
+  /** The session is still being checked: the avatar's circle, no initials. */
+  pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -207,7 +199,6 @@ export function ProfileMenu({
 
   const userInitials = initials(accountName);
   const displayName = accountLabel;
-  const firstName = getFirstName(accountName, profileEmail);
   const displayEmail =
     profileEmail ||
     (authenticated ? "Private workspace" : "Sign in to analyse calls");
@@ -219,6 +210,7 @@ export function ProfileMenu({
       data-placement={placement}
       data-variant={variant}
       data-compact={compact || undefined}
+      data-pending={pending || undefined}
     >
       {variant === "header" ? (
         <button
@@ -232,19 +224,18 @@ export function ProfileMenu({
           onClick={() => setOpen((value) => !value)}
         >
           <span className={styles.avatarInitials} aria-hidden="true">
-            <AccountAvatarImage
-              key={profileEmail}
-              photoUrl={profile?.photo_url}
-            >
-              {userInitials}
-            </AccountAvatarImage>
+            {authenticated ? (
+              <AccountAvatarImage
+                key={profileEmail}
+                photoUrl={profile?.photo_url}
+              >
+                {userInitials}
+              </AccountAvatarImage>
+            ) : (
+              // A visitor has no initials: never a made-up "AC".
+              <User size={15} />
+            )}
           </span>
-          <span className={styles.headerName}>{firstName}</span>
-          <ChevronDown
-            className={styles.chevron}
-            size={14}
-            aria-hidden="true"
-          />
         </button>
       ) : (
         <button
@@ -387,6 +378,14 @@ export function ProfileMenu({
               <Mail size={16} aria-hidden="true" />
               <span>Email the AC team</span>
             </a>
+            <Link
+              href="/pricing"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <Tag size={16} aria-hidden="true" />
+              <span>Pricing</span>
+            </Link>
             <a
               href="https://app.authorityclosers.com/privacy"
               target="_blank"
@@ -417,6 +416,14 @@ export function ProfileMenu({
                 className={styles.external}
               />
             </a>
+            <Link
+              href="/refunds"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <ReceiptText size={16} aria-hidden="true" />
+              <span>Refunds</span>
+            </Link>
           </div>
           {authenticated ? (
             <>

@@ -145,7 +145,13 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   fetchMock = vi.fn();
-  vi.stubGlobal("fetch", fetchMock);
+  // The shell's logo read (organisation workspaces) is outside these access
+  // checks; it answers "no logo" and stays out of the recorded calls.
+  vi.stubGlobal("fetch", (path: string, init?: RequestInit) =>
+    path === "/v1/organisation/branding"
+      ? Promise.resolve(response({}, 404))
+      : (fetchMock as unknown as typeof fetch)(path, init),
+  );
 });
 
 function profileRecord(complete = true) {
@@ -260,6 +266,23 @@ it("does not announce a confirmed session while access is still pending", async 
   pending.resolve(response({}, 401));
   await flush();
   expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
+});
+
+it("draws the page's own skeleton while access is checked", async () => {
+  for (const [path, label] of [
+    ["/organisation", "Loading organisation"],
+    ["/dashboard", "Loading your dashboard"],
+  ] as const) {
+    pathname = path;
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    await mount();
+    expect(
+      container.querySelector(`[role="status"][aria-label="${label}"]`),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="page-skeleton"]')).toBeNull();
+    await act(async () => root.render(<></>));
+  }
 });
 
 it("keeps a requested saved call on a neutral access-check surface", async () => {

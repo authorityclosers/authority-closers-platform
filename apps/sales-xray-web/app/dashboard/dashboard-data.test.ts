@@ -11,6 +11,7 @@ import {
   readCallActivity,
   readCallSummary,
   readRecentCalls,
+  settle,
 } from "./dashboard-data";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -161,5 +162,17 @@ describe("minutes and recents", () => {
     expect(isEmptyAccount(empty, parseCallActivity(activity()), [])).toBe(true);
     expect(isEmptyAccount(null, null, null)).toBe(true);
     expect(isEmptyAccount(parseCallSummary(summary), null, [])).toBe(false);
+  });
+});
+
+it("settles every read into a value: a panel never sees a rejection", async () => {
+  expect(await settle(Promise.resolve(3))).toEqual({ ok: true, value: 3 });
+  expect(await settle(Promise.reject(new AcquisitionError(403)))).toEqual({
+    ok: false,
+    status: 403,
+  });
+  expect(await settle(Promise.reject(new TypeError("bad shape")))).toEqual({
+    ok: false,
+    status: null,
   });
 });

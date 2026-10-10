@@ -28,14 +28,18 @@
   background: var(--lx-paper-2);
 }
 
+/* The top bar's account control: the avatar alone, one fixed size, so the
+   bar never moves when the name or photo arrives. */
 .headerTrigger {
   display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
   align-items: center;
-  gap: 8px;
-  min-height: var(--lx-control-compact-h, 32px);
-  padding: 4px 10px 4px 6px;
+  justify-content: center;
+  padding: 0;
   border: 1px solid var(--lx-line);
-  border-radius: 99px;
+  border-radius: 50%;
   background: var(--lx-surface);
   color: var(--lx-ink);
   font: inherit;
@@ -51,10 +55,21 @@
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
 }
 
-.headerName {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--lx-ink);
+.headerTrigger .avatarInitials {
+  width: 26px;
+  height: 26px;
+}
+
+/* Still checking the session: the same circle, quiet, without initials. */
+.menu[data-pending] .headerTrigger {
+  pointer-events: none;
+}
+.menu[data-pending] .headerTrigger .avatarInitials {
+  background: var(--lx-sunken);
+  color: transparent;
+}
+.menu[data-pending] .headerTrigger .avatarInitials > * {
+  visibility: hidden;
 }
 
 .avatarInitials {
@@ -113,7 +128,6 @@
   transition: transform 150ms ease;
 }
 
-.headerTrigger[aria-expanded="true"] .chevron,
 .trigger[aria-expanded="true"] .chevron {
   transform: rotate(180deg);
 }
@@ -207,7 +221,7 @@
 
 .headerEmail {
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.3;
   color: var(--lx-muted);
   text-overflow: ellipsis;
@@ -224,7 +238,7 @@
   margin: 2px 0 2px;
   padding: 4px 10px 2px;
   color: var(--lx-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -413,7 +427,11 @@
 }
 
 @media (pointer: coarse) {
-  .headerTrigger,
+  .headerTrigger {
+    width: var(--lx-row-min-h, 44px);
+    height: var(--lx-row-min-h, 44px);
+  }
+
   .item,
   .themeRow {
     min-height: var(--lx-row-min-h, 44px);

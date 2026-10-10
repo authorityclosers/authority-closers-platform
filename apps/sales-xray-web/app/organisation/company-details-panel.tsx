@@ -191,6 +191,7 @@ function DetailsEditor({
           <div
             className={styles.formSkeleton}
             role="status"
+            aria-busy="true"
             aria-label="Loading company details…"
           >
             {fields.map(([key]) => (
