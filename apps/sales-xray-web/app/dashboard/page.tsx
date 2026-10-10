@@ -36,6 +36,7 @@ import {
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
+import { PolicyFooter } from "../policy-footer";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -81,6 +82,8 @@ export default function DashboardPage() {
           Or analyse a call without an account
         </Link>
       </section>
+      {/* The public landing ("/" sends visitors here): the site's footer. */}
+      <PolicyFooter />
     </LightboxShell>
   );
 }

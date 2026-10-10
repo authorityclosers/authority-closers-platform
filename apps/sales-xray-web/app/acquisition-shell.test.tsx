@@ -362,7 +362,10 @@ it("collapses the rail from its own toggle and keeps focus on the visible toggle
   expect(expand).not.toBeNull();
   // DOM coverage of the native keyboard exclusion; browser Tab proof is separate.
   expect(panel.hasAttribute("inert")).toBe(true);
-  expect(panel.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
+  // Signed out, the panel offers sign-in where the workspace would be.
+  expect(panel.querySelector('a[href="/login"]')?.textContent).toContain(
+    "Sign in",
+  );
   expect(expand.getAttribute("aria-controls")).toBe(panel.id);
   expect(expand.closest("[inert]")).toBeNull();
   expect.soft(expand.getAttribute("aria-expanded")).toBe("false");
@@ -423,4 +426,27 @@ it("offers the theme control in the account menu only when the theme is released
       (input) => (input as HTMLInputElement).value,
     ),
   ).toEqual(["system", "light", "dark"]);
+});
+
+it("signed out, offers sign-in instead of a made-up workspace, Recents or initials", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  await act(async () =>
+    root.render(
+      <AcquisitionShell authenticated={false}>
+        <p>Signed-out entry</p>
+      </AcquisitionShell>,
+    ),
+  );
+  const panel = host.querySelector("#sales-xray-sidebar-panel")!;
+  expect(panel.querySelector('a[href="/login"]')?.textContent).toBe(
+    "Sign into see your calls",
+  );
+  expect(panel.textContent).not.toContain("Your account");
+  expect(panel.textContent).not.toContain("Recents");
+  expect(panel.querySelector('[role="search"]')).toBeNull();
+  const avatar = host.querySelector(
+    'header button[aria-label="Open profile menu"]',
+  )!;
+  expect(avatar.textContent).toBe("");
+  expect(avatar.querySelector("svg")).not.toBeNull();
 });

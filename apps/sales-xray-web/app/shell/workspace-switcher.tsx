@@ -1,7 +1,8 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown } from "lucide-react";
-import type { RefObject } from "react";
+import { Building2, Check, ChevronsUpDown, LogIn } from "lucide-react";
+import Link from "next/link";
+import type { MouseEvent, RefObject } from "react";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import type { Branding } from "./branding-store";
 import { OrgLogo } from "./org-logo";
@@ -152,6 +153,32 @@ export function WorkspaceSwitcher({
               the menu never shows a promise it cannot keep. */}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Signed out there is no workspace to name: the switcher's place offers
+ * sign-in instead, in the same size, so nothing moves when the session settles.
+ */
+export function GuestSwitcher({
+  href,
+  onSignIn,
+}: {
+  href: string;
+  onSignIn: (event: MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  return (
+    <div className={styles.container}>
+      <Link className={styles.trigger} href={href} onClick={onSignIn}>
+        <span className={styles.tile} data-kind="personal" aria-hidden="true">
+          <LogIn size={14} />
+        </span>
+        <span className={styles.copy}>
+          <b>Sign in</b>
+          <small>to see your calls</small>
+        </span>
+      </Link>
     </div>
   );
 }

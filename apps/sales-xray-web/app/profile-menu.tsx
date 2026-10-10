@@ -224,12 +224,17 @@ export function ProfileMenu({
           onClick={() => setOpen((value) => !value)}
         >
           <span className={styles.avatarInitials} aria-hidden="true">
-            <AccountAvatarImage
-              key={profileEmail}
-              photoUrl={profile?.photo_url}
-            >
-              {userInitials}
-            </AccountAvatarImage>
+            {authenticated ? (
+              <AccountAvatarImage
+                key={profileEmail}
+                photoUrl={profile?.photo_url}
+              >
+                {userInitials}
+              </AccountAvatarImage>
+            ) : (
+              // A visitor has no initials: never a made-up "AC".
+              <User size={15} />
+            )}
           </span>
         </button>
       ) : (

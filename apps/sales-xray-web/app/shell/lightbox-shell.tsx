@@ -73,7 +73,7 @@ import {
   type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
-import { WorkspaceSwitcher } from "./workspace-switcher";
+import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
 import { SettingsMenu } from "./settings-menu";
 import { useShellUpdates } from "./updates-store";
 import { UpdatesBell } from "./updates-bell";
@@ -590,6 +590,8 @@ function LightboxShellFrame({
       workspace.kind === "organisation",
   );
   const branding = useBranding(inOrganisation);
+  // Confirmed signed out (not merely unknown yet): nothing personal to show.
+  const guest = !authenticated && !sessionPending && !loading;
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
@@ -821,17 +823,21 @@ function LightboxShellFrame({
           inert={collapsed}
         >
           <div className={styles.panelHeader}>
-            <WorkspaceSwitcher
-              workspaces={workspaces}
-              currentId={effectiveTenantId}
-              personName={profileName}
-              branding={branding}
-              pending={chromePending}
-              open={switcherOpen}
-              setOpen={setSwitcherOpen}
-              containerRef={switcherRef}
-              onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
-            />
+            {guest ? (
+              <GuestSwitcher href={accountHref} onSignIn={openAccount} />
+            ) : (
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                currentId={effectiveTenantId}
+                personName={profileName}
+                branding={branding}
+                pending={chromePending}
+                open={switcherOpen}
+                setOpen={setSwitcherOpen}
+                containerRef={switcherRef}
+                onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
+              />
+            )}
             <button
               type="button"
               ref={collapseButtonRef}
@@ -846,40 +852,43 @@ function LightboxShellFrame({
             </button>
           </div>
 
-          {/* Enter opens Calls filtered by the text; the box then clears. */}
-          <Form
-            action={CALLS_PATH}
-            role="search"
-            className={`${styles.searchBox} ${styles.panelSearch}`}
-            onSubmit={(event) => {
-              const form = event.currentTarget;
-              window.setTimeout(() => {
-                form.reset();
-                searchInputRef.current?.blur();
-              }, 0);
-            }}
-          >
-            <Search
-              size={15}
-              className={styles.searchIcon}
-              aria-hidden="true"
-            />
-            <input
-              ref={searchInputRef}
-              type="search"
-              name="q"
-              className={styles.searchInput}
-              placeholder="Search calls…"
-              aria-label="Search calls"
-              enterKeyHint="search"
-            />
-            <kbd className={styles.searchKbd} aria-hidden="true">
-              {shortcut}
-            </kbd>
-          </Form>
+          {/* Enter opens Calls filtered by the text; the box then clears.
+              Signed out there are no calls to search. */}
+          {!guest && (
+            <Form
+              action={CALLS_PATH}
+              role="search"
+              className={`${styles.searchBox} ${styles.panelSearch}`}
+              onSubmit={(event) => {
+                const form = event.currentTarget;
+                window.setTimeout(() => {
+                  form.reset();
+                  searchInputRef.current?.blur();
+                }, 0);
+              }}
+            >
+              <Search
+                size={15}
+                className={styles.searchIcon}
+                aria-hidden="true"
+              />
+              <input
+                ref={searchInputRef}
+                type="search"
+                name="q"
+                className={styles.searchInput}
+                placeholder="Search calls…"
+                aria-label="Search calls"
+                enterKeyHint="search"
+              />
+              <kbd className={styles.searchKbd} aria-hidden="true">
+                {shortcut}
+              </kbd>
+            </Form>
+          )}
 
           {/* Recents Section */}
-          {salesXrayEnabled && (
+          {salesXrayEnabled && !guest && (
             <div className={styles.recentsSection}>
               <div className={styles.recentsHeader}>
                 <button
@@ -1115,7 +1124,7 @@ function LightboxShellFrame({
           <span>Coaching</span>
         </Link>
         {/* Signed out shows Sign in; an unconfirmed session keeps More. */}
-        {!authenticated && !sessionPending && !loading ? (
+        {guest ? (
           <Link
             className={styles.bottomLink}
             href={accountHref}
