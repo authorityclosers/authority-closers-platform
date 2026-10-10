@@ -1,7 +1,7 @@
 """Invitation transaction and race proof in the disposable CI database."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import digest
 from typing import Any
@@ -22,17 +22,13 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.errors import ResourceNotFound
-from ac_platform.organisations.invite_email import (
-    ORGANISATION_INVITATION_EVENT,
-    ORGANISATION_INVITATION_ROUTE,
-    resolve_organisation_invitation_message,
-)
+from ac_platform.organisations import invite_email
 from ac_platform.organisations.service import OrganisationSeatsFull, OrganisationService
-from ac_platform.outbox.models import OutboxEvent
-from ac_platform.outbox.repository import OutboxRepository
+from ac_platform.outbox.models import Job, JobStatus, OutboxEvent
 from ac_platform.providers.fake_email import FakeEmailAdapter
 from ac_platform.providers.resend_email import render_email
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationInvite
+from ac_platform.worker import DurableWorker, build_default_dispatcher
 from tests.database.test_conversation_postgresql import (
     cancel_pending,
     run,
@@ -46,6 +42,12 @@ from tests.unit.organisations.test_service import seed_paid_seats
 
 @pytest.fixture(scope="module")
 def postgres_harness() -> Any:
+    yield from _postgres_harness.__wrapped__()
+
+
+@pytest.fixture
+def worker_postgres_harness() -> Any:
+    # Default materialisation consumes the whole queue: isolate worker cases.
     yield from _postgres_harness.__wrapped__()
 
 
@@ -195,15 +197,16 @@ def test_competing_invites_cannot_reserve_the_same_last_paid_seat(postgres_harne
     run(exercise())
 
 
-def test_http_create_invite_durable_mail_and_explicit_accept_journey(postgres_harness):
+def test_http_create_invite_durable_mail_and_explicit_accept_journey(worker_postgres_harness):
     async def exercise():
-        engine = create_async_engine(postgres_harness.url)
+        engine = create_async_engine(worker_postgres_harness.url)
         try:
             owner = await seed(engine)
             origin = "https://salesxray.example.test"
             settings = Settings(
                 _env_file=None,
                 environment="test",
+                external_side_effects_hold=False,
                 public_app_url="https://learner.example.test",
                 sales_xray_app_url=origin,
                 operations_tenant_id=owner.permission_id,
@@ -248,10 +251,11 @@ def test_http_create_invite_durable_mail_and_explicit_accept_journey(postgres_ha
                 )
                 assert selected.status_code == 200, selected.text
                 email = f"journey-{tenant_id.hex}@example.test"
+                invite_key = uuid4()
                 invited = await client.post(
                     "/v1/organisation/members",
                     json={"email": email, "role": "member"},
-                    headers=headers(owner_cookie, uuid4()),
+                    headers=headers(owner_cookie, invite_key),
                 )
                 assert invited.status_code == 200, invited.text
                 invite_id = UUID(invited.json()["invite_id"])
@@ -259,24 +263,35 @@ def test_http_create_invite_durable_mail_and_explicit_accept_journey(postgres_ha
                     assert (
                         await database.scalar(select(Person).where(Person.email == email)) is None
                     )
-                    # Exercise the exact organisation route in the existing outbox. The
-                    # production worker registration is owned by Strike C, separately.
-                    jobs = await OutboxRepository(database).materialize(
-                        routes={ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE},
-                        limit=10,
-                    )
-                    matching = [job for job in jobs if job.payload == {"invite_id": str(invite_id)}]
-                    assert len(matching) == 1
-                    job = matching[0]
-                    message = await resolve_organisation_invitation_message(
-                        database, settings, job, provider_key=f"outbox:{job.id}"
-                    )
-                    mail = FakeEmailAdapter()
-                    first_receipt = await mail.send(message)
-                    replay_receipt = await mail.send(message)
-                    assert first_receipt.accepted and replay_receipt.deduplicated
-                    rendered = render_email(message)
-                    assert f"/organisation/invites?invite_id={invite_id}" in rendered.text
+                mail = FakeEmailAdapter()
+                worker = DurableWorker(
+                    sessions,
+                    settings=settings,
+                    dispatcher=build_default_dispatcher(settings, provider=mail),
+                )
+                assert await worker.prepare()
+                delivered = await worker.run_once()
+                assert delivered.materialized == 1
+                assert delivered.succeeded == 1
+                assert len(mail.deliveries) == 1
+                message = mail.deliveries[0].message
+                assert message.to == email
+                rendered = render_email(message)
+                assert f"/organisation/invites?invite_id={invite_id}" in rendered.text
+                async with sessions() as database, database.begin():
+                    job = await database.scalar(select(Job).where(Job.tenant_id == tenant_id))
+                    assert job is not None and job.status == JobStatus.SUCCEEDED.value
+                    assert job.payload == {"invite_id": str(invite_id)}
+                    assert job.provider_idempotency_key == message.idempotency_key
+                repeated = await client.post(
+                    "/v1/organisation/members",
+                    json={"email": email, "role": "member"},
+                    headers=headers(owner_cookie, invite_key),
+                )
+                assert repeated.json() == invited.json()
+                replayed = await worker.run_once()
+                assert replayed.materialized == 0 and replayed.claimed == 0
+                assert len(mail.deliveries) == 1
                 member = await seed(engine)
                 async with sessions() as database, database.begin():
                     person = await database.get(Person, member.person_id)
@@ -316,6 +331,78 @@ def test_http_create_invite_durable_mail_and_explicit_accept_journey(postgres_ha
                 )
                 assert pending.json()["invites"] == []
             async with sessions() as database, database.begin():
+                assert (await verify_audit_chain(database, tenant_id)).valid
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("denial", ["revoked", "expired", "wrong_tenant"])
+def test_default_worker_refuses_unavailable_invite_before_send(
+    worker_postgres_harness, monkeypatch, denial
+):
+    async def exercise():
+        engine = create_async_engine(worker_postgres_harness.url)
+        try:
+            owner, _, tenant_id = await setup(engine)
+            settings = Settings(
+                _env_file=None,
+                environment="test",
+                external_side_effects_hold=False,
+                public_app_url="https://learner.example.test",
+                sales_xray_app_url="https://salesxray.example.test",
+                operations_tenant_id=owner.permission_id,
+                public_learner_tenant_id=owner.tenant_id,
+            )
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            await _reconcile(sessions, owner)
+            async with sessions() as database, database.begin():
+                result = await service(database, owner).request_member(
+                    tenant_id,
+                    "denied@example.test",
+                    "member",
+                    uuid4(),
+                    actor_person_id=owner.person_id,
+                    require_acceptance=True,
+                )
+                invite_id = UUID(result["invite_id"])
+            mail = FakeEmailAdapter()
+            worker = DurableWorker(
+                sessions,
+                settings=settings,
+                dispatcher=build_default_dispatcher(settings, provider=mail),
+            )
+            assert await worker.prepare()
+            jobs = await worker._materialize()
+            assert len(jobs) == 1
+            if denial == "revoked":
+                async with sessions() as database, database.begin():
+                    await service(database, owner).revoke_invite(
+                        tenant_id, invite_id, uuid4(), actor_person_id=owner.person_id
+                    )
+            elif denial == "expired":
+                # Advance the fictional clock; never rewrite the sealed audit policy.
+                future = datetime.now(UTC) + timedelta(days=8)
+
+                class ExpiredClock(datetime):
+                    @classmethod
+                    def now(cls, tz=None):
+                        return future if tz is not None else future.replace(tzinfo=None)
+
+                monkeypatch.setattr(invite_email, "datetime", ExpiredClock)
+            else:
+                async with sessions() as database, database.begin():
+                    job = await database.get(Job, jobs[0].id)
+                    job.tenant_id = owner.tenant_id
+            refused = await worker.run_once()
+            assert refused.dead_lettered == 1 and refused.succeeded == 0
+            assert mail.deliveries == ()
+            replayed = await worker.run_once()
+            assert replayed.claimed == 0 and mail.deliveries == ()
+            async with sessions() as database, database.begin():
+                job = await database.get(Job, jobs[0].id)
+                assert job.status == JobStatus.DEAD_LETTER.value
                 assert (await verify_audit_chain(database, tenant_id)).valid
         finally:
             await engine.dispose()
