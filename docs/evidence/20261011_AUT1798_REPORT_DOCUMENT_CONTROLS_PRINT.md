@@ -110,3 +110,26 @@ Bounded classification is complete; exact remaining output is the original
 PDF's raster/pixel quality, **NOT VERIFIED** because a working renderer is
 unavailable. Future existing QA captures should preserve the viewport/PNG
 discrepancy rather than call this artifact a full-paper visual pass.
+
+## Final retained QA receipt
+
+E's `4057f24e` classification independently confirms the capture mismatch.
+G verified its SHA-256
+`0fbb19cb79fdb61d8c32bb069654980dd3b219132ff1f123c5c51a239490d133`,
+all 22 retained input pins, eight passing cases/JUnit with no failures,
+errors or skips, and normal pytest/launcher exits. The owned Document,
+copy and standalone-fixture sources remain unchanged from accepted `75fcbdad`.
+No tests or browser visits were repeated.
+
+The original and latest phone/light PNGs are byte-identical. Their PDFs have
+different hashes: original `eb84a508b316e59906e14c6b8cce5369864e2573ec5c7ec955374eb623345c83`,
+latest `5e63d79053bad5ccecc0a8e4c3bfc3539ce41604ce1b7a00b7f713307e7053fe`.
+The original's 11-page text-only result does not validate the latest PDF.
+**Both original and latest PDF pixel bounds/quality remain NOT VERIFIED.**
+The retained PNG/geometry finding does not establish a product CSS defect.
+
+Read-only reconciliation receipt:
+`1798/harness/retained-print-classification-check-20261011-2354.json`, SHA-256
+`08732f8901d11ab9c27028dce98b0e088921de419f0996e03fb73488e170926c`.
+No new owned source item remains. Authenticated persistence and the coordinator's
+release acceptance remain separately scoped.
