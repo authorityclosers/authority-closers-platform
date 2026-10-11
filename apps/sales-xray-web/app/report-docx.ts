@@ -202,6 +202,15 @@ function blocks(
           { ...at, before: 80, after: 40, keepNext: true },
         ),
       ];
+    case "subheading":
+      return [
+        para([{ text: item.text, bold: true, size: 23, color: C.ink }], {
+          ...at,
+          before: 200,
+          after: 60,
+          keepNext: true,
+        }),
+      ];
     case "list":
       return item.items.map((text) =>
         para([{ text }], { ...at, bullet: true, after: 40 }),

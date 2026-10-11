@@ -156,6 +156,8 @@ function Item({
           ) : null}
         </p>
       );
+    case "subheading":
+      return <p className={styles.subheading}>{item.text}</p>;
     case "list":
       return (
         <ul className={styles.list}>

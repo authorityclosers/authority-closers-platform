@@ -141,6 +141,23 @@ describe("report document model", () => {
     );
   });
 
+  it("opens Deep Analysis in the spec's groups and order", () => {
+    const deeper = amitDoc().sections[4].parts.find(
+      (p) => p.heading === "Deeper Analysis",
+    );
+    const groups = (deeper?.items ?? [])
+      .filter((i) => i.type === "subheading")
+      .map((i) => docItemText(i));
+    const order = [
+      "Discovery & Qualification",
+      "Presentation & Value",
+      "Objection / Price / Decision",
+      "Communication",
+    ];
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups).toEqual(order.filter((g) => groups.includes(g)));
+  });
+
   it("an older, sparse report still makes a whole document with honest gaps", () => {
     const doc = reportDocumentModel({ report: syntheticReport as SalesReport });
     expect(doc.sections).toHaveLength(6);

@@ -66,6 +66,8 @@ export type DocItem =
     }
   /** A small bold label inside a part ("Why it helped"). */
   | { type: "label"; text: string; possible?: boolean }
+  /** A group heading inside a part (the Deep Analysis groups). */
+  | { type: "subheading"; text: string }
   | { type: "list"; items: string[] }
   | { type: "quote"; clip: DocClip }
   | { type: "play"; clip: DocClip; range?: boolean }
@@ -380,12 +382,15 @@ export function reportDocumentModel(
   /* 3. What Worked — & What Didn't */
   const itemCard = (item: Item, why: string, tone: DocTone): DocItem => {
     const play = clip(item.what.sources[0]);
+    const areas = item.areas?.filter((area) => area?.trim()) ?? [];
     return {
       type: "card",
       title: item.title,
       tone,
       items: keep([
         { type: "text", text: item.what.text },
+        areas.length ? { type: "label", text: WORKED_DIDNT.areasLead } : null,
+        areas.length ? { type: "list", items: areas } : null,
         play ? { type: "play", clip: play } : null,
         item.why ? { type: "label", text: why } : null,
         item.why ? { type: "text", text: item.why.text } : null,
@@ -424,7 +429,16 @@ export function reportDocumentModel(
       title: moment.title,
       tone: MOMENT_TONE[moment.kind] ?? "neutral",
       items: keep([
-        at?.quote ? { type: "quote", clip: at } : null,
+        ...(moment.priceStated
+          ? [
+              { type: "label", text: MOMENTS.priceStated } as const,
+              quoteOf(moment.priceStated),
+              moment.prospectResponse
+                ? ({ type: "label", text: MOMENTS.prospectResponse } as const)
+                : null,
+              moment.prospectResponse ? quoteOf(moment.prospectResponse) : null,
+            ]
+          : [at?.quote ? ({ type: "quote", clip: at } as const) : null]),
         moment.movedToward
           ? { type: "label", text: MOMENTS.movedToward }
           : null,
@@ -446,6 +460,12 @@ export function reportDocumentModel(
       ]),
     };
   };
+  function quoteOf(said: Line): DocItem {
+    const at = clip(said.sources[0]);
+    return at
+      ? { type: "quote", clip: { ...at, quote: said.text } }
+      : { type: "text", text: said.text };
+  }
   const topKeys = new Set(model.topMoments.map((m) => m.key));
   const otherMoments = [...model.moments]
     .filter((m) => !topKeys.has(m.key))
@@ -474,8 +494,84 @@ export function reportDocumentModel(
     model.missing[3],
   );
 
+  /** "Discuss the program with his partner before Friday. (24:12)" */
+  const listOf = (lines: Line[]) =>
+    lines.map((item) => {
+      const at = clip(item.sources.at(-1));
+      return at ? `${item.text} (${at.at})` : item.text;
+    });
+
   /* 5. Your Skills on This Call */
-  const { deeper } = model;
+  const { discovery, decision, communication, findings, presentation } =
+    model.deeper;
+  const labelled = (label: string, item: DocItem | null): DocItem[] =>
+    item ? [{ type: "label", text: label }, item] : [];
+  const listItem = (list: string[] | undefined): DocItem | null =>
+    list?.length ? { type: "list", items: list } : null;
+  const plain = (text: string | null | undefined): DocItem | null =>
+    text?.trim() ? { type: "text", text } : null;
+  const deeperItems = keep([
+    ...(discovery.clear.length ||
+    discovery.unclear.length ||
+    discovery.openingMissed
+      ? [
+          { type: "subheading", text: SKILLS.deeperDiscovery } as const,
+          ...labelled(SKILLS.becameClear, listItem(discovery.clear)),
+          ...labelled(SKILLS.stillUnclear, listItem(discovery.unclear)),
+          ...labelled(SKILLS.openingMissed, lineItem(discovery.openingMissed)),
+        ]
+      : []),
+    ...(presentation
+      ? [
+          { type: "subheading", text: SKILLS.deeperPresentation } as const,
+          ...labelled(SKILLS.relevant, listItem(presentation.relevant)),
+          ...labelled(SKILLS.lessRelevant, plain(presentation.lessRelevant)),
+          ...labelled(
+            SKILLS.valueConnection,
+            plain(presentation.valueConnection),
+          ),
+        ]
+      : []),
+    ...(decision.price || decision.likely.length || findings.length
+      ? [
+          { type: "subheading", text: SKILLS.deeperDecision } as const,
+          ...labelled(SKILLS.price, lineItem(decision.price)),
+          ...labelled(SKILLS.prospectResponse, lineItem(decision.response)),
+          ...(decision.likely.length
+            ? [
+                {
+                  type: "label",
+                  text: SKILLS.possibleWorries,
+                  possible: true,
+                } as const,
+                { type: "list", items: listOf(decision.likely) } as const,
+              ]
+            : []),
+          ...labelled(
+            SKILLS.objectionsClosing,
+            listItem(
+              findings.map((f) => {
+                const at = clip(f.what.sources[0]);
+                return `${f.title}: ${f.what.text}${at ? ` (${at.at})` : ""}`;
+              }),
+            ),
+          ),
+        ]
+      : []),
+    ...(communication.longest ||
+    communication.observation ||
+    communication.listening
+      ? [
+          { type: "subheading", text: SKILLS.deeperCommunication } as const,
+          ...labelled(SKILLS.listening, plain(communication.listening)),
+          ...labelled(SKILLS.longestMonologue, plain(communication.longest)),
+          ...labelled(
+            SKILLS.importantObservation,
+            lineItem(communication.observation),
+          ),
+        ]
+      : []),
+  ]);
   const skills = section(
     "skills",
     [
@@ -500,57 +596,14 @@ export function reportDocumentModel(
           },
         ],
       },
-      deeper.unclear.length || deeper.concerns.length || deeper.findings.length
-        ? {
-            heading: SKILLS.deeperTitle,
-            items: keep([
-              deeper.unclear.length
-                ? { type: "label", text: SKILLS.stillUnclear }
-                : null,
-              deeper.unclear.length
-                ? { type: "list", items: deeper.unclear }
-                : null,
-              deeper.concerns.length
-                ? {
-                    type: "label",
-                    text: SKILLS.possibleWorries,
-                    possible: true,
-                  }
-                : null,
-              deeper.concerns.length
-                ? {
-                    type: "list",
-                    items: deeper.concerns.map((c) => {
-                      const at = clip(c.sources[0]);
-                      return at ? `${c.text} (${at.at})` : c.text;
-                    }),
-                  }
-                : null,
-              deeper.findings.length
-                ? { type: "label", text: SKILLS.objectionsClosing }
-                : null,
-              deeper.findings.length
-                ? {
-                    type: "list",
-                    items: deeper.findings.map((f) => {
-                      const at = clip(f.what.sources[0]);
-                      return `${f.title}: ${f.what.text}${at ? ` (${at.at})` : ""}`;
-                    }),
-                  }
-                : null,
-            ]),
-          }
+      deeperItems.length
+        ? { heading: SKILLS.deeperTitle, items: deeperItems }
         : null,
     ],
     model.missing[4],
   );
 
   /* 6. Where the Deal Stands */
-  const listOf = (lines: Line[]) =>
-    lines.map((item) => {
-      const at = clip(item.sources.at(-1));
-      return at ? `${item.text} (${at.at})` : item.text;
-    });
   const dealSection = section(
     "facts",
     [
@@ -609,15 +662,14 @@ export function reportDocumentModel(
   );
 
   /* Report end summary */
-  const keyMoment =
-    model.topMoments.find((m) => m.kind === "Turning Point") ??
-    model.topMoments[0];
+  const end = model.end;
+  const keyMoment = end?.moment ?? null;
   type Cell = { label: string; value: string | null | undefined };
   const cells = (
     [
       { label: END_SUMMARY.outcome, value: outcome.status },
-      { label: END_SUMMARY.strongest, value: model.worked[0]?.title },
-      { label: END_SUMMARY.issue, value: model.didnt[0]?.title },
+      { label: END_SUMMARY.strongest, value: end?.strongest },
+      { label: END_SUMMARY.issue, value: end?.issue },
       {
         label: END_SUMMARY.moment,
         value: keyMoment
@@ -627,7 +679,7 @@ export function reportDocumentModel(
       {
         label: END_SUMMARY.nextEvent,
         value:
-          deal.nextEvent?.text ??
+          end?.nextEvent ??
           (picture.nextStep ? END_SUMMARY.agreedNoDate : null),
       },
     ] as Cell[]
@@ -668,6 +720,7 @@ export function docItemText(item: DocItem): string {
     case "text":
       return item.text;
     case "label":
+    case "subheading":
       return item.text;
     case "list":
       return item.items.join("\n");

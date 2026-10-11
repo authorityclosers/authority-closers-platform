@@ -210,6 +210,8 @@ export const WORKED_DIDNT = {
   didnt: part("3.2", "What Didn't", "What didn't"),
   whyHelped: "Why it helped",
   whatAffected: "What it affected",
+  /** Before the open areas a What Didn't item lists (spec 3.2). */
+  areasLead: "Possible unanswered areas included:",
   noneWorked: "Nothing stood out as a clear strength we can point to.",
   noneDidnt:
     "No clear issue we can point to. That doesn't mean everything went right.",
