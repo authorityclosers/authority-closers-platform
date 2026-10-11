@@ -809,6 +809,17 @@
   .view {
     overflow: visible;
   }
+
+  /* The page scrolls here, so the player stays in reach while reading. */
+  .left {
+    display: contents;
+  }
+
+  .player {
+    position: sticky;
+    z-index: 5;
+    top: var(--sx-topbar-h);
+  }
 }
 
 /* ---------- Phone: sticky player, transcript as a tab ---------- */
