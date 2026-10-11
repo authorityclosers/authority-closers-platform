@@ -48,8 +48,11 @@ function formatDuration(durationSeconds: number) {
 
 export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const access = useWorkspaceAccess();
-  const authenticated = access?.authenticated === true;
-  const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}:${prospectId}`;
+  const authenticated =
+    access?.authenticated === true &&
+    access.status === "ready" &&
+    !!access.context;
+  const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}:${access?.context?.sessionId}:${prospectId}`;
 
   const [detail, setDetail] = useState<ProspectDetail | null>(null);
   const [loadedContext, setLoadedContext] = useState<string | null>(null);
@@ -90,6 +93,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);
         setErrorContext(contextKey);
+        setLoadedContext(null);
         setLoading(false);
       });
 
@@ -106,7 +110,13 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   };
 
   const handleLoadMoreCalls = () => {
-    if (nextOffset === null || loadingMore) return;
+    if (
+      !authenticated ||
+      loadedContext !== contextKey ||
+      nextOffset === null ||
+      loadingMore
+    )
+      return;
     setLoadingMore(true);
     const controller = new AbortController();
     pagination.current = controller;
@@ -128,13 +138,17 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);
         setErrorContext(contextKey);
+        setLoadedContext(null);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingMore(false);
       });
   };
 
-  const prospect = loadedContext === contextKey ? detail?.prospect : undefined;
+  const prospect =
+    authenticated && loadedContext === contextKey
+      ? detail?.prospect
+      : undefined;
   const visibleError = errorContext === contextKey ? error : null;
   const showLoading =
     authenticated &&

@@ -8,6 +8,41 @@ import { syntheticProspect } from "./review-fixture/prospects/synthetic-prospect
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("preserves an explicit human Unknown lock without promoting it into a known value or source", () => {
+  const fields = parseProfileFields({
+    city: {
+      state: "unknown",
+      reason: "not_asked",
+      basis: "person",
+      locked: true,
+      set_at: "2026-10-11T00:00:00Z",
+      value: { kind: "text", text: "private old value" },
+      evidence: { quote: "private old source" },
+    },
+  });
+  expect(fields.city).toEqual({
+    state: "unknown",
+    reason: "not_asked",
+    basis: "person",
+    locked: true,
+    set_at: "2026-10-11T00:00:00Z",
+  });
+  expect(JSON.stringify(fields)).not.toContain("private");
+});
+
+it.each([
+  { locked: true },
+  { basis: "heard_in_call", locked: true, set_at: "2026-10-11T00:00:00Z" },
+  { basis: "person", locked: false, set_at: "2026-10-11T00:00:00Z" },
+  { basis: "person", locked: true, set_at: "invalid" },
+])("rejects incomplete or invented Unknown lock provenance %j", (change) => {
+  expect(() =>
+    parseProfileFields({
+      city: { state: "unknown", reason: "not_asked", ...change },
+    }),
+  ).toThrow();
+});
+
 it("opens legacy summaries and preserves observed source bounds, human locks and contradictions", () => {
   const legacy = { ...syntheticProspect, profile_fields: undefined };
   expect(parseProspectSummary(legacy).profile_fields).toBeUndefined();

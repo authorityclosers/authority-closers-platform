@@ -8,6 +8,7 @@ import {
   callCoachingBinding,
 } from "../../../report-call-coaching.fixture";
 import { parseCallCoaching } from "../../../report-call-coaching-client";
+import { fictionalClip } from "../../../coaching/coaching.fixture";
 import {
   parseAcquisitionReport,
   type ReportEvidence,
@@ -28,7 +29,10 @@ const data = {
   ).report,
   transcript,
   recordingId,
-  callCoaching: parseCallCoaching(fictionalCallCoaching(), callCoachingBinding),
+  callCoaching: parseCallCoaching(
+    { ...fictionalCallCoaching(), media_clips: [fictionalClip] },
+    callCoachingBinding,
+  ),
 };
 const access = {
   status: "ready" as const,

@@ -6,11 +6,12 @@ import {
 } from "../tests/acquisition-fixture";
 import type { CallCoachingBinding } from "./report-call-coaching-client";
 
-/** Invented call/guide data only, matching the pinned 7cefa23 API contract. */
+/** Invented call/guide data only, matching the pinned 1a43d30 API contract. */
 export const callCoachingBinding: CallCoachingBinding = {
   callId: submissionId,
   personId: fictionalCoaching.person_id,
   tenantId: fictionalCoaching.tenant_id,
+  sessionId: "00000000-0000-0000-0000-000000000008",
   recordingId,
   sourceSha256: transcript.source_sha256,
   transcriptRevision: transcript.revision,
@@ -40,6 +41,7 @@ export function fictionalCallCoaching() {
     schema: "ac.sales-xray.call-coaching/1",
     person_id: callCoachingBinding.personId,
     tenant_id: callCoachingBinding.tenantId,
+    session_id: callCoachingBinding.sessionId,
     submission_id: submissionId,
     recording_id: recordingId,
     source_sha256: transcript.source_sha256,
