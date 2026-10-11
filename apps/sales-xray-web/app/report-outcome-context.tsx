@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import {
+  CALL_OUTCOME_SCHEMA,
   readCallOutcome,
   saveCallOutcome,
   type CallOutcomeBinding,
@@ -165,6 +166,64 @@ export function CallOutcomeProvider({
             reload,
           },
     [current, save, reload],
+  );
+  return (
+    <CallOutcomeContext.Provider value={value}>
+      {children}
+    </CallOutcomeContext.Provider>
+  );
+}
+
+/**
+ * Fictional fixtures: the same control, kept in memory. Nothing is read or
+ * sent; a choice lasts until the page reloads, so a review shows exactly how
+ * recording an outcome looks in the Report.
+ */
+export function FixtureCallOutcomeProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [record, setRecord] = useState<CallOutcomeRecord>(() => ({
+    schema: CALL_OUTCOME_SCHEMA,
+    submission_id: "fixture",
+    person_id: "fixture",
+    tenant_id: "fixture",
+    session_id: "fixture",
+    revision: 0,
+    value: null,
+    basis: null,
+    locked: false,
+    set_by_person_id: null,
+    set_at: null,
+    prospect_binding: null,
+    can_edit: true,
+  }));
+  const value = useMemo<Value>(
+    () => ({
+      state: {
+        status: "ready",
+        key: "fixture",
+        binding: {
+          callId: "fixture",
+          personId: "fixture",
+          tenantId: "fixture",
+          sessionId: "fixture",
+        },
+        record,
+      },
+      save: async (next: HumanCallOutcome) =>
+        setRecord((current) => ({
+          ...current,
+          revision: current.revision + 1,
+          value: next,
+          basis: "person",
+          set_by_person_id: "fixture",
+          set_at: new Date().toISOString(),
+        })),
+      reload: async () => {},
+    }),
+    [record],
   );
   return (
     <CallOutcomeContext.Provider value={value}>
