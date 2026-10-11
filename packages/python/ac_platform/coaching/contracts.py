@@ -113,6 +113,26 @@ class Strength(Model):
     evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
 
 
+ObjectionKind = Literal[
+    "price_concern",
+    "affordability_gap",
+    "time_constraint",
+    "stall",
+    "competitor_or_status_quo",
+    "decision_maker_absent",
+    "trust_concern",
+    "other",
+]
+
+
+class ObjectionSeen(Model):
+    """A buyer objection from the report's call map: its fixed kind and how the
+    seller handled it. Never its words or who raised it."""
+
+    kind: ObjectionKind
+    handling: Literal["answered", "deflected", "ignored", "question_back"]
+
+
 class CallHistory(Model):
     submission_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -120,6 +140,9 @@ class CallHistory(Model):
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
     strength: Strength | None = None
+    objections: tuple[ObjectionSeen, ...] = Field(default=(), max_length=6)
+    # The report has a call map (v7), so an empty objection list means none.
+    has_call_map: bool = False
 
     @model_validator(mode="after")
     def bound_evidence(self) -> "CallHistory":

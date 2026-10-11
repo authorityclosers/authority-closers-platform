@@ -29,6 +29,31 @@ class TeamSuggestion(Model):
     suggestion_calls: int = Field(ge=1)
 
 
+OBJECTION_LABELS = {
+    "price_concern": "Price",
+    "affordability_gap": "Affordability",
+    "time_constraint": "Timing",
+    "stall": "Stalling",
+    "competitor_or_status_quo": "Competitor or status quo",
+    "decision_maker_absent": "Decision maker not there",
+    "trust_concern": "Trust",
+    "other": "Other objections",
+}
+
+
+class TeamObjection(Model):
+    """How often the team hears one kind of buyer objection and how it was met.
+
+    Counts from report call maps only; no words, call or person."""
+
+    kind: str
+    label: str
+    calls: int = Field(ge=1)
+    heard: int = Field(ge=1)
+    # Answered, or met with a question back; the rest were deflected or ignored.
+    handled: int = Field(ge=0)
+
+
 class TeamRep(Model):
     """A named rep row. Only fictional AC Sandbox reps today; real reps appear
     here only after they share their coaching (owner decision 2)."""
@@ -63,6 +88,9 @@ class TeamCoachingView(Model):
     # When the newest counted report's call happened; a date, never whose call.
     latest_call_at: datetime | None = None
     suggestions: tuple[TeamSuggestion, ...]
+    # Buyer objections from v7 report call maps; older reports have none.
+    objections: tuple[TeamObjection, ...] = ()
+    objection_calls: int = Field(default=0, ge=0)
     reps: tuple[TeamRep, ...] = ()
     limitations: tuple[str, ...]
 
@@ -102,9 +130,29 @@ def summarize_team(
                 if row.skill_id in LABELS and row.improvement and row.mission
             }
         )
+    heard: Counter[str] = Counter()
+    handled: Counter[str] = Counter()
+    in_calls: Counter[str] = Counter()
+    for call in unique.values():
+        in_calls.update({row.kind for row in call.objections})
+        for row in call.objections:
+            heard[row.kind] += 1
+            handled[row.kind] += row.handling in ("answered", "question_back")
     return TeamCoachingView(
         person_id=person_id,
         tenant_id=tenant_id,
+        objections=tuple(
+            TeamObjection(
+                kind=kind,
+                label=OBJECTION_LABELS[kind],
+                calls=in_calls[kind],
+                heard=count,
+                handled=handled[kind],
+            )
+            for kind, count in sorted(heard.items(), key=lambda pair: (-in_calls[pair[0]], pair[0]))
+        ),
+        # Calls whose report has a call map (v7), so "none heard" is honest.
+        objection_calls=sum(1 for call in unique.values() if call.has_call_map),
         analysed_calls=len(unique),
         rep_count=len({owner for owner, _source in unique}),
         pending_calls=pending_calls,

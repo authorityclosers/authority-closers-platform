@@ -162,6 +162,8 @@ export const fictionalTeamCoaching: TeamCoaching & {
   named_rep_details: false,
   sandbox: false,
   reps: [],
+  objections: [],
+  objection_calls: 0,
   analysed_calls: 3,
   rep_count: 2,
   pending_calls: 0,

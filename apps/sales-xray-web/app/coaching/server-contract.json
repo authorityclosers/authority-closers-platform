@@ -333,6 +333,16 @@
       "Assigned coach duties are pending. Current organisation owners/admins see aggregates."
     ],
     "named_rep_details": false,
+    "objection_calls": 1,
+    "objections": [
+      {
+        "calls": 1,
+        "handled": 1,
+        "heard": 2,
+        "kind": "price_concern",
+        "label": "Price"
+      }
+    ],
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
     "rep_count": 1,

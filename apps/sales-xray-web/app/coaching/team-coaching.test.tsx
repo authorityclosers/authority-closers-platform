@@ -87,6 +87,40 @@ describe("anonymous Team coaching", () => {
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
   });
+  it("shows which buyer objections the team hears and how many were left open", () => {
+    const team = parseTeamCoaching({
+      ...fictionalTeamCoaching,
+      objection_calls: 2,
+      objections: [
+        {
+          kind: "price_concern",
+          label: "Server words",
+          calls: 2,
+          heard: 3,
+          handled: 1,
+        },
+        { kind: "stall", calls: 1, heard: 1, handled: 1 },
+        // Unknown kinds and impossible counts drop only that row.
+        { kind: "made_up", calls: 1, heard: 1, handled: 0 },
+        { kind: "trust_concern", calls: 5, heard: 5, handled: 0 },
+        { kind: "time_constraint", calls: 1, heard: 1, handled: 2 },
+      ],
+    })!;
+    expect(team.objections.map((row) => row.label)).toEqual([
+      "Price",
+      "Stalling",
+    ]);
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("Objections your team hears");
+    expect(html).toContain("2 of 3 left open");
+    expect(html).toContain("all 1 answered");
+    expect(html).not.toContain("Server words");
+    // Older reports without a call map never read as "no objections".
+    const older = renderToStaticMarkup(
+      <TeamCoachingStory coaching={fictionalTeamCoaching} />,
+    );
+    expect(older).not.toContain("Objections your team hears");
+  });
   it("names only fictional AC Sandbox reps, with links to their coaching", () => {
     const team = parseTeamCoaching(sandboxTeam)!;
     expect(team.sandbox).toBe(true);

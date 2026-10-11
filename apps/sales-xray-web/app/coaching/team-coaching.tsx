@@ -34,6 +34,52 @@ const AREA: Record<string, string> = {
 const share = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
+/** Buyer objections from report call maps: how often, and how they were met. */
+function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
+  const calls = coaching.objection_calls;
+  return (
+    <Panel
+      title="Objections your team hears"
+      sub={`In ${calls} mapped call${calls === 1 ? "" : "s"}`}
+    >
+      {coaching.objections.length ? (
+        <List label="Objections">
+          {coaching.objections.map((row) => (
+            <Row
+              key={row.kind}
+              title={row.label}
+              meta={[
+                `${row.calls} of ${calls} call${calls === 1 ? "" : "s"}`,
+                row.handled < row.heard
+                  ? `${row.heard - row.handled} of ${row.heard} left open`
+                  : `all ${row.heard} answered`,
+              ]}
+              end={
+                <span className={styles.share}>
+                  <Meter value={row.calls} max={calls} />
+                  <span>{share(row.calls, calls)}%</span>
+                </span>
+              }
+            />
+          ))}
+        </List>
+      ) : (
+        <Empty
+          icon={FileSearch}
+          title="No objections in these calls"
+          text="Each analysed call’s map lists the buyer’s objections."
+        />
+      )}
+      <p className={styles.body}>
+        <span className={styles.note}>
+          Left open means the reply deflected or skipped it. Counts come from
+          each report’s call map; they never show the words or who said them.
+        </span>
+      </p>
+    </Panel>
+  );
+}
+
 /** Fictional AC Sandbox reps, each with their newest call's one focus. */
 function RepList({
   reps,
@@ -207,6 +253,9 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
               </span>
             </p>
           </Panel>
+          {coaching.objection_calls > 0 ? (
+            <ObjectionsPanel coaching={coaching} />
+          ) : null}
           {coaching.sandbox && coaching.reps.length ? (
             <RepList reps={coaching.reps} rows={rows} />
           ) : (
