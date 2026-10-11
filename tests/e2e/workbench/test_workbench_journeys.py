@@ -193,6 +193,7 @@ class Journey:
     server_errors: list[str] = field(default_factory=list)
     visual_errors: list[str] = field(default_factory=list)
     fixture_outcome_requests: list[str] = field(default_factory=list)
+    outcome_persistence: dict[str, object] | None = None
     observations: list[dict[str, object]] = field(default_factory=list)
     main_navigations: int = 0
     live_refreshes: int = 0
@@ -394,6 +395,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
             "fixture_outcome_requests": journey.fixture_outcome_requests,
+            "outcome_persistence": journey.outcome_persistence,
             "observations": journey.observations,
         }
         (directory / f"{name}-{width}-{theme}.json").write_text(json.dumps(receipt, indent=2))
@@ -437,9 +439,8 @@ def _word_call_outcome(page: Page, status: str, detail: str | None) -> None:
         assert detail in outcome, "Word Call Outcome omits the recorded reason/date"
 
 
-def _fixture_call_outcomes(journey: Journey) -> None:
-    """Only the labelled fictional Story; never mutate a live user's outcome."""
-    assert journey.fixture
+def _outcome_controls_and_documents(journey: Journey) -> None:
+    """Fixture formatting or an explicitly supplied fictional dev call only."""
     page = journey.page
     nav = page.locator("[data-report-sections]")
     picture = page.locator('[data-report-pillar="overview"]')
@@ -460,18 +461,27 @@ def _fixture_call_outcomes(journey: Journey) -> None:
     for key, status, detail in choices:
         editor.get_by_role("button", name=status, exact=True).click()
         if key == "lost":
+            editor.get_by_label("Why was it lost?", exact=True).fill("")
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Add why it was lost.")
             expect(badge).to_have_text("Won")
             editor.get_by_label("Why was it lost?", exact=True).fill(reason)
             editor.get_by_role("button", name="Save", exact=True).click()
         elif key == "follow-up":
+            editor.get_by_label("Follow-up date", exact=True).fill("")
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Pick a follow-up date.")
             expect(badge).to_have_text("Lost")
             editor.get_by_label("Follow-up date", exact=True).fill("2026-11-11")
             editor.get_by_role("button", name="Save", exact=True).click()
+        expect(editor).to_have_attribute("aria-busy", "false")
         expect(badge).to_have_text(status)
+        if not journey.fixture:
+            # Each human choice must survive a real document reload. This branch
+            # is reachable only through the explicitly opted-in fictional dev test.
+            page.reload(wait_until="domcontentloaded")
+            expect(badge).to_have_text(status)
+            journey.snapshot(f"outcome-{key}-reloaded")
         expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
         expect(editor).to_contain_text("25000 INR")
         if key == "lost":
@@ -494,11 +504,17 @@ def _fixture_call_outcomes(journey: Journey) -> None:
         _word_call_outcome(page, status, detail)
         _switch_report_view(page, "Report view")
         nav.get_by_role("link", name="The Big Picture", exact=True).click()
-    # The new owner acceptance requires reload durability. The fixture's
-    # declared memory-only limitation is reported honestly until B supplies
-    # supported fictional persistence; it never falls back to live writes.
     editor.get_by_role("button", name="Won", exact=True).click()
+    expect(editor).to_have_attribute("aria-busy", "false")
     expect(badge).to_have_text("Won")
+
+
+def _recorded_outcome_reload(journey: Journey) -> None:
+    """Actual authenticated fictional persistence; never a fixture substitute."""
+    assert not journey.fixture
+    page = journey.page
+    picture = page.locator('[data-report-pillar="overview"]')
+    badge = picture.locator('span[data-size="lg"] > span[data-tone]')
     page.reload(wait_until="domcontentloaded")
     expect(badge).to_have_text("Won")
     expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
@@ -632,7 +648,56 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
         if journey.fixture:
-            _fixture_call_outcomes(journey)
+            _outcome_controls_and_documents(journey)
+            journey.outcome_persistence = {
+                "scope": "fixture_format_agreement",
+                "canonical_reload_verified": False,
+            }
+
+
+def test_fictional_outcome_persistence(browser: Browser, viewport: tuple[int, str]) -> None:
+    # The named builder supplies this exact owned fictional call and an existing
+    # approved dev session. Ordinary/staging acceptance cannot enable writes.
+    if os.environ.get("WB_MODE") != "live" or not os.environ.get("WB_OUTCOME_WRITE_PATH"):
+        pytest.skip("Requires an explicitly supplied fictional dev call and existing session")
+    origin = urlsplit(os.environ["WB_BASE_URL"])
+    assert (
+        origin.scheme == "https" and origin.hostname == "salesxray-dev.authorityclosers.com"
+    ) or (origin.scheme == "http" and origin.hostname == "127.0.0.1" and origin.port == 3026), (
+        "Outcome writes are limited to the approved dev origin"
+    )
+    path = _path("WB_OUTCOME_WRITE_PATH", "/")
+    matched = re.fullmatch(r"/analysis/calls/([0-9a-f-]{36})", path, re.IGNORECASE)
+    assert matched is not None, "Supply the exact owned fictional finished-call route"
+    api = f"/v1/conversation/prospects/calls/{matched.group(1)}/outcome"
+    with _journey(browser, viewport, "outcome-persistence") as journey:
+        journey.open(path)
+        before = journey.page.request.get(api)
+        assert before.status == 200, "Fictional call outcome is unavailable"
+        initial = before.json()
+        assert initial.get("schema") == "ac.sales-xray.call-outcome/1"
+        assert initial.get("submission_id") == matched.group(1)
+        assert initial.get("can_edit") is True, "Existing account must own the fictional call"
+        _outcome_controls_and_documents(journey)
+        _recorded_outcome_reload(journey)
+        after = journey.page.request.get(api)
+        assert after.status == 200, "Reloaded fictional outcome is unavailable"
+        persisted = after.json()
+        saved_value = persisted.get("value")
+        assert isinstance(saved_value, dict), "Reloaded outcome must be a saved human fact"
+        assert saved_value.get("outcome") == "won"
+        assert saved_value.get("deal_value") == {
+            "amount": "25000",
+            "currency_code": "INR",
+        }
+        assert persisted.get("revision", 0) > initial.get("revision", 0)
+        journey.outcome_persistence = {
+            "scope": "authenticated_fictional_dev_api",
+            "revision_before": initial["revision"],
+            "revision_after": persisted["revision"],
+            "canonical_reload_verified": True,
+            "choices_reloaded": ["won", "lost", "follow_up", "no_decision"],
+        }
 
 
 def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:

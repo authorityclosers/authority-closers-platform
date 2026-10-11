@@ -24,15 +24,23 @@ Live calls are checked only for deeper groups actually supplied by their report.
 The fictional Report also checks Won, Lost with a required reason, Follow-up Set
 with a required date, Decision Pending (the no-decision choice), and optional
 deal value. It checks human attribution, Deal status, Document and the Word
-file's 1.1 Call Outcome, then reload durability. Fictional outcome API requests
-are blocked and counted; the fixture must stay local to the test browser.
-Browser-local fixture persistence is distinct from real API/database evidence.
-Live-mode journeys read existing outcomes and never save one.
+file's 1.1 Call Outcome. Fixture outcome API requests are blocked and counted;
+the in-memory fixture deliberately resets on reload. Its receipt identifies
+format agreement and explicitly says canonical reload is unverified.
+The ordinary live-mode Report/Document/Coaching journeys are read-only.
+
+Four additional cases, `test_fictional_outcome_persistence`, require `WB_MODE=live`,
+an existing approved dev session and `WB_OUTCOME_WRITE_PATH` naming an explicitly
+fictional finished call owned by that account. They save through the real control,
+fully reload each choice, check Report/Document/Word and read the saved API value
+and increasing revision. They refuse staging origins. No fixture storage or
+React-state result substitutes for this evidence. Without the explicit write
+path they skip. The full file therefore collects 20 cases.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
 Its four cases remain available for a later populated, approved-session run by
-omitting `-k 'not dashboard'`. `/review-fixture/dashboard` does not exist;
+omitting the Dashboard filter. `/review-fixture/dashboard` does not exist;
 the retained dashboard journey requires a populated `WB_DASHBOARD_PATH` or live
 mode. A missing fixture does not prove the protected product route is broken.
 
@@ -53,6 +61,9 @@ go into this directory, Git, commands or test output. Live mode uses real produc
 routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
+The read-only twelve-case staging selection is
+`-k 'not dashboard and not fictional_outcome_persistence'`. Clear the optional
+write path when running smoke; no outcome mutation is part of staging acceptance.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.

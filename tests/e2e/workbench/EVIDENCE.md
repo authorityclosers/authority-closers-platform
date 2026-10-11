@@ -9,13 +9,17 @@ live data change or shipping action is performed by QA.
 New 17:45 UTC owner/coordinator acceptance extends Report QA to human outcomes:
 all four choices, Lost reason / Follow-up date validation, optional value, human
 badge and Deal status, Document/Word 1.1 Call Outcome, then reload. The owned
-fixture-only journey is implemented; browser verification is pending. Fixture
-outcome API reads/writes are blocked and counted; live mode remains read-only.
-The current Story provider intentionally keeps choices in memory only; B has
-the exact request for supported labelled fictional reload persistence or an
-existing approved dev context with an owned fictional call. The prior completed
-Report/Coaching coverage below does not certify this new acceptance. Browser
-simulation and actual API/database persistence remain separate claims.
+fixture formatting journey is implemented; browser verification is pending.
+Fixture outcome API reads/writes are blocked and counted. Its memory-only reset
+is an honest fixture limit, not an API persistence defect. Per CEO's 18:06 UTC
+handoff, the earlier request for browser storage is withdrawn. A separate strict
+opt-in dev test saves each choice, fully reloads and checks Report/Document/Word,
+then reads the API's saved value and revision. It needs B's existing approved
+private dev session reference and an owned fictional finished-call route; it
+is **NOT EXECUTED** without them. Ordinary live journeys and staging smoke stay
+read-only. The full file collects 20 cases, with 12 in the staging selection.
+The prior completed Report/Coaching coverage below does not certify this new
+acceptance. Fixture format agreement and canonical persistence remain separate.
 
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
