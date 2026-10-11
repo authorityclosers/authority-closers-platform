@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,20 @@ from pathlib import Path
 import pytest
 
 from scripts.ci import ac_fast_check as FAST
+
+
+@pytest.fixture(autouse=True)
+def shared_slot_adapter(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unit subprocess checks do not depend on the server's installed launcher."""
+    directory = tmp_path_factory.mktemp("shared-slot-adapter")
+    launcher = directory / "ac-heavy"
+    launcher.write_text(
+        f"#!{sys.executable}\nimport os, sys\nos.execv(sys.argv[1], sys.argv[1:])\n"
+    )
+    launcher.chmod(0o700)
+    monkeypatch.setenv("PATH", str(directory) + os.pathsep + os.environ.get("PATH", ""))
 
 
 def write(root: Path, relative: str, content: str) -> None:
@@ -403,6 +418,19 @@ def test_runner_requires_explicit_lane_database_for_pytest(
     monkeypatch.delenv("AC_TEST_DATABASE_URL", raising=False)
     check = FAST.Check("pytest", (sys.executable, "-m", "pytest"), tmp_path, ())
     assert FAST.run_check(check, 30, 5)["status"] == "unavailable"
+
+
+def test_runner_requires_installed_shared_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = FAST.shutil.which
+    monkeypatch.setattr(
+        FAST.shutil, "which", lambda name: None if name == "ac-heavy" else original(name)
+    )
+    check = FAST.Check("synthetic", (sys.executable, "-c", "raise AssertionError"), tmp_path, ())
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == "unavailable"
+    assert result["reason"] == "The shared heavy slot is required"
 
 
 def test_timeout_stops_a_child_without_claiming_success(tmp_path: Path) -> None:
