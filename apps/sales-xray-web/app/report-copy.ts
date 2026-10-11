@@ -228,6 +228,8 @@ export const OUTCOME_RECORD = {
 export const CALL_FLOW = {
   metrics: part("2.1", "Call Metrics", "Call numbers"),
   timeline: part("2.2", "Conversation Timeline", "How the call moved"),
+  /** Gap line when the report names no stages (the talk bars still show). */
+  stagesGap: "Call stages",
   change: part("2.3", "Key Change in the Conversation", "Key change"),
   beforeAfter: part("2.4", "Before / Switch / After", "Before and after"),
   before: "Before",
