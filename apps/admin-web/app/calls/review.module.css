@@ -750,8 +750,9 @@
     padding: 10px var(--sx-gutter) 16px;
   }
 
-  /* Unbuilt commands and the keyboard help are desktop-only. */
-  .headActions [data-desk] {
+  /* Unbuilt commands, the keyboard help and dead arrows are desktop-only. */
+  .headActions [data-desk],
+  .headActions a[aria-disabled="true"] {
     display: none;
   }
 
