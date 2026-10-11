@@ -601,11 +601,11 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     if (
       next.size === 0 ||
       next.size > 32 * 1024 * 1024 ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(next.name)
+      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+        next.name,
+      )
     ) {
-      setError(
-        "Choose a supported audio recording recording up to 32 MB.",
-      );
+      setError("Choose a supported audio recording recording up to 32 MB.");
       return;
     }
     ++attempt.current;

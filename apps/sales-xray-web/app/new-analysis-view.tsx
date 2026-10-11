@@ -232,7 +232,8 @@ export function NewAnalysisView({
           </button>
 
           <p className={styles.formats}>
-            MP3, WAV, M4A and common phone audio formats &nbsp;·&nbsp; Up to 32MB / 60 min
+            MP3, WAV, M4A and common phone audio formats &nbsp;·&nbsp; Up to
+            32MB / 60 min
           </p>
         </div>
       </section>

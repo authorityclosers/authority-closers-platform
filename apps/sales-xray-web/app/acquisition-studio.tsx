@@ -1267,7 +1267,9 @@ export function AcquisitionStudio({
     setPlanRequiresAction(false);
     if (
       !policy ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(next.name) ||
+      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+        next.name,
+      ) ||
       !next.size ||
       next.size > policy.maximum_file_bytes
     ) {
@@ -1298,7 +1300,9 @@ export function AcquisitionStudio({
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(candidate.name) &&
+        /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+          candidate.name,
+        ) &&
         candidate.size > 0 &&
         candidate.size <= policy.maximum_file_bytes,
     );

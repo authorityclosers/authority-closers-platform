@@ -14,7 +14,8 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
-const SUPPORTED_AUDIO = /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i;
+const SUPPORTED_AUDIO =
+  /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
   files: readonly File[];
