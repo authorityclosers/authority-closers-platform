@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SalesReport } from "./report-contract";
+import type { SalesReport, Transcript } from "./report-contract";
 import { callOutcome, reportStoryModel } from "./report-story-model";
 import {
   AMIT_SPEAKERS,
@@ -8,6 +8,7 @@ import {
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
+import callB from "./review-fixture/report/story/fictional-call-b.json";
 
 const withOutcome = (
   kind: string,
@@ -170,5 +171,36 @@ describe("honest gaps", () => {
     expect(model.worked).toEqual([]);
     expect(model.moments).toEqual([]);
     expect(model.missing[3]).toEqual(["Moments"]);
+  });
+});
+
+describe("today's real pipeline output (corpus call B, invented script)", () => {
+  const report = callB.report as unknown as SalesReport;
+  const transcript = callB.transcript as unknown as Transcript;
+  const model = reportStoryModel(report, transcript, {
+    roles: { seller: "speaker_0", prospect: "speaker_1" },
+  });
+
+  it("fills the Big Picture from the overview it already has", () => {
+    expect(model.picture.outcome).toMatchObject({
+      status: "Follow-up Set",
+      origin: "call",
+    });
+    expect(model.picture.influence?.sources.length).toBeGreaterThan(0);
+    expect(model.picture.strongest?.sources).toHaveLength(1);
+    expect(model.picture.concern?.sources).toHaveLength(1);
+    expect(model.picture.nextStep?.text).toBe(report.overview!.outcome!.text);
+    expect(model.missing[0]).toEqual([]);
+  });
+
+  it("says plainly what the older format lacks", () => {
+    expect(model.flow.phases).toBeNull();
+    expect(model.missing[1]).toContain("Conversation stages");
+    expect(model.deal.quality).toBeNull();
+    expect(model.missing[5]).toContain("Commitment quality");
+    expect(model.skills.every((skill) => skill.state === "Observed")).toBe(
+      true,
+    );
+    expect(model.topMoments.length).toBeGreaterThan(0);
   });
 });

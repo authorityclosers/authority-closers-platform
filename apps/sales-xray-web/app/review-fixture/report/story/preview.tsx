@@ -14,7 +14,11 @@ import { useTheme } from "../../../lightbox/theme-provider";
 import { NextCallPlan } from "../../../next-call-plan";
 import { OverviewHook } from "../../../overview-hook";
 import { ProspectSnapshot } from "../../../prospect-snapshot";
-import type { ReportEvidence } from "../../../report-contract";
+import type {
+  ReportEvidence,
+  SalesReport,
+  Transcript,
+} from "../../../report-contract";
 import { ReportHeader } from "../../../report-header";
 import { ReportModes } from "../../../report-modes";
 import { ReportMoments } from "../../../report-moments";
@@ -52,28 +56,60 @@ const FIXTURE_ALLOWANCE: Allowance = {
   available_seconds: 2_520,
 };
 
-const FIXTURE_DURATION_MS = amitTranscript.duration_ms;
-
 /** A fictional call id: local notes (speaker names, facts, ticks) stay in this browser only. */
 const FIXTURE_CALL_ID = "00000000-0000-4000-8000-000000000077";
 
-/** Fictional names and roles, as a person would confirm them on a real call. */
-const FIXTURE_SPEAKERS = {
-  callId: FIXTURE_CALL_ID,
-  profiles: {
-    [AMIT_SPEAKERS.seller]: { name: "Arjun", role: "you", icon: null },
-    [AMIT_SPEAKERS.prospect]: {
-      name: "Amit Sharma",
-      role: "prospect",
-      icon: null,
-    },
+export type StoryFixture = {
+  report: SalesReport;
+  transcript: Transcript;
+  title: string;
+  language: string;
+  /** Names and roles as a person would confirm them; null leaves them unset. */
+  speakers: {
+    seller: string;
+    sellerName: string;
+    prospect: string;
+    prospectName: string;
+  } | null;
+};
+
+export const AMIT_FIXTURE: StoryFixture = {
+  report: amitReport,
+  transcript: amitTranscript,
+  title: "Amit Sharma · discovery call",
+  language: "English",
+  speakers: {
+    seller: AMIT_SPEAKERS.seller,
+    sellerName: "Arjun",
+    prospect: AMIT_SPEAKERS.prospect,
+    prospectName: "Amit Sharma",
   },
-  drafts: {},
-  save: () => false,
-  canSave: false,
-  error: null,
-  server: true,
-} as const;
+};
+
+function speakerProfiles(speakers: StoryFixture["speakers"]) {
+  return {
+    callId: FIXTURE_CALL_ID,
+    profiles: speakers
+      ? {
+          [speakers.seller]: {
+            name: speakers.sellerName,
+            role: "you" as const,
+            icon: null,
+          },
+          [speakers.prospect]: {
+            name: speakers.prospectName,
+            role: "prospect" as const,
+            icon: null,
+          },
+        }
+      : {},
+    drafts: {},
+    save: () => false,
+    canSave: false,
+    error: null,
+    server: true,
+  };
+}
 
 /**
  * The real Report inside the real shell, filled with the spec's own fictional
@@ -82,7 +118,13 @@ const FIXTURE_SPEAKERS = {
  * step when a section is added there. No recording, account, analysis or
  * provider call exists; actions only report what they would do.
  */
-export function StoryShellPreview() {
+export function StoryShellPreview({
+  fixture = AMIT_FIXTURE,
+}: {
+  fixture?: StoryFixture;
+}) {
+  const amitReport = fixture.report;
+  const FIXTURE_DURATION_MS = fixture.transcript.duration_ms;
   const audio = useRef<HTMLAudioElement>(null);
   // Like the live studio: a light report sheet unless the app is dark.
   const resolvedTheme = useTheme()?.resolved ?? "light";
@@ -90,7 +132,7 @@ export function StoryShellPreview() {
     "Fictional fixture. Actions here do not reach any service.",
   );
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
-  const transcript = amitTranscript;
+  const transcript = fixture.transcript;
   const selectSource = (evidence: ReportEvidence, title: string) =>
     setStatus(
       `Selected ${formatTranscriptTime(evidence.start_ms)}–${formatTranscriptTime(evidence.end_ms)} · ${title}. No audio exists in this fixture.`,
@@ -106,7 +148,9 @@ export function StoryShellPreview() {
 
   return (
     <UploadSessionProvider>
-      <SpeakerProfilesContext.Provider value={FIXTURE_SPEAKERS}>
+      <SpeakerProfilesContext.Provider
+        value={speakerProfiles(fixture.speakers)}
+      >
         <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
           <AcquisitionShell
             authenticated
@@ -139,7 +183,7 @@ export function StoryShellPreview() {
                   >
                     <ReportHeader
                       durationMs={FIXTURE_DURATION_MS}
-                      languageLabel="English"
+                      languageLabel={fixture.language}
                       sourceLabel="Fictional fixture transcript"
                       claimed
                       busy={false}
@@ -181,7 +225,7 @@ export function StoryShellPreview() {
                       documentData={{
                         report: amitReport,
                         transcript,
-                        title: "Amit Sharma · discovery call",
+                        title: fixture.title,
                       }}
                       label="Explore your sales report"
                       lightSurface={resolvedTheme !== "dark"}
@@ -324,7 +368,7 @@ export function StoryShellPreview() {
                       transcript={transcript}
                       report={amitReport}
                       callId={FIXTURE_CALL_ID}
-                      callTitle="Amit Sharma · discovery call"
+                      callTitle={fixture.title}
                       onSeek={playFrom}
                       audioAvailable
                     />
