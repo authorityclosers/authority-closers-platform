@@ -145,20 +145,41 @@ async def prepare(engine, member, runtime, upload):
         )
 
 
+@pytest.mark.parametrize("existing_principal", [False, True])
 def test_create_invite_accept_then_two_first_uploads_create_one_principal(
-    postgres_harness, tmp_path
+    postgres_harness, tmp_path, existing_principal
 ):
     async def exercise():
         engine = create_async_engine(postgres_harness.url)
         try:
             member, bundle, runtime = await setup(engine, tmp_path)
+            prior_person = None
+            if existing_principal:
+                prior_person = uuid4()
+                async with AsyncSession(engine) as db, db.begin():
+                    sessions = AcquisitionSessions(
+                        db,
+                        tenant_id=member.tenant_id,
+                        policy_revision="previous-fictional-organisation-policy",
+                        clock=lambda: member.now,
+                        trial_enabled=False,
+                    )
+                    await GuestOwnership(sessions).provision(
+                        operator_reference="ref:fictional:previous-processing-principal",
+                        reason="Fictional existing principal with its preserved history.",
+                        processing_person_id=prior_person,
+                    )
             upload = measured_upload()
             results = await asyncio.gather(
                 prepare(engine, member, runtime, upload), prepare(engine, member, runtime, upload)
             )
             assert results[0] == results[1]
             processing, _ = results[0]
-            policy = bundle.acquisition_policy_for(member.tenant_id, registered_organisation=True)
+            policy = bundle.acquisition_policy_for(
+                member.tenant_id,
+                registered_organisation=True,
+                processing_person_id=prior_person,
+            )
             assert processing.person_id == policy.processing_person_id
             async with AsyncSession(engine) as db:
                 assert (

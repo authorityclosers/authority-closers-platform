@@ -11,6 +11,7 @@ from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpl
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
+from ac_platform.conversation_intelligence.guest_models import ConversationProcessingPrincipal
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
@@ -85,7 +86,16 @@ class AcquisitionProcessing:
             )
             if organisation is not None and organisation != authority.operations_tenant_id:
                 bundle = authority.current(self.ownership.clock())
-                policy = bundle.acquisition_policy_for(organisation, registered_organisation=True)
+                principal = await self.database.scalar(
+                    select(ConversationProcessingPrincipal).where(
+                        ConversationProcessingPrincipal.tenant_id == organisation
+                    )
+                )
+                policy = bundle.acquisition_policy_for(
+                    organisation,
+                    registered_organisation=True,
+                    processing_person_id=None if principal is None else principal.person_id,
+                )
                 if policy is not None:
                     await self.ownership.provision(
                         operator_reference="ref:approval:AUT-1701:AUT-1694:all-organisations",

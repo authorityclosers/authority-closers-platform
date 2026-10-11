@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, overload
 from uuid import UUID
 
 from sqlalchemy import select
@@ -36,8 +37,40 @@ def sales_xray_tenant_ids(
     return frozenset(tenant_ids)
 
 
-async def sales_xray_served_tenant_ids(
+@overload
+def sales_xray_served_tenant_ids(
+    settings: Settings, intake: ConversationIntakeRuntime | None
+) -> frozenset[UUID]: ...
+
+
+@overload
+def sales_xray_served_tenant_ids(
     settings: Settings, intake: ConversationIntakeRuntime | None, database: AsyncSession
+) -> Awaitable[frozenset[UUID]]: ...
+
+
+def sales_xray_served_tenant_ids(
+    settings: Settings,
+    intake: ConversationIntakeRuntime | None,
+    database: AsyncSession | None = None,
+) -> frozenset[UUID] | Awaitable[frozenset[UUID]]:
+    """Keep legacy route installation compatible while callers adopt live scope.
+
+    The two-argument form retains the old composition snapshot solely for legacy
+    installers. Request admission must supply its database (or use the selected
+    workspace predicate) to include all active registered organisations.
+    """
+    if database is not None:
+        return sales_xray_active_tenant_ids(settings, database)
+    tenant_ids = set(sales_xray_tenant_ids(settings, intake))
+    if settings.public_learner_tenant_id is not None:
+        tenant_ids.add(settings.public_learner_tenant_id)
+    tenant_ids.discard(settings.operations_tenant_id)
+    return frozenset(tenant_ids)
+
+
+async def sales_xray_active_tenant_ids(
+    settings: Settings, database: AsyncSession
 ) -> frozenset[UUID]:
     """Personal plus every active registered organisation, excluding operations.
 

@@ -861,13 +861,19 @@ class HostedApprovalBundle(_StrictFrozenModel):
         return self
 
     def acquisition_policy_for(
-        self, tenant_id: UUID, *, registered_organisation: bool = False
+        self,
+        tenant_id: UUID,
+        *,
+        registered_organisation: bool = False,
+        processing_person_id: UUID | None = None,
     ) -> AcquisitionProviderPolicy | None:
         """Resolve provider limits; this lookup never grants workspace access.
 
         Registered organisations use the existing organisation processing pattern
         by default. The database-backed admission still requires an active registry,
-        membership and processing lease before using any derived policy.
+        membership and processing lease before using any derived policy. A
+        canonical existing non-login principal may be retained; an exact sealed
+        policy's principal can never be overridden by this argument.
         """
 
         if self.acquisition_policy is not None and self.acquisition_policy.tenant_id == tenant_id:
@@ -884,6 +890,14 @@ class HostedApprovalBundle(_StrictFrozenModel):
             return explicit
         if not registered_organisation or tenant_id == self.provider_control_tenant_id:
             return None
+        if processing_person_id is not None and type(processing_person_id) is not UUID:
+            raise ActivationContractError("organisation_processing_principal_invalid")
+        if processing_person_id is not None and any(
+            policy is not None and policy.processing_person_id == processing_person_id
+            for policy in (self.acquisition_policy, *self.organisation_acquisition_policies)
+        ):
+            # An existing sealed principal cannot be borrowed by another tenant.
+            return None
         template = next(iter(self.organisation_acquisition_policies), self.acquisition_policy)
         if template is None:
             return None
@@ -891,7 +905,8 @@ class HostedApprovalBundle(_StrictFrozenModel):
         payload.update(
             id=uuid5(template.id, f"organisation-acquisition:{tenant_id}"),
             tenant_id=tenant_id,
-            processing_person_id=uuid5(
+            processing_person_id=processing_person_id
+            or uuid5(
                 NAMESPACE_URL,
                 f"https://authorityclosers.com/sales-xray/organisation-processing/1/{tenant_id}",
             ),

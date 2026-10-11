@@ -59,6 +59,12 @@ def test_default_preserves_template_limits_routes_and_legacy_approval_bytes():
     assert bundle.to_json() == raw and bundle.digest == digest
     assert bundle.acquisition_policy_for(ORG_ID, registered_organisation=True) == template
     assert (
+        bundle.acquisition_policy_for(
+            ORG_ID, registered_organisation=True, processing_person_id=uuid4()
+        )
+        == template
+    )
+    assert (
         bundle.acquisition_policy_for(TENANT_ID, registered_organisation=True)
         == bundle.acquisition_policy
     )
@@ -88,7 +94,9 @@ async def test_authority_requires_live_registry_before_accepting_default(registe
     actor = ProcessingActor(policy.processing_person_id, tenant_id, uuid4())
     app = SimpleNamespace(
         admit=AsyncMock(return_value=datetime.fromtimestamp(1100, UTC)),
-        database=SimpleNamespace(scalar=AsyncMock(return_value=tenant_id if registered else None)),
+        database=SimpleNamespace(
+            scalar=AsyncMock(return_value=actor.person_id if registered else None)
+        ),
     )
     authority = ConversationAuthority(
         lambda: bundle, environment="test", operations_tenant_id=CONTROL_ID
@@ -100,8 +108,9 @@ async def test_authority_requires_live_registry_before_accepting_default(registe
         assert await authority.admit(app, actor) == bundle
         stage = authority.stage_approval(bundle, actor, source_sha256=SOURCE_SHA, stage="C2")
         assert (stage.tenant_id, stage.person_id) == (tenant_id, policy.processing_person_id)
-        with pytest.raises(ConversationDenied, match="approved acquisition provider policy"):
-            authority.recipient(bundle, ProcessingActor(ORG_PERSON_ID, tenant_id, uuid4()))
+        app.database.scalar.return_value = uuid4()
+        with pytest.raises(ConversationDenied, match="its processing principal"):
+            await authority.admit(app, ProcessingActor(ORG_PERSON_ID, tenant_id, uuid4()))
 
 
 def test_personal_template_can_supply_routes_when_no_organisation_override_is_sealed():
@@ -109,6 +118,27 @@ def test_personal_template_can_supply_routes_when_no_organisation_override_is_se
     policy = bundle.acquisition_policy_for(uuid4(), registered_organisation=True)
     assert policy.stage_sets() == bundle.acquisition_policy.stage_sets()
     assert policy.max_recordings == 2000
+
+
+def test_default_keeps_canonical_existing_principal_without_changing_sealed_bytes():
+    bundle = organisation_bundle()
+    raw = bundle.to_json()
+    tenant_id, person_id = uuid4(), uuid4()
+    policy = bundle.acquisition_policy_for(
+        tenant_id, registered_organisation=True, processing_person_id=person_id
+    )
+    assert policy.processing_person_id == person_id
+    assert policy.max_recordings == 2000 and bundle.to_json() == raw
+    assert (
+        bundle.acquisition_policy_for(
+            tenant_id, registered_organisation=True, processing_person_id=ORG_PERSON_ID
+        )
+        is None
+    )
+    with pytest.raises(ValueError, match="organisation_processing_principal_invalid"):
+        bundle.acquisition_policy_for(
+            tenant_id, registered_organisation=True, processing_person_id="untrusted-value"
+        )
 
 
 def default_reservation(bundle, tenant_id, stage_name, source_sha):
@@ -162,7 +192,7 @@ def test_default_stages_reach_router_with_exact_org_source_binding(stage_name):
     assert FixedProviderRouter._stage(reservation, bundle) == stage
     assert stage.configuration_sha256 == "e" * 64
     for forged_quote in (
-        replace(reservation.quote, account_id=str(ORG_PERSON_ID)),
+        replace(reservation.quote, account_id=str(uuid4())),
         replace(
             reservation.quote,
             source=replace(reservation.quote.source, tenant_id=str(uuid4())),
@@ -177,8 +207,11 @@ def test_default_stages_reach_router_with_exact_org_source_binding(stage_name):
                 approved_by=forged_quote.account_id,
             ),
         )
-        with pytest.raises(ProviderRouterError, match="broker_router_route_mismatch"):
-            FixedProviderRouter._stage(forged, bundle)
+        candidate = FixedProviderRouter._stage(forged, bundle)
+        assert candidate.id != stage.id
+        assert forged.permission.authorization_ref != (
+            f"hosted-stage-v1:{candidate.id}:{bundle.digest}"
+        )
 
 
 async def test_default_router_dispatches_only_with_matching_signed_permission():
@@ -206,6 +239,25 @@ async def test_default_router_dispatches_only_with_matching_signed_permission():
     )
     with pytest.raises(ProviderRouterError, match="broker_router_authorization_mismatch"):
         await router.execute(forged, source)
+    for forged_quote in (
+        replace(reservation.quote, account_id=str(ORG_PERSON_ID)),
+        replace(
+            reservation.quote, source=replace(reservation.quote.source, tenant_id=str(uuid4()))
+        ),
+    ):
+        forged = replace(
+            reservation,
+            quote=forged_quote,
+            permission=replace(
+                reservation.permission,
+                quote_fingerprint=forged_quote.fingerprint,
+                approved_by=forged_quote.account_id,
+            ),
+        )
+        with pytest.raises(
+            ProviderRouterError, match="broker_router_(authorization|route)_mismatch"
+        ):
+            await router.execute(forged, source)
     assert len(child.calls) == 1
 
 
@@ -218,7 +270,7 @@ async def test_default_organisation_keeps_every_storage_and_count_limit(limit):
     database = SimpleNamespace(
         scalar=AsyncMock(
             side_effect=[
-                tenant_id,
+                actor.person_id,
                 bundle.max_stored_source_bytes if limit == "shared_storage" else 0,
             ]
         ),

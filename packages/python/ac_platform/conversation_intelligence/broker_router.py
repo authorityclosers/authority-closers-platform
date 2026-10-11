@@ -195,7 +195,9 @@ class FixedProviderRouter:
         # route or borrowing a different source's stage.
         try:
             policy = bundle.acquisition_policy_for(
-                UUID(quote.source.tenant_id), registered_organisation=True
+                UUID(quote.source.tenant_id),
+                registered_organisation=True,
+                processing_person_id=UUID(quote.account_id),
             )
         except (TypeError, ValueError):
             policy = None

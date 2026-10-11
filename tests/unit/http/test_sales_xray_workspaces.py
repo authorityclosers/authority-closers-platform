@@ -194,3 +194,10 @@ async def test_live_registry_is_the_served_set_and_new_organisations_need_no_res
     with Session(state.engine) as db, db.begin():
         db.get(Tenant, new_id).status = "suspended"
     assert str(new_id) not in {w["tenant_id"] for w in (await get(state)).json()["workspaces"]}
+
+
+def test_legacy_two_argument_installation_remains_synchronous(state):
+    assert sales_xray_served_tenant_ids(state.settings, state.intake) == frozenset(
+        state.tenants[n] for n in ("Beta", "Alpha")
+    )
+    assert sales_xray_served_tenant_ids(state.settings, None) == frozenset({state.tenants["Beta"]})
