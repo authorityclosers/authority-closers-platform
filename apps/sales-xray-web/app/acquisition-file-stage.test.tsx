@@ -176,5 +176,14 @@ it("shows the call's wave, quiet and hidden from screen readers, until a file is
   expect(wave).not.toBeNull();
   expect(wave?.closest('[aria-hidden="true"]')).not.toBeNull();
   await renderStage({ files: [first], selectedFile: first });
-  expect(host.querySelector('[data-state="idle"]')).toBeNull();
+  // The drop area gives the wave to the chosen file's card, which keeps its
+  // room from the start (the motif until the file is measured).
+  expect(
+    host.querySelector(
+      '[aria-label="Add sales call audio files"] [data-state]',
+    ),
+  ).toBeNull();
+  const card = host.querySelector('li[data-selected="true"]')!;
+  expect(card.querySelector('[role="img"][data-compact]')).not.toBeNull();
+  expect(host.querySelectorAll('li [role="img"]')).toHaveLength(1);
 });

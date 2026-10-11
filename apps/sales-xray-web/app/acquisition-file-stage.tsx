@@ -12,6 +12,8 @@ import {
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import { AnalysisWave } from "./analysis-wave";
+import { useFileWave } from "./analysis-wave-file";
+import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
@@ -56,6 +58,8 @@ export function AcquisitionFileStage({
     (currentPage + 1) * PAGE_SIZE,
   );
   const activeFile = files.find((file) => file === selectedFile) ?? null;
+  // The chosen call's own wave, measured here before anything is sent.
+  const wave = useFileWave(activeFile);
   const hasFiles = files.length > 0;
   const limits = [
     "MP3, WAV, M4A and common phone audio formats",
@@ -209,6 +213,16 @@ export function AcquisitionFileStage({
               const unsupported = !SUPPORTED_AUDIO.test(file.name);
               const selectable = !oversized && !unsupported;
               const selected = file === activeFile;
+              const length =
+                selected && wave
+                  ? formatClock(wave.duration_ms).replace(/^0(?=\d:)/, "")
+                  : null;
+              const overLength =
+                selected &&
+                wave !== null &&
+                maxMinutes !== undefined &&
+                maxMinutes > 0 &&
+                wave.duration_ms > maxMinutes * 60_000;
               return (
                 <li
                   className={styles.fileCard}
@@ -222,11 +236,14 @@ export function AcquisitionFileStage({
                     <strong title={file.name}>{file.name}</strong>
                     <small>
                       {fileSize(file.size)}
+                      {length ? ` · ${length}` : ""}
                       {oversized
                         ? " · Over size limit"
                         : unsupported
                           ? " · Unsupported format"
-                          : " · Audio file"}
+                          : overLength
+                            ? ` · Longer than ${maxMinutes} min`
+                            : " · Audio file"}
                     </small>
                   </span>
                   {selected ? (
@@ -253,6 +270,18 @@ export function AcquisitionFileStage({
                   >
                     <X size={19} aria-hidden="true" />
                   </button>
+                  {selected && selectable ? (
+                    // Room kept from the start: the quiet motif reshapes
+                    // into this call's wave once it is measured.
+                    <span className={styles.fileWave}>
+                      <AnalysisWave
+                        envelope={wave}
+                        played={0}
+                        state={wave ? "still" : "idle"}
+                        compact
+                      />
+                    </span>
+                  ) : null}
                 </li>
               );
             })}

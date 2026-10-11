@@ -783,6 +783,16 @@
 .stage.stage[data-has-files="true"] .fileCopy {
   gap: 4px;
 }
+/* The chosen call's wave runs under its name, the card's full width. */
+.stage.stage[data-has-files="true"] .fileCard[data-selected="true"] {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+.fileWave {
+  display: block;
+  flex: 1 0 100%;
+  min-width: 0;
+}
 .stage.stage[data-has-files="true"] .fileCopy strong {
   color: var(--lx-ink);
   font-size: 16px;

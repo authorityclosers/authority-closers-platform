@@ -91,6 +91,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { useFileWave } from "./analysis-wave-file";
 import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
@@ -295,6 +296,9 @@ export function AcquisitionStudio({
   const file = pending
     ? (pending.selection?.file ?? retainedUploadFile)
     : (localFile ?? retainedUploadFile);
+  // The chosen file's wave, measured in this browser (shared with its card),
+  // carries the call's shape into sending and the steps.
+  const fileWave = useFileWave(file);
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -2723,6 +2727,7 @@ export function AcquisitionStudio({
                   // analysis panel shows the call being sent, then carries on.
                   <AcquisitionProcessingPanel
                     upload={{ fraction: null }}
+                    localEnvelope={fileWave}
                     stageRows={[]}
                     statusText="Sending your call"
                     fileName={displayFileName ?? undefined}
@@ -3242,6 +3247,7 @@ export function AcquisitionStudio({
                 {submission && !report && showProgress && (
                   <AcquisitionProcessingPanel
                     submissionId={submission.id}
+                    localEnvelope={fileWave}
                     progress={progress}
                     waitingForApproval={waitingForApproval}
                     accepted={plan?.accepted ?? false}

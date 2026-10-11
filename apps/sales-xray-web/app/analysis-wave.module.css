@@ -132,7 +132,9 @@
   height: var(--h);
   border-radius: 99px;
   background: var(--lx-line-strong);
+  /* The motif reshapes into the call once it is measured. */
   transition:
+    height 600ms var(--lx-ease-move, ease),
     background-color 400ms ease,
     opacity 400ms ease;
 }
@@ -177,6 +179,12 @@
     --wave-h: 72px;
     gap: 1px;
   }
+}
+
+/* A short strip (the chosen file's card), at every width. */
+.wave[data-compact] {
+  --wave-h: 44px;
+  gap: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

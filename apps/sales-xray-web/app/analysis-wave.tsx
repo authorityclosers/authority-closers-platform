@@ -76,6 +76,19 @@ export type WaveState =
   | "still";
 
 /**
+ * The level the loud end of the call reaches (its 95th percentile), so a
+ * quiet recording still fills the strip and one cough doesn't flatten the
+ * rest. Only the drawing scale: the shape is the measurement's.
+ */
+export function loudReference(levels: readonly (number | null)[]): number {
+  const known = levels
+    .filter((level): level is number => level !== null && level > 0)
+    .sort((a, b) => a - b);
+  if (!known.length) return 1;
+  return known[Math.min(known.length - 1, Math.floor(known.length * 0.95))];
+}
+
+/**
  * `arrived` (0-1): how much of the file has reached us (uploading); bars
  * beyond it are faint. `played` (0-1): the share of steps finished.
  */
@@ -84,16 +97,23 @@ export function AnalysisWave({
   arrived,
   played,
   state,
+  compact,
 }: {
   envelope: WaveformEnvelope | null;
   /** Omitted when the upload doesn't report its progress. */
   arrived?: number;
   played: number;
   state: WaveState;
+  /** A short strip, e.g. inside the chosen file's card. */
+  compact?: boolean;
 }) {
-  const levels = envelope
-    ? waveformBins(envelope, 0, envelope.duration_ms, BARS).map((level) =>
-        level === null ? 0.04 : 0.08 + 0.92 * level,
+  const bins = envelope
+    ? waveformBins(envelope, 0, envelope.duration_ms, BARS)
+    : null;
+  const reference = bins ? loudReference(bins) : 1;
+  const levels = bins
+    ? bins.map((level) =>
+        level === null ? 0.04 : 0.08 + 0.92 * Math.min(1, level / reference),
       )
     : MOTIF;
   const label =
@@ -111,6 +131,7 @@ export function AnalysisWave({
       className={styles.wave}
       data-state={state}
       data-measured={envelope ? "" : undefined}
+      data-compact={compact ? "" : undefined}
       role="img"
       aria-label={label}
       style={{ "--played": played, "--arrived": arrived } as CSSProperties}

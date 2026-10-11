@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import { AnalysisWave, loudReference, useMeasuredWave } from "./analysis-wave";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -95,4 +95,13 @@ it("shows how much of the file has arrived while it is sent", async () => {
   );
   expect(wave.getAttribute("aria-label")).toBe("Uploading your call");
   expect(wave.querySelector("[data-pending]")).toBeNull();
+});
+
+it("scales the wave to its loud end, not to one spike or to silence", () => {
+  const levels = [
+    ...Array.from({ length: 99 }, (_, i) => (i % 2 ? 0.2 : 0.1)),
+    0.95,
+  ];
+  expect(loudReference(levels)).toBe(0.2);
+  expect(loudReference([null, 0, null])).toBe(1);
 });

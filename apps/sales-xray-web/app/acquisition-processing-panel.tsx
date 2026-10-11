@@ -31,6 +31,7 @@ import {
 } from "./processing-steps";
 import { useWorkspaceAccess } from "./workspace-access";
 import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import type { WaveformEnvelope } from "./source-waveform";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-processing-panel.module.css";
 
@@ -70,6 +71,12 @@ type Props = {
    * the journey is one screen from the first byte to the report.
    */
   upload?: { fraction: number | null } | null;
+  /**
+   * The file's own wave, measured in this browser before it was sent: drawn
+   * until the server's measurement arrives, so the call's shape carries on
+   * from the chosen file through sending and the steps.
+   */
+  localEnvelope?: WaveformEnvelope | null;
   children?: ReactNode;
 };
 
@@ -221,6 +228,7 @@ export function AcquisitionProcessingPanel({
   deleteConfirm,
   staticPreview = false,
   upload = null,
+  localEnvelope = null,
   children,
 }: Props) {
   const access = useWorkspaceAccess();
@@ -282,10 +290,11 @@ export function AcquisitionProcessingPanel({
     return () => clearTimeout(timer);
   }, [hasReport, staticPreview]);
 
-  const envelope = useMeasuredWave(
+  const measured = useMeasuredWave(
     staticPreview || upload ? undefined : submissionId,
     progress?.current_stage ?? live.plan?.stage ?? null,
   );
+  const envelope = measured ?? (staticPreview ? null : localEnvelope);
   const phase = staticPreview
     ? "example"
     : upload
