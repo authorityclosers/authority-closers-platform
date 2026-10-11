@@ -946,17 +946,44 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await library_page.reload(wait_until="domcontentloaded")
                     picture = library_page.locator('[data-report-pillar="overview"]')
                     await expect(picture).to_contain_text("Chose another program.", timeout=20000)
-                    await expect(picture).to_contain_text("Set by your team")
-                    await expect(
-                        library_page.locator('[data-report-pillar="facts"]')
-                    ).to_contain_text("Set by your team")
+
+                    def outcome_block(text: str, start: str, end: str) -> str:
+                        """The words of one numbered part, e.g. 1.1 up to 1.2."""
+                        flat = re.sub(r"\s+", " ", text)
+                        begin = flat.find(start)
+                        assert begin >= 0, start
+                        stop = flat.find(end, begin)
+                        return flat[begin : stop if stop > begin else None]
+
+                    # 1.1 on screen: the person's status first, then who set it.
+                    report_picture = re.sub(r"\s+", " ", await picture.inner_text())
+                    assert report_picture.startswith("Lost Set by your team"), report_picture[:60]
+                    assert "Chose another program." in report_picture
+                    # 6.1 on screen follows the same record.
+                    deal = re.sub(
+                        r"\s+",
+                        " ",
+                        await library_page.locator('[data-report-pillar="facts"]').inner_text(),
+                    )
+                    assert deal.startswith("Current status Lost Set by your team"), deal[:60]
                     await library_page.locator('summary[aria-label="More views"]').click()
                     await library_page.get_by_role(
                         "button", name="Document view", exact=True
                     ).click()
-                    await expect(
-                        library_page.get_by_role("region", name="Report document")
-                    ).to_contain_text("Chose another program.", timeout=20000)
+                    document_region = library_page.get_by_role("region", name="Report document")
+                    await expect(document_region).to_contain_text(
+                        "Chose another program.", timeout=20000
+                    )
+                    document_text = await document_region.inner_text()
+                    for start, end in (
+                        ("1.1 Call Outcome", "1.2"),
+                        ("6.1 Current Status", "6.2"),
+                    ):
+                        part = outcome_block(document_text, start, end)
+                        assert "lost" in part.lower() and "Set by your team" in part, part
+                    assert "Chose another program." in outcome_block(
+                        document_text, "1.1 Call Outcome", "1.2"
+                    )
                     async with library_page.expect_download() as word_file:
                         await library_page.get_by_role(
                             "button", name=re.compile("Word")
@@ -967,9 +994,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         with zipfile.ZipFile(io.BytesIO(Path(word_path).read_bytes())) as archive:
                             return archive.read("word/document.xml").decode("utf-8")
 
-                    word_body = await asyncio.to_thread(word_document_xml)
-                    assert "Chose another program." in word_body
-                    assert "Set by your team" in word_body
+                    word_text = re.sub(r"<[^>]+>", " ", await asyncio.to_thread(word_document_xml))
+                    word_outcome = outcome_block(word_text, "1.1 Call Outcome", "1.2")
+                    assert "lost" in word_outcome.lower(), word_outcome
+                    assert "Set by your team" in word_outcome, word_outcome
+                    assert "Chose another program." in word_outcome, word_outcome
                     journey_checks["outcome_persisted_report_document_word"] = True
                     report_actions = library_page.get_by_role(
                         "region", name="Sales call report", exact=True
