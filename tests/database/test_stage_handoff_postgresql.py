@@ -10,10 +10,14 @@ from uuid import UUID
 import pytest
 from sqlalchemy import update
 
-from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
+from ac_platform.conversation_intelligence.models import (
+    ConversationProcessingPlan,
+    ConversationRecording,
+)
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.conversation_intelligence.stage_handoff import (
     committed_work_listener,
+    make_plans_due,
     notify_work,
 )
 from tests.database.test_conversation_authority_postgresql import _setup
@@ -54,6 +58,34 @@ def test_provider_completion_makes_plan_immediately_due(
                 if (await _view(setup, identifier))["state"] == "completed":
                     break
             assert (await _view(setup, identifier))["report_ready"] is True
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_completion_never_waits_on_coordinators_plan_lock(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            quote = await _quote(setup, "locked-handoff")
+            await _accept(setup, quote, "locked-handoff-accept")
+            async with setup.sessions() as coordinator, coordinator.begin():
+                plan = await coordinator.get(
+                    ConversationProcessingPlan, UUID(quote["id"]), with_for_update=True
+                )
+                async with setup.sessions() as publisher, publisher.begin():
+                    recording = await publisher.get(
+                        ConversationRecording, plan.recording_id, with_for_update=True
+                    )
+                    # Both halves of the old plan/recording lock inversion are
+                    # held. The scheduling hint must still return immediately.
+                    await asyncio.wait_for(make_plans_due(publisher, recording), 2)
+                assert await coordinator.get(
+                    ConversationRecording, plan.recording_id, with_for_update=True
+                )
         finally:
             await setup.engine.dispose()
 

@@ -74,3 +74,11 @@ commit-versus-rollback notification delivery; the actual shared/exclusive fence
 test passed, and both database deletion/revocation race cases passed. Strict
 mypy passed for the listener and the worker modules; its URL input now accepts
 the existing SQLAlchemy URL object.
+
+Publication already owns recording custody, while the coordinator locks a plan
+before its recording. The immediate-due update therefore selects matching plans
+with `FOR UPDATE SKIP LOCKED`: it never waits in the opposite lock order. A
+coordinator already waiting on that recording reads the completion after commit;
+notifications and durable scans cover other callers. A real database regression
+holds both sides of this order and proves publication returns without waiting.
+All three PostgreSQL handoff/notification/lock-order cases pass with this update.

@@ -69,8 +69,11 @@ async def committed_work_listener(
 async def make_plans_due(database: AsyncSession, recording: ConversationRecording) -> None:
     # This is scheduling only. The coordinator still rechecks current consent,
     # actor, source, route, budget and immutable checkpoint before enqueuing.
-    await database.execute(
-        update(ConversationProcessingPlan)
+    # The coordinator locks plan -> recording; publication already owns the
+    # recording. Never wait for its plan lock in the opposite order. If skipped,
+    # the coordinator's pending recording read sees this committed completion.
+    unlocked_plans = (
+        select(ConversationProcessingPlan.id)
         .where(
             ConversationProcessingPlan.tenant_id == recording.tenant_id,
             ConversationProcessingPlan.recording_id == recording.id,
@@ -78,6 +81,11 @@ async def make_plans_due(database: AsyncSession, recording: ConversationRecordin
             ConversationProcessingPlan.state == "active",
             ConversationProcessingPlan.erased_at.is_(None),
         )
+        .with_for_update(skip_locked=True)
+    )
+    await database.execute(
+        update(ConversationProcessingPlan)
+        .where(ConversationProcessingPlan.id.in_(unlocked_plans))
         .values(next_check_at=func.clock_timestamp())
         .execution_options(synchronize_session=False)
     )
