@@ -33,7 +33,7 @@ it("hands the server's session only to pages that render on the server", async (
   expect(await seen("/dashboard/")).toBe("seeded");
   expect(await seen("/analysis/calls")).toBe("seeded");
   expect(await seen("/analysis/new")).toBe("browser");
-  expect(await seen("/organisation")).toBe("browser");
+  expect(await seen("/organisation")).toBe("seeded");
   expect(await seen(null)).toBe("browser");
   await act(async () => root.unmount());
 });

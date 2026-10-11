@@ -29,7 +29,11 @@ export function InitialSessionProvider({
  * Pages that render their data on the server start from the server's
  * session instead of the browser's check (other pages keep the check).
  */
-export const SERVER_RENDERED = new Set(["/dashboard", "/analysis/calls"]);
+export const SERVER_RENDERED = new Set([
+  "/dashboard",
+  "/analysis/calls",
+  "/organisation",
+]);
 
 /**
  * Server-read page data is for the first moments of this document: a page

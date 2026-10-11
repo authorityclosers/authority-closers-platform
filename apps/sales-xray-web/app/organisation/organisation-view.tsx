@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -28,6 +29,12 @@ import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { unnamedCallName } from "../call-label";
 import { AcquisitionShell } from "../acquisition-shell";
 import { callDate, callTone, submissionState } from "../call-status";
+import { useDisplayDates } from "../display-clock";
+import { useServerSeedAllowed } from "../initial-session";
+import {
+  seededOrganisation,
+  type ServerOrganisation,
+} from "./organisation-seed";
 import { formatClock } from "../lightbox/time";
 import { newCallHref } from "../new-call-navigation";
 import { dismissNotice, notify } from "../notice-center";
@@ -143,11 +150,20 @@ async function readBase(signal: AbortSignal): Promise<Base> {
 function useLive<T>(
   read: (signal: AbortSignal) => Promise<T>,
   enabled: boolean,
+  /** The value the server read for this page (dev): no first read here. */
+  seeded?: T,
 ): [Live<T>, () => void, () => void] {
-  const [state, setState] = useState<Live<T>>({ status: "loading" });
+  const [state, setState] = useState<Live<T>>(() =>
+    seeded === undefined
+      ? { status: "loading" }
+      : { status: "ready", value: seeded },
+  );
   const [attempt, setAttempt] = useState(0);
+  // The seed answers this read only (a retry or another read reads again).
+  const [seededRead] = useState(() => (seeded === undefined ? null : read));
   useEffect(() => {
     if (!enabled) return;
+    if (attempt === 0 && read === seededRead) return;
     const controller = new AbortController();
     read(controller.signal)
       .then((value) => {
@@ -164,7 +180,7 @@ function useLive<T>(
         });
       });
     return () => controller.abort();
-  }, [read, enabled, attempt]);
+  }, [read, enabled, attempt, seededRead]);
   return [
     state,
     useCallback(() => {
@@ -175,15 +191,25 @@ function useLive<T>(
   ];
 }
 
-function initialTab(): Tab {
-  if (typeof window === "undefined") return "overview";
-  const value = new URLSearchParams(window.location.search).get("tab");
-  return isTab(value) ? value : "overview";
-}
-
 /** Company, members and the organisation's calls in the last 30 days. */
-export function OrganisationView() {
+export function OrganisationView({
+  initial = null,
+}: {
+  /** The page's first reads made on the server (dev), or null. */
+  initial?: ServerOrganisation | null;
+}) {
   const access = useWorkspaceAccess();
+  // The section in the address, the same on the server and in the browser.
+  const searchParams = useSearchParams() as URLSearchParams | null;
+  const context = access?.context;
+  const seedAllowed = useServerSeedAllowed(
+    context
+      ? JSON.stringify([context.personId, context.sessionId, context.tenantId])
+      : null,
+  );
+  const [seed] = useState(() =>
+    seedAllowed ? seededOrganisation(initial) : {},
+  );
   const authenticated = access?.authenticated === true;
   const branding = useBranding();
   // The app's session check has just read the workspace directory: start
@@ -202,7 +228,10 @@ export function OrganisationView() {
     base.status === "ready" ? access?.context?.tenantId : undefined,
   );
   const [baseAttempt, setBaseAttempt] = useState(0);
-  const [tab, setTabState] = useState<Tab>(initialTab);
+  const [tab, setTabState] = useState<Tab>(() => {
+    const value = searchParams?.get("tab") ?? null;
+    return isTab(value) ? value : "overview";
+  });
   const [missing, setMissing] = useState(false);
 
   const setTab = useCallback((next: Tab) => {
@@ -265,11 +294,17 @@ export function OrganisationView() {
   const [org, reloadOrg, refreshOrganisation] = useLive(
     readCurrentOrganisation,
     isOrganisation && tenantId !== null,
+    seed.organisation?.tenantId === tenantId ? seed.organisation : undefined,
   );
-  const [members, reloadMembers] = useLive(readMembers, isOrganisation);
+  const [members, reloadMembers] = useLive(
+    readMembers,
+    isOrganisation,
+    isOrganisation ? seed.members : undefined,
+  );
   const [readActivityState, reloadActivity] = useLive(
     readActivity,
     isOrganisation,
+    isOrganisation ? seed.activity : undefined,
   );
   // A rename in the sidebar or a report shows here at once.
   const [renamed, setRenamed] = useState(
@@ -888,6 +923,7 @@ function CallsTable({
   team: boolean;
 }) {
   const [all, setAll] = useState(false);
+  const dates = useDisplayDates();
   const shown = all ? calls : calls.slice(0, CALLS_SHOWN);
   const title = team ? "Team calls" : "Your calls";
   return (
@@ -953,11 +989,13 @@ function CallsTable({
                     {call.label ? (
                       <b>{call.label}</b>
                     ) : (
-                      <b data-unnamed="">{unnamedCallName(call.createdAt)}</b>
+                      <b data-unnamed="">
+                        {unnamedCallName(call.createdAt, dates)}
+                      </b>
                     )}
                     <small className={styles.callMeta}>
                       {team ? `${person} · ` : ""}
-                      {callDate(call.createdAt)}
+                      {callDate(call.createdAt, undefined, dates)}
                       {call.durationSeconds > 0
                         ? ` · ${formatClock(call.durationSeconds * 1000)}`
                         : ""}
@@ -972,9 +1010,13 @@ function CallsTable({
                   <span
                     role="cell"
                     className={styles.callDate}
-                    title={new Date(call.createdAt).toLocaleString()}
+                    title={new Intl.DateTimeFormat(dates.locale, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                      timeZone: dates.timeZone,
+                    }).format(new Date(call.createdAt))}
                   >
-                    {callDate(call.createdAt)}
+                    {callDate(call.createdAt, undefined, dates)}
                   </span>
                   <span
                     role="cell"
@@ -1214,6 +1256,7 @@ function MembersPanel({
   onMissing: () => void;
 }) {
   const [email, setEmail] = useState("");
+  const dates = useDisplayDates();
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState("");
@@ -1497,11 +1540,15 @@ function MembersPanel({
                 </span>
                 <span role="cell" className={styles.dateCell}>
                   <span className={styles.cellLabel}>Joined </span>
-                  {member.joinedAt ? callDate(member.joinedAt) : "—"}
+                  {member.joinedAt
+                    ? callDate(member.joinedAt, undefined, dates)
+                    : "—"}
                 </span>
                 <span role="cell" className={styles.dateCell}>
                   <span className={styles.cellLabel}>Last active </span>
-                  {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
+                  {member.lastActiveAt
+                    ? callDate(member.lastActiveAt, undefined, dates)
+                    : "—"}
                 </span>
                 <span role="cell" className={styles.rowActions}>
                   {isYou ? (

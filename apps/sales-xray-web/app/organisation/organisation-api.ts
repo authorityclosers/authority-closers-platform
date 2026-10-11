@@ -351,7 +351,12 @@ const counts = (item: Record<string, unknown>): ActivityCounts => ({
 });
 
 export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
-  const data = obj(await call("/activity?days=30", { signal }));
+  return parseActivity(await call("/activity?days=30", { signal }));
+}
+
+/** The 30-day activity answer, tolerant of missing fields (see readActivity). */
+export function parseActivity(value: unknown): OrgActivity {
+  const data = obj(value);
   return {
     perDay: list(data.per_day).map((raw) => {
       const item = obj(raw);
