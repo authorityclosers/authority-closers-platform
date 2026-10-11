@@ -27,6 +27,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { useChipsOwnRow } from "./calls-chip-row";
+
 import { AcquisitionShell } from "./acquisition-shell";
 import { useUploadSession, useUploadSnapshot } from "./hooks/upload-session";
 import {
@@ -34,12 +36,18 @@ import {
   parseSubmissionLibraryPage,
   rememberSubmission,
   type LibrarySubmission,
+  type SubmissionLibraryPage,
 } from "./acquisition-client";
+import { seededLibraryPage } from "./calls-seed";
+import { useServerSeedAllowed } from "./initial-session";
+import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
 import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
 import { newCallHref } from "./new-call-navigation";
 import { callTitle, unnamedCallName, type CallLabel } from "./call-label";
+import { useDisplayDates } from "./display-clock";
+import { dayKey, daysBetween, type DisplayDates } from "./display-dates";
 import {
   CALL_LABEL_EVENT,
   readCallLabel,
@@ -49,6 +57,10 @@ import {
 import { ownsCall, requestWorkspace } from "./call-ownership";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
+import { CallsBodySkeleton } from "./calls-skeleton";
+
+// The skeletons live in a small module so loading screens load them alone.
+export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { csvRows } from "./csv-export";
@@ -81,16 +93,24 @@ function formatDuration(durationSeconds: number) {
 export { callTone, submissionState };
 export type { CallTone };
 
-function formatCreatedDate(createdAt: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(createdAt),
-  );
+function formatCreatedDate(createdAt: string, dates: DisplayDates) {
+  return new Intl.DateTimeFormat(dates.locale, {
+    dateStyle: "medium",
+    timeZone: dates.timeZone,
+  }).format(new Date(createdAt));
 }
 
-function formatCreatedTime(createdAt: string) {
-  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
-    new Date(createdAt),
-  );
+function formatCreatedTime(createdAt: string, dates: DisplayDates) {
+  return new Intl.DateTimeFormat(dates.locale, {
+    timeStyle: "short",
+    timeZone: dates.timeZone,
+  }).format(new Date(createdAt));
+}
+
+/** Days from a call's day to today (0 today), in the display's zone. */
+function daysAgo(createdAt: string, dates: DisplayDates) {
+  const day = dayKey(createdAt, dates.timeZone);
+  return day === null ? null : daysBetween(day, dates.today);
 }
 
 type CallSort = "newest" | "oldest" | "longest";
@@ -118,21 +138,13 @@ function sortCalls(rows: LibrarySubmission[], sort: CallSort) {
   return copy;
 }
 
-function dayGroup(createdAt: string, now = new Date()) {
-  const created = new Date(createdAt);
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const day = 86_400_000;
-  const diff =
-    start.getTime() -
-    new Date(
-      created.getFullYear(),
-      created.getMonth(),
-      created.getDate(),
-    ).getTime();
-  if (diff <= 0) return "Today";
-  if (diff <= day) return "Yesterday";
-  if (diff < 7 * day) return "This week";
-  if (diff < 31 * day) return "This month";
+function dayGroup(createdAt: string, dates: DisplayDates) {
+  const days = daysAgo(createdAt, dates);
+  if (days === null) return "Earlier";
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return "This week";
+  if (days < 31) return "This month";
   return "Earlier";
 }
 
@@ -240,6 +252,7 @@ export function CallsLibrary({
   studioHref = "/",
   preview = false,
   insights = false,
+  initial = null,
 }: {
   variant?: "standalone" | "embedded";
   studioHref?: "/" | "/sales-xray";
@@ -247,6 +260,8 @@ export function CallsLibrary({
   preview?: boolean;
   /** Calls workspace: per-call insights, preview drawer, stats, bulk export. */
   insights?: boolean;
+  /** The list's first page as the server read it (dev), or null. */
+  initial?: ServerRead;
 }) {
   const access = useWorkspaceAccess();
   const identityKey =
@@ -259,10 +274,21 @@ export function CallsLibrary({
           ])
         : "authenticated-context-pending"
       : `authentication:${String(access?.authenticated ?? "unknown")}`;
+  // The server read the list for one identity (person, session, workspace)
+  // as this document loaded: only that identity, mounting now, starts from
+  // it, and only while it stays (never a later one).
+  const seedAllowed = useServerSeedAllowed(
+    access?.context ? identityKey : null,
+  );
+  const [firstIdentity] = useState(identityKey);
+  const [seed] = useState(() =>
+    preview || !seedAllowed ? null : seededLibraryPage(initial),
+  );
   return (
     <CallsLibraryContent
       key={identityKey}
       identityKey={identityKey}
+      seed={identityKey === firstIdentity ? seed : null}
       variant={variant}
       studioHref={studioHref}
       preview={preview}
@@ -277,6 +303,7 @@ function CallsLibraryContent({
   preview = false,
   insights = false,
   identityKey,
+  seed,
 }: {
   variant?: "standalone" | "embedded";
   studioHref?: "/" | "/sales-xray";
@@ -284,6 +311,8 @@ function CallsLibraryContent({
   preview?: boolean;
   insights?: boolean;
   identityKey: string;
+  /** The first page the server read for this identity: no first read here. */
+  seed: SubmissionLibraryPage | null;
 }) {
   const embedded = variant === "embedded";
   const access = useWorkspaceAccess();
@@ -300,21 +329,25 @@ function CallsLibraryContent({
     router.prefetch("/dashboard");
   }, [router]);
 
-  const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
-  const submissionsRef = useRef<LibrarySubmission[]>([]);
+  const [submissions, setSubmissions] = useState<LibrarySubmission[]>(
+    seed?.submissions ?? [],
+  );
+  const submissionsRef = useRef<LibrarySubmission[]>(seed?.submissions ?? []);
 
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(access?.authenticated === true);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    seed?.nextCursor ?? null,
+  );
+  const [loading, setLoading] = useState(
+    !seed && access?.authenticated === true,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   // Only the call being opened says so; the others are just unavailable.
   const [openingId, setOpeningId] = useState<string | null>(null);
   const opening = openingId !== null;
-  const [filter, setFilter] = useState<"all" | CallTone>(() =>
-    typeof window === "undefined"
-      ? "all"
-      : readCallsView(window.location.search).filter,
-  );
+  // The view in the address (status, rep, sort), the same on the server.
+  const [addressView] = useState(() => readCallsView(searchParams.toString()));
+  const [filter, setFilter] = useState<"all" | CallTone>(addressView.filter);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   // The sidebar search opens Calls with ?q=; a new one replaces the box.
   // The box writes ?q= too: those writes are acknowledged, never re-applied,
@@ -330,16 +363,8 @@ function CallsLibraryContent({
     else setQuery(urlQuery);
   }
   // A rep from the address stays only if the loaded calls include them.
-  const [selectedRep, setSelectedRep] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : readCallsView(window.location.search).rep,
-  );
-  const [sort, setSort] = useState<CallSort>(() =>
-    typeof window === "undefined"
-      ? "newest"
-      : readCallsView(window.location.search).sort,
-  );
+  const [selectedRep, setSelectedRep] = useState(addressView.rep);
+  const [sort, setSort] = useState<CallSort>(addressView.sort);
   useEffect(() => {
     const { pathname, search, hash } = window.location;
     const next = callsViewSearch(search, {
@@ -374,12 +399,16 @@ function CallsLibraryContent({
   const [previewId, setPreviewId] = useState<string | null>(null);
   // Phones show row checkboxes only in Select mode; desktops always do.
   const [selecting, setSelecting] = useState(false);
-  // One clock reading per page load keeps render pure (react-hooks/purity).
-  const [loadedAt] = useState(() => Date.now());
+  // Dates in the browser's language and zone; a page drawn on the server
+  // starts from the server's (display-clock.tsx), so it keeps its words.
+  const dates = useDisplayDates();
   const searchInput = useRef<HTMLInputElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const seenSubmissionIds = useRef(new Set<string>());
-  const firstPageSubmissionIds = useRef(new Set<string>());
+  const seededIds = () =>
+    new Set(seed?.submissions.map((submission) => submission.id));
+  const seenSubmissionIds = useRef(seededIds());
+  const firstPageSubmissionIds = useRef(seededIds());
   const loadedCursors = useRef(new Set<string>());
   const activeRequest = useRef<AbortController | null>(null);
   const activeRequestKind = useRef<"initial" | "more" | "refresh" | null>(null);
@@ -543,6 +572,11 @@ function CallsLibraryContent({
 
   useEffect(() => {
     if (access?.authenticated !== true) return;
+    // The server already read the first page (a retry reads again).
+    if (seed && attempt === 0) {
+      mounted.current = true;
+      return;
+    }
     const controller = new AbortController();
     let timedOut = false;
     const timeout = window.setTimeout(() => {
@@ -608,7 +642,7 @@ function CallsLibraryContent({
       if (requestGeneration.current === generation)
         requestGeneration.current += 1;
     };
-  }, [access?.authenticated, attempt, identityKey, preview]);
+  }, [access?.authenticated, attempt, identityKey, preview, seed]);
 
   useEffect(() => {
     if (
@@ -857,6 +891,11 @@ function CallsLibraryContent({
       a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
   );
   const showReps = !preview && repOptions.length > 0;
+  // The chips take their own row when they don't fit beside the controls.
+  const chipsOwnRow = useChipsOwnRow(
+    toolbarRef,
+    `${counts.ready}:${counts.active}:${counts.attention}:${counts.idle}:${showReps}`,
+  );
   // A rep from the address or an earlier list filters only while the loaded
   // calls include them; otherwise the list shows everyone's calls.
   const activeRep =
@@ -902,7 +941,10 @@ function CallsLibraryContent({
         (filter === "all" || callTone(submission) === filter) &&
         (!activeRep || submission.owner?.personId === activeRep) &&
         (!needle ||
-          callTitle(submission.label, unnamedCallName(submission.createdAt))
+          callTitle(
+            submission.label,
+            unnamedCallName(submission.createdAt, dates),
+          )
             .toLocaleLowerCase()
             .includes(needle)),
     ),
@@ -935,7 +977,7 @@ function CallsLibraryContent({
     return () => window.removeEventListener("keydown", onKey);
   }, [workspace]);
   const titleOf = (submission: LibrarySubmission) =>
-    callTitle(submission.label, unnamedCallName(submission.createdAt));
+    callTitle(submission.label, unnamedCallName(submission.createdAt, dates));
   const lengthOf = (
     submission: LibrarySubmission,
     insight: CallInsight | null,
@@ -975,8 +1017,8 @@ function CallsLibraryContent({
           const insight = insightOf(submission.id);
           return [
             titleOf(submission),
-            formatCreatedDate(submission.createdAt),
-            formatCreatedTime(submission.createdAt),
+            formatCreatedDate(submission.createdAt, dates),
+            formatCreatedTime(submission.createdAt, dates),
             lengthOf(submission, insight),
             submissionState(submission),
             insight?.assessment ?? "",
@@ -1055,8 +1097,8 @@ function CallsLibraryContent({
             <strong>{titleOf(submission)}</strong>
             <small>
               {submission.label?.displayName
-                ? `${formatCreatedDate(submission.createdAt)} · ${formatCreatedTime(submission.createdAt)}`
-                : formatCreatedTime(submission.createdAt)}
+                ? `${formatCreatedDate(submission.createdAt, dates)} · ${formatCreatedTime(submission.createdAt, dates)}`
+                : formatCreatedTime(submission.createdAt, dates)}
             </small>
           </span>
           <span
@@ -1139,7 +1181,6 @@ function CallsLibraryContent({
     );
   }
 
-  const now = new Date(loadedAt);
   const grouped = workspace && sort !== "longest";
   /** The length measured from the audio at upload. */
   const lengthCell = (
@@ -1173,13 +1214,13 @@ function CallsLibraryContent({
     const length = lengthCell(submission, insight);
     const rep =
       showReps && submission.owner ? repLabel(submission.owner.personId) : null;
-    const day = callDate(submission.createdAt, now);
+    const day = callDate(submission.createdAt, undefined, dates);
     // Under a Today or Yesterday heading the time says more than the day.
     const when =
       grouped && (day === "Today" || day === "Yesterday")
-        ? formatCreatedTime(submission.createdAt)
+        ? formatCreatedTime(submission.createdAt, dates)
         : day;
-    const fullDate = `${formatCreatedDate(submission.createdAt)}, ${formatCreatedTime(submission.createdAt)}`;
+    const fullDate = `${formatCreatedDate(submission.createdAt, dates)}, ${formatCreatedTime(submission.createdAt, dates)}`;
     // Rename needs a server that supplies labels, and only the owner may.
     const mine = ownsCall(submission.owner, viewerId);
     if (renamingId === submission.id && label && mine)
@@ -1230,7 +1271,10 @@ function CallsLibraryContent({
           onClick={() => openSubmission(submission)}
         >
           <span className={`${styles.copy} calls-library-copy`}>
-            <strong data-unnamed={label?.displayName ? undefined : "true"}>
+            <strong
+              data-unnamed={label?.displayName ? undefined : "true"}
+              title={title}
+            >
               {title}
             </strong>
             {/* Phone: one quiet line carries what the desktop columns show. */}
@@ -1353,7 +1397,6 @@ function CallsLibraryContent({
         .map((submission) => insightOf(submission.id))
         .filter((insight): insight is CallInsight => insight !== null)
     : [];
-  const weekAgo = loadedAt - 7 * 86_400_000;
   // Call time: the length measured at upload, as Organisation counts it.
   const time = { calls: 0, ms: 0 };
   for (const submission of submissions) {
@@ -1371,24 +1414,18 @@ function CallsLibraryContent({
   const nextSteps = outcomes.filter((kind) => kind === "follow_up").length;
   const closed = outcomes.filter((kind) => kind === "closed").length;
   // Calls per day over the last 14 days, from the same loaded rows.
-  const days = Array.from({ length: 14 }, (_, index) => {
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (13 - index));
-    const end = start.getTime() + 86_400_000;
-    return submissions.filter((submission) => {
-      const at = new Date(submission.createdAt).getTime();
-      return at >= start.getTime() && at < end;
-    }).length;
-  });
+  const days = Array.from<number>({ length: 14 }).fill(0);
+  for (const submission of submissions) {
+    const ago = daysAgo(submission.createdAt, dates);
+    if (ago !== null && ago >= 0 && ago < 14) days[13 - ago] += 1;
+  }
   const activeDays = days.filter((count) => count > 0).length;
   const busiestDay = Math.max(1, ...days);
   const stats = workspace
     ? {
         calls: `${submissions.length}${nextCursor ? "+" : ""}`,
-        thisWeek: submissions.filter(
-          (submission) => new Date(submission.createdAt).getTime() >= weekAgo,
-        ).length,
+        // Today and the six days before it (the spark's last seven bars).
+        thisWeek: days.slice(-7).reduce((sum, count) => sum + count, 0),
         time: time.calls ? hoursLabel(time.ms) : null,
       }
     : null;
@@ -1403,7 +1440,7 @@ function CallsLibraryContent({
     const out: ReactNode[] = [];
     let current = "";
     for (const submission of visibleSubmissions) {
-      const group = dayGroup(submission.createdAt, now);
+      const group = dayGroup(submission.createdAt, dates);
       if (group !== current) {
         current = group;
         out.push(
@@ -1639,7 +1676,7 @@ function CallsLibraryContent({
                   <strong>{titleOf(selectedSubmission)}</strong>
                   <span>
                     {submissionState(selectedSubmission)} ·{" "}
-                    {formatCreatedDate(selectedSubmission.createdAt)}
+                    {formatCreatedDate(selectedSubmission.createdAt, dates)}
                   </span>
                 </div>
                 <button
@@ -1669,8 +1706,12 @@ function CallsLibraryContent({
                 </button>
               </div>
             )}
-            <div className={styles.toolbar}>
-              <label className={styles.search}>
+            <div
+              ref={toolbarRef}
+              className={styles.toolbar}
+              data-chips-row={chipsOwnRow ? "" : undefined}
+            >
+              <label className={styles.search} data-shrinks="">
                 <Search size={15} aria-hidden="true" />
                 <input
                   ref={searchInput}
@@ -1699,6 +1740,9 @@ function CallsLibraryContent({
                 className={`${styles.filters} calls-library-filters`}
                 role="group"
                 aria-label="Filter loaded calls by status"
+                data-chips=""
+                // Phones scroll the chips sideways on purpose (faded edge).
+                data-scroll-x=""
               >
                 {FILTERS.map((option) => {
                   const count =
@@ -1789,7 +1833,9 @@ function CallsLibraryContent({
                   <span>Call</span>
                   {showReps ? <span>Rep</span> : null}
                   <span>Date</span>
-                  <span className={styles.num}>Length</span>
+                  <span className={`${styles.num} ${styles.lengthHead}`}>
+                    Length
+                  </span>
                   <span>Status</span>
                   <span />
                 </span>
@@ -1909,7 +1955,7 @@ function CallsLibraryContent({
             key={previewSubmission.id}
             id={previewSubmission.id}
             title={titleOf(previewSubmission)}
-            meta={`${formatCreatedDate(previewSubmission.createdAt)} · ${formatCreatedTime(previewSubmission.createdAt)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
+            meta={`${formatCreatedDate(previewSubmission.createdAt, dates)} · ${formatCreatedTime(previewSubmission.createdAt, dates)} · ${lengthOf(previewSubmission, insightOf(previewSubmission.id))}`}
             status={submissionState(previewSubmission)}
             tone={callTone(previewSubmission)}
             insight={insightOf(previewSubmission.id)}
@@ -1957,61 +2003,5 @@ function initials(name: string) {
       .map((word) => word[0])
       .join("")
       .toLocaleUpperCase() || "?"
-  );
-}
-
-/** The loaded page's own blocks in loading mode, so nothing moves. */
-export function CallsBodySkeleton({
-  workspace = true,
-}: {
-  workspace?: boolean;
-}) {
-  return (
-    <div
-      className={styles.skeleton}
-      role="status"
-      aria-busy="true"
-      aria-label="Loading your calls"
-    >
-      {workspace ? (
-        <div className={`${styles.strip} ${styles.skeletonStrip}`}>
-          {[0, 1, 2, 3].map((tile) => (
-            <div className={styles.kpi} key={tile}>
-              <i data-w="label" />
-              <i data-w="value" />
-              <i data-w="context" />
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className={styles.skeletonToolbar}>
-        <i data-w="search" />
-        <i data-w="chips" />
-      </div>
-      <div className={styles.table}>
-        <div className={styles.head} aria-hidden="true" />
-        {Array.from({ length: 8 }, (_, row) => (
-          <div className={styles.skeletonRow} key={row}>
-            <i data-w="title" />
-            <i data-w="meta" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Route-level loading: the header plus the same skeleton blocks. */
-export function CallsSkeleton() {
-  return (
-    <div className={styles.page} data-workspace="true">
-      <header className={styles.header}>
-        <div className={styles.headerCopy}>
-          <h1>Calls</h1>
-          <p>Private to your account and workspace</p>
-        </div>
-      </header>
-      <CallsBodySkeleton />
-    </div>
   );
 }

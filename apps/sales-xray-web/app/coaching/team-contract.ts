@@ -9,6 +9,8 @@ export type TeamCoaching = {
   scope: "anonymous";
   named_rep_details: false;
   analysed_calls: number;
+  /** How many people the calls belong to; never who. Optional: older APIs. */
+  rep_count: number;
   pending_calls: number;
   unavailable_calls: number;
   history_limited: boolean;
@@ -81,6 +83,10 @@ export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
     scope: "anonymous",
     named_rep_details: false,
     analysed_calls: analysed,
+    rep_count:
+      Number.isSafeInteger(data.rep_count) && (data.rep_count as number) > 0
+        ? (data.rep_count as number)
+        : 0,
     pending_calls: pending,
     unavailable_calls: unavailable,
     history_limited: data.history_limited === true,

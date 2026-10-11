@@ -3,7 +3,12 @@ import { cache } from "react";
 
 import { LOCAL_PREVIEW_ENV } from "./admin-access";
 import type { ConsoleAccess } from "./nav";
-import { adminRead, internalTransport, read } from "./server-api";
+import {
+  adminRead,
+  devEdgeTransport,
+  internalTransport,
+  read,
+} from "./server-api";
 
 const ENVIRONMENTS: Readonly<Record<string, string>> = {
   "api.production.ac.internal.invalid": "production",
@@ -14,6 +19,7 @@ const ENVIRONMENTS: Readonly<Record<string, string>> = {
 export function consoleEnvironment(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | null {
+  if (devEdgeTransport(env)) return "development";
   if (internalTransport(env))
     return ENVIRONMENTS[env.AC_INTERNAL_API_HOST ?? ""] ?? null;
   return env[LOCAL_PREVIEW_ENV] === "1" ? "preview" : null;

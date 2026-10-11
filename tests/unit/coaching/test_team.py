@@ -13,6 +13,7 @@ def test_team_counts_only_source_linked_suggestions_and_never_serializes_reps() 
     rep = UUID(int=999)
     view = summarize_team(((rep, call), (rep, call)), person_id=UUID(int=1), tenant_id=UUID(int=2))
     assert view.analysed_calls == 1 and view.suggestions[0].suggestion_calls == 1
+    assert view.rep_count == 1
     assert view.latest_call_at == NOW
     raw = view.model_dump_json()
     for private in (str(rep), str(CALL), "Handover takes time.", "Ask one impact question."):

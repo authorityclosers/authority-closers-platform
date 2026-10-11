@@ -2,8 +2,10 @@ import { parseClips, type CoachingClip } from "./media-contract";
 import {
   parseCoaching,
   parseEvidence,
+  parseStrength,
   type Coaching,
   type Evidence,
+  type Strength,
   type TextLesson,
 } from "./coaching-client";
 import { parseTeamCoaching, type TeamCoaching } from "./team-contract";
@@ -34,6 +36,10 @@ export type CallCoaching = {
   practice: Coaching["practice"];
   mission: Coaching["mission"];
   media_clips?: CoachingClip[];
+  /** A quoted "What worked" finding from this call's report (spec 3.6). */
+  strength?: Strength | null;
+  /** How many other suggestions the report holds; Coaching keeps one focus. */
+  other_suggestions?: number;
   limitations: string[];
 };
 export type CoachingResult =
@@ -143,6 +149,11 @@ export function parseCallCoaching(
     return null;
   const ownCall = lesson.own_call == null ? null : ownEvidence(lesson.own_call);
   if (lesson.own_call != null && !ownCall) return null;
+  // Optional: a malformed or foreign strength is dropped, never the coaching.
+  const strength =
+    item.state === "ready"
+      ? parseStrength(item.strength, (moment) => ownEvidence(moment) !== null)
+      : null;
   return {
     schema: "ac.sales-xray.call-coaching/1",
     person_id: item.person_id as string,
@@ -158,6 +169,13 @@ export function parseCallCoaching(
     basis: item.basis as CallCoaching["basis"],
     evidence,
     media_clips: item.state === "ready" ? parseClips(item.media_clips) : [],
+    strength,
+    other_suggestions:
+      item.state === "ready" &&
+      Number.isInteger(item.other_suggestions) &&
+      (item.other_suggestions as number) > 0
+        ? Math.min(item.other_suggestions as number, 20)
+        : 0,
     root_cause: {
       hypothesis: text(
         cause.hypothesis,

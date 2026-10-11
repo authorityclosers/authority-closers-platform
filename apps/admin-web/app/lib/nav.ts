@@ -72,6 +72,8 @@ export type NavItem = Readonly<{
   phone?: boolean;
   /** Listed once its screen is built (AUT-1798 builds them in order). */
   soon?: boolean;
+  /** Other paths whose pages belong to this item (its subpages elsewhere). */
+  also?: readonly string[];
 }>;
 
 export type NavGroup = Readonly<{ label: string; items: readonly NavItem[] }>;
@@ -101,7 +103,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/gold",
-        soon: true,
         label: "Gold set",
         icon: "gold",
         need: { kind: "salesXray" },
@@ -111,6 +112,7 @@ export const NAVIGATION: readonly NavGroup[] = [
         href: "/reviewers",
         label: "Reviewers",
         icon: "reviewers",
+        also: ["/sales-xray/review"],
         need: { kind: "salesXray" },
       },
     ],
@@ -127,14 +129,12 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/usage",
-        soon: true,
         label: "Usage",
         icon: "usage",
         need: { kind: "salesXray" },
       },
       {
         href: "/outcomes",
-        soon: true,
         label: "Deal outcomes",
         icon: "outcomes",
         need: { kind: "salesXray" },
@@ -170,7 +170,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/synthetic",
-        soon: true,
         label: "Synthetic data",
         icon: "synthetic",
         need: { kind: "salesXray" },
@@ -212,21 +211,18 @@ export const NAVIGATION: readonly NavGroup[] = [
     items: [
       {
         href: "/releases",
-        soon: true,
         label: "Releases & status",
         icon: "releases",
         need: { kind: "platform", any: ["platform_release_manage"] },
       },
       {
         href: "/updates",
-        soon: true,
         label: "Product updates",
         icon: "updates",
         need: { kind: "salesXray" },
       },
       {
         href: "/safety",
-        soon: true,
         label: "Safety",
         icon: "safety",
         need: { kind: "platform", any: ["platform_content_safety_manage"] },
@@ -310,12 +306,13 @@ export function activeHref(
 ): string | null {
   const params = new URLSearchParams(search);
   let best: string | null = null;
+  let bestLength = 0;
   for (const group of groups)
     for (const item of group.items)
-      if (
-        matches(item.href, pathname, params) &&
-        (!best || item.href.length > best.length)
-      )
-        best = item.href;
+      for (const href of [item.href, ...(item.also ?? [])])
+        if (matches(href, pathname, params) && href.length > bestLength) {
+          best = item.href;
+          bestLength = href.length;
+        }
   return best;
 }

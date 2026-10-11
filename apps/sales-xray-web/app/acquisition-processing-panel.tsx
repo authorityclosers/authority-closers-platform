@@ -1,5 +1,6 @@
 "use client";
 
+import { trackOnce, waitBand } from "./telemetry";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -248,6 +249,20 @@ export function AcquisitionProcessingPanel({
     now !== null && Number.isFinite(started)
       ? formatElapsed(now - started)
       : null;
+
+  // Analytics only: the person saw the analysis finish here (wait in bands).
+  // A call that was already done when the panel opened is not counted.
+  const sawWorking = useRef(false);
+  useEffect(() => {
+    if (!hasReport) {
+      sawWorking.current = true;
+      return;
+    }
+    if (staticPreview || !submissionId || !sawWorking.current) return;
+    trackOnce(`analysis-done:${submissionId}`, "sx.analysis_seen_done", {
+      wait_band: waitBand(Date.now() - started),
+    });
+  }, [hasReport, staticPreview, submissionId, started]);
 
   const [openStale, setOpenStale] = useState(false);
   useEffect(() => {

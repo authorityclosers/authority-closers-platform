@@ -238,11 +238,44 @@
 
 .transcript {
   position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 
+.find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+}
+
+.find input {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  outline: none;
+}
+
+/* The field drops its own outline, so the bar shows where focus is. */
+.find:focus-within {
+  box-shadow: inset 0 -2px 0 var(--sx-accent);
+}
+
+.find small {
+  font-size: var(--sx-text-xs);
+  white-space: nowrap;
+}
+
 .lines {
-  height: 100%;
+  min-height: 0;
   margin: 0;
   padding: 6px;
   overflow-y: auto;
@@ -453,6 +486,7 @@
   z-index: 1;
   top: -8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   overflow-x: auto;
   margin: -8px -16px 0;
@@ -638,9 +672,71 @@
   font-variant-numeric: tabular-nums;
 }
 
+.metrics [data-num] {
+  text-align: right;
+}
+
+/* Talk share as one stacked bar: the first speaker in the accent. */
+.share {
+  display: grid;
+  gap: 4px;
+}
+
+.shareBar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.shareBar i {
+  display: block;
+  height: 100%;
+  background: color-mix(in oklab, var(--sx-ink-2) 35%, var(--sx-sunken));
+}
+
+.shareBar i[data-index="0"] {
+  background: var(--sx-accent);
+}
+
+.shareLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
 .compare tbody th {
   width: 22%;
   font-weight: 600;
+}
+
+.compareBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.compareBar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Words one compared run has and the other doesn't. */
+.diff {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--sx-warn) 22%, transparent);
+  color: inherit;
 }
 
 .compare tr[data-changed] td {
@@ -650,9 +746,21 @@
 .runs li {
   display: grid;
   gap: 2px;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid var(--lx-line-soft);
   border-radius: var(--sx-radius-sm);
+}
+
+.runs[data-inset] {
+  padding: 10px 12px 12px;
+}
+
+.failCode {
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
 }
 
 .runs li[data-current] {
@@ -662,6 +770,13 @@
 .runMeta {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
+}
+
+.runsHeading {
+  margin: 4px 0 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
 }
 
 .runActions {
@@ -694,6 +809,17 @@
   .view {
     overflow: visible;
   }
+
+  /* The page scrolls here, so the player stays in reach while reading. */
+  .left {
+    display: contents;
+  }
+
+  .player {
+    position: sticky;
+    z-index: 5;
+    top: var(--sx-topbar-h);
+  }
 }
 
 /* ---------- Phone: sticky player, transcript as a tab ---------- */
@@ -701,6 +827,17 @@
 @media (max-width: 760px) {
   .screen {
     padding: 10px var(--sx-gutter) 16px;
+  }
+
+  /* All six pillars show on wide screens; phones keep one scrolling line. */
+  .pillarNav {
+    flex-wrap: nowrap;
+  }
+
+  /* Unbuilt commands, the keyboard help and dead arrows are desktop-only. */
+  .headActions [data-desk],
+  .headActions a[aria-disabled="true"] {
+    display: none;
   }
 
   .player {
@@ -773,5 +910,180 @@
   .compare {
     display: block;
     overflow-x: auto;
+  }
+}
+
+/* ---------- Review panel ---------- */
+
+.reviewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.reviewActions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.verdicts {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verdicts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: var(--sx-radius-sm);
+}
+
+.verdicts li[data-active] {
+  background: var(--sx-accent-soft);
+  box-shadow: inset 3px 0 0 var(--sx-accent);
+}
+
+.verdictLabel {
+  display: grid;
+  font-weight: 600;
+}
+
+.verdictLabel small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.verdictButtons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}
+
+.verdictButtons button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.verdictButtons button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+  color: var(--sx-ink);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="correct"] {
+  color: var(--sx-good);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="partly"] {
+  color: var(--sx-warn);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="wrong"] {
+  color: var(--sx-bad);
+}
+
+.verdictButtons button:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.noteForm {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.noteForm textarea,
+.goldGrid textarea,
+.goldGrid select,
+.metrics select {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.noteForm textarea,
+.goldGrid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.goldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.goldGrid > label[data-wide] {
+  grid-column: 1 / -1;
+}
+
+.history {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-xs);
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.history li > span:first-child {
+  color: var(--sx-muted);
+}
+
+.history li[data-superseded] {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+@media (max-width: 760px) {
+  .goldGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .verdictButtons button {
+    min-height: 40px;
+  }
+
+  .noteForm textarea,
+  .goldGrid textarea,
+  .goldGrid select,
+  .metrics select {
+    font-size: 16px;
   }
 }

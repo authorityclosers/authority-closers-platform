@@ -1,7 +1,7 @@
 "use client";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { CallsSkeleton } from "../calls-library";
+import { CallsSkeleton } from "../calls-skeleton";
 import { useWorkspaceAccess } from "../workspace-access";
 
 export default function CallsLoading() {

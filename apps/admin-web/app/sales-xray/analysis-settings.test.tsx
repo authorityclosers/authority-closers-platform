@@ -105,6 +105,18 @@ it("loads the bounded controls and saves a real future-plan revision", async () 
   expect(host.textContent).toContain("revision 1");
 });
 
+it("shows a failed read as a small unavailable card, not an alert", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({}, 503)),
+  );
+  await act(async () => root.render(createElement(AnalysisSettingsPanel)));
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.querySelector('[role="status"]')?.textContent).toContain(
+    "The settings revision is unavailable",
+  );
+});
+
 it("requires the versioned engine for Marathi and sends the exact selected settings", async () => {
   const available = {
     ...state,

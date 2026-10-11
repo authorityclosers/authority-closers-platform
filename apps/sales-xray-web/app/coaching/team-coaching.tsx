@@ -34,11 +34,18 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           label="Analysed calls"
           value={analysed}
           note={
-            coaching.latest_call_at
-              ? `Updated ${callDate(coaching.latest_call_at)}${coaching.history_limited ? " · last 40" : ""}`
-              : coaching.history_limited
-                ? "Most recent 40"
-                : "In this view"
+            [
+              coaching.rep_count
+                ? `${coaching.rep_count} ${coaching.rep_count === 1 ? "person" : "people"}`
+                : null,
+              coaching.latest_call_at
+                ? `updated ${callDate(coaching.latest_call_at)}`
+                : null,
+              coaching.history_limited ? "last 40" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+              .replace(/^./, (c) => c.toUpperCase()) || "In this view"
           }
         />
         <Kpi
@@ -52,15 +59,15 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
         <Kpi
           label="Coaching areas"
           value={rows.length}
-          note="With report suggestions"
+          note="With suggestions"
         />
         <Kpi
           label="Awaiting a report"
           value={coaching.pending_calls}
           note={
             coaching.unavailable_calls
-              ? `${coaching.unavailable_calls} without usable evidence`
-              : "Still being analysed"
+              ? `${coaching.unavailable_calls} unusable`
+              : "Being analysed"
           }
         />
       </Tiles>
@@ -68,7 +75,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
         <div className={styles.main}>
           <Panel
             title="Where the team can practise"
-            sub="Share of analysed calls with a suggestion"
+            sub="Share of analysed calls"
           >
             {rows.length ? (
               <List label="Coaching areas">
@@ -106,7 +113,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
               </span>
             </p>
           </Panel>
-          <Panel title="Who needs help with what" sub="Shared coaching only">
+          <Panel title="Who needs help with what" sub="Shared only">
             <Empty
               icon={Lock}
               title="Named coaching appears when a rep shares it"

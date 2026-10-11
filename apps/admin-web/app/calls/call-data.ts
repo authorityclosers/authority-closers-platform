@@ -3,7 +3,9 @@
  * (GET /v1/admin/conversation/calls, /calls/{id}, /runs/{id}/review) that give
  * every missing field a default, and the labels screens show. Pure.
  */
+import { normalizeFailedJob, type FailedJob } from "../health/health-data";
 import { read } from "../lib/read";
+import { asReviewState, REVIEW_STATES, type ReviewState } from "./labels-data";
 
 export const CALL_STATUSES = [
   "ready",
@@ -63,17 +65,20 @@ export type QueueItem = {
   promptRevision: string | null;
   runs: number;
   reportRunId: string | null;
+  review: ReviewState;
 };
 export type Facet = { value: string; label: string; count: number };
 export type Queue = {
   items: QueueItem[];
   total: number;
   counts: Record<CallStatus, number>;
+  reviewCounts: Record<ReviewState, number>;
   facets: {
     organisations: Facet[];
     reps: Facet[];
     languages: Facet[];
     providers: Facet[];
+    prompts: Facet[];
   };
   nextCursor: string | null;
   truncated: boolean;
@@ -125,17 +130,25 @@ export function normalizeQueue(raw: unknown): Queue {
         promptRevision: read.optionalString(row.prompt_revision),
         runs: read.number(row.runs),
         reportRunId: read.optionalString(row.report_run_id),
+        review: asReviewState(row.review),
       };
     }),
     total: read.number(body.total),
     counts: Object.fromEntries(
       CALL_STATUSES.map((status) => [status, read.number(counts[status])]),
     ) as Record<CallStatus, number>,
+    reviewCounts: Object.fromEntries(
+      REVIEW_STATES.map((state) => [
+        state,
+        read.number(read.object(body.review_counts)[state]),
+      ]),
+    ) as Record<ReviewState, number>,
     facets: {
       organisations: facets(facetBody.organisations),
       reps: facets(facetBody.reps),
       languages: facets(facetBody.languages),
       providers: facets(facetBody.providers),
+      prompts: facets(facetBody.prompts),
     },
     nextCursor: read.optionalString(body.next_cursor),
     truncated: read.boolean(window.truncated),
@@ -168,6 +181,8 @@ export type Call = {
   rep: Person;
   status: CallStatus;
   runs: Run[];
+  /** Dead-lettered steps, newest first; the admin job retry may run the retryable ones. */
+  failedJobs: FailedJob[];
 };
 
 export function normalizeCall(raw: unknown): Call {
@@ -201,6 +216,7 @@ export function normalizeCall(raw: unknown): Call {
         retryOf: read.optionalString(row.retry_of),
       };
     }),
+    failedJobs: read.array(body.failed_jobs).map(normalizeFailedJob),
   };
 }
 

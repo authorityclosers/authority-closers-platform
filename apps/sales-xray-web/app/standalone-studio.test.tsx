@@ -259,8 +259,11 @@ it("does not announce a confirmed session while access is still pending", async 
   const pending = deferred<Response>();
   fetchMock.mockReturnValueOnce(pending.promise);
   await mount();
+  // New analysis's own upload screen, busy, while the session is checked.
   expect(
-    container.querySelector('[data-testid="page-skeleton"]'),
+    container.querySelector(
+      '[role="status"][aria-label="Loading New analysis"]',
+    ),
   ).not.toBeNull();
   expect(container.textContent).not.toContain("Session found");
   pending.resolve(response({}, 401));

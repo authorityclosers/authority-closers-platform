@@ -1,4 +1,5 @@
 import type { LibrarySubmission } from "./acquisition-client";
+import { dayKey, daysBetween, type DisplayDates } from "./display-dates";
 
 /** Status families from the saved state only; no inferred outcome. */
 export type CallTone = "ready" | "active" | "attention" | "idle";
@@ -38,19 +39,27 @@ export function submissionState(submission: LibrarySubmission) {
     : (STATE_COPY[submission.state] ?? "Saved call");
 }
 
-/** A call's date in lists: Today, Yesterday, 24 Sep, or 24 Sep 2025. */
-export function callDate(createdAt: string, now = new Date()): string {
+/**
+ * A call's date in lists: Today, Yesterday, 24 Sep, or 24 Sep 2025. In the
+ * runtime's own language and zone, or as `dates` says (display-clock.tsx).
+ */
+export function callDate(
+  createdAt: string,
+  now = new Date(),
+  dates?: DisplayDates,
+): string {
   const date = new Date(createdAt);
   // Intl throws on an invalid date; a list row must never take a screen down.
-  if (Number.isNaN(date.getTime())) return "Date unknown";
-  const day = (value: Date) =>
-    new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
-  const days = Math.round((day(now) - day(date)) / 86_400_000);
+  const day = dayKey(date, dates?.timeZone);
+  const today = dates?.today ?? dayKey(now, dates?.timeZone);
+  if (day === null || today === null) return "Date unknown";
+  const days = daysBetween(day, today);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(dates?.locale, {
     day: "numeric",
     month: "short",
-    year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
+    year: day.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
+    timeZone: dates?.timeZone,
   }).format(date);
 }

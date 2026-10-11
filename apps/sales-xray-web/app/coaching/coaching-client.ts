@@ -119,6 +119,8 @@ export type Coaching = {
   regression: { state: string; action: string };
   lesson: TextLesson | null;
   media_clips?: CoachingClip[];
+  /** The newest own call's quoted "What worked" finding (spec 3.6). */
+  strength?: Strength | null;
   calls?: CallSummary[];
   progress?: ProgressPoint[];
   development_path: {
@@ -131,6 +133,13 @@ export type Coaching = {
   reflection_question: string | null;
   feedback_available: false;
   limitations: string[];
+};
+
+/** A quoted "What worked" finding from one of the learner's own calls. */
+export type Strength = {
+  title: string;
+  explanation: string;
+  evidence: Evidence[];
 };
 
 function invalid(): never {
@@ -298,9 +307,29 @@ export function parseCoaching(value: unknown): Coaching {
   return {
     ...item,
     media_clips: parseClips(item.media_clips),
+    strength: item.state === "ready" ? parseStrength(item.strength) : null,
     calls: parseCallSummaries(item.calls),
     progress: parseProgress(item.progress),
   } as Coaching;
+}
+
+/** Optional: a malformed or foreign strength is dropped, never the page. */
+export function parseStrength(
+  value: unknown,
+  own: (moment: Evidence) => boolean = () => true,
+): Strength | null {
+  try {
+    const item = record(value);
+    const title = string(item.title),
+      explanation = string(item.explanation);
+    if (!Array.isArray(item.evidence)) return null;
+    const evidence = item.evidence.slice(0, 2).map(parseEvidence);
+    return evidence.length && evidence.every(own)
+      ? { title, explanation, evidence }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Optional strip: a malformed point is dropped, never fatal to the page. */

@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Gauge, RefreshCw } from "lucide-react";
 
 import {
   loadProviderControls,
   type ProviderControlsPayload,
 } from "./provider-controls";
+import { Button, Empty, Panel, Skeleton, kitStyles } from "../ui/kit";
 import styles from "./benchmark-center.module.css";
 
 type LoadState =
@@ -23,24 +25,24 @@ function AccessState({
 }) {
   if (state.status === "loading") {
     return (
-      <section className={styles.loading} role="status">
-        <h2>Checking benchmark control access</h2>
-        <p>
-          The server returns readiness after it verifies this admin session.
-        </p>
-      </section>
+      <div className={styles.page} role="status">
+        <span className={kitStyles.srOnly}>
+          Checking benchmark control access
+        </span>
+        <Skeleton height={160} />
+      </div>
     );
   }
   if (state.status === "unauthenticated" || state.status === "forbidden") {
     return (
-      <section className={styles.forbidden} role="alert">
+      <section className={styles.state} role="alert">
         <h2>
           {state.status === "forbidden"
             ? "Verified AC admin account required"
             : "AC admin sign-in required"}
         </h2>
         <p>{state.message}</p>
-        <Link className="button button-primary" href="/login">
+        <Link className={kitStyles.button} data-variant="primary" href="/login">
           {state.status === "forbidden" ? "Check admin sign-in" : "Sign in"}
         </Link>
       </section>
@@ -48,16 +50,12 @@ function AccessState({
   }
   if (state.status === "error") {
     return (
-      <section className={styles.error} role="alert">
+      <section className={styles.state} role="alert">
         <h2>Benchmark readiness unavailable</h2>
         <p>{state.message}</p>
-        <button
-          className="button button-primary"
-          type="button"
-          onClick={onRetry}
-        >
-          Try again
-        </button>
+        <Button onClick={onRetry}>
+          <RefreshCw size={14} aria-hidden="true" /> Try again
+        </Button>
       </section>
     );
   }
@@ -104,90 +102,69 @@ export function BenchmarkCenterPanel() {
   const current = state.payload.current;
   return (
     <div className={styles.page}>
-      <section className={styles.hero}>
-        <span className={styles.eyebrow}>Benchmark / test runs</span>
-        <h2>Prepare your first comparison</h2>
-        <p>
-          Test runs are not available from Admin yet. Configure providers and
-          invite reviewers here; run controls are being connected.
-        </p>
-        <div className={styles.buttonRow}>
-          <Link
-            className="button button-primary"
-            href="/sales-xray/providers?tab=providers"
-          >
-            Configure providers
-          </Link>
-          <Link className="button button-secondary" href="/calls">
-            Invite reviewers
-          </Link>
-        </div>
-      </section>
+      <Panel
+        title="Benchmark and test runs"
+        sub={`Provider revision ${current ? `#${current.revision}` : "none saved"} · paid spend ceiling ₹0`}
+      >
+        <Empty
+          icon={Gauge}
+          title="Prepare your first comparison"
+          text="Test runs are not available from Admin yet. Configure providers and invite reviewers; run controls are being connected. Saved settings are configuration evidence only, not provider quality evidence."
+          action={
+            <span className={styles.actions}>
+              <Link
+                className={kitStyles.button}
+                data-variant="primary"
+                href="/sales-xray/providers?tab=providers"
+              >
+                Configure providers
+              </Link>
+              <Link
+                className={kitStyles.button}
+                data-variant="secondary"
+                href="/reviewers"
+              >
+                Invite reviewers
+              </Link>
+            </span>
+          }
+        />
+      </Panel>
 
-      <section className={styles.notice} role="status">
-        <h2>Current setup</h2>
-        <p>
-          Provider revision: {current ? `#${current.revision}` : "none saved"}.
-          Paid spend ceiling: ₹0. Saved settings are configuration evidence
-          only, not provider quality evidence.
-        </p>
-      </section>
-
-      <details className={styles.details}>
-        <summary>Advanced API details</summary>
-        <section className={styles.panel}>
-          <span className={styles.eyebrow}>Available integrations</span>
-          <h2>What the current service supports</h2>
-          <div className={styles.endpointList}>
-            <article className={styles.endpoint}>
-              <span className={styles.method}>GET / POST</span>
-              <div>
-                <h3>
-                  <code>/v1/admin/conversation/providers</code>
-                </h3>
-                <p>
-                  Read the safe catalog/current revision or save a new
-                  zero-paid-spend provider configuration revision.
-                </p>
-              </div>
-            </article>
-            <article className={styles.endpoint}>
-              <span className={styles.method}>POST</span>
-              <div>
-                <h3>
-                  <code>/v1/admin/conversation/review-assignments</code>
-                </h3>
-                <p>
-                  Create a server-authorized human reviewer handoff. Use the
-                  reviewer queue for this supported action.
-                </p>
-              </div>
-            </article>
-            <article className={styles.endpoint}>
-              <span className={styles.method}>POST</span>
-              <div>
-                <h3>
-                  <code>/v1/conversation/recordings/:id/analysis</code>
-                </h3>
-                <p>
-                  Start owner-consented recording analysis after a quote; this
-                  is not an admin benchmark runner and does not bypass consent
-                  or retention gates.
-                </p>
-              </div>
-            </article>
-          </div>
-        </section>
-      </details>
-
-      <details className={styles.details}>
-        <summary>Why run controls are not shown</summary>
-        <section className={styles.panel}>
-          <span className={styles.eyebrow}>
-            Deferred until separately authorized
-          </span>
-          <h2>Missing run capabilities</h2>
-          <ul>
+      <Panel title="Technical notes">
+        <details className={styles.details}>
+          <summary>What the current service supports</summary>
+          <dl className={styles.endpoints}>
+            <dt>
+              <span>GET / POST</span>
+              <code>/v1/admin/conversation/providers</code>
+            </dt>
+            <dd>
+              Read the safe catalog/current revision or save a new
+              zero-paid-spend provider configuration revision.
+            </dd>
+            <dt>
+              <span>POST</span>
+              <code>/v1/admin/conversation/review-assignments</code>
+            </dt>
+            <dd>
+              Create a server-authorized human reviewer handoff. Use Reviewers
+              for this supported action.
+            </dd>
+            <dt>
+              <span>POST</span>
+              <code>/v1/conversation/recordings/:id/analysis</code>
+            </dt>
+            <dd>
+              Start owner-consented recording analysis after a quote; this is
+              not an admin benchmark runner and does not bypass consent or
+              retention gates.
+            </dd>
+          </dl>
+        </details>
+        <details className={styles.details}>
+          <summary>Why run controls are not shown</summary>
+          <ul className={styles.list}>
             <li>
               <code>/v1/admin/conversation/benchmarks</code>,{" "}
               <code>/test-runs</code>, and <code>/providers/:id/probe</code> do
@@ -206,8 +183,8 @@ export function BenchmarkCenterPanel() {
               execution activation remain outside this workspace.
             </li>
           </ul>
-        </section>
-      </details>
+        </details>
+      </Panel>
     </div>
   );
 }

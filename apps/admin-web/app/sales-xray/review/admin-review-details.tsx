@@ -11,6 +11,7 @@ import {
 } from "./admin-review-details-api";
 import { ReviewApiProblem } from "./review-api";
 import styles from "./admin-review-details.module.css";
+import { istStamp } from "../../lib/time";
 
 type DetailState =
   | { status: "loading"; details: AdminReviewDetails | null }
@@ -24,10 +25,7 @@ type DetailState =
 
 function formatEpoch(epoch: number | null): string {
   if (epoch === null) return "Unavailable";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(epoch * 1000));
+  return istStamp(new Date(epoch * 1000), "Unavailable");
 }
 
 function shortId(value: string): string {

@@ -11,6 +11,16 @@
   color: var(--sx-accent);
 }
 
+/* A whole queue row opens its call (see QueueKeys); J/K focus lights it. */
+.callRow {
+  cursor: pointer;
+}
+
+.callRow:hover > *,
+.callRow:has(.rowLink:focus-visible) > * {
+  background: color-mix(in oklab, var(--sx-sunken) 70%, transparent);
+}
+
 .rowLink:focus-visible,
 .cardLink:focus-visible {
   outline: 2px solid var(--sx-accent);
@@ -60,4 +70,76 @@
   gap: 6px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
+}
+
+.filterArea {
+  display: grid;
+  gap: 8px;
+}
+
+.filterToggle {
+  display: none;
+  justify-self: start;
+}
+
+/* Selects size to their longest option; cap them so the bar stays on one line. */
+.filterSelect {
+  max-width: 172px;
+  text-overflow: ellipsis;
+}
+
+/* A date filter with its visible label ("From" / "To") inside the control. */
+.dateFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.dateFilter:focus-within {
+  border-color: var(--sx-accent);
+}
+
+.dateFilter input {
+  min-width: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .hint {
+    display: none;
+  }
+
+  .filterToggle {
+    display: inline-flex;
+  }
+
+  .filterArea:not([data-shown]) > [role="group"] {
+    display: none;
+  }
+
+  .filterSelect {
+    max-width: none;
+  }
+
+  .dateFilter {
+    flex: 1 1 140px;
+  }
+
+  .dateFilter input {
+    flex: 1;
+    font-size: 16px;
+  }
 }

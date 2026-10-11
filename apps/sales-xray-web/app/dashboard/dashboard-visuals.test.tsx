@@ -80,7 +80,7 @@ it("reads the day under a finger anywhere across the plot", async () => {
   expect(readout()).toBe("Today0 calls · 0 min");
 });
 
-it("lists every status in full with its count, including zeros", async () => {
+it("lists each main status in full with its count, zeros too; Other only when used", async () => {
   await act(async () =>
     root.render(
       <StatusSplit
@@ -93,7 +93,15 @@ it("lists every status in full with its count, including zeros", async () => {
     "Report ready770%",
     "In progress220%",
     "Needs attention110%",
-    "Other00%",
   ]);
   expect(host.textContent).toContain("10 saved calls");
+  // "Other" appears only when it counts a call.
+  await act(async () =>
+    root.render(
+      <StatusSplit
+        summary={{ total: 11, processing: 2, completed: 7, needsAttention: 1 }}
+      />,
+    ),
+  );
+  expect([...host.querySelectorAll("li")].at(-1)?.textContent).toBe("Other19%");
 });

@@ -60,6 +60,79 @@ def test_a_strength_can_supply_the_call_lesson_without_inventing_a_weakness() ->
     assert view.evidence[0].quote == report["strengths"][0]["evidence"][0]["quote"]
 
 
+def test_a_quoted_report_strength_is_offered_to_build_on() -> None:
+    data = envelope()
+    report = data["report"]["content"]
+    ref = {"segment_id": "seg-2", "quote": "Tell me more.", "start_ms": 4000, "end_ms": 6000}
+    report["strengths"] = [
+        {"title": "Unquoted", "explanation": "No moment.", "evidence": []},
+        {
+            "title": "Withheld",
+            "explanation": "Hidden.",
+            "evidence": [{**ref, "quote": WITHHELD_MARKER}],
+        },
+        {"title": "Curious follow-up", "explanation": "You asked a follow-up.", "evidence": [ref]},
+    ]
+    view = build_call_coaching(data, **CONTEXT)
+    assert view.strength is not None
+    assert view.strength.title == "Curious follow-up"
+    assert [m.quote for m in view.strength.evidence] == ["Tell me more."]
+    assert view.strength.evidence[0].submission_id == CALL
+    report.pop("strengths")
+    assert build_call_coaching(data, **CONTEXT).strength is None
+
+
+def test_counts_the_reports_other_suggestions_without_their_content() -> None:
+    data = envelope()
+    report = data["report"]["content"]
+    ref = report["improvements"][0]["evidence"][0]
+    report["improvements"].append(
+        {"title": "Confirm the decision maker", "explanation": "Ask who signs.", "evidence": [ref]}
+    )
+    report["missed_opportunities"] = [
+        {"title": "Withheld", "explanation": WITHHELD_MARKER, "evidence": [ref]},
+        {"title": "Ask for the next step", "explanation": "Book a date.", "evidence": [ref]},
+    ]
+    view = build_call_coaching(data, **CONTEXT)
+    # The focus's own finding (improvement 0) and the withheld one are not counted.
+    assert view.other_suggestions == 2
+    assert "Ask who signs." not in view.model_dump_json()
+    report.pop("improvements")
+    report.pop("missed_opportunities")
+    assert build_call_coaching(data, **CONTEXT).other_suggestions == 0
+
+
+def test_a_malformed_strength_never_fails_the_call_coaching() -> None:
+    data = envelope()
+    bad = {"segment_id": "seg-2", "quote": "x" * 2001, "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "Too long", "explanation": "Bad moment.", "evidence": [bad]}
+    ]
+    view = build_call_coaching(data, **CONTEXT)
+    assert view.state == "ready" and view.strength is None
+
+
+def test_the_strength_that_supplied_the_focus_is_not_repeated() -> None:
+    data = envelope()
+    report = data["report"]["content"]
+    report["strengths"] = report.pop("improvements")
+    report.pop("overview")
+    report.pop("dimensions")
+    view = build_call_coaching(data, **CONTEXT)
+    assert view.focus.label == report["strengths"][0]["title"]
+    assert view.strength is None
+
+
+def test_strength_evidence_cannot_cross_into_another_source() -> None:
+    view = build_call_coaching(envelope(), **CONTEXT)
+    data = view.model_dump(by_alias=True)
+    data["strength"] = {"title": "T", "explanation": "E", "evidence": [data["evidence"][0]]}
+    assert CallCoachingView.model_validate(data).strength is not None
+    data["strength"]["evidence"][0]["source_sha256"] = "b" * 64
+    with pytest.raises(ValidationError, match="exact call source"):
+        CallCoachingView.model_validate(data)
+
+
 def test_withheld_evidence_cannot_be_relabelled_as_a_no_timestamp_finding() -> None:
     data = envelope()
     data["report"]["content"]["dimensions"] = []

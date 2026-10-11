@@ -2,7 +2,13 @@
 
 import { Lock, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Badge, kitStyles } from "../ui/kit";
 import {
   clipSource,
@@ -30,6 +36,30 @@ const PLAY_LABEL: Record<ClipState, string> = {
   limit: "Preview finished",
   failed: "Try clip again",
 };
+
+/**
+ * Where the learner stopped a reviewed clip, on this device only (spec 3.4,
+ * "resume playback if learner returns"). A position, never progress.
+ */
+const resumeKey = (clip: CoachingClip) =>
+  `sx-coaching-clip:${clip.topic_id}:${clip.revision}:${clip.review_id}`;
+function readResume(key: string): number {
+  try {
+    const saved = Number(window.localStorage.getItem(key));
+    return Number.isFinite(saved) && saved > 0 ? Math.floor(saved) : 0;
+  } catch {
+    return 0;
+  }
+}
+const noSubscription = () => () => {};
+function writeResume(key: string, offset: number | null) {
+  try {
+    if (offset === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, String(offset));
+  } catch {
+    // Storage may be unavailable (private mode); resuming is optional.
+  }
+}
 
 /** The funnel to Dipak's full coaching: credits and entitlements only. */
 export function ClipOfferCard({
@@ -72,9 +102,8 @@ export function ClipOfferCard({
             className={kitStyles.button}
             target="_blank"
             rel="noopener noreferrer"
-            title={offer.academy.label}
           >
-            Open the course on the Learner’s Academy
+            {offer.academy.label}
           </a>
         ) : null}
       </div>
@@ -92,10 +121,12 @@ function ClipCard({
   const identity = useId();
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
-  const [state, setState] = useState<ClipState>("idle");
+  const [playState, setState] = useState<ClipState>("idle");
   const [attempt, setAttempt] = useState(0);
   const [slide, setSlide] = useState(0);
-  const [position, setPosition] = useState(0);
+  const [playPosition, setPosition] = useState(0);
+  const resumeFrom = useRef(0);
+  const saved = useRef(0);
   const locked = clip.access === "locked";
   const length = clip.end_ms - clip.start_ms;
   // The server decides the window; the player only stops where it was told.
@@ -114,6 +145,28 @@ function ClipCard({
     window.addEventListener("sx-coaching-play", stopOther);
     return () => window.removeEventListener("sx-coaching-play", stopOther);
   }, [identity]);
+  // A stored position shows after hydration (the server renders 0), and only
+  // inside the window the server allows; before the first play it reads as
+  // a paused clip.
+  const key = resumeKey(clip);
+  const stored = useSyncExternalStore(
+    noSubscription,
+    () => (locked ? 0 : readResume(key)),
+    () => 0,
+  );
+  const fresh =
+    attempt === 0 &&
+    playState === "idle" &&
+    stored > 0 &&
+    clip.start_ms + stored < stopAt - 1000;
+  const state: ClipState = fresh ? "paused" : playState;
+  const position = fresh ? stored : playPosition;
+  const remember = (offset: number | null, force = false) => {
+    if (force || offset === null || Math.abs(offset - saved.current) >= 2000) {
+      saved.current = offset ?? 0;
+      writeResume(key, offset);
+    }
+  };
   const begin = (audio: HTMLAudioElement, from: number) => {
     audio.currentTime = from / 1000;
     void audio
@@ -130,6 +183,7 @@ function ClipCard({
     if (state === "playing") {
       active.current = false;
       player.current?.pause();
+      remember(position, true);
       setState("paused");
       return;
     }
@@ -137,16 +191,17 @@ function ClipCard({
       new CustomEvent("sx-coaching-play", { detail: identity }),
     );
     active.current = true;
+    const resume =
+      state === "paused" && position > 0 && clip.start_ms + position < stopAt;
     if (attempt === 0 || state === "failed") {
+      resumeFrom.current = resume ? position : 0;
       setState("loading");
-      setPosition(0);
+      setPosition(resume ? position : 0);
       setAttempt((value) => value + 1);
       return;
     }
     const audio = player.current;
     if (!audio) return;
-    const resume =
-      state === "paused" && position > 0 && clip.start_ms + position < stopAt;
     setState("loading");
     if (!resume) setPosition(0);
     begin(audio, resume ? clip.start_ms + position : clip.start_ms);
@@ -237,15 +292,21 @@ function ClipCard({
           </div>
         </div>
       )}
-      <p>
-        <span className={styles.label}>Why this fits your focus</span>
-        {clip.reason}
-      </p>
-      <ul className={styles.takeaways}>
-        {clip.takeaways.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      {locked ? (
+        <p className={styles.note}>{clip.reason}</p>
+      ) : (
+        <>
+          <p>
+            <span className={styles.label}>Why this fits your focus</span>
+            {clip.reason}
+          </p>
+          <ul className={styles.takeaways}>
+            {clip.takeaways.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {locked || state === "limit" ? (
         <ClipOfferCard clip={clip} finished={state === "limit"} />
       ) : null}
@@ -306,21 +367,24 @@ function ClipCard({
           aria-label="Placeholder coaching narration"
           onLoadedMetadata={() => {
             if (!player.current || !active.current) return;
-            begin(player.current, clip.start_ms);
+            begin(player.current, clip.start_ms + resumeFrom.current);
           }}
           onTimeUpdate={() => {
             const audio = player.current;
             if (!audio || !active.current) return;
             const at = Math.round(audio.currentTime * 1000);
-            setPosition(Math.max(0, Math.min(length, at - clip.start_ms)));
+            const offset = Math.max(0, Math.min(length, at - clip.start_ms));
+            setPosition(offset);
             if (at >= stopAt) {
               audio.pause();
               active.current = false;
+              remember(null);
               setState(stopAt < clip.end_ms ? "limit" : "done");
-            }
+            } else remember(offset);
           }}
           onEnded={() => {
             active.current = false;
+            remember(null);
             setState(stopAt < clip.end_ms ? "limit" : "done");
           }}
           onError={() => {

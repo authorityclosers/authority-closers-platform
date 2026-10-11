@@ -76,6 +76,7 @@ class ConversationAcquisitionUsage(Base):
         Index("ix_conversation_acquisition_usage_person", "tenant_id", "person_id"),
         Index("ix_conversation_acquisition_usage_visitor", "tenant_id", "visitor_id"),
         UniqueConstraint("tenant_id", "submission_id"),
+        UniqueConstraint("id", "tenant_id", "source_sha256"),
         ForeignKeyConstraint(
             ["visitor_id", "tenant_id"],
             ["conversation_visitors.id", "conversation_visitors.tenant_id"],

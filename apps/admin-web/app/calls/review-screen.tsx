@@ -11,9 +11,11 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
-  FlaskConical,
   Keyboard,
+  Link2,
   RefreshCcw,
+  ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -30,7 +32,9 @@ import {
   type Call,
   type Evidence,
 } from "./call-data";
+import type { Labels } from "./labels-data";
 import { Player } from "./player";
+import { ReviewPanel } from "./review-panel";
 import {
   Coaching,
   CurrentReport,
@@ -57,6 +61,7 @@ const TABS: {
   phoneOnly?: boolean;
 }[] = [
   { key: "transcript", label: "Transcript", key1: "T", phoneOnly: true },
+  { key: "review", label: "Review", key1: "V" },
   { key: "report", label: "Report", key1: "R" },
   { key: "pillars", label: "Six pillars", key1: "S" },
   { key: "coaching", label: "Coaching", key1: "C" },
@@ -73,7 +78,16 @@ export function ReviewScreen({
   compareBundle,
   back,
   neighbours,
+  safety = false,
+  labels = null,
+  startMs = null,
 }: {
+  /** The call's reviewer labels, or null when they couldn't be read. */
+  labels?: Labels | null;
+  /** The operator may withhold passages (platform_content_safety_manage). */
+  safety?: boolean;
+  /** Where a shared link (?at=) opens the call, in ms. */
+  startMs?: number | null;
   call: Call;
   bundle: Bundle;
   compare: string | null;
@@ -84,12 +98,19 @@ export function ReviewScreen({
   const router = useRouter();
   const audio = useRef<HTMLAudioElement | null>(null);
   const [tab, setTab] = useState<ReviewTab>(compare ? "runs" : "report");
-  const [currentMs, setCurrentMs] = useState(0);
+  const [currentMs, setCurrentMs] = useState(startMs ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [failed, setFailed] = useState(false);
-  const [focused, setFocused] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(() =>
+    startMs === null
+      ? null
+      : (bundle.transcript.segments[
+          segmentAt(bundle.transcript.segments, startMs)
+        ]?.id ?? null),
+  );
   const [help, setHelp] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const segments = bundle.transcript.segments;
   const names = useMemo(
@@ -158,6 +179,33 @@ export function ReviewScreen({
     [failed, seek],
   );
 
+  // A shared link opens at its moment (paused, that line marked): the audio
+  // starts there once, on arrival; later seeks belong to the reviewer.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (arrived.current || startMs === null || !audio.current) return;
+    arrived.current = true;
+    audio.current.currentTime = startMs / 1000;
+  }, [startMs]);
+
+  /** Copy a link to this moment (without the queue filters, which are personal). */
+  const copyLink = useCallback(() => {
+    const at = Math.round(currentMs);
+    const url = new URL(
+      href({ at: String(at), back: null, compare: null }),
+      window.location.origin,
+    ).toString();
+    const done = (text: string) => {
+      setCopied(text);
+      window.setTimeout(() => setCopied(null), 2500);
+    };
+    if (!navigator.clipboard) return done("Copy isn't available here");
+    navigator.clipboard
+      .writeText(url)
+      .then(() => done(`Link to ${clock(at)} copied`))
+      .catch(() => done("The link couldn't be copied"));
+  }, [currentMs, href]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (typing(event.target)) return;
@@ -176,6 +224,7 @@ export function ReviewScreen({
       else if (action.kind === "speed") changeSpeed(action.step);
       else if (action.kind === "tab") setTab(action.tab);
       else if (action.kind === "help") setHelp((value) => !value);
+      else if (action.kind === "link") copyLink();
       else if (action.kind === "call") {
         const target = action.step > 0 ? neighbours.next : neighbours.previous;
         if (target) router.push(href({}, target));
@@ -183,7 +232,17 @@ export function ReviewScreen({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [changeSpeed, currentMs, help, href, neighbours, router, seek, toggle]);
+  }, [
+    changeSpeed,
+    copyLink,
+    currentMs,
+    help,
+    href,
+    neighbours,
+    router,
+    seek,
+    toggle,
+  ]);
 
   return (
     <div className={styles.screen}>
@@ -215,24 +274,39 @@ export function ReviewScreen({
           <Badge tone={STATUS_TONE[call.status]}>
             {STATUS_LABEL[call.status]}
           </Badge>
+          {call.failedJobs.length ? (
+            <button
+              type="button"
+              className={kitStyles.button}
+              onClick={() => setTab("runs")}
+              title="Open the failed steps in Runs (U)"
+            >
+              <TriangleAlert size={14} aria-hidden="true" />
+              {call.failedJobs.length === 1
+                ? "1 failed step"
+                : `${call.failedJobs.length} failed steps`}
+            </button>
+          ) : null}
           <button
             type="button"
             className={kitStyles.button}
+            data-desk=""
             disabled
-            title="Needs an admin re-run API. Today only the rep can retry a call from Sales Xray."
+            title="Re-running a finished call needs an admin re-run command (a new provider charge). Failed steps can be retried from Runs."
           >
             <RefreshCcw size={14} aria-hidden="true" />
             Re-run
           </button>
-          <button
-            type="button"
-            className={kitStyles.button}
-            disabled
-            title="Training and test marks arrive with the gold-set store."
-          >
-            <FlaskConical size={14} aria-hidden="true" />
-            Mark data
-          </button>
+          {safety ? (
+            <Link
+              href={`/safety?recording=${call.recordingId}`}
+              className={kitStyles.button}
+              title="Withhold sensitive passages of this call"
+            >
+              <ShieldCheck size={14} aria-hidden="true" />
+              Safety
+            </Link>
+          ) : null}
           <Link
             href={neighbours.previous ? href({}, neighbours.previous) : "#"}
             className={kitStyles.button}
@@ -259,6 +333,22 @@ export function ReviewScreen({
             type="button"
             className={kitStyles.button}
             data-variant="icon"
+            onClick={copyLink}
+            aria-label="Copy a link to this moment (Y)"
+            title="Copy a link to this moment (Y)"
+          >
+            <Link2 size={16} aria-hidden="true" />
+          </button>
+          {copied ? (
+            <span role="status" className={kitStyles.muted}>
+              {copied}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className={kitStyles.button}
+            data-variant="icon"
+            data-desk=""
             onClick={() => setHelp((value) => !value)}
             aria-label="Keyboard shortcuts (?)"
             aria-expanded={help}
@@ -337,7 +427,20 @@ export function ReviewScreen({
             className={styles.view}
             data-hidden-on-phone={tab === "transcript" ? "" : undefined}
           >
-            {tab === "report" || tab === "transcript" ? (
+            {tab === "review" ? (
+              labels ? (
+                <ReviewPanel
+                  recordingId={call.recordingId}
+                  runId={bundle.runId}
+                  labels={labels}
+                />
+              ) : (
+                <p className={styles.gap} style={{ padding: 16 }}>
+                  Reviewer labels can&rsquo;t be read right now. Reload to try
+                  again.
+                </p>
+              )
+            ) : tab === "report" || tab === "transcript" ? (
               <CurrentReport report={bundle.report} onEvidence={playEvidence} />
             ) : tab === "pillars" ? (
               <Pillars

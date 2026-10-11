@@ -11,11 +11,14 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 ATTEMPTS = 3
 TIMEOUT_SECONDS = 120
 PAGE_SIZE = 100
+EXPIRY_MARGIN_SECONDS = 300
 
 
 def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -27,17 +30,60 @@ def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def validate_inventory(raw: str) -> tuple[list[dict[str, Any]], int]:
+class SnapshotChanged(ValueError):
+    """An artifact in the fixed snapshot changed identity or size."""
+
+
+class InventorySnapshot:
+    """Keep the original boundary, older identities and recent byte bounds."""
+
+    def __init__(self, started_at: datetime | None = None) -> None:
+        # GitHub timestamps have second precision. Exclude the boundary second
+        # so an in-flight upload cannot be mistaken for an older artifact.
+        self.started_at = (started_at or datetime.now(UTC)).replace(microsecond=0)
+        self.expected_count: int | None = None
+        self.known: dict[int, dict[str, Any]] = {}
+        self.recent: dict[int, dict[str, Any]] = {}
+
+
+def artifact_created_at(artifact: dict[str, Any]) -> datetime:
+    try:
+        created = datetime.fromisoformat(artifact["created_at"].replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            raise ValueError
+        return created
+    except (KeyError, AttributeError, TypeError, ValueError):
+        raise ValueError("invalid artifact schema: created_at") from None
+
+
+def expiry_can_remove(artifact: dict[str, Any], now: datetime) -> bool:
+    """Only explicit expiry evidence can explain an absent older identity."""
+    if artifact["expired"]:
+        return True
+    try:
+        expires = datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+        return expires.tzinfo is not None and expires <= now + timedelta(
+            seconds=EXPIRY_MARGIN_SECONDS
+        )
+    except (KeyError, AttributeError, TypeError, ValueError):
+        return False
+
+
+def validate_inventory(
+    raw: str, *, snapshot: InventorySnapshot | None = None, now: datetime | None = None
+) -> tuple[list[dict[str, Any]], int]:
+    snapshot = snapshot or InventorySnapshot()
+    now = now or datetime.now(UTC)
     try:
         pages = json.loads(raw, object_pairs_hook=unique_object)
     except ValueError:
         raise ValueError("invalid JSON") from None
     if not isinstance(pages, list) or not pages:
         raise ValueError("missing inventory pages")
-    artifacts: list[dict[str, Any]] = []
-    total = None
-    ids: set[int] = set()
-    for page in pages:
+    artifacts: dict[int, dict[str, Any]] = {}
+    older: dict[int, dict[str, Any]] = {}
+    maximum_count = 0
+    for index, page in enumerate(pages):
         if (
             not isinstance(page, dict)
             or type(page.get("total_count")) is not int
@@ -45,34 +91,84 @@ def validate_inventory(raw: str) -> tuple[list[dict[str, Any]], int]:
             or not isinstance(page.get("artifacts"), list)
         ):
             raise ValueError("invalid page schema")
-        if total is None:
-            total = page["total_count"]
-        if page["total_count"] != total:
-            raise ValueError("inventory count changed between pages")
-        expected_size = min(PAGE_SIZE, max(0, total - len(artifacts)))
+        expected_size = min(PAGE_SIZE, max(0, page["total_count"] - index * PAGE_SIZE))
         if len(page["artifacts"]) != expected_size:
             raise ValueError("incomplete inventory page")
+        if not expected_size and (index or len(pages) != 1):
+            raise ValueError("unexpected empty inventory page")
+        maximum_count = max(maximum_count, page["total_count"])
+        recent: set[int] = set()
         for artifact in page["artifacts"]:
             if (
                 not isinstance(artifact, dict)
                 or type(artifact.get("id")) is not int
                 or artifact["id"] <= 0
-                or artifact["id"] in ids
                 or type(artifact.get("size_in_bytes")) is not int
                 or artifact["size_in_bytes"] < 0
                 or not isinstance(artifact.get("name"), str)
                 or not artifact["name"]
                 or type(artifact.get("expired")) is not bool
             ):
-                raise ValueError("invalid artifact schema or duplicate identity")
-            ids.add(artifact["id"])
-            artifacts.append(artifact)
-    if len(artifacts) != total or len(pages) != max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE):
+                raise ValueError("invalid artifact schema")
+            identity = artifact["id"]
+            in_snapshot = artifact_created_at(artifact) < snapshot.started_at
+            previous = snapshot.known.get(identity) or snapshot.recent.get(identity)
+            if (
+                previous
+                and (in_snapshot or identity in snapshot.known)
+                and any(
+                    previous[key] != artifact[key]
+                    for key in ("size_in_bytes", "name", "created_at")
+                )
+            ):
+                raise SnapshotChanged("artifact identity or size changed during inventory")
+            artifacts[identity] = (
+                previous
+                if previous and previous["size_in_bytes"] > artifact["size_in_bytes"]
+                else artifact
+            )
+            if in_snapshot:
+                older[identity] = artifact
+                snapshot.known[identity] = artifact
+            else:
+                recent.add(identity)
+                snapshot.recent[identity] = artifacts[identity]
+        if index == 0:
+            # GitHub lists newest artifacts first. If the boundary is hidden
+            # behind a whole page of concurrent uploads, do not guess its count.
+            if len(recent) == PAGE_SIZE and page["total_count"] > PAGE_SIZE:
+                raise ValueError("inventory snapshot boundary is not visible")
+            expected = page["total_count"] - len(recent)
+            if snapshot.expected_count is None:
+                snapshot.expected_count = expected
+    # Pagination can skip a still-live row when an earlier row expires. Retry
+    # that sweep; only a complete later sweep plus known expiry identities can
+    # reconcile a smaller count. Never infer the identity of an unseen removal.
+    missing = snapshot.known.keys() - older.keys()
+    expired_missing = {
+        identity for identity in missing if expiry_can_remove(snapshot.known[identity], now)
+    }
+    if missing != expired_missing:
         raise ValueError("incomplete inventory")
-    return artifacts, len(pages)
+    if len(older) + len(expired_missing) != snapshot.expected_count:
+        raise ValueError("incomplete inventory: older artifact count changed during inventory")
+    # Older completeness alone cannot bound unseen uploads at the front of
+    # already-read pages. Require this sweep to account for every reported row;
+    # otherwise restart at page one, preserving all previously observed bounds.
+    if len(artifacts) != maximum_count:
+        raise ValueError("incomplete inventory: unobserved artifacts")
+    # Charge the largest recent size across attempts, including recent IDs
+    # missing from a later sweep. Repeated IDs are charged only once.
+    return list((snapshot.recent | artifacts).values()), len(pages)
 
 
-def read_inventory(executable: str, repository: str, operation: str) -> list[dict[str, Any]]:
+def read_inventory(
+    executable: str,
+    repository: str,
+    operation: str,
+    *,
+    fetch: Callable[[], str] | None = None,
+) -> list[dict[str, Any]]:
     command = [
         executable,
         "api",
@@ -84,24 +180,30 @@ def read_inventory(executable: str, repository: str, operation: str) -> list[dic
         "X-GitHub-Api-Version: 2026-03-10",
         f"/repos/{repository}/actions/artifacts?per_page={PAGE_SIZE}",
     ]
+    snapshot = InventorySnapshot()
     for attempt in range(1, ATTEMPTS + 1):
         prefix = f"Artifact inventory operation={operation} attempt={attempt}/{ATTEMPTS}"
         try:
             # Each invocation starts at page one. Capture/suppress CLI diagnostics
             # and publish no bytes until both transport and completeness pass.
-            result = subprocess.run(  # noqa: S603 - resolved gh executable, no shell
-                command, capture_output=True, text=True, check=False, timeout=TIMEOUT_SECONDS
-            )
-            if result.returncode != 0:
-                reason = f"gh exit={result.returncode}"
+            if fetch is not None:
+                raw = fetch()
             else:
-                artifacts, pages = validate_inventory(result.stdout)
-                print(
-                    f"{prefix} complete pages={pages} artifacts={len(artifacts)} "
-                    f"bytes={sum(a['size_in_bytes'] for a in artifacts)}",
-                    file=sys.stderr,
+                result = subprocess.run(  # noqa: S603 - resolved gh executable, no shell
+                    command, capture_output=True, text=True, check=False, timeout=TIMEOUT_SECONDS
                 )
-                return artifacts
+                if result.returncode != 0:
+                    raise ValueError(f"gh exit={result.returncode}")
+                raw = result.stdout
+            artifacts, pages = validate_inventory(raw, snapshot=snapshot)
+            print(
+                f"{prefix} complete pages={pages} artifacts={len(artifacts)} "
+                f"bytes={sum(a['size_in_bytes'] for a in artifacts)}",
+                file=sys.stderr,
+            )
+            return artifacts
+        except SnapshotChanged:
+            raise
         except subprocess.TimeoutExpired:
             reason = f"timeout={TIMEOUT_SECONDS}s"
         except UnicodeError:

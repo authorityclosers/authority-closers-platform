@@ -75,6 +75,25 @@ if (typeof window !== "undefined") {
   } catch {}
 }
 
+/** The pre-paint attribute that draws a collapsed sidebar from the first frame. */
+export const SIDEBAR_ATTRIBUTE = "data-sx-sidebar";
+
+/**
+ * For the root layout, before the page paints: a sidebar the person
+ * collapsed is drawn collapsed at once (it used to open, then slide shut
+ * after the app started).
+ */
+export function sidebarInitScript(): string {
+  return `(function(){try{if(localStorage.getItem("sx.sidebar.collapsed")==="true")document.documentElement.setAttribute(${JSON.stringify(SIDEBAR_ATTRIBUTE)},"collapsed")}catch(e){}})();`;
+}
+
+/** Keep the pre-paint attribute in step with the person's choice. */
+export function markSidebar(collapsed: boolean) {
+  if (collapsed)
+    document.documentElement.setAttribute(SIDEBAR_ATTRIBUTE, "collapsed");
+  else document.documentElement.removeAttribute(SIDEBAR_ATTRIBUTE);
+}
+
 export function getShellState(): ShellStoreState {
   return globalState;
 }

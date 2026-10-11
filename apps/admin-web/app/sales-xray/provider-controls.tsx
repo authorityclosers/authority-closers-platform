@@ -1583,7 +1583,7 @@ export function ProviderControlsPanel() {
             call.
           </p>
         </div>
-        <span className={styles.noticeCode}>NO PROVIDER CALLS</span>
+        <span className={styles.noticeCode}>No provider calls</span>
       </div>
 
       <div className={styles.summaryGrid} aria-label="Provider control status">

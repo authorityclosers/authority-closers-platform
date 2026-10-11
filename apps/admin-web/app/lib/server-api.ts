@@ -23,6 +23,8 @@ const ADMIN_HOST_BY_API_HOST: Readonly<Record<string, string>> = {
   "api.development.ac.internal.invalid": "admin-dev.authorityclosers.com",
 };
 const SESSION_COOKIE_NAME = "__Host-ac_session";
+/** The development API's session cookie name (settings.session_cookie_name default). */
+const DEV_SESSION_COOKIE_NAME = "ac_session";
 const OPAQUE_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
 const SAFE_PATH = /^\/v1\/[A-Za-z0-9\-._~/%]*(\?[A-Za-z0-9\-._~%&=+,:]*)?$/;
 const READ_TIMEOUT_MS = 15_000;
@@ -39,30 +41,76 @@ export const MESSAGES = {
     "The data service sent an answer this screen doesn't understand yet.",
 } as const;
 
-type Transport = { origin: URL; adminHost: string };
+type Transport = {
+  origin: URL;
+  adminHost: string;
+  cookieNames: readonly string[];
+};
+
+const DEV_ADMIN_HOSTS = new Set(["admin-dev.authorityclosers.com"]);
+const LOOPBACK = new Set(["127.0.0.1", "localhost"]);
+
+/**
+ * Development only (next dev behind admin-dev): read through the local dev
+ * edge, which routes /v1/* to whichever API the dev environment uses, as the
+ * admin-dev host. Never active in a production build.
+ */
+export function devEdgeTransport(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Transport | null {
+  if (env.NODE_ENV === "production") return null;
+  const host = env.AC_ADMIN_DEV_HOST ?? "";
+  if (!DEV_ADMIN_HOSTS.has(host)) return null;
+  try {
+    const origin = new URL(env.AC_ADMIN_DEV_EDGE_ORIGIN ?? "");
+    if (
+      origin.protocol !== "http:" ||
+      !LOOPBACK.has(origin.hostname) ||
+      origin.pathname !== "/" ||
+      origin.search ||
+      origin.username ||
+      origin.password
+    )
+      return null;
+    return {
+      origin,
+      adminHost: host,
+      cookieNames: [SESSION_COOKIE_NAME, DEV_SESSION_COOKIE_NAME],
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function internalTransport(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Transport | null {
   const apiHost = env.AC_INTERNAL_API_HOST ?? "";
   const adminHost = ADMIN_HOST_BY_API_HOST[apiHost];
-  if (!adminHost) return null;
   const approved = `http://${apiHost}:8000`;
-  if (env.AC_INTERNAL_API_URL !== approved) return null;
-  return { origin: new URL(approved), adminHost };
+  if (adminHost && env.AC_INTERNAL_API_URL === approved)
+    return {
+      origin: new URL(approved),
+      adminHost,
+      cookieNames: [SESSION_COOKIE_NAME],
+    };
+  return devEdgeTransport(env);
 }
 
 export function sessionCookieFrom(
   cookies: readonly { name: string; value: string }[],
+  names: readonly string[] = [SESSION_COOKIE_NAME],
 ): string | null {
-  const values = cookies
-    .filter((cookie) => cookie.name === SESSION_COOKIE_NAME)
-    .map((cookie) => cookie.value);
-  if (values.length !== 1) return null;
-  const value = values[0] ?? "";
-  return OPAQUE_SESSION_PATTERN.test(value)
-    ? `${SESSION_COOKIE_NAME}=${value}`
-    : null;
+  for (const name of names) {
+    const values = cookies
+      .filter((cookie) => cookie.name === name)
+      .map((cookie) => cookie.value);
+    if (values.length === 0) continue;
+    if (values.length !== 1) return null;
+    const value = values[0] ?? "";
+    return OPAQUE_SESSION_PATTERN.test(value) ? `${name}=${value}` : null;
+  }
+  return null;
 }
 
 export function messageForStatus(status: number): string {
@@ -159,7 +207,10 @@ export async function adminRead<T>(
   const transport = internalTransport(env);
   if (!transport)
     return { ok: false, status: 503, error: MESSAGES.notConnected };
-  const cookie = sessionCookieFrom(cookies ?? (await requestCookies()));
+  const cookie = sessionCookieFrom(
+    cookies ?? (await requestCookies()),
+    transport.cookieNames,
+  );
   if (!cookie) return { ok: false, status: 401, error: MESSAGES.signedOut };
   let raw: RawResponse;
   try {

@@ -193,6 +193,7 @@ def build_learner(
             success_condition=mission.done_when,
         ),
         lesson=lesson_for(origin.skill_id, evidence[0], mission),
+        strength=next((call.strength for call in reversed(calls) if call.strength), None),
         development_path=Path(
             current=label,
             likely_next=candidates[0] if candidates else None,

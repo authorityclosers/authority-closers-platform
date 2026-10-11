@@ -67,14 +67,16 @@ import {
 import {
   CREATE_ORGANISATION_EVENT,
   getShellState,
+  markSidebar,
   OPEN_SWITCHER_EVENT,
-  RECENTS_CHANGED_EVENT,
   recentCallsForContext,
-  updateShellState,
+  RECENTS_CHANGED_EVENT,
   type ShellRecentCall,
+  updateShellState,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
 import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
 import {
@@ -155,6 +157,9 @@ function resolvePageTitle(
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
+  // The studio names its stage once it loads; until then (and while a route
+  // loads) the bar already says where you are, so nothing swaps in later.
+  if (active === "analyse") return "New analysis";
   return null;
 }
 
@@ -323,6 +328,7 @@ function LightboxShellFrame({
     focusTogglePendingRef.current = true;
     setCollapsed(next);
     updateShellState({ collapsed: next });
+    markSidebar(next);
     try {
       localStorage.setItem("sx.sidebar.collapsed", String(next));
     } catch {}
@@ -534,6 +540,10 @@ function LightboxShellFrame({
       if (next) window.location.assign(next);
       return Boolean(next);
     }
+    // Nothing read for the old workspace may answer a read for the new one,
+    // and the next page reads conversations only once Sales Xray is known on.
+    dropEarlyReads();
+    allowEarlyConversationReads(false);
     try {
       const res = await fetch("/v1/context", {
         method: "POST",
@@ -1070,7 +1080,7 @@ function LightboxShellFrame({
           <div className={styles.panelSpacer} />
         </div>
       </aside>
-      <div className={styles.content}>
+      <div className={styles.content} data-shell-content="">
         <header className={styles.mobileBar}>
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
@@ -1081,9 +1091,11 @@ function LightboxShellFrame({
                   workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
                 }
               >
-                {workspaceLabel ? (
-                  <small>{pageTitle ? workspaceLabel : "Workspace"}</small>
-                ) : null}
+                {/* Two lines from the first paint: the workspace line is a
+                    placeholder while it loads, so the title never drops. */}
+                <small className={styles.mobileContext}>
+                  {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                </small>
                 <b>{pageTitle ?? workspaceLabel}</b>
               </span>
             </div>
@@ -1301,10 +1313,14 @@ const PersistentShellContext = createContext<
  * chrome (active item, heading, allowance) instead of drawing a second one.
  */
 export function PersistentShell({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<ShellPage>({
-    authenticated: false,
-    loading: true,
-  });
+  // Pages hand the frame their settings before paint; until then it starts
+  // from what the session already knows, so a page drawn on the server with
+  // its session (dev) arrives with its full bar, not loading placeholders.
+  const access = useWorkspaceAccess();
+  const [page, setPage] = useState<ShellPage>(() => ({
+    authenticated: access?.authenticated === true,
+    loading: !access || access.status === "loading",
+  }));
   return (
     <PersistentShellContext.Provider value={setPage}>
       <LightboxShellFrame {...page}>{children}</LightboxShellFrame>

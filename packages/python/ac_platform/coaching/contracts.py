@@ -102,19 +102,34 @@ class SkillObservation(Model):
         return self
 
 
+class Strength(Model):
+    """A retained "What worked" finding from one call (spec 3.6), never a trait.
+
+    It needs its own quoted moments; an unquoted strength is not shown.
+    """
+
+    title: str = Field(min_length=1, max_length=240)
+    explanation: str = Field(min_length=1, max_length=4000)
+    evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
+
+
 class CallHistory(Model):
     submission_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     created_at: datetime
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
+    strength: Strength | None = None
 
     @model_validator(mode="after")
     def bound_evidence(self) -> "CallHistory":
+        moments = (
+            *(moment for skill in self.skills for moment in skill.evidence),
+            *(self.strength.evidence if self.strength else ()),
+        )
         if len({skill.skill_id for skill in self.skills}) != len(self.skills) or any(
             moment.submission_id != self.submission_id or moment.source_sha256 != self.source_sha256
-            for skill in self.skills
-            for moment in skill.evidence
+            for moment in moments
         ):
             raise ValueError("Call evidence cannot cross a source or duplicate a skill.")
         return self
@@ -225,6 +240,21 @@ class Slide(Model):
     bullets: tuple[str, ...] = Field(min_length=1, max_length=5)
 
 
+class AcademyLink(Model):
+    href: str = Field(pattern=r"^https://([a-z0-9-]+\.)*authorityclosers\.com/[A-Za-z0-9/_.-]*$")
+    label: str = Field(min_length=1, max_length=120)
+
+
+class ClipOffer(Model):
+    """Where a locked clip leads: the app's own offer and the Learner's Academy.
+
+    Credits and entitlements only; never a payment-provider URL.
+    """
+
+    full_coaching_href: str = Field(pattern=r"^/[A-Za-z0-9/_-]*$")
+    academy: AcademyLink | None = None
+
+
 class ClipSuggestion(Model):
     topic_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,99}$")
     revision: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -233,19 +263,27 @@ class ClipSuggestion(Model):
     kind: Literal["audio", "video"]
     placeholder: Literal[True] = True
     voice: Literal["neutral"] = "neutral"
-    access: Literal["full"] = "full"
-    entitlement_policy: Literal["AUT-1678-open-access"] = "AUT-1678-open-access"
+    # Locked clips carry no playable source: the stream refuses them.
+    access: Literal["full", "locked"] = "full"
+    entitlement_policy: Literal[
+        "AUT-1678-open-access", "AUT-1678-demo-one-free-topic-per-skill"
+    ] = "AUT-1678-open-access"
     start_ms: int = Field(ge=0, strict=True)
     end_ms: int = Field(gt=0, strict=True)
     reason: str
     takeaways: tuple[str, ...]
     transcript_excerpt: str
     slides: tuple[Slide, ...]
+    offer: ClipOffer | None = None
 
     @model_validator(mode="after")
     def ordered_clip(self) -> "ClipSuggestion":
         if self.end_ms <= self.start_ms:
             raise ValueError("Coaching clips need ordered source timestamps.")
+        if (self.access == "full") != (self.entitlement_policy == "AUT-1678-open-access"):
+            raise ValueError("Only the open Coaching policy grants a full clip.")
+        if self.access == "locked" and self.offer is None:
+            raise ValueError("A locked clip must lead to the full coaching.")
         return self
 
 
@@ -302,6 +340,8 @@ class CoachingView(Model):
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: LearningAsset | None = None
     other_format: LearningAsset | None = None
+    # The newest own call's quoted strength; one call, never an established trait.
+    strength: Strength | None = None
     calls: tuple[CallSummary, ...] = Field(default=(), max_length=40)
     progress: tuple[ProgressPoint, ...] = Field(default=(), max_length=40)
     development_path: Path

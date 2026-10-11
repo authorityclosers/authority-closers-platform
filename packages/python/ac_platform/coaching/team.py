@@ -41,6 +41,8 @@ class TeamCoachingView(Model):
     scope: Literal["anonymous"] = "anonymous"
     named_rep_details: Literal[False] = False
     analysed_calls: int = Field(ge=0)
+    # How many people those calls belong to: a count, never who they are.
+    rep_count: int = Field(default=0, ge=0)
     pending_calls: int = Field(ge=0)
     unavailable_calls: int = Field(ge=0)
     history_limited: bool
@@ -81,6 +83,7 @@ def summarize_team(
         person_id=person_id,
         tenant_id=tenant_id,
         analysed_calls=len(unique),
+        rep_count=len({owner for owner, _source in unique}),
         pending_calls=pending_calls,
         unavailable_calls=unavailable_calls,
         history_limited=history_limited,
