@@ -172,14 +172,14 @@ it("draws the call in stages with moments and the change point", () => {
   // The phone track's span sits over the stages.
   expect(markup).toMatch(/<span>00:00<\/span><span>25:08<\/span>/);
   // Phones: each stage sits on one track of the call at its own place and
-  // length, with its own set of wider bars (40 across the whole call).
+  // length, with its own set of wider bars (56 across the whole call).
   expect(markup).toContain("--from:0.09946949602122016");
   expect(markup).toContain("--span:0.9005305039787799");
   const rows = [...markup.matchAll(/data-set="rows"[^>]*>(.*?)<\/span>/g)];
   expect(rows).toHaveLength(2);
   expect(
     rows.reduce((sum, [, bars]) => sum + (bars.match(/<i /g) ?? []).length, 0),
-  ).toBe(40);
+  ).toBe(56);
   // No duration, no timeline; no speech or sound, stage blocks only.
   expect(html(<CallTimeline durationMs={0} />)).toBe("");
   expect(html(<CallTimeline durationMs={10_000} />)).toContain(

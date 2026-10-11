@@ -15,8 +15,8 @@ export type TimelinePhase = { label: string; start_ms: number; end_ms: number };
 /** All the wave bars in a timeline, shared out between its stages. */
 export const WAVE_BARS = 96;
 
-/** The same on a phone, where the stages stack on one narrow track. */
-export const ROW_BARS = 40;
+/** The same on a phone, where the stages stack on one track the card's width. */
+export const ROW_BARS = 56;
 
 /** A phone's timeline without stages: one strip the card's width. */
 export const NARROW_BARS = 60;

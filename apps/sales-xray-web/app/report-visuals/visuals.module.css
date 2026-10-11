@@ -804,7 +804,8 @@ button.pin:focus-visible {
 }
 
 /* Narrow: fewer, wider bars; the stages stack as rows on one track of the
-   whole call. */
+   whole call. Each row is the stage's name and times, with the track the
+   card's full width below it (beside the names it was half as wide). */
 @container timeline (max-width: 679px) {
   .timeline .bars[data-set="wide"] {
     display: none;
@@ -815,31 +816,37 @@ button.pin:focus-visible {
   }
 
   .timeline:not([data-single]) .blocks {
-    --wave-h: 36px;
+    --wave-h: 28px;
     flex-direction: column;
-    gap: 0;
+    gap: 8px;
   }
 
   .timeline:not([data-single]) .block {
-    grid-template-columns: 4px minmax(0, 1fr) minmax(112px, 46%);
-    grid-template-rows: auto;
+    grid-template-columns: 4px minmax(0, 1fr);
+    grid-template-rows: auto var(--wave-h);
     align-items: center;
-    column-gap: 12px;
+    gap: 3px 10px;
     box-sizing: border-box;
     min-width: 0;
     min-height: 44px;
-    padding: 4px 0;
+    padding: 2px 0;
   }
 
   .timeline:not([data-single]) .stageBar {
-    grid-row: 1;
+    grid-row: 1 / -1;
     grid-column: 1;
     align-self: stretch;
   }
 
   .timeline:not([data-single]) .stageText {
+    display: flex;
     grid-row: 1;
     grid-column: 2;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 12px;
+    flex-wrap: wrap;
+    padding-right: 0;
   }
 
   .timeline:not([data-single]) .stageEnd {
@@ -849,8 +856,8 @@ button.pin:focus-visible {
   /* One track of the whole call: each stage's stretch sits at its true place
      and length, so the rows step from left to right as the call moves on. */
   .timeline:not([data-single]) .block::after {
-    grid-row: 1;
-    grid-column: 3;
+    grid-row: 2;
+    grid-column: 2;
     align-self: center;
     height: 1px;
     background: color-mix(in oklab, var(--sx-ink) 12%, transparent);
@@ -859,37 +866,25 @@ button.pin:focus-visible {
 
   .timeline:not([data-single]) .wave {
     --stretch: max(12px, calc(var(--span, 1) * 100%));
-    grid-row: 1;
-    grid-column: 3;
+    grid-row: 2;
+    grid-column: 2;
     justify-self: start;
     width: var(--stretch);
     margin-left: min(calc(var(--from, 0) * 100%), calc(100% - var(--stretch)));
   }
 
   .timeline:not([data-single]) .bars {
-    inset: 4px 1px;
+    inset: 3px 1px;
     gap: 1px;
   }
 
   .timeline:not([data-single]) .trackAxis {
-    display: grid;
-    grid-template-columns: 4px minmax(0, 1fr) minmax(112px, 46%);
-    column-gap: 12px;
-    margin: 0 0 -6px;
+    display: flex;
+    justify-content: space-between;
+    margin: 0 0 -4px 14px;
     color: var(--sx-muted);
     font: 400 var(--sx-text-xs) / 1 var(--lx-font-ui);
     font-variant-numeric: tabular-nums;
-  }
-
-  .timeline:not([data-single]) .trackAxis > span:first-child {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .timeline:not([data-single]) .trackAxis > span:last-child {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
   }
 }
 
