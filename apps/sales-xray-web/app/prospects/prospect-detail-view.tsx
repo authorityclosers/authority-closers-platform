@@ -27,6 +27,7 @@ import { ProspectInformation } from "../prospect-information";
 import { PageSkeleton } from "../shell/page-skeleton";
 import informationStyles from "../prospect-information.module.css";
 import { ProspectsAccessState } from "./prospects-access-state";
+import { useLatestCallReport } from "../prospect-latest-call";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Never";
@@ -66,6 +67,11 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const pagination = useRef<AbortController | null>(null);
 
   const [attempt, setAttempt] = useState(0);
+  // Call facts (blocker, commitments, next event) come from the latest Report.
+  const latestCall = useLatestCallReport(
+    calls,
+    authenticated && loadedContext === contextKey,
+  );
 
   useEffect(() => {
     if (!authenticated) return;
@@ -230,6 +236,8 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
               key={contextKey}
               prospect={prospect}
               calls={calls}
+              latest={latestCall.latest}
+              latestState={latestCall.state}
               onSaved={() => setAttempt((a) => a + 1)}
             />
 

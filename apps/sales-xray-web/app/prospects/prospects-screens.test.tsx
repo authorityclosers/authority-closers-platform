@@ -20,6 +20,11 @@ vi.mock("../acquisition-shell", () => ({
   ),
 }));
 
+// The latest call's Report read has its own tests; these screens use the
+// prospect payload only, so no extra network read happens here.
+vi.mock("../prospect-latest-call", () => ({
+  useLatestCallReport: () => ({ state: "none", latest: undefined }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -552,7 +557,9 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("Acme Corp Prospect");
     expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
     expect(host.textContent).toContain("Prospect’s Information");
-    expect(host.textContent).toContain("Ability to investUnknown");
+    expect(
+      host.querySelector('[data-prospect-section="3"]')?.textContent,
+    ).toContain("Willingness to invest");
     expect(host.textContent).toContain("Unknown");
     expect(host.textContent).not.toContain("Revision 2");
     expect(host.textContent).not.toContain("Buyer readiness");

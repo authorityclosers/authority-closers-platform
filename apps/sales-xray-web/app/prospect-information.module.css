@@ -291,3 +291,209 @@
     height: 44px;
   }
 }
+
+/* ---------- Prospect's Information: six short sections (spec 9 Oct §2) ---------- */
+.detected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px dashed var(--lx-hypothesis-edge);
+  border-radius: var(--lx-radius-md);
+  color: var(--lx-ink-3);
+  font-size: 13px;
+}
+.detected button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--lx-teal);
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font: 600 13px/1 var(--lx-font-ui);
+  cursor: pointer;
+}
+.briefBasis {
+  margin: 0 0 12px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.briefSection {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-surface);
+}
+.briefSection[data-brief-lead] {
+  border-color: color-mix(in oklab, var(--lx-teal) 35%, var(--lx-line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lx-teal) 8%, transparent);
+}
+.briefHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.briefHead h2 {
+  margin: 0;
+  font: 600 15px/1.35 var(--lx-font-ui);
+}
+.briefHead p {
+  margin: 1px 0 0;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.briefNumber {
+  display: inline-grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
+  color: var(--lx-teal);
+  font: 700 12px/1 var(--lx-font-ui);
+}
+.briefFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 0 20px;
+  margin: 0;
+}
+.briefFact {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-height: 44px;
+  padding: 9px 0;
+  border-top: 1px solid var(--lx-line-soft);
+}
+.briefFact dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.briefFact dd {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.factChip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.factChip[data-fact="Observed"] {
+  background: color-mix(in oklab, var(--lx-teal) 10%, var(--lx-surface));
+  color: var(--lx-teal);
+}
+.factChip[data-fact="Inferred"] {
+  border: 1px dashed var(--lx-hypothesis-edge);
+  background: transparent;
+}
+.factChip[data-fact="Changed"] {
+  background: color-mix(in oklab, var(--lx-warning) 12%, var(--lx-surface));
+  color: var(--lx-warning);
+}
+.factChip[data-fact="Contradiction"] {
+  background: color-mix(in oklab, var(--lx-danger) 10%, var(--lx-surface));
+  color: var(--lx-danger);
+}
+.briefSource {
+  justify-self: start;
+  color: var(--lx-teal);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.briefNote {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.briefList {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+}
+.briefUnknown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+.briefAdd {
+  font-size: 13px;
+}
+.briefSkeleton {
+  display: block;
+  height: 44px;
+  border-radius: var(--lx-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken),
+    color-mix(in oklab, var(--lx-sunken) 50%, var(--lx-surface)),
+    var(--lx-sunken)
+  );
+}
+.briefMore {
+  margin: 0 0 12px;
+  padding: 0 18px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--lx-surface);
+}
+.briefMore > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.briefHistory {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.briefHistory a {
+  color: var(--lx-teal);
+}
+@media (max-width: 720px) {
+  .briefSection {
+    padding: 14px;
+  }
+}
+@media (pointer: coarse) {
+  .detected button {
+    min-height: 44px;
+  }
+}
+.previewSecond {
+  margin: 32px 0 8px;
+  font-size: 15px;
+}
