@@ -55,3 +55,11 @@ wrapped and the corner card's maximum width excluded padding. The existing
 owned Prospect corner-card style now includes padding in its width, lets the
 message wrap and keeps its action on one line. The browser proof checks actual
 card insets/width and non-wrapping action text at both viewports and themes.
+
+The next attempt reached the fresh profile's deadline, then failed a counter
+that assumed exactly one mount GET. Shared dev may replay an initial effect.
+The final runner records the initial dispatch count after it settles and checks
+that no additional request occurs before/after the deadline failure; the user's
+explicit retry must add exactly one GET. This preserves the no-automatic-retry
+assertion without confusing an initial mount with a retry. Partial attempts
+remain separately recorded, never counted as complete acceptance.

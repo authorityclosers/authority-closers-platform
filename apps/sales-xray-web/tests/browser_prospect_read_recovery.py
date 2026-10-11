@@ -109,11 +109,18 @@ def main():
                             states.get_by_role("button", name="Preview profile", exact=True).click()
                         expect(page.locator('[aria-busy="true"]')).to_be_visible()
                         expect(populated).to_have_count(0)
+                        # Shared dev can replay mount effects. Measure after the
+                        # initial dispatch settles; then no retry may occur
+                        # while waiting or after the deadline's failure.
+                        page.wait_for_timeout(250)
+                        started_reads = state["reads"]
+                        initial_reads = started_reads - before
+                        assert 1 <= initial_reads <= 2, (kind, initial_reads)
                         corner = page.get_by_role("alert").filter(has_text=MESSAGE)
                         expect(corner).to_be_visible(timeout=20_000)
                         expect(page.locator('[aria-busy="true"]')).to_have_count(0)
                         expect(populated).to_have_count(0)
-                        assert state["reads"] == before + 1, "No automatic retry."
+                        assert state["reads"] == started_reads, "No automatic retry."
                         retry = corner.get_by_role("button", name="Try again", exact=True)
                         assert corner.evaluate(
                             "el => { const r = el.getBoundingClientRect(); "
@@ -136,7 +143,7 @@ def main():
                         expect(populated).to_be_visible()
                         expect(corner).to_have_count(0)
                         expect(page.locator('[aria-busy="true"]')).to_have_count(0)
-                        assert state["reads"] == before + 2
+                        assert state["reads"] == started_reads + 1
                         if kind == "profile":
                             assert page.locator("[data-prospect-section]").count() == 6
                             expect(page.locator('[data-prospect-section="1"]')).to_contain_text(
@@ -149,6 +156,7 @@ def main():
                                 "theme": theme,
                                 "page": kind,
                                 "stalled_get_deadline": True,
+                                "initial_dispatched_reads": initial_reads,
                                 "loading_cleared": True,
                                 "explicit_retry_restores_populated_data": True,
                                 "no_automatic_retry": True,
