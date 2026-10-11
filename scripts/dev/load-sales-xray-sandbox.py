@@ -4,7 +4,7 @@
 Dry-run by default. Runtime-injected AC_DATABASE_URL must name the dedicated
 live-dev database (172.27.0.12/ac_platform, formerly ac_dev_live on loopback).
 No provider transport, schema change, login credential or paid job.
-One transaction includes members, calls, preserved source records and audit.
+Full calls are atomic; history uses bounded, individually audited transactions.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import os
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4, uuid5
@@ -56,7 +57,10 @@ from ac_platform.conversation_intelligence.speaker_map_store import normalize_sp
 from ac_platform.conversation_intelligence.submission_label_models import (
     ConversationSubmissionLabelRevision,
 )
-from ac_platform.conversation_intelligence.synthetic_import_contracts import SyntheticCallBundle
+from ac_platform.conversation_intelligence.synthetic_import_contracts import (
+    SyntheticCallBundle,
+    SyntheticRecordInput,
+)
 from ac_platform.conversation_intelligence.synthetic_import_dataset import (
     bundles,
     date,
@@ -623,6 +627,7 @@ async def preserved(
     payload: dict,
     approver: UUID,
     now: datetime,
+    apply: bool = True,
 ) -> bool:
     identity = (TARGET, kind, key, 1)
     digest = content_hash(payload)
@@ -635,6 +640,8 @@ async def preserved(
         ):
             raise ValueError("A preserved synthetic revision changed; supersede it explicitly.")
         return False
+    if not apply:
+        return True
     db.add(
         ConversationSyntheticRecord(
             tenant_id=TARGET,
@@ -653,7 +660,7 @@ async def preserved(
 
 
 async def target(db: AsyncSession, approver: UUID) -> None:
-    tenant = await db.scalar(select(Tenant).where(Tenant.id == TARGET).with_for_update())
+    tenant = await db.scalar(select(Tenant).where(Tenant.id == TARGET).with_for_update(read=True))
     member = await db.get(Membership, (TARGET, approver))
     if (
         tenant is None
@@ -677,14 +684,13 @@ async def load(
     approver: UUID,
     approval: str,
     apply: bool,
-    include_history: bool = False,
 ) -> dict:
     """Caller owns one transaction. Dry-run reads and validates without adding rows."""
-    await target(db, approver)
     await db.execute(
         text("SELECT pg_advisory_xact_lock(:key)"),
         {"key": int.from_bytes(TARGET.bytes[:8], signed=True)},
     )
+    await target(db, approver)
     now = datetime.now(UTC)
     run_id = uuid4()
     reps = representatives(root)
@@ -1033,24 +1039,6 @@ async def load(
         await db.flush()
     if len(source_hashes) != EXPECTED_BUNDLES:
         raise ValueError("The sealed publication must contain all 3,360 full bundles.")
-    if include_history:
-        for row in summaries(root):
-            if apply:
-                created = await preserved(
-                    db,
-                    kind=row.kind,
-                    key=row.key,
-                    business=row.business_id,
-                    at=row.occurred_at,
-                    payload=row.payload,
-                    approver=approver,
-                    now=now,
-                )
-                counts["summaries_created" if created else "summaries_skipped"] += 1
-                if sum(counts[k] for k in ("summaries_created", "summaries_skipped")) % 500 == 0:
-                    await db.flush()
-            else:
-                counts["summaries_validated"] += 1
     if apply:
         await db.flush()
         # Reuse the company's controlled synthetic adapter, including its
@@ -1098,20 +1086,171 @@ async def load(
     return result
 
 
+async def load_history(
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    root: Path,
+    approver: UUID,
+    approval: str,
+    apply: bool,
+    batch_size: int = 2000,
+) -> dict:
+    """Commit each history batch with its audit; identical reruns resume safely."""
+    if not 1 <= batch_size <= 2000:
+        raise ValueError("Use a history batch size between 1 and 2,000.")
+    run_id, now = uuid4(), datetime.now(UTC)
+    scope = {
+        "run_id": str(run_id),
+        "tenant_id": str(TARGET),
+        "environment": "development",
+        "issue": "AUT-1676",
+        "approval_reference": approval,
+        "approver_person_id": str(approver),
+        "applied": apply,
+        "batch_size": batch_size,
+        "provider_calls": 0,
+        "charged_seconds": 0,
+    }
+    counts: Counter = Counter(
+        summaries_created=0,
+        summaries_skipped=0,
+        summaries_validated=0,
+        batches=0,
+        insight_rows_refreshed=0,
+    )
+    summary_count = (
+        select(func.count())
+        .select_from(ConversationSyntheticRecord)
+        .where(
+            ConversationSyntheticRecord.tenant_id == TARGET,
+            ConversationSyntheticRecord.kind == "call_summary",
+        )
+    )
+
+    async def checked(db: AsyncSession) -> None:
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": int.from_bytes(TARGET.bytes[:8], signed=True)},
+        )
+        await target(db, approver)
+        if apply and await db.get(ConversationSandboxOrganisation, TARGET) is None:
+            raise ValueError("Load the approved sandbox full calls before its history.")
+
+    async def audit(db: AsyncSession, payload: dict) -> None:
+        await AuditRepository(db).append(
+            tenant_id=TARGET,
+            actor_person_id=approver,
+            actor_type="operator",
+            action="conversation.synthetic_dev_loaded",
+            resource_type="conversation_synthetic_import",
+            resource_id=run_id,
+            payload={**scope, **payload},
+            reason=approval,
+            now=datetime.now(UTC),
+        )
+
+    async with sessions() as db, db.begin():
+        await checked(db)
+        before = await db.scalar(summary_count)
+    stream = iter(summaries(root))
+    source = hashlib.sha256()
+    rows: list[SyntheticRecordInput]
+    while rows := list(islice(stream, batch_size)):
+        digests = [content_hash(row.model_dump(mode="json")) for row in rows]
+        created = skipped = 0
+        async with sessions() as db, db.begin():
+            await checked(db)
+            for row in rows:
+                new = await preserved(
+                    db,
+                    kind=row.kind,
+                    key=row.key,
+                    business=row.business_id,
+                    at=row.occurred_at,
+                    payload=row.payload,
+                    approver=approver,
+                    now=now,
+                    apply=apply,
+                )
+                created += int(new)
+                skipped += int(not new)
+            if apply:
+                await db.flush()
+                await audit(
+                    db,
+                    {
+                        "mode": "history_batch",
+                        "batch": counts["batches"] + 1,
+                        "summaries_created": created,
+                        "summaries_skipped": skipped,
+                        "summaries_validated": len(rows),
+                        "source_sha256": content_hash(digests),
+                    },
+                )
+        # These counts describe completed transactions, including after interruption.
+        counts.update(
+            summaries_created=created,
+            summaries_skipped=skipped,
+            summaries_validated=len(rows),
+            batches=1,
+        )
+        for digest in digests:
+            source.update(digest.encode("ascii"))
+    if apply:
+        # Projection transactions are also bounded; no approver FK is held across
+        # the entire multi-year stream or the entire Insights refresh.
+        for _ in range(64):
+            async with sessions() as db, db.begin():
+                await checked(db)
+                refreshed = await OrganisationInsights(db, TARGET).refresh(now=now)
+                if refreshed["pending"] and not refreshed["projected"]:
+                    raise ValueError("The normal Insights projection cannot advance.")
+                if refreshed["projected"]:
+                    await audit(db, {"mode": "history_projection", **refreshed})
+            counts["insight_rows_refreshed"] += refreshed["projected"]
+            if not refreshed["pending"]:
+                break
+        else:
+            raise ValueError("The normal Insights refresh exceeded its bounded load budget.")
+    async with sessions() as db, db.begin():
+        await checked(db)
+        result = {
+            **scope,
+            "mode": "history_batched",
+            "before_summaries": before,
+            "after_summaries": await db.scalar(summary_count),
+            "source_sha256": source.hexdigest(),
+            **counts,
+        }
+        if apply:
+            await audit(db, result)
+    return result
+
+
 async def execute(args: argparse.Namespace) -> dict:
     url = dev_database_url(os.environ.get("AC_DATABASE_URL", ""))
     model_metadata()
     engine = create_async_engine(url, echo=False, hide_parameters=True)
     try:
-        async with async_sessionmaker(engine, expire_on_commit=False)() as db, db.begin():
-            return await load(
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as db, db.begin():
+            result = await load(
                 db,
                 root=args.dataset.resolve(),
                 approver=args.approver_person_id,
                 approval=args.approval_reference,
                 apply=args.apply,
-                include_history=args.include_history,
             )
+        if args.include_history:
+            result["history"] = await load_history(
+                sessions,
+                root=args.dataset.resolve(),
+                approver=args.approver_person_id,
+                approval=args.approval_reference,
+                apply=args.apply,
+                batch_size=args.history_batch_size,
+            )
+        return result
     finally:
         await engine.dispose()
 
@@ -1122,14 +1261,21 @@ def main() -> None:
     parser.add_argument("--approver-person-id", type=UUID, required=True)
     parser.add_argument("--approval-reference", required=True)
     parser.add_argument("--include-history", action="store_true")
+    parser.add_argument("--history-batch-size", type=int, default=2000)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     if not 1 <= len(args.approval_reference) <= 160:
         parser.error("Use a bounded recorded owner approval reference.")
+    if not 1 <= args.history_batch_size <= 2000:
+        parser.error("Use a history batch size between 1 and 2,000.")
     try:
         result = asyncio.run(execute(args))
     except Exception:
-        parser.exit(2, "Synthetic dev load failed; connection details and content withheld.\n")
+        parser.exit(
+            2,
+            "Synthetic dev load failed; connection details and content withheld. "
+            "History batches may already be committed and audited; resume with identical source.\n",
+        )
     print(json.dumps(result, sort_keys=True))
 
 

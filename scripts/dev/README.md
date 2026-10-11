@@ -73,8 +73,22 @@ calls and refuse changes to preserved content or existing membership state.
 Once the full calls are loaded, repeat dry-run and apply with `--include-history`
 to preserve the 177,615 dated call summaries for history readers. These summaries
 do not acquire invented transcripts or reports. The loader calls the normal
-company Insights refresh adapter so charts can read them immediately. Keep the identifier/count-only
-JSON receipts in the strike notes; full source files stay outside Git.
+company Insights refresh adapter so charts can read them immediately. History
+is reported under the receipt's `history` field and commits in batches of at most
+2,000 rows (`--history-batch-size`, default 2,000). Each batch checks the current
+approving owner, preserves the exact source and appends its audit event in that
+same transaction. Insights refreshes also use separate bounded transactions.
+If interrupted, committed batches remain; rerun with identical source to skip
+those rows and resume. A changed preserved revision is refused, including on
+dry-run. Keep the identifier/count-only JSON receipts in the strike notes; full
+source files stay outside Git.
+
+The tenant is fenced with `FOR SHARE`, compatible with ordinary API tenant
+reads. The advisory transaction lock serialises loader runs before taking that
+fence. Batching releases the history's approver foreign-key locks between
+transactions. The full-call import still uses one atomic transaction, and can
+delay operations that need an exclusive approver-person lock while it runs;
+run that initial apply when the approver is not using the app.
 
 Verify with a normal dev owner session: select AC Sandbox, open Calls and a
 populated report, then organisation members and team Coaching. The normal API
@@ -83,7 +97,10 @@ Hosted acceptance is complete only after these reads succeed on dev.
 
 The focused PostgreSQL acceptance test exercises normal library/report/progress
 reads, two concurrent imports, exact history replay, changed-content refusal,
-atomic rollback, the audit chain and zero-charge accounting. It also reads the
+atomic rollback, the audit chain and zero-charge accounting. The history checks
+exercise concurrent tenant reads, approver lock release, audit-failure rollback,
+owner rechecks, interruption/resume and changed-source refusal on dry-run.
+It also reads the
 preserved authored Team, representative and call Coaching, checks the exact
 mission and transcript quote, refuses another viewer's private coaching and
 keeps text-only moments nonplayable. Calls → Report → Coaching uses the same
