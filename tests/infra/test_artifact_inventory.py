@@ -212,4 +212,5 @@ def test_only_diagnostic_retention_changes() -> None:
     }
     assert len(uploads) == 4
     for name, days in uploads.items():
-        assert days == (1 if name.startswith("ac-application-") else 2)
+        # The reduction belongs to the ordered follow-up after #442 and #437.
+        assert days == (1 if name.startswith("ac-application-") else 14)

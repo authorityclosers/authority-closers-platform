@@ -37,7 +37,7 @@ Validation on the AC server:
 
 - `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **118 passed in 21.79 s**.
 - Focused Ruff/format checks, incremental mypy on both readers (`--follow-imports=silent`) and `git diff --check`: passed. The dynamic shared-reader return has an explicit type annotation; runtime inventory behavior is unchanged.
-- Retention deferral: 12 focused workflow/retention contracts passed in 2.38 s; Prettier passed; application.yml is byte-for-byte identical to fetched main. The PR has no shared-file diff.
+- Retention deferral: the new inventory policy test retains fourteen diagnostic days until the ordered follow-up. All 29 inventory/workflow/retention cases passed in 2.07 s, Ruff and Prettier passed, and application.yml is byte-for-byte identical to fetched main. No test was removed; the PR has no shared-file diff.
 - Read-only live admission inventory: **attempt 1/3**, **92 pages**, **9,154
   unique artifacts**, **2,244,516,417 bytes**. No artifact deletion was invoked.
 - Open PR file inventory: no overlap with the six implementation/test files.
