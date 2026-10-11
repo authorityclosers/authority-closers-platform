@@ -95,5 +95,12 @@ describe("report copy", () => {
     expect(viewAllMoments(8)).toBe("View all 8 moments");
     expect(copy.prospectInsights(1)).toBe("1 prospect insight captured");
     expect(copy.changedAt("11:18")).toBe("The call changed here · 11:18");
+    expect(copy.followUpDate("2026-10-16")).toBe("Follow-up: Friday, 16 Oct");
+    expect(copy.followUpDate("soon")).toBe("Follow-up: soon");
+  });
+
+  it("names the outcome buttons exactly like the status they set", () => {
+    for (const status of Object.values(copy.OUTCOME_CHOICES))
+      expect(copy.OUTCOME_STATUSES).toContain(status);
   });
 });

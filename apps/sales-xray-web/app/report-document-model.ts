@@ -20,6 +20,7 @@ import {
   partHeading,
   pillarHeading,
   prospectAgreed,
+  type OutcomeStatus,
   type PartCopy,
   type PillarId,
 } from "./report-copy";
@@ -147,6 +148,8 @@ export type DocPeople = {
   /** A confirmed or default name for a transcript speaker id. */
   speakerName?: (speakerId: string) => string | null | undefined;
   roles?: { seller?: string | null; prospect?: string | null };
+  /** The outcome a person recorded for this call (Won / Lost only come from here). */
+  recorded?: { status: OutcomeStatus; note?: string | null } | null;
 };
 
 const OUTCOME_TONE: Record<string, DocTone> = {
@@ -262,6 +265,7 @@ export function reportDocumentModel(
 
   const model: StoryModel = reportStoryModel(data.report, transcript, {
     roles: people.roles,
+    recorded: people.recorded,
   });
 
   const prospectName =

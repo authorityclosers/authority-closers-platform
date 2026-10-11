@@ -158,6 +158,56 @@ export const BIG_PICTURE = {
 /** "Follow-up: Friday · 4:00 PM" */
 export const followUpOn = (when: string) => `Follow-up: ${when}`;
 
+const WEEKDAYS = "Sunday Monday Tuesday Wednesday Thursday Friday Saturday";
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec";
+
+/** A follow-up date someone picked ("2026-10-16") → "Follow-up: Friday, 16 Oct". */
+export const followUpDate = (isoDate: string) => {
+  const day = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(day.getTime())) return followUpOn(isoDate);
+  const weekday = WEEKDAYS.split(" ")[day.getUTCDay()];
+  const month = MONTHS.split(" ")[day.getUTCMonth()];
+  return followUpOn(`${weekday}, ${day.getUTCDate()} ${month}`);
+};
+
+/**
+ * Recording the outcome yourself (1.1). The buttons carry the same names as
+ * the status above them, so a tap and what the Report then says always match.
+ */
+export const OUTCOME_CHOICES: Record<
+  "won" | "lost" | "follow_up" | "no_decision",
+  OutcomeStatus
+> = {
+  won: "Won",
+  lost: "Lost",
+  follow_up: "Follow-up Set",
+  no_decision: "Decision Pending",
+};
+
+export const OUTCOME_RECORD = {
+  title: "Set the outcome",
+  notSet: "Not set yet",
+  unavailable: "Couldn't load",
+  /** A save the server didn't confirm: it may or may not have landed. */
+  notConfirmed: "Not confirmed",
+  dealValue: "Deal value",
+  lostReason: "Why was it lost?",
+  followUpDate: "Follow-up date",
+  amount: "Amount",
+  currency: "Currency",
+  currencyExample: "INR",
+  save: "Save",
+  saving: "Saving…",
+  checking: "Checking…",
+  reload: "Reload",
+  needReason: "Add why it was lost.",
+  needDate: "Pick a follow-up date.",
+  checkValues: "Check the date, amount and currency.",
+  saveNotConfirmed: "We couldn't confirm your save. Reload, then try again.",
+  stillUnavailable: "Still couldn't load the outcome. Reload the page.",
+  readFailed: "Couldn't load the call outcome.",
+};
+
 /* ── 2. How the Call Played Out ──────────────────────────────────────── */
 
 export const CALL_FLOW = {

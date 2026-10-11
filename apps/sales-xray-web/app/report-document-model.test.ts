@@ -94,6 +94,37 @@ describe("report document model", () => {
     expect(textOf(doc)).toContain("Clear because Friday · 4:00 PM is agreed.");
   });
 
+  it("shows the outcome a person recorded, in 1.1 and 6.1, with their reason", () => {
+    const doc = reportDocumentModel(
+      {
+        report: amitReport as SalesReport,
+        transcript: amitTranscript as Transcript,
+      },
+      {
+        roles: AMIT_SPEAKERS,
+        speakerName: (id) => NAMES[id],
+        recorded: { status: "Lost", note: "Went with a cheaper course." },
+      },
+    );
+    const [status, reason] = doc.sections[0].parts[0].items;
+    expect(status).toEqual({
+      type: "status",
+      status: "Lost",
+      origin: "Set by your team",
+      tone: expect.any(String),
+    });
+    expect(reason).toMatchObject({
+      type: "text",
+      text: "Went with a cheaper course.",
+    });
+    const current = doc.sections[5].parts[0];
+    expect(current.heading).toBe("6.1 Current Status");
+    expect(current.items[0]).toMatchObject({ type: "status", status: "Lost" });
+    // Without a person's record the call's own reading stays.
+    const [heard] = amitDoc().sections[0].parts[0].items;
+    expect(heard).toMatchObject({ origin: "As heard on the call" });
+  });
+
   it("puts the call's own words, names and play times in the page", () => {
     const doc = amitDoc();
     const [outcome] = doc.sections[0].parts[0].items;
