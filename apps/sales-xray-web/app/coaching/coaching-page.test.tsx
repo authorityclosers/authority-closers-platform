@@ -367,6 +367,29 @@ describe("Coaching story", () => {
       ),
     ).not.toContain("more suggestion");
   });
+  it("marks a call whose focus also came up on other calls, and only that call", () => {
+    const row = (id: string, recurring: boolean | null) => ({
+      submission_id: id,
+      call_label: `Call ${id.slice(-1)}`,
+      created_at: "2026-10-01T10:00:00Z",
+      state: "ready" as const,
+      focus_label: "Explore the consequence",
+      recurring,
+    });
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          calls: [
+            row("00000000-0000-0000-0000-000000000091", true),
+            row("00000000-0000-0000-0000-000000000092", false),
+            row("00000000-0000-0000-0000-000000000093", null),
+          ],
+        }}
+      />,
+    );
+    expect(html.match(/Also on other calls/g)).toHaveLength(1);
+  });
   it("opens with the three newest calls on one column until asked", async () => {
     const calls = Array.from({ length: 5 }, (_, index) => ({
       submission_id: `00000000-0000-0000-0000-00000000009${index}`,

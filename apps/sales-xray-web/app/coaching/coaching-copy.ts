@@ -328,6 +328,7 @@ export const CALLS = {
   analysing: "Analysing…",
   unavailable: "No usable report",
   fallback: "One practice for your next call",
+  recurring: "Also on other calls",
   showAll: (count: number) => `Show all ${count} calls`,
 } as const;
 

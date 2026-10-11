@@ -132,6 +132,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
                   : call.state === "unavailable"
                     ? CALLS.unavailable
                     : (call.focus_label ?? CALLS.fallback),
+                call.recurring ? CALLS.recurring : null,
               ]}
               end={
                 call.state === "ready" ? (
