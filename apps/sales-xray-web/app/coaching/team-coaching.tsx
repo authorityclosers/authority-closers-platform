@@ -5,6 +5,19 @@ import { Badge, Empty, Kpi, List, Meter, Panel, Row, Tiles } from "../ui/kit";
 import type { TeamCoaching } from "./team-contract";
 import styles from "./coaching.module.css";
 
+// The owner's plain words for each approved skill area.
+const AREA: Record<string, string> = {
+  human_connection_trust: "Rapport",
+  discovery_deep_understanding: "Discovery",
+  qualification: "Qualification",
+  problem_impact_desire: "Pain and impact",
+  solution_relevance_presentation: "Pitch",
+  certainty_objection_intelligence: "Objections",
+  closing_decision_management: "Closing",
+  communication_tonality: "Delivery",
+  report_next_step: "Other",
+};
+
 const share = (part: number, whole: number) =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
@@ -54,6 +67,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                   key={row.skill_id}
                   title={row.label}
                   meta={[
+                    AREA[row.skill_id] ?? "Other",
                     `${row.suggestion_calls} of ${analysed} call${analysed === 1 ? "" : "s"}`,
                   ]}
                   end={
