@@ -19,9 +19,12 @@ pillars. Font audit now includes those fixture pillars and stores a positive
 rendered-text count, preventing an absent wrapper from yielding an empty audit.
 Prior Coaching fixture receipts retain their interaction/geometry/visual evidence;
 their zero font-error counters did not establish automated fixture font coverage.
-New eight-case Coaching+quote acceptance is pending no earlier23:29:54UTC.
+New twelve-case Coaching+quote+print acceptance is pending no earlier23:29:54UTC.
 
 Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-document-quote-readback/receipt.json`.
+A new independent dev-only native Document print journey is prepared for that
+same wave: six headings, readable call facts, hidden shell controls without
+motion, A4 captures and valid PDF headers. Runtime acceptance is pending.
 G's d8358066 print receipt reports4/4; its retained A4 first-page capture was
 personally inspected, facts clear with no empty shell shapes. This remains
 attributed builder print evidence, separate from QA's own screen/Word checks.

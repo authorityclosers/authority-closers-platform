@@ -53,11 +53,14 @@ fictional finished call owned by that account. They save through the real contro
 fully reload each choice, check Report/Document/Word and read the saved API value
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
-path they skip. The original sixteen plus four format, four persistence and four quote cases
-collect 28 cases. The original Report journey retains its full thirteen steps.
+path they skip. The original sixteen plus four format, four persistence and four quote and four print cases
+collect 32 cases. The original Report journey retains its full thirteen steps.
 The additional dev-only long-quote journey verifies the exact fictional
 1,232-character source once, its original time span, one expand/collapse click,
 32/44 px reachable disclosure targets and no eager media in both widths/themes.
+The separate dev print journey checks the native full-shell Document, six headings,
+call facts and motionless hidden shell controls, saves A4 captures/PDFs and keeps
+compact print typography outside the screen font/control audit.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
@@ -84,7 +87,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 The coordinator-approved local deployed transport is opt-in:

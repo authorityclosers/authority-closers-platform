@@ -1128,3 +1128,60 @@ def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]
             }
             assert page.locator("audio,video").count() == 0
             assert not media_requests, "Reading the quote started a media request"
+
+
+def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> None:
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Independent print repair readback is dev fixture coverage only")
+    with _journey(browser, viewport, "document-print") as journey:
+        page = journey.page
+        journey.open("/review-fixture/report/story")
+        expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
+        _switch_report_view(page, "Document view")
+        preview = _document_preview(page)
+        expect(preview.locator("section[data-document-section]")).to_have_count(6)
+        page.locator("[data-document-export]").evaluate("el => el.scrollIntoView({block: 'start'})")
+        journey.snapshot("screen")
+        journey.document_controls()
+        page.emulate_media(media="print")
+        page.set_viewport_size({"width": 794, "height": 1123})
+        preview.evaluate("el => el.scrollIntoView({block: 'start'})")
+        metrics = page.evaluate(
+            """() => {
+              const search = document.querySelector('input[aria-label="Search calls"]')
+                ?.closest('form');
+              const account = document.querySelector('button[aria-label="Open AC account menu"]');
+              const controls = [search, account].filter(Boolean).map(el => {
+                const style = getComputedStyle(el);
+                return {visibility: style.visibility, transition: style.transitionDuration,
+                  animation: style.animationName};
+              });
+              const sheet = document.querySelector('[data-document-export] article');
+              return {controls, headings: sheet.querySelectorAll('h3').length,
+                overflow: Math.max(document.documentElement.scrollWidth - innerWidth,
+                  sheet.scrollWidth - sheet.clientWidth)};
+            }"""
+        )
+        assert len(metrics["controls"]) == 2, "Print shell controls were not checked"
+        assert all(
+            control["visibility"] == "hidden"
+            and all(
+                float(value.strip().removesuffix("s")) == 0
+                for value in control["transition"].split(",")
+            )
+            and control["animation"] == "none"
+            for control in metrics["controls"]
+        ), "Hidden print shell controls can still paint during motion"
+        assert metrics["headings"] == 6
+        assert metrics["overflow"] <= 1
+        expect(preview.locator("dl")).to_contain_text("25:08")
+        expect(preview.locator("dl")).to_contain_text("Arjun")
+        expect(preview.locator("dl")).to_contain_text("Amit Sharma")
+        shot = journey.directory / f"document-print-a4-{journey.width}-{journey.theme}.png"
+        page.screenshot(path=str(shot))
+        pdf = journey.directory / f"document-print-{journey.width}-{journey.theme}.pdf"
+        page.pdf(path=str(pdf), prefer_css_page_size=True, print_background=True)
+        assert pdf.read_bytes().startswith(b"%PDF-")
+        journey.observations.append(
+            {"step": "print", "screenshot": str(shot), "pdf": str(pdf), "print_metrics": metrics}
+        )
