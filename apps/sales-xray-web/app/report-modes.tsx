@@ -1174,6 +1174,7 @@ export function ReportModes({
             key={value}
             type="button"
             title={hint}
+            aria-label={hint}
             aria-pressed={view === value}
             onClick={() => changeView(value)}
           >
