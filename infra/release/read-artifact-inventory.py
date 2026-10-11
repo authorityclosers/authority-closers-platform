@@ -37,7 +37,9 @@ class InventorySnapshot:
     """Keep the original boundary and observed identities across retries."""
 
     def __init__(self, started_at: datetime | None = None) -> None:
-        self.started_at = started_at or datetime.now(UTC)
+        # GitHub timestamps have second precision. Exclude the boundary second
+        # so an in-flight upload cannot be mistaken for an older artifact.
+        self.started_at = (started_at or datetime.now(UTC)).replace(microsecond=0)
         self.expected_count: int | None = None
         self.known: dict[int, dict[str, Any]] = {}
 
@@ -91,7 +93,7 @@ def validate_inventory(
             ):
                 raise ValueError("invalid artifact schema")
             identity = artifact["id"]
-            in_snapshot = artifact_created_at(artifact) <= snapshot.started_at
+            in_snapshot = artifact_created_at(artifact) < snapshot.started_at
             previous = snapshot.known.get(identity) or artifacts.get(identity)
             if previous and (in_snapshot or identity in snapshot.known) and any(
                 previous[key] != artifact[key] for key in ("size_in_bytes", "name", "created_at")

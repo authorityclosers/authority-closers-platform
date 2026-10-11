@@ -92,6 +92,20 @@ def test_duplicate_recent_ids_cannot_hide_a_missing_older_artifact() -> None:
         READER["validate_inventory"](json.dumps(pages), snapshot=snapshot())
 
 
+def test_second_precision_does_not_misclassify_an_inflight_upload_as_older() -> None:
+    older = [artifact(identity) for identity in range(100, 0, -1)]
+    recent = {**artifact(101, size=500), "created_at": START.isoformat()}
+    state = READER["InventorySnapshot"](START.replace(microsecond=500000))
+    pages = [
+        {"total_count": 101, "artifacts": [recent, *older[:99]]},
+        {"total_count": 102, "artifacts": [{**recent, "size_in_bytes": 600}, older[-1]]},
+    ]
+    items, _ = READER["validate_inventory"](json.dumps(pages), snapshot=state)
+    assert state.expected_count == 100
+    assert len(state.known) == 100
+    assert sum(item["size_in_bytes"] for item in items) == 1600
+
+
 def test_duplicate_older_size_change_fails_closed() -> None:
     pages = changing_pages()
     pages[1]["artifacts"][0] = {**pages[1]["artifacts"][0], "size_in_bytes": 1}

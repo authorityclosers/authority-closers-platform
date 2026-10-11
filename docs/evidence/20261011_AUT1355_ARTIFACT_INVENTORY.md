@@ -16,6 +16,10 @@ identity/size changes fail immediately. New uploads do not invalidate the older
 snapshot, and any observed new bytes still count conservatively (the largest
 observed size for a repeated new ID).
 
+GitHub timestamps have second precision. The proof excludes the start second
+from its older set, while charging observed bytes, so an upload started during
+that second can finish without being misclassified as an older size change.
+
 The GitHub API exposes page, page size and name filters, with no snapshot-time
 filter. Repository admission needs all artifact sizes, so filtering by release
 artifact name would undercount. The snapshot proof uses the observed newest-first
@@ -31,7 +35,7 @@ diagnostic artifacts or relax the ceiling.
 
 Validation on the AC server:
 
-- `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **117 passed in 19.79 s**.
+- `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **118 passed in 38.40 s**.
 - Focused Ruff checks and `git diff --check`: passed.
 - Read-only live admission inventory: **attempt 1/3**, **92 pages**, **9,154
   unique artifacts**, **2,244,516,417 bytes**. No artifact deletion was invoked.
