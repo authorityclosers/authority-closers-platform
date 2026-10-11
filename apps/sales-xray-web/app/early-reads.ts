@@ -97,7 +97,27 @@ export function earlyReadsFor(pathname: string): readonly string[] {
   return EARLY_READS[route] ?? [];
 }
 
-type Early = { at: number; p: Promise<Response | null> };
+/**
+ * An early answer, read at once (an unread body keeps the request open in
+ * the browser, so a page that never uses it would never go network-idle).
+ */
+type Answer = {
+  status: number;
+  statusText: string;
+  headers: [string, string][];
+  body: string;
+};
+type Early = { at: number; p: Promise<Answer | null> };
+
+/** A fresh Response for each reader, from the answer kept in memory. */
+function responseOf(answer: Answer): Response {
+  const empty = answer.status === 204 || answer.status === 304;
+  return new Response(empty ? null : answer.body, {
+    status: answer.status,
+    statusText: answer.statusText,
+    headers: answer.headers,
+  });
+}
 type EarlyStore = Record<string, Early>;
 type EarlyWindow = Window & { __sxEarly?: EarlyStore };
 
@@ -112,7 +132,7 @@ export function earlyReadsScript(): string {
   const callReadsJson = JSON.stringify(CALL_READS);
   const acquisition = JSON.stringify(ACQUISITION);
   const key = JSON.stringify(EARLY_CONVERSATION_KEY);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
@@ -137,14 +157,7 @@ export function takeEarlyRead(
     return null;
   }
   if (init.signal?.aborted) return null;
-  return early.p.then((response) => {
-    // A copy each time: the original stays unread for a second reader.
-    try {
-      return response && !response.bodyUsed ? response.clone() : null;
-    } catch {
-      return null;
-    }
-  });
+  return early.p.then((answer) => (answer ? responseOf(answer) : null));
 }
 
 /** The reader got its answer (not cancelled): later reads ask the server. */

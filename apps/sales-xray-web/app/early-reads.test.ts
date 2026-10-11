@@ -84,6 +84,29 @@ it("starts the reads from the inline script with the browser's own session", asy
   expect(network).toHaveBeenCalledTimes(6);
 });
 
+it("reads every early answer at once, so no request stays open", async () => {
+  const read = vi.fn(async () => "{}");
+  network.mockImplementation(async () => ({
+    status: 200,
+    statusText: "OK",
+    headers: new Headers({ "content-type": "application/json" }),
+    text: read,
+  }));
+  boot("/dashboard");
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(6));
+});
+
+it("keeps the server's headers on the answer it hands out", async () => {
+  network.mockImplementation(async () =>
+    Response.json({ ok: true }, { headers: { "x-request-id": "req-1" } }),
+  );
+  boot("/analysis/calls");
+  const response = await earlyFetch(`${A}/submissions?include_owners=true`);
+  expect(response.headers.get("x-request-id")).toBe("req-1");
+  expect(response.headers.get("content-type")).toContain("application/json");
+  expect(await response.json()).toEqual({ ok: true });
+});
+
 it("starts only the session reads until this tab has seen Sales Xray on", () => {
   boot("/dashboard", false);
   expect(network.mock.calls.map(([url]) => url)).toEqual([
@@ -120,7 +143,12 @@ it("gives every reader its own copy and keeps the server's status", async () => 
   (window as EarlyWindow).__sxEarly = {
     [`${A}/forbidden`]: {
       at: Date.now(),
-      p: Promise.resolve(Response.json({}, { status: 403 })),
+      p: Promise.resolve({
+        status: 403,
+        statusText: "Forbidden",
+        headers: [["content-type", "application/json"]],
+        body: "{}",
+      }),
     },
   };
   const both = await Promise.all([
