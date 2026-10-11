@@ -40,6 +40,7 @@ export type ReviewAction =
   | { kind: "tab"; tab: ReviewTab }
   | { kind: "call"; step: 1 | -1 }
   | { kind: "help" }
+  | { kind: "link" }
   | { kind: "close" };
 
 /** The review screen's keys. Single keys only act outside text fields (the caller checks). */
@@ -84,6 +85,8 @@ export function keyAction(event: {
       return { kind: "call", step: 1 };
     case "p":
       return { kind: "call", step: -1 };
+    case "y":
+      return { kind: "link" };
     case "?":
       return { kind: "help" };
     case "Escape":
@@ -91,6 +94,13 @@ export function keyAction(event: {
     default:
       return null;
   }
+}
+
+/** A shared link's moment (?at=, in ms): a whole number within a day, else none. */
+export function startAt(value: string | undefined): number | null {
+  if (!value || !/^\d{1,8}$/.test(value)) return null;
+  const ms = Number(value);
+  return ms < 86_400_000 ? ms : null;
 }
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
@@ -107,6 +117,7 @@ export const SHORTCUTS: readonly [string, string][] = [
   ["R · S · C · M · U", "Report · Six pillars · Coaching · Metrics · Runs"],
   ["T", "Transcript (phones)"],
   ["N / P", "Next or previous call in the queue"],
+  ["Y", "Copy a link to this moment of the call"],
   ["?", "Show or hide these keys"],
 ];
 

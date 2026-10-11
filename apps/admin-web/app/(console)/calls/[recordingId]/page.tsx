@@ -11,6 +11,7 @@ import {
 } from "@/app/calls/call-data";
 import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
+import { startAt } from "@/app/calls/review-logic";
 import { ReviewScreen } from "@/app/calls/review-screen";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
@@ -178,6 +179,7 @@ export default async function CallReviewPage({
       compareBundle={compared?.ok ? compared.data : null}
       back={back}
       safety={access.platform.includes("platform_content_safety_manage")}
+      startMs={startAt(one(query.at))}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
         next: at >= 0 ? (ids[at + 1] ?? null) : null,

@@ -11,6 +11,7 @@ import {
   when,
 } from "./call-data";
 import { filterQuery, queueApiPath, queueFilters } from "./queue-query";
+import { startAt } from "./review-logic";
 import { reportPillars, REPORT_PILLARS } from "./report-pillars";
 import {
   compareReports,
@@ -394,5 +395,17 @@ describe("queue address", () => {
       }).facets.prompts,
     ).toEqual([{ value: "coaching-v5", label: "coaching-v5", count: 3 }]);
     expect(normalizeQueue({}).facets.prompts).toEqual([]);
+  });
+});
+
+describe("shared moment", () => {
+  it("accepts a whole number of ms within a day, and nothing else", () => {
+    expect(startAt("83000")).toBe(83_000);
+    expect(startAt("0")).toBe(0);
+    expect(startAt(undefined)).toBeNull();
+    expect(startAt("-5")).toBeNull();
+    expect(startAt("1.5")).toBeNull();
+    expect(startAt("99999999")).toBeNull();
+    expect(startAt("12abc")).toBeNull();
   });
 });

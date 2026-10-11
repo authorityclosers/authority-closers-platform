@@ -105,10 +105,11 @@ afterEach(async () => {
   host.remove();
 });
 
-async function render(shown = call) {
+async function render(shown = call, startMs: number | null = null) {
   await act(async () =>
     root.render(
       <ReviewScreen
+        startMs={startMs}
         call={shown}
         bundle={bundle}
         compare={null}
@@ -259,4 +260,34 @@ it("points to a failed step and offers the admin retry only where it is safe", a
 it("shows no failed-step chip when nothing failed", async () => {
   await render();
   expect(host.textContent).not.toContain("failed step");
+});
+
+it("opens a shared link at its moment, paused, with that line marked", async () => {
+  await render(call, 4500);
+  expect(
+    host.querySelector('[data-segment="s2"]')?.hasAttribute("data-focused"),
+  ).toBe(true);
+  expect(host.textContent).toContain("0:04");
+  expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+});
+
+it("copies a link to this moment with Y, without the personal queue filters", async () => {
+  const writeText = vi.fn<(text: string) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+  await render(call, 4500);
+  await key("y");
+  expect(writeText).toHaveBeenCalledTimes(1);
+  const url = new URL(writeText.mock.calls[0]![0]);
+  expect(url.pathname).toBe("/calls/rec-1");
+  expect(url.searchParams.get("at")).toBe("4500");
+  expect(url.searchParams.get("run")).toBe("run-1");
+  expect(url.searchParams.has("back")).toBe(false);
+  expect(host.querySelector('[role="status"]')?.textContent).toBe(
+    "Link to 0:04 copied",
+  );
 });
