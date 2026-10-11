@@ -1,6 +1,30 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Current dev matrix: **15 PASS / 1 FAIL**, 19:45:10–19:49:04 UTC,
+Latest bounded dev coverage: **PASS across two runs**. Report, Document, Word
+and outcome formats pass twelve cases at `2be67628` → `b24a23ec`
+(19:45:10–19:49:04 UTC). The newer Coaching repeat passes all four screen/theme
+pairs at `82e7a86d` → `a38bda24` (20:00:11–20:00:39 UTC), nineteen observations
+per pair. This includes the completed `3b12d1d7` progress correction and all six
+fictional-rep pillars, their short factual progress summary and readable legend.
+
+The original desktop/dark selection failure did not reproduce. Every pair's
+diagnostic records the single click landing on the personal control, followed
+by My coaching pressed, This call unpressed and `view=me`. There were no retries,
+forced clicks or changed interaction. Cause of the earlier failure remains
+unconfirmed; its receipt stays below. Latest JUnit: 4 passed, no errors/skips;
+refresh/runtime/server/font/overflow/outcome API request counts all zero.
+Both browser launchers exited; latest exit 0. Inspected desktop/dark personal
+focus/pattern/rep progress and phone/light personal progress: readable, the
+"2 of 5" after-mission count excludes the call without a skill opportunity.
+
+Latest receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-coaching-desktop-switch-repeat/receipt.json`.
+Source/dirty boundaries remain recorded. This is mutable shared-dev fixture
+acceptance across separate runs, not one immutable sixteen-case run or canonical
+reload evidence. Shared-dev persistence, compiled canonical CI/Root receipts
+and authenticated staging smoke remain pending under the operator hold.
+Next browser wave no earlier than 20:15:12 UTC, only for relevant completed work.
+
+Superseded full dev matrix: **15 PASS / 1 FAIL**, 19:45:10–19:49:04 UTC,
 recorded source `2be67628` → `b24a23ec`. Report, independent Document, Word and
 all four outcome formats pass every width/theme pair. Coaching passes three
 pairs with nineteen observations each, including all six fictional-rep pillars
@@ -14,7 +38,9 @@ but This call remains selected. Inspected failure screenshot confirms that pane.
 Failure at `test_coaching_pages`, line 827; navigation 3, refresh 0, runtime,
 server, font/overflow errors and outcome API requests all zero. Cause remains
 unconfirmed; exact receipt/screenshot handed to D's INBOX. The next bounded
-desktop/dark repeat is no earlier than 20:00:11 UTC. New fixture-only diagnostic
+Coaching repeat is no earlier than 20:00:11 UTC. It now covers all four pairs
+after the new completed `3b12d1d7` progress-denominator correction.
+New fixture-only diagnostic
 records the actual fixed control clicked, coordinates and selected states;
 it preserves the single click and original assertions without a retry.
 
