@@ -26,6 +26,9 @@ const SHELL_ROUTES = new Set([
   "/analysis",
   "/analysis/new",
   "/analysis/calls",
+  // Coaching keeps the signed-in session across navigation, so it opens
+  // without re-checking the account (AUT-1678).
+  "/coaching",
 ]);
 
 function isShellRoute(pathname: string | null) {
