@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSearch, FlaskConical, Lock, Users } from "lucide-react";
+import { FileSearch, FlaskConical, LineChart, Lock, Users } from "lucide-react";
 import { useState } from "react";
 import {
   Avatar,
@@ -323,6 +323,18 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                   will see only their reps, and only what each rep shares.
                 </p>
               </div>
+            </Panel>
+          )}
+          {coaching.sandbox ? null : (
+            <Panel title="Every call, over time">
+              <List label="Company view">
+                <Row
+                  icon={<LineChart size={15} aria-hidden="true" />}
+                  title="Open Insights"
+                  href="/organisation/insights"
+                  meta={["Trends, outcomes and people across all calls"]}
+                />
+              </List>
             </Panel>
           )}
           {coaching.limitations.length ? (

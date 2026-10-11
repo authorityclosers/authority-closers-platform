@@ -55,6 +55,8 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain("Named coaching appears when a rep shares it");
     expect(html).toContain("stop sharing at any time");
     expect(html).not.toContain("/analysis/calls/");
+    // Every call over time lives in Insights, not recounted here.
+    expect(html).toContain('href="/organisation/insights"');
     expect(html).not.toContain("Play evidence");
     expect(html).not.toContain("<audio");
   });
@@ -133,6 +135,7 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain("Focus for Closer 1");
     expect(html).toContain("Show all 10 people");
     expect(html).not.toContain("Named coaching appears when a rep shares it");
+    expect(html).not.toContain("/organisation/insights");
     // Malformed rows drop; the rest of the team still shows.
     const partial = parseTeamCoaching({
       ...sandboxTeam,
