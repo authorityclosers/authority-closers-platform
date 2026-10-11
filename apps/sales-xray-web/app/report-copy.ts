@@ -361,7 +361,7 @@ export const DEAL = {
   prospectCommitment: part("6.4", "Prospect Commitment", "Prospect agreed to"),
   sellerCommitment: part("6.5", "Seller Commitment", "You agreed to"),
   nextEvent: part("6.6", "Next Event", "Next event"),
-  quality: part("6.7", "Commitment Quality", "Commitment"),
+  quality: part("6.7", "Commitment Quality", "Commitment quality"),
   unclear: part(
     "6.8",
     "What Still Needs to Become Clear",
