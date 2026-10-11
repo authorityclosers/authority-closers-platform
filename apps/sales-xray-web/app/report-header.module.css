@@ -27,8 +27,9 @@
   }
 }
 
-/* The file type beside "Download report": small, never below 12 px. */
-.fileType {
+/* The file type beside "Download report": small, never below 12 px. The
+   repeated class outranks the studio's 11.5 px menu rule. */
+small.fileType.fileType.fileType.fileType.fileType {
   font-size: var(--sx-text-xs, 12px);
 }
 
@@ -42,4 +43,13 @@
   border-color: var(--lx-line-strong);
   background: var(--lx-sunken);
   color: var(--lx-ink);
+}
+
+/* An open "…" menu paints and takes clicks above the sticky Report bar:
+   the row is pinned at the top (as the studio already pins it) and its
+   layer rises while the menu is open. */
+.pinned.pinned.pinned.pinned.pinned:has(details[open]) {
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }

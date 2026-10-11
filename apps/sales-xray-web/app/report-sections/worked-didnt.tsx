@@ -24,7 +24,11 @@ function ItemRow({
       <p className={styles.line}>
         <Text text={item.what.text} />
       </p>
-      {item.areas?.length ? <Bullets items={item.areas} /> : null}
+      {item.areas?.length ? (
+        <Field label={WORKED_DIDNT.areasLead}>
+          <Bullets items={item.areas} />
+        </Field>
+      ) : null}
       <PlayChip
         source={item.what.sources[0]}
         title={item.title}
