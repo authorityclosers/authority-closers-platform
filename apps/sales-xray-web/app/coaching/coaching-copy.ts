@@ -281,3 +281,58 @@ export const CALLS = {
 } as const;
 
 export const ABOUT = "About this coaching";
+
+/** Team coaching for owners and admins: totals, objections, shared reps. */
+export const TEAM = {
+  calls: "Analysed calls",
+  top: "Top area to work on",
+  noneYet: "No suggestions yet",
+  areas: "Skills to work on",
+  areasNote: "Across the team",
+  pending: "Still analysing",
+  pendingNote: "Reports on the way",
+  unusable: (count: number) => `${count} couldn’t be read`,
+  sandboxReps: "Fictional reps",
+  sandboxRepsNote: "AC Sandbox, only you",
+  practise: "What the team should work on",
+  practiseSub: "Share of calls",
+  practiseNote:
+    "How many calls had a report suggestion in each skill. Not a score and not mastery. Updates after every call.",
+  sandboxNote:
+    "Each fictional call carries one authored focus. Counts are those focuses, not measured mistakes or mastery.",
+  emptyTitle: "No team suggestions yet",
+  emptyText:
+    "Each analysed report can add one. A skill with no evidence never counts as a team weakness.",
+  objections: "Objections your team hears",
+  objectionsSub: (calls: number) =>
+    `In ${calls} mapped call${calls === 1 ? "" : "s"}`,
+  objectionsNote:
+    "Left open: the reply dodged or skipped it. Counts only — never the words or who said them.",
+  noObjections: "No objections in these calls",
+  noObjectionsText: "Each analysed call’s map lists the buyer’s objections.",
+  who: "Who needs help with what",
+  sharedSub: (count: number) => `${count} shared with you`,
+  fictionalSub: (count: number) =>
+    `${count} fictional ${count === 1 ? "rep" : "reps"}`,
+  sharedOnly: "Shared only",
+  namedTitle: "Named coaching appears when a rep shares it",
+  namedText:
+    "Each rep’s focus, reason and mission stay private until they share them with one tap. They can stop sharing at any time.",
+  privateTitle: "Private by default",
+  privateBadge: "Anonymous",
+  privateWho: "Owners and admins see these totals",
+  privateText:
+    "Totals never name a rep or show their calls, quotes, focus or mission. Owners and admins follow the same rule as everyone else.",
+  privateShare:
+    "A rep can share their coaching with you in one tap, and stop at any time.",
+  sandboxTitle: "Fictional AC Sandbox",
+  sandboxWho: "Only you see these reps",
+  sandboxText:
+    "These reps, calls and coaching are fictional records you imported. Each call carries one authored focus.",
+  sandboxPrivate:
+    "Real reps’ coaching stays private until they share it; their totals never name anyone.",
+  insightsTitle: "Every call, over time",
+  insights: "Open Insights",
+  insightsNote: "Trends, outcomes and people across all calls",
+  counted: "How these totals are counted",
+} as const;

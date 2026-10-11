@@ -204,13 +204,13 @@ def summarize_team(
             for skill, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
         ),
         limitations=(
-            "Counts describe report suggestions, not proven recurring mistakes or mastery.",
+            "Counts are report suggestions, not proof of a repeated mistake or of mastery.",
             "Totals never name a rep or show their calls, quotes, focus or mission.",
-            "A rep appears by name, with their current focus, only after they share; "
-            "they can stop at any time and any change to their membership ends it.",
-            "Assigned coach duties are pending. Current organisation owners/admins see aggregates.",
+            "A rep appears by name, with their current focus, only after they share. "
+            "They can stop at any time, and any change to their membership ends it.",
+            "Owners and admins of the organisation see these totals.",
             *(
-                ("Only the most recent 40 retained team calls are included.",)
+                ("Only the team's 40 most recent calls are included.",)
                 if history_limited
                 else ()
             ),

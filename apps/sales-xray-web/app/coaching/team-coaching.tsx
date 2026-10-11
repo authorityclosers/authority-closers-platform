@@ -14,6 +14,7 @@ import {
   Row,
   Tiles,
 } from "../ui/kit";
+import { TEAM } from "./coaching-copy";
 import { callDate } from "./coaching-format";
 import type { TeamCoaching, TeamRep } from "./team-contract";
 import styles from "./coaching.module.css";
@@ -38,10 +39,7 @@ const share = (part: number, whole: number) =>
 function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
   const calls = coaching.objection_calls;
   return (
-    <Panel
-      title="Objections your team hears"
-      sub={`In ${calls} mapped call${calls === 1 ? "" : "s"}`}
-    >
+    <Panel title={TEAM.objections} sub={TEAM.objectionsSub(calls)}>
       {coaching.objections.length ? (
         <List label="Objections">
           {coaching.objections.map((row) => (
@@ -66,15 +64,12 @@ function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
       ) : (
         <Empty
           icon={FileSearch}
-          title="No objections in these calls"
-          text="Each analysed call’s map lists the buyer’s objections."
+          title={TEAM.noObjections}
+          text={TEAM.noObjectionsText}
         />
       )}
       <p className={styles.body}>
-        <span className={styles.note}>
-          Left open means the reply deflected or skipped it. Counts come from
-          each report’s call map; they never show the words or who said them.
-        </span>
+        <span className={styles.note}>{TEAM.objectionsNote}</span>
       </p>
     </Panel>
   );
@@ -100,11 +95,9 @@ function RepList({
   );
   return (
     <Panel
-      title="Who needs help with what"
+      title={TEAM.who}
       sub={
-        shared
-          ? `${reps.length} shared with you`
-          : `${reps.length} fictional ${reps.length === 1 ? "rep" : "reps"}`
+        shared ? TEAM.sharedSub(reps.length) : TEAM.fictionalSub(reps.length)
       }
     >
       {areas.length > 1 ? (
@@ -178,7 +171,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
     <div className={styles.story}>
       <Tiles label="Team coaching totals">
         <Kpi
-          label="Analysed calls"
+          label={TEAM.calls}
           value={analysed}
           note={
             [
@@ -196,42 +189,33 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           }
         />
         <Kpi
-          label="Top coaching area"
+          label={TEAM.top}
           value={first ? `${share(first.suggestion_calls, analysed)}%` : "—"}
-          note={
-            first ? (AREA[first.skill_id] ?? first.label) : "No suggestions yet"
-          }
+          note={first ? (AREA[first.skill_id] ?? first.label) : TEAM.noneYet}
           tone={first ? "accent" : undefined}
         />
-        <Kpi
-          label="Coaching areas"
-          value={rows.length}
-          note="With suggestions"
-        />
+        <Kpi label={TEAM.areas} value={rows.length} note={TEAM.areasNote} />
         {coaching.sandbox ? (
           <Kpi
-            label="Fictional reps"
+            label={TEAM.sandboxReps}
             value={coaching.rep_count}
-            note="AC Sandbox, only you"
+            note={TEAM.sandboxRepsNote}
           />
         ) : (
           <Kpi
-            label="Awaiting a report"
+            label={TEAM.pending}
             value={coaching.pending_calls}
             note={
               coaching.unavailable_calls
-                ? `${coaching.unavailable_calls} unusable`
-                : "Being analysed"
+                ? TEAM.unusable(coaching.unavailable_calls)
+                : TEAM.pendingNote
             }
           />
         )}
       </Tiles>
       <div className={styles.layout}>
         <div className={styles.main}>
-          <Panel
-            title="Where the team can practise"
-            sub="Share of analysed calls"
-          >
+          <Panel title={TEAM.practise} sub={TEAM.practiseSub}>
             {rows.length ? (
               <List label="Coaching areas">
                 {rows.map((row) => (
@@ -256,15 +240,13 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
             ) : (
               <Empty
                 icon={FileSearch}
-                title="No team suggestions yet"
-                text="Each analysed report can add one. Unknown evidence never becomes a team weakness."
+                title={TEAM.emptyTitle}
+                text={TEAM.emptyText}
               />
             )}
             <p className={styles.body}>
               <span className={styles.note}>
-                {coaching.sandbox
-                  ? "Each fictional call carries one authored focus. Counts are those focuses, not measured mistakes or mastery."
-                  : "Counts describe report suggestions. They do not measure recurring mistakes, successful execution or mastery. They update after every analysed call."}
+                {coaching.sandbox ? TEAM.sandboxNote : TEAM.practiseNote}
               </span>
             </p>
           </Panel>
@@ -278,68 +260,57 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
               shared={coaching.reps_basis === "shared"}
             />
           ) : (
-            <Panel title="Who needs help with what" sub="Shared only">
+            <Panel title={TEAM.who} sub={TEAM.sharedOnly}>
               <Empty
                 icon={Lock}
-                title="Named coaching appears when a rep shares it"
-                text="Each rep’s focus, reason and mission stay private until they share them with one tap. They can stop sharing at any time."
+                title={TEAM.namedTitle}
+                text={TEAM.namedText}
               />
             </Panel>
           )}
         </div>
         <aside className={styles.rail} aria-label="Privacy">
           {coaching.sandbox ? (
-            <Panel title="Fictional AC Sandbox" tools={<Badge>Sandbox</Badge>}>
+            <Panel title={TEAM.sandboxTitle} tools={<Badge>Sandbox</Badge>}>
               <div className={styles.body}>
                 <p className={styles.eyebrow}>
                   <FlaskConical size={14} aria-hidden="true" />
-                  Only you see these reps
+                  {TEAM.sandboxWho}
                 </p>
-                <p>
-                  These reps, calls and coaching are fictional dataset records
-                  you imported. Each call carries one authored focus.
-                </p>
-                <p className={styles.note}>
-                  Real reps’ coaching stays private until they share it; their
-                  totals never name anyone.
-                </p>
+                <p>{TEAM.sandboxText}</p>
+                <p className={styles.note}>{TEAM.sandboxPrivate}</p>
               </div>
             </Panel>
           ) : (
-            <Panel title="Private by default" tools={<Badge>Anonymous</Badge>}>
+            <Panel
+              title={TEAM.privateTitle}
+              tools={<Badge>{TEAM.privateBadge}</Badge>}
+            >
               <div className={styles.body}>
                 <p className={styles.eyebrow}>
                   <Users size={14} aria-hidden="true" />
-                  Owners and admins see these totals
+                  {TEAM.privateWho}
                 </p>
-                <p>
-                  Totals never name a rep or show their calls, quotes, focus or
-                  mission. Leadership and admins follow the same rule as
-                  everyone else.
-                </p>
-                <p className={styles.note}>
-                  A rep can share their coaching with owners and admins in one
-                  tap, and stop at any time. Assigned coaches come next; a coach
-                  will see only their reps, and only what each rep shares.
-                </p>
+                <p>{TEAM.privateText}</p>
+                <p className={styles.note}>{TEAM.privateShare}</p>
               </div>
             </Panel>
           )}
           {coaching.sandbox ? null : (
-            <Panel title="Every call, over time">
+            <Panel title={TEAM.insightsTitle}>
               <List label="Company view">
                 <Row
                   icon={<LineChart size={15} aria-hidden="true" />}
-                  title="Open Insights"
+                  title={TEAM.insights}
                   href="/organisation/insights"
-                  meta={["Trends, outcomes and people across all calls"]}
+                  meta={[TEAM.insightsNote]}
                 />
               </List>
             </Panel>
           )}
           {coaching.limitations.length ? (
             <details className={styles.more}>
-              <summary>How these totals are counted</summary>
+              <summary>{TEAM.counted}</summary>
               <ul className={styles.takeaways}>
                 {coaching.limitations.map((line) => (
                   <li key={line}>{line}</li>
