@@ -13,6 +13,7 @@ import {
   Page,
   PageHeader,
   Panel,
+  QueryTabs,
   Table,
   Tiles,
   Unavailable,
@@ -40,6 +41,13 @@ import {
   type Organisation,
 } from "./company-data";
 import styles from "./company.module.css";
+
+export const VIEWS = [
+  { key: "overview", label: "Overview" },
+  { key: "people", label: "People" },
+  { key: "calls", label: "Calls" },
+] as const;
+export type CompanyViewKey = (typeof VIEWS)[number]["key"];
 
 function points(now: number | null, before: number | null) {
   if (now === null || before === null) return null;
@@ -213,6 +221,7 @@ export function CompanyView({
   calls,
   callsError,
   offset,
+  view = "overview",
 }: {
   organisations: Organisation[];
   organisation: Organisation;
@@ -221,6 +230,7 @@ export function CompanyView({
   calls: CallPage | null;
   callsError: string | null;
   offset: number;
+  view?: CompanyViewKey;
 }) {
   const { totals, previous } = data;
   const value = rupees(totals.wonValue);
@@ -244,7 +254,11 @@ export function CompanyView({
     }));
   const range =
     RANGES.find((item) => item.key === filters.range)?.label ?? "90 days";
-  const address = (next: Partial<Filters> = {}, nextOffset = 0) => {
+  const address = (
+    next: Partial<Filters> = {},
+    nextOffset = 0,
+    withView = true,
+  ) => {
     const merged = { ...filters, ...next };
     const query = new URLSearchParams();
     query.set("organisation", organisation.id);
@@ -254,6 +268,7 @@ export function CompanyView({
       if (value) query.set(name, value);
     }
     if (nextOffset) query.set("offset", String(nextOffset));
+    if (withView && view !== "overview") query.set("view", view);
     return `/company?${query}`;
   };
   const page = (nextOffset: number) => address({}, nextOffset);
@@ -277,6 +292,13 @@ export function CompanyView({
         organisation={organisation.id}
         filters={filters}
         facets={data.facets}
+      />
+      <QueryTabs
+        base="/company"
+        param="view"
+        items={VIEWS.map((item) => ({ key: item.key, label: item.label }))}
+        current={view}
+        keep={address({}, 0, false).split("?")[1]}
       />
       <PrepareCalls
         key={organisation.id}
@@ -324,290 +346,313 @@ export function CompanyView({
           note="Lower is better"
         />
       </Tiles>
-      <Panel
-        title="Calls over time"
-        sub={`By ${data.window.unit}`}
-        tools={
-          <Why detail="Outcomes and skill states are what each call's report says, added up: a guide for coaching, never an official score (AC-SVAL)." />
-        }
-      >
-        <div className={styles.inset}>
-          {data.trend.length ? (
-            <Trend data={data} />
-          ) : (
-            <p className={styles.muted}>No calls in this period.</p>
-          )}
-        </div>
-      </Panel>
-      <div className={styles.grid}>
-        <Panel title="How calls ended" sub="As each report read it">
-          <div className={styles.inset}>
-            <Bars
-              rows={[
-                {
-                  key: "calls",
-                  label: "Calls analysed",
-                  value: totals.calls,
-                  note: "100%",
-                },
-                {
-                  key: "next",
-                  label: "Agreed a next step",
-                  value: totals.nextStep,
-                  note: percent(totals.nextStepShare),
-                },
-                {
-                  key: "won",
-                  label: "Won",
-                  value: totals.won,
-                  note: percent(totals.winShare),
-                },
-              ]}
-            />
-            <Bars rows={outcomes} />
+      {view === "overview" ? (
+        <>
+          <Panel
+            title="Calls over time"
+            sub={`By ${data.window.unit}`}
+            tools={
+              <Why detail="Outcomes and skill states are what each call's report says, added up: a guide for coaching, never an official score (AC-SVAL)." />
+            }
+          >
+            <div className={styles.inset}>
+              {data.trend.length ? (
+                <Trend data={data} />
+              ) : (
+                <p className={styles.muted}>No calls in this period.</p>
+              )}
+            </div>
+          </Panel>
+          <div className={styles.grid}>
+            <Panel title="How calls ended" sub="As each report read it">
+              <div className={styles.inset}>
+                <Bars
+                  rows={[
+                    {
+                      key: "calls",
+                      label: "Calls analysed",
+                      value: totals.calls,
+                      note: "100%",
+                    },
+                    {
+                      key: "next",
+                      label: "Agreed a next step",
+                      value: totals.nextStep,
+                      note: percent(totals.nextStepShare),
+                    },
+                    {
+                      key: "won",
+                      label: "Won",
+                      value: totals.won,
+                      note: percent(totals.winShare),
+                    },
+                  ]}
+                />
+                <Bars rows={outcomes} />
+              </div>
+            </Panel>
+            <Panel
+              title="Skills across the calls"
+              sub="Observed share; calls needing attention"
+            >
+              <div className={styles.inset}>
+                <ul className={styles.skills}>
+                  {data.skills.map((skill) => {
+                    const observed = skill.strong + skill.observed;
+                    const whole =
+                      observed + skill.needsAttention + skill.unknown;
+                    return (
+                      <li key={skill.id}>
+                        <span>{skill.label}</span>
+                        <span className={styles.split} aria-hidden="true">
+                          <i
+                            data-key="observed"
+                            style={{ flexGrow: observed }}
+                          />
+                          <i
+                            data-key="attention"
+                            style={{ flexGrow: skill.needsAttention }}
+                          />
+                          <i
+                            data-key="unknown"
+                            style={{ flexGrow: skill.unknown }}
+                          />
+                        </span>
+                        <span className={styles.value}>
+                          {percent(whole ? observed / whole : null)}
+                          <small>
+                            {skill.needsAttention
+                              ? `${count(skill.needsAttention)} need work`
+                              : "—"}
+                          </small>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </Panel>
           </div>
-        </Panel>
-        <Panel
-          title="Skills across the calls"
-          sub="Observed share; calls needing attention"
-        >
-          <div className={styles.inset}>
-            <ul className={styles.skills}>
-              {data.skills.map((skill) => {
-                const observed = skill.strong + skill.observed;
-                const whole = observed + skill.needsAttention + skill.unknown;
-                return (
-                  <li key={skill.id}>
-                    <span>{skill.label}</span>
-                    <span className={styles.split} aria-hidden="true">
-                      <i data-key="observed" style={{ flexGrow: observed }} />
-                      <i
-                        data-key="attention"
-                        style={{ flexGrow: skill.needsAttention }}
-                      />
-                      <i
-                        data-key="unknown"
-                        style={{ flexGrow: skill.unknown }}
-                      />
-                    </span>
-                    <span className={styles.value}>
-                      {percent(whole ? observed / whole : null)}
-                      <small>
-                        {skill.needsAttention
-                          ? `${count(skill.needsAttention)} need work`
-                          : "—"}
-                      </small>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+          <div className={styles.grid}>
+            <Panel title="Objections" sub="What prospects pushed back on">
+              <div className={styles.inset}>
+                {data.objections.length ? (
+                  <Bars
+                    rows={data.objections.map((row) => ({
+                      key: row.kind,
+                      label: row.label,
+                      value: row.calls,
+                      note: `${percent(row.calls ? row.won / row.calls : null)} won`,
+                    }))}
+                  />
+                ) : (
+                  <p className={styles.muted}>
+                    No objections recorded in these calls.
+                  </p>
+                )}
+              </div>
+            </Panel>
+            <Panel
+              title={
+                data.mistakes.length
+                  ? "Common mistakes"
+                  : "Skills most often needing work"
+              }
+              sub={
+                data.mistakes.length
+                  ? "The main mistake in each call"
+                  : "Calls where the skill needed attention"
+              }
+            >
+              <div className={styles.inset}>
+                {data.mistakes.length ? (
+                  <Bars
+                    rows={data.mistakes.map((row) => ({
+                      key: row.kind,
+                      label: row.label,
+                      value: row.calls,
+                    }))}
+                  />
+                ) : attention.length ? (
+                  <Bars rows={attention} />
+                ) : (
+                  <p className={styles.muted}>
+                    No skill needed attention in these calls.
+                  </p>
+                )}
+              </div>
+            </Panel>
           </div>
-        </Panel>
-      </div>
-      <Panel
-        title={data.teams.length ? "People (and teams)" : "People"}
-        sub={`${count(data.people.length)} with calls · skill cells: share observed, amber marks gaps`}
-      >
-        <Table label="People">
-          <thead>
-            <tr>
-              <th scope="col">Person</th>
-              {data.teams.length ? <th scope="col">Team</th> : null}
-              <th scope="col" data-num="">
-                Calls
-              </th>
-              <th scope="col" data-num="">
-                Next step
-              </th>
-              <th scope="col" data-num="">
-                Won
-              </th>
-              <th scope="col" data-num="">
-                Talk
-              </th>
-              {SKILLS.map((skill) => (
-                <th key={skill.id} scope="col" className={styles.heatHead}>
-                  {skill.short}
-                </th>
-              ))}
-              <th scope="col">Skills trend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.people.slice(0, 40).map((person) => {
-              const trend = change(person.needsAttentionChange);
-              return (
-                <tr key={person.key ?? person.name}>
-                  <th scope="row" className={styles.nowrap}>
-                    {person.key ? (
-                      <Link href={address({ person: person.key })}>
-                        {person.name}
-                      </Link>
-                    ) : (
-                      person.name
-                    )}
+        </>
+      ) : null}
+      {view === "people" ? (
+        <>
+          <Panel
+            title={data.teams.length ? "People (and teams)" : "People"}
+            sub={`${count(data.people.length)} with calls · skill cells: share observed, amber marks gaps`}
+          >
+            <Table label="People">
+              <thead>
+                <tr>
+                  <th scope="col">Person</th>
+                  {data.teams.length ? <th scope="col">Team</th> : null}
+                  <th scope="col" data-num="">
+                    Calls
                   </th>
-                  {data.teams.length ? (
-                    <td className={styles.nowrap}>{person.team ?? "—"}</td>
+                  <th scope="col" data-num="">
+                    Next step
+                  </th>
+                  <th scope="col" data-num="">
+                    Won
+                  </th>
+                  <th scope="col" data-num="">
+                    Talk
+                  </th>
+                  {SKILLS.map((skill) => (
+                    <th key={skill.id} scope="col" className={styles.heatHead}>
+                      {skill.short}
+                    </th>
+                  ))}
+                  <th scope="col">Skills trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.people.slice(0, 40).map((person) => {
+                  const trend = change(person.needsAttentionChange);
+                  return (
+                    <tr key={person.key ?? person.name}>
+                      <th scope="row" className={styles.nowrap}>
+                        {person.key ? (
+                          <Link href={address({ person: person.key })}>
+                            {person.name}
+                          </Link>
+                        ) : (
+                          person.name
+                        )}
+                      </th>
+                      {data.teams.length ? (
+                        <td className={styles.nowrap}>{person.team ?? "—"}</td>
+                      ) : null}
+                      <td data-num="">{count(person.calls)}</td>
+                      <td data-num="">
+                        {percent(
+                          person.calls ? person.nextStep / person.calls : null,
+                        )}
+                      </td>
+                      <td data-num="">{count(person.won)}</td>
+                      <td data-num="">
+                        {person.talkShare === null
+                          ? "—"
+                          : `${person.talkShare}%`}
+                      </td>
+                      <HeatCells group={person} />
+                      <td className={styles.trendCell} data-trend={trend.tone}>
+                        {trend.text}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Panel>
+        </>
+      ) : null}
+      {view === "calls" ? (
+        <>
+          <div className={styles.grid}>
+            <Panel
+              title="Strongest calls"
+              sub="Fewest skills needing attention"
+            >
+              <CallList rows={data.strongest} />
+            </Panel>
+            <Panel title="Calls to review" sub="Most skills needing attention">
+              <CallList rows={data.weakest} />
+            </Panel>
+          </div>
+          <Panel
+            title="Calls"
+            sub={
+              calls
+                ? `${count(calls.total)} in this view · newest first`
+                : undefined
+            }
+            foot={
+              calls && (offset > 0 || calls.nextOffset !== null) ? (
+                <span className={styles.pager}>
+                  {offset > 0 ? (
+                    <Link href={page(Math.max(0, offset - 50))}>Newer 50</Link>
                   ) : null}
-                  <td data-num="">{count(person.calls)}</td>
-                  <td data-num="">
-                    {percent(
-                      person.calls ? person.nextStep / person.calls : null,
-                    )}
-                  </td>
-                  <td data-num="">{count(person.won)}</td>
-                  <td data-num="">
-                    {person.talkShare === null ? "—" : `${person.talkShare}%`}
-                  </td>
-                  <HeatCells group={person} />
-                  <td className={styles.trendCell} data-trend={trend.tone}>
-                    {trend.text}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </Table>
-      </Panel>
-      <div className={styles.grid}>
-        <Panel title="Objections" sub="What prospects pushed back on">
-          <div className={styles.inset}>
-            {data.objections.length ? (
-              <Bars
-                rows={data.objections.map((row) => ({
-                  key: row.kind,
-                  label: row.label,
-                  value: row.calls,
-                  note: `${percent(row.calls ? row.won / row.calls : null)} won`,
-                }))}
-              />
-            ) : (
-              <p className={styles.muted}>
-                No objections recorded in these calls.
-              </p>
-            )}
-          </div>
-        </Panel>
-        <Panel
-          title={
-            data.mistakes.length
-              ? "Common mistakes"
-              : "Skills most often needing work"
-          }
-          sub={
-            data.mistakes.length
-              ? "The main mistake in each call"
-              : "Calls where the skill needed attention"
-          }
-        >
-          <div className={styles.inset}>
-            {data.mistakes.length ? (
-              <Bars
-                rows={data.mistakes.map((row) => ({
-                  key: row.kind,
-                  label: row.label,
-                  value: row.calls,
-                }))}
-              />
-            ) : attention.length ? (
-              <Bars rows={attention} />
-            ) : (
-              <p className={styles.muted}>
-                No skill needed attention in these calls.
-              </p>
-            )}
-          </div>
-        </Panel>
-      </div>
-      <div className={styles.grid}>
-        <Panel title="Strongest calls" sub="Fewest skills needing attention">
-          <CallList rows={data.strongest} />
-        </Panel>
-        <Panel title="Calls to review" sub="Most skills needing attention">
-          <CallList rows={data.weakest} />
-        </Panel>
-      </div>
-      <Panel
-        title="Calls"
-        sub={
-          calls
-            ? `${count(calls.total)} in this view · newest first`
-            : undefined
-        }
-        foot={
-          calls && (offset > 0 || calls.nextOffset !== null) ? (
-            <span className={styles.pager}>
-              {offset > 0 ? (
-                <Link href={page(Math.max(0, offset - 50))}>Newer 50</Link>
-              ) : null}
-              <span className={styles.muted}>
-                {count(offset + 1)}–{count(offset + calls.items.length)} of{" "}
-                {count(calls.total)}
-              </span>
-              {calls.nextOffset !== null ? (
-                <Link href={page(calls.nextOffset)}>Older 50</Link>
-              ) : null}
-            </span>
-          ) : undefined
-        }
-      >
-        {callsError ? <Unavailable title="Calls" reason={callsError} /> : null}
-        {calls ? (
-          <Table label="Calls">
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">Person</th>
-                <th scope="col">Outcome</th>
-                <th scope="col" data-num="">
-                  Length
-                </th>
-                <th scope="col" data-num="">
-                  Talk
-                </th>
-                <th scope="col">Skills</th>
-                <th scope="col">Objections</th>
-              </tr>
-            </thead>
-            <tbody>
-              {calls.items.map((row) => (
-                <tr key={row.key}>
-                  <td>{dateLabel(row.at, true)}</td>
-                  <td>
-                    {row.recordingId ? (
-                      <Link href={`/calls/${row.recordingId}`}>
-                        {row.person}
-                      </Link>
-                    ) : (
-                      row.person
-                    )}
-                    {row.team ? (
-                      <small className={styles.sub}>{row.team}</small>
-                    ) : null}
-                  </td>
-                  <td>{outcomeLabel(row.outcome)}</td>
-                  <td data-num="">{duration(row.durationMs)}</td>
-                  <td data-num="">
-                    {row.talkShare === null ? "—" : `${row.talkShare}%`}
-                  </td>
-                  <td>
-                    <SkillDots skills={row.skills} />
-                  </td>
-                  <td className={styles.objections}>
-                    {row.objections.length
-                      ? row.objections
-                          .map((item) => item.replace(/_/g, " "))
-                          .join(", ")
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        ) : null}
-      </Panel>
+                  <span className={styles.muted}>
+                    {count(offset + 1)}–{count(offset + calls.items.length)} of{" "}
+                    {count(calls.total)}
+                  </span>
+                  {calls.nextOffset !== null ? (
+                    <Link href={page(calls.nextOffset)}>Older 50</Link>
+                  ) : null}
+                </span>
+              ) : undefined
+            }
+          >
+            {callsError ? (
+              <Unavailable title="Calls" reason={callsError} />
+            ) : null}
+            {calls ? (
+              <Table label="Calls">
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">Person</th>
+                    <th scope="col">Outcome</th>
+                    <th scope="col" data-num="">
+                      Length
+                    </th>
+                    <th scope="col" data-num="">
+                      Talk
+                    </th>
+                    <th scope="col">Skills</th>
+                    <th scope="col">Objections</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calls.items.map((row) => (
+                    <tr key={row.key}>
+                      <td>{dateLabel(row.at, true)}</td>
+                      <td>
+                        {row.recordingId ? (
+                          <Link href={`/calls/${row.recordingId}`}>
+                            {row.person}
+                          </Link>
+                        ) : (
+                          row.person
+                        )}
+                        {row.team ? (
+                          <small className={styles.sub}>{row.team}</small>
+                        ) : null}
+                      </td>
+                      <td>{outcomeLabel(row.outcome)}</td>
+                      <td data-num="">{duration(row.durationMs)}</td>
+                      <td data-num="">
+                        {row.talkShare === null ? "—" : `${row.talkShare}%`}
+                      </td>
+                      <td>
+                        <SkillDots skills={row.skills} />
+                      </td>
+                      <td className={styles.objections}>
+                        {row.objections.length
+                          ? row.objections
+                              .map((item) => item.replace(/_/g, " "))
+                              .join(", ")
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : null}
+          </Panel>
+        </>
+      ) : null}
       <p className={styles.footnote}>
         Outcomes and skill states are what each call&apos;s report says, added
         up.
