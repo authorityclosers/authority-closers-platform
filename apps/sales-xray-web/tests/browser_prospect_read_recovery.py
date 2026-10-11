@@ -122,9 +122,11 @@ def main():
                         )
                         assert retry.evaluate(
                             "el => { const text = [...el.childNodes].find(n => "
-                            "n.nodeType === Node.TEXT_NODE && n.textContent.includes('Try again')); "
+                            "n.nodeType === Node.TEXT_NODE && "
+                            "n.textContent.includes('Try again')); "
                             "if (!text) return false; const range = document.createRange(); "
-                            "range.selectNodeContents(text); return range.getClientRects().length === 1; }"
+                            "range.selectNodeContents(text); "
+                            "return range.getClientRects().length === 1; }"
                         )
                         if width == 390:
                             assert retry.evaluate("el => el.getBoundingClientRect().height >= 44")
