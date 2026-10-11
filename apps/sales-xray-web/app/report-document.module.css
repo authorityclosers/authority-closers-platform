@@ -2,6 +2,21 @@
    Doc. Tokens only (ui/sx-tokens.css); the Report workspace keeps this view on
    the light surface in both themes, so the page always reads as paper. */
 .document {
+  /* The --sx-* aliases resolve at :root, so re-point them here: the Report
+     workspace puts this view on the light surface, and paper stays white. */
+  --sx-paper: var(--lx-paper);
+  --sx-surface: var(--lx-surface);
+  --sx-sunken: var(--lx-sunken);
+  --sx-ink: var(--lx-ink);
+  --sx-ink-2: var(--lx-ink-2);
+  --sx-muted: var(--lx-muted);
+  --sx-line: var(--lx-line);
+  --sx-line-strong: var(--lx-line-strong);
+  --sx-accent: var(--lx-teal);
+  --sx-accent-ink: var(--lx-on-teal);
+  --sx-accent-soft: color-mix(in oklab, var(--lx-teal) 12%, transparent);
+  --sx-good: var(--lx-success);
+  --sx-warn: var(--lx-warning);
   --doc-scale: 1;
   --doc-body: calc(15px * var(--doc-scale));
   min-width: 0;
@@ -70,6 +85,14 @@
   padding: 28px 24px 40px;
   border-radius: var(--sx-radius-md);
   background: var(--sx-sunken);
+}
+
+/* In the dark app the paper sits on a dark desk, like a PDF viewer. */
+:global(html[data-theme="dark"]) .canvas {
+  background: color-mix(in oklab, var(--lx-film) 70%, transparent);
+}
+:global(html[data-theme="dark"]) .sheet {
+  border-color: transparent;
 }
 
 .unavailable {
@@ -538,7 +561,7 @@
 /* Report end summary */
 .summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 0;
   margin: 0;
   border: 1px solid var(--sx-line);

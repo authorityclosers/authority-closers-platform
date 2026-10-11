@@ -15,6 +15,7 @@ import { COMMON, DEAL, DOCUMENT, playLabel } from "./report-copy";
 import type { ReportEvidence, Transcript } from "./report-contract";
 import type { DocumentReportData } from "./report-document-data";
 import {
+  DOCUMENT_SECTION_IDS,
   reportDocumentModel,
   type DocClip,
   type DocItem,
@@ -205,14 +206,14 @@ function Item({
             {item.stages.map((stage, index) => (
               <li
                 key={`${stage.label}-${index}`}
-                data-stage={index % 5}
+                data-stage={stage.tone % 5}
                 style={{ flexGrow: Math.max(0.02, stage.share) }}
               />
             ))}
           </ol>
           <ol className={styles.stages}>
             {item.stages.map((stage, index) => (
-              <li key={`${stage.label}-${index}`} data-stage={index % 5}>
+              <li key={`${stage.label}-${index}`} data-stage={stage.tone % 5}>
                 <strong>{stage.label}</strong>
                 <span>
                   {stage.from}–{stage.to}
@@ -313,7 +314,14 @@ export function ReportDocumentSheet({
 }) {
   return (
     <article className={styles.sheet} aria-labelledby={`${id}-doc-title`}>
-      <header className={styles.head}>
+      {/* The first section's anchor is the sheet's top, so arriving at
+          "The Big Picture" shows the title and contents above it. */}
+      <header
+        className={styles.head}
+        id={`${id}-heading-${doc.sections[0]?.id}`}
+        tabIndex={-1}
+        data-report-mode-section={doc.sections[0]?.id}
+      >
         <p className={styles.docKicker}>{doc.kicker}</p>
         <h2 id={`${id}-doc-title`} className={styles.title}>
           {doc.title}
@@ -340,44 +348,49 @@ export function ReportDocumentSheet({
           </ol>
         </nav>
       </header>
-      {doc.sections.map((section) => (
-        <section
-          key={section.id}
-          className={styles.section}
-          aria-labelledby={`${id}-heading-${section.id}`}
-          data-document-section={section.id}
-        >
-          <h3
-            id={`${id}-heading-${section.id}`}
-            className={styles.pillar}
-            tabIndex={-1}
-            data-report-mode-section={section.id}
+      {doc.sections.map((section, index) => {
+        const headingId = index
+          ? `${id}-heading-${section.id}`
+          : `${id}-pillar-${section.id}`;
+        return (
+          <section
+            key={section.id}
+            className={styles.section}
+            aria-labelledby={headingId}
+            data-document-section={section.id}
           >
-            {section.heading}
-          </h3>
-          <p className={styles.subtitle}>{section.subtitle}</p>
-          {section.parts.map((part, index) => (
-            <div key={part.heading ?? index} className={styles.part}>
-              {part.heading ? (
-                <h4 className={styles.partHeading}>{part.heading}</h4>
-              ) : null}
-              {part.items.map((item, itemIndex) => (
-                <Item
-                  key={itemIndex}
-                  item={item}
-                  title={part.heading ?? section.heading}
-                  onSelect={onSelect}
-                />
-              ))}
-            </div>
-          ))}
-          {section.gaps.length ? (
-            <p className={styles.gaps}>
-              <span>{COMMON.gapsLead}</span> {section.gaps.join(" · ")}
-            </p>
-          ) : null}
-        </section>
-      ))}
+            <h3
+              id={headingId}
+              className={styles.pillar}
+              tabIndex={index ? -1 : undefined}
+              data-report-mode-section={index ? section.id : undefined}
+            >
+              {section.heading}
+            </h3>
+            <p className={styles.subtitle}>{section.subtitle}</p>
+            {section.parts.map((part, index) => (
+              <div key={part.heading ?? index} className={styles.part}>
+                {part.heading ? (
+                  <h4 className={styles.partHeading}>{part.heading}</h4>
+                ) : null}
+                {part.items.map((item, itemIndex) => (
+                  <Item
+                    key={itemIndex}
+                    item={item}
+                    title={part.heading ?? section.heading}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </div>
+            ))}
+            {section.gaps.length ? (
+              <p className={styles.gaps}>
+                <span>{COMMON.gapsLead}</span> {section.gaps.join(" · ")}
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
       {doc.summary ? (
         <section className={styles.section} aria-label={DOCUMENT.contents}>
           <Item item={doc.summary} title="Report summary" />
@@ -426,12 +439,14 @@ export function ReportDocument({
   }, [data, people]);
   const [word, setWord] = useState<"idle" | "busy" | "failed">("idle");
 
+  // Opening on the first section shows the title; a later section is a jump.
+  const ready = Boolean(doc && doc !== "unavailable");
   useEffect(() => {
-    if (doc && doc !== "unavailable" && section)
+    if (ready && section && section !== DOCUMENT_SECTION_IDS[0])
       document
         .getElementById(`${id}-heading-${section}`)
         ?.scrollIntoView?.({ block: "start" });
-  }, [doc, id, section]);
+  }, [ready, id, section]);
 
   async function downloadWord() {
     if (!data?.report || word === "busy") return;

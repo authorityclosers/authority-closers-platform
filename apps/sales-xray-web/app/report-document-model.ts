@@ -77,7 +77,14 @@ export type DocItem =
   | {
       type: "timeline";
       durationMs: number;
-      stages: { label: string; from: string; to: string; share: number }[];
+      stages: {
+        label: string;
+        /** Same stage, same colour: the stage's place among distinct stages. */
+        tone: number;
+        from: string;
+        to: string;
+        share: number;
+      }[];
     }
   | {
       type: "steps";
@@ -287,7 +294,7 @@ export function reportDocumentModel(
       partOf(BIG_PICTURE.concern, [lineItem(picture.concern)]),
       partOf(BIG_PICTURE.nextStep, [
         lineItem(picture.nextStep, { last: true }),
-        deal.nextEvent
+        deal.nextEvent && !picture.nextStep?.text.includes(deal.nextEvent.text)
           ? {
               type: "text",
               text: followUpOn(deal.nextEvent.text),
@@ -324,8 +331,11 @@ export function reportDocumentModel(
             {
               type: "timeline",
               durationMs: duration,
-              stages: flow.phases.map((phase) => ({
+              stages: flow.phases.map((phase, _, all) => ({
                 label: phase.label,
+                tone: [...new Set(all.map((p) => p.label))].indexOf(
+                  phase.label,
+                ),
                 from: formatClock(phase.start_ms),
                 to: formatClock(phase.end_ms),
                 share: Math.max(0, phase.end_ms - phase.start_ms) / duration,
@@ -359,7 +369,7 @@ export function reportDocumentModel(
               ? { type: "label", text: CALL_FLOW.effect, possible: true }
               : null,
             flow.change.effect
-              ? { type: "text", text: flow.change.effect, possible: true }
+              ? { type: "text", text: flow.change.effect }
               : null,
           ])
         : null,
@@ -378,9 +388,7 @@ export function reportDocumentModel(
         { type: "text", text: item.what.text },
         play ? { type: "play", clip: play } : null,
         item.why ? { type: "label", text: why } : null,
-        item.why
-          ? { type: "text", text: item.why.text, possible: item.why.inferred }
-          : null,
+        item.why ? { type: "text", text: item.why.text } : null,
       ]),
     };
   };
@@ -432,20 +440,8 @@ export function reportDocumentModel(
               text: `${MOMENTS.couldFirst} ${moment.couldExplore}`,
             }
           : null,
-        moment.why
-          ? {
-              type: "label",
-              text: MOMENTS.whyMattered,
-              possible: moment.why.inferred,
-            }
-          : null,
-        moment.why
-          ? {
-              type: "text",
-              text: moment.why.text,
-              possible: moment.why.inferred,
-            }
-          : null,
+        moment.why ? { type: "label", text: MOMENTS.whyMattered } : null,
+        moment.why ? { type: "text", text: moment.why.text } : null,
         at ? { type: "play", clip: at, range: true } : null,
       ]),
     };

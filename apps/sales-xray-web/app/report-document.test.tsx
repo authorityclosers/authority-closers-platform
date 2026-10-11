@@ -74,7 +74,7 @@ it("renders the report as one page with Dipak's headings and section anchors", a
     "6. Where the Deal Stands",
   ]);
   expect(
-    container.querySelector('[data-report-mode-section="overview"]')?.id,
+    container.querySelector(`[data-report-mode-section="overview"]`)?.id,
   ).toBe("report-heading-overview");
   expect(
     container.querySelector('[data-report-mode-section="facts"]')?.id,
