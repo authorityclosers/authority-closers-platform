@@ -1313,10 +1313,14 @@ const PersistentShellContext = createContext<
  * chrome (active item, heading, allowance) instead of drawing a second one.
  */
 export function PersistentShell({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<ShellPage>({
-    authenticated: false,
-    loading: true,
-  });
+  // Pages hand the frame their settings before paint; until then it starts
+  // from what the session already knows, so a page drawn on the server with
+  // its session (dev) arrives with its full bar, not loading placeholders.
+  const access = useWorkspaceAccess();
+  const [page, setPage] = useState<ShellPage>(() => ({
+    authenticated: access?.authenticated === true,
+    loading: !access || access.status === "loading",
+  }));
   return (
     <PersistentShellContext.Provider value={setPage}>
       <LightboxShellFrame {...page}>{children}</LightboxShellFrame>
