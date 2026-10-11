@@ -72,7 +72,7 @@ it("says the outcome in words and who established it", () => {
   expect(markup).toContain('data-tone="warn"');
   expect(markup).toContain("As heard on the call");
   expect(html(<OutcomeBadge status={null} origin={null} />)).toContain(
-    "Only a person records won or lost",
+    "Only a person can mark a call Won or Lost",
   );
 });
 
@@ -174,7 +174,7 @@ it("keeps skill states and moment kinds as words, never numbers", () => {
   expect(html(<SkillStateMark state="Needs Attention" />)).toContain(
     "Needs Attention",
   );
-  expect(html(<SkillStateMark state={null} />)).toContain("Not established");
+  expect(html(<SkillStateMark state={null} />)).toContain("Not covered");
   expect(html(<MomentTag kind="Important Miss" atMs={532_000} />)).toContain(
     "08:52",
   );
@@ -190,7 +190,7 @@ it("lays out the switch, commitment, facts and the end strip", () => {
     ),
   ).toContain("The switch");
   const quality = html(<CommitmentQuality quality="Clear" />);
-  expect(quality).toContain("A specific action with a specific date or time.");
+  expect(quality).toContain("Specific action + specific date/time.");
   expect(quality.match(/data-on/g)).toHaveLength(3);
   expect(
     html(

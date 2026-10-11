@@ -36,7 +36,15 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 
 import { formatClock } from "../lightbox/time";
-import { COMMON } from "../report-copy";
+import {
+  BIG_PICTURE,
+  CALL_FLOW,
+  COMMITMENT_MEANING,
+  COMMON,
+  END_SUMMARY,
+  playLabel,
+  SKILLS,
+} from "../report-copy";
 import type { ReportEvidence } from "../report-contract";
 import {
   ClipPlayIcon,
@@ -202,7 +210,7 @@ export function PlayChip({
           type="button"
           className={styles.play}
           aria-pressed={playing}
-          aria-label={`${playing ? "Pause" : "Play"} ${at}: ${title}`}
+          aria-label={playLabel(playing, at, title)}
           onClick={() => onSelect(source, title)}
         >
           <ClipPlayIcon playing={playing} size={9} />
@@ -265,7 +273,7 @@ export function Quote({
               <span className={styles.quoteName}>{speaker.name}</span>
               {speaker.role ? (
                 <span className={styles.quoteRole}>
-                  {speaker.role === "you" ? "You" : "Prospect"}
+                  {speaker.role === "you" ? COMMON.you : COMMON.prospect}
                 </span>
               ) : null}
             </>
@@ -315,15 +323,15 @@ export function OutcomeBadge({
     <span className={styles.outcome} data-size={size}>
       <span className={styles.outcomeStatus} data-tone={tone}>
         <Icon size={size === "lg" ? 16 : 14} aria-hidden="true" />
-        {status ?? "Outcome not recorded"}
+        {status ?? BIG_PICTURE.outcomeNotSet}
       </span>
       {origin !== undefined ? (
         <span className={styles.outcomeOrigin}>
           {origin === "person"
-            ? "Recorded by your team"
+            ? BIG_PICTURE.outcomeByPerson
             : origin === "call"
-              ? "As heard on the call"
-              : "Only a person records won or lost"}
+              ? BIG_PICTURE.outcomeFromCall
+              : BIG_PICTURE.outcomeOnlyPerson}
         </span>
       ) : null}
     </span>
@@ -344,7 +352,7 @@ export type MetricItem = {
 /** A compact horizontal row of measured figures; labels wrap, never cut. */
 export function MetricRow({
   items,
-  label = "Call figures",
+  label = CALL_FLOW.metrics.label,
   bare,
 }: {
   items: MetricItem[];
@@ -516,7 +524,7 @@ export function SkillStateMark({ state }: { state: string | null }) {
   return (
     <span className={styles.skillState} data-tone={tone}>
       <Icon size={14} strokeWidth={2.2} aria-hidden="true" />
-      {state ?? "Not established"}
+      {state ?? SKILLS.notCovered}
     </span>
   );
 }
@@ -547,7 +555,7 @@ export function CallTimeline({
   playheadMs,
   names,
   onSelect,
-  label = "How the call moved",
+  label = CALL_FLOW.timeline.label,
 }: {
   durationMs: number;
   /** Measured talk of the two people (see speechFromTranscript). */
@@ -594,7 +602,7 @@ export function CallTimeline({
       ? "level"
       : ("none" as const);
   const changeText = change
-    ? `${change.label ?? "Changed here"} · ${formatClock(change.at_ms)}`
+    ? `${change.label ?? CALL_FLOW.changedShort} · ${formatClock(change.at_ms)}`
     : null;
   const summary = [
     stages.length
@@ -631,7 +639,7 @@ export function CallTimeline({
           {moments.length ? (
             <span>
               <i data-side="pin" />
-              Moments
+              {CALL_FLOW.momentsLane}
             </span>
           ) : null}
           {changeText ? (
@@ -789,7 +797,7 @@ export function ChangeSteps({
   before,
   turn,
   after,
-  turnLabel = "The switch",
+  turnLabel = CALL_FLOW.switch,
 }: {
   before: ReactNode;
   turn: ReactNode;
@@ -833,14 +841,14 @@ const QUALITY: Record<
   Clear: {
     filled: 3,
     tone: "good",
-    meaning: "A specific action with a specific date or time.",
+    meaning: COMMITMENT_MEANING.Clear,
   },
   Soft: {
     filled: 2,
     tone: "warn",
-    meaning: "An action was mentioned, but no firm timing.",
+    meaning: COMMITMENT_MEANING.Soft,
   },
-  Unclear: { filled: 1, tone: "bad", meaning: "No reliable next step." },
+  Unclear: { filled: 1, tone: "bad", meaning: COMMITMENT_MEANING.Unclear },
 };
 
 /** How firm the next step is: Clear, Soft or Unclear, with what that means. */
@@ -868,7 +876,7 @@ export function CommitmentQuality({
 /** The report's last line: the story in five short cells. */
 export function SummaryStrip({
   cells,
-  label = "Report summary",
+  label = END_SUMMARY.title,
 }: {
   cells: { label: string; value: ReactNode; tone?: VisualTone }[];
   label?: string;
