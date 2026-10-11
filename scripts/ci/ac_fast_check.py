@@ -612,7 +612,67 @@ def pytest_summary(path: Path) -> dict[str, int]:
     return counts
 
 
+def vitest_summary(path: Path) -> tuple[dict[str, int], bool]:
+    """Read only the installed JSON reporter's counts and success flag."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        raise FastCheckError("Vitest did not produce valid test evidence") from None
+    fields = {
+        "passed": "numPassedTests",
+        "skipped": "numPendingTests",
+        "todo": "numTodoTests",
+        "failed": "numFailedTests",
+        "failed_suites": "numFailedTestSuites",
+    }
+    if not isinstance(document, dict):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    values = {key: document.get(field) for key, field in fields.items()}
+    total = document.get("numTotalTests")
+    success = document.get("success")
+    if (
+        any(type(value) is not int or value < 0 for value in (*values.values(), total))
+        or type(success) is not bool
+    ):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    counts = {key: int(document[field]) for key, field in fields.items()}
+    if total != sum(counts[key] for key in ("passed", "skipped", "todo", "failed")):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    return counts, success
+
+
+def run_vitest_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="ac-fast-vitest-", dir="/tmp") as directory:
+        report = Path(directory) / "results.json"
+        separator = check.argv.index("--") if "--" in check.argv else len(check.argv)
+        argv = (
+            *check.argv[:separator],
+            "--reporter=json",
+            f"--outputFile={report}",
+            *check.argv[separator:],
+        )
+        result = _run_check(Check(check.name, argv, check.cwd, check.scope), seconds, cpu_remaining)
+        if result["status"] not in {"passed", "failed"}:
+            return result
+        try:
+            counts, success = vitest_summary(report)
+        except FastCheckError as error:
+            result.update({"status": "failed", "reason": str(error)})
+            return result
+        result["vitest_summary"] = counts
+        if not success or counts["failed"] or counts["failed_suites"]:
+            result["status"] = "failed"
+        elif result["status"] == "passed":
+            if not any(counts.values()) and check.name.startswith("vitest:"):
+                result.update({"status": "failed", "reason": "No selected Vitest tests collected"})
+            elif not counts["passed"] or counts["skipped"] or counts["todo"]:
+                result["status"] = "partial"
+        return result
+
+
 def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
+    if check.name.startswith(("vitest:", "vitest-related:")):
+        return run_vitest_check(check, seconds, cpu_remaining)
     if check.name != "pytest":
         return _run_check(check, seconds, cpu_remaining)
     # Keep raw JUnit outside the source and remove it on every outcome. Only
@@ -819,6 +879,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if skipped:
         print(f"  coverage: {skipped} selected pytest cases skipped")
+    vitest_counts = [
+        result["vitest_summary"] for result in receipt["checks"] if "vitest_summary" in result
+    ]
+    pending = sum(counts["skipped"] + counts["todo"] for counts in vitest_counts)
+    if pending:
+        print(f"  coverage: {pending} selected Vitest cases skipped or todo")
+    empty = sum(not any(counts.values()) for counts in vitest_counts)
+    if empty:
+        print(f"  coverage: {empty} Vitest checks collected no tests")
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"

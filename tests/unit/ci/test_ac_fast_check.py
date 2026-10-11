@@ -15,6 +15,176 @@ import yaml
 from scripts.ci import ac_fast_check as FAST
 
 
+def vitest_evidence(
+    *,
+    passed: int = 0,
+    skipped: int = 0,
+    todo: int = 0,
+    failed: int = 0,
+    failed_suites: int = 0,
+    success: bool = True,
+) -> str:
+    return json.dumps(
+        {
+            "numPassedTests": passed,
+            "numPendingTests": skipped,
+            "numTodoTests": todo,
+            "numFailedTests": failed,
+            "numFailedTestSuites": failed_suites,
+            "numTotalTests": passed + skipped + todo + failed,
+            "success": success,
+            "testResults": [{"message": "fixture-private-output"}],
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("evidence", "related", "exit_code", "expected_status"),
+    [
+        (vitest_evidence(passed=1), False, 0, "passed"),
+        (vitest_evidence(skipped=1), False, 0, "partial"),
+        (vitest_evidence(passed=1, skipped=1), False, 0, "partial"),
+        (vitest_evidence(todo=1), False, 0, "partial"),
+        (vitest_evidence(), False, 0, "failed"),
+        (vitest_evidence(), True, 0, "partial"),
+        (vitest_evidence(failed=1), False, 0, "failed"),
+        (vitest_evidence(passed=1, failed_suites=1), False, 0, "failed"),
+        (vitest_evidence(passed=1, success=False), False, 0, "failed"),
+        (vitest_evidence(passed=1), False, 1, "failed"),
+    ],
+)
+def test_vitest_receipts_distinguish_executed_from_missing_coverage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    evidence: str,
+    related: bool,
+    exit_code: int,
+    expected_status: str,
+) -> None:
+    reports = []
+    original_summary = FAST.vitest_summary
+
+    def summary(path):
+        reports.append(path)
+        return original_summary(path)
+
+    monkeypatch.setattr(FAST, "vitest_summary", summary)
+    script = (
+        "import pathlib, sys\n"
+        "report = next(value for value in sys.argv if value.startswith('--outputFile='))\n"
+        "assert '--reporter=json' in sys.argv[:sys.argv.index('--')]\n"
+        "assert sys.argv.index(report) < sys.argv.index('--')\n"
+        f"pathlib.Path(report.split('=', 1)[1]).write_text({evidence!r})\n"
+        "print('fixture-private-output')\n"
+        f"sys.exit({exit_code})\n"
+    )
+    check = FAST.Check(
+        "vitest-related:fixture" if related else "vitest:fixture",
+        (sys.executable, "-c", script, "--", "fixture.test.ts"),
+        tmp_path,
+        ("fixture.test.ts",),
+    )
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == expected_status
+    assert result["returncode"] == exit_code
+    document = json.loads(evidence)
+    assert result["vitest_summary"] == {
+        "passed": document["numPassedTests"],
+        "skipped": document["numPendingTests"],
+        "todo": document["numTodoTests"],
+        "failed": document["numFailedTests"],
+        "failed_suites": document["numFailedTestSuites"],
+    }
+    assert reports and all(not report.parent.exists() for report in reports)
+    assert "fixture-private-output" not in json.dumps(result) + capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        None,
+        "not json",
+        "[]",
+        "{}",
+        vitest_evidence(passed=1).replace('"numTotalTests": 1', '"numTotalTests": 2'),
+        vitest_evidence(passed=1).replace('"numPassedTests": 1', '"numPassedTests": true'),
+        vitest_evidence(passed=-1),
+        vitest_evidence(passed=1).replace('"success": true', '"success": 1'),
+    ],
+)
+def test_success_without_valid_vitest_evidence_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: str | None,
+) -> None:
+    reports = []
+    original_summary = FAST.vitest_summary
+
+    def summary(path):
+        reports.append(path)
+        return original_summary(path)
+
+    monkeypatch.setattr(FAST, "vitest_summary", summary)
+    script = (
+        "import pathlib, sys\n"
+        "report = next(value.split('=', 1)[1] for value in sys.argv "
+        "if value.startswith('--outputFile='))\n"
+        f"evidence = {evidence!r}\n"
+        "if evidence is not None: pathlib.Path(report).write_text(evidence)\n"
+    )
+    check = FAST.Check("vitest:fixture", (sys.executable, "-c", script), tmp_path, ())
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == "failed" and result["returncode"] == 0
+    assert result["reason"] == "Vitest did not produce valid test evidence"
+    assert "vitest_summary" not in result
+    assert reports and all(not report.parent.exists() for report in reports)
+    assert "fixture-private-output" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    ("evidence", "expected_status", "expected_summary"),
+    [
+        (vitest_evidence(passed=1), "passed", None),
+        (vitest_evidence(passed=1, todo=1), "partial", "1 selected Vitest cases skipped or todo"),
+        (vitest_evidence(), "partial", "1 Vitest checks collected no tests"),
+    ],
+)
+def test_main_reports_unexecuted_vitest_coverage(
+    repository: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    evidence: str,
+    expected_status: str,
+    expected_summary: str | None,
+) -> None:
+    original_plan = FAST.plan
+
+    def vitest_plan(root, changed, cap):
+        _, metadata = original_plan(root, changed, cap)
+        return (FAST.Check("vitest-related:fixture", ("fixture",), root, ()),), metadata
+
+    def execute(check, seconds, cpu_remaining):
+        report = next(
+            value.split("=", 1)[1] for value in check.argv if value.startswith("--outputFile=")
+        )
+        Path(report).write_text(evidence)
+        return {"name": check.name, "status": "passed", "returncode": 0}
+
+    monkeypatch.setattr(FAST, "plan", vitest_plan)
+    monkeypatch.setattr(FAST, "_run_check", execute)
+    receipt = tmp_path.parent / (tmp_path.name + "-vitest-coverage.json")
+    assert FAST.main(["--root", str(repository), "--base", "HEAD", "--receipt", str(receipt)]) == 0
+    data = json.loads(receipt.read_text())
+    assert data["status"] == data["checks"][0]["status"] == expected_status
+    assert data["commit"] == git(repository, "rev-parse", "HEAD")
+    output = capsys.readouterr().out
+    if expected_summary is not None:
+        assert expected_summary in output
+    assert "fixture-private-output" not in json.dumps(data) + output
+
+
 @pytest.fixture(autouse=True)
 def shared_slot_adapter(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
