@@ -781,6 +781,11 @@ button.pin:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* The phone track's span (00:00 … end), shown only when the stages stack. */
+.trackAxis {
+  display: none;
+}
+
 /* Side by side the next stage's start says where this one ends. */
 .stageEnd {
   display: none;
@@ -864,6 +869,27 @@ button.pin:focus-visible {
   .timeline:not([data-single]) .bars {
     inset: 4px 1px;
     gap: 1px;
+  }
+
+  .timeline:not([data-single]) .trackAxis {
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr) minmax(112px, 46%);
+    column-gap: 12px;
+    margin: 0 0 -6px;
+    color: var(--sx-muted);
+    font: 400 var(--sx-text-xs) / 1 var(--lx-font-ui);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline:not([data-single]) .trackAxis > span:first-child {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .timeline:not([data-single]) .trackAxis > span:last-child {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
   }
 }
 

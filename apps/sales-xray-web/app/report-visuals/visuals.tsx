@@ -63,6 +63,7 @@ import {
   cleanPhases,
   positionIn,
   shares,
+  stageTints,
   voiceBars,
   type Speech,
   type TimelinePhase,
@@ -589,6 +590,7 @@ export function CallTimeline({
     ? stages
     : [{ label: "", start_ms: 0, end_ms: durationMs }];
   const lengths = blocks.map((block) => block.end_ms - block.start_ms);
+  const tints = stageTints(blocks.map((block) => block.label));
   const bars = allocateBars(lengths, WAVE_BARS, 3);
   // Phones draw fewer, wider bars: the stages as rows on one track of the
   // whole call (a bar the same width in every row), or one strip without them.
@@ -651,6 +653,13 @@ export function CallTimeline({
           ) : null}
         </p>
       ) : null}
+      {stages.length ? (
+        // Phones: the whole call's span over the stages' shared track.
+        <p className={styles.trackAxis} aria-hidden="true">
+          <span>00:00</span>
+          <span>{formatClock(durationMs)}</span>
+        </p>
+      ) : null}
       <ol className={styles.blocks}>
         {blocks.map((block, index) => {
           const last = index === blocks.length - 1;
@@ -704,7 +713,7 @@ export function CallTimeline({
             <li
               key={`${block.label}-${block.start_ms}`}
               className={styles.block}
-              data-stage={index % 4}
+              data-stage={tints[index]}
               style={
                 {
                   flexGrow: block.end_ms - block.start_ms,

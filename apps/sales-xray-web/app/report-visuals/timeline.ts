@@ -140,6 +140,20 @@ export function allocateBars(
   return bars;
 }
 
+/**
+ * One tint per stage name, in order of first appearance (four, then round
+ * again): a call that returns to a stage shows it in the same colour, since
+ * the framework is non-linear and calls do go back to discovery.
+ */
+export function stageTints(labels: readonly string[], tints = 4): number[] {
+  const seen = new Map<string, number>();
+  return labels.map((label) => {
+    const key = label.trim().toLowerCase();
+    if (!seen.has(key)) seen.set(key, seen.size % tints);
+    return seen.get(key)!;
+  });
+}
+
 /** Position (0-1) of a time inside a stretch of the call, clamped. */
 export function positionIn(atMs: number, startMs: number, endMs: number) {
   if (!(endMs > startMs)) return 0;

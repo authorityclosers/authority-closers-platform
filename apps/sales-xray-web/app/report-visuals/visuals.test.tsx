@@ -169,6 +169,8 @@ it("draws the call in stages with moments and the change point", () => {
   );
   expect(markup).toMatch(/data-key="change">.*The call changed · 11:18/);
   expect(markup).toContain('data-mode="speech"');
+  // The phone track's span sits over the stages.
+  expect(markup).toMatch(/<span>00:00<\/span><span>25:08<\/span>/);
   // Phones: each stage sits on one track of the call at its own place and
   // length, with its own set of wider bars (40 across the whole call).
   expect(markup).toContain("--from:0.09946949602122016");
