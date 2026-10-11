@@ -62,6 +62,22 @@
   font-size: var(--sx-text-xs);
 }
 
+.filterArea {
+  display: grid;
+  gap: 8px;
+}
+
+.filterToggle {
+  display: none;
+  justify-self: start;
+}
+
+/* Selects size to their longest option; cap them so the bar stays on one line. */
+.filterSelect {
+  max-width: 172px;
+  text-overflow: ellipsis;
+}
+
 /* A date filter with its visible label ("From" / "To") inside the control. */
 .dateFilter {
   display: inline-flex;
@@ -92,6 +108,22 @@
 }
 
 @media (max-width: 760px) {
+  .hint {
+    display: none;
+  }
+
+  .filterToggle {
+    display: inline-flex;
+  }
+
+  .filterArea:not([data-shown]) > [role="group"] {
+    display: none;
+  }
+
+  .filterSelect {
+    max-width: none;
+  }
+
   .dateFilter {
     flex: 1 1 140px;
   }
