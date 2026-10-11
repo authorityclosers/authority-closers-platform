@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -16,7 +18,8 @@ from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
 from sqlalchemy import update
 
-from ac_platform.conversation_intelligence import pipeline_timings
+from ac_platform.conversation_intelligence import pipeline_timings, signals
+from ac_platform.conversation_intelligence import worker as worker_module
 from ac_platform.conversation_intelligence.models import ConversationReportDraft
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from tests.database.test_conversation_authority_postgresql import _setup
@@ -30,6 +33,19 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
+@pytest.fixture(scope="module")
+def native(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    # CI prepares the checked-in native tool. A local timing check must also
+    # work without it, while retaining source and binary verification.
+    try:
+        return signals._native_executable(None)
+    except signals.SignalError as error:
+        if str(error) != "signal_native_build_required":
+            raise
+    built = signals.build_native(tmp_path_factory.mktemp("pipeline-timings-native"))
+    return signals._native_executable(built)
+
+
 def _dsn(url: Any) -> str:
     # SQLAlchemy URI query spaces use '+', while libpq expects literal options.
     return make_conninfo(
@@ -38,8 +54,12 @@ def _dsn(url: Any) -> str:
 
 
 def test_canonical_pipeline_timings_and_erased_delivery(
-    postgres_harness: Any, tmp_path: Any
+    postgres_harness: Any, tmp_path: Any, native: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(
+        worker_module, "inspect_media", partial(signals.inspect_media, native_executable=native)
+    )
+
     async def exercise() -> None:
         since = datetime.now(UTC) - timedelta(seconds=1)
         setup = await _setup(postgres_harness, tmp_path)
