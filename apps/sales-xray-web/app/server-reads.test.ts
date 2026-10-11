@@ -75,15 +75,30 @@ it("asks the API as this request (its cookie and host), GET only, together", asy
     });
 });
 
-it("leaves reading to the browser without a session cookie, a sane host or an origin", async () => {
+it("leaves reading to the browser without a session cookie, a sane host, an origin or a full page load", async () => {
   incoming.value = new Headers({ host: "salesxray-dev.example.test" });
   expect(await serverReads(["/v1/me/workspaces"])).toBeNull();
   incoming.value = new Headers({ cookie: "a=b", host: "evil host/x" });
+  expect(await serverReads(["/v1/me/workspaces"])).toBeNull();
+  // An in-app navigation or prefetch (not the document): the browser reads.
+  incoming.value = new Headers({
+    cookie: "a=b",
+    host: "ok.test",
+    "sec-fetch-dest": "empty",
+  });
   expect(await serverReads(["/v1/me/workspaces"])).toBeNull();
   vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "");
   incoming.value = new Headers({ cookie: "a=b", host: "ok.test" });
   expect(await serverReads(["/v1/me/workspaces"])).toBeNull();
   expect(network).not.toHaveBeenCalled();
+  // A full page load reads.
+  vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "http://127.0.0.1:8100");
+  incoming.value = new Headers({
+    cookie: "a=b",
+    host: "ok.test",
+    "sec-fetch-dest": "document",
+  });
+  expect(await serverReads(["/v1/me/workspaces"])).not.toBeNull();
 });
 
 it("starts the app ready only from a full, selected server session", async () => {

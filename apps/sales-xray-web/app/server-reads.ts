@@ -47,8 +47,9 @@ const HOST = /^[a-z0-9.-]+(?::[0-9]+)?$/i;
 
 /**
  * GET each path on the API as this request (its cookie and host), together,
- * within `timeoutMs`. Null when server reads are off or the request has no
- * session cookie; a single read that fails or times out is null in the map.
+ * within `timeoutMs`. Null when server reads are off, the request is not a
+ * full page load or has no session cookie; a single read that fails or times
+ * out is null in the map.
  */
 export async function serverReads(
   paths: readonly string[],
@@ -57,6 +58,12 @@ export async function serverReads(
   const origin = serverApiOrigin();
   if (!origin) return null;
   const incoming = await headers();
+  // Full page loads only. An in-app navigation reads in the browser, fresh:
+  // Next may reuse a navigation's server payload for 30 s (`staleTimes`), and
+  // it should not wait for reads here. (Next hides its own navigation header
+  // from pages; the browser's Fetch Metadata names the document request.)
+  const destination = incoming.get("sec-fetch-dest");
+  if (destination && destination !== "document") return null;
   const cookie = incoming.get("cookie");
   const host = incoming.get("host") ?? "";
   if (!cookie || !HOST.test(host)) return null;
