@@ -1,3 +1,5 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { parseCoaching } from "../../coaching/coaching-client";
@@ -49,5 +51,27 @@ describe("Coaching review fixture", () => {
     );
     expect(call?.state).toBe("ready");
     expect(call?.evidence.every((moment) => !moment.playable)).toBe(true);
+  });
+  it("opens the level named in the address and keeps a new choice there", async () => {
+    window.history.replaceState(null, "", "/review-fixture/coaching?view=me");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<CoachingFixture />));
+    const pressed = () =>
+      [...host.querySelectorAll('button[aria-pressed="true"]')].map(
+        (button) => button.textContent,
+      );
+    expect(pressed()).toContain("My coaching");
+    expect(host.textContent).toContain("Why This Keeps Happening");
+    const team = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Team",
+    );
+    await act(async () => team?.click());
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("team");
+    expect(pressed()).toContain("Team");
+    await act(async () => root.unmount());
+    host.remove();
+    window.history.replaceState(null, "", "/");
   });
 });

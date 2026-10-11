@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader, Segmented } from "../../ui/kit";
 import { CallCoachingStory } from "../../coaching/call-coaching";
 import { parseCoaching } from "../../coaching/coaching-client";
@@ -15,6 +15,13 @@ import acSandbox from "./sandbox-team.json";
 type View = "call" | "me" | "team";
 type Data = "review" | "sandbox";
 
+/** Keep the chosen level in the address, so a reload or a link opens it. */
+function remember(key: "view" | "data", value: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(key, value);
+  window.history.replaceState(window.history.state, "", url);
+}
+
 /**
  * Synthetic payloads through the real parsers and screens: the design review
  * set (Dipak clip preview and locked states) and AC Sandbox, built from the
@@ -23,6 +30,13 @@ type Data = "review" | "sandbox";
 export function CoachingFixture() {
   const [view, setView] = useState<View>("call");
   const [data, setData] = useState<Data>("review");
+  // ?view=me|team and ?data=sandbox, read once after the first render.
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const wanted = query.get("view");
+    if (wanted === "me" || wanted === "team") setView(wanted);
+    if (query.get("data") === "sandbox") setData("sandbox");
+  }, []);
   const set = data === "sandbox" ? acSandbox : sandbox;
   const call = parseCallCoaching(set.call, set.call.submission_id);
   const me = parseCoaching(data === "sandbox" ? acSandbox.rep : sandbox.me);
@@ -44,7 +58,10 @@ export function CoachingFixture() {
             <Segmented<Data>
               label="Data"
               value={data}
-              onChange={setData}
+              onChange={(next) => {
+                setData(next);
+                remember("data", next);
+              }}
               items={[
                 { key: "review", label: "Design review" },
                 { key: "sandbox", label: "AC Sandbox" },
@@ -53,7 +70,10 @@ export function CoachingFixture() {
             <Segmented<View>
               label="Coaching level"
               value={view}
-              onChange={setView}
+              onChange={(next) => {
+                setView(next);
+                remember("view", next);
+              }}
               items={[
                 { key: "call", label: "This call" },
                 {
