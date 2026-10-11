@@ -348,10 +348,10 @@ export function parseCallPage(body: unknown): CallPage {
 export function filtersFrom(
   params: Readonly<Record<string, string | string[] | undefined>>,
 ): Filters {
-  const one = (name: string) => {
+  const one = (name: string, limit = 160) => {
     const value = params[name];
     const text = Array.isArray(value) ? value[0] : value;
-    return text && text.length <= 160 ? text : null;
+    return text && text.length <= limit ? text : null;
   };
   const range = one("range");
   const outcome = one("outcome");
@@ -364,7 +364,7 @@ export function filtersFrom(
     outcome: OUTCOMES.some((item) => item.key === outcome)
       ? (outcome as OutcomeKey)
       : null,
-    language: one("language"),
+    language: one("language", 32),
   };
 }
 

@@ -177,3 +177,78 @@ it("never reads or refreshes in a review fixture", async () => {
   );
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+it("finishes preparing under React's development double effects", async () => {
+  const { StrictMode } = await import("react");
+  let refreshes = 0;
+  fetchMock.mockImplementation(async (path: string) => {
+    if (path.endsWith("/refresh")) {
+      refreshes += 1;
+      return json({ projected: 5, pending: 0 });
+    }
+    if (path.includes("/calls")) return json(fixture.calls);
+    return json({ ...fixture.overview, pending: 0 });
+  });
+  await render(
+    <StrictMode>
+      <InsightsView
+        filters={DEFAULT_FILTERS}
+        initial={{ status: 200, body: { ...fixture.overview, pending: 5 } }}
+        initialCalls={{ status: 200, body: fixture.calls }}
+      />
+    </StrictMode>,
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(refreshes).toBeGreaterThanOrEqual(1);
+  expect(host.textContent).not.toContain("Preparing");
+});
+
+it("never lets an older answer replace newer figures", async () => {
+  let releaseOld: (() => void) | null = null;
+  fetchMock.mockImplementation(async (path: string) => {
+    if (path.includes("outcome=lost") && !path.includes("/calls"))
+      await new Promise<void>((resolve) => {
+        releaseOld = resolve;
+      });
+    const body = path.includes("/calls")
+      ? fixture.calls
+      : {
+          ...fixture.overview,
+          totals: {
+            ...fixture.overview.totals,
+            calls: path.includes("outcome=lost") ? 111 : 222,
+          },
+        };
+    return json(body);
+  });
+  await render(
+    <InsightsView
+      filters={DEFAULT_FILTERS}
+      initial={{ status: 200, body: fixture.overview }}
+      initialCalls={{ status: 200, body: fixture.calls }}
+    />,
+  );
+  const outcome = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="Outcome"]',
+  )!;
+  await act(async () => {
+    outcome.value = "lost";
+    outcome.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => {
+    outcome.value = "won";
+    outcome.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(host.textContent).toContain("222 calls");
+  await act(async () => {
+    releaseOld?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(host.textContent).toContain("222 calls");
+  expect(host.textContent).not.toContain("111 calls");
+});

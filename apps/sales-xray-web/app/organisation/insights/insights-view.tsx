@@ -142,19 +142,25 @@ export function InsightsView({
   );
   const [moreLoading, setMoreLoading] = useState(false);
   const [preparing, setPreparing] = useState<number | null>(null);
-  const seeded = useRef(read.status === "ready" ? query : null);
-  const refreshing = useRef(false);
+  // The query whose figures are on screen (or on their way): a repeat of the
+  // same query (React's development double effects) never reads twice.
+  const shown = useRef(read.status === "ready" ? query : null);
+  // Every read gets a number; an answer for an older one is dropped.
+  const sequence = useRef(0);
 
   const load = useCallback(async (target: string) => {
+    const id = ++sequence.current;
     setUpdating(true);
     try {
       const [overview, page] = await Promise.all([
         readJson(INSIGHTS_PATH + target),
         readJson(`${INSIGHTS_PATH}/calls${target}`).catch(() => null),
       ]);
+      if (id !== sequence.current) return;
       setRead({ status: "ready", value: parseInsights(overview) });
       setCalls(page === null ? null : parseCallPage(page));
     } catch (error) {
+      if (id !== sequence.current) return;
       const status = error instanceof ReadError ? error.status : 0;
       if (status === 403) setRead({ status: "denied" });
       else if (status === 401) setRead({ status: "signed-out" });
@@ -171,16 +177,21 @@ export function InsightsView({
         });
       }
     } finally {
-      setUpdating(false);
+      if (id === sequence.current) setUpdating(false);
     }
   }, []);
 
+  // The address always says what is shown (after a workspace switch too).
   useEffect(() => {
     if (fixture) return;
-    if (seeded.current === query) {
-      seeded.current = null;
-      return;
-    }
+    const target = `${pathname}${queryOf(filters)}`;
+    if (`${window.location.pathname}${window.location.search}` !== target)
+      window.history.replaceState(null, "", target);
+  }, [filters, fixture, pathname]);
+
+  useEffect(() => {
+    if (fixture || shown.current === query) return;
+    shown.current = query;
     void load(query);
   }, [query, load, fixture]);
 
@@ -188,8 +199,9 @@ export function InsightsView({
   // bounded batches, then read again. Honest about it while it runs.
   const pending = read.status === "ready" ? read.value.pending : 0;
   useEffect(() => {
-    if (fixture || pending <= 0 || refreshing.current) return;
-    refreshing.current = true;
+    // Each run owns its loop; a new filter or answer cancels the old one, and
+    // the line always clears when its loop ends or is cancelled.
+    if (fixture || pending <= 0) return;
     let cancelled = false;
     (async () => {
       let left = pending;
@@ -213,12 +225,12 @@ export function InsightsView({
             message: "The figures show the calls prepared so far.",
           });
       } finally {
-        refreshing.current = false;
         if (!cancelled) setPreparing(null);
       }
     })();
     return () => {
       cancelled = true;
+      setPreparing(null);
     };
   }, [pending, fixture, load, query]);
 
@@ -233,6 +245,7 @@ export function InsightsView({
 
   async function more() {
     if (!calls || calls.nextOffset === null || moreLoading) return;
+    const id = sequence.current;
     setMoreLoading(true);
     try {
       const page = parseCallPage(
@@ -240,6 +253,8 @@ export function InsightsView({
           `${INSIGHTS_PATH}/calls${queryOf(filters, { offset: String(calls.nextOffset) })}`,
         ),
       );
+      // A filter changed meanwhile: these rows belong to the old list.
+      if (id !== sequence.current) return;
       setCalls({ ...page, items: [...calls.items, ...page.items] });
     } catch {
       notify({

@@ -278,7 +278,11 @@ export function CompanyView({
         filters={filters}
         facets={data.facets}
       />
-      <PrepareCalls organisation={organisation.id} pending={data.pending} />
+      <PrepareCalls
+        key={organisation.id}
+        organisation={organisation.id}
+        pending={data.pending}
+      />
       <Tiles label="This period">
         <Kpi
           label="Calls analysed"
