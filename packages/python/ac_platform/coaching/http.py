@@ -78,14 +78,17 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
     call_cache = CallCoachingCache()
 
-    async def with_media(view: CoachingRead) -> CoachingRead:
+    async def with_media(view: CoachingRead, *, their: bool = False) -> CoachingRead:
         if view.focus is None:
             return view
         topics = await asyncio.to_thread(read_topics)
         clips = suggestions(
             topics, skill_id=view.focus.skill_id, gap_type=view.root_cause.gap_type
         ) or await asyncio.to_thread(
-            placeholder.clips_for, view.focus.skill_id, gap_type=view.root_cause.gap_type
+            placeholder.clips_for,
+            view.focus.skill_id,
+            gap_type=view.root_cause.gap_type,
+            their=their,
         )
         limitations = view.limitations
         if clips:
@@ -265,7 +268,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 view = await with_context(
                     view, person_id, library.ownership.tenant_id, library.database
                 )
-            view = await with_media(view)
+            view = await with_media(view, their=True)
             return CoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )

@@ -143,3 +143,11 @@ def test_a_lesson_for_the_likely_gap_comes_first_and_says_so_only_when_true() ->
     assert "spotting the moment live" in judgment[0].reason
     unknown = placeholder.clips_for("closing_decision_management", gap_type="uncertain")
     assert all("gap" not in clip.reason for clip in unknown)
+
+
+def test_another_reps_lesson_reason_says_they_not_you() -> None:
+    mine = placeholder.clips_for("qualification")[0]
+    theirs = placeholder.clips_for("qualification", their=True)[0]
+    assert mine.reason.endswith("the skill you’re working on.")
+    assert theirs.reason.endswith("the skill they’re working on.")
+    assert theirs.model_copy(update={"reason": mine.reason}) == mine

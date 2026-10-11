@@ -120,7 +120,9 @@ GAP_WORDS = {
 }
 
 
-def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestion:
+def _clip(
+    topic: PlaceholderTopic, gap_type: str | None = None, *, their: bool = False
+) -> ClipSuggestion:
     label = SKILL_LABELS[topic.skill_id]
     # Say why only with facts on both sides: the lesson's tag and this coaching's
     # likely reason. A guessed match is never claimed.
@@ -129,6 +131,7 @@ def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestio
         if gap_type == topic.gap_type and topic.gap_type in GAP_WORDS
         else ""
     )
+    who = "they’re" if their else "you’re"
     preview_end = (
         topic.start_ms + topic.preview_ms
         if topic.previewable and topic.preview_ms is not None
@@ -151,7 +154,7 @@ def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestio
         start_ms=topic.start_ms,
         end_ms=topic.end_ms,
         reason=(
-            f"Dipak’s lesson on {label}, the skill you’re working on.{gap}"
+            f"Dipak’s lesson on {label}, the skill {who} working on.{gap}"
             if topic.free
             else f"Another lesson on {label}, from Dipak’s full coaching.{free_part}{gap}"
         ),
@@ -163,19 +166,20 @@ def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestio
 
 
 def clips_for(
-    skill_id: str, root: Path = MEDIA, *, gap_type: str | None = None
+    skill_id: str, root: Path = MEDIA, *, gap_type: str | None = None, their: bool = False
 ) -> tuple[ClipSuggestion, ...]:
     """One free lesson and one locked lesson for an assessed skill; else none.
 
     Among the skill's further lessons, one tagged for the likely gap comes
     first (spec 11: the most specific asset). An unlinked report suggestion
-    has no assessed skill, so no clip is guessed.
+    has no assessed skill, so no clip is guessed. `their`: another rep's
+    coaching, so the reason says "they're", not "you're".
     """
     matching = sorted((t for t in topics(root) if t.skill_id == skill_id), key=lambda t: t.priority)
     free = next((t for t in matching if t.free), None)
     further = [t for t in matching if not t.free]
     locked = next((t for t in further if t.gap_type == gap_type), None) or next(iter(further), None)
-    return tuple(_clip(t, gap_type) for t in (free, locked) if t is not None)
+    return tuple(_clip(t, gap_type, their=their) for t in (free, locked) if t is not None)
 
 
 def playable(
