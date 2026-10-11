@@ -34,7 +34,7 @@ class SnapshotChanged(ValueError):
 
 
 class InventorySnapshot:
-    """Keep the original boundary and observed identities across retries."""
+    """Keep the original boundary, older identities and recent byte bounds."""
 
     def __init__(self, started_at: datetime | None = None) -> None:
         # GitHub timestamps have second precision. Exclude the boundary second
@@ -42,6 +42,7 @@ class InventorySnapshot:
         self.started_at = (started_at or datetime.now(UTC)).replace(microsecond=0)
         self.expected_count: int | None = None
         self.known: dict[int, dict[str, Any]] = {}
+        self.recent: dict[int, dict[str, Any]] = {}
 
 
 def artifact_created_at(artifact: dict[str, Any]) -> datetime:
@@ -66,6 +67,7 @@ def validate_inventory(
         raise ValueError("missing inventory pages")
     artifacts: dict[int, dict[str, Any]] = {}
     older: dict[int, dict[str, Any]] = {}
+    maximum_count = 0
     for index, page in enumerate(pages):
         if (
             not isinstance(page, dict)
@@ -79,6 +81,7 @@ def validate_inventory(
             raise ValueError("incomplete inventory page")
         if not expected_size and (index or len(pages) != 1):
             raise ValueError("unexpected empty inventory page")
+        maximum_count = max(maximum_count, page["total_count"])
         recent: set[int] = set()
         for artifact in page["artifacts"]:
             if (
@@ -94,9 +97,14 @@ def validate_inventory(
                 raise ValueError("invalid artifact schema")
             identity = artifact["id"]
             in_snapshot = artifact_created_at(artifact) < snapshot.started_at
-            previous = snapshot.known.get(identity) or artifacts.get(identity)
-            if previous and (in_snapshot or identity in snapshot.known) and any(
-                previous[key] != artifact[key] for key in ("size_in_bytes", "name", "created_at")
+            previous = snapshot.known.get(identity) or snapshot.recent.get(identity)
+            if (
+                previous
+                and (in_snapshot or identity in snapshot.known)
+                and any(
+                    previous[key] != artifact[key]
+                    for key in ("size_in_bytes", "name", "created_at")
+                )
             ):
                 raise SnapshotChanged("artifact identity or size changed during inventory")
             artifacts[identity] = (
@@ -109,6 +117,7 @@ def validate_inventory(
                 snapshot.known[identity] = artifact
             else:
                 recent.add(identity)
+                snapshot.recent[identity] = artifacts[identity]
         if index == 0:
             # GitHub lists newest artifacts first. If the boundary is hidden
             # behind a whole page of concurrent uploads, do not guess its count.
@@ -121,9 +130,14 @@ def validate_inventory(
                 raise ValueError("older artifact count changed during inventory")
     if len(older) != snapshot.expected_count or not snapshot.known.keys() <= older.keys():
         raise ValueError("incomplete inventory")
-    # New uploads are outside the completeness proof, but count any observed
-    # bytes conservatively for the ceiling. Repeated IDs are charged only once.
-    return list(artifacts.values()), len(pages)
+    # Older completeness alone cannot bound unseen uploads at the front of
+    # already-read pages. Require this sweep to account for every reported row;
+    # otherwise restart at page one, preserving all previously observed bounds.
+    if len(artifacts) != maximum_count:
+        raise ValueError("incomplete inventory: unobserved artifacts")
+    # Charge the largest recent size across attempts, including recent IDs
+    # missing from a later sweep. Repeated IDs are charged only once.
+    return list((snapshot.recent | artifacts).values()), len(pages)
 
 
 def read_inventory(

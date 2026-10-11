@@ -12,9 +12,12 @@ checks the number and sizes of artifacts predating that boundary. The boundary,
 original count and observed older identities survive retries; retries cannot
 silently accept a smaller pool after an older artifact disappears. Missing
 pages, malformed metadata and transport failures still fail closed. Older
-identity/size changes fail immediately. New uploads do not invalidate the older
-snapshot, and any observed new bytes still count conservatively (the largest
-observed size for a repeated new ID).
+identity/size changes fail immediately. Each accepted sweep also accounts for
+the largest repository artifact count reported by its pages. A sweep covering
+all older identities but omitting new uploads retries from page one; sustained
+unobserved uploads exhaust the existing three attempts without publishing a
+partial inventory. Recent observations survive retries, charging the largest
+observed size per ID even when a later sweep omits that recent ID.
 
 GitHub timestamps have second precision. The proof excludes the start second
 from its older set, while charging observed bytes, so an upload started during
@@ -33,7 +36,30 @@ for a separate small follow-up after PRs #442 and #437 merge. Visual evidence
 and release artifact retention remain unchanged. This inventory repair does
 not delete existing diagnostic artifacts or relax the ceiling.
 
-Validation on the AC server:
+Validation on the AC server after CTO review at `9af6cce`:
+
+- Before the fix, the real workflow's admission step accepted the 201 -> 202 ->
+  203 fixture at a projected **1,405,000,000 bytes**, omitting two 500 MB uploads.
+  After the fix it rejects that incomplete sweep, recovers all 203 artifacts
+  on attempt two, and refuses the **2,405,000,000-byte** projection against the
+  unchanged 2 GB ceiling. The fixture invokes the repository workflow and shared
+  readers with synthetic CLI responses; it verifies no deletion occurred.
+- Before the fix, a retry observing recent ID 101 at 500 bytes and then 1 byte
+  returned **1,001 bytes**. Afterward it retains the **1,500-byte** bound. A
+  second case verifies the bound survives when the recent ID disappears from
+  the subsequent sweep. Repeated unobserved uploads fail after three attempts.
+- `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **122 passed in 17.79 s**.
+  Every original test function remains; four cases were added. Fixtures that
+  previously accepted an unbounded upload gap now require its recovery or
+  rejection, preserving older-byte, second-precision and size-bound assertions.
+- Focused Ruff/format checks, incremental mypy on both readers and
+  `git diff --check`: passed. No workflow, dependency or gate file changed.
+- Raw before/after receipts are in the strike folder:
+  `review-unseen-uploads-before-valid.xml`, `review-recent-size-before.xml`, and
+  `review-admission-after.xml`. The earlier `review-unseen-uploads-before.xml`
+  used an out-of-range pool fixture and is not evidence of the admission defect.
+
+Historical validation before those review corrections:
 
 - `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **118 passed in 21.79 s**.
 - Focused Ruff/format checks, incremental mypy on both readers (`--follow-imports=silent`) and `git diff --check`: passed. The dynamic shared-reader return has an explicit type annotation; runtime inventory behavior is unchanged.
@@ -42,7 +68,7 @@ Validation on the AC server:
   unique artifacts**, **2,244,516,417 bytes**. No artifact deletion was invoked.
 - Open PR file inventory: no overlap with the six implementation/test files.
 
-The live pool is still above the inbox's 2 GB ceiling. Release admission must
+That historical snapshot was above the inbox's 2 GB ceiling. Release admission must
 continue to refuse if existing permitted superseded-artifact reclamation cannot
 make room. GitHub CI and CTO/CEO review remain required for this sensitive
 workflow/infrastructure repair. No deployment, manual merge, or production/data

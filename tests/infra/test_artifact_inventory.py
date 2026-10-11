@@ -40,8 +40,24 @@ def changing_pages() -> list[dict]:
     ]
 
 
+def complete_pages(items: list[dict]) -> list[dict]:
+    return [
+        {"total_count": len(items), "artifacts": items[start : start + 100]}
+        for start in range(0, max(1, len(items)), 100)
+    ]
+
+
 def test_uploads_between_pages_deduplicate_without_losing_older_bytes() -> None:
-    items, pages = READER["validate_inventory"](json.dumps(changing_pages()), snapshot=snapshot())
+    state = snapshot()
+    with pytest.raises(ValueError, match="unobserved artifacts"):
+        READER["validate_inventory"](json.dumps(changing_pages()), snapshot=state)
+    recovered = [artifact(203, recent=True), artifact(202, recent=True)]
+    recovered.extend(artifact(identity) for identity in range(201, 0, -1))
+    all_items, pages = READER["validate_inventory"](
+        json.dumps(complete_pages(recovered)), snapshot=state
+    )
+    assert len(all_items) == 203
+    items = [item for item in all_items if item["id"] <= 201]
     assert pages == 3
     assert len(items) == 201
     assert {item["id"] for item in items} == set(range(1, 202))
@@ -53,7 +69,7 @@ def test_recent_uploads_are_outside_proof_but_observed_bytes_still_count() -> No
     recent = artifact(101, size=500, recent=True)
     pages = [
         {"total_count": 101, "artifacts": [recent, *older[:99]]},
-        {"total_count": 102, "artifacts": older[-2:]},
+        {"total_count": 101, "artifacts": older[-1:]},
     ]
     state = snapshot()
     items, _ = READER["validate_inventory"](json.dumps(pages), snapshot=state)
@@ -80,7 +96,11 @@ def test_recent_upload_size_churn_uses_largest_observed_size() -> None:
         {"total_count": 101, "artifacts": [recent, *older[:99]]},
         {"total_count": 102, "artifacts": [{**recent, "size_in_bytes": 1}, older[-1]]},
     ]
-    items, _ = READER["validate_inventory"](json.dumps(pages), snapshot=snapshot())
+    state = snapshot()
+    with pytest.raises(ValueError, match="unobserved artifacts"):
+        READER["validate_inventory"](json.dumps(pages), snapshot=state)
+    recovered = [{**recent, "size_in_bytes": 1}, *older]
+    items, _ = READER["validate_inventory"](json.dumps(complete_pages(recovered)), snapshot=state)
     assert len(items) == 101
     assert sum(item["size_in_bytes"] for item in items) == 1500
 
@@ -100,7 +120,11 @@ def test_second_precision_does_not_misclassify_an_inflight_upload_as_older() -> 
         {"total_count": 101, "artifacts": [recent, *older[:99]]},
         {"total_count": 102, "artifacts": [{**recent, "size_in_bytes": 600}, older[-1]]},
     ]
-    items, _ = READER["validate_inventory"](json.dumps(pages), snapshot=state)
+    with pytest.raises(ValueError, match="unobserved artifacts"):
+        READER["validate_inventory"](json.dumps(pages), snapshot=state)
+    items, _ = READER["validate_inventory"](
+        json.dumps(complete_pages([recent, *older])), snapshot=state
+    )
     assert state.expected_count == 100
     assert len(state.known) == 100
     assert sum(item["size_in_bytes"] for item in items) == 1600
@@ -160,11 +184,40 @@ def test_retry_rechecks_sizes_seen_in_an_incomplete_attempt(
         )
 
 
+@pytest.mark.parametrize("still_present", [True, False])
+def test_retry_preserves_recent_size_bound(
+    monkeypatch: pytest.MonkeyPatch, still_present: bool
+) -> None:
+    older = [artifact(identity) for identity in range(100, 0, -1)]
+    recent = artifact(101, size=500, recent=True)
+    completed = (
+        [
+            {"total_count": 101, "artifacts": [{**recent, "size_in_bytes": 1}, *older[:99]]},
+            {"total_count": 101, "artifacts": older[-1:]},
+        ]
+        if still_present
+        else [{"total_count": 100, "artifacts": older}]
+    )
+    responses = iter([[{"total_count": 101, "artifacts": [recent, *older[:99]]}], completed])
+    monkeypatch.setattr(READER["time"], "sleep", lambda _: None)
+    items = READER["read_inventory"](
+        "/fixture/gh",
+        "fixture/repository",
+        "admission",
+        fetch=lambda: json.dumps(next(responses)),
+    )
+    assert {item["id"] for item in items} == set(range(1, 102))
+    assert sum(item["size_in_bytes"] for item in items) == 1500
+    assert RECLAIMER["projection"](items, 100, None) == 1600
+
+
 def test_reader_retries_transient_missing_page_then_accepts_upload_churn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pages = changing_pages()
-    responses = iter([pages[:1], pages])
+    recovered = [artifact(203, recent=True), artifact(202, recent=True)]
+    recovered.extend(artifact(identity) for identity in range(201, 0, -1))
+    responses = iter([pages[:1], pages, complete_pages(recovered)])
     sleeps = []
     monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
     items = READER["read_inventory"](
@@ -173,8 +226,30 @@ def test_reader_retries_transient_missing_page_then_accepts_upload_churn(
         "admission",
         fetch=lambda: json.dumps(next(responses)),
     )
-    assert len(items) == 201
-    assert sleeps == [2]
+    assert len(items) == 203
+    assert {item["id"] for item in items} == set(range(1, 204))
+    assert sleeps == [2, 4]
+
+
+def test_unobserved_uploads_exhaust_retries_without_publishing_bytes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = []
+    sleeps = []
+
+    def fetch() -> str:
+        calls.append(True)
+        return json.dumps(changing_pages())
+
+    monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
+    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+        READER["read_inventory"]("/fixture/gh", "fixture/repository", "admission", fetch=fetch)
+    assert len(calls) == 3
+    assert sleeps == [2, 4]
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "complete pages=" not in output.err
+    assert output.err.count("unobserved artifacts") == 3
 
 
 @pytest.mark.parametrize("created", [None, "invalid", "2026-10-01T00:00:00", 1])
@@ -196,10 +271,14 @@ def test_reclaimer_uses_the_same_concurrent_pagination_proof(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     github = RECLAIMER["GitHub"]("fixture/repository")
-    monkeypatch.setattr(github, "api", lambda *args, **kwargs: changing_pages())
+    recovered = [artifact(203, recent=True), artifact(202, recent=True)]
+    recovered.extend(artifact(identity) for identity in range(201, 0, -1))
+    responses = iter([changing_pages(), complete_pages(recovered)])
+    monkeypatch.setattr(github, "api", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(RECLAIMER["INVENTORY"]["time"], "sleep", lambda _: None)
     items = github.artifacts()
-    assert len(items) == 201
-    assert sum(item["size_in_bytes"] for item in items) == 2010
+    assert len(items) == 203
+    assert sum(item["size_in_bytes"] for item in items) == 2030
 
 
 def test_only_diagnostic_retention_changes() -> None:
