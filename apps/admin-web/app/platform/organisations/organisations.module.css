@@ -1,6 +1,5 @@
 /* Organisations: only the bits the kit doesn't draw. Tokens only. */
 
-.alert,
 .notice {
   width: fit-content;
   max-width: 100%;
@@ -9,16 +8,8 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
-  font-size: var(--sx-text-sm);
-}
-
-.alert {
-  border-color: color-mix(in oklab, var(--sx-bad) 30%, var(--sx-line));
-  color: var(--sx-bad);
-}
-
-.notice {
   color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
 }
 
 .skeleton {

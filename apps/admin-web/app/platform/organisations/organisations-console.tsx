@@ -27,6 +27,7 @@ import {
   Panel,
   Skeleton,
   Table,
+  Unavailable,
   kitStyles,
 } from "../../ui/kit";
 import styles from "./organisations.module.css";
@@ -116,9 +117,7 @@ export function OrganisationsConsole() {
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className={styles.alert}>
-          {error}
-        </p>
+        <Unavailable title="The organisation directory" reason={error} />
       ) : null}
       {notice ? (
         <p role="status" className={styles.notice}>

@@ -92,6 +92,10 @@ afterEach(async () => {
 async function mount() {
   await act(async () => root.render(<OrganisationsConsole />));
 }
+/** The small "unavailable" card a failed read shows (never an alert banner). */
+function unavailable() {
+  return container.querySelector('section[role="status"]')?.textContent ?? "";
+}
 function button(text: string) {
   const found = [...container.querySelectorAll("button")].find(
     (element) => element.textContent?.trim() === text,
@@ -177,7 +181,7 @@ it.each([
     vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(subject);
     await mount();
     expect(fetch).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(unavailable()).toContain("is unavailable");
   },
 );
 it("shows empty directory and member states", async () => {
@@ -201,7 +205,8 @@ it.each([403, 404, 409])(
     const detail = `Fictional directory rejection ${status}.`;
     vi.mocked(fetch).mockResolvedValue(Response.json({ detail }, { status }));
     await mount();
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe(detail);
+    expect(unavailable()).toContain(detail);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector("table")).toBeNull();
   },
 );
@@ -215,7 +220,7 @@ it("rejects unknown member roles without displaying the rows", async () => {
   );
   await openMembers();
   expect(container.textContent).not.toContain(member.name);
-  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(unavailable()).toContain("is unavailable");
 });
 
 it.each([
