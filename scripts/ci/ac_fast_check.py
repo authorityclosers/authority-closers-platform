@@ -726,7 +726,7 @@ def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, 
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "VIRTUAL_ENV": str(check.source_root / ".venv"),
                 "NODE_PATH": str(check.source_root / "node_modules/.pnpm/node_modules"),
-                "NODE_OPTIONS": "--preserve-symlinks --preserve-symlinks-main",
+                "NODE_OPTIONS": "--require=" + str(check.source_root / ".ac-fast-node-source.cjs"),
                 "XDG_CACHE_HOME": str(check.source_root / ".ac-fast-cache"),
             }
         )

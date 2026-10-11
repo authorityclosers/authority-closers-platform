@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -23,9 +24,57 @@ class Snapshot:
     root: Path
     sources: tuple[str, ...]
     sha256: str
+    node_hook_sha256: str
 
     def unchanged(self) -> bool:
-        return source_digest(self.root, self.sources) == self.sha256
+        return (
+            source_digest(self.root, self.sources) == self.sha256
+            and hashlib.sha256((self.root / ".ac-fast-node-source.cjs").read_bytes()).hexdigest()
+            == self.node_hook_sha256
+        )
+
+
+def node_source_hook(workbench: Path, snapshot: Path) -> Path:
+    """Redirect workspace source without duplicating third-party module identities."""
+    hook = snapshot / ".ac-fast-node-source.cjs"
+    hook.write_text(
+        """const { createRequire, isBuiltin, registerHooks } = require('node:module');
+const { fileURLToPath, pathToFileURL } = require('node:url');
+const path = require('node:path');
+const workbench = __WORKBENCH__;
+const snapshot = __SNAPSHOT__;
+function exported(value, dependencies = false) {
+  if (typeof value !== 'string') return value;
+  const isURL = value.startsWith('file:');
+  if (!isURL && !path.isAbsolute(value)) return value;
+  const relative = path.relative(workbench, isURL ? fileURLToPath(value) : value);
+  if (relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) return value;
+  if (!dependencies && relative.split(path.sep).includes('node_modules')) return value;
+  const target = path.join(snapshot, relative);
+  return isURL ? pathToFileURL(target).href : target;
+}
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const pinned = { ...context, parentURL: exported(context.parentURL, true) };
+    const required = context.conditions.includes('require');
+    const name = exported(specifier);
+    const target = required && pinned.parentURL !== context.parentURL && !isBuiltin(name)
+      ? createRequire(pinned.parentURL).resolve(name) : name;
+    const result = nextResolve(target, pinned);
+    const url = exported(result.url);
+    return url === result.url ? result
+      : nextResolve(required && url.startsWith('file:') ? fileURLToPath(url) : url, pinned);
+  },
+  load(url, context, nextLoad) {
+    return nextLoad(exported(url), context);
+  }
+});
+""".replace("__WORKBENCH__", json.dumps(str(workbench))).replace(
+            "__SNAPSHOT__", json.dumps(str(snapshot))
+        ),
+        encoding="utf-8",
+    )
+    return hook
 
 
 def source_digest(root: Path, sources: tuple[str, ...]) -> str:
@@ -138,7 +187,8 @@ def committed_snapshot(workbench: Path, commit: str) -> Iterator[Snapshot]:
                     installed_node_modules(
                         installed, directory_path / "node_modules", workbench, root
                     )
-            yield Snapshot(root, sources, sha256)
+            hook = node_source_hook(workbench, root)
+            yield Snapshot(root, sources, sha256, hashlib.sha256(hook.read_bytes()).hexdigest())
         except (OSError, tarfile.TarError) as error:
             raise SnapshotError(
                 f"Committed source could not be prepared ({type(error).__name__})"

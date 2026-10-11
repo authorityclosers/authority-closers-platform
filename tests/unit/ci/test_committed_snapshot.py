@@ -127,3 +127,11 @@ def test_invalid_commit_cannot_create_an_export(repository: Path) -> None:
         SNAPSHOT.committed_snapshot(repository, "not-a-commit"),
     ):
         pytest.fail("An invalid commit must never run checks")
+
+
+def test_source_resolution_hook_is_attested(repository: Path) -> None:
+    with SNAPSHOT.committed_snapshot(repository, "HEAD") as exported:
+        hook = exported.root / ".ac-fast-node-source.cjs"
+        assert exported.unchanged()
+        hook.write_text("// changed resolution behavior\n")
+        assert not exported.unchanged()

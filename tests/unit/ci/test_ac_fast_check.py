@@ -959,6 +959,79 @@ def test_installed_node_tool_imports_exported_nested_workspace_source(
     ).read_text() == "module.exports = 'uncommitted';\n"
 
 
+@pytest.mark.skipif(
+    shutil.which("node") is None, reason="Node is required for workspace resolution"
+)
+def test_export_keeps_shared_dependency_identity_for_a_workspace_consumer(repository: Path) -> None:
+    write(
+        repository, "packages/typescript/ui/index.js", "exports.singleton = require('singleton');\n"
+    )
+    git(repository, "add", "packages")
+    git(repository, "commit", "-m", "workspace dependency identity fixture")
+    installed = repository / "node_modules/.pnpm/tool@1/node_modules"
+    singleton = repository / "node_modules/.pnpm/singleton@1/node_modules/singleton"
+    write(
+        repository,
+        "node_modules/.pnpm/singleton@1/node_modules/singleton/index.js",
+        "module.exports = {};\n",
+    )
+    write(
+        repository,
+        "node_modules/.pnpm/tool@1/node_modules/tool/index.js",
+        "require('node:assert/strict').equal(require('singleton'), require('@ac/ui').singleton);\n",
+    )
+    (installed / "@ac").mkdir()
+    (installed / "@ac/ui").symlink_to(
+        repository / "packages/typescript/ui", target_is_directory=True
+    )
+    (installed / "singleton").symlink_to(singleton, target_is_directory=True)
+    modules = repository / "packages/typescript/ui/node_modules"
+    modules.mkdir()
+    (modules / "singleton").symlink_to(singleton, target_is_directory=True)
+    node = shutil.which("node")
+    assert node is not None
+    with FAST.SNAPSHOT.committed_snapshot(repository, "HEAD") as exported:
+        script = exported.root / "node_modules/.pnpm/tool@1/node_modules/tool/index.js"
+        check = FAST.Check(
+            "synthetic", (node, str(script)), exported.root, (), source_root=exported.root
+        )
+        assert FAST.run_check(check, 30, 5)["status"] == "passed"
+        assert exported.unchanged()
+
+
+@pytest.mark.skipif(
+    shutil.which("node") is None, reason="Node is required for workspace resolution"
+)
+def test_node_resolution_uses_committed_workspace_manifest(repository: Path) -> None:
+    write(repository, "packages/typescript/ui/index.js", "module.exports = 'committed';\n")
+    write(repository, "packages/typescript/ui/package.json", '{"name": "@ac/ui"}\n')
+    git(repository, "add", "packages")
+    git(repository, "commit", "-m", "workspace manifest fixture")
+    write(repository, "packages/typescript/ui/package.json", "invalid builder draft\n")
+    installed = repository / "node_modules/.pnpm/tool@1/node_modules"
+    write(
+        repository,
+        "node_modules/.pnpm/tool@1/node_modules/tool/index.js",
+        "require('node:assert/strict').equal(require('@ac/ui'), 'committed');\n",
+    )
+    (installed / "@ac").mkdir()
+    (installed / "@ac/ui").symlink_to(
+        repository / "packages/typescript/ui", target_is_directory=True
+    )
+    node = shutil.which("node")
+    assert node is not None
+    with FAST.SNAPSHOT.committed_snapshot(repository, "HEAD") as exported:
+        script = exported.root / "node_modules/.pnpm/tool@1/node_modules/tool/index.js"
+        check = FAST.Check(
+            "synthetic", (node, str(script)), exported.root, (), source_root=exported.root
+        )
+        assert FAST.run_check(check, 30, 5)["status"] == "passed"
+        assert exported.unchanged()
+    assert (
+        repository / "packages/typescript/ui/package.json"
+    ).read_text() == "invalid builder draft\n"
+
+
 def test_builder_commit_during_checks_keeps_the_original_snapshot(
     repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
