@@ -330,6 +330,26 @@ it("pauses calmly: saved work, the reason and the recovery actions in view", asy
   expect(host.textContent).not.toContain("You can leave this page");
 });
 
+it("names a failed run as failed: the step didn't finish, only saved work is listed", async () => {
+  await mount({
+    stageRows: [{ stage: "C2", state: "not_started" }],
+    progress: {
+      ...running,
+      local_state: "failed",
+      run_state: "failed",
+      minute_state: "released",
+      retry_available: false,
+      stages: [{ stage: "C2", state: "not_started" }],
+    },
+  });
+  expect(host.textContent).toContain("Analysis failed");
+  expect(stepStatus("C2")).toBe("Didn’t finish");
+  expect(host.textContent).not.toContain("Paused");
+  expect(
+    host.querySelector('[aria-label="Saved work"]')?.textContent,
+  ).not.toContain("isn’t confirmed yet");
+});
+
 it("falls back to the task rows on a server without a plan for the call", async () => {
   fetchMock.mockImplementation(async () =>
     Response.json({ detail: "Not found" }, { status: 404 }),

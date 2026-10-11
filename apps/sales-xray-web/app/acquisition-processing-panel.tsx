@@ -202,6 +202,7 @@ function stepStatus(
   state: StepState,
   duration: number | null,
   row: AcquisitionProcessingStageRow | undefined,
+  failed = false,
 ) {
   if (state === "done") {
     // Under a second (work already saved, a cached step) is just "Done", never "0:00".
@@ -212,11 +213,14 @@ function stepStatus(
   }
   if (state === "active") return "In progress";
   if (state === "attention")
-    return row?.state === "uncertain"
-      ? "Paused · needs attention"
-      : ["failed", "held"].includes(row?.state ?? "")
-        ? "Needs attention"
-        : "Paused";
+    // A run the server reports failed stopped here; it is not paused.
+    return failed
+      ? "Didn’t finish"
+      : row?.state === "uncertain"
+        ? "Paused · needs attention"
+        : ["failed", "held"].includes(row?.state ?? "")
+          ? "Needs attention"
+          : "Paused";
   return row?.state === "queued" || row?.state === "pending" ? "Queued" : "";
 }
 
@@ -506,6 +510,7 @@ export function AcquisitionProcessingPanel({
                   state,
                   duration,
                   stageRows.find((row) => row.stage === step.id),
+                  progress?.run_state === "failed",
                 )}
               </small>
             </li>
@@ -519,11 +524,12 @@ export function AcquisitionProcessingPanel({
           <div>
             <strong>Your recording is saved</strong>
             <p>There’s no need to upload it again.</p>
-            <p>
-              {projection.savedTranscript
-                ? "The transcript is saved with this call."
-                : "The full transcript isn’t confirmed yet."}
-            </p>
+            {projection.savedTranscript ? (
+              <p>The transcript is saved with this call.</p>
+            ) : progress?.run_state !== "failed" ? (
+              // Only while it may still continue; a failed run lists what's saved.
+              <p>The full transcript isn’t confirmed yet.</p>
+            ) : null}
             {projection.savedEvidence && (
               <p>Part of the analysis is saved with this call.</p>
             )}
