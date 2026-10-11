@@ -60,6 +60,7 @@ import {
   WAVE_BARS,
   activityBins,
   allocateBars,
+  barsByWidth,
   cleanPhases,
   positionIn,
   shares,
@@ -591,7 +592,11 @@ export function CallTimeline({
     : [{ label: "", start_ms: 0, end_ms: durationMs }];
   const lengths = blocks.map((block) => block.end_ms - block.start_ms);
   const tints = stageTints(blocks.map((block) => block.label));
-  const bars = allocateBars(lengths, WAVE_BARS, 3);
+  // Side by side: bars by each stage block's laid-out width (short stages
+  // are held at a minimum width), so bars are about one width throughout.
+  const bars = stages.length
+    ? barsByWidth(lengths)
+    : allocateBars(lengths, WAVE_BARS, 3);
   // Phones draw fewer, wider bars: the stages as rows on one track of the
   // whole call (a bar the same width in every row), or one strip without them.
   const rowBars = allocateBars(
