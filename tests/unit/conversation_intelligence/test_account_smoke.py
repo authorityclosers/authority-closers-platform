@@ -26,6 +26,8 @@ from tests.conversation_overview_fixtures import overview_for
         "wrong_source",
         "wrong_person",
         "wrong_report_revision",
+        "wrong_report_submission",
+        "stale_report_recording",
         "over_cap",
         "held",
     ],
@@ -33,6 +35,7 @@ from tests.conversation_overview_fixtures import overview_for
 def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkeypatch, scenario):
     async def exercise():
         person, tenant, recording, run_id = (str(uuid4()) for _ in range(4))
+        shown_recording = str(uuid4()) if scenario == "stale_report_recording" else recording
         calls = []
         submission = None
         polls = 0
@@ -93,7 +96,10 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
                     200,
                     {
                         "source_sha256": FIXTURE_SHA256,
-                        "recording_id": recording,
+                        "submission_id": str(uuid4())
+                        if scenario == "wrong_report_submission"
+                        else submission,
+                        "recording_id": shown_recording,
                         "run_id": run_id,
                         "transcript_revision": "fictional-revision",
                         "report": projection,
@@ -108,7 +114,7 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
                         "schema": "ac.sales-xray.call-coaching/1",
                         "state": "ready",
                         "submission_id": submission,
-                        "recording_id": recording,
+                        "recording_id": shown_recording,
                         "source_sha256": "f" * 64 if scenario == "wrong_source" else FIXTURE_SHA256,
                         "transcript_revision": "fictional-revision",
                         "report_revision": "f" * 64

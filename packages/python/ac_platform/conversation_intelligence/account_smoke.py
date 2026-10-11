@@ -31,6 +31,7 @@ _FAILURE_CODES = frozenset(
         "qa_workspace_required",
         "qa_retention_refused",
         "qa_fixture_changed",
+        "qa_source_binding_invalid",
         "qa_analysis_failed_or_held",
         "qa_quote_over_cap",
         "qa_report_binding_invalid",
@@ -115,7 +116,7 @@ async def account_smoke(
             raise failure("qa_fixture_changed")
         submission_id = uuid4()
         path = f"{PREFIX}/submissions/{submission_id}"
-        await request(
+        uploaded = await request(
             "PUT",
             path + "/source",
             content=fixture,
@@ -126,6 +127,10 @@ async def account_smoke(
                 "X-Upload-Consent": "accepted",
             },
         )
+        try:
+            recording_id = str(UUID(uploaded["recording_id"]))
+        except (KeyError, ValueError, TypeError, AttributeError):
+            raise failure("qa_source_binding_invalid") from None
         accepted = False
         while True:
             progress = await request("GET", path)
@@ -167,10 +172,16 @@ async def account_smoke(
             await asyncio.sleep(1)
         report = await request("GET", path + "/report")
         if (
-            report.get("source_sha256") != FIXTURE_SHA256
+            report.get("submission_id") != str(submission_id)
+            or report.get("recording_id") != recording_id
+            or report.get("source_sha256") != FIXTURE_SHA256
             or report.get("report", {}).get("access") != "claimed_account"
         ):
             raise failure("qa_report_binding_invalid")
+        try:
+            report_run_id = str(UUID(report["run_id"]))
+        except (KeyError, ValueError, TypeError, AttributeError):
+            raise failure("qa_report_binding_invalid") from None
         try:
             check_report_coaching(report["report"]["content"])
         except ValueError:
@@ -194,8 +205,8 @@ async def account_smoke(
             "environment": environment,
             "ok": True,
             "submission_id": str(submission_id),
-            "recording_id": report["recording_id"],
-            "report_run_id": report["run_id"],
+            "recording_id": recording_id,
+            "report_run_id": report_run_id,
             "fixture_sha256": FIXTURE_SHA256,
             "report_present": True,
             "per_call_coaching_present": True,

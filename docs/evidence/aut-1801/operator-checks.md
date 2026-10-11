@@ -63,8 +63,9 @@ No automatic schedule or production write is enabled by this change.
 The run signs into the pinned official origin, uses the existing selected
 workspace and uploads the committed known fictional canary clip. It verifies
 the fixture digest and policy, accepts one bounded plan, and polls to delivery.
-It never retries a held or uncertain provider send. The report must be bound
-to the fixture. Call Coaching must match the submission, recording,
+It never retries a held or uncertain provider send. The report must match the
+requested submission, upload acknowledgement's recording and fixture digest.
+Its report-run UUID must be valid. Call Coaching must match the submission, recording,
 transcript, report revision, person and tenant and remain provisional.
 Browser mode checks the real Report and Coaching views with no page errors.
 Only a content-free receipt is printed. A passing guest canary alone does
@@ -127,3 +128,8 @@ built, phone media, signals, canary atomicity and fixture checks passed all
 75 without skips. Ruff formatting/lint and strict mypy passed for changed
 Python sources. The frontend CI formatting failure was reproduced and fixed
 in the four already touched upload files; no rendered behavior changed.
+
+The final upload/report binding and safe CLI failure suites passed 14 tests,
+including stale recording/submission responses. The acquisition-review suite
+passed both tests after its old format-specific validation copy was updated;
+it still verifies that an invalid replacement preserves the prior valid file.
