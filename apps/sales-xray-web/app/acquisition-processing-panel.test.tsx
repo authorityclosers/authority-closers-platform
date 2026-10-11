@@ -10,9 +10,10 @@ import { WorkspaceAccessProvider } from "./workspace-access";
 
 // The measured waveform has its own tests (analysis-wave.test.tsx); here it
 // stays out of the fetch sequence the plan polls use.
+const wave = vi.hoisted(() => ({ measured: null as unknown }));
 vi.mock("./analysis-wave", async (original) => ({
   ...(await original<typeof import("./analysis-wave")>()),
-  useMeasuredWave: () => null,
+  useMeasuredWave: () => wave.measured,
 }));
 
 (
@@ -313,4 +314,16 @@ it("renders a static example with no live claim, read or action", () => {
   expect(markup).not.toContain("Delete this call");
   expect(markup).not.toContain("You can leave this page");
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("adds the call's measured length to its file line once the server has it", async () => {
+  wave.measured = {
+    schema: "ac.sales-xray.waveform/1",
+    kind: "rms_envelope",
+    duration_ms: 1_520_000,
+    points: [{ start_ms: 0, level: 0.5 }],
+  };
+  await mount();
+  expect(host.textContent).toContain("12.4 MB · 25:20");
+  wave.measured = null;
 });

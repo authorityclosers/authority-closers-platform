@@ -31,6 +31,7 @@ import {
 } from "./processing-steps";
 import { useWorkspaceAccess } from "./workspace-access";
 import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-processing-panel.module.css";
 
 export type AcquisitionProcessingStageRow = {
@@ -344,7 +345,19 @@ export function AcquisitionProcessingPanel({
         <strong title={fileName || undefined}>
           {fileName || (staticPreview ? "Example audio" : "Your recording")}
         </strong>
-        {fileMeta && <small>{fileMeta}</small>}
+        {fileMeta || envelope ? (
+          <small>
+            {[
+              fileMeta,
+              // The server's measurement, as soon as it has one.
+              envelope
+                ? formatClock(envelope.duration_ms).replace(/^0(?=\d:)/, "")
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
+        ) : null}
         {!staticPreview && !actionsInline && children ? (
           <details className={styles.more}>
             <summary aria-label="More actions" title="More actions">
