@@ -254,7 +254,9 @@ describe("Coaching story", () => {
         coaching={{ ...fictionalCallCoaching, other_suggestions: 2 }}
       />,
     );
-    expect(html).toContain("The report has 2 more suggestions.");
+    expect(html).toContain(
+      "2 more suggestions there; Coaching keeps one focus",
+    );
     expect(
       renderToStaticMarkup(
         <CallCoachingStory coaching={fictionalCallCoaching} />,

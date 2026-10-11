@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FileSearch } from "lucide-react";
-import { Empty, Panel } from "../ui/kit";
+import { FileSearch, FileText, GraduationCap } from "lucide-react";
+import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { FocusHero, LessonPanel, MissionPanel } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
@@ -92,24 +92,25 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           foot="One call shows a suggestion, not a recurring pattern. My coaching keeps your focus across calls."
         />
         <Panel title="Keep going">
-          <div className={styles.body}>
-            {coaching.other_suggestions ? (
-              <p className={styles.note}>
-                The report has {coaching.other_suggestions} more suggestion
-                {coaching.other_suggestions === 1 ? "" : "s"}. Coaching keeps
-                one focus at a time.
-              </p>
-            ) : null}
-            <Link
-              className={styles.jump}
+          <List label="Keep going">
+            <Row
+              icon={<FileText size={15} aria-hidden="true" />}
+              title="Back to this call’s report"
               href={`/analysis/calls/${coaching.submission_id}`}
-            >
-              Back to this call’s report
-            </Link>
-            <Link className={styles.jump} href="/coaching">
-              My coaching across calls
-            </Link>
-          </div>
+              meta={
+                coaching.other_suggestions
+                  ? [
+                      `${coaching.other_suggestions} more suggestion${coaching.other_suggestions === 1 ? "" : "s"} there; Coaching keeps one focus`,
+                    ]
+                  : undefined
+              }
+            />
+            <Row
+              icon={<GraduationCap size={15} aria-hidden="true" />}
+              title="My coaching across calls"
+              href="/coaching"
+            />
+          </List>
         </Panel>
       </aside>
     </div>
