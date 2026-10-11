@@ -176,11 +176,7 @@ describe("report DOCX", () => {
       report: syntheticReport,
     });
     const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    for (const status of [
-      "Observed",
-      "Not Enough Evidence",
-      "Not established",
-    ])
+    for (const status of ["Observed", "Not Enough Evidence", "Not established"])
       expect(xml.text).toContain(status);
     expect(xml.text).toContain(syntheticReport.dimensions[1].observation);
     expect(xml.text).not.toMatch(/\bof\s+\d+\s+observed\b/i);
