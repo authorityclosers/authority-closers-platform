@@ -263,7 +263,8 @@ class Journey:
                 return result;
               }
               for (const el of document.querySelectorAll(
-                  'main *, [data-report-modes] *, [data-coaching-pillar] *')) {
+                  'main *, [data-report-modes] *, [data-coaching-pillar] *, ' +
+                  'section[aria-label] *, section[aria-labelledby] *')) {
                 // Decorative initials accompany a separately rendered speaker name.
                 if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
                 // Closed details can retain layout bounds without painting their content.
@@ -1174,9 +1175,11 @@ def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> 
         ), "Hidden print shell controls can still paint during motion"
         assert metrics["headings"] == 6
         assert metrics["overflow"] <= 1
-        expect(preview.locator("dl")).to_contain_text("25:08")
-        expect(preview.locator("dl")).to_contain_text("Arjun")
-        expect(preview.locator("dl")).to_contain_text("Amit Sharma")
+        facts = preview.locator("header dl")
+        expect(facts).to_have_count(1)
+        expect(facts).to_contain_text("25:08")
+        expect(facts).to_contain_text("Arjun")
+        expect(facts).to_contain_text("Amit Sharma")
         shot = journey.directory / f"document-print-a4-{journey.width}-{journey.theme}.png"
         page.screenshot(path=str(shot))
         pdf = journey.directory / f"document-print-{journey.width}-{journey.theme}.pdf"
