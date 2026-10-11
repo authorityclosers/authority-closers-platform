@@ -84,6 +84,12 @@
   min-width: 0;
 }
 
+.storyRail {
+  display: grid;
+  align-content: start;
+  gap: var(--sx-gap);
+}
+
 @container (min-width: 900px) {
   .story {
     grid-template-columns: minmax(0, 1fr) 320px;
