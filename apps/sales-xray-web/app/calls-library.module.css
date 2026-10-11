@@ -1381,10 +1381,23 @@
     overflow-wrap: anywhere;
   }
 
+  /* Every part carries a 14 px separator; the line is shifted left and
+     clipped by that much, so a part that starts a line shows none. */
   .meta {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
+    margin-left: -14px;
+    clip-path: inset(0 0 0 14px);
+  }
+
+  .meta > span::before,
+  .meta > span + span::before {
+    display: inline-block;
+    width: 14px;
+    margin: 0;
+    content: "·";
+    text-align: center;
   }
 
   .snippet,
