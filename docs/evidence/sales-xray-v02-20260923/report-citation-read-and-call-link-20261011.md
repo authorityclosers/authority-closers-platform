@@ -42,6 +42,13 @@ median times of 9.210ms before and 1.780ms after. Host timing varies; this is an
 offline synthetic measurement, not a production timing or acceptance receipt.
 The count-only benchmark receipt is retained in the strike folder.
 
+Retained native-source follow-up on `21964af`: both the exact `7995d9c` parser
+and candidate admit all 13 retained corpus C5 reports against their original C2.
+All 13 canonical output hashes match; three C5s are absent and zero provider
+calls occur. The opt-in account/guest projection, six-pillar, Word and Coaching
+corpus test also passes on this source. Inputs and receipts remain private on
+the AC server; this comparison carries no hosted ownership or quality claim.
+
 ## Check after the normal merge and dev refresh
 
 Open a finished call, select Coaching and follow **Open full coaching for this
