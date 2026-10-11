@@ -86,3 +86,9 @@ required; an old corpus read or unit test is not proof of that target.
 The remaining current-dev artifact/clock and independent Gate 2 evidence
 requirements are recorded in the private handoff
 `/home/acdev/strikes/1801/report-v8-comparison-handoff.md`.
+The private `report_timing_check.py` there accepts only recorded clocks with
+source-receipt references. It separates dispatch, provider completion, receipt
+storage and checkpoint publication; missing clocks stay unknown. Comparison
+requires the same pinned source/transcript/roles. Concurrent provider work is
+not summed into delivery time, and a retained-checkpoint replay cannot establish
+the full 20-minute target. Its fictional tests are checker evidence only.
