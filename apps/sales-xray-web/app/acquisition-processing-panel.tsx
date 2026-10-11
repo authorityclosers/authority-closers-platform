@@ -312,6 +312,8 @@ export function AcquisitionProcessingPanel({
           : notStarted
             ? "ready"
             : "working";
+  // The server runs it again (after Try again, or a step waiting to rerun).
+  const retrying = phase === "working" && progress?.run_state === "retrying";
   const headline =
     phase === "example"
       ? "Example processing state"
@@ -325,7 +327,9 @@ export function AcquisitionProcessingPanel({
             ? "Ready to start"
             : phase === "sending"
               ? "Sending your call"
-              : "Analysing your call";
+              : retrying
+                ? "Trying again"
+                : "Analysing your call";
   const subline =
     phase === "example"
       ? "Paused interface example. No call was uploaded or analysed."
@@ -341,8 +345,10 @@ export function AcquisitionProcessingPanel({
                 : "Keep this tab open until it's sent"
               : refreshProblem || offline
                 ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
-                : // Measured on staging, 11 Oct: 105-197 s from upload to report.
-                  `Usually 2–3 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
+                : retrying
+                  ? "Your recording is saved. The analysis is running again."
+                  : // Measured on staging, 11 Oct: 105-197 s from upload to report.
+                    `Usually 2–3 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
   const signedIn = access?.authenticated === true;
   // Recovery and start actions stay in view; the rest wait in the ⋯ menu.
   const actionsInline = phase === "attention" || phase === "ready";

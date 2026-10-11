@@ -1173,7 +1173,9 @@ export function AcquisitionStudio({
             next.state === "held" ||
             next.stages.some((stage) => stage.state === "uncertain");
           if (paused) setError(pausedFailureMessage(next.failure_code));
-          else
+          // A failed run the server lets you retry is said once, in the panel
+          // ("Analysis failed" with its Try again), not again in a corner card.
+          else if (!(next.run_state === "failed" && next.retry_available))
             setError(
               "This analysis needs attention. Your call is saved; completed work remains available.",
             );

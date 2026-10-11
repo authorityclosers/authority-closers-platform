@@ -164,6 +164,22 @@ it("uses the server's own stage and clock when the progress read has them", asyn
   expect(host.textContent).toContain("2:51 so far");
 });
 
+it("says it is trying again while the server reruns the analysis", async () => {
+  await mount({
+    progress: {
+      ...running,
+      run_state: "retrying",
+      minute_state: "reserved",
+      retry_available: false,
+    },
+  });
+  expect(host.querySelector("h2")?.textContent).toBe("Trying again");
+  expect(host.textContent).toContain(
+    "Your recording is saved. The analysis is running again.",
+  );
+  expect(host.textContent).not.toContain("Usually 2–3 minutes");
+});
+
 it("says only 'Done' for a step the server finished in under a second", async () => {
   vi.setSystemTime(new Date("2026-10-10T12:03:00Z"));
   await mount({

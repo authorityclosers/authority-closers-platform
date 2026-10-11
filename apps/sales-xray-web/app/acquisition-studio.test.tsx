@@ -2814,6 +2814,29 @@ it("explains provider credential pauses without exposing the raw failure", async
   );
 });
 
+it("says a failed run once: the panel's Analysis failed and Try again, no corner card", async () => {
+  existing = true;
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "failed",
+    has_report: false,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+    stages: [{ stage: "C2", state: "not_started" }],
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain("Analysis failed");
+  expect(container.textContent).toContain(
+    "Your minutes have been released. Your recording is saved.",
+  );
+  expect(button("Try again")).toBeDefined();
+  expect(container.textContent).not.toContain("This analysis needs attention");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
 function reloadHeldCall() {
   existing = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
