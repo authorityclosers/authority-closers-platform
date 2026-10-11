@@ -140,7 +140,8 @@ function XrayScene() {
 // server (AUT-157): Google returns to staging, which cannot see the dev start.
 const DEV_HOST = "salesxray-dev.authorityclosers.com";
 const noHostSubscription = () => () => {};
-const readGoogleBlocked = () => window.location.hostname === DEV_HOST;
+// 11 Oct: dev now has its own sign-in back end (dev-live API, dev Google OAuth client), so Google works on dev too.
+const readGoogleBlocked = () => false && window.location.hostname === DEV_HOST;
 
 function GoogleMark() {
   // Google's own four-colour "G", as its sign-in branding requires.
