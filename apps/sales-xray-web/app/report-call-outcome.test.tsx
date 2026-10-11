@@ -15,6 +15,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
 });
 function button(label: string) {
   return [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -114,6 +115,7 @@ it("does not record Lost until a person supplies a reason", async () => {
     "Add a reason",
   );
   expect(save).not.toHaveBeenCalled();
+  expect(button("Try again").disabled).toBe(false);
   await type("Reason for Lost", "Chose a different option.");
   await act(async () => button("Save outcome").click());
   expect(save).toHaveBeenCalledExactlyOnceWith({
@@ -150,11 +152,71 @@ it("retains the exact human follow-up date and optional amount/currency", async 
     deal_value: { amount: "123.0000", currency_code: "INR" },
   });
 });
-it("keeps a failed outcome honest and supports an explicit retry", async () => {
+it("requires a fresh read before retrying an unconfirmed write", async () => {
   const save = vi
     .fn()
     .mockRejectedValueOnce(new Error("private response"))
     .mockResolvedValueOnce(undefined);
+  const reload = vi.fn(async () => {});
+  await act(async () =>
+    root.render(
+      <CallOutcomeEditor
+        scopeKey="call-a"
+        value={null}
+        canEdit
+        onSave={save}
+        onReload={reload}
+      />,
+    ),
+  );
+  await act(async () => button("No decision").click());
+  expect(host.textContent).toContain("Your outcome couldn't be confirmed");
+  expect(host.querySelector("strong + span")?.textContent).toBe("Unconfirmed");
+  expect(host.textContent).not.toContain("private response");
+  expect(button("No decision").disabled).toBe(true);
+  await act(async () => button("No decision").click());
+  expect(save).toHaveBeenCalledTimes(1);
+  await act(async () => button("Reload").click());
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("Unrecorded");
+  await act(async () => button("No decision").click());
+  expect(save).toHaveBeenCalledTimes(2);
+});
+
+it("keeps unconfirmed state and write controls disabled if the fresh read fails", async () => {
+  const save = vi.fn(async () => {
+    throw new Error("private save detail");
+  });
+  const reload = vi.fn(async () => {
+    throw new Error("private read detail");
+  });
+  await act(async () =>
+    root.render(
+      <CallOutcomeEditor
+        scopeKey="call-a"
+        value={null}
+        canEdit
+        onSave={save}
+        onReload={reload}
+      />,
+    ),
+  );
+  await act(async () => button("Won").click());
+  await act(async () => button("Reload").click());
+  expect(host.textContent).toContain("still unavailable");
+  expect(host.textContent).not.toContain("private");
+  expect(host.querySelector("strong + span")?.textContent).toBe("Unconfirmed");
+  expect(button("Lost").disabled).toBe(true);
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+it("uses one explicit page reload when no scoped read port is supplied", async () => {
+  const reload = vi
+    .spyOn(window.location, "reload")
+    .mockImplementation(() => {});
+  const save = vi.fn(async () => {
+    throw new Error("lost acknowledgement");
+  });
   await act(async () =>
     root.render(
       <CallOutcomeEditor
@@ -165,12 +227,74 @@ it("keeps a failed outcome honest and supports an explicit retry", async () => {
       />,
     ),
   );
-  await act(async () => button("No decision").click());
-  expect(host.textContent).toContain("Your outcome wasn't saved");
-  expect(host.textContent).not.toContain("private response");
-  await act(async () => button("Try again").click());
-  expect(save).toHaveBeenCalledTimes(2);
-  expect(host.textContent).toContain("Unrecorded");
+  await act(async () => button("Won").click());
+  await act(async () => {
+    button("Reload").click();
+    button("Reload").click();
+  });
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(button("Lost").disabled).toBe(true);
+});
+
+it("reads back a completed write without replaying it or presenting stale previous facts", async () => {
+  const save = vi.fn(async () => {
+    throw new Error("lost acknowledgement");
+  });
+  let finish: () => void = () => {};
+  const reload = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const render = (
+    value: null | {
+      outcome: "won" | "lost";
+      lost_reason: string | null;
+      follow_up_on: null;
+      deal_value: null;
+    },
+  ) =>
+    root.render(
+      <CallOutcomeEditor
+        scopeKey="call-a"
+        value={value}
+        canEdit
+        onSave={save}
+        onReload={reload}
+      />,
+    );
+  await act(async () =>
+    render({
+      outcome: "lost",
+      lost_reason: "Previous reason",
+      follow_up_on: null,
+      deal_value: null,
+    }),
+  );
+  await act(async () => button("Won").click());
+  expect(host.textContent).not.toContain("Previous reason");
+  await act(async () => {
+    button("Reload").click();
+    button("Reload").click();
+  });
+  expect(reload).toHaveBeenCalledTimes(1);
+  expect(button("Reload").disabled).toBe(true);
+  expect(host.textContent).toContain("Reading outcome");
+  await act(async () => {
+    render({
+      outcome: "won",
+      lost_reason: null,
+      follow_up_on: null,
+      deal_value: null,
+    });
+    finish();
+  });
+  expect(host.querySelector("strong + span")?.textContent).toBe("Won");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(save).toHaveBeenCalledTimes(1);
 });
 it("discards the previous call or account's draft when its scope changes", async () => {
   const save = vi.fn(async () => {});

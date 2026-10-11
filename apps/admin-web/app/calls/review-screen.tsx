@@ -11,7 +11,6 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
-  FlaskConical,
   Keyboard,
   Link2,
   RefreshCcw,
@@ -33,7 +32,9 @@ import {
   type Call,
   type Evidence,
 } from "./call-data";
+import type { Labels } from "./labels-data";
 import { Player } from "./player";
+import { ReviewPanel } from "./review-panel";
 import {
   Coaching,
   CurrentReport,
@@ -60,6 +61,7 @@ const TABS: {
   phoneOnly?: boolean;
 }[] = [
   { key: "transcript", label: "Transcript", key1: "T", phoneOnly: true },
+  { key: "review", label: "Review", key1: "V" },
   { key: "report", label: "Report", key1: "R" },
   { key: "pillars", label: "Six pillars", key1: "S" },
   { key: "coaching", label: "Coaching", key1: "C" },
@@ -77,8 +79,11 @@ export function ReviewScreen({
   back,
   neighbours,
   safety = false,
+  labels = null,
   startMs = null,
 }: {
+  /** The call's reviewer labels, or null when they couldn't be read. */
+  labels?: Labels | null;
   /** The operator may withhold passages (platform_content_safety_manage). */
   safety?: boolean;
   /** Where a shared link (?at=) opens the call, in ms. */
@@ -302,16 +307,6 @@ export function ReviewScreen({
               Safety
             </Link>
           ) : null}
-          <button
-            type="button"
-            className={kitStyles.button}
-            data-desk=""
-            disabled
-            title="Training and test marks arrive with the gold-set store."
-          >
-            <FlaskConical size={14} aria-hidden="true" />
-            Mark data
-          </button>
           <Link
             href={neighbours.previous ? href({}, neighbours.previous) : "#"}
             className={kitStyles.button}
@@ -432,7 +427,20 @@ export function ReviewScreen({
             className={styles.view}
             data-hidden-on-phone={tab === "transcript" ? "" : undefined}
           >
-            {tab === "report" || tab === "transcript" ? (
+            {tab === "review" ? (
+              labels ? (
+                <ReviewPanel
+                  recordingId={call.recordingId}
+                  runId={bundle.runId}
+                  labels={labels}
+                />
+              ) : (
+                <p className={styles.gap} style={{ padding: 16 }}>
+                  Reviewer labels can&rsquo;t be read right now. Reload to try
+                  again.
+                </p>
+              )
+            ) : tab === "report" || tab === "transcript" ? (
               <CurrentReport report={bundle.report} onEvidence={playEvidence} />
             ) : tab === "pillars" ? (
               <Pillars

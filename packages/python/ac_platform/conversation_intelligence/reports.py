@@ -1201,12 +1201,11 @@ def _citation_model(value: Any) -> ReportCitation:
 def _validate_citations(
     citations: list[Any],
     *,
-    profile: Mapping[str, Any],
+    supported: frozenset[tuple[str, str]],
     expected: set[tuple[str, str]] | None = None,
 ) -> tuple[ReportCitation, ...]:
     if not citations:
         raise ReportError("report_citation_missing")
-    supported = _profile_citation_keys(profile)
     parsed = tuple(_citation_model(citation) for citation in citations)
     for citation in parsed:
         for section in citation.sections:
@@ -1396,6 +1395,7 @@ def _normalise_dimensions(
     raw_value: Any,
     *,
     profile: Mapping[str, Any],
+    citation_keys: frozenset[tuple[str, str]],
     transcript: Mapping[str, Any],
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
     canonical_read: bool = False,
@@ -1511,7 +1511,7 @@ def _normalise_dimensions(
                 ]
             else:
                 parsed = _validate_citations(
-                    supplied_citations, profile=profile, expected=expected_citations
+                    supplied_citations, supported=citation_keys, expected=expected_citations
                 )
                 citations = [citation.model_dump(mode="json") for citation in parsed]
         else:
@@ -1559,7 +1559,12 @@ def _normalise_dimensions(
     return output
 
 
-def _normalise_sections(raw_value: Any, *, profile: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _normalise_sections(
+    raw_value: Any,
+    *,
+    profile: Mapping[str, Any],
+    citation_keys: frozenset[tuple[str, str]],
+) -> list[dict[str, Any]]:
     profile_sections = profile["report_sections"]
     if not isinstance(profile_sections, list):
         raise ReportError("report_profile_sections_invalid")
@@ -1575,7 +1580,7 @@ def _normalise_sections(raw_value: Any, *, profile: Mapping[str, Any]) -> list[d
                 raise ReportError("report_section_mismatch")
             supplied = item.get("citations")
             if supplied is not None:
-                _validate_citations(supplied, profile=profile, expected={("Doc-5", "§53")})
+                _validate_citations(supplied, supported=citation_keys, expected={("Doc-5", "§53")})
     return [
         {
             "number": section["number"],
@@ -3019,9 +3024,14 @@ def parse_report_draft(
     if "dimension_assessments" in payload:
         dimensions = payload["dimension_assessments"]
         normalized.pop("dimension_assessments", None)
+    # Resolve the controlled profile once for this parse. Every citation still
+    # checks both this complete index and its dimension/section-specific scope;
+    # nothing is cached across reports, profiles, sessions or erasure reads.
+    citation_keys = frozenset(_profile_citation_keys(resolved_profile))
     normalized["dimensions"] = _normalise_dimensions(
         dimensions,
         profile=resolved_profile,
+        citation_keys=citation_keys,
         transcript=validated_transcript,
         coaching_prompt_revision=coaching_prompt_revision,
         canonical_read=canonical_read,
@@ -3037,7 +3047,7 @@ def parse_report_draft(
     if salvaged:
         compatibility_extras["evidence_salvaged"] = salvaged
     normalized["report_sections"] = _normalise_sections(
-        payload.get("report_sections"), profile=resolved_profile
+        payload.get("report_sections"), profile=resolved_profile, citation_keys=citation_keys
     )
     provider_extras = _provider_extras(
         payload, consumed_keys=consumed_provider_keys, canonical_read=canonical_read

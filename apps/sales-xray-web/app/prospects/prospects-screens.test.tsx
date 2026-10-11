@@ -20,6 +20,11 @@ vi.mock("../acquisition-shell", () => ({
   ),
 }));
 
+// The latest call's Report read has its own tests; these screens use the
+// prospect payload only, so no extra network read happens here.
+vi.mock("../prospect-latest-call", () => ({
+  useLatestCallReport: () => ({ state: "none", latest: undefined }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -117,7 +122,209 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe.each(["list", "profile"] as const)("Prospects %s access", (page) => {
+  const render = (access: WorkspaceAccessValue | null) =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        {page === "list" ? (
+          <ProspectsListView />
+        ) : (
+          <ProspectDetailView prospectId={mockProspectSummary.prospect_id} />
+        )}
+      </WorkspaceAccessContext.Provider>,
+    );
+
+  it("replaces a stalled read's skeleton with a corner retry and loads fresh data once retried", async () => {
+    vi.useFakeTimers();
+    const payload =
+      page === "list"
+        ? {
+            schema: "ac.sales-xray.prospects/1",
+            prospects: [mockProspectSummary],
+            total: 1,
+            stage_filters: [],
+            next_offset: null,
+          }
+        : {
+            schema: "ac.sales-xray.prospects/1",
+            prospect: mockProspectSummary,
+            calls: [mockCall],
+            next_offset: null,
+            promises: [],
+            next_steps: [],
+            buyer_intent_history: [],
+          };
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload)));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => render(mockAccess));
+    expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    await act(async () =>
+      vi.advanceTimersByTimeAsync(prospectsClient.PROSPECT_READ_TIMEOUT_MS),
+    );
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    const corner = host.querySelector('[role="alert"]')!;
+    expect(corner.textContent).toContain(
+      "Prospect information is unavailable. Try again.",
+    );
+    expect(host.textContent).not.toContain(mockProspectSummary.name);
+    expect(fetch).toHaveBeenCalledOnce();
+    await act(async () =>
+      corner.querySelector<HTMLButtonElement>("button")!.click(),
+    );
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(host.textContent).toContain(mockProspectSummary.name);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers sign-in without reading private data and uses the workspace account action", async () => {
+    const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+    const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+    const requestAccountSignIn = vi.fn();
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+        requestAccountSignIn,
+      }),
+    );
+    expect(host.textContent).toContain("Sign in to see your prospects");
+    const link = host.querySelector<HTMLAnchorElement>('a[href="/login"]')!;
+    expect(link.textContent).toBe("Sign in");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => link.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(requestAccountSignIn).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
+    expect(detail).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Search prospects"]')).toBeNull();
+  });
+
+  it("keeps a direct login destination when no workspace sign-in action exists", async () => {
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+      }),
+    );
+    expect(host.querySelector('a[href="/login"]')?.textContent).toBe("Sign in");
+  });
+
+  it.each(["unknown", "loading", "selecting"] as const)(
+    "shows a skeleton during %s access without claiming the visitor is signed out",
+    async (state) => {
+      const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+      const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+      await act(async () =>
+        render(
+          state === "unknown"
+            ? null
+            : {
+                status: state,
+                authenticated: state === "loading" ? null : true,
+                context: null,
+                retry: vi.fn(),
+              },
+        ),
+      );
+      expect(
+        host.querySelector(
+          '[aria-label="Checking prospect access"][aria-busy="true"]',
+        ),
+      ).not.toBeNull();
+      expect(host.textContent).not.toContain("Sign in");
+      expect(host.textContent).not.toContain("unavailable");
+      expect(list).not.toHaveBeenCalled();
+      expect(detail).not.toHaveBeenCalled();
+      await act(async () =>
+        render({
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: vi.fn(),
+        }),
+      );
+      expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+      expect(host.textContent).toContain("Sign in to see your prospects");
+    },
+  );
+
+  it("offers workspace retry on a service failure without showing login or private data", async () => {
+    const retry = vi.fn();
+    const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+    const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+    await act(async () =>
+      render({
+        status: "unavailable",
+        authenticated: true,
+        context: null,
+        retry,
+      }),
+    );
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "Workspace access is unavailable.",
+    );
+    expect(host.textContent).not.toContain("Sign in");
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="alert"] button')!.click(),
+    );
+    expect(retry).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
+    expect(detail).not.toHaveBeenCalled();
+  });
+
+  it("hides a loaded customer immediately on sign-out and cancels its scoped reads", async () => {
+    const list = vi
+      .spyOn(prospectsClient, "fetchProspectsList")
+      .mockResolvedValue({
+        schema: "ac.sales-xray.prospects/1",
+        prospects: [mockProspectSummary],
+        total: 1,
+        stage_filters: [],
+        next_offset: null,
+      });
+    const detail = vi
+      .spyOn(prospectsClient, "fetchProspectDetail")
+      .mockResolvedValue({
+        schema: "ac.sales-xray.prospects/1",
+        prospect: mockProspectSummary,
+        calls: [mockCall],
+        next_offset: null,
+        promises: [],
+        next_steps: [],
+        buyer_intent_history: [],
+      });
+    await act(async () => render(mockAccess));
+    expect(host.textContent).toContain(mockProspectSummary.name);
+    const calls = page === "list" ? list.mock.calls : detail.mock.calls;
+    const signal = calls[0][0]!.signal;
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+      }),
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(host.textContent).not.toContain(mockProspectSummary.name);
+    expect(host.textContent).not.toContain(mockCall.display_name);
+    expect(host.textContent).toContain("Sign in to see your prospects");
+    expect(list.mock.calls.length + detail.mock.calls.length).toBe(1);
+  });
 });
 
 describe("ProspectsListView", () => {
@@ -172,10 +379,32 @@ describe("ProspectsListView", () => {
     expect(host.textContent).toContain("AC");
   });
 
-  it("shows hover summary card with UUID identity and metadata on mouse enter", async () => {
+  it("shows one scannable row per prospect: who, main problem, stage, next step and last call, never an ID", async () => {
     vi.spyOn(prospectsClient, "fetchProspectsList").mockResolvedValueOnce({
       schema: "ac.sales-xray.prospects/1",
-      prospects: [mockProspectSummary],
+      prospects: [
+        {
+          ...mockProspectSummary,
+          origin: "detected",
+          confirmed_at: null,
+          profile_fields: {
+            role: {
+              state: "known",
+              value: { kind: "text", text: "Founder" },
+              basis: "person",
+              locked: true,
+              set_at: "2026-10-11T00:00:00Z",
+            },
+            main_pain: {
+              state: "known",
+              value: { kind: "text", text: "Sales depend on the founder" },
+              basis: "person",
+              locked: true,
+              set_at: "2026-10-11T00:00:00Z",
+            },
+          },
+        },
+      ],
       total: 1,
       stage_filters: [],
       next_offset: null,
@@ -189,22 +418,18 @@ describe("ProspectsListView", () => {
       );
     });
 
-    const hoverBtn = host.querySelector<HTMLButtonElement>(
-      `button[aria-label="Hover summary for ${mockProspectSummary.name}"]`,
+    const row = host.querySelector<HTMLAnchorElement>(
+      `[data-testid="prospect-row-${mockProspectSummary.prospect_id}"]`,
+    )!;
+    expect(row.getAttribute("href")).toBe(
+      `/prospects/${mockProspectSummary.prospect_id}`,
     );
-    expect(hoverBtn).not.toBeNull();
-
-    await act(async () => {
-      hoverBtn!.focus();
-    });
-
-    const hoverCard = host.querySelector(
-      `[data-testid="hover-card-${mockProspectSummary.prospect_id}"]`,
-    );
-    expect(hoverCard).not.toBeNull();
-    expect(hoverCard?.textContent).toContain(mockProspectSummary.prospect_id);
-    expect(hoverCard?.textContent).toContain("2");
-    expect(hoverCard?.textContent).toContain("None recorded");
+    expect(row.textContent).toContain("Founder");
+    expect(row.textContent).toContain("Detected");
+    expect(row.textContent).toContain("Sales depend on the founder");
+    expect(row.textContent).toContain("No next step");
+    expect(row.textContent).toContain("2 visible calls");
+    expect(row.textContent).not.toContain(mockProspectSummary.prospect_id);
   });
 
   it("handles missing stage filter toggle", async () => {
@@ -350,7 +575,9 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("Acme Corp Prospect");
     expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
     expect(host.textContent).toContain("Prospect’s Information");
-    expect(host.textContent).toContain("Ability to investUnknown");
+    expect(
+      host.querySelector('[data-prospect-section="3"]')?.textContent,
+    ).toContain("Willingness to invest");
     expect(host.textContent).toContain("Unknown");
     expect(host.textContent).not.toContain("Revision 2");
     expect(host.textContent).not.toContain("Buyer readiness");
@@ -373,7 +600,8 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("Opportunity history (2 visible calls)");
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
-    expect(host.textContent).toContain("State: report_ready");
+    // A finished call needs no status label; internal states never show.
+    expect(host.textContent).not.toContain("State:");
     expect(host.textContent).not.toContain("Score");
     expect(host.textContent).not.toContain("Buyer readiness");
 
@@ -442,7 +670,7 @@ describe("ProspectDetailView", () => {
     },
   );
 
-  it("renders per-call hypothesis snapshot with provenance, interpretations and evidence quotes", async () => {
+  it("keeps provenance hashes off the page and shows the call's concern once, as Inferred", async () => {
     vi.spyOn(prospectsClient, "fetchProspectDetail").mockResolvedValueOnce(
       detailData,
     );
@@ -455,22 +683,17 @@ describe("ProspectDetailView", () => {
       );
     });
 
-    const snapshotEl = host.querySelector(
-      '[data-testid="call-snapshot-55555555-5555-4555-8555-555555555555"]',
+    expect(
+      host.querySelector(
+        '[data-testid="call-snapshot-55555555-5555-4555-8555-555555555555"]',
+      ),
+    ).toBeNull();
+    expect(host.textContent).not.toContain("scribe-response-r1");
+    expect(host.textContent).not.toContain("Per-call hypothesis");
+    const holding = host.querySelector('[data-prospect-section="5"]')!;
+    const concern = [...holding.querySelectorAll("[data-fact-label]")].find(
+      (fact) => fact.textContent?.includes("Possible concern"),
     );
-    expect(snapshotEl).not.toBeNull();
-    expect(snapshotEl?.textContent).toContain(
-      "Per-call hypothesis (c5_checkpoint)",
-    );
-    expect(snapshotEl?.textContent).toContain("rev 1");
-    expect(snapshotEl?.textContent).toContain("scribe-response-r1");
-    expect(snapshotEl?.textContent).toContain("inference");
-    expect(snapshotEl?.textContent).toContain(
-      "The buyer asks about pricing and implementation timeline.",
-    );
-    expect(snapshotEl?.textContent).toContain(
-      "how fast can we get started and what are the license tiers?",
-    );
-    expect(snapshotEl?.textContent).toContain("00:12 – 00:18");
+    expect(concern?.getAttribute("data-fact-label")).toBe("Inferred");
   });
 });

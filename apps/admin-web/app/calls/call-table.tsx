@@ -9,6 +9,7 @@ import {
   when,
   type QueueItem,
 } from "./call-data";
+import { REVIEW_LABEL, REVIEW_TONE } from "./labels-data";
 import styles from "./calls.module.css";
 
 const href = (item: QueueItem, back: string) => {
@@ -43,6 +44,9 @@ export function CallTable({
               {clock(item.durationMs)}
             </span>
             <span className={styles.cardMeta}>
+              <Badge tone={REVIEW_TONE[item.review]}>
+                {REVIEW_LABEL[item.review]}
+              </Badge>
               <Badge tone={STATUS_TONE[item.status]}>
                 {STATUS_LABEL[item.status]}
               </Badge>
@@ -66,7 +70,8 @@ export function CallTable({
           <th scope="col" data-num="">
             Runs
           </th>
-          <th scope="col">Status</th>
+          <th scope="col">Analysis</th>
+          <th scope="col">Review</th>
         </tr>
       </thead>
       <tbody>
@@ -102,6 +107,11 @@ export function CallTable({
             <td>
               <Badge tone={STATUS_TONE[item.status]}>
                 {STATUS_LABEL[item.status]}
+              </Badge>
+            </td>
+            <td>
+              <Badge tone={REVIEW_TONE[item.review]}>
+                {REVIEW_LABEL[item.review]}
               </Badge>
             </td>
           </tr>

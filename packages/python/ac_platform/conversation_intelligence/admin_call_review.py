@@ -57,6 +57,11 @@ from ac_platform.conversation_intelligence.plan_facts import plan_facts as _plan
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.report_story import report_story
+from ac_platform.conversation_intelligence.review_labels import (
+    REVIEW_STATES,
+    ReviewLabels,
+    review_state,
+)
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
@@ -337,6 +342,7 @@ class AdminCallReview:
         provider: str | None = None,
         prompt: str | None = None,
         status: str | None = None,
+        review: str | None = None,
         since: date | None = None,
         until: date | None = None,
         cursor: str | None = None,
@@ -347,6 +353,8 @@ class AdminCallReview:
             raise ConversationError("Use a queue page size between 1 and 100.")
         if status is not None and status not in STATUSES:
             raise ConversationError("Use a known call status.")
+        if review is not None and review not in REVIEW_STATES:
+            raise ConversationError("Use a known review state.")
         if language is not None and language not in LANGUAGES:
             raise ConversationError("Use a known report language.")
         if since is not None and until is not None and until < since:
@@ -384,6 +392,11 @@ class AdminCallReview:
         runs = await self._runs(ids)
         plans = await self._plans(ids)
         reports = await self._reports(ids)
+        label_rows = await ReviewLabels(
+            self.application,
+            self.operations_tenant_id,
+            recording_tenant_ids=self.recording_tenant_ids,
+        ).rows(ids)
 
         items: list[dict[str, Any]] = []
         for recording in window:
@@ -428,6 +441,7 @@ class AdminCallReview:
                         "completed_at": _iso(latest_run.completed_at),
                     },
                     "report_run_id": None if report_run is None else str(report_run.id),
+                    "review": review_state(label_rows.get(recording.id, [])),
                 }
             )
 
@@ -441,16 +455,21 @@ class AdminCallReview:
         if prompt is not None:
             items = [item for item in items if prompt in item["prompt_revisions"]]
         counts = {name: 0 for name in STATUSES}
+        review_counts = {name: 0 for name in REVIEW_STATES}
         for item in items:
             counts[item["status"]] += 1
+            review_counts[item["review"]] += 1
         if status is not None:
             items = [item for item in items if item["status"] == status]
+        if review is not None:
+            items = [item for item in items if item["review"] == review]
         page = items[offset : offset + limit]
         following = offset + limit
         return {
             "items": page,
             "total": len(items),
             "counts": counts,
+            "review_counts": review_counts,
             "facets": facets,
             "next_cursor": _cursor(following) if following < len(items) else None,
             "window": {"size": QUEUE_WINDOW, "truncated": truncated},

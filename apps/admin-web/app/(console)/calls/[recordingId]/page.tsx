@@ -13,6 +13,7 @@ import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { startAt } from "@/app/calls/review-logic";
 import { ReviewScreen } from "@/app/calls/review-screen";
+import { normalizeLabels } from "@/app/calls/labels-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
 import {
@@ -67,7 +68,7 @@ export default async function CallReviewPage({
   const compareRun = compareId
     ? call.data.runs.find((item) => item.id === compareId && item.reportId)
     : undefined;
-  const [bundle, compared, queue, access] = await Promise.all([
+  const [bundle, compared, queue, access, labels] = await Promise.all([
     run
       ? adminRead(
           `/v1/admin/conversation/runs/${run.id}/review`,
@@ -82,6 +83,10 @@ export default async function CallReviewPage({
       : null,
     back ? adminRead(queueApiPath(backFilters, 100), normalizeQueue) : null,
     loadConsoleAccess(),
+    adminRead(
+      `/v1/admin/conversation/calls/${recordingId}/labels`,
+      normalizeLabels,
+    ),
   ]);
 
   if (!run || !bundle?.ok)
@@ -182,6 +187,7 @@ export default async function CallReviewPage({
       compareBundle={compared?.ok ? compared.data : null}
       back={back}
       safety={access.platform.includes("platform_content_safety_manage")}
+      labels={labels.ok ? labels.data : null}
       startMs={startAt(one(query.at))}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
