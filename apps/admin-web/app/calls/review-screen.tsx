@@ -15,6 +15,7 @@ import {
   Keyboard,
   RefreshCcw,
   ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -219,11 +220,24 @@ export function ReviewScreen({
           <Badge tone={STATUS_TONE[call.status]}>
             {STATUS_LABEL[call.status]}
           </Badge>
+          {call.failedJobs.length ? (
+            <button
+              type="button"
+              className={kitStyles.button}
+              onClick={() => setTab("runs")}
+              title="Open the failed steps in Runs (U)"
+            >
+              <TriangleAlert size={14} aria-hidden="true" />
+              {call.failedJobs.length === 1
+                ? "1 failed step"
+                : `${call.failedJobs.length} failed steps`}
+            </button>
+          ) : null}
           <button
             type="button"
             className={kitStyles.button}
             disabled
-            title="Needs an admin re-run API. Today only the rep can retry a call from Sales Xray."
+            title="Re-running a finished call needs an admin re-run command (a new provider charge). Failed steps can be retried from Runs."
           >
             <RefreshCcw size={14} aria-hidden="true" />
             Re-run

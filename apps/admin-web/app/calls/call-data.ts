@@ -3,6 +3,7 @@
  * (GET /v1/admin/conversation/calls, /calls/{id}, /runs/{id}/review) that give
  * every missing field a default, and the labels screens show. Pure.
  */
+import { normalizeFailedJob, type FailedJob } from "../health/health-data";
 import { read } from "../lib/read";
 
 export const CALL_STATUSES = [
@@ -168,6 +169,8 @@ export type Call = {
   rep: Person;
   status: CallStatus;
   runs: Run[];
+  /** Dead-lettered steps, newest first; the admin job retry may run the retryable ones. */
+  failedJobs: FailedJob[];
 };
 
 export function normalizeCall(raw: unknown): Call {
@@ -201,6 +204,7 @@ export function normalizeCall(raw: unknown): Call {
         retryOf: read.optionalString(row.retry_of),
       };
     }),
+    failedJobs: read.array(body.failed_jobs).map(normalizeFailedJob),
   };
 }
 

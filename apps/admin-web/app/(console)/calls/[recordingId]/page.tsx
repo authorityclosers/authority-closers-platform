@@ -7,12 +7,22 @@ import {
   normalizeQueue,
   pickRun,
   STATUS_LABEL,
+  when,
 } from "@/app/calls/call-data";
+import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { ReviewScreen } from "@/app/calls/review-screen";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
-import { Empty, Page, PageHeader, Panel, Unavailable } from "@/app/ui/kit";
+import {
+  Badge,
+  Empty,
+  Page,
+  PageHeader,
+  Panel,
+  Table,
+  Unavailable,
+} from "@/app/ui/kit";
 
 export const dynamic = "force-dynamic";
 
@@ -97,8 +107,52 @@ export default async function CallReviewPage({
                     ? "The analysis failed"
                     : "This call has no report"
               }
-              text="A call can be reviewed once one of its runs has a saved report. Its runs are listed in Analysis health."
+              text="A call can be reviewed once one of its runs has a saved report."
             />
+          </Panel>
+        ) : null}
+        {call.data.failedJobs.length ? (
+          <Panel
+            title="Failed steps"
+            sub="Retry runs the step again; it needs a reason and is audited."
+          >
+            <FailedSteps jobs={call.data.failedJobs} />
+          </Panel>
+        ) : null}
+        {call.data.runs.length ? (
+          <Panel title="Runs" sub={`${call.data.runs.length} on this call`}>
+            <Table label="Runs">
+              <thead>
+                <tr>
+                  <th scope="col">Started</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Prompt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {call.data.runs.map((item) => (
+                  <tr key={item.id}>
+                    <th scope="row">{when(item.createdAt)}</th>
+                    <td>
+                      <Badge
+                        tone={
+                          item.reportId
+                            ? "good"
+                            : item.state === "failed"
+                              ? "bad"
+                              : "neutral"
+                        }
+                      >
+                        {item.reportId ? "Report" : item.state}
+                      </Badge>
+                    </td>
+                    <td>{item.model ?? item.provider ?? "Not recorded"}</td>
+                    <td>{item.promptRevision ?? "Not recorded"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </Panel>
         ) : null}
       </Page>

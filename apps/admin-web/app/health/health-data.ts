@@ -90,6 +90,20 @@ const duration = (raw: unknown): Duration => {
   };
 };
 
+/** One dead-lettered job, as Analysis health and the call screen both show it. */
+export function normalizeFailedJob(raw: unknown): FailedJob {
+  const row = read.object(raw);
+  return {
+    jobId: read.string(row.job_id),
+    stage: read.string(row.stage, "?"),
+    recordingId: read.optionalString(row.recording_id),
+    attempts: read.number(row.attempts),
+    code: read.string(row.code, "not_recorded"),
+    failedAt: read.optionalString(row.failed_at),
+    retryable: read.boolean(row.retryable),
+  };
+}
+
 export function normalizeHealth(raw: unknown): Health {
   const body = read.object(raw);
   const window = read.object(body.window);
@@ -109,18 +123,7 @@ export function normalizeHealth(raw: unknown): Health {
       (sum, value) => sum + read.number(value),
       0,
     ),
-    failed: read.array(body.failed).map((item) => {
-      const row = read.object(item);
-      return {
-        jobId: read.string(row.job_id),
-        stage: read.string(row.stage, "?"),
-        recordingId: read.optionalString(row.recording_id),
-        attempts: read.number(row.attempts),
-        code: read.string(row.code, "not_recorded"),
-        failedAt: read.optionalString(row.failed_at),
-        retryable: read.boolean(row.retryable),
-      };
-    }),
+    failed: read.array(body.failed).map(normalizeFailedJob),
     held: read.array(body.held).map((item) => {
       const row = read.object(item);
       return {

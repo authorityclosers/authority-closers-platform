@@ -78,6 +78,8 @@ def test_queue_call_and_bundle_show_one_analysed_call(review_case: ReviewCase) -
             assert call["status"] == "ready"
             reported = [entry for entry in call["runs"] if entry["report_id"]]
             assert [entry["id"] for entry in reported] == [str(case.report_run_id)]
+            # The analysed call has no dead-lettered step to retry.
+            assert call["failed_jobs"] == []
 
             bundle = await service.bundle(case.admin_actor, case.report_run_id)
             assert bundle["run_id"] == str(case.report_run_id)

@@ -144,6 +144,38 @@ describe("call review data", () => {
     expect(pickRun(normalizeCall({ runs: [] }), undefined)).toBeNull();
   });
 
+  it("reads a call's failed steps with defaults, and none when the field is missing", () => {
+    expect(normalizeCall({}).failedJobs).toEqual([]);
+    const call = normalizeCall({
+      failed_jobs: [
+        {
+          job_id: "job-1",
+          stage: "C2",
+          recording_id: "rec-1",
+          attempts: 3,
+          code: "provider_timeout",
+          failed_at: "2026-10-11T03:00:00Z",
+          retryable: true,
+        },
+        { job_id: "job-2" },
+      ],
+    });
+    expect(call.failedJobs[0]).toEqual({
+      jobId: "job-1",
+      stage: "C2",
+      recordingId: "rec-1",
+      attempts: 3,
+      code: "provider_timeout",
+      failedAt: "2026-10-11T03:00:00Z",
+      retryable: true,
+    });
+    expect(call.failedJobs[1]).toMatchObject({
+      stage: "?",
+      code: "not_recorded",
+      retryable: false,
+    });
+  });
+
   it("builds the bundle, its audio URL and speaker names from the call map", () => {
     const bundle = normalizeBundle({
       run_id: "run-1",

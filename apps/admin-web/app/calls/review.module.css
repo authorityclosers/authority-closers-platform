@@ -692,6 +692,13 @@
   font-size: var(--sx-text-xs);
 }
 
+.runsHeading {
+  margin: 4px 0 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
 .runActions {
   display: flex;
   gap: 12px;

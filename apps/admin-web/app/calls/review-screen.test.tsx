@@ -8,7 +8,7 @@ import { ReviewScreen } from "./review-screen";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -105,11 +105,11 @@ afterEach(async () => {
   host.remove();
 });
 
-async function render() {
+async function render(shown = call) {
   await act(async () =>
     root.render(
       <ReviewScreen
-        call={call}
+        call={shown}
         bundle={bundle}
         compare={null}
         compareBundle={null}
@@ -210,4 +210,53 @@ it("finds lines in the transcript and counts them", async () => {
     host.querySelector('[data-segment="s2"]')?.hasAttribute("hidden"),
   ).toBe(false);
   expect(host.textContent).toContain("1 line");
+});
+
+it("points to a failed step and offers the admin retry only where it is safe", async () => {
+  await render({
+    ...call,
+    failedJobs: [
+      {
+        jobId: "job-1",
+        stage: "C5",
+        recordingId: "rec-1",
+        attempts: 3,
+        code: "provider_timeout",
+        failedAt: "2026-10-11T03:00:00Z",
+        retryable: true,
+      },
+      {
+        jobId: "job-2",
+        stage: "C2",
+        recordingId: "rec-1",
+        attempts: 1,
+        code: "withheld",
+        failedAt: null,
+        retryable: false,
+      },
+    ],
+  });
+  const chip = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "2 failed steps",
+  );
+  expect(chip).toBeTruthy();
+  await act(async () => chip!.click());
+  const failed = host.querySelector('[aria-label="Failed steps"]');
+  expect(failed?.textContent).toContain("Report");
+  expect(failed?.textContent).toContain("provider_timeout");
+  expect(failed?.textContent).toContain("reached a provider");
+  // Only the step that never reached a provider gets a Retry button.
+  expect(
+    [...failed!.querySelectorAll("button")].map((item) => item.textContent),
+  ).toEqual(["Retry"]);
+  // Re-running a finished call stays an unbuilt, disabled command.
+  const rerun = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Re-run",
+  );
+  expect(rerun?.disabled).toBe(true);
+});
+
+it("shows no failed-step chip when nothing failed", async () => {
+  await render();
+  expect(host.textContent).not.toContain("failed step");
 });

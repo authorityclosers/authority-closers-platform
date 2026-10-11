@@ -6,7 +6,8 @@ operations control accounts that may open Admin reports today:
 * ``queue``: the newest calls in a bounded window, filterable by organisation,
   rep, report language, provider, status and upload date;
 * ``call``: one recording with every analysis run (prompt version, provider
-  and whether a report exists), for comparing runs;
+  and whether a report exists), for comparing runs, and its failed steps
+  (stored codes only) for the existing admin job retry;
 * ``bundle``: one run's report and transcript, withheld per the recording's
   sensitive-segment marks and audited like ``admin_report_view``.
 
@@ -30,6 +31,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.admin_analysis_health import failed_job_view
 from ac_platform.conversation_intelligence.admin_recordings import _owner_view
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -58,10 +60,12 @@ from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Tenant
 
 QUEUE_WINDOW = 500
 MAX_PAGE = 100
+MAX_FAILED_JOBS = 20
 STATUSES = ("ready", "analysing", "failed", "uploaded")
 LANGUAGES = ("en", "hi-Deva+en", "mr-Deva+en")
 
@@ -323,6 +327,34 @@ class AdminCallReview:
         )
         return {run_id: plan_id for run_id, plan_id in rows.all()}
 
+    async def _failed_jobs(
+        self, recording_id: UUID, runs: Sequence[ConversationRun]
+    ) -> list[dict[str, Any]]:
+        """One call's dead-lettered steps, newest first: the local run job and its stages."""
+
+        stage_by_job: dict[UUID, str] = {run.job_id: "C1" for run in runs}
+        rows = await self.database.execute(
+            select(ConversationInferenceTask.job_id, ConversationInferenceTask.stage).where(
+                ConversationInferenceTask.tenant_id.in_(self.recording_tenant_ids),
+                ConversationInferenceTask.recording_id == recording_id,
+            )
+        )
+        stage_by_job.update({job_id: stage for job_id, stage in rows.all()})
+        if not stage_by_job:
+            return []
+        jobs = (
+            await self.database.scalars(
+                select(Job)
+                .where(Job.id.in_(stage_by_job), Job.status == "dead_letter")
+                .order_by(Job.created_at.desc())
+                .limit(MAX_FAILED_JOBS)
+            )
+        ).all()
+        return [
+            failed_job_view(job, stage=stage_by_job[job.id], recording_id=recording_id)
+            for job in jobs
+        ]
+
     # ---------- Views ----------
 
     async def queue(
@@ -493,6 +525,7 @@ class AdminCallReview:
                 }
                 for run in runs
             ],
+            "failed_jobs": await self._failed_jobs(recording.id, runs),
         }
 
     async def bundle(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:

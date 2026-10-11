@@ -57,6 +57,26 @@ def failure_code(job: Job) -> str:
     return "not_recorded" if not job.last_error else "withheld"
 
 
+def failed_job_view(job: Job, *, stage: str, recording_id: UUID | None) -> dict[str, Any]:
+    """One dead-lettered job as the console shows it: stored codes, never error text."""
+
+    return {
+        "job_id": str(job.id),
+        "stage": stage,
+        "recording_id": None if recording_id is None else str(recording_id),
+        "attempts": job.attempt_count,
+        "code": failure_code(job),
+        "created_at": utc(job.created_at).isoformat(),
+        "failed_at": None
+        if job.dead_lettered_at is None
+        else utc(job.dead_lettered_at).isoformat(),
+        # The retry route refuses work that already reached a provider.
+        "retryable": job.dispatch_started_at is None
+        and job.provider_receipt is None
+        and job.delivery_ambiguous_at is None,
+    }
+
+
 def _percentile(values: list[float], share: float) -> float | None:
     if not values:
         return None
@@ -159,21 +179,7 @@ class AdminAnalysisHealth:
         totals: Counter[str] = Counter(job.status for job in in_scope)
 
         failed = [
-            {
-                "job_id": str(job.id),
-                "stage": stage(job),
-                "recording_id": None if recording(job) is None else str(recording(job)),
-                "attempts": job.attempt_count,
-                "code": failure_code(job),
-                "created_at": utc(job.created_at).isoformat(),
-                "failed_at": None
-                if job.dead_lettered_at is None
-                else utc(job.dead_lettered_at).isoformat(),
-                # The retry route refuses work that already reached a provider.
-                "retryable": job.dispatch_started_at is None
-                and job.provider_receipt is None
-                and job.delivery_ambiguous_at is None,
-            }
+            failed_job_view(job, stage=stage(job), recording_id=recording(job))
             for job in in_scope
             if job.status == "dead_letter"
         ][:50]

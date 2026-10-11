@@ -27,6 +27,7 @@ import {
   skillState,
   type ReportPillar,
 } from "./report-pillars";
+import { FailedSteps } from "./failed-steps";
 import { compareReports } from "./review-logic";
 import styles from "./review.module.css";
 
@@ -493,6 +494,13 @@ export function Runs({
     : [];
   return (
     <div className={styles.reading}>
+      {call.failedJobs.length ? (
+        <>
+          <h3 className={styles.runsHeading}>Failed steps</h3>
+          <FailedSteps jobs={call.failedJobs} />
+          <h3 className={styles.runsHeading}>Runs</h3>
+        </>
+      ) : null}
       <ul className={styles.runs}>
         {call.runs.map((run) => {
           const isCurrent = run.id === current.runId;
