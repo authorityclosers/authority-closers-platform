@@ -423,6 +423,7 @@ export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
   const response = await fetch(COACHING_API, {
     credentials: "same-origin",
     cache: "no-store",
+    redirect: "error",
     signal,
     headers: { Accept: "application/json" },
   });

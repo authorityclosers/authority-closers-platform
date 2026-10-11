@@ -47,6 +47,11 @@ it("says whether a call's issue recurs from one shared My coaching read", async 
   expect(await recurringIssue(C, me)).toBeNull();
   expect(await recurringIssue(fictionalCoaching.person_id, me)).toBeNull();
   expect(fetch).toHaveBeenCalledOnce();
+  // Like every read in the app: same-origin, and a redirect is an error.
+  expect((fetch.mock.calls[0] as unknown[])[1]).toMatchObject({
+    credentials: "same-origin",
+    redirect: "error",
+  });
 });
 
 it("never answers for another account and stops quietly on failure or abort", async () => {
