@@ -46,7 +46,13 @@ export function CallsBodySkeleton({
 /** Route-level loading: the header plus the same skeleton blocks. */
 export function CallsSkeleton() {
   return (
-    <div className={styles.page} data-workspace="true">
+    // The standalone page's frame: its h1 is for screen readers only (the
+    // shell's bar says "Calls"), so the loading outline must not show one.
+    <div
+      className={styles.page}
+      data-variant="standalone"
+      data-workspace="true"
+    >
       <header className={styles.header}>
         <div className={styles.headerCopy}>
           <h1>Calls</h1>
