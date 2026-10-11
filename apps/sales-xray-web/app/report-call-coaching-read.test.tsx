@@ -268,10 +268,21 @@ it("does not reuse a bootstrap from the previous session of the same person", as
   expect(container.textContent).not.toContain("Fictional API focus");
   expect(container.textContent).not.toContain(transcript.segments[0].text);
 });
-it("keeps the report focus available if this API has not deployed", async () => {
+it("shows the report's own coaching, with no error, for a call that isn't the viewer's", async () => {
+  // An admin reading a teammate's report: the rep's Coaching stays private (404).
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response("private error", { status: 404 })),
+  );
+  await render();
+  expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();
+  expect(notices.notify).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("private error");
+});
+it("keeps the report focus and offers Try again when the read fails", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("private error", { status: 503 })),
   );
   await render();
   expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();

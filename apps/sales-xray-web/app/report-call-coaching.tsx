@@ -204,14 +204,19 @@ export function ReportCallCoaching(props: Props) {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
+        const status =
+          error instanceof CallCoachingReadError ? error.status : undefined;
         if (
-          error instanceof CallCoachingReadError &&
-          ([401, 403].includes(error.status ?? 0) ||
-            (error.status === 404 && authorisedScope.current === baseScope))
+          [401, 403].includes(status ?? 0) ||
+          (status === 404 && authorisedScope.current === baseScope)
         ) {
           setWithheldScope(baseScope);
         }
         setLoaded({ scope, baseScope, report, view: null, error: true });
+        // Not one of the viewer's own calls (an admin reading a teammate's
+        // report): Coaching stays private to the rep, so the report's own
+        // coaching is the whole answer, not a failure to retry.
+        if (status === 404 && authorisedScope.current !== baseScope) return;
         notify({
           id: "report-call-coaching",
           tone: "error",
