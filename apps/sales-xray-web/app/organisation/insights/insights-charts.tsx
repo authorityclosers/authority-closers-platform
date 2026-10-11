@@ -90,8 +90,12 @@ export function TrendColumns({
           </>
         )}
         <span className={styles.legend} aria-hidden="true">
-          <i data-key="won" /> Won
-          <i data-key="calls" /> Other calls
+          <span>
+            <i data-key="won" /> Won
+          </span>
+          <span>
+            <i data-key="calls" /> Other calls
+          </span>
         </span>
       </figcaption>
       <div className={styles.plot}>
@@ -324,9 +328,15 @@ export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
   return (
     <>
       <p className={styles.legendRow} aria-hidden="true">
-        <i data-key="observed" /> Observed
-        <i data-key="attention" /> Needs attention
-        <i data-key="unknown" /> Not enough evidence
+        <span>
+          <i data-key="observed" /> Observed
+        </span>
+        <span>
+          <i data-key="attention" /> Needs attention
+        </span>
+        <span>
+          <i data-key="unknown" /> Not enough evidence
+        </span>
       </p>
       <ul className={styles.skillList} aria-label="Skills across the calls">
         {skills.map((skill) => {
@@ -365,7 +375,8 @@ export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
 
 /**
  * People (or teams) against the eight skills: each cell is the share of that
- * group's skill moments that were observed, deeper teal for more. A real
+ * group's skill moments that were observed. Full cells stay quiet; a gap is
+ * tinted amber, deeper the more often the skill needed attention. A real
  * table, so the values read without colour.
  */
 export function SkillHeatmap({
@@ -418,17 +429,15 @@ export function SkillHeatmap({
                   <td
                     key={skill.id}
                     data-empty={share === null ? "" : undefined}
-                    data-strong={
-                      share !== null && share >= 0.85 ? "" : undefined
-                    }
+                    data-full={share === 1 ? "" : undefined}
                     style={
-                      share === null
+                      share === null || share === 1
                         ? undefined
                         : ({
-                            "--fill": `${Math.round(12 + share * 78)}%`,
+                            "--gap": `${Math.min(72, Math.round(10 + (1 - share) * 120))}%`,
                           } as CSSProperties)
                     }
-                    title={`${group.name} · ${skill.short}: ${percent(share)} observed${cell?.needsAttention ? `, ${cell.needsAttention} need attention` : ""}`}
+                    title={`${group.name} · ${skill.short}: ${percent(share)} observed${cell?.needsAttention ? `, ${cell.needsAttention} needed attention` : ""}`}
                   >
                     {percent(share)}
                   </td>

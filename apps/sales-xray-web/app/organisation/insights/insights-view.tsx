@@ -31,7 +31,6 @@ import {
   Panel,
   Segmented,
   Skeleton,
-  Spark,
   Table,
   Card,
   Tiles,
@@ -508,7 +507,6 @@ function Sections({
 }) {
   const { totals, previous } = data;
   const [view, setView] = useState<"people" | "teams">("people");
-  const trendCalls = data.trend.map((point) => point.calls);
   const outcomeRows = data.outcomes
     .filter((row) => row.calls > 0)
     .sort((a, b) => b.calls - a.calls)
@@ -559,10 +557,7 @@ function Sections({
               <Delta value={totals.calls} previous={previous.calls} />
             ) : null
           }
-          note={`${minutes(totals.minutes)} of calls · ${count(totals.people)} people`}
-          spark={
-            <Spark values={trendCalls} label={`Calls by ${data.window.unit}`} />
-          }
+          note={`${minutes(totals.minutes)} · ${count(totals.people)} people`}
         />
         <Kpi
           label="Agreed a next step"
@@ -571,7 +566,7 @@ function Sections({
             totals.nextStepShare,
             previous?.nextStepShare ?? null,
           )}
-          note={`${count(totals.nextStep)} calls ended with a next step`}
+          note={`${count(totals.nextStep)} calls`}
         />
         <Kpi
           label="Won"
@@ -583,7 +578,7 @@ function Sections({
           }
           note={
             value
-              ? `${percent(totals.winShare)} of calls · ${value} quoted`
+              ? `${percent(totals.winShare)} · ${value} quoted`
               : `${percent(totals.winShare)} of calls`
           }
         />
@@ -594,7 +589,7 @@ function Sections({
             totals.needsAttentionShare,
             previous?.needsAttentionShare ?? null,
           )}
-          note="Of all skill moments; lower is better"
+          note="Lower is better"
         />
       </Tiles>
 
@@ -640,8 +635,9 @@ function Sections({
         title="Skills by person"
         sub="Share of skill moments observed"
         className={styles.wide}
-        tools={
-          data.teams.length ? (
+      >
+        <div className={styles.heatBar}>
+          {data.teams.length ? (
             <Segmented
               label="Group by"
               items={[
@@ -651,9 +647,12 @@ function Sections({
               value={view}
               onChange={setView}
             />
-          ) : null
-        }
-      >
+          ) : null}
+          <span className={styles.caption}>
+            Amber marks a skill that needed attention; the deeper, the more
+            often.
+          </span>
+        </div>
         <SkillHeatmap
           groups={heatGroups}
           label={view === "teams" ? "Team" : "Person"}
@@ -819,11 +818,12 @@ function Sections({
 function changeText(change: number | null) {
   if (change === null) return "—";
   const points = Math.round(change * 100);
+  const size = Math.abs(points) === 1 ? "1 pt" : `${Math.abs(points)} pts`;
   return points === 0
     ? "steady"
     : points < 0
-      ? `${-points} pts better`
-      : `${points} pts worse`;
+      ? `${size} better`
+      : `${size} worse`;
 }
 
 function PeopleTable({

@@ -211,13 +211,15 @@
   display: inline-block;
   width: 10px;
   height: 10px;
-  margin-left: 6px;
   border-radius: 2px;
 }
 
-.legend i:first-child,
-.legendRow i:first-child {
-  margin-left: 0;
+.legend > span,
+.legendRow > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .page [data-key="won"] {
@@ -629,15 +631,23 @@ button.barRow:focus-visible {
   border-radius: 4px;
   background: color-mix(
     in oklab,
-    var(--sx-accent) var(--fill, 0%),
-    var(--sx-surface)
+    var(--sx-warn) var(--gap, 0%),
+    var(--sx-sunken)
   );
   color: var(--sx-ink);
   text-align: center;
 }
 
-.heat td[data-strong] {
-  color: var(--sx-accent-ink);
+.heat td[data-full] {
+  color: var(--sx-muted);
+}
+
+.heatBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px 0;
 }
 
 .heat td[data-empty] {
@@ -892,7 +902,19 @@ a.callTitle:hover {
   }
 
   .skillList li {
-    grid-template-columns: minmax(0, 1fr) 80px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+
+  .skillValue {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .skillValue small {
+    white-space: nowrap;
   }
 
   .skillList .split {

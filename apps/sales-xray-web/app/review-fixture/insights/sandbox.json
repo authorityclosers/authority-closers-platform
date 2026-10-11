@@ -245,7 +245,7 @@
         ],
         "needs_attention_change": -0.012,
         "name": "Revati Ambarsekar",
-        "team": "syn-insurance-TEAM"
+        "team": "Kavach Setu Benefits"
       },
       {
         "key": "syn-healthcare-R1",
@@ -296,7 +296,7 @@
         ],
         "needs_attention_change": -0.0071,
         "name": "Mira Ransurekar",
-        "team": "syn-healthcare-TEAM"
+        "team": "Swasthya Bridge Clinics"
       },
       {
         "key": "syn-insurance-R4",
@@ -347,7 +347,7 @@
         ],
         "needs_attention_change": -0.0087,
         "name": "Nikhil Ambarsekar",
-        "team": "syn-insurance-TEAM"
+        "team": "Kavach Setu Benefits"
       },
       {
         "key": "syn-estate-R2",
@@ -398,7 +398,7 @@
         ],
         "needs_attention_change": -0.0089,
         "name": "Rohan Velankarkar",
-        "team": "syn-estate-TEAM"
+        "team": "Estate Autopilots"
       },
       {
         "key": "syn-insurance-R2",
@@ -449,7 +449,7 @@
         ],
         "needs_attention_change": -0.0057,
         "name": "Rohan Ambarsekar",
-        "team": "syn-insurance-TEAM"
+        "team": "Kavach Setu Benefits"
       },
       {
         "key": "syn-saas-R3",
@@ -500,7 +500,7 @@
         ],
         "needs_attention_change": 0.0096,
         "name": "Sana Savdekar",
-        "team": "syn-saas-TEAM"
+        "team": "DarpanDesk Cloud"
       },
       {
         "key": "syn-brokerage-R3",
@@ -551,7 +551,7 @@
         ],
         "needs_attention_change": -0.0038,
         "name": "Sana Joglekar",
-        "team": "syn-brokerage-TEAM"
+        "team": "Aangan Square Realty"
       },
       {
         "key": "syn-insurance-R3",
@@ -602,7 +602,7 @@
         ],
         "needs_attention_change": -0.0117,
         "name": "Sana Ambarsekar",
-        "team": "syn-insurance-TEAM"
+        "team": "Kavach Setu Benefits"
       },
       {
         "key": "syn-naya-R6",
@@ -653,7 +653,7 @@
         ],
         "needs_attention_change": -0.0096,
         "name": "Omkar Talvanekar",
-        "team": "syn-naya-TEAM"
+        "team": "Naya Growth / Kriya"
       },
       {
         "key": "syn-brokerage-R1",
@@ -704,7 +704,7 @@
         ],
         "needs_attention_change": 0.0133,
         "name": "Mira Joglekar",
-        "team": "syn-brokerage-TEAM"
+        "team": "Aangan Square Realty"
       },
       {
         "key": "syn-advisory-R4",
@@ -755,7 +755,7 @@
         ],
         "needs_attention_change": -0.0239,
         "name": "Nikhil Nivsekar",
-        "team": "syn-advisory-TEAM"
+        "team": "ArthaPath Advisory Studio"
       },
       {
         "key": "syn-estate-R5",
@@ -806,7 +806,7 @@
         ],
         "needs_attention_change": 0.0134,
         "name": "Revati Velankarkar",
-        "team": "syn-estate-TEAM"
+        "team": "Estate Autopilots"
       },
       {
         "key": "syn-naya-R3",
@@ -857,7 +857,7 @@
         ],
         "needs_attention_change": -0.0034,
         "name": "Sana Talvanekar",
-        "team": "syn-naya-TEAM"
+        "team": "Naya Growth / Kriya"
       },
       {
         "key": "syn-manufacturing-R6",
@@ -908,7 +908,7 @@
         ],
         "needs_attention_change": -0.0147,
         "name": "Omkar Kovekar",
-        "team": "syn-manufacturing-TEAM"
+        "team": "ForgeLane Industrial Supply"
       },
       {
         "key": "syn-authority-R2",
@@ -959,7 +959,7 @@
         ],
         "needs_attention_change": -0.0068,
         "name": "Rohan Dhotrekar",
-        "team": "syn-authority-TEAM"
+        "team": "Authority Closers"
       },
       {
         "key": "syn-edtech-R6",
@@ -1010,7 +1010,7 @@
         ],
         "needs_attention_change": -0.0041,
         "name": "Omkar Kendrekar",
-        "team": "syn-edtech-TEAM"
+        "team": "SkillHarbour Learning"
       },
       {
         "key": "syn-naya-R4",
@@ -1061,7 +1061,7 @@
         ],
         "needs_attention_change": -0.0241,
         "name": "Nikhil Talvanekar",
-        "team": "syn-naya-TEAM"
+        "team": "Naya Growth / Kriya"
       },
       {
         "key": "syn-brokerage-R4",
@@ -1112,7 +1112,7 @@
         ],
         "needs_attention_change": -0.0167,
         "name": "Nikhil Joglekar",
-        "team": "syn-brokerage-TEAM"
+        "team": "Aangan Square Realty"
       },
       {
         "key": "syn-saas-R2",
@@ -1163,7 +1163,7 @@
         ],
         "needs_attention_change": 0.0061,
         "name": "Rohan Savdekar",
-        "team": "syn-saas-TEAM"
+        "team": "DarpanDesk Cloud"
       },
       {
         "key": "syn-healthcare-R2",
@@ -1214,7 +1214,7 @@
         ],
         "needs_attention_change": -0.017,
         "name": "Rohan Ransurekar",
-        "team": "syn-healthcare-TEAM"
+        "team": "Swasthya Bridge Clinics"
       },
       {
         "key": "syn-healthcare-R4",
@@ -1265,7 +1265,7 @@
         ],
         "needs_attention_change": -0.0177,
         "name": "Nikhil Ransurekar",
-        "team": "syn-healthcare-TEAM"
+        "team": "Swasthya Bridge Clinics"
       },
       {
         "key": "syn-authority-R3",
@@ -1316,7 +1316,7 @@
         ],
         "needs_attention_change": -0.0032,
         "name": "Sana Dhotrekar",
-        "team": "syn-authority-TEAM"
+        "team": "Authority Closers"
       },
       {
         "key": "syn-advisory-R1",
@@ -1367,7 +1367,7 @@
         ],
         "needs_attention_change": -0.0022,
         "name": "Mira Nivsekar",
-        "team": "syn-advisory-TEAM"
+        "team": "ArthaPath Advisory Studio"
       },
       {
         "key": "syn-saas-R5",
@@ -1418,7 +1418,7 @@
         ],
         "needs_attention_change": -0.0098,
         "name": "Revati Savdekar",
-        "team": "syn-saas-TEAM"
+        "team": "DarpanDesk Cloud"
       }
     ],
     "teams": [
@@ -1974,7 +1974,7 @@
           "key": "syn-advisory-J09-C-04",
           "person_key": "syn-advisory-R6",
           "person": "Omkar Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-08-29T07:30:00+00:00",
           "outcome": "won",
           "duration_ms": 327140,
@@ -1986,7 +1986,7 @@
           "key": "syn-advisory-J06-C-04",
           "person_key": "syn-advisory-R3",
           "person": "Sana Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-08-23T04:30:00+00:00",
           "outcome": "won",
           "duration_ms": 337476,
@@ -1998,7 +1998,7 @@
           "key": "syn-advisory-J01-C-03",
           "person_key": "syn-advisory-R4",
           "person": "Nikhil Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-07-31T04:30:00+00:00",
           "outcome": "won",
           "duration_ms": 270272,
@@ -2010,7 +2010,7 @@
           "key": "syn-insurance-SIM-J005158-C-03",
           "person_key": "syn-insurance-R6",
           "person": "Omkar Ambarsekar",
-          "team": "syn-insurance-TEAM",
+          "team": "Kavach Setu Benefits",
           "at": "2026-07-27T08:36:00+00:00",
           "outcome": "won",
           "duration_ms": 111332,
@@ -2022,7 +2022,7 @@
           "key": "syn-brokerage-SIM-J006213-C-03",
           "person_key": "syn-brokerage-R6",
           "person": "Omkar Joglekar",
-          "team": "syn-brokerage-TEAM",
+          "team": "Aangan Square Realty",
           "at": "2026-09-11T08:11:00+00:00",
           "outcome": "won",
           "duration_ms": 109955,
@@ -2036,7 +2036,7 @@
           "key": "syn-advisory-J10-C-05",
           "person_key": "syn-advisory-R1",
           "person": "Mira Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-09-07T08:30:00+00:00",
           "outcome": "lost",
           "duration_ms": 330271,
@@ -2048,7 +2048,7 @@
           "key": "syn-advisory-J08-C-06",
           "person_key": "syn-advisory-R5",
           "person": "Revati Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-09-07T06:30:00+00:00",
           "outcome": "unclear",
           "duration_ms": 262283,
@@ -2060,7 +2060,7 @@
           "key": "syn-insurance-SIM-J005322-C-02",
           "person_key": "syn-insurance-R3",
           "person": "Sana Ambarsekar",
-          "team": "syn-insurance-TEAM",
+          "team": "Kavach Setu Benefits",
           "at": "2026-08-24T04:34:00+00:00",
           "outcome": "follow_up",
           "duration_ms": 125172,
@@ -2072,7 +2072,7 @@
           "key": "syn-advisory-J04-C-02",
           "person_key": "syn-advisory-R1",
           "person": "Mira Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-08-08T07:30:00+00:00",
           "outcome": "deferred",
           "duration_ms": 343890,
@@ -2084,7 +2084,7 @@
           "key": "syn-advisory-J02-C-03",
           "person_key": "syn-advisory-R5",
           "person": "Revati Nivsekar",
-          "team": "syn-advisory-TEAM",
+          "team": "ArthaPath Advisory Studio",
           "at": "2026-08-05T05:30:00+00:00",
           "outcome": "lost",
           "duration_ms": 238257,
@@ -2099,202 +2099,202 @@
         {
           "key": "syn-insurance-R1",
           "name": "Mira Ambarsekar",
-          "team": "syn-insurance-TEAM"
+          "team": "Kavach Setu Benefits"
         },
         {
           "key": "syn-authority-R1",
           "name": "Mira Dhotrekar",
-          "team": "syn-authority-TEAM"
+          "team": "Authority Closers"
         },
         {
           "key": "syn-brokerage-R1",
           "name": "Mira Joglekar",
-          "team": "syn-brokerage-TEAM"
+          "team": "Aangan Square Realty"
         },
         {
           "key": "syn-edtech-R1",
           "name": "Mira Kendrekar",
-          "team": "syn-edtech-TEAM"
+          "team": "SkillHarbour Learning"
         },
         {
           "key": "syn-manufacturing-R1",
           "name": "Mira Kovekar",
-          "team": "syn-manufacturing-TEAM"
+          "team": "ForgeLane Industrial Supply"
         },
         {
           "key": "syn-advisory-R1",
           "name": "Mira Nivsekar",
-          "team": "syn-advisory-TEAM"
+          "team": "ArthaPath Advisory Studio"
         },
         {
           "key": "syn-healthcare-R1",
           "name": "Mira Ransurekar",
-          "team": "syn-healthcare-TEAM"
+          "team": "Swasthya Bridge Clinics"
         },
         {
           "key": "syn-saas-R1",
           "name": "Mira Savdekar",
-          "team": "syn-saas-TEAM"
+          "team": "DarpanDesk Cloud"
         },
         {
           "key": "syn-naya-R1",
           "name": "Mira Talvanekar",
-          "team": "syn-naya-TEAM"
+          "team": "Naya Growth / Kriya"
         },
         {
           "key": "syn-estate-R1",
           "name": "Mira Velankarkar",
-          "team": "syn-estate-TEAM"
+          "team": "Estate Autopilots"
         },
         {
           "key": "syn-insurance-R4",
           "name": "Nikhil Ambarsekar",
-          "team": "syn-insurance-TEAM"
+          "team": "Kavach Setu Benefits"
         },
         {
           "key": "syn-authority-R4",
           "name": "Nikhil Dhotrekar",
-          "team": "syn-authority-TEAM"
+          "team": "Authority Closers"
         },
         {
           "key": "syn-brokerage-R4",
           "name": "Nikhil Joglekar",
-          "team": "syn-brokerage-TEAM"
+          "team": "Aangan Square Realty"
         },
         {
           "key": "syn-edtech-R4",
           "name": "Nikhil Kendrekar",
-          "team": "syn-edtech-TEAM"
+          "team": "SkillHarbour Learning"
         },
         {
           "key": "syn-manufacturing-R4",
           "name": "Nikhil Kovekar",
-          "team": "syn-manufacturing-TEAM"
+          "team": "ForgeLane Industrial Supply"
         },
         {
           "key": "syn-advisory-R4",
           "name": "Nikhil Nivsekar",
-          "team": "syn-advisory-TEAM"
+          "team": "ArthaPath Advisory Studio"
         },
         {
           "key": "syn-healthcare-R4",
           "name": "Nikhil Ransurekar",
-          "team": "syn-healthcare-TEAM"
+          "team": "Swasthya Bridge Clinics"
         },
         {
           "key": "syn-saas-R4",
           "name": "Nikhil Savdekar",
-          "team": "syn-saas-TEAM"
+          "team": "DarpanDesk Cloud"
         },
         {
           "key": "syn-naya-R4",
           "name": "Nikhil Talvanekar",
-          "team": "syn-naya-TEAM"
+          "team": "Naya Growth / Kriya"
         },
         {
           "key": "syn-estate-R4",
           "name": "Nikhil Velankarkar",
-          "team": "syn-estate-TEAM"
+          "team": "Estate Autopilots"
         },
         {
           "key": "syn-insurance-R6",
           "name": "Omkar Ambarsekar",
-          "team": "syn-insurance-TEAM"
+          "team": "Kavach Setu Benefits"
         },
         {
           "key": "syn-authority-R6",
           "name": "Omkar Dhotrekar",
-          "team": "syn-authority-TEAM"
+          "team": "Authority Closers"
         },
         {
           "key": "syn-brokerage-R6",
           "name": "Omkar Joglekar",
-          "team": "syn-brokerage-TEAM"
+          "team": "Aangan Square Realty"
         },
         {
           "key": "syn-edtech-R6",
           "name": "Omkar Kendrekar",
-          "team": "syn-edtech-TEAM"
+          "team": "SkillHarbour Learning"
         },
         {
           "key": "syn-manufacturing-R6",
           "name": "Omkar Kovekar",
-          "team": "syn-manufacturing-TEAM"
+          "team": "ForgeLane Industrial Supply"
         },
         {
           "key": "syn-advisory-R6",
           "name": "Omkar Nivsekar",
-          "team": "syn-advisory-TEAM"
+          "team": "ArthaPath Advisory Studio"
         },
         {
           "key": "syn-healthcare-R6",
           "name": "Omkar Ransurekar",
-          "team": "syn-healthcare-TEAM"
+          "team": "Swasthya Bridge Clinics"
         },
         {
           "key": "syn-saas-R6",
           "name": "Omkar Savdekar",
-          "team": "syn-saas-TEAM"
+          "team": "DarpanDesk Cloud"
         },
         {
           "key": "syn-naya-R6",
           "name": "Omkar Talvanekar",
-          "team": "syn-naya-TEAM"
+          "team": "Naya Growth / Kriya"
         },
         {
           "key": "syn-estate-R6",
           "name": "Omkar Velankarkar",
-          "team": "syn-estate-TEAM"
+          "team": "Estate Autopilots"
         },
         {
           "key": "syn-insurance-R5",
           "name": "Revati Ambarsekar",
-          "team": "syn-insurance-TEAM"
+          "team": "Kavach Setu Benefits"
         },
         {
           "key": "syn-authority-R5",
           "name": "Revati Dhotrekar",
-          "team": "syn-authority-TEAM"
+          "team": "Authority Closers"
         },
         {
           "key": "syn-brokerage-R5",
           "name": "Revati Joglekar",
-          "team": "syn-brokerage-TEAM"
+          "team": "Aangan Square Realty"
         },
         {
           "key": "syn-edtech-R5",
           "name": "Revati Kendrekar",
-          "team": "syn-edtech-TEAM"
+          "team": "SkillHarbour Learning"
         },
         {
           "key": "syn-manufacturing-R5",
           "name": "Revati Kovekar",
-          "team": "syn-manufacturing-TEAM"
+          "team": "ForgeLane Industrial Supply"
         },
         {
           "key": "syn-advisory-R5",
           "name": "Revati Nivsekar",
-          "team": "syn-advisory-TEAM"
+          "team": "ArthaPath Advisory Studio"
         },
         {
           "key": "syn-healthcare-R5",
           "name": "Revati Ransurekar",
-          "team": "syn-healthcare-TEAM"
+          "team": "Swasthya Bridge Clinics"
         },
         {
           "key": "syn-saas-R5",
           "name": "Revati Savdekar",
-          "team": "syn-saas-TEAM"
+          "team": "DarpanDesk Cloud"
         },
         {
           "key": "syn-naya-R5",
           "name": "Revati Talvanekar",
-          "team": "syn-naya-TEAM"
+          "team": "Naya Growth / Kriya"
         },
         {
           "key": "syn-estate-R5",
           "name": "Revati Velankarkar",
-          "team": "syn-estate-TEAM"
+          "team": "Estate Autopilots"
         }
       ],
       "teams": [
@@ -2347,7 +2347,7 @@
         "key": "syn-authority-SIM-J006035-C-03",
         "person_key": "syn-authority-R5",
         "person": "Revati Dhotrekar",
-        "team": "syn-authority-TEAM",
+        "team": "Authority Closers",
         "at": "2026-09-15T10:15:00+00:00",
         "outcome": "deferred",
         "duration_ms": 384000,
@@ -2363,7 +2363,7 @@
         "key": "syn-healthcare-SIM-J005885-C-03",
         "person_key": "syn-healthcare-R3",
         "person": "Sana Ransurekar",
-        "team": "syn-healthcare-TEAM",
+        "team": "Swasthya Bridge Clinics",
         "at": "2026-09-15T10:15:00+00:00",
         "outcome": "won",
         "duration_ms": 369000,
@@ -2379,7 +2379,7 @@
         "key": "syn-insurance-SIM-J005435-C-03",
         "person_key": "syn-insurance-R1",
         "person": "Mira Ambarsekar",
-        "team": "syn-insurance-TEAM",
+        "team": "Kavach Setu Benefits",
         "at": "2026-09-15T10:15:00+00:00",
         "outcome": "lost",
         "duration_ms": 341000,
@@ -2395,7 +2395,7 @@
         "key": "syn-advisory-SIM-J006113-C-03",
         "person_key": "syn-advisory-R2",
         "person": "Rohan Nivsekar",
-        "team": "syn-advisory-TEAM",
+        "team": "ArthaPath Advisory Studio",
         "at": "2026-09-15T10:11:00+00:00",
         "outcome": "won",
         "duration_ms": 238000,
@@ -2411,7 +2411,7 @@
         "key": "syn-brokerage-SIM-J006227-C-03",
         "person_key": "syn-brokerage-R3",
         "person": "Sana Joglekar",
-        "team": "syn-brokerage-TEAM",
+        "team": "Aangan Square Realty",
         "at": "2026-09-15T10:09:00+00:00",
         "outcome": "won",
         "duration_ms": 260000,
@@ -2427,7 +2427,7 @@
         "key": "syn-insurance-SIM-J005441-C-03",
         "person_key": "syn-insurance-R4",
         "person": "Nikhil Ambarsekar",
-        "team": "syn-insurance-TEAM",
+        "team": "Kavach Setu Benefits",
         "at": "2026-09-15T10:07:00+00:00",
         "outcome": "disqualified",
         "duration_ms": 450000,
@@ -2443,7 +2443,7 @@
         "key": "syn-edtech-SIM-J006005-C-03",
         "person_key": "syn-edtech-R1",
         "person": "Mira Kendrekar",
-        "team": "syn-edtech-TEAM",
+        "team": "SkillHarbour Learning",
         "at": "2026-09-15T10:05:00+00:00",
         "outcome": "lost",
         "duration_ms": 302000,
@@ -2459,7 +2459,7 @@
         "key": "syn-estate-SIM-J006155-C-03",
         "person_key": "syn-estate-R2",
         "person": "Rohan Velankarkar",
-        "team": "syn-estate-TEAM",
+        "team": "Estate Autopilots",
         "at": "2026-09-15T10:05:00+00:00",
         "outcome": "lost",
         "duration_ms": 445000,
@@ -2475,7 +2475,7 @@
         "key": "syn-saas-SIM-J005405-C-03",
         "person_key": "syn-saas-R1",
         "person": "Mira Savdekar",
-        "team": "syn-saas-TEAM",
+        "team": "DarpanDesk Cloud",
         "at": "2026-09-15T10:05:00+00:00",
         "outcome": "lost",
         "duration_ms": 435000,
@@ -2491,7 +2491,7 @@
         "key": "syn-advisory-SIM-J006119-C-03",
         "person_key": "syn-advisory-R6",
         "person": "Omkar Nivsekar",
-        "team": "syn-advisory-TEAM",
+        "team": "ArthaPath Advisory Studio",
         "at": "2026-09-15T10:03:00+00:00",
         "outcome": "won",
         "duration_ms": 390000,
@@ -2507,7 +2507,7 @@
         "key": "syn-edtech-SIM-J006011-C-03",
         "person_key": "syn-edtech-R5",
         "person": "Revati Kendrekar",
-        "team": "syn-edtech-TEAM",
+        "team": "SkillHarbour Learning",
         "at": "2026-09-15T09:57:00+00:00",
         "outcome": "deferred",
         "duration_ms": 187000,
@@ -2523,7 +2523,7 @@
         "key": "syn-manufacturing-SIM-J005417-C-03",
         "person_key": "syn-manufacturing-R2",
         "person": "Rohan Kovekar",
-        "team": "syn-manufacturing-TEAM",
+        "team": "ForgeLane Industrial Supply",
         "at": "2026-09-15T09:49:00+00:00",
         "outcome": "won",
         "duration_ms": 344000,
@@ -2539,7 +2539,7 @@
         "key": "syn-manufacturing-SIM-J005423-C-03",
         "person_key": "syn-manufacturing-R5",
         "person": "Revati Kovekar",
-        "team": "syn-manufacturing-TEAM",
+        "team": "ForgeLane Industrial Supply",
         "at": "2026-09-15T09:41:00+00:00",
         "outcome": "lost",
         "duration_ms": 261000,
@@ -2555,7 +2555,7 @@
         "key": "syn-naya-SIM-J005465-C-03",
         "person_key": "syn-naya-R3",
         "person": "Sana Talvanekar",
-        "team": "syn-naya-TEAM",
+        "team": "Naya Growth / Kriya",
         "at": "2026-09-15T09:35:00+00:00",
         "outcome": "won",
         "duration_ms": 387000,
@@ -2571,7 +2571,7 @@
         "key": "syn-authority-SIM-J006029-C-03",
         "person_key": "syn-authority-R1",
         "person": "Mira Dhotrekar",
-        "team": "syn-authority-TEAM",
+        "team": "Authority Closers",
         "at": "2026-09-15T09:33:00+00:00",
         "outcome": "lost",
         "duration_ms": 269748,
@@ -2587,7 +2587,7 @@
         "key": "syn-naya-SIM-J005464-C-03",
         "person_key": "syn-naya-R3",
         "person": "Sana Talvanekar",
-        "team": "syn-naya-TEAM",
+        "team": "Naya Growth / Kriya",
         "at": "2026-09-15T09:18:00+00:00",
         "outcome": "lost",
         "duration_ms": 155000,
@@ -2603,7 +2603,7 @@
         "key": "syn-authority-SIM-J006034-C-03",
         "person_key": "syn-authority-R4",
         "person": "Nikhil Dhotrekar",
-        "team": "syn-authority-TEAM",
+        "team": "Authority Closers",
         "at": "2026-09-15T09:08:00+00:00",
         "outcome": "won",
         "duration_ms": 271000,
@@ -2619,7 +2619,7 @@
         "key": "syn-healthcare-SIM-J005884-C-03",
         "person_key": "syn-healthcare-R2",
         "person": "Rohan Ransurekar",
-        "team": "syn-healthcare-TEAM",
+        "team": "Swasthya Bridge Clinics",
         "at": "2026-09-15T09:08:00+00:00",
         "outcome": "won",
         "duration_ms": 334000,
@@ -2635,7 +2635,7 @@
         "key": "syn-advisory-SIM-J006112-C-03",
         "person_key": "syn-advisory-R1",
         "person": "Mira Nivsekar",
-        "team": "syn-advisory-TEAM",
+        "team": "ArthaPath Advisory Studio",
         "at": "2026-09-15T09:04:00+00:00",
         "outcome": "won",
         "duration_ms": 348000,
@@ -2651,7 +2651,7 @@
         "key": "syn-brokerage-SIM-J006226-C-03",
         "person_key": "syn-brokerage-R2",
         "person": "Rohan Joglekar",
-        "team": "syn-brokerage-TEAM",
+        "team": "Aangan Square Realty",
         "at": "2026-09-15T09:02:00+00:00",
         "outcome": "lost",
         "duration_ms": 252300,
@@ -2667,7 +2667,7 @@
         "key": "syn-insurance-SIM-J005440-C-03",
         "person_key": "syn-insurance-R4",
         "person": "Nikhil Ambarsekar",
-        "team": "syn-insurance-TEAM",
+        "team": "Kavach Setu Benefits",
         "at": "2026-09-15T09:00:00+00:00",
         "outcome": "lost",
         "duration_ms": 298000,
@@ -2683,7 +2683,7 @@
         "key": "syn-estate-SIM-J006154-C-03",
         "person_key": "syn-estate-R2",
         "person": "Rohan Velankarkar",
-        "team": "syn-estate-TEAM",
+        "team": "Estate Autopilots",
         "at": "2026-09-15T08:58:00+00:00",
         "outcome": "lost",
         "duration_ms": 362000,
@@ -2699,7 +2699,7 @@
         "key": "syn-advisory-SIM-J006118-C-03",
         "person_key": "syn-advisory-R6",
         "person": "Omkar Nivsekar",
-        "team": "syn-advisory-TEAM",
+        "team": "ArthaPath Advisory Studio",
         "at": "2026-09-15T08:56:00+00:00",
         "outcome": "deferred",
         "duration_ms": 275000,
@@ -2715,7 +2715,7 @@
         "key": "syn-edtech-SIM-J006010-C-03",
         "person_key": "syn-edtech-R4",
         "person": "Nikhil Kendrekar",
-        "team": "syn-edtech-TEAM",
+        "team": "SkillHarbour Learning",
         "at": "2026-09-15T08:50:00+00:00",
         "outcome": "lost",
         "duration_ms": 407000,
@@ -2731,7 +2731,7 @@
         "key": "syn-saas-SIM-J005410-C-03",
         "person_key": "syn-saas-R6",
         "person": "Omkar Savdekar",
-        "team": "syn-saas-TEAM",
+        "team": "DarpanDesk Cloud",
         "at": "2026-09-15T08:50:00+00:00",
         "outcome": "lost",
         "duration_ms": 296000,
