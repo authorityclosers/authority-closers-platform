@@ -215,7 +215,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
 
   it("says plainly what the older format lacks", () => {
     expect(model.flow.phases).toBeNull();
-    expect(model.missing[1]).toContain("Conversation timeline");
+    expect(model.missing[1]).toContain("Call stages");
     expect(model.deal.quality).toBeNull();
     expect(model.missing[5]).toContain("Commitment quality");
     expect(model.skills.every((skill) => skill.state === "Observed")).toBe(
@@ -327,4 +327,21 @@ it("shows a skill's state and evidence without a placeholder note (C's Sandbox d
   expect(communication?.observation).toBeNull();
   expect(communication?.sources.length).toBeGreaterThan(0);
   expect(model.deeper.communication.observation).toBeNull();
+});
+
+it("puts a person's outcome first, without the call's contradicting line", () => {
+  const won = reportStoryModel(amitReport, amitTranscript, {
+    recorded: { status: "Won" },
+  });
+  expect(won.picture.outcome).toMatchObject({
+    status: "Won",
+    origin: "person",
+    detail: null,
+  });
+  // Where the prospect stands still reads what the call heard.
+  expect(won.deal.position?.text).toBe(amitReport.overview!.outcome!.text);
+  const lost = reportStoryModel(amitReport, amitTranscript, {
+    recorded: { status: "Lost", note: "Chose another program." },
+  });
+  expect(lost.picture.outcome.detail?.text).toBe("Chose another program.");
 });

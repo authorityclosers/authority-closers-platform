@@ -316,7 +316,7 @@ const GAP = {
   strongest: BIG_PICTURE.strongest.label,
   concern: BIG_PICTURE.concern.label,
   nextStep: BIG_PICTURE.nextStep.label,
-  stages: sentence(CALL_FLOW.timeline.heading),
+  stages: CALL_FLOW.stagesGap,
   change: CALL_FLOW.change.label,
   worked: WORKED_DIDNT.worked.label,
   didnt: WORKED_DIDNT.didnt.label,
@@ -365,12 +365,6 @@ export function callOutcome(
   const detail =
     line(overview?.text, overview?.evidence) ??
     line(report.story?.next_step?.text, report.story?.next_step?.evidence);
-  if (recorded)
-    return {
-      status: recorded.status,
-      origin: "person",
-      detail: line(recorded.note, []) ?? detail,
-    };
   let status: OutcomeStatus | null = null;
   if (story) {
     if (story.kind === "follow_up") status = "Follow-up Set";
@@ -393,6 +387,16 @@ export function callOutcome(
               ? "No Clear Next Step"
               : null; // closed / no_sale: only a person records Won or Lost.
   }
+  // A person's outcome wins. The call's own line stays under it only when it
+  // says the same thing; otherwise ("Won" over "wants to think it over") it
+  // would contradict the badge, and it still reads in Prospect's position.
+  if (recorded)
+    return {
+      status: recorded.status,
+      origin: "person",
+      detail:
+        line(recorded.note, []) ?? (recorded.status === status ? detail : null),
+    };
   return { status, origin: status ? "call" : null, detail };
 }
 
@@ -904,7 +908,8 @@ export function reportStoryModel(
   const rung = story?.outcome.next_step_rung;
   const deal = {
     outcome,
-    position: outcome.detail,
+    // Where the prospect stands is what the call heard, whoever set the status.
+    position: callOutcome(report).detail,
     blocker: concerns[0] ?? null,
     prospectCommitments: [
       ...(story?.prospect_commitments ?? []),
