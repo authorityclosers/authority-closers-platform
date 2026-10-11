@@ -11,9 +11,10 @@ import re
 import tempfile
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import anyio
@@ -72,7 +73,7 @@ from ac_platform.conversation_intelligence.report_export import report_docx_byte
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
-    sales_xray_served_tenant_ids,
+    sales_xray_workspace_served,
 )
 from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.speaker_map_service import (
@@ -218,7 +219,6 @@ def install_submission_http(
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
     capacity = anyio.CapacityLimiter(1)
     public = settings.public_learner_tenant_id
-    served = sales_xray_served_tenant_ids(settings, runtime)
 
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
@@ -258,10 +258,11 @@ def install_submission_http(
             raise RuntimeError("Acquisition must use the selected Sales Xray workspace.")
         return GuestOwnership(service)
 
-    def workspace(actor: ActorContext) -> UUID:
+    async def workspace(database: AsyncSession, actor: ActorContext) -> UUID:
         """The selected tenant, when Sales Xray serves it; operations never qualifies."""
-        if actor.tenant_id is None or actor.tenant_id not in served:
+        if not await sales_xray_workspace_served(database, settings, actor.tenant_id):
             raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
+        assert actor.tenant_id is not None
         return actor.tenant_id
 
     def guest_token(actor: ActorContext, current: str | None) -> str | None:
@@ -279,7 +280,7 @@ def install_submission_http(
     async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
-                workspace(auth.resolved.actor)
+                await workspace(auth.database, auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -293,7 +294,9 @@ def install_submission_http(
             try:
                 async with learner_account(request) as auth:
                     actor = auth.resolved.actor
-                    yield _Owner(ownership(auth.database, workspace(actor)), None, actor)
+                    yield _Owner(
+                        ownership(auth.database, await workspace(auth.database, actor)), None, actor
+                    )
             except ConversationError as error:
                 # Unwind the owner transaction before translating an endpoint's
                 # domain denial, just as the standalone account/guest paths do.
@@ -306,7 +309,7 @@ def install_submission_http(
                 async with asynccontextmanager(require_actor)(request) as auth:
                     actor = auth.resolved.actor
                     yield _Owner(
-                        ownership(auth.database, workspace(actor)),
+                        ownership(auth.database, await workspace(auth.database, actor)),
                         guest_token(actor, current),
                         actor,
                     )
@@ -394,7 +397,7 @@ def install_submission_http(
     async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(read_require_actor)(request) as auth:
-                workspace(auth.resolved.actor)
+                await workspace(auth.database, auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -409,7 +412,7 @@ def install_submission_http(
                 async with learner_read_account(request) as auth:
                     actor = auth.resolved.actor
                     yield _Owner(
-                        ownership(auth.database, workspace(actor)),
+                        ownership(auth.database, await workspace(auth.database, actor)),
                         None,
                         actor,
                         shared_identity_locks=True,
@@ -426,7 +429,7 @@ def install_submission_http(
                 async with asynccontextmanager(read_require_actor)(request) as auth:
                     actor = auth.resolved.actor
                     yield _Owner(
-                        ownership(auth.database, workspace(actor)),
+                        ownership(auth.database, await workspace(auth.database, actor)),
                         guest_token(actor, current),
                         actor,
                         shared_identity_locks=True,
@@ -527,7 +530,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_library(
-                    ownership(auth.database, workspace(auth.resolved.actor)),
+                    ownership(auth.database, await workspace(auth.database, auth.resolved.actor)),
                     auth.resolved.actor,
                     before=before,
                     shared_identity_locks=True,
@@ -549,7 +552,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_library_summary(
-                    ownership(auth.database, workspace(auth.resolved.actor)),
+                    ownership(auth.database, await workspace(auth.database, auth.resolved.actor)),
                     auth.resolved.actor,
                     shared_identity_locks=True,
                 )
@@ -569,7 +572,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_activity(
-                    ownership(auth.database, workspace(auth.resolved.actor)),
+                    ownership(auth.database, await workspace(auth.database, auth.resolved.actor)),
                     auth.resolved.actor,
                     shared_identity_locks=True,
                 )
@@ -589,7 +592,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await organisation_acquisition_activity(
-                    ownership(auth.database, workspace(auth.resolved.actor)),
+                    ownership(auth.database, await workspace(auth.database, auth.resolved.actor)),
                     auth.resolved.actor,
                     shared_identity_locks=True,
                 )
@@ -1327,6 +1330,33 @@ def install_submission_http(
 
     from ac_platform.http.conversation_prospects import install_prospect_http
 
+    # The separately owned prospect installer takes a synchronous served scope.
+    # Adapt that port after live registry admission without changing its routes
+    # or keeping a process-wide cache of organisation ids.
+    prospect_tenant: ContextVar[UUID | None] = ContextVar("prospect_served_tenant", default=None)
+
+    class ProspectWorkspaceScope:
+        def __contains__(self, tenant_id: object) -> bool:
+            return tenant_id is not None and tenant_id == prospect_tenant.get()
+
+    def prospect_actor_dependency(dependency: RequireActor) -> RequireActor:
+        async def admitted(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+            async with asynccontextmanager(dependency)(request) as auth:
+                tenant_id = await workspace(auth.database, auth.resolved.actor)
+                token = prospect_tenant.set(tenant_id)
+                try:
+                    yield auth
+                finally:
+                    prospect_tenant.reset(token)
+
+        return admitted
+
+    prospect_actor = prospect_actor_dependency(require_actor)
+    prospect_actor.read_only = prospect_actor_dependency(read_require_actor)  # type: ignore[attr-defined]
     install_prospect_http(
-        application, settings=settings, require_actor=require_actor, factory=factory, served=served
+        application,
+        settings=settings,
+        require_actor=prospect_actor,
+        factory=factory,
+        served=cast(frozenset[UUID], ProspectWorkspaceScope()),
     )

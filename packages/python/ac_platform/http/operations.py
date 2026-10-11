@@ -687,10 +687,10 @@ def install_operations_http(
     )
     actor_dependency = Depends(require_actor)
     # Personal plus the approved organisations; owner, admin and member count there.
-    served_tenant_ids = sales_xray_served_tenant_ids(settings, intake)
 
-    def eligible_roles(tenant_id: UUID) -> frozenset[str]:
+    async def eligible_roles(database: AsyncSession, tenant_id: UUID) -> frozenset[str]:
         """Owner, admin and member count in a served tenant; elsewhere learners only, as before."""
+        served_tenant_ids = await sales_xray_served_tenant_ids(settings, intake, database)
         return SALES_XRAY_MEMBER_ROLES if tenant_id in served_tenant_ids else LEARNER_ROLES
 
     @router.post(
@@ -785,12 +785,13 @@ def install_operations_http(
             raise CapabilityDenied("A current platform access-management assignment is required.")
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
         try:
+            roles = await eligible_roles(auth.database, tenant_id)
             await require_eligible_learner(
                 auth.database,
                 tenant_id=tenant_id,
                 person_id=person_id,
                 operations_tenant_id=operations_tenant_id,
-                roles=eligible_roles(tenant_id),
+                roles=roles,
             )
             state = await load_minute_account(
                 auth.database,
@@ -813,7 +814,7 @@ def install_operations_http(
                 operations_tenant_id=operations_tenant_id,
                 effective_unlimited=effective_unlimited,
                 organisation_pool=(
-                    tenant_id in served_tenant_ids
+                    roles == SALES_XRAY_MEMBER_ROLES
                     and tenant_id != settings.public_learner_tenant_id
                 ),
             )
@@ -855,7 +856,7 @@ def install_operations_http(
         if "platform_access_manage" not in capabilities:
             raise CapabilityDenied("A current platform access-management assignment is required.")
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
-        roles = eligible_roles(tenant_id)
+        roles = await eligible_roles(auth.database, tenant_id)
         key = _normalize_idempotency_key(idempotency_key)
         reason = _normalize_reason(body.reason)
         # Serialize actor/key lookup before touching a target account. The
@@ -1015,7 +1016,7 @@ def install_operations_http(
             operations_tenant_id=operations_tenant_id,
             effective_unlimited=effective_unlimited,
             organisation_pool=(
-                tenant_id in served_tenant_ids and tenant_id != settings.public_learner_tenant_id
+                roles == SALES_XRAY_MEMBER_ROLES and tenant_id != settings.public_learner_tenant_id
             ),
         )
         _no_store(response)

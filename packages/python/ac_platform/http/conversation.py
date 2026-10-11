@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.report_access import (
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import ReportDraft
+from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_workspace_served
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     AuthenticationRequired,
@@ -73,7 +74,19 @@ def install_conversation_http(
                     await application.admit(auth.resolved.actor)
                     answer.update(authenticated=True, sign_in_url=None)
                     if intake_runtime is not None:
-                        await intake_runtime.intake(application).admit(auth.resolved.actor)
+                        actor = auth.resolved.actor
+                        organisation = (
+                            settings is not None
+                            and actor.tenant_id != settings.public_learner_tenant_id
+                            and intake_runtime.policy.registered_organisations
+                            and await sales_xray_workspace_served(
+                                auth.database, settings, actor.tenant_id
+                            )
+                        )
+                        if not organisation:
+                            await intake_runtime.intake(application).admit(actor)
+                        # Organisation uploads use their non-login processing
+                        # principal, not a pre-issued allowance for this human.
                         answer.update(
                             intake_enabled=True,
                             message=(
@@ -83,7 +96,8 @@ def install_conversation_http(
                         )
                     else:
                         answer["message"] = (
-                            "AC account connected. Upload is not enabled for this workspace."
+                            "AC account connected. The upload service is unavailable. "
+                            "Try again shortly."
                         )
             except (AuthenticationRequired, SessionNotFoundError, IdentityResolutionError):
                 pass

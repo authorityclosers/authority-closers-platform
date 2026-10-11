@@ -1,10 +1,9 @@
 """Sales Xray serves the selected tenant on PostgreSQL (AUT-436).
 
-Personal and an organisation approved in the hosted bundle are served; the
-operations tenant and an organisation outside the list get 403 on every
-route. Personal and organisation calls are invisible to each other. An
-organisation starts with 0 trial seconds and gains minutes only through an
-Admin grant or the internal-tester exemption.
+Personal and every active registered organisation are served; the
+operations tenant gets 403 on every route. Personal and organisation calls
+are invisible to each other. An organisation starts with 0 trial seconds
+and gains minutes only through an Admin grant or the internal-tester exemption.
 """
 
 from __future__ import annotations
@@ -43,12 +42,13 @@ from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
 )
 from ac_platform.http.auth import install_identity_http
+from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_conversation_authority_postgresql import _bundle
 from tests.database.test_conversation_guest_ownership_postgresql import _provision
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -90,6 +90,13 @@ async def _workspace_app(postgres_harness: Any, tmp_path: Any) -> SimpleNamespac
     async with setup.sessions() as db, db.begin():
         await db.execute(update(Person).where(Person.id == state.person_id).values(email=email))
         for name, tenant in (("organisation", organisation), ("unlisted", unlisted)):
+            db.add(
+                Organisation(
+                    tenant_id=tenant.tenant_id,
+                    creation_command_id=uuid4(),
+                    domain_verification_token="f" * 43,
+                )
+            )
             db.add(Membership(tenant_id=tenant.tenant_id, person_id=state.person_id, role="member"))
             await db.flush()
             db.add(
@@ -127,11 +134,15 @@ async def _workspace_app(postgres_harness: Any, tmp_path: Any) -> SimpleNamespac
         policy=replace(
             setup.runtime.policy,
             tenant_ids=frozenset({state.tenant_id, organisation.tenant_id}),
+            registered_organisations=True,
         ),
     )
     app = FastAPI()
     register_problem_handlers(app)
     require_actor = install_identity_http(app, settings=settings, sessions=setup.sessions)
+    install_conversation_http(
+        app, settings=settings, require_actor=require_actor, intake_runtime=runtime
+    )
     install_submission_http(
         app,
         settings=settings,
@@ -165,7 +176,7 @@ async def _workspace_app(postgres_harness: Any, tmp_path: Any) -> SimpleNamespac
     )
 
 
-def test_sales_xray_serves_personal_and_approved_organisation_only(
+def test_sales_xray_serves_personal_and_all_registered_organisations(
     postgres_harness: Any, tmp_path: Any
 ) -> None:
     async def exercise() -> None:
@@ -329,10 +340,20 @@ def test_sales_xray_serves_personal_and_approved_organisation_only(
                     )
                     assert exemption is not None and exemption.email == workspace.email
 
-                # The operations tenant and an unlisted organisation: 403 everywhere.
+                # A registered organisation without a policy is still readable.
+                select_workspace(workspace.tokens["unlisted"])
+                workspace_read = await client.get("/v1/conversation/workspace")
+                assert workspace_read.status_code == 200
+                assert workspace_read.json()["intake_enabled"] is True
+                unlisted_session = await client.get(PREFIX + "/session")
+                assert unlisted_session.status_code == 200, unlisted_session.text
+                assert unlisted_session.json()["allowance"]["available_seconds"] == 0
+                assert (await client.get(PREFIX + "/submissions")).status_code == 200
+                assert (await client.get(personal_path)).status_code == 404
+                # The operations tenant remains excluded from every route.
                 # Real upload headers: the header check runs before authentication.
                 upload_headers = await _headers(client, data)
-                for name in ("operations", "unlisted"):
+                for name in ("operations",):
                     select_workspace(workspace.tokens[name])
                     client.cookies.set("ac_xray_guest", setup.guest.token)
                     attempts: list[tuple[str, str, dict[str, Any]]] = [
