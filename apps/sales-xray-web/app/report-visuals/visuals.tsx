@@ -173,7 +173,7 @@ export function StoryCard({
 /* ---------- Evidence ---------- */
 
 /**
- * "▶ 18:42": plays the clip in the report's one player and turns into Pause
+ * "▶ 18:42" (or "▶ 18:42 · Play" with a label): plays the clip in the report's one player and turns into Pause
  * while that clip plays. Without a player it is the time as plain text.
  */
 export function PlayChip({
@@ -186,7 +186,7 @@ export function PlayChip({
   source: ReportEvidence | null | undefined;
   title: string;
   onSelect?: Select;
-  /** Words before the time, e.g. "Play". */
+  /** Words after the time, as Dipak writes it: "18:42 · Play". */
   label?: string;
   /** Show "06:35–06:58" instead of the start time only. */
   range?: boolean;
@@ -198,10 +198,7 @@ export function PlayChip({
       : formatClock(source.start_ms);
   if (!onSelect)
     return (
-      <span className={styles.time}>
-        {label ? `${label} · ` : ""}
-        {at}
-      </span>
+      <span className={styles.time}>{label ? `${at} · ${label}` : at}</span>
     );
   return (
     <ClipPlayState startMs={source.start_ms} endMs={source.end_ms}>
@@ -214,8 +211,7 @@ export function PlayChip({
           onClick={() => onSelect(source, title)}
         >
           <ClipPlayIcon playing={playing} size={9} />
-          {label ? `${label} · ` : ""}
-          {at}
+          {label ? `${at} · ${label}` : at}
         </button>
       )}
     </ClipPlayState>

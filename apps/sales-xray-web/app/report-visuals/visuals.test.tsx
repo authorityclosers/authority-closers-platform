@@ -52,6 +52,21 @@ it("plays a clip when there is a player, else shows the time as text", () => {
     "06:35–06:58",
   );
   expect(html(<PlayChip source={undefined} title="Goal" />)).toBe("");
+  // With a label the time comes first, as in Dipak's document.
+  expect(
+    html(
+      <PlayChip
+        source={source}
+        title="Goal"
+        onSelect={vi.fn()}
+        label="Play"
+        range
+      />,
+    ),
+  ).toContain("06:35–06:58 · Play");
+  expect(
+    html(<PlayChip source={source} title="Goal" label="Play" />),
+  ).toContain("06:35 · Play");
 });
 
 it("quotes in the UI face with who said it", () => {
