@@ -417,6 +417,35 @@ export const THEIR = {
 
 export const ABOUT = "About this coaching";
 
+/** The Coaching page's own frame: titles, header lines and page states. */
+export const PAGE = {
+  mine: "My coaching",
+  call: "Coaching for this call",
+  team: "Team coaching",
+  rep: "Rep coaching",
+  mineContext: "Your focus, mission and progress across calls",
+  callContext: "One focus from this call’s report",
+  sandboxRep: ["Fictional AC Sandbox rep", "Only you see this"],
+  sharedRep: "Shared with you. They can stop sharing at any time.",
+  sandboxTeam: ["Fictional AC Sandbox reps and calls", "Only you see them"],
+  teamContext: "Team totals from analysed calls, with no names",
+  backToTeam: "Back to team",
+  backToReport: "Back to report",
+  tabTeam: "Team",
+  failed: "Coaching didn’t load",
+  failedText: "Your calls and reports are fine. Open a call to see its report.",
+  openCall: "Open the call",
+  openCalls: "Open calls",
+  workspaceChanged: "Your workspace changed. Try again.",
+  signIn: "Sign in for your Coaching",
+  chooseWorkspace: "Choose your workspace",
+  signInText:
+    "Coaching follows your own analysed calls in the selected workspace.",
+  signInAction: "Sign in",
+  badCallLink: "This link doesn’t work. Open the call’s report again.",
+  badTeamLink: "This link doesn’t work. Open Team coaching again.",
+} as const;
+
 /** The Report's fallback when this call's coaching can't be read. */
 export const RETAINED = {
   keep: "Keep doing",
@@ -431,6 +460,12 @@ export const RETAINED = {
 
 /** Team coaching for owners and admins: totals, objections, shared reps. */
 export const TEAM = {
+  allAreas: "All areas",
+  repCount: (count: number) => `${count} ${count === 1 ? "rep" : "reps"}`,
+  people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
+  updated: (date: string) => `updated ${date}`,
+  last40: "last 40",
+  inView: "In this view",
   calls: "Analysed calls",
   top: "Top area to work on",
   noneYet: "No suggestions yet",

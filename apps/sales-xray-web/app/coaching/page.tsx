@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { CoachingRoute, CoachingSkeleton } from "./coaching-page";
+import { PAGE } from "./coaching-copy";
 import { requestedCall } from "./coaching-read";
 import { loadServerCoaching } from "./coaching-server";
 
@@ -22,12 +23,12 @@ export default async function Page({
     query.call !== undefined && !callId
       ? ({
           data: null,
-          error: "This link doesn’t work. Open the call’s report again.",
+          error: PAGE.badCallLink,
         } as const)
       : !callId && query.person !== undefined && !person
         ? ({
             data: null,
-            error: "This link doesn’t work. Open Team coaching again.",
+            error: PAGE.badTeamLink,
           } as const)
         : await loadServerCoaching(
             team ? "team" : person ? `person:${person}` : callId,
