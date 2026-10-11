@@ -25,19 +25,37 @@ all six assigned files, as do the required HTTP import and diff checks.
 At committed source `45002852c7fcc80854da63f5c2040f92ad29ce24`, the isolated
 default Turbopack static build **passes**. Its source digest remains unchanged:
 `55dddc03236a08d3d3646f8e2431aeb0d8e82be19c6c6b344304980a747821fc`.
-The browser test then errors in fixture setup: this exported runner omitted CI's
-explicit generated AudioAtlas binary preparation, and the offline local worker
-fails before login or workspace assertions. **No standalone browser PASS yet.**
-Receipt: `/home/acdev/strikes/1694/workbench-release-ci-static-turbo.json`;
-JUnit and build/test logs share that prefix. The committed-snapshot helper and
+The corrected runner includes CI's generated AudioAtlas preparation and manifest
+validation: **native preparation, default Turbopack build and standalone browser
+all PASS (1 case, no skips)** at the same source and unchanged digest. This covers
+login, registered-org selection, empty history, the Personal recording's 404
+isolation, report/audio/measurement/transcript and logout. Phone workspace and
+desktop private-report screenshots were inspected. Receipt:
+`/home/acdev/strikes/1694/workbench-release-ci-static-native.json`; JUnit, logs
+and screenshots share that prefix. The committed-snapshot helper and
 installed dependencies keep all generated files outside the shared dev cache.
 Earlier attempts are retained: external package links were rejected by Turbo;
 the webpack alternative rejected a global-only CSS selector. Neither failed
-build is reported as acceptance. No product/dependency changes were made to
-accommodate those attempts. The corrected runner includes CI's native build and
-manifest check, with fresh `workbench-release-ci-static-native*` receipts.
+build is reported as acceptance. The first Turbo browser attempt's generic
+fixture failure was missing generated native preparation in my runner; the
+corrected PASS supersedes it. No product/dependency changes were made to
+accommodate those attempts. **Assigned repairs: 20 focused cases + 1 compiled
+browser case PASS.** This regression proof does not replace the twelve-case
+Dipak Report/Document/Coaching staging smoke.
 Coordinator's 17:03 UTC handoff reports green v0.40.0 release CI at `f0437c9` /
 main `a775389`; staging images are building. QA has no staging verdict yet.
+
+Latest shared-dev Report/Document readback (17:11:43–17:13:28 UTC) passes **8/8**
+at recorded start/end HEAD `67feed3e`. Each Report pair completes all 13 steps:
+actions, six pillars, eight ordered skill rows, all four deeper groups, reload,
+Document, valid six-bookmark Word file and return. Each independent Document
+pair has six populated sections and a visible Word control. No runtime/server
+or visual errors. Phone overview/light, actions/dark, deeper analysis/dark,
+Document/dark and desktop overview/dark screenshots were inspected and are
+readable. Receipts: `shots/2026-10-11-workbench-release-readback/`.
+The older blank Report/failed Document observations are superseded by this
+completed four-pair repeat; their cause remains unconfirmed. Navigation/refresh
+counters are retained: unchanged HEAD does not certify immutable served bytes.
 
 The bounded 16:10 UTC Coaching run passes **4/4**, all 13 observations per pair,
 at recorded source `aa49b888` with unchanged start/end HEAD. Both call/personal
@@ -46,9 +64,9 @@ heading is visible. Phone/dark call, phone/light personal mission and desktop/da
 focus screenshots were inspected and are readable. Later Report batch at
 `50d088e8` ended 143 before any receipt. Standalone Document fails at `9c2abc63`:
 the inspected image shows "This report didn't load. Please try again.", disabled
-Word export and zero sections. B received the exact capture. Current Report and
-Document acceptance remain incomplete; the historical PASS table below is not
-a newer-dev verdict.
+Word export and zero sections. B/G received the exact capture. These older
+failures are retained as history and did not reproduce in the completed 17:11
+readback above. Coaching edits after its 16:10 run await the next allowed repeat.
 
 The 16 opt-in cases cover 1440/390, light/dark, dashboard-to-report, all six
 Report sections in Dipak's order, their required example blocks, eight skills,
@@ -66,7 +84,8 @@ the remaining ten cases. Runtime/server/visual error lists are empty in both
 receipts. This incomplete batch cannot replace the prior completed four-pair
 acceptance below or certify the newer dev changes. Exact capture and safe run
 log are in `2026-10-11-workbench-mission-readback/`. Report and backend owners
-received the observations; a bounded repeat is pending at the 15-minute interval.
+received the observations; the completed 17:11 repeat above supersedes these
+interrupted observations.
 
 `3a47bf6a` adds real call/personal mission-link taps, center reachability and
 32 px desktop / 44 px phone target checks. The later bounded Coaching run above
@@ -125,8 +144,8 @@ No traces or storage-state files are produced.
 
 Ruff passes, all 16 cases collect, and the no-server invocation skips all 16
 without contacting a live server. The required `uv run python -c
-"import ac_platform.http"` check passes. Historical Report/Document/DOCX checks
-passed; newer Report/Document acceptance is incomplete as recorded above.
+"import ac_platform.http"` check passes. Latest Report/Document/DOCX checks pass
+as recorded above; the staging context/version limits still apply.
 Coaching's source-changing batch (`4b058a59` to `56ea01c6`) passed three pairs;
 its phone/light repeat passed at unchanged recorded HEAD `7058bd8f`. The repeat
 records two navigations and two Fast Refresh notices, showing that unchanged Git
