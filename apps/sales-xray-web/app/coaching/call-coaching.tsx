@@ -93,6 +93,13 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
         />
         <Panel title="Keep going">
           <div className={styles.body}>
+            {coaching.other_suggestions ? (
+              <p className={styles.note}>
+                The report has {coaching.other_suggestions} more suggestion
+                {coaching.other_suggestions === 1 ? "" : "s"}. Coaching keeps
+                one focus at a time.
+              </p>
+            ) : null}
             <Link
               className={styles.jump}
               href={`/analysis/calls/${coaching.submission_id}`}

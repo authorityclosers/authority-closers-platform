@@ -82,6 +82,26 @@ def test_a_quoted_report_strength_is_offered_to_build_on() -> None:
     assert build_call_coaching(data, **CONTEXT).strength is None
 
 
+def test_counts_the_reports_other_suggestions_without_their_content() -> None:
+    data = envelope()
+    report = data["report"]["content"]
+    ref = report["improvements"][0]["evidence"][0]
+    report["improvements"].append(
+        {"title": "Confirm the decision maker", "explanation": "Ask who signs.", "evidence": [ref]}
+    )
+    report["missed_opportunities"] = [
+        {"title": "Withheld", "explanation": WITHHELD_MARKER, "evidence": [ref]},
+        {"title": "Ask for the next step", "explanation": "Book a date.", "evidence": [ref]},
+    ]
+    view = build_call_coaching(data, **CONTEXT)
+    # The focus's own finding (improvement 0) and the withheld one are not counted.
+    assert view.other_suggestions == 2
+    assert "Ask who signs." not in view.model_dump_json()
+    report.pop("improvements")
+    report.pop("missed_opportunities")
+    assert build_call_coaching(data, **CONTEXT).other_suggestions == 0
+
+
 def test_a_malformed_strength_never_fails_the_call_coaching() -> None:
     data = envelope()
     bad = {"segment_id": "seg-2", "quote": "x" * 2001, "start_ms": 4000, "end_ms": 6000}

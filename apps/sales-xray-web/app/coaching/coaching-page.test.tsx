@@ -248,6 +248,19 @@ describe("Coaching story", () => {
       html.indexOf("Use your strength"),
     );
   });
+  it("says the report holds more suggestions while coaching keeps one", () => {
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{ ...fictionalCallCoaching, other_suggestions: 2 }}
+      />,
+    );
+    expect(html).toContain("The report has 2 more suggestions.");
+    expect(
+      renderToStaticMarkup(
+        <CallCoachingStory coaching={fictionalCallCoaching} />,
+      ),
+    ).not.toContain("more suggestion");
+  });
   it("opens with the three newest calls on one column until asked", async () => {
     const calls = Array.from({ length: 5 }, (_, index) => ({
       submission_id: `00000000-0000-0000-0000-00000000009${index}`,

@@ -213,6 +213,7 @@
         }
       ]
     },
+    "other_suggestions": 0,
     "limitations": ["Synthetic sandbox call."],
     "recommended_media": null
   },

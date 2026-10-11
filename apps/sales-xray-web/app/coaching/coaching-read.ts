@@ -38,6 +38,8 @@ export type CallCoaching = {
   media_clips?: CoachingClip[];
   /** A quoted "What worked" finding from this call's report (spec 3.6). */
   strength?: Strength | null;
+  /** How many other suggestions the report holds; Coaching keeps one focus. */
+  other_suggestions?: number;
   limitations: string[];
 };
 export type CoachingResult =
@@ -168,6 +170,12 @@ export function parseCallCoaching(
     evidence,
     media_clips: item.state === "ready" ? parseClips(item.media_clips) : [],
     strength,
+    other_suggestions:
+      item.state === "ready" &&
+      Number.isInteger(item.other_suggestions) &&
+      (item.other_suggestions as number) > 0
+        ? Math.min(item.other_suggestions as number, 20)
+        : 0,
     root_cause: {
       hypothesis: text(
         cause.hypothesis,

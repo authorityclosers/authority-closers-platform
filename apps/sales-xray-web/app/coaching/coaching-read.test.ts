@@ -70,6 +70,21 @@ describe("call-specific coaching read", () => {
       parseCallCoaching(fictionalCallCoaching, callId)?.strength,
     ).toBeNull();
   });
+  it("reads how many other suggestions the report holds, defaulting to none", () => {
+    expect(
+      parseCallCoaching(
+        { ...fictionalCallCoaching, other_suggestions: 2 },
+        callId,
+      )?.other_suggestions,
+    ).toBe(2);
+    for (const bad of [undefined, -1, 1.5, "2", 99]) {
+      const parsed = parseCallCoaching(
+        { ...fictionalCallCoaching, other_suggestions: bad },
+        callId,
+      );
+      expect(parsed?.other_suggestions).toBe(bad === 99 ? 20 : 0);
+    }
+  });
   it("rejects crossed call/mission/lesson sources and unparsed media", () => {
     for (const raw of [
       {
