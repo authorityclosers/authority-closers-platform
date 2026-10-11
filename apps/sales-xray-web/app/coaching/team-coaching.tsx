@@ -173,10 +173,9 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           value={analysed}
           note={
             [
+              // One line in the tile; the latest call's date sits in the
+              // footnote below, which wraps on phones.
               coaching.rep_count ? TEAM.people(coaching.rep_count) : null,
-              coaching.latest_call_at
-                ? TEAM.updated(callDate(coaching.latest_call_at))
-                : null,
               coaching.history_limited ? TEAM.last40 : null,
             ]
               .filter(Boolean)
@@ -243,6 +242,9 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
             <p className={styles.body}>
               <span className={styles.note}>
                 {coaching.sandbox ? TEAM.sandboxNote : TEAM.practiseNote}
+                {coaching.latest_call_at
+                  ? ` ${TEAM.latest(callDate(coaching.latest_call_at))}`
+                  : null}
               </span>
             </p>
           </Panel>

@@ -48,7 +48,9 @@ describe("anonymous Team coaching", () => {
       <TeamCoachingStory coaching={fictionalTeamCoaching} />,
     );
     expect(html).toContain("Analysed calls");
-    expect(html).toContain("2 people · updated 9 Oct 2026");
+    // The tile's note stays one short line; the date sits in the footnote.
+    expect(html).toContain(">2 people<");
+    expect(html).toContain("Updates after every call. Latest call 9 Oct 2026.");
     expect(html).toContain("2 of 3 calls");
     expect(html).toContain("67%");
     expect(html).toContain("Private by default");

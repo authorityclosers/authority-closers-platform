@@ -603,7 +603,7 @@ export const TEAM = {
   allAreas: "All areas",
   repCount: (count: number) => `${count} ${count === 1 ? "rep" : "reps"}`,
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
-  updated: (date: string) => `updated ${date}`,
+  latest: (date: string) => `Latest call ${date}.`,
   last40: "last 40",
   inView: "In this view",
   calls: "Analysed calls",
