@@ -356,6 +356,7 @@
   flex: none;
   align-items: center;
   gap: 4px;
+  min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
   font-weight: 600;
@@ -1126,6 +1127,10 @@
 }
 
 @media (pointer: coarse) {
+  .jump {
+    min-height: 44px;
+  }
+
   .clipPlay {
     width: 44px;
     height: 44px;
