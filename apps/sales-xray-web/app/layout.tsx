@@ -15,7 +15,8 @@ import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
 import { InitialSessionProvider } from "./initial-session";
-import { serverSession } from "./server-reads";
+import { DisplayDatesProvider } from "./display-clock";
+import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
 export const metadata: Metadata = {
   title: "Dipak’s Sales Xray · Authority Closers",
@@ -43,7 +44,11 @@ export default async function Layout({
 }: Readonly<{ children: React.ReactNode }>) {
   // Where this server can read the API (dev), the session arrives with the
   // page, so pages that render their data on the server show it at once.
-  const initialSession = await serverSession();
+  // Dates in those pages are written as the browser will start writing them.
+  const [initialSession, displayDates] = await Promise.all([
+    serverSession(),
+    serverDisplayDates(),
+  ]);
   const liveDataMode = process.env.AC_SALES_XRAY_DEV_LIVE_DATA === "true";
   const themeControl = themeControlEnabled({
     NODE_ENV: process.env.NODE_ENV,
@@ -75,13 +80,15 @@ export default async function Layout({
               upload is owned here rather than by the page that started it. */}
           <UploadSessionProvider>
             <InitialSessionProvider value={initialSession}>
-              <AppSession>
-                {liveDataMode ? (
-                  <LiveDataBanner>{children}</LiveDataBanner>
-                ) : (
-                  children
-                )}
-              </AppSession>
+              <DisplayDatesProvider value={displayDates}>
+                <AppSession>
+                  {liveDataMode ? (
+                    <LiveDataBanner>{children}</LiveDataBanner>
+                  ) : (
+                    children
+                  )}
+                </AppSession>
+              </DisplayDatesProvider>
             </InitialSessionProvider>
             <UploadIndicator />
             <NoticeCenter />

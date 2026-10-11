@@ -1,5 +1,8 @@
 import { headers } from "next/headers";
 
+import { serverDisplayDates as displayDatesFor } from "./display-dates";
+import type { DisplayDates } from "./display-dates";
+
 /**
  * Server-side reads (owner, 11 Oct: "server-side data like Pulse").
  *
@@ -110,4 +113,14 @@ export async function serverSession(): Promise<InitialSession | null> {
   const directory = reads?.[SESSION_PATHS[1]];
   if (identity?.status !== 200 || directory?.status !== 200) return null;
   return { identity: identity.body, directory: directory.body };
+}
+
+/**
+ * How pages drawn here write dates: the language this request asked for, in
+ * India time (display-dates.ts). Null where the server draws no data.
+ */
+export async function serverDisplayDates(): Promise<DisplayDates | null> {
+  if (!serverApiOrigin()) return null;
+  const incoming = await headers();
+  return displayDatesFor(incoming.get("accept-language"));
 }

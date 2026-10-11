@@ -5,6 +5,7 @@ vi.mock("next/headers", () => ({ headers: async () => incoming.value }));
 
 import {
   serverApiOrigin,
+  serverDisplayDates,
   serverReads,
   serverSession,
   SESSION_PATHS,
@@ -125,4 +126,14 @@ it("starts the app ready only from a full, selected server session", async () =>
   expect(seededChoices(null)).toBeNull();
   network.mockImplementation(async () => new Response("{}", { status: 401 }));
   expect(await serverSession()).toBeNull();
+});
+
+it("writes dates in the request's language and India time where it draws data", async () => {
+  incoming.value = new Headers({ "accept-language": "en-GB,en;q=0.8" });
+  expect(await serverDisplayDates()).toMatchObject({
+    locale: "en-GB",
+    timeZone: "Asia/Kolkata",
+  });
+  vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "");
+  expect(await serverDisplayDates()).toBeNull();
 });
