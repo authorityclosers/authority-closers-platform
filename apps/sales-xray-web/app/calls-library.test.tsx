@@ -1502,7 +1502,9 @@ it("shows at most three live rows in the home preview with a Calls link", async 
   await flush();
 
   expect(host.querySelector("h2")?.textContent).toBe("Recent calls");
-  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(3);
+  expect(
+    host.querySelectorAll('.calls-library-preview a[href^="/analysis/calls/"]'),
+  ).toHaveLength(3);
   expect(host.querySelector('a[href="/analysis/calls"]')?.textContent).toBe(
     "View all calls",
   );
