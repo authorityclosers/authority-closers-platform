@@ -5,6 +5,7 @@ V8 generates this once. Legacy findings project the same validated content.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from typing import Annotated, Any, Literal
 
@@ -55,7 +56,10 @@ COACHING_PROMPT_V8_INSTRUCTION = (
     "Use Follow-up Set, Decision Pending, Deferred, Meeting Booked, Disqualified, No Clear "
     "Next Step or Still Open; Won/Lost are recorded by a person elsewhere. summary is 3-5 "
     "short everyday sentences: conclusion, what was understood, what changed, what helped, "
-    "what hurt, where the call ended. Cite its 1-3 source segments in summary_evidence. "
+    "what hurt, where the call ended. Outcome line and summary have different openings: "
+    "never repeat their first five words or add a second overall-verdict paragraph. "
+    "The outcome line states only where the call ended; the summary explains the "
+    "conversation and its changes. Cite its 1-3 source segments in summary_evidence. "
     "biggest_influence is the ONE biggest influence, positive or negative. strongest_part "
     "and biggest_concern have one short observation, evidence and a <=8-word short label, "
     "or null. next_step is an explicitly agreed action with literal spoken when or null. "
@@ -262,6 +266,15 @@ class ReportPillars(_Model):
 
     @model_validator(mode="after")
     def source_order(self) -> ReportPillars:
+        if self.outcome:
+            outcome_words = re.findall(r"\w+", self.outcome.line.casefold())
+            summary_words = re.findall(r"\w+", self.summary.casefold())
+            if outcome_words == summary_words or (
+                len(outcome_words) >= 5
+                and len(summary_words) >= 5
+                and outcome_words[:5] == summary_words[:5]
+            ):
+                raise ValueError("report_pillars_duplicate_opening")
         if self.most_important_moment is not None and self.most_important_moment >= len(
             self.moments
         ):

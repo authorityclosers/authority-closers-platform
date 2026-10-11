@@ -321,6 +321,7 @@ def test_actual_c5_response_uses_v8_parser(case):
         "missing_pillars",
         "missing_call_state",
         "unsupported_state",
+        "duplicate_opening",
         "no_agreement",
         "no_timing",
         "invented_date",
@@ -346,6 +347,8 @@ def test_unsupported_claims_fail_closed(case, invalid):
         payload["dimensions"][0].pop("call_state")
     elif invalid == "unsupported_state":
         payload["dimensions"][0]["evidence"] = []
+    elif invalid == "duplicate_opening":
+        p["summary"] = p["outcome"]["line"].upper() + " You explored the problem."
     elif invalid == "no_agreement":
         p["deal"]["next_event"] = None
     elif invalid == "no_timing":
@@ -414,6 +417,7 @@ def test_prompt_is_one_sales_story_not_a_second_copy_of_old_sections(case):
     system = prompt["messages"][0]["content"]
     assert "3-5 short everyday sentences" in system
     assert "Assigned tasks and suggestions are not commitments" in system
+    assert "Outcome line and summary have different openings" in system
     assert "V8 WIRE LIMITS" in system and "V7 WIRE LIMITS" not in system
     assert "Required overview shape" not in system
 
