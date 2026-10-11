@@ -19,10 +19,25 @@ composition, while submission routes remain conditional. Billing rationale was
 posted to the coordinator before committing. No product/billing code or live
 data changed. JUnit: `/home/acdev/strikes/1694/workbench-release-ci-focused-20261011.xml`.
 The corrected static browser journey checks enabled registered-org selection,
-empty history and 404 for the Personal recording. Its compiled proof is pending;
-the live checkout's static export is absent. One pinned, isolated source build
-uses the existing committed-snapshot helper and installed tools, preserving the
-shared dev cache. These test repairs do not certify release CI or staging.
+empty history and 404 for the Personal recording. Ruff check/format passes for
+all six assigned files, as do the required HTTP import and diff checks.
+
+At committed source `45002852c7fcc80854da63f5c2040f92ad29ce24`, the isolated
+default Turbopack static build **passes**. Its source digest remains unchanged:
+`55dddc03236a08d3d3646f8e2431aeb0d8e82be19c6c6b344304980a747821fc`.
+The browser test then errors in fixture setup: this exported runner omitted CI's
+explicit generated AudioAtlas binary preparation, and the offline local worker
+fails before login or workspace assertions. **No standalone browser PASS yet.**
+Receipt: `/home/acdev/strikes/1694/workbench-release-ci-static-turbo.json`;
+JUnit and build/test logs share that prefix. The committed-snapshot helper and
+installed dependencies keep all generated files outside the shared dev cache.
+Earlier attempts are retained: external package links were rejected by Turbo;
+the webpack alternative rejected a global-only CSS selector. Neither failed
+build is reported as acceptance. No product/dependency changes were made to
+accommodate those attempts. The corrected runner includes CI's native build and
+manifest check, with fresh `workbench-release-ci-static-native*` receipts.
+Coordinator's 17:03 UTC handoff reports green v0.40.0 release CI at `f0437c9` /
+main `a775389`; staging images are building. QA has no staging verdict yet.
 
 The bounded 16:10 UTC Coaching run passes **4/4**, all 13 observations per pair,
 at recorded source `aa49b888` with unchanged start/end HEAD. Both call/personal
@@ -54,8 +69,8 @@ log are in `2026-10-11-workbench-mission-readback/`. Report and backend owners
 received the observations; a bounded repeat is pending at the 15-minute interval.
 
 `3a47bf6a` adds real call/personal mission-link taps, center reachability and
-32 px desktop / 44 px phone target checks. Browser acceptance of these new checks
-is pending because the interrupted batch did not reach Coaching. Failure
+32 px desktop / 44 px phone target checks. The later bounded Coaching run above
+verifies these new checks in all four pairs. Failure
 receipts now preserve exception type and the journey's check/line, excluding
 exception/customer text, even if pytest's batch summary is interrupted.
 
@@ -63,10 +78,11 @@ Coordinator supplied existing private session references at 15:43 UTC; the
 session file is not Playwright storage-state JSON (format checked, no values
 printed). Populated staging smoke still needs a compatible approved session
 reference/format contract, retained Report route, existing Team-read permission
-and confirmed staging version. Coordinator's second staging attempt is running;
+and confirmed staging version. Coordinator's third staging attempt is running
+at `f0437c9` according to its 16:40 UTC note;
 QA has performed no staging writes, new sign-in/account/access grants or deploy.
 
-Latest completed checks:
+Historical completed baseline (superseded by newer failures where noted above):
 
 | Journey | Result | Evidence / remaining owner |
 | --- | --- | --- |
@@ -109,14 +125,15 @@ No traces or storage-state files are produced.
 
 Ruff passes, all 16 cases collect, and the no-server invocation skips all 16
 without contacting a live server. The required `uv run python -c
-"import ac_platform.http"` check passes. Report/Document/DOCX rendering is green.
+"import ac_platform.http"` check passes. Historical Report/Document/DOCX checks
+passed; newer Report/Document acceptance is incomplete as recorded above.
 Coaching's source-changing batch (`4b058a59` to `56ea01c6`) passed three pairs;
 its phone/light repeat passed at unchanged recorded HEAD `7058bd8f`. The repeat
 records two navigations and two Fast Refresh notices, showing that unchanged Git
 HEAD does not mean a refresh-free live checkout. All 11 checks still completed.
 The original view reset's cause remains unconfirmed. Receipts retain only counts,
-never console text. Combined dev rendering checks are green; no immutable release
-or authenticated staging verdict is implied. Staging awaits the coordinator's
+never console text. No immutable release or authenticated staging verdict is
+implied. Staging awaits the coordinator's
 version confirmation, approved session-file path and populated Report route.
 
 External screenshots/JSON: `/home/acdev/strikes/1694/shots/`:
