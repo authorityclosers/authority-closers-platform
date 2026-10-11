@@ -19,13 +19,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// The API's limits: free text up to 80 characters, filter values up to 64
-// (a longer hand-edited value is dropped rather than failing the whole list).
-const SAFE = /^[A-Za-z0-9 ._+:-]{1,80}$/;
+// The API's limits: free text up to 80 characters, filter values up to 64,
+// any script (Devanagari included) but no control characters; offsets up to
+// 100,000. A hand-edited value outside them is dropped, never failing the list.
+const CONTROL = /[\u0000-\u001f\u007f]/;
 type Params = Record<string, string | string[] | undefined>;
 const one = (value: string | string[] | undefined, max = 64) => {
-  const text = Array.isArray(value) ? value[0] : value;
-  return text && text.length <= max && SAFE.test(text) ? text : undefined;
+  const text = (Array.isArray(value) ? value[0] : value)?.trim();
+  return text && text.length <= max && !CONTROL.test(text) ? text : undefined;
 };
 
 export default async function SyntheticPage({
@@ -40,9 +41,9 @@ export default async function SyntheticPage({
     outcome: one(params.outcome),
     q: one(params.q, 80),
   };
-  const offset = Math.max(
-    0,
-    Number.parseInt(one(params.offset) ?? "0", 10) || 0,
+  const offset = Math.min(
+    100_000,
+    Math.max(0, Number.parseInt(one(params.offset) ?? "0", 10) || 0),
   );
   const query = new URLSearchParams(
     Object.entries(filters).filter(
