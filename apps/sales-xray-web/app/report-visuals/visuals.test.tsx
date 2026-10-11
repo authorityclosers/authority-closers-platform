@@ -203,3 +203,24 @@ it("draws figures without a second frame inside a card", () => {
   );
   expect(markup).toContain("data-bare");
 });
+
+it("draws the measured sound when there is no speech, and the player's position", () => {
+  const envelope = {
+    schema: "ac.sales-xray.waveform/1" as const,
+    kind: "rms_envelope" as const,
+    duration_ms: 10_000,
+    points: Array.from({ length: 10 }, (_, index) => ({
+      start_ms: index * 1000,
+      level: 0.5,
+    })),
+  };
+  const markup = html(
+    <CallTimeline durationMs={10_000} envelope={envelope} playheadMs={5_000} />,
+  );
+  expect(markup).toContain('data-mode="level"');
+  expect(markup).toContain("left:50%");
+  // Outside a report (no player) and no explicit position: no playhead.
+  expect(
+    html(<CallTimeline durationMs={10_000} envelope={envelope} />),
+  ).not.toContain("left:50%");
+});

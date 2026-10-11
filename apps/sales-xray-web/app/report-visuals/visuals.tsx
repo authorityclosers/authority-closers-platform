@@ -41,6 +41,7 @@ import type { ReportEvidence } from "../report-contract";
 import {
   ClipPlayIcon,
   ClipPlayState,
+  useSourceWaveform,
   waveformBins,
   type WaveformEnvelope,
 } from "../source-waveform";
@@ -552,18 +553,30 @@ export function CallTimeline({
   speech?: Speech | null;
   /**
    * The server's sound envelope: shapes the speech bars when both exist, and
-   * draws the call alone when there is no speech data.
+   * draws the call alone when there is no speech data. Defaults to the
+   * report's waveform context; pass null for none.
    */
   envelope?: WaveformEnvelope | null;
   phases?: TimelinePhase[] | null;
   moments?: TimelineMoment[];
   change?: { at_ms: number; label?: string } | null;
+  /** Where the player is; defaults to the report's player while it plays. */
   playheadMs?: number | null;
   /** Names for the legend: top (the seller) and bottom (the prospect). */
   names?: { top: string; bottom: string } | null;
   onSelect?: Select;
   label?: string;
 }) {
+  // Inside a report the measured sound and the player's position come from
+  // the report's own waveform context unless the caller passes them.
+  const source = useSourceWaveform();
+  const sound = envelope === undefined ? source.envelope : envelope;
+  const head =
+    playheadMs !== undefined
+      ? playheadMs
+      : source.playing || source.currentTimeMs > 0
+        ? source.currentTimeMs
+        : null;
   if (!(durationMs > 0)) return null;
   const stages = cleanPhases(phases, durationMs);
   const blocks = stages.length
@@ -576,7 +589,7 @@ export function CallTimeline({
   );
   const mode = speech?.top.length
     ? "speech"
-    : envelope
+    : sound
       ? "level"
       : ("none" as const);
   const summary = stages.length
@@ -613,8 +626,8 @@ export function CallTimeline({
           const inside = (atMs: number) =>
             atMs >= block.start_ms && (atMs < block.end_ms || last);
           const count = bars[index] ?? 3;
-          const levels = envelope
-            ? waveformBins(envelope, block.start_ms, block.end_ms, count)
+          const levels = sound
+            ? waveformBins(sound, block.start_ms, block.end_ms, count)
             : null;
           const { top, bottom } =
             mode === "speech" && speech
@@ -674,10 +687,10 @@ export function CallTimeline({
                       </span>
                     </span>
                   ) : null}
-                  {playheadMs != null && inside(playheadMs) ? (
+                  {head != null && inside(head) ? (
                     <span
                       className={styles.playhead}
-                      style={{ left: at(playheadMs) }}
+                      style={{ left: at(head) }}
                       aria-hidden="true"
                     />
                   ) : null}
