@@ -33,7 +33,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
       </Panel>
     );
   return (
-    <div className={styles.story}>
+    <div className={styles.conversation}>
       <FocusHero
         heading="One focus for this call"
         label={focus.label}
@@ -81,7 +81,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
         fallbackObservation={focus.explanation}
         strength={coaching.strength}
       />
-      <aside className={styles.storyRail} aria-label="Your next call">
+      <aside className={styles.conversationRail} aria-label="Your next call">
         <MissionPanel
           id="call-mission"
           mission={mission}

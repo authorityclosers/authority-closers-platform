@@ -331,6 +331,7 @@
     "named_rep_details": false,
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
+    "rep_count": 1,
     "schema": "ac.sales-xray.team-coaching/1",
     "scope": "anonymous",
     "session_id": "00000000-0000-0000-0000-000000000003",

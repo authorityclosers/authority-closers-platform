@@ -573,6 +573,7 @@
     "scope": "anonymous",
     "named_rep_details": false,
     "analysed_calls": 40,
+    "rep_count": 6,
     "pending_calls": 2,
     "unavailable_calls": 1,
     "history_limited": true,

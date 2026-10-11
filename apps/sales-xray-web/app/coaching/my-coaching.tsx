@@ -204,7 +204,7 @@ export function CoachingStory({
   // One conversation in spec order (1–6); on wide screens the mission (4)
   // stays beside the story instead of a stack of side panels (spec 3, 9).
   return (
-    <div className={styles.story}>
+    <div className={styles.conversation}>
       <FocusHero
         heading="What You Should Work On Now"
         label={focus.label}
@@ -260,7 +260,7 @@ export function CoachingStory({
         strength={coaching.strength}
         acrossCalls
       />
-      <aside className={styles.storyRail} aria-label="Your next call">
+      <aside className={styles.conversationRail} aria-label="Your next call">
         <MissionPanel
           id="mission"
           mission={mission}

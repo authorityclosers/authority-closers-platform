@@ -73,46 +73,46 @@
 /* One conversation: the pillars read in spec order in one column. On wide
    screens the next-call mission sits beside them for the whole story,
    instead of a stack of side panels (spec 3 and 9). */
-.story {
+.conversation {
   display: grid;
   gap: var(--sx-gap);
   align-items: start;
   min-width: 0;
 }
 
-.story > * {
+.conversation > * {
   min-width: 0;
 }
 
-.storyRail {
+.conversationRail {
   display: grid;
   align-content: start;
   gap: var(--sx-gap);
 }
 
 @container (min-width: 900px) {
-  .story {
+  .conversation {
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-rows: repeat(8, auto);
   }
 
-  .story > * {
+  .conversation > * {
     grid-column: 1;
   }
 
-  .story > .storyRail {
+  .conversation > .conversationRail {
     grid-column: 2;
     grid-row: 1 / -1;
     align-self: start;
   }
 
-  .storyRail .nextCall,
-  .story .hero .nextCall {
+  .conversationRail .nextCall,
+  .conversation .hero .nextCall {
     display: none;
   }
 
   @media (min-height: 760px) {
-    .storyRail {
+    .conversationRail {
       position: sticky;
       top: 16px;
     }

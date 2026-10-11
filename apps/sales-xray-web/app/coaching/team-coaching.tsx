@@ -34,11 +34,18 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           label="Analysed calls"
           value={analysed}
           note={
-            coaching.latest_call_at
-              ? `Updated ${callDate(coaching.latest_call_at)}${coaching.history_limited ? " · last 40" : ""}`
-              : coaching.history_limited
-                ? "Most recent 40"
-                : "In this view"
+            [
+              coaching.rep_count
+                ? `${coaching.rep_count} ${coaching.rep_count === 1 ? "person" : "people"}`
+                : null,
+              coaching.latest_call_at
+                ? `updated ${callDate(coaching.latest_call_at)}`
+                : null,
+              coaching.history_limited ? "last 40" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+              .replace(/^./, (c) => c.toUpperCase()) || "In this view"
           }
         />
         <Kpi
