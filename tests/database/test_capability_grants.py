@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, event, exists, select
+from sqlalchemy import MetaData, Table, create_engine, event, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -63,10 +63,26 @@ def seed_scope(database: Session) -> Scope:
         [
             Tenant(id=scope.tenant, slug=f"academy-{scope.tenant}", name="Academy"),
             Tenant(id=scope.other_tenant, slug=f"other-{scope.other_tenant}", name="Other"),
-            Person(id=scope.subject, email=f"subject-{scope.subject}@example.test"),
-            Person(id=scope.actor, email=f"actor-{scope.actor}@example.test"),
         ]
     )
+    # The same fixture seeds explicit old revisions and the current registry.
+    # Historical inserts must use that revision's actual identity columns.
+    persons = Table("persons", MetaData(), autoload_with=database.connection())
+    if "username" in persons.c:
+        database.add_all(
+            [
+                Person(id=scope.subject, email=f"subject-{scope.subject}@example.test"),
+                Person(id=scope.actor, email=f"actor-{scope.actor}@example.test"),
+            ]
+        )
+    else:
+        database.execute(
+            persons.insert(),
+            [
+                {"id": scope.subject, "email": f"subject-{scope.subject}@example.test"},
+                {"id": scope.actor, "email": f"actor-{scope.actor}@example.test"},
+            ],
+        )
     database.flush()
     database.add_all(
         [
