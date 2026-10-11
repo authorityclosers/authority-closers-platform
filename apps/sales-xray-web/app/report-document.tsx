@@ -93,17 +93,20 @@ function Play({
           onClick={() => onSelect(clip.source, title)}
         >
           <ClipPlayIcon playing={playing} size={9} />
-          {range ? (
-            <>
-              <span className={styles.playWord}>{COMMON.play} </span>
-              {at}
-            </>
-          ) : (
-            <>
-              {at}
-              <span className={styles.playWord}> · {COMMON.play}</span>
-            </>
-          )}
+          {/* One flex item, so the word sits next to the time. */}
+          <span>
+            {range ? (
+              <>
+                <span className={styles.playWord}>{COMMON.play} </span>
+                {at}
+              </>
+            ) : (
+              <>
+                {at}
+                <span className={styles.playWord}> · {COMMON.play}</span>
+              </>
+            )}
+          </span>
         </button>
       )}
     </ClipPlayState>
