@@ -25,7 +25,8 @@ export const fictionalCoaching: Coaching & {
     label: "Problem, Impact & Desire Clarity",
     explanation: "Explore the consequence before recommending a solution.",
     why_it_matters: "The recommendation needs a clear purpose.",
-    selected_reason: "Two comparable calls include suggestions for this skill.",
+    selected_reason:
+      "Your reports flagged it in 2 of your last 2 calls that checked this skill.",
     selected_at: "2026-10-09T10:00:00Z",
     status: "active",
     verdict: "Ask one impact question.",
@@ -140,7 +141,7 @@ export const fictionalCallCoaching: CallCoaching & {
   focus: {
     ...fictionalCoaching.focus!,
     status: "provisional",
-    selected_reason: "Selected from this call’s report.",
+    selected_reason: "This call’s report suggested it.",
   },
   evidence: [fictionalCoaching.evidence[0]],
   root_cause: fictionalCoaching.root_cause,

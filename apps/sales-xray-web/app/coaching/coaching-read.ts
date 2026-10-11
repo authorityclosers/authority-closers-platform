@@ -204,7 +204,7 @@ export function parseCallCoaching(
             why_it_matters: text(focus.why_it_matters),
             selected_reason: text(
               focus.selected_reason,
-              "Selected from this call's report.",
+              "This call’s report suggested it.",
             ),
             selected_at: text(focus.selected_at),
             status: "provisional",
