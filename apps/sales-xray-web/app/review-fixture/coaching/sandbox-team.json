@@ -1535,6 +1535,8 @@
     "strength": null,
     "other_suggestions": 0,
     "sandbox": true,
+    "rep_person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
+    "rep_name": "Rohan Kendrekar",
     "limitations": [
       "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call.",
       "Only the person who imported these sandbox calls sees their coaching."

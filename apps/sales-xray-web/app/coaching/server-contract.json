@@ -98,6 +98,8 @@
     },
     "recommended_media": null,
     "recording_id": "00000000-0000-0000-0000-000000000014",
+    "rep_name": null,
+    "rep_person_id": null,
     "report_revision": "ae11921cee5ac25a2350e149210b0dc0f68d7bd747db297760b3ef9d1a29494f",
     "root_cause": {
       "alternatives": [],

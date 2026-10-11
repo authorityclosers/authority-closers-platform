@@ -174,6 +174,8 @@ def test_call_view_carries_the_authored_coaching_bound_to_its_fictional_call() -
     assert call.call_label == "Fixture · Ira K. · call 1" and call.rep_name == "Nikhil Nivsekar"
     view = call_view(call, bundle, person_id=VIEWER, tenant_id=TENANT)
     assert view.state == "ready" and view.sandbox is True
+    assert view.rep_person_id == rep_uuid(TENANT, "syn-fixture-R1")
+    assert view.rep_name == "Nikhil Nivsekar"
     assert view.submission_id == call_uuid(TENANT, "syn-fixture-J01-C-01")
     assert view.focus and view.focus.skill_id == "closing_decision_management"
     assert view.mission and view.mission.origin_submission_id == view.submission_id

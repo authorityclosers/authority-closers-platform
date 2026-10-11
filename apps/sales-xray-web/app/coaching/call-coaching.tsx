@@ -115,11 +115,19 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
                   : undefined
               }
             />
-            <Row
-              icon={<GraduationCap size={15} aria-hidden="true" />}
-              title="My coaching across calls"
-              href="/coaching"
-            />
+            {coaching.sandbox && coaching.rep_person_id ? (
+              <Row
+                icon={<GraduationCap size={15} aria-hidden="true" />}
+                title={`${coaching.rep_name ?? "This rep"}’s coaching across calls`}
+                href={`/coaching?person=${coaching.rep_person_id}`}
+              />
+            ) : (
+              <Row
+                icon={<GraduationCap size={15} aria-hidden="true" />}
+                title="My coaching across calls"
+                href="/coaching"
+              />
+            )}
           </List>
         </Panel>
       </aside>

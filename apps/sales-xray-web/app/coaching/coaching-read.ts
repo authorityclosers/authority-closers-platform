@@ -42,6 +42,9 @@ export type CallCoaching = {
   other_suggestions?: number;
   /** Fictional AC Sandbox data, read only by the person who imported it. */
   sandbox?: boolean;
+  /** The fictional rep whose call this is (sandbox only). */
+  rep_person_id?: string | null;
+  rep_name?: string | null;
   limitations: string[];
 };
 export type CoachingResult =
@@ -267,6 +270,12 @@ export function parseCallCoaching(
           }
         : null,
     sandbox: item.sandbox === true,
+    rep_person_id:
+      item.sandbox === true ? requestedCall(item.rep_person_id) : null,
+    rep_name:
+      item.sandbox === true && text(item.rep_name)
+        ? text(item.rep_name).slice(0, 120)
+        : null,
     limitations: texts(item.limitations),
   };
 }

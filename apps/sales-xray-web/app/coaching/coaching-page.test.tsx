@@ -128,6 +128,20 @@ describe("Coaching story", () => {
     expect(html).toContain("Fictional AC Sandbox");
     expect(html).toContain("Back to team coaching");
     expect(html).not.toContain("/analysis/calls/");
+    const withRep = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{
+          ...fictionalCallCoaching,
+          sandbox: true,
+          rep_person_id: "00000000-0000-4000-8000-0000000000aa",
+          rep_name: "Rohan Kendrekar",
+        }}
+      />,
+    );
+    expect(withRep).toContain("Rohan Kendrekar’s coaching across calls");
+    expect(withRep).toContain(
+      "/coaching?person=00000000-0000-4000-8000-0000000000aa",
+    );
   });
   it("opens a fictional rep's coaching under their name, read-only", async () => {
     const person = "00000000-0000-4000-8000-0000000000aa";

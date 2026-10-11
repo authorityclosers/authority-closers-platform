@@ -365,6 +365,8 @@ def call_view(
         report_revision=call.payload_sha256,
         call_label=call.call_label,
         sandbox=True,
+        rep_person_id=rep_uuid(tenant_id, call.rep_key),
+        rep_name=call.rep_name[:120],
     )
     parts = authored(call, payload)
     if parts is None:
