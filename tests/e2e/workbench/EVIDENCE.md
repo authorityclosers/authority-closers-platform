@@ -1,5 +1,24 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Current 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
+pytest completion, cause unconfirmed; no owned descendants remain. Six cases
+pass and desktop/dark Report → Document fails after fourteen recorded refresh
+events. The screenshot stays in Report/Deal after the original single click;
+no persistent cause is asserted. Report desktop/light and both phone themes
+pass. Three outcome-format pairs pass; the other cases have no completed receipt.
+
+The network-free clipping negative control rejects the long historical note
+(206 px inside 120 px) and accepts "60 people". Stronger shared-dev Team
+acceptance remains pending. Ten targeted cases (eight unfinished Document/Coaching
+pairs, unfinished phone/dark format and failed desktop/dark Report) are scheduled
+no earlier than 20:30:26 UTC. The launcher now has its own retained process session;
+no retry/force/test relaxation, product mutation, deployment or session creation.
+`ff8bda19` safely adds refresh phase/timestamps and the comparable original
+Coaching click timestamp. Ruff check/format, HTTP import, no-server 24 skips and
+owned diff checks pass. Historical green coverage below is not this new wave.
+
+Partial receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-readback/interrupted-receipt.json`.
+
 New Team clipping guard is prepared after D's `4130bb91` phone repair.
 It checks all rendered total labels/values/notes and captures the full relocated
 latest-call context. Ruff check/format, required HTTP import, no-server collection
