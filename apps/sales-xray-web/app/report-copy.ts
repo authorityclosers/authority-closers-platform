@@ -408,11 +408,21 @@ export const END_SUMMARY = {
 
 /* ── Views and the Document ──────────────────────────────────────────── */
 
+/** `text` on the toolbar, `hint` for screen readers, `menu` in "More views". */
 export const VIEWS = {
   report: { text: "Report", hint: "Report view" },
   coaching: { text: "Coaching", hint: "Coaching view" },
-  details: { text: "Details", hint: "Details view" },
-  document: { text: "Document", hint: "Document view" },
+  details: {
+    text: "Details",
+    hint: "Details view",
+    menu: "All analysis details",
+  },
+  document: {
+    text: "Document",
+    hint: "Document view",
+    menu: "Document · print or Word",
+  },
+  more: "More views",
 };
 
 export const DOCUMENT = {
