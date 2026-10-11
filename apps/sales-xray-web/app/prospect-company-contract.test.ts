@@ -116,7 +116,6 @@ it.each([
   { revision: 0 },
   { origin: "organisation" },
   { name: "Some unrelated person" },
-  { fields: {} },
   { confirmed_at: "invalid" },
   { can_edit: "admin" },
   { people: [{ prospect_id: "by-name", name: "Fictional person" }] },
@@ -140,4 +139,22 @@ it("rejects duplicate opaque identities and unsafe pagination", () => {
   expect(() =>
     parseCompanyList({ ...payload, next_offset: -1 }, companyBinding),
   ).toThrow();
+});
+it("does not promote an authorised identity label into an unknown name fact", () => {
+  const row = parseCompany({
+    ...fictionalCompanyPayload(),
+    fields: { name: { state: "unknown", reason: "not_asked" } },
+  });
+  expect(row.name).toBe("Fictional व्यवसाय");
+  expect(row.fields.name).toEqual({
+    state: "unknown",
+    reason: "not_asked",
+  });
+  expect(JSON.stringify(row.fields)).not.toContain("quote");
+});
+it("defaults all missing Company facts without inventing a source or person edit", () => {
+  const row = parseCompany({ ...fictionalCompanyPayload(), fields: undefined });
+  expect(
+    Object.values(row.fields).every((field) => field.state === "unknown"),
+  ).toBe(true);
 });

@@ -27,6 +27,11 @@ export type CompanyReadBinding = {
   tenantId: string;
   sessionId: string;
 };
+export type CompanyListPage = {
+  companies: CompanyRecord[];
+  total: number;
+  next_offset: number | null;
+};
 
 function invalid(): never {
   throw new Error("Companies are unavailable. Try again.");
@@ -77,9 +82,8 @@ export function parseCompany(value: unknown): CompanyRecord {
     }
     const name = text(row.name);
     if (
-      parsed.name.state !== "known" ||
-      parsed.name.value.kind !== "text" ||
-      parsed.name.value.text !== name
+      parsed.name.state === "known" &&
+      (parsed.name.value.kind !== "text" || parsed.name.value.text !== name)
     )
       invalid();
     const rawPeople = row.people ?? [];
@@ -139,4 +143,24 @@ export function parseCompanyList(value: unknown, binding: CompanyReadBinding) {
     total: row.total as number,
     next_offset: row.next_offset as number | null,
   };
+}
+
+export function parseCompanyDetail(
+  value: unknown,
+  binding: CompanyReadBinding,
+  companyId: string,
+): CompanyRecord {
+  const row = record(value);
+  if (
+    row.schema !== "ac.sales-xray.company/1" ||
+    row.person_id !== binding.personId ||
+    row.tenant_id !== binding.tenantId ||
+    row.session_id !== binding.sessionId ||
+    !Object.values(binding).every((id) => UUID_RE.test(id)) ||
+    !UUID_RE.test(companyId)
+  )
+    invalid();
+  const company = parseCompany(row.company);
+  if (company.company_id !== companyId) invalid();
+  return company;
 }

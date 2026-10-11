@@ -356,9 +356,9 @@
   gap: 6px;
   padding: 6px 14px;
   border-radius: var(--lx-radius-pill);
-  border: 1px solid var(--lx-focus-edge);
+  border: 1px solid var(--lx-line);
   background: var(--lx-surface);
-  color: var(--lx-focus-ink);
+  color: var(--lx-teal);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;

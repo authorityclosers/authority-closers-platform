@@ -10,7 +10,7 @@ export function CompanyList({
   onOpen,
 }: {
   companies: CompanyRecord[];
-  onOpen: (companyId: string) => void;
+  onOpen?: (companyId: string) => void;
 }) {
   return (
     <section aria-label="Companies" className={styles.prospectsList}>
@@ -23,7 +23,8 @@ export function CompanyList({
               <button
                 type="button"
                 className={styles.companyOpen}
-                onClick={() => onOpen(company.company_id)}
+                disabled={!onOpen}
+                onClick={() => onOpen?.(company.company_id)}
               >
                 <span className={styles.prospectName}>{company.name}</span>
                 <span className={styles.prospectSub}>
