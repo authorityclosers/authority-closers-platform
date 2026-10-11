@@ -2,7 +2,7 @@
 
 import { Pause, Play, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
@@ -10,6 +10,16 @@ import { callDate, timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
 
 export { timeLabel } from "./coaching-format";
+
+/** "15 s" or "1 min 5 s": how long the cut from the call is. */
+export function clipLength(ms: number) {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  const rest = seconds % 60;
+  return rest
+    ? `${Math.floor(seconds / 60)} min ${rest} s`
+    : `${seconds / 60} min`;
+}
 
 /** One playable moment from the learner's own call, as a compact row. */
 export function EvidencePlayer({
@@ -29,9 +39,12 @@ export function EvidencePlayer({
     "idle",
   );
   const [attempt, setAttempt] = useState(0);
+  // Where playback is inside this clip of the call, 0–1.
+  const [progress, setProgress] = useState(0);
   const active = useRef(false);
   const source = `/v1/conversation/acquisition/submissions/${evidence.submission_id}/source`;
   const span = `${timeLabel(evidence.start_ms)}–${timeLabel(evidence.end_ms)}`;
+  const length = Math.max(1, evidence.end_ms - evidence.start_ms);
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -44,6 +57,7 @@ export function EvidencePlayer({
   }, [identity]);
   const start = (player: HTMLAudioElement) => {
     player.currentTime = evidence.start_ms / 1000;
+    setProgress(0);
     void player
       .play()
       .then(() => {
@@ -82,6 +96,13 @@ export function EvidencePlayer({
           onClick={play}
           disabled={state === "loading"}
           data-state={state}
+          style={
+            state === "playing"
+              ? ({
+                  "--clip": `${Math.round(progress * 100)}%`,
+                } as CSSProperties)
+              : undefined
+          }
           aria-label={
             state === "playing"
               ? `Pause moment ${span}`
@@ -110,7 +131,10 @@ export function EvidencePlayer({
               <span>{callDate(evidence.created_at)}</span>
             </>
           ) : null}
-          <span>{span}</span>
+          <span>
+            {span}
+            {evidence.playable ? ` · ${clipLength(length)} clip` : ""}
+          </span>
           {state === "loading" ? <span>Loading audio…</span> : null}
           {!evidence.playable ? (
             <span>Audio alignment is uncertain; read the quote.</span>
@@ -133,11 +157,10 @@ export function EvidencePlayer({
             if (audio.current && active.current) start(audio.current);
           }}
           onTimeUpdate={() => {
-            if (
-              audio.current &&
-              audio.current.currentTime >= evidence.end_ms / 1000 &&
-              active.current
-            ) {
+            if (!audio.current || !active.current) return;
+            const at = audio.current.currentTime * 1000 - evidence.start_ms;
+            setProgress(Math.min(1, Math.max(0, at / length)));
+            if (audio.current.currentTime >= evidence.end_ms / 1000) {
               audio.current.pause();
               active.current = false;
               setState("idle");
