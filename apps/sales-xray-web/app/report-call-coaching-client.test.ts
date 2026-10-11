@@ -7,6 +7,7 @@ import {
   parseCallCoaching,
   readCallCoaching,
 } from "./report-call-coaching-client";
+import { fictionalClip } from "./coaching/coaching.fixture";
 
 afterEach(() => vi.unstubAllGlobals());
 it("reads one private own-call result with native evidence and one mission", async () => {
@@ -129,6 +130,58 @@ it("refuses missing required lesson fields and unreviewed media", () => {
       binding,
     ),
   ).toThrow();
+});
+it("accepts reviewed fixed-route clips without requiring them on older reads", () => {
+  expect(
+    parseCallCoaching(fictionalCallCoaching(), binding).media_clips,
+  ).toEqual([]);
+  const view = parseCallCoaching(
+    { ...fictionalCallCoaching(), media_clips: [fictionalClip] },
+    binding,
+  );
+  expect(view.media_clips).toEqual([fictionalClip]);
+  expect(view.lesson?.title).toBe(fictionalCallCoaching().lesson.title);
+});
+it.each([
+  undefined,
+  null,
+  { url: "https://untrusted.example/clip" },
+  [{ ...fictionalClip, url: "https://untrusted.example/clip" }],
+  [{ ...fictionalClip, topic_id: "../private" }],
+  [{ ...fictionalClip, voice: "dipak", placeholder: false }],
+  [{ ...fictionalClip, revision: "invalid" }],
+  [{ ...fictionalClip, review_id: "invalid" }],
+  [{ ...fictionalClip, access: "preview" }],
+  [{ ...fictionalClip, slides: [{}] }],
+  Array.from({ length: 4 }, () => fictionalClip),
+])(
+  "drops unsafe or missing clips while retaining the text lesson (%#)",
+  (clips) => {
+    const view = parseCallCoaching(
+      { ...fictionalCallCoaching(), media_clips: clips },
+      binding,
+    );
+    expect(view.media_clips).toEqual([]);
+    expect(view.state).toBe("ready");
+    expect(view.lesson?.title).toBe(fictionalCallCoaching().lesson.title);
+  },
+);
+it("never retains media in an unavailable read", () => {
+  const view = parseCallCoaching(
+    {
+      ...fictionalCallCoaching(),
+      state: "unavailable",
+      basis: "unavailable",
+      focus: null,
+      evidence: [],
+      lesson: null,
+      practice: null,
+      mission: null,
+      media_clips: [fictionalClip],
+    },
+    binding,
+  );
+  expect(view.media_clips).toEqual([]);
 });
 it("bounds an adapter that ignores cancellation without printing private failures", async () => {
   vi.stubGlobal(

@@ -7,6 +7,7 @@ import type { ReportEvidence, SalesReport } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 import { RichText } from "./report-entities";
 import { Clip } from "./report-kit";
+import { CoachingMedia } from "./coaching/media-player";
 import { formatClock } from "./lightbox/time";
 import {
   buildContextualSourcePlayback,
@@ -225,7 +226,13 @@ export function ReportCallCoaching(props: Props) {
       </div>
     );
   if (current?.state === "ready")
-    return <CanonicalCallCoaching {...props} coaching={current} />;
+    return (
+      <CanonicalCallCoaching
+        key={`${baseScope}:${current.report_revision}`}
+        {...props}
+        coaching={current}
+      />
+    );
   if (access && identity !== initialIdentity)
     return (
       <p className={styles.context}>
@@ -355,6 +362,12 @@ function CanonicalCallCoaching({
           </div>
         </details>
       </section>
+      {coaching.media_clips?.length ? (
+        <section aria-label="Coaching example for this focus">
+          <h3>See this focus in practice</h3>
+          <CoachingMedia clips={coaching.media_clips} />
+        </section>
+      ) : null}
       <section aria-label="Next-call mission">
         <h3>Your next-call mission</h3>
         <p>

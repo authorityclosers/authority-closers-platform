@@ -6,6 +6,7 @@ import {
 } from "./coaching/coaching-client";
 import type { Transcript } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
+import { parseClips, type CoachingClip } from "./coaching/media-contract";
 
 export type CallCoachingBinding = {
   callId: string;
@@ -48,6 +49,7 @@ export type CallCoaching = {
   lesson: (Omit<TextLesson, "own_call"> & { own_call: Evidence | null }) | null;
   practice: { exercise: string; success_condition: string } | null;
   mission: Mission | null;
+  media_clips?: CoachingClip[];
   limitations: string[];
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -210,7 +212,10 @@ export function parseCallCoaching(
     if (lesson.next_call_connection !== mission.behavior) invalid();
     if (row.basis === "skill_evidence" && !row.evidence.length) invalid();
   }
-  return row as CallCoaching;
+  return {
+    ...row,
+    media_clips: row.state === "ready" ? parseClips(row.media_clips) : [],
+  } as CallCoaching;
 }
 
 /** One own-call GET. It cannot load another person's coaching or start a job. */

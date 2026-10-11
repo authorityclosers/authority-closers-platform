@@ -7,6 +7,8 @@ import {
   fictionalCallCoaching,
 } from "./report-call-coaching.fixture";
 import { parseCallCoaching } from "./report-call-coaching-client";
+import { fictionalClip } from "./coaching/coaching.fixture";
+import { clipSource } from "./coaching/media-contract";
 import { parseAcquisitionReport } from "./report-contract";
 import {
   envelope,
@@ -51,6 +53,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 async function render(context = access, bootstrap = false, selected = vi.fn()) {
   await act(async () =>
@@ -102,6 +105,114 @@ it("uses a source-checked server bootstrap without another read", async () => {
   expect(container.textContent).toContain("Fictional API focus");
   expect(fetcher).not.toHaveBeenCalled();
 });
+it("renders reviewed examples from the call read without eager audio and keeps the lesson on media failure", async () => {
+  const fetcher = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          ...fictionalCallCoaching(),
+          media_clips: [fictionalClip],
+        }),
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  await render();
+  expect(container.textContent).toContain("Placeholder · neutral narration");
+  expect(container.querySelector("audio")).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const button = (label: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === label,
+    )!;
+  await act(async () => button("Next slide").click());
+  expect(container.textContent).toContain("Wait for their answer.");
+  await act(async () => button("Play coaching clip").click());
+  const audio = container.querySelector("audio")!;
+  expect(audio.getAttribute("src")).toBe(clipSource(fictionalClip));
+  expect(play).not.toHaveBeenCalled();
+  await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+  expect(audio.currentTime).toBe(fictionalClip.start_ms / 1000);
+  expect(play).toHaveBeenCalledOnce();
+  await act(async () => audio.dispatchEvent(new Event("error")));
+  expect(container.textContent).toContain("Narration is unavailable");
+  expect(container.textContent).toContain("Your next-call mission");
+  expect(container.textContent).toContain(fictionalClip.transcript_excerpt);
+  await act(async () => button("Try clip again").click());
+  expect(container.querySelector("audio")).not.toBe(audio);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it("removes active media immediately when the workspace changes", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...fictionalCallCoaching(),
+          media_clips: [fictionalClip],
+        }),
+      ),
+    )
+    .mockImplementation(() => new Promise(() => {}));
+  vi.stubGlobal("fetch", fetcher);
+  await render();
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((item) => item.textContent === "Play coaching clip")!
+      .click(),
+  );
+  expect(container.querySelector("audio")).not.toBeNull();
+  await render({
+    ...access,
+    context: {
+      ...access.context!,
+      tenantId: "00000000-0000-0000-0000-000000000009",
+    },
+  });
+  expect(container.querySelector("audio")).toBeNull();
+  expect(container.textContent).not.toContain(fictionalClip.title);
+  expect(container.textContent).not.toContain(fictionalClip.transcript_excerpt);
+});
+it.each([true, false])(
+  "resets playback on a changed Coaching digest even with an acquisition pin of %s",
+  async (pinned) => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const view = (revision: string) => (
+      <WorkspaceAccessContext.Provider value={access}>
+        <ReportCallCoaching
+          callId={submissionId}
+          data={{
+            ...data,
+            reportRevision: pinned ? revision : undefined,
+            callCoaching: parseCallCoaching(
+              {
+                ...fictionalCallCoaching(),
+                report_revision: revision,
+                media_clips: [fictionalClip],
+              },
+              { ...binding, reportRevision: pinned ? revision : undefined },
+            ),
+          }}
+        />
+      </WorkspaceAccessContext.Provider>
+    );
+    await act(async () => root.render(view("b".repeat(64))));
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((item) => item.textContent === "Play coaching clip")!
+        .click(),
+    );
+    const audio = container.querySelector("audio")!;
+    expect(audio).not.toBeNull();
+    await act(async () => root.render(view("c".repeat(64))));
+    expect(audio.isConnected).toBe(false);
+    expect(container.querySelector("audio")).toBeNull();
+    expect(container.textContent).toContain(fictionalClip.title);
+    expect(fetcher).not.toHaveBeenCalled();
+  },
+);
 it("does not reuse a bootstrap from the previous session of the same person", async () => {
   vi.stubGlobal(
     "fetch",
