@@ -904,3 +904,24 @@
 .stage.stage[data-has-files="true"] .dropCopy strong {
   white-space: nowrap;
 }
+
+/* Phones: the file's name keeps the row ("Disco…" at 390); "Selected"
+   shows as its check, and the word stays for screen readers. */
+@media (max-width: 480px) {
+  .stage.stage[data-has-files="true"] .fileCard {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .stage.stage[data-has-files="true"] .fileIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .stage.stage[data-has-files="true"] .selectedBadge {
+    gap: 0;
+    padding: 6px;
+    font-size: 0;
+  }
+}
