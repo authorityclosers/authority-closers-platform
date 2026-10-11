@@ -441,8 +441,8 @@
     "recommended_media": null,
     "other_format": null,
     "strength": {
-      "title": "Asked for a recent example and consequence",
-      "explanation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+      "title": "Answered a scope question with a clear limit",
+      "explanation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
       "evidence": [
         {
           "submission_id": "5a0d0000-0000-4000-8000-000000000106",
@@ -451,11 +451,11 @@
           "transcript_revision": "synthetic-v1",
           "created_at": "2026-09-07T12:00:00+05:30",
           "call_label": "ArthaPath · Chennai clinic · Close",
-          "segment_id": "L005",
-          "quote": "ஒரு recent example சொல்ல முடியுமா? என்ன நடந்தது, team வேலைக்கு என்ன பாதிப்பு வந்தது?",
-          "start_ms": 38070,
-          "end_ms": 43176,
-          "observation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+          "segment_id": "L018",
+          "quote": "That is for your own accounts adviser to decide. The commercial quote will name the purchaser and service clearly. I should not infer tax treatment from the account used for payment.",
+          "start_ms": 181063,
+          "end_ms": 194254,
+          "observation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
           "playable": true
         }
       ]
