@@ -164,7 +164,8 @@ export function ProspectsListView() {
           <div>
             <h1 className={styles.title}>Prospects</h1>
             <p className={styles.summary}>
-              Cross-call prospect intelligence and conversation history.
+              Everyone you're selling to, their main problem and what happens
+              next.
               {current && !visibleError && total > 0
                 ? ` (${total} recorded)`
                 : ""}

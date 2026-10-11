@@ -284,14 +284,20 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "who stage"
-      "problem last";
-    gap: 6px 12px;
+      "problem problem"
+      "last last";
+    gap: 4px 12px;
   }
   .prospectLeft {
     grid-area: who;
   }
+  .prospectName {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
   .prospectStage {
     grid-area: stage;
+    align-self: start;
   }
   .prospectProblem {
     grid-area: problem;
@@ -302,6 +308,13 @@
   }
   .prospectLast {
     grid-area: last;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-start;
+    padding-left: 48px;
+  }
+  .prospectLast small::before {
+    content: "· ";
   }
 }
 
