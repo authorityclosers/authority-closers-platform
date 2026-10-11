@@ -54,6 +54,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.conversation_sandbox_browser import install_sandbox_browser_routes
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
@@ -230,6 +231,8 @@ def install_insights_routes(
             intake=acquisition_intake,
         )
     _install_admin(application, settings=settings, require_actor=require_actor, intake=intake)
+    # The sandbox's full calls for Admin's synthetic browser (no folder mount needed).
+    install_sandbox_browser_routes(application, settings=settings, require_actor=require_actor)
 
 
 def _install_sales_xray(

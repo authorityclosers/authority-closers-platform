@@ -174,3 +174,53 @@ async def test_without_the_live_registry_admin_uses_the_composed_set(
     assert (await client.get("/v1/admin/conversation/insights")).status_code == 200
     # Personal plus the intake's approved organisation; never operations.
     assert seen["served"] == {PERSONAL, ORGANISATION}
+
+
+async def test_sandbox_calls_are_admitted_like_the_console(admin_client, monkeypatch) -> None:
+    """Admin's sandbox browser: the console's admission, its own filters, read-only."""
+    import ac_platform.http.conversation_sandbox_browser as sandbox_routes
+
+    client, seen = admin_client
+
+    class Browser:
+        def __init__(self, database: Any) -> None:
+            pass
+
+        async def index(self, **filters: Any) -> dict[str, Any]:
+            seen["sandbox_filters"] = filters
+            return {"synthetic": True, "source": "sandbox", "items": []}
+
+        async def call(self, call_id: str) -> dict[str, Any]:
+            seen["sandbox_call"] = call_id
+            return {"synthetic": True, "source": "sandbox", "lines": []}
+
+    monkeypatch.setattr(sandbox_routes, "SandboxCallBrowser", Browser)
+    path = "/v1/admin/conversation/sandbox-calls"
+    page = await client.get(path, params={"business": "syn-saas", "offset": "50"})
+    assert page.status_code == 200, page.text
+    assert page.json()["source"] == "sandbox"
+    assert page.headers["cache-control"] == "private, no-store"
+    assert seen["sandbox_filters"]["business"] == "syn-saas"
+    assert seen["sandbox_filters"]["offset"] == 50
+    assert seen["admitted"] == 1
+    one = await client.get(path + "/syn-saas-J01-C-01")
+    assert one.status_code == 200 and seen["sandbox_call"] == "syn-saas-J01-C-01"
+    assert seen["admitted"] == 2
+    assert (await client.get(path, params={"tenant": "x"})).status_code == 422
+    assert (await client.get(path + "/syn-saas-J01-C-01", params={"q": "x"})).status_code == 422
+    assert (await client.post(path, headers={"Origin": "https://admin.test"})).status_code == 405
+    other_host = await client.get(path, headers={"host": "salesxray.example.test"})
+    assert other_host.status_code in {403, 404}
+
+
+async def test_sandbox_calls_refuse_whom_the_console_refuses(admin_client, monkeypatch) -> None:
+    from ac_platform.conversation_intelligence.application import ConversationDenied
+
+    client, _seen = admin_client
+
+    async def refuse(_service: Any, _who: Any) -> None:
+        raise ConversationDenied("Not a call review account.")
+
+    monkeypatch.setattr(ConversationProviderAdmin, "admit", refuse)
+    response = await client.get("/v1/admin/conversation/sandbox-calls")
+    assert response.status_code == 403
