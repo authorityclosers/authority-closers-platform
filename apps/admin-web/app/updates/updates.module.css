@@ -1,0 +1,30 @@
+.notes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes > li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  font-size: var(--sx-text-sm);
+}
+
+.notes > li + li {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.items {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: var(--sx-ink-2);
+}

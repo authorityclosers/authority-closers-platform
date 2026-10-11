@@ -82,6 +82,7 @@ export function CommandMenu({ groups }: { groups: readonly NavGroup[] }) {
         type="button"
         className={styles.trigger}
         onClick={open}
+        aria-label="Go to a section or call"
         aria-keyshortcuts="Control+K Meta+K"
       >
         <Search size={14} aria-hidden="true" />

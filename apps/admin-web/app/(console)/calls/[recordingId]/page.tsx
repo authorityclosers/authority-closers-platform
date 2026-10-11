@@ -7,11 +7,24 @@ import {
   normalizeQueue,
   pickRun,
   STATUS_LABEL,
+  when,
 } from "@/app/calls/call-data";
+import { FailedSteps } from "@/app/calls/failed-steps";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
+import { startAt } from "@/app/calls/review-logic";
 import { ReviewScreen } from "@/app/calls/review-screen";
+import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
-import { Empty, Page, PageHeader, Panel, Unavailable } from "@/app/ui/kit";
+import {
+  Badge,
+  Card,
+  Empty,
+  Page,
+  PageHeader,
+  Panel,
+  Table,
+  Unavailable,
+} from "@/app/ui/kit";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +67,7 @@ export default async function CallReviewPage({
   const compareRun = compareId
     ? call.data.runs.find((item) => item.id === compareId && item.reportId)
     : undefined;
-  const [bundle, compared, queue] = await Promise.all([
+  const [bundle, compared, queue, access] = await Promise.all([
     run
       ? adminRead(
           `/v1/admin/conversation/runs/${run.id}/review`,
@@ -68,6 +81,7 @@ export default async function CallReviewPage({
         )
       : null,
     back ? adminRead(queueApiPath(backFilters, 100), normalizeQueue) : null,
+    loadConsoleAccess(),
   ]);
 
   if (!run || !bundle?.ok)
@@ -95,8 +109,61 @@ export default async function CallReviewPage({
                     ? "The analysis failed"
                     : "This call has no report"
               }
-              text="A call can be reviewed once one of its runs has a saved report. Its runs are listed in Analysis health."
+              text="A call can be reviewed once one of its runs has a saved report."
             />
+          </Panel>
+        ) : null}
+        {call.data.failedJobs.length ? (
+          <Panel title="Failed steps" sub="Retry asks for a reason">
+            <FailedSteps jobs={call.data.failedJobs} inset />
+          </Panel>
+        ) : null}
+        {call.data.runs.length ? (
+          <Panel title="Runs" sub={`${call.data.runs.length} on this call`}>
+            <Table
+              label="Runs"
+              cards={call.data.runs.map((item) => (
+                <Card key={item.id}>
+                  <strong>{when(item.createdAt)}</strong>
+                  <span>
+                    {item.reportId ? "Report" : item.state} ·{" "}
+                    {item.model ?? item.provider ?? "model not recorded"} ·{" "}
+                    {item.promptRevision ?? "prompt not recorded"}
+                  </span>
+                </Card>
+              ))}
+            >
+              <thead>
+                <tr>
+                  <th scope="col">Started</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Prompt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {call.data.runs.map((item) => (
+                  <tr key={item.id}>
+                    <th scope="row">{when(item.createdAt)}</th>
+                    <td>
+                      <Badge
+                        tone={
+                          item.reportId
+                            ? "good"
+                            : item.state === "failed"
+                              ? "bad"
+                              : "neutral"
+                        }
+                      >
+                        {item.reportId ? "Report" : item.state}
+                      </Badge>
+                    </td>
+                    <td>{item.model ?? item.provider ?? "Not recorded"}</td>
+                    <td>{item.promptRevision ?? "Not recorded"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </Panel>
         ) : null}
       </Page>
@@ -106,11 +173,16 @@ export default async function CallReviewPage({
   const at = ids.indexOf(recordingId);
   return (
     <ReviewScreen
+      // A new call or run starts fresh: position, marked line and audio state
+      // never carry over from the call before (N / P reuse this page).
+      key={`${recordingId}:${run.id}`}
       call={call.data}
       bundle={bundle.data}
       compare={compareRun && compareRun.id !== run.id ? compareRun.id : null}
       compareBundle={compared?.ok ? compared.data : null}
       back={back}
+      safety={access.platform.includes("platform_content_safety_manage")}
+      startMs={startAt(one(query.at))}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
         next: at >= 0 ? (ids[at + 1] ?? null) : null,

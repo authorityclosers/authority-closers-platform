@@ -2,11 +2,29 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Gauge,
+  ListChecks,
+  RefreshCw,
+  SlidersHorizontal,
+  UsersRound,
+} from "lucide-react";
 
 import {
   loadProviderControls,
   type ProviderControlsPayload,
 } from "./provider-controls";
+import {
+  Badge,
+  Button,
+  Kpi,
+  List,
+  Panel,
+  Row,
+  Skeleton,
+  Tiles,
+  kitStyles,
+} from "../ui/kit";
 import styles from "./control-center.module.css";
 
 type LoadState =
@@ -23,46 +41,41 @@ function AccessState({
 }) {
   if (state.status === "loading") {
     return (
-      <section className={styles.loading} role="status">
-        <h2>Checking Sales Xray control access</h2>
-        <p>
-          The server returns control status after it verifies this admin
-          session.
-        </p>
-      </section>
+      <div className={styles.page} role="status">
+        <span className={kitStyles.srOnly}>
+          Checking Sales Xray control access
+        </span>
+        <Tiles label="Sales Xray control status">
+          {[0, 1, 2, 3].map((tile) => (
+            <Skeleton key={tile} height={96} />
+          ))}
+        </Tiles>
+      </div>
     );
   }
   if (state.status === "unauthenticated" || state.status === "forbidden") {
     return (
-      <section className={styles.forbidden} role="alert">
+      <section className={styles.state} role="alert">
         <h2>
           {state.status === "forbidden"
             ? "Verified AC admin account required"
             : "AC admin sign-in required"}
         </h2>
         <p>{state.message}</p>
-        <div className={styles.buttonRow}>
-          <Link className="button button-primary" href="/login">
-            {state.status === "forbidden" ? "Check admin sign-in" : "Sign in"}
-          </Link>
-        </div>
+        <Link className={kitStyles.button} data-variant="primary" href="/login">
+          {state.status === "forbidden" ? "Check admin sign-in" : "Sign in"}
+        </Link>
       </section>
     );
   }
   if (state.status === "error") {
     return (
-      <section className={styles.error} role="alert">
+      <section className={styles.state} role="alert">
         <h2>Sales Xray controls unavailable</h2>
         <p>{state.message}</p>
-        <div className={styles.buttonRow}>
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={onRetry}
-          >
-            Try again
-          </button>
-        </div>
+        <Button onClick={onRetry}>
+          <RefreshCw size={14} aria-hidden="true" /> Try again
+        </Button>
       </section>
     );
   }
@@ -126,150 +139,120 @@ export function ControlCenterPanel() {
     limits_remaining_bounded: [],
   };
 
+  const money = (paise: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2,
+    }).format(paise / 100);
+
   return (
     <div className={styles.page}>
-      <section className={styles.statusPanel} role="status">
-        <div>
-          <h2>Your calls, coaching and provider settings.</h2>
-          <p>
-            Open a recording, review its report, or choose the approved setup
-            for future analyses. Each call keeps its own processing history.
-          </p>
-          <div className={styles.buttonRow}>
-            <Link className="button button-primary" href="/calls">
-              Open call inventory
-            </Link>
-            <Link
-              className="button button-secondary"
-              href="/sales-xray/providers?tab=providers"
-            >
-              Providers and models
-            </Link>
-          </div>
-        </div>
-        <span className={styles.statusValue}>
+      <section className={styles.lead} role="status">
+        <span>
+          <strong>Analysis setup for future calls</strong>
+          <small>
+            Choose the approved setup new analyses use. Each call keeps its own
+            processing history.
+          </small>
+        </span>
+        <Badge
+          tone={activation ? "good" : approvedChoices > 0 ? "accent" : "warn"}
+        >
           {activation
             ? `Selected revision #${activation.revision}`
             : approvedChoices > 0
               ? "Approved setup available"
               : "Setup approval pending"}
-        </span>
+        </Badge>
       </section>
 
-      <div
-        className={styles.summaryGrid}
-        aria-label="Sales Xray control status"
-      >
-        <div className={styles.summaryCard}>
-          <span>Latest saved revision</span>
-          <strong>{current ? `#${current.revision}` : "None"}</strong>
-          <small>{current ? current.created_at : "No saved revision"}</small>
-        </div>
-        <div className={styles.summaryCard}>
-          <span>Saved provider models</span>
-          <strong>{configuredProviders}</strong>
-          <small>in the latest saved revision</small>
-        </div>
-        <div className={styles.summaryCard}>
-          <span>Selected for future plans</span>
-          <strong>
-            {activation ? `#${activation.revision}` : "Release default"}
-          </strong>
-          <small>{configuredRoutes} routes in the saved configuration</small>
-        </div>
-        <div className={styles.summaryCard}>
-          <span>Approved budget ceiling</span>
-          <strong>
-            {budgetCeiling == null
-              ? "Not available"
-              : new Intl.NumberFormat("en-IN", {
-                  style: "currency",
-                  currency: "INR",
-                  maximumFractionDigits: 2,
-                }).format(budgetCeiling / 100)}
-          </strong>
-          <small>
-            Shared processing limit · not spend or remaining balance
-          </small>
-        </div>
-        <div className={styles.summaryCard}>
-          <span>Internal tester access</span>
-          <strong>{testerPolicy.enabled ? "Enabled" : "Disabled"}</strong>
-          <small>
-            {testerPolicy.enabled
+      <Tiles label="Sales Xray control status">
+        <Kpi
+          label="Latest saved revision"
+          value={current ? `#${current.revision}` : "None"}
+          note={current ? current.created_at : "No saved revision"}
+        />
+        <Kpi
+          label="Saved provider models"
+          value={configuredProviders}
+          note="in the latest saved revision"
+        />
+        <Kpi
+          label="Selected for future plans"
+          value={activation ? `#${activation.revision}` : "Release default"}
+          note={`${configuredRoutes} routes in the saved configuration`}
+        />
+        <Kpi
+          label="Approved budget ceiling"
+          value={budgetCeiling == null ? "Not available" : money(budgetCeiling)}
+          note="Shared processing limit · not spend or remaining balance"
+        />
+        <Kpi
+          label="Internal tester access"
+          value={testerPolicy.enabled ? "Enabled" : "Disabled"}
+          note={
+            testerPolicy.enabled
               ? `${testerPolicy.accounts.length} named account${testerPolicy.accounts.length === 1 ? "" : "s"} · ${testerPolicy.scopes.length} scope${testerPolicy.scopes.length === 1 ? "" : "s"}`
-              : "No hash-pinned tester exemptions"}
-          </small>
-        </div>
-      </div>
+              : "No hash-pinned tester exemptions"
+          }
+        />
+      </Tiles>
 
-      <div className={styles.capabilityGrid}>
-        <article className={styles.capabilityCard}>
-          <span className={styles.eyebrow}>Provider configuration</span>
-          <h2>Choose your analysis setup</h2>
-          <p>
-            Save model and task settings, then select an approved revision for
-            new plans. Calls already in progress keep their original setup.
-          </p>
-          <Link href="/sales-xray/providers?tab=providers">
-            Open provider settings →
-          </Link>
-        </article>
-        <article className={styles.capabilityCard}>
-          <span className={styles.eyebrow}>Reports and usage</span>
-          <h2>See every retained call</h2>
-          <p>
-            Find learner and guest recordings, check processing status and
-            inspect usage. Estimates and reserved amounts remain separate from
-            confirmed provider charges.
-          </p>
-          <Link href="/calls">Browse calls and costs →</Link>
-        </article>
-        <article className={styles.capabilityCard}>
-          <span className={styles.eyebrow}>Reviewer entrypoint</span>
-          <h2>Bring your team into the review</h2>
-          <p>
-            Choose a saved report, invite a reviewer and collect feedback from
-            sales, development or user-experience perspectives.
-          </p>
-          <Link href="/calls">Open reviewer queue →</Link>
-        </article>
-        <article className={styles.capabilityCard}>
-          <span className={styles.eyebrow}>Benchmark / test runs</span>
-          <h2>Prepare your first comparison</h2>
-          <p>
-            Test runs are not available from Admin yet. Configure providers and
-            invite reviewers while run controls are connected.
-          </p>
-          <Link href="/sales-xray/providers?tab=benchmark">
-            See benchmark readiness →
-          </Link>
-        </article>
-      </div>
+      <div className={styles.columns}>
+        <Panel title="Where to go">
+          <List label="Sales Xray setup">
+            <Row
+              icon={<SlidersHorizontal size={16} aria-hidden="true" />}
+              href="/sales-xray/providers?tab=providers"
+              title="Providers and models"
+              meta={[
+                "Save model and task settings, then select an approved revision for new plans. Calls in progress keep their setup.",
+              ]}
+            />
+            <Row
+              icon={<ListChecks size={16} aria-hidden="true" />}
+              href="/calls"
+              title="Calls and reports"
+              meta={[
+                "Every retained call with its status, report and runs. Estimates stay separate from confirmed provider charges.",
+              ]}
+            />
+            <Row
+              icon={<UsersRound size={16} aria-hidden="true" />}
+              href="/reviewers"
+              title="Reviewers"
+              meta={[
+                "Invite a reviewer to a saved report for sales, developer or experience feedback.",
+              ]}
+            />
+            <Row
+              icon={<Gauge size={16} aria-hidden="true" />}
+              href="/sales-xray/providers?tab=benchmark"
+              title="Benchmark readiness"
+              meta={["Test runs aren't available from Admin yet."]}
+            />
+          </List>
+        </Panel>
 
-      <section className={styles.gapPanel}>
-        <span className={styles.eyebrow}>Configuration details</span>
-        <h2>Clear settings, traceable changes</h2>
-        <ul>
-          <li>
-            {implementedProviders} implemented catalog entries and{" "}
-            {plannedProviders} planned entries. Only approved configurations can
-            be selected for processing.
-          </li>
-          <li>
-            Recipe, profile and prompt revisions select analysis behavior. They
-            do not train the provider model.
-          </li>
-          <li>
-            Secrets stay on the server. Selecting a configuration does not start
-            a paid run or buy credits.
-          </li>
-          <li>
-            Test runs are not available from Admin yet; configure providers and
-            invite reviewers while run controls are connected.
-          </li>
-        </ul>
-      </section>
+        <Panel title="How settings work">
+          <ul className={styles.facts}>
+            <li>
+              {implementedProviders} implemented catalog entries and{" "}
+              {plannedProviders} planned entries. Only approved configurations
+              can be selected for processing.
+            </li>
+            <li>
+              Recipe, profile and prompt revisions select analysis behavior.
+              They do not train the provider model.
+            </li>
+            <li>
+              Secrets stay on the server. Selecting a configuration does not
+              start a paid run or buy credits.
+            </li>
+          </ul>
+        </Panel>
+      </div>
     </div>
   );
 }
