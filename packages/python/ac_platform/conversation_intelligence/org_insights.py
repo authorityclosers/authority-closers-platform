@@ -378,6 +378,23 @@ class OrganisationInsights:
             ):
                 if recording_id not in latest or (created_at, draft_id) > latest[recording_id]:
                     latest[recording_id] = (created_at, draft_id)
+        # A rep's later seller choice changes talk share without a new report,
+        # so the projected row follows the report and the latest speaker map.
+        maps: dict[UUID, int] = {}
+        submissions = [row[0] for row in rows]
+        if submissions:
+            for submission_id, revision in await self.database.execute(
+                select(
+                    ConversationSpeakerMapRevision.submission_id,
+                    func.max(ConversationSpeakerMapRevision.revision),
+                )
+                .where(
+                    ConversationSpeakerMapRevision.tenant_id == self.tenant_id,
+                    ConversationSpeakerMapRevision.submission_id.in_(submissions),
+                )
+                .group_by(ConversationSpeakerMapRevision.submission_id)
+            ):
+                maps[submission_id] = int(revision or 0)
         existing: dict[str, str] = {
             key: ref
             for key, ref in await self.database.execute(
@@ -395,8 +412,9 @@ class OrganisationInsights:
             if draft is None:
                 continue
             live.add(key)
-            if existing.get(key) != str(draft[1]):
-                todo.append((*row, draft[1]))
+            ref = f"{draft[1]}:{maps.get(row[0], 0)}"
+            if existing.get(key) != ref:
+                todo.append((*row, draft[1], ref))
         stale = [key for key in existing if key not in live]
         return todo, stale
 
@@ -459,7 +477,7 @@ class OrganisationInsights:
             .order_by(ConversationProcessingPlan.created_at, ConversationProcessingPlan.id)
         ):
             languages[recording_id] = report_language(manifest)
-        for submission_id, owner, created_at, seconds, recording_id, draft_id in batch:
+        for submission_id, owner, created_at, seconds, recording_id, draft_id, ref in batch:
             draft = drafts.get(draft_id)
             report = draft.payload if draft is not None else None
             if not isinstance(report, Mapping):
@@ -469,7 +487,7 @@ class OrganisationInsights:
                     tenant_id=self.tenant_id,
                     source="call",
                     call_key=str(submission_id),
-                    source_ref=str(draft_id),
+                    source_ref=ref,
                     person_key=None if owner is None else str(owner),
                     team_key=None,
                     occurred_at=created_at,

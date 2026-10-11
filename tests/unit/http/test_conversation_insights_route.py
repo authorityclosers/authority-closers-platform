@@ -140,3 +140,59 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
     ) as learner:
         state.update(signed_in=True, reader=True)
         assert (await learner.get(PREFIX + "/insights")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_served_organisations_are_read_per_request(tmp_path, monkeypatch):
+    """With the live registry (AUT-1694), availability follows it on every request."""
+    from ac_platform.conversation_intelligence import sales_xray_tenants
+
+    created_later = uuid4()  # not in the intake policy at start
+    actor = ActorContext(PERSON_ID, SESSION_ID, created_later)
+    live: dict[str, Any] = {"served": set(), "reader": True}
+
+    async def require_actor(request):
+        yield AuthenticatedTransaction(
+            _Database(), SimpleNamespace(), SimpleNamespace(actor=actor), "fictional-session"
+        )
+
+    require_actor.read_only = require_actor
+
+    async def workspace_served(database, settings, tenant_id):
+        return tenant_id in live["served"]
+
+    async def reader(database, who, operations):
+        return live["reader"]
+
+    monkeypatch.setattr(
+        sales_xray_tenants, "sales_xray_workspace_served", workspace_served, raising=False
+    )
+    monkeypatch.setattr("ac_platform.http.conversation_insights.organisation_reader", reader)
+    insights = SimpleNamespace(overview=AsyncMock(return_value={"source": "call"}))
+    monkeypatch.setattr(
+        "ac_platform.http.conversation_insights.library_insights", lambda db, who: insights
+    )
+    app, runtime = FastAPI(), _runtime(tmp_path)
+    install_insights_routes(
+        app,
+        settings=_settings(),
+        require_actor=require_actor,
+        intake=runtime.intake,
+        acquisition_intake=runtime.intake,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
+    ) as client:
+        # Not served yet: refused.
+        assert (await client.get(PREFIX + "/insights")).status_code == 403
+        # Created after start, with no processing-policy entry: served at once.
+        live["served"].add(created_later)
+        assert (await client.get(PREFIX + "/insights")).status_code == 200
+        # Served, but the caller isn't an owner or admin: refused.
+        live["reader"] = False
+        assert (await client.get(PREFIX + "/insights")).status_code == 403
+        live["reader"] = True
+        # Suspended after start: refused at once.
+        live["served"].discard(created_later)
+        assert (await client.get(PREFIX + "/insights")).status_code == 403
+        assert insights.overview.await_count == 1

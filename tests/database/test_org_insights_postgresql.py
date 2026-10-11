@@ -273,7 +273,7 @@ def test_real_calls_project_aggregate_and_leave_with_the_library(database_url: U
             asha = rows[str(ids["s1"])]
             assert (asha.outcome, asha.talk_share, asha.language) == ("won", 55, "hi-en")
             assert asha.skills == "OONOOOOO" and asha.objection == "price"
-            assert asha.duration_ms == 600_000 and asha.source_ref == str(ids["d1"])
+            assert asha.duration_ms == 600_000 and asha.source_ref == f"{ids['d1']}:1"
             ravi = rows[str(ids["s2"])]
             assert (ravi.outcome, ravi.talk_share, ravi.objection) == ("lost", None, "timing|price")
 
@@ -371,10 +371,44 @@ def test_a_newer_report_replaces_the_projected_row(database_url: URL) -> None:
             row = await db.get(ConversationInsightCall, (tenant, "call", str(ids["s1"])))
             assert row is not None
             assert (row.source_ref, row.outcome, row.skills) == (
-                str(newer),
+                f"{newer}:1",
                 "follow_up",
                 "OOOOOOOO",
             )
+
+    run(database_url, body)
+
+
+def test_a_new_seller_choice_recomputes_talk_share_on_the_same_report(
+    database_url: URL,
+) -> None:
+    async def body(sessions: async_sessionmaker[AsyncSession]) -> None:
+        tenant, ids = await seed_calls(sessions)
+        async with sessions() as db, db.begin():
+            await library(db, tenant).refresh(now=NOW)
+            row = await db.get(ConversationInsightCall, (tenant, "call", str(ids["s1"])))
+            assert row is not None and row.talk_share == 55
+            # The rep says the other speaker was the seller; the report is unchanged.
+            await db.execute(
+                insert(ConversationSpeakerMapRevision.__table__).values(
+                    id=uuid4(),
+                    tenant_id=tenant,
+                    submission_id=ids["s1"],
+                    revision=2,
+                    created_at=NOW,
+                    speakers=[{"speaker_id": "B", "role": "you"}],
+                )
+            )
+            insights = library(db, tenant)
+            assert await insights.pending() == 1
+            assert (await insights.refresh(now=NOW))["projected"] == 1
+            row = await db.get(
+                ConversationInsightCall,
+                (tenant, "call", str(ids["s1"])),
+                populate_existing=True,
+            )
+            assert row is not None
+            assert (row.talk_share, row.source_ref) == (45, f"{ids['d1']}:2")
 
     run(database_url, body)
 

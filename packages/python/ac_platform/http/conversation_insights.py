@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from sqlalchemy import select
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence import sales_xray_tenants
 from ac_platform.conversation_intelligence.acquisition_library import _account_library_query
 from ac_platform.conversation_intelligence.admin_call_review import AdminCallReview
 from ac_platform.conversation_intelligence.application import (
@@ -171,6 +172,35 @@ async def organisation_reader(database: AsyncSession, actor: ActorContext, opera
     )
 
 
+async def served_tenants(
+    settings: Settings, intake: ConversationIntakeRuntime | None, database: AsyncSession
+) -> frozenset[UUID]:
+    """The tenants Sales Xray serves now, read inside the request (never at startup).
+
+    Uses the live organisation registry's helper (AUT-1694, every active
+    organisation) where it exists; until then, the composed served set.
+    """
+    active = getattr(sales_xray_tenants, "sales_xray_active_tenant_ids", None)
+    if active is not None:
+        return frozenset(await active(settings, database))
+    return sales_xray_served_tenant_ids(settings, intake)
+
+
+async def workspace_served(
+    settings: Settings,
+    intake: ConversationIntakeRuntime | None,
+    database: AsyncSession,
+    tenant_id: UUID | None,
+) -> bool:
+    """Is the selected workspace served now? The registry's predicate where it exists."""
+    if tenant_id is None:
+        return False
+    predicate = getattr(sales_xray_tenants, "sales_xray_workspace_served", None)
+    if predicate is not None:
+        return bool(await predicate(database, settings, tenant_id))
+    return tenant_id in sales_xray_served_tenant_ids(settings, intake)
+
+
 def install_insights_routes(
     application: FastAPI,
     *,
@@ -180,19 +210,16 @@ def install_insights_routes(
     acquisition_intake: ConversationIntakeRuntime | None,
 ) -> None:
     """Mount the company view: Sales Xray for owners/admins, Admin for AC staff."""
+    # Which organisations are served is read inside each request, so an
+    # organisation created or suspended after start is seen at once.
     if settings.sales_xray_app_url is not None and acquisition_intake is not None:
         _install_sales_xray(
             application,
             settings=settings,
             require_actor=require_actor,
-            served=sales_xray_served_tenant_ids(settings, acquisition_intake),
+            intake=acquisition_intake,
         )
-    _install_admin(
-        application,
-        settings=settings,
-        require_actor=require_actor,
-        recording_tenant_ids=tuple(sorted(sales_xray_served_tenant_ids(settings, intake), key=str)),
-    )
+    _install_admin(application, settings=settings, require_actor=require_actor, intake=intake)
 
 
 def _install_sales_xray(
@@ -200,7 +227,7 @@ def _install_sales_xray(
     *,
     settings: Settings,
     require_actor: RequireActor,
-    served: frozenset[UUID],
+    intake: ConversationIntakeRuntime,
 ) -> None:
     assert settings.sales_xray_app_url is not None
     hostname = settings.sales_xray_app_url.host
@@ -217,7 +244,7 @@ def _install_sales_xray(
         try:
             async with asynccontextmanager(require_actor if write else read_actor)(request) as auth:
                 actor = auth.resolved.actor
-                if actor.tenant_id is None or actor.tenant_id not in served:
+                if not await workspace_served(settings, intake, auth.database, actor.tenant_id):
                     raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
                 if not await organisation_reader(
                     auth.database, actor, settings.operations_tenant_id
@@ -314,7 +341,7 @@ def _install_admin(
     *,
     settings: Settings,
     require_actor: RequireActor,
-    recording_tenant_ids: tuple[UUID, ...],
+    intake: ConversationIntakeRuntime | None,
 ) -> None:
     router = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-insights-admin"])
     dependency = Depends(require_actor, scope="function")
@@ -329,12 +356,14 @@ def _install_admin(
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Call review is not configured.")
+        # Admitted exactly like the call review console, before anything is read.
         await AdminCallReview(
             ConversationApplication(auth.database),
             settings.operations_tenant_id,
-            recording_tenant_ids=recording_tenant_ids,
+            recording_tenant_ids=(),
         )._admit(auth.resolved.actor)
-        organisations = await insight_organisations(auth.database, recording_tenant_ids)
+        served = await served_tenants(settings, intake, auth.database)
+        organisations = await insight_organisations(auth.database, served)
         if organisation is None:
             return organisations, organisations[0] if organisations else None
         chosen = next((item for item in organisations if item["id"] == str(organisation)), None)
