@@ -70,6 +70,25 @@ async def _member(
     return cast(Membership | None, await database.scalar(statement))
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _effective(latest: CoachingShareRevision | None, member: Membership | None) -> bool:
+    """A share counts only if made after the membership last changed.
+
+    Removal, re-adding and role changes all update the membership row, so
+    each returns coaching to private until the rep shares again (consent is
+    never carried into a new membership period).
+    """
+    return bool(
+        latest is not None
+        and latest.shared
+        and member is not None
+        and _aware(latest.created_at) >= _aware(member.updated_at)
+    )
+
+
 async def _latest(
     database: AsyncSession, tenant_id: UUID, person_id: UUID
 ) -> CoachingShareRevision | None:
@@ -113,7 +132,8 @@ async def _share_lock(database: AsyncSession, tenant_id: UUID, person_id: UUID) 
 
 
 async def read_sharing(database: AsyncSession, *, tenant_id: UUID, person_id: UUID) -> SharingView:
-    if await _member(database, tenant_id, person_id) is None:
+    member = await _member(database, tenant_id, person_id)
+    if member is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
     latest = await _latest(database, tenant_id, person_id)
     available = await _organisation(database, tenant_id)
@@ -136,7 +156,7 @@ async def read_sharing(database: AsyncSession, *, tenant_id: UUID, person_id: UU
         reaches = tuple(Reach(name=_name(name, email), why="admin") for name, email in rows)
     return SharingView(
         available=available,
-        shared=bool(latest and latest.shared and available),
+        shared=_effective(latest, member) and available,
         revision=latest.revision if latest else 0,
         reaches=reaches,
     )
@@ -156,13 +176,14 @@ async def set_sharing(
     if actor.tenant_id != tenant_id:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
     await _share_lock(database, tenant_id, actor.person_id)
-    if await _member(database, tenant_id, actor.person_id) is None:
+    member = await _member(database, tenant_id, actor.person_id)
+    if member is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
     if not await _organisation(database, tenant_id):
         raise ConversationConflict("A Personal workspace has nobody to share Coaching with.")
     latest = await _latest(database, tenant_id, actor.person_id)
     current_revision = latest.revision if latest else 0
-    current = bool(latest and latest.shared)
+    current = _effective(latest, member)
     if expected_revision != current_revision:
         if shared == current:
             return await read_sharing(database, tenant_id=tenant_id, person_id=actor.person_id)
@@ -207,22 +228,22 @@ async def shared_reps(
         or not await _organisation(database, tenant_id)
     ):
         return ()
+    # The newest revision per rep only (PostgreSQL DISTINCT ON).
     revisions = (
         await database.scalars(
             select(CoachingShareRevision)
             .where(CoachingShareRevision.tenant_id == tenant_id)
             .order_by(CoachingShareRevision.rep_person_id, CoachingShareRevision.revision.desc())
+            .distinct(CoachingShareRevision.rep_person_id)
         )
     ).all()
-    latest: dict[UUID, CoachingShareRevision] = {}
-    for row in revisions:
-        latest.setdefault(row.rep_person_id, row)
+    latest = {row.rep_person_id: row for row in revisions}
     sharing = {person for person, row in latest.items() if row.shared and person != actor.person_id}
     if not sharing:
         return ()
     rows = (
         await database.execute(
-            select(Person.id, Person.display_name, Person.email)
+            select(Person.id, Person.display_name, Person.email, Membership)
             .join(Membership, Membership.person_id == Person.id)
             .where(
                 Membership.tenant_id == tenant_id,
@@ -232,6 +253,7 @@ async def shared_reps(
             )
         )
     ).all()
+    rows = [row for row in rows if _effective(latest[row[0]], row[3])]
     return tuple(
         sorted(
             (
@@ -240,7 +262,7 @@ async def shared_reps(
                     name=_name(name, email),
                     shared_at=latest[person].created_at,
                 )
-                for person, name, email in rows
+                for person, name, email, _member_row in rows
             ),
             key=lambda rep: rep.name.casefold(),
         )
@@ -249,9 +271,17 @@ async def shared_reps(
 
 async def rep_has_shared(database: AsyncSession, *, tenant_id: UUID, rep_person_id: UUID) -> bool:
     latest = await _latest(database, tenant_id, rep_person_id)
-    return bool(latest and latest.shared) and (
-        await _member(database, tenant_id, rep_person_id) is not None
-    )
+    return _effective(latest, await _member(database, tenant_id, rep_person_id))
+
+
+async def member_name(database: AsyncSession, *, person_id: UUID) -> str | None:
+    """One person's display name for a shared view's header."""
+    row = (
+        await database.execute(
+            select(Person.display_name, Person.email).where(Person.id == person_id)
+        )
+    ).first()
+    return _name(row[0], row[1]) if row else None
 
 
 async def record_feedback(
@@ -377,15 +407,24 @@ async def record_context(
 
 
 async def latest_context(
-    database: AsyncSession, *, tenant_id: UUID, person_id: UUID, focus_skill_id: str
+    database: AsyncSession,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    focus_skill_id: str,
+    mission_origin_submission_id: UUID,
 ) -> str | None:
-    """The newest note this person added about this focus, if any."""
+    """The newest note this person added about this focus and mission, if any.
+
+    A note on an earlier mission with the same skill is about another call.
+    """
     note: str | None = await database.scalar(
         select(CoachingLearnerContext.context)
         .where(
             CoachingLearnerContext.tenant_id == tenant_id,
             CoachingLearnerContext.person_id == person_id,
             CoachingLearnerContext.focus_skill_id == focus_skill_id,
+            CoachingLearnerContext.mission_origin_submission_id == mission_origin_submission_id,
         )
         .order_by(CoachingLearnerContext.created_at.desc())
         .limit(1)

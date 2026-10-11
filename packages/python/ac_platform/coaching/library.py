@@ -13,7 +13,7 @@ from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
 from ac_platform.coaching.learner import build_learner
 from ac_platform.coaching.report_adapter import _text, from_report
-from ac_platform.coaching.sharing_store import rep_has_shared, shared_reps
+from ac_platform.coaching.sharing_store import member_name, rep_has_shared, shared_reps
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
     _account_library_query,
@@ -205,14 +205,7 @@ class CoachingLibrary:
             )
         ).all()
         view = await self._learner(actor, rep_person_id, rows, organisation=True)
-        name = next(
-            (
-                rep.name
-                for rep in await shared_reps(self.database, actor=actor, tenant_id=tenant_id)
-                if rep.person_id == rep_person_id
-            ),
-            None,
-        )
+        name = await member_name(self.database, person_id=rep_person_id)
         return view.model_copy(update={"person_id": rep_person_id, "person_name": name})
 
     async def _learner(

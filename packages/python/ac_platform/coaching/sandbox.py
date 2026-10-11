@@ -286,6 +286,12 @@ def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
         moment.model_copy(update={"observation": f"“{moment.quote}”"[:4000]})
         for moment in _moments(call, payload, lesson.get("own_call_example"))
     ]
+    if not evidence and own:
+        evidence = (_moments(call, payload, lesson.get("own_call_example"))[0],)
+    if not evidence:
+        # A focus needs at least one inspectable moment (spec 12.2); without
+        # one the call's coaching is unavailable, never a guessed moment.
+        return None
     pattern = _text(diagnosis.get("pattern")) or "This call's authored focus."
     why = _text(lesson.get("why_it_matters")) or pattern
     better = _text(lesson.get("better_direction")) or behavior
@@ -336,7 +342,7 @@ def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
                 if text
             )[:5],
             source=SOURCE,
-            own_call=own[0] if own else (evidence[0] if evidence else None),
+            own_call=own[0] if own else evidence[0],
             next_call_connection=behavior,
         ),
         practice=Practice(
@@ -460,6 +466,13 @@ def rep_view(
     mission = parts.mission
     relevant = _int(progress.get("relevant_opportunities"))
     correct = _int(progress.get("correct_execution_count"))
+    if relevant is None or correct is None or correct > relevant:
+        # Counts are shown only as a consistent pair.
+        relevant = correct = None
+    occurrences = _int(counts.get("occurrence_count"))
+    opportunities = _int(counts.get("relevant_opportunities"))
+    if occurrences is None or opportunities is None or occurrences > opportunities:
+        occurrences = opportunities = None
     baseline_relevant = _int(progress.get("baseline_relevant_opportunities"))
     baseline_correct = _int(progress.get("baseline_correct_execution_count"))
     chronological = sorted(calls[:HISTORY_LIMIT], key=lambda call: call.occurred_at)
@@ -477,11 +490,11 @@ def rep_view(
             }
         ),
         pattern=Pattern(
-            relevant_call_count=_int(counts.get("relevant_opportunities")) or 0,
-            attention_call_count=_int(counts.get("occurrence_count")) or 0,
+            relevant_call_count=opportunities or 0,
+            attention_call_count=occurrences or 0,
             summary=parts.pattern,
-            relevant_opportunities=_int(counts.get("relevant_opportunities")),
-            occurrence_count=_int(counts.get("occurrence_count")),
+            relevant_opportunities=opportunities,
+            occurrence_count=occurrences,
         ),
         root_cause=parts.root_cause,
         evidence=tuple(evidence[:MAX_MOMENTS]),
@@ -699,6 +712,9 @@ class SandboxCoaching:
         ]
         earlier = await self.payloads(person_id, keys)
         return rep_view(calls, latest, earlier, person_id=rep_person_id, tenant_id=self.tenant_id)
+
+    async def rep_count(self, person_id: UUID) -> int:
+        return len({call.rep_key for call in (await self.index(person_id)).calls})
 
     async def read_team(self, person_id: UUID) -> TeamCoachingView:
         index = await self.index(person_id)

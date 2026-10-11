@@ -186,7 +186,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
             )
             sandbox = await sandbox_for(library, actor)
             # Your own (real) coaching; a pointer when fictional reps exist.
-            reps = (await sandbox.read_team(actor.person_id)).rep_count if sandbox else 0
+            reps = await sandbox.rep_count(actor.person_id) if sandbox else 0
             return CoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id, "sandbox_reps": reps})
             )
@@ -285,8 +285,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.put("/sharing", response_model=SharingView)
     async def change_sharing(request: Request, response: Response) -> SharingView:
+        # The body is read before any transaction or row lock is taken.
+        choice = await json_body(request, ShareChoice)
         async with account_library(request, response, write=True) as (library, actor):
-            choice = await json_body(request, ShareChoice)
             try:
                 return await set_sharing(
                     library.database,
@@ -303,10 +304,14 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         view: CoachingView, person_id: UUID, tenant_id: UUID, db: Any
     ) -> CoachingView:
         """Show the person's own newest note about this focus with the likely reason."""
-        if view.focus is None or view.sandbox:
+        if view.focus is None or view.mission is None or view.sandbox:
             return view
         note = await latest_context(
-            db, tenant_id=tenant_id, person_id=person_id, focus_skill_id=view.focus.skill_id
+            db,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            focus_skill_id=view.focus.skill_id,
+            mission_origin_submission_id=view.mission.origin_submission_id,
         )
         if note is None:
             return view
@@ -316,9 +321,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.post("/context", status_code=204)
     async def add_context(request: Request, response: Response) -> Response:
+        # 1,000 characters of Devanagari are up to 3 KB of UTF-8; read before locks.
+        note = await json_body(request, ContextNote, limit=4096)
         async with account_library(request, response, write=True) as (library, actor):
-            # 1,000 characters of Devanagari are up to 3 KB of UTF-8.
-            note = await json_body(request, ContextNote, limit=4096)
             if note.focus_skill_id not in LABELS or not await library.owns_call(
                 actor, note.mission_origin_submission_id
             ):
@@ -342,8 +347,8 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.post("/feedback", status_code=204)
     async def feedback(request: Request, response: Response) -> Response:
+        choice = await json_body(request, FeedbackChoice)
         async with account_library(request, response, write=True) as (library, actor):
-            choice = await json_body(request, FeedbackChoice)
             # Feedback attaches to a supported focus on one of the learner's
             # own retained calls; it never changes a score or another person.
             if choice.focus_skill_id not in LABELS or not await library.owns_call(

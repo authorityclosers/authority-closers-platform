@@ -330,8 +330,8 @@
     "latest_call_at": "2026-10-10T00:00:00Z",
     "limitations": [
       "Counts describe report suggestions, not proven recurring mistakes or mastery.",
-      "No rep's focus, root cause, mission, identity or call evidence is disclosed.",
-      "Reps are named only after they share their coaching; they can stop at any time.",
+      "Totals never name a rep or show their calls, quotes, focus or mission.",
+      "A rep appears by name, with their current focus, only after they share; they can stop at any time and any change to their membership ends it.",
       "Assigned coach duties are pending. Current organisation owners/admins see aggregates."
     ],
     "named_rep_details": false,

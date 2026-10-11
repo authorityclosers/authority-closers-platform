@@ -163,6 +163,37 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
                 assert (await client.get(TEAM)).json()["reps"] == []
 
+                # Consent does not survive a membership change (removal and
+                # re-adding, or a new role): coaching is private until shared again.
+                as_(setup.token)
+                again = await client.put(
+                    SHARING, json={"shared": True, "expected_revision": 2}, headers=WRITE
+                )
+                assert again.status_code == 200 and again.json()["shared"] is True
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Membership)
+                        .where(Membership.person_id == setup.state.person_id)
+                        .values(revision=Membership.revision + 1)
+                    )
+                assert (await client.get(SHARING)).json()["shared"] is False
+                as_(admin_token)
+                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
+                assert (await client.get(TEAM)).json()["reps"] == []
+                as_(setup.token)
+                renewed = await client.put(
+                    SHARING, json={"shared": True, "expected_revision": 3}, headers=WRITE
+                )
+                assert renewed.status_code == 200 and renewed.json()["revision"] == 4
+                as_(admin_token)
+                assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 200
+                as_(setup.token)
+                assert (
+                    await client.put(
+                        SHARING, json={"shared": False, "expected_revision": 4}, headers=WRITE
+                    )
+                ).status_code == 200
+
                 # Feedback: idempotent per command, own focus and own call only.
                 as_(setup.token)
                 command = str(uuid4())
@@ -221,7 +252,7 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                         select(CoachingShareRevision).order_by(CoachingShareRevision.revision)
                     )
                 ).all()
-                assert [row.shared for row in revisions] == [True, False]
+                assert [row.shared for row in revisions] == [True, False, True, True, False]
                 assert len((await db.scalars(select(CoachingFeedback))).all()) == 1
                 events = (
                     await db.scalars(select(AuditEvent).where(AuditEvent.action.like("coaching.%")))
@@ -229,8 +260,7 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 assert sorted(event.action for event in events) == [
                     "coaching.context_added",
                     "coaching.feedback_recorded",
-                    "coaching.share_changed",
-                    "coaching.share_changed",
+                    *["coaching.share_changed"] * 5,
                 ]
                 assert all("Ask before presenting" not in str(e.payload) for e in events)
                 assert all("hurry" not in str(e.payload) for e in events)

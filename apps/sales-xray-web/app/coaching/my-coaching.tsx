@@ -147,7 +147,42 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   );
 }
 
-function StartCoaching({ coaching }: { coaching: Coaching }) {
+function StartCoaching({
+  coaching,
+  readOnly = false,
+  sharing,
+}: {
+  coaching: Coaching;
+  /** Another rep's view: say "their", offer no action that is the viewer's. */
+  readOnly?: boolean;
+  sharing?: SharingView;
+}) {
+  if (readOnly)
+    return (
+      <div className={styles.layout}>
+        <div className={styles.main}>
+          <section className={styles.hero} aria-labelledby="coaching-focus">
+            <div className={styles.eyebrow}>
+              <h2 id="coaching-focus" className={styles.label}>
+                What They Should Work On Now
+              </h2>
+              <Badge>No focus yet</Badge>
+            </div>
+            <p className={styles.focusTitle}>
+              {coaching.analysed_calls
+                ? "Their calls do not yet show one focus"
+                : "No analysed calls yet"}
+            </p>
+            <p className={styles.lead}>
+              {coaching.analysed_calls
+                ? "Each analysed call below has its own focus and next-call mission."
+                : "Their coaching starts with their first analysed call."}
+            </p>
+          </section>
+          <CallsPanel calls={coaching.calls} />
+        </div>
+      </div>
+    );
   return (
     <div className={styles.layout}>
       <div className={styles.main}>
@@ -206,6 +241,8 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
           ) : null}
         </section>
         <CallsPanel calls={coaching.calls} />
+        {/* Sharing can always be stopped, focus or not. */}
+        <SharePanel initial={sharing} />
       </div>
     </div>
   );
@@ -226,7 +263,13 @@ export function CoachingStory({
 }) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
-    return <StartCoaching coaching={coaching} />;
+    return (
+      <StartCoaching
+        coaching={coaching}
+        readOnly={readOnly}
+        sharing={sharing}
+      />
+    );
   const pattern = coaching.pattern;
   const recurring = focus.status === "active";
   const step = JOURNEY.indexOf(mastery.state);

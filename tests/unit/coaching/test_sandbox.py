@@ -285,3 +285,26 @@ def test_real_team_totals_cannot_carry_names() -> None:
         with pytest.raises(ValidationError):
             TeamCoachingView(**common, **unsafe)
     assert TeamCoachingView(**common).named_rep_details is False
+
+
+def test_ready_sandbox_views_always_carry_a_moment_and_consistent_counts() -> None:
+    # No playable moments: the lesson's own-call example becomes the moment.
+    bundle = sandbox_bundle()
+    bundle["coaching"]["diagnosis"]["playable_moments"] = []
+    view = call_view(indexed(bundle), bundle, person_id=VIEWER, tenant_id=TENANT)
+    assert view.state == "ready" and len(view.evidence) == 1
+    assert view.lesson and view.lesson.own_call is not None
+    # Neither: unavailable, never a guessed moment.
+    bundle["coaching"]["teaching"]["text_lesson"]["own_call_example"] = None
+    view = call_view(indexed(bundle), bundle, person_id=VIEWER, tenant_id=TENANT)
+    assert view.state == "unavailable"
+    # Half a count pair, or more occurrences than opportunities, is not shown.
+    odd = sandbox_bundle()
+    odd["coaching"]["progress"].pop("correct_execution_count")
+    odd["coaching"]["diagnosis"]["pattern_counts"]["occurrence_count"] = 5
+    rep = rep_view(
+        (indexed(odd),), odd, {}, person_id=rep_uuid(TENANT, "syn-fixture-R1"), tenant_id=TENANT
+    )
+    assert rep.mastery.relevant_count is None and rep.mastery.correct_count is None
+    assert rep.pattern.attention_call_count <= rep.pattern.relevant_call_count
+    assert rep.pattern.occurrence_count is None

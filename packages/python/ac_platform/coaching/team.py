@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from ac_platform.coaching.contracts import CallHistory, Model
+from ac_platform.coaching.learner import build_learner
 
 # Fixed approved taxonomy, never a source's title, quote or a person's name.
 LABELS = {
@@ -143,20 +144,24 @@ def summarize_team(
     for rep_id, name, shared_at in shared:
         own = [call for (owner, _sha), call in unique.items() if owner == rep_id]
         newest = max(own, key=lambda call: call.created_at, default=None)
-        skill = next(
-            (
-                row.skill_id
-                for row in (newest.skills if newest else ())
-                if row.skill_id in LABELS and row.improvement and row.mission
-            ),
-            None,
+        # The same focus selection as the rep's own coaching page, over the
+        # calls in this view (their page may see older calls too).
+        focus = (
+            build_learner(
+                tuple(sorted(own, key=lambda call: call.created_at)),
+                person_id=rep_id,
+                tenant_id=tenant_id,
+            ).focus
+            if own
+            else None
         )
+        skill = focus.skill_id if focus and focus.skill_id in LABELS else None
         reps.append(
             TeamRep(
                 person_id=rep_id,
                 name=name,
                 skill_id=skill,
-                focus_label=LABELS[skill] if skill else None,
+                focus_label=focus.label if focus else None,
                 calls=len(own),
                 latest_call_at=newest.created_at if newest else None,
                 shared_at=shared_at,
@@ -200,8 +205,9 @@ def summarize_team(
         ),
         limitations=(
             "Counts describe report suggestions, not proven recurring mistakes or mastery.",
-            "No rep's focus, root cause, mission, identity or call evidence is disclosed.",
-            "Reps are named only after they share their coaching; they can stop at any time.",
+            "Totals never name a rep or show their calls, quotes, focus or mission.",
+            "A rep appears by name, with their current focus, only after they share; "
+            "they can stop at any time and any change to their membership ends it.",
             "Assigned coach duties are pending. Current organisation owners/admins see aggregates.",
             *(
                 ("Only the most recent 40 retained team calls are included.",)

@@ -118,6 +118,15 @@ describe("Coaching story", () => {
       <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} />,
     );
     expect(plain).not.toContain("fictional reps");
+    // Sharing can always be stopped, focus or not.
+    expect(plain).toContain("Who sees your coaching");
+    // Another rep's empty view speaks about them, with no action of the viewer's.
+    const theirs = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} readOnly />,
+    );
+    expect(theirs).toContain("What They Should Work On Now");
+    expect(theirs).not.toContain("Analyse a call");
+    expect(theirs).not.toContain("Who sees your coaching");
   });
   it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
     const html = renderToStaticMarkup(
