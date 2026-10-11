@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FileSearch, FileText, GraduationCap, Users } from "lucide-react";
+import { StoryCard } from "../report-visuals/visuals";
 import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { CALL_PILLARS, FOCUS, NEXT, WHY } from "./coaching-copy";
@@ -60,30 +61,23 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           missionAnchor="call-mission"
         />
       </Pillar>
-      <Pillar
-        id="coaching-why"
-        copy={CALL_PILLARS.why}
-        aside={
-          evidence.length
-            ? `${evidence.length} moment${evidence.length === 1 ? "" : "s"}`
-            : undefined
-        }
-      >
+      <Pillar id="coaching-why" copy={CALL_PILLARS.why}>
         {evidence.length ? (
           <div className={styles.card} data-flush="">
             <MomentList
               evidence={evidence}
               showCall={false}
+              heading={WHY.callEvidence}
               label="Moments from this call"
               fictional={coaching.sandbox}
             />
           </div>
         ) : (
-          <div className={styles.card}>
+          <StoryCard>
             <p className={styles.momentNote}>
               {WHY.noTimestamp} <Link href={report.href}>Open the report</Link>
             </p>
-          </div>
+          </StoryCard>
         )}
       </Pillar>
       <LessonPanel

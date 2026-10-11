@@ -84,7 +84,7 @@
   min-width: 0;
 }
 
-/* ---------- Pillars: headed the way the Report heads its six parts ---------- */
+/* ---------- Pillars: Strike A's heading and cards (report-visuals) ---------- */
 
 .pillar {
   display: grid;
@@ -93,57 +93,37 @@
   scroll-margin-top: 72px;
 }
 
-.pillarHead {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.pillarHead > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.pillarNumber {
-  display: inline-grid;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
-  color: var(--lx-teal);
-  font: 700 13px/1 var(--lx-font-ui);
-}
-
-.pillarTitle {
-  color: var(--sx-ink);
-  font: 650 20px/1.25 var(--lx-font-ui);
-}
-
-.pillarSubtitle {
-  margin-top: 2px;
-  color: var(--sx-muted);
-  font-size: 13px;
-}
-
-.pillarAside {
-  flex: none;
-  padding-top: 5px;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  font-weight: 600;
+/* A's heading keeps its own bottom margin; the pillar's gap does the rest. */
+.pillar > header {
+  margin-bottom: 0;
 }
 
 /* A plain card, and the Report's callout with its coloured left edge. */
+/* A list card: the same frame as A's StoryCard, rows run edge to edge. */
 .card {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 16px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+  color: var(--sx-ink-2);
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 14px 16px 2px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.listHead > span {
+  margin-left: auto;
+  font-weight: 500;
 }
 
 .card[data-flush] {
@@ -156,44 +136,12 @@
   margin: 0 16px 12px;
 }
 
-.callout {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--sx-line);
-  border-left: 3px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-}
-
-.callout[data-tone="accent"],
-.callout[data-tone="good"] {
-  border-left-color: var(--lx-teal);
-}
-
+/* Sub-labels inside a card, in A's quiet label style. */
 .cardLabel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  display: block;
+  margin-bottom: 2px;
   color: var(--sx-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.callout[data-tone] .cardLabel {
-  color: var(--lx-teal);
-}
-
-.cardLabelMuted {
-  color: var(--sx-muted);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
 }
 
 .chips {
@@ -211,10 +159,7 @@
   border-radius: var(--lx-radius-pill);
   background: var(--sx-sunken);
   color: var(--sx-ink-2);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
 }
 
 .chip[data-tone="accent"],
@@ -254,10 +199,7 @@
 .diagnosis dt {
   padding-top: 2px;
   color: var(--sx-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: 600 var(--sx-text-xs) / 1.5 var(--lx-font-ui);
 }
 
 .diagnosis dd {
@@ -267,11 +209,6 @@
 @container (max-width: 560px) {
   .diagnosis > div {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* Phones: the title keeps the line; the count is in the content below. */
-  .pillarAside {
-    display: none;
   }
 }
 
@@ -347,10 +284,6 @@
   padding: 14px;
 }
 
-.section {
-  scroll-margin-top: 72px;
-}
-
 .label {
   display: block;
   color: var(--sx-muted);
@@ -375,15 +308,6 @@
 
 /* ---------- Focus hero (pillar 1) ---------- */
 
-.hero {
-  display: grid;
-  gap: 12px;
-  padding: 18px 20px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--lx-radius-lg);
-  background: var(--sx-surface);
-}
-
 .focusTitle {
   color: var(--sx-ink);
   font: var(--sx-text-title);
@@ -395,16 +319,6 @@
   color: var(--sx-ink-2);
   font-size: var(--sx-text-md);
   line-height: 1.55;
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 24px;
-}
-
-.facts dd {
-  color: var(--sx-ink-2);
 }
 
 .nextCall {
@@ -600,14 +514,6 @@
   font-size: var(--sx-text-xs);
 }
 
-.hypothesis {
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
-}
-
 /* ---------- Lesson (pillar 3) ---------- */
 
 .lessonTitle {
@@ -675,21 +581,9 @@
 }
 
 /* Spec 3.6: a quoted strength from this call, to build the mission on. */
-.strength {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px 6px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-sm);
-}
-
 .strengthTitle {
   font-size: var(--sx-text-sm);
   font-weight: 600;
-}
-
-.strength .moment {
-  padding: 6px 0;
 }
 
 .wording {
@@ -915,12 +809,6 @@
 
 /* ---------- Mission and practice (pillar 4) ---------- */
 
-.mission {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-}
-
 .missionBehavior {
   color: var(--sx-ink);
   font: var(--sx-text-panel);
@@ -955,17 +843,7 @@
 .cue > span {
   color: var(--sx-muted);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.practice {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--sx-line);
-  background: color-mix(in oklab, var(--sx-sunken) 50%, transparent);
+  font-weight: 600;
 }
 
 /* ---------- Progress and path (pillars 5 and 6) ---------- */
@@ -1090,23 +968,6 @@
   white-space: nowrap;
 }
 
-.path {
-  display: grid;
-  gap: 8px;
-}
-
-.path > div {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.path dt {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-  font-weight: 600;
-}
-
 .reflection {
   padding: 10px 12px;
   border-radius: var(--sx-radius-sm);
@@ -1193,10 +1054,6 @@
   .root,
   .skeleton {
     padding: 14px var(--sx-gutter) 32px;
-  }
-
-  .hero {
-    padding: 14px;
   }
 
   .clipHead {

@@ -18,12 +18,7 @@ export function CoachingSkeleton() {
       <div className={styles.conversation}>
         {[260, 220, 300].map((height) => (
           <div key={height} className={styles.pillar}>
-            <div className={styles.pillarHead}>
-              <span className={styles.pillarNumber} />
-              <div>
-                <Skeleton width={240} height={20} />
-              </div>
-            </div>
+            <Skeleton width={260} height={22} />
             <span className={styles.skeletonBlock} style={{ height }} />
           </div>
         ))}

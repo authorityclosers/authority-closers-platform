@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, PencilLine, Sparkles, Target } from "lucide-react";
 import type { ReactNode } from "react";
+import { PillarHeading, StoryCard } from "../report-visuals/visuals";
 import type {
   Coaching,
   Evidence,
@@ -24,25 +25,22 @@ import styles from "./coaching.module.css";
 export { callDate } from "./coaching-format";
 
 /**
- * One numbered pillar, headed the way the Report heads its six parts: the
- * number, Dipak's title and his subtitle, then the content (spec 2, 7, 9).
+ * One numbered pillar with the Report's own heading (Strike A's primitive):
+ * the number, Dipak's title and his subtitle, then the content (spec 2, 7, 9).
  */
 export function Pillar({
   id,
   copy,
   label,
-  aside,
   children,
 }: {
   id: string;
   copy: CoachingPillarCopy;
   /** Another rep's view words the title for "them". */
   label?: string;
-  /** A quiet count beside the title, e.g. "4 moments". */
-  aside?: ReactNode;
   children: ReactNode;
 }) {
-  const heading = `coaching-${id}-heading`;
+  const heading = `${id}-heading`;
   return (
     <section
       id={id}
@@ -50,24 +48,18 @@ export function Pillar({
       aria-labelledby={heading}
       data-coaching-pillar={copy.number}
     >
-      <header className={styles.pillarHead}>
-        <span className={styles.pillarNumber} aria-hidden="true">
-          {copy.number}
-        </span>
-        <div>
-          <h2 id={heading} className={styles.pillarTitle}>
-            {label ?? copy.label}
-          </h2>
-          <p className={styles.pillarSubtitle}>{copy.subtitle}</p>
-        </div>
-        {aside ? <span className={styles.pillarAside}>{aside}</span> : null}
-      </header>
+      <PillarHeading
+        index={copy.number}
+        id={heading}
+        title={label ?? copy.label}
+        subtitle={copy.subtitle}
+      />
       {children}
     </section>
   );
 }
 
-/** A small uppercase label, as the Report's cards carry. */
+/** A quiet label inside a card, as the Report's cards carry. */
 export function CardLabel({ children }: { children: ReactNode }) {
   return <span className={styles.cardLabel}>{children}</span>;
 }
@@ -95,7 +87,7 @@ export function FocusHero({
   children?: ReactNode;
 }) {
   return (
-    <div className={styles.hero}>
+    <StoryCard emphasis>
       {chips.length ? (
         <p className={styles.chips}>
           {chips.map((chip) => (
@@ -131,7 +123,7 @@ export function FocusHero({
           {FOCUS.seeMission} <ArrowDown size={13} aria-hidden="true" />
         </a>
       </div>
-    </div>
+    </StoryCard>
   );
 }
 
@@ -170,12 +162,8 @@ export function LessonPanel({
     </div>
   ) : null;
   return (
-    <Pillar
-      id="coaching-better"
-      copy={copy}
-      aside={media ? BETTER.dipak : BETTER.textLesson}
-    >
-      <div className={styles.card}>
+    <Pillar id="coaching-better" copy={copy}>
+      <StoryCard label={media ? BETTER.dipak : BETTER.textLesson} tone="accent">
         <h3 className={styles.lessonTitle}>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
         {lesson.framework.length ? (
@@ -203,18 +191,11 @@ export function LessonPanel({
             <p>{lesson.better_direction}</p>
           </div>
         </div>
-      </div>
+      </StoryCard>
       <CoachingMedia clips={clips} />
-      {media ? null : wording ? (
-        <div className={styles.card}>{wording}</div>
-      ) : null}
+      {media ? null : wording ? <StoryCard>{wording}</StoryCard> : null}
       {strength ? (
-        <section
-          className={styles.callout}
-          data-tone="good"
-          aria-label={BETTER.strength}
-        >
-          <CardLabel>{BETTER.strength}</CardLabel>
+        <StoryCard label={BETTER.strength} tone="good" icon={Sparkles}>
           <p className={styles.strengthTitle}>{strength.title}</p>
           <ul className={styles.moments} aria-label="What worked on this call">
             {strength.evidence.map((moment) => (
@@ -229,7 +210,7 @@ export function LessonPanel({
             {acrossCalls ? BETTER.strengthAcross : BETTER.strengthCall}{" "}
             {BETTER.strengthKeep}
           </p>
-        </section>
+        </StoryCard>
       ) : null}
       <details className={styles.more}>
         <summary>{BETTER.fullLesson}</summary>
@@ -291,14 +272,15 @@ export function MissionPanel({
 }) {
   return (
     <Pillar id={id} copy={copy}>
-      <div className={styles.callout} data-tone="accent" data-active-mission="">
-        <CardLabel>
-          {NEXT.mission}
-          {since ? (
-            <span className={styles.cardLabelMuted}>{NEXT.since(since)}</span>
-          ) : null}
-        </CardLabel>
-        <p className={styles.missionBehavior}>{mission.behavior}</p>
+      <StoryCard
+        label={NEXT.mission}
+        tone="accent"
+        icon={Target}
+        aside={since ? NEXT.since(since) : undefined}
+      >
+        <p className={styles.missionBehavior} data-active-mission="">
+          {mission.behavior}
+        </p>
         <dl className={styles.terms}>
           <div>
             <dt>{NEXT.useWhen}</dt>
@@ -312,21 +294,21 @@ export function MissionPanel({
         <p className={styles.cue}>
           <span>{NEXT.cue}</span> {mission.cue}
         </p>
-      </div>
-      <div className={styles.callout}>
-        <CardLabel>
-          {NEXT.practice}
-          {practice.estimated_minutes ? (
-            <span className={styles.cardLabelMuted}>
-              {NEXT.minutes(practice.estimated_minutes)}
-            </span>
-          ) : null}
-        </CardLabel>
+      </StoryCard>
+      <StoryCard
+        label={NEXT.practice}
+        icon={PencilLine}
+        aside={
+          practice.estimated_minutes
+            ? NEXT.minutes(practice.estimated_minutes)
+            : undefined
+        }
+      >
         <p>{practice.exercise}</p>
         <p className={styles.momentNote}>
           <strong>{NEXT.success}:</strong> {practice.success_condition}
         </p>
-      </div>
+      </StoryCard>
       {foot ? <p className={styles.note}>{foot}</p> : null}
     </Pillar>
   );

@@ -4,6 +4,7 @@ import { ArrowRight, ChevronRight, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { StoryCard } from "../report-visuals/visuals";
 import { kitStyles, List, Panel, Row } from "../ui/kit";
 import type {
   CallSummary,
@@ -170,7 +171,7 @@ function StartCoaching({
           copy={COACHING_PILLARS.focus}
           label={THEIR_FOCUS}
         >
-          <div className={styles.hero}>
+          <StoryCard emphasis>
             <p className={styles.chips}>
               <span className={styles.chip} data-tone="neutral">
                 {FOCUS.theirNotYet}
@@ -186,7 +187,7 @@ function StartCoaching({
                 ? "Each analysed call below has its own focus and next-call mission."
                 : "Their coaching starts with their first analysed call."}
             </p>
-          </div>
+          </StoryCard>
         </Pillar>
         <CallsPanel calls={coaching.calls} />
       </div>
@@ -194,7 +195,7 @@ function StartCoaching({
   return (
     <div className={styles.conversation}>
       <Pillar id="coaching-focus" copy={COACHING_PILLARS.focus}>
-        <div className={styles.hero}>
+        <StoryCard emphasis>
           <p className={styles.chips}>
             <span className={styles.chip} data-tone="neutral">
               {FOCUS.notYet}
@@ -246,7 +247,7 @@ function StartCoaching({
               you imported. Your own coaching follows your own calls.
             </p>
           ) : null}
-        </div>
+        </StoryCard>
       </Pillar>
       <CallsPanel calls={coaching.calls} />
       {/* Sharing can always be stopped, focus or not. */}
@@ -316,12 +317,8 @@ export function CoachingStory({
           ) : null}
         </FocusHero>
       </Pillar>
-      <Pillar
-        id="coaching-why"
-        copy={COACHING_PILLARS.why}
-        aside={`${evidence.length} moment${evidence.length === 1 ? "" : "s"}`}
-      >
-        <div className={styles.card}>
+      <Pillar id="coaching-why" copy={COACHING_PILLARS.why}>
+        <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
               <dt>{WHY.pattern}</dt>
@@ -353,9 +350,13 @@ export function CoachingStory({
               </div>
             ) : null}
           </dl>
-        </div>
+        </StoryCard>
         <div className={styles.card} data-flush="">
-          <MomentList evidence={evidence} fictional={coaching.sandbox} />
+          <MomentList
+            evidence={evidence}
+            heading={WHY.evidence}
+            fictional={coaching.sandbox}
+          />
         </div>
       </Pillar>
       <LessonPanel
@@ -375,7 +376,7 @@ export function CoachingStory({
         foot={NEXT.stays}
       />
       <Pillar id="coaching-progress" copy={COACHING_PILLARS.progress}>
-        <div className={styles.card}>
+        <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
               <dt>{PROGRESS.status}</dt>
@@ -431,10 +432,10 @@ export function CoachingStory({
               <p className={styles.note}>{PROGRESS.watching}</p>
             </div>
           </details>
-        </div>
+        </StoryCard>
       </Pillar>
       <Pillar id="coaching-path" copy={COACHING_PILLARS.path}>
-        <div className={styles.card}>
+        <StoryCard>
           <ol className={styles.route} aria-label="Your development path">
             <li data-now="">
               <span>{PATH.now}</span>
@@ -464,7 +465,7 @@ export function CoachingStory({
               originSubmissionId={mission.origin_submission_id}
             />
           )}
-        </div>
+        </StoryCard>
       </Pillar>
       {readOnly ? null : <SharePanel initial={sharing} />}
       <CallsPanel calls={coaching.calls} />

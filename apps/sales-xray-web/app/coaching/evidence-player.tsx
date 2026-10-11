@@ -192,16 +192,27 @@ export function MomentList({
   evidence,
   showCall = true,
   label = "Moments from your calls",
+  heading,
   fictional = false,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
   label?: string;
+  /** A visible label line above the list, with the moment count. */
+  heading?: string;
   fictional?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <>
+      {heading ? (
+        <p className={styles.listHead}>
+          {heading}
+          <span>
+            {evidence.length} moment{evidence.length === 1 ? "" : "s"}
+          </span>
+        </p>
+      ) : null}
       <ul
         className={styles.moments}
         aria-label={label}
