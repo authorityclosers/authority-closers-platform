@@ -4,7 +4,7 @@ import { LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, type ReactNode } from "react";
 
-import { COMMON } from "../report-copy";
+import { COMMON, recordedOutcome } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
 import type {
   ReportEvidence,
@@ -35,32 +35,12 @@ const EMPTY_TRANSCRIPT = {
   segments: [],
 } as unknown as Transcript;
 
-const HUMAN_STATUS = {
-  won: "Won",
-  lost: "Lost",
-  follow_up: "Follow-up Set",
-  no_decision: "Decision Pending",
-} as const;
-
 /** A person's recorded outcome for this call, in the Report's words. */
 function useRecorded() {
   const { state } = useCallOutcome();
   const value = state.status === "ready" ? state.record.value : null;
-  return useMemo(
-    () =>
-      value
-        ? {
-            status: HUMAN_STATUS[value.outcome],
-            note:
-              value.outcome === "lost"
-                ? value.lost_reason
-                : value.outcome === "follow_up"
-                  ? `Follow-up on ${value.follow_up_on}`
-                  : null,
-          }
-        : null,
-    [value],
-  );
+  // One mapping for the screen and the Document (G's copy module).
+  return useMemo(() => (value ? recordedOutcome(value) : null), [value]);
 }
 
 /** One model per report and speaker roles, shared by all six pillars. */

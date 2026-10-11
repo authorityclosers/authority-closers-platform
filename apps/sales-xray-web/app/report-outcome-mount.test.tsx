@@ -95,7 +95,7 @@ it("records a person's outcome in one tap and shows it as the call outcome", asy
   );
   // Until a person records it, the analysis's reading stays labelled as such.
   expect(picture().textContent).toContain("As heard on the call");
-  expect(picture().textContent).toContain("Unrecorded");
+  expect(picture().textContent).toContain("Not set yet");
   const wonButton = [
     ...picture().querySelectorAll<HTMLButtonElement>("button"),
   ].find((b) => b.textContent === "Won")!;
@@ -132,7 +132,7 @@ it("never reads an outcome for a guest preview or without a signed-in workspace"
   );
   await settle();
   expect(fetch).not.toHaveBeenCalled();
-  expect(host.textContent).not.toContain("Unrecorded");
+  expect(host.textContent).not.toContain("Not set yet");
   await act(async () => root.unmount());
 });
 
@@ -164,7 +164,7 @@ it("stays quiet on a teammate's call the person cannot record", async () => {
   expect(fetch).toHaveBeenCalledOnce();
   const picture = host.querySelector('[data-report-pillar="overview"]')!;
   expect(picture.textContent).not.toContain("couldn't be read");
-  expect(picture.textContent).not.toContain("Unrecorded");
+  expect(picture.textContent).not.toContain("Not set yet");
   expect(picture.textContent).toContain("As heard on the call");
   await act(async () => root.unmount());
 });

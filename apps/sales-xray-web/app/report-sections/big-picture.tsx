@@ -3,7 +3,12 @@
 import { CalendarClock, Flag, Sparkles, TriangleAlert } from "lucide-react";
 
 import { CallOutcomeEditor } from "../report-call-outcome";
-import { BIG_PICTURE, followUpOn } from "../report-copy";
+import {
+  BIG_PICTURE,
+  COMMON,
+  OUTCOME_RECORD,
+  followUpOn,
+} from "../report-copy";
 import { useCallOutcome } from "../report-outcome-context";
 import type { StoryModel } from "../report-story-model";
 import { OutcomeBadge, PlayChip, StoryCard } from "../report-visuals/visuals";
@@ -20,13 +25,13 @@ function OutcomeControl() {
   if (state.status === "unavailable")
     return (
       <p className={styles.gap} role="status">
-        The call outcome couldn&apos;t be read.{" "}
+        {OUTCOME_RECORD.readFailed}{" "}
         <button
           type="button"
           className={styles.more}
           onClick={() => void reload().catch(() => {})}
         >
-          Try again
+          {COMMON.tryAgain}
         </button>
       </p>
     );

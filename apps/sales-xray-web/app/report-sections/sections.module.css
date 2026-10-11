@@ -200,6 +200,7 @@
   flex: 1;
   min-width: 0;
   color: var(--sx-ink);
+  font-size: var(--sx-text-md);
   font-weight: 600;
 }
 .notCovered {
