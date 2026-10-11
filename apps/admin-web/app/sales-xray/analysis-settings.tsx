@@ -9,7 +9,14 @@ import { newIdempotencyKey } from "@ac/operations-web/api";
 import { settingsSchema, responseSchema } from "./analysis-settings-contract";
 import { AnalysisSettingsHistory } from "./analysis-settings-history";
 
-import { Button, Field, Panel, Skeleton, kitStyles } from "../ui/kit";
+import {
+  Button,
+  Field,
+  Panel,
+  Skeleton,
+  Unavailable,
+  kitStyles,
+} from "../ui/kit";
 import styles from "./analysis-settings.module.css";
 
 type State = z.infer<typeof responseSchema>;
@@ -151,7 +158,10 @@ export function AnalysisSettingsPanel() {
           </p>
         ) : null}
         {!state && !error ? <Skeleton height={160} /> : null}
-        {error ? (
+        {error && !state ? (
+          <Unavailable title="The settings revision" reason={error} />
+        ) : null}
+        {error && state ? (
           <p role="alert" className={styles.error}>
             {error}
           </p>

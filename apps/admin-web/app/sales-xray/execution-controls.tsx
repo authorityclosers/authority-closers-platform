@@ -12,6 +12,7 @@ import {
   Panel,
   Skeleton,
   Tiles,
+  Unavailable,
   kitStyles,
 } from "../ui/kit";
 import styles from "./execution-controls.module.css";
@@ -306,10 +307,13 @@ export function ExecutionControlsPanel() {
             recorded.
           </p>
           {!state && !error ? <Skeleton width={180} height={32} /> : null}
-          {error ? (
-            <p role="alert" className={styles.alert}>
+          {error && !state ? (
+            <Unavailable title="The pause control" reason={error} />
+          ) : null}
+          {error && state ? (
+            <small role="alert" className={kitStyles.fieldError}>
               {error}
-            </p>
+            </small>
           ) : null}
           {message ? <p role="status">{message}</p> : null}
           {state ? (
@@ -357,10 +361,13 @@ export function ExecutionControlsPanel() {
         sub={budgetState ? `revision ${budgetState.revision}` : undefined}
       >
         <div className={styles.body}>
-          {budgetError ? (
-            <p role="alert" className={styles.alert}>
+          {budgetError && !budget ? (
+            <Unavailable title="The budget" reason={budgetError} />
+          ) : null}
+          {budgetError && budget ? (
+            <small role="alert" className={kitStyles.fieldError}>
               {budgetError}
-            </p>
+            </small>
           ) : null}
           {budget ? (
             <>
@@ -441,6 +448,10 @@ export function ExecutionControlsPanel() {
                 </div>
               ) : null}
             </>
+          ) : budgetError ? (
+            <p className={kitStyles.muted}>
+              No zero balance or extra allowance is assumed.
+            </p>
           ) : state ? (
             <p className={kitStyles.muted}>
               Budget details are unavailable. No zero balance or extra allowance
