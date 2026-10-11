@@ -1,20 +1,20 @@
+import { Page, Skeleton } from "./ui/kit";
+
 export default function Loading() {
   return (
-    <section
-      className="route-boundary"
-      id="route-loading-boundary"
-      aria-labelledby="loading-title"
+    <div
       role="status"
-      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading"
+      id="route-loading-boundary"
     >
-      <span className="route-boundary-code">Loading / route boundary</span>
-      <h1 id="loading-title">Checking admin access and route state.</h1>
-      <p>No operational record is shown until the server route resolves.</p>
-      <div className="route-skeleton" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-    </section>
+      <Page>
+        <Skeleton width={220} height={24} />
+        <Skeleton width={320} height={14} />
+        <p hidden>
+          No operational record is shown until the server route resolves.
+        </p>
+      </Page>
+    </div>
   );
 }

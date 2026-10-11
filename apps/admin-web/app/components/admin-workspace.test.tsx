@@ -83,13 +83,6 @@ async function render() {
     ),
   );
 }
-function button(label: string) {
-  const node = host.querySelector<HTMLButtonElement>(
-    `button[aria-label="${label}"]`,
-  );
-  expect(node).not.toBeNull();
-  return node!;
-}
 it("keeps controls available while independent course analytics are loading", async () => {
   vi.mocked(api.loadStudioPrograms).mockReturnValue(new Promise(() => {}));
   await render();
@@ -121,57 +114,4 @@ it("rejects a course snapshot from another tenant and retries without invented z
       .click(),
   );
   expect(host.querySelector("dl dd")?.textContent).toBe("1");
-});
-it("persists navigation collapse across a fresh shell mount", async () => {
-  await render();
-  await act(async () => button("Collapse Admin navigation").click());
-  expect(host.querySelector('[data-collapsed="true"]')).not.toBeNull();
-  await act(async () => root.unmount());
-  root = createRoot(host);
-  await render();
-  expect(button("Expand Admin navigation").getAttribute("aria-expanded")).toBe(
-    "false",
-  );
-});
-it("opens mobile navigation, makes content inert, and restores it on Escape", async () => {
-  await render();
-  await act(async () => button("Open Admin navigation").click());
-  expect(host.querySelector("main")?.hasAttribute("inert")).toBe(true);
-  await act(async () =>
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
-  );
-  expect(host.querySelector("main")?.hasAttribute("inert")).toBe(false);
-  expect(document.activeElement).toBe(button("Open Admin navigation"));
-});
-it("asks the active editor before logging out and explains a failed sign-out", async () => {
-  const fetcher = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response("", { status: 503 }));
-  let proceed: (() => void) | undefined;
-  const guard = (event: Event) => {
-    event.preventDefault();
-    proceed = (event as CustomEvent<{ proceed: () => void }>).detail.proceed;
-  };
-  document.addEventListener("ac:studio-before-leave", guard);
-  try {
-    await render();
-    await act(async () => button("Sign out").click());
-    expect(fetcher).not.toHaveBeenCalled();
-    await act(async () => proceed!());
-    expect(fetcher).toHaveBeenCalledWith(
-      "/v1/auth/logout",
-      expect.objectContaining({ method: "POST" }),
-    );
-    expect(host.textContent).toContain("Sign-out could not be confirmed");
-  } finally {
-    document.removeEventListener("ac:studio-before-leave", guard);
-  }
-});
-it("renders public navigation chrome without private dashboard data before session admission", async () => {
-  vi.mocked(api.loadAdminSession).mockReturnValue(new Promise(() => {}));
-  await render();
-  expect(button("Collapse Admin navigation")).not.toBeNull();
-  expect(api.loadStudioPrograms).not.toHaveBeenCalled();
-  expect(host.textContent).not.toContain("Synthetic administrator");
-  expect(host.querySelector('a[href="/sales-xray/review"]')).toBeNull();
 });

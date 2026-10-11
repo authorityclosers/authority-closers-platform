@@ -3,16 +3,13 @@ import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import AdminHome from "./page";
 import ErrorBoundary from "./error";
-import LearningOperationsPage from "./learning-operations/page";
+import LearningOperationsPage from "./(console)/learning-operations/page";
 import Loading from "./loading";
 import NotFound from "./not-found";
-import PeoplePage from "./people/page";
-import CorrectionPage from "./people/corrections/page";
-import GrantsPage from "./people/grants/page";
-import StudioPage from "./studio/page";
-import StudioProgramsPage from "./studio/programs/page";
+import PeoplePage from "./(console)/people/page";
+import CorrectionPage from "./(console)/people/corrections/page";
+import GrantsPage from "./(console)/people/grants/page";
 import {
   CorrectionForm,
   DIAGNOSIS_PURPOSES,
@@ -241,50 +238,21 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).not.toContain("CF_Authorization");
   });
 
-  it("renders the Clarity Grid organization shell without asserting metrics", () => {
-    const markup = renderToStaticMarkup(createElement(AdminHome));
-
-    expect(markup).toContain("clarity-shell surface-organization");
-    expect(markup).toContain('<h1 id="page-title">Overview</h1>');
-    expect(markup).toContain("Workspace pending");
-    expect(markup).toContain("Waiting for session verification");
-    expect(markup).toContain("Checking workspace access");
-    expect(markup).not.toContain("Active learners");
-    expect(markup).not.toContain(">248<");
-    expect(markup).not.toContain(">68%<");
-  });
-
   it("renders people as an empty, fail-closed directory with locked actions", () => {
     const markup = renderToStaticMarkup(createElement(PeoplePage));
 
-    expect(markup).toContain("clarity-shell surface-people");
+    expect(markup).toContain("<h1");
     expect(markup).toContain("Checking workspace access");
+    expect(markup).toContain('aria-busy="true"');
     expect(markup).not.toContain("No learner records available");
     expect(markup).not.toContain("Create assignment");
-    expect(markup).toContain("ACADEMY LEARNER RECORDS · AUDITED ACCESS");
-    expect(markup).not.toContain("PREVIEW DATA · NO RECORDS ASSERTED");
   });
 
-  it("renders the Academy Studio shell without requesting before session verification", () => {
-    const markup = renderToStaticMarkup(createElement(StudioPage));
-    const programs = renderToStaticMarkup(createElement(StudioProgramsPage));
+  it("leaves Studio and the former catalog URL to the coach workspace", () => {
+    const proxy = readFileSync(new URL("../proxy.ts", import.meta.url), "utf8");
 
-    expect(markup).toContain("clarity-shell surface-studio");
-    expect(markup).toContain("Today’s content work");
-    expect(markup).toContain("Checking workspace access");
-    expect(markup).not.toContain("studio-detail-stack");
-    expect(programs).toContain("Programs and versions");
-    expect(programs).toContain("within your current Studio access");
-  });
-
-  it("keeps the former catalog URL as one permanent Studio redirect", () => {
-    const redirectRoute = readFileSync(
-      new URL("./catalog/page.tsx", import.meta.url),
-      "utf8",
-    );
-
-    expect(redirectRoute).toContain('permanentRedirect("/studio/programs")');
-    expect(redirectRoute).not.toContain("Course studio preview");
+    expect(proxy).toContain('request.nextUrl.pathname === "/catalog"');
+    expect(proxy).toContain('"/studio/programs"');
   });
 
   it("locks effectful controls and names permission, reason, and audit behavior", () => {
@@ -318,13 +286,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
         (match) => match[0],
       );
       const enabled = buttons.filter((button) => !/\bdisabled\b/.test(button));
-      expect(
-        enabled.map((button) => /aria-label="([^"]+)"/.exec(button)?.[1]),
-      ).toEqual([
-        "Collapse Admin navigation",
-        "Close Admin navigation",
-        "Open Admin navigation",
-      ]);
+      // The console shell (layout) owns navigation; the page body has no live controls.
+      expect(enabled).toEqual([]);
       expect(
         buttons.filter((button) => /type="submit"/.test(button)),
       ).toHaveLength(0);
@@ -338,24 +301,28 @@ describe("G1 admin permissions and semantic boundaries", () => {
     const loading = renderToStaticMarkup(createElement(Loading));
     const error = renderToStaticMarkup(
       createElement(ErrorBoundary, {
-        error: Object.assign(new Error("hidden"), { digest: "trace-123" }),
+        error: Object.assign(new Error("internal secret detail"), {
+          digest: "trace-123",
+        }),
         reset: vi.fn(),
       }),
     );
     const notFound = renderToStaticMarkup(createElement(NotFound));
 
     expect(loading).toContain('role="status"');
+    expect(loading).toContain('aria-busy="true"');
     expect(loading).toContain('id="route-loading-boundary"');
     expect(loading).not.toContain('id="admin-content"');
     expect(loading).toContain("No operational record is shown");
     expect(error).toContain("No action was performed");
-    expect(error).not.toContain("hidden");
+    expect(error).not.toContain("internal secret detail");
     expect(error).toContain("Trace trace-123");
-    expect(notFound).toContain("outside the G1 surface");
+    expect(error).toContain("Try again");
+    expect(notFound).toContain("no admin page here");
     expect(notFound).toContain('href="/"');
   });
 
-  it("uses one content landmark, a skip link, and hides nav until permissions resolve", () => {
+  it("keeps one content landmark in the shell, a skip link, and permission-gated navigation", () => {
     const people = renderToStaticMarkup(createElement(PeoplePage));
     const correction = renderToStaticMarkup(createElement(CorrectionPage));
     const layout = readFileSync(
@@ -363,21 +330,23 @@ describe("G1 admin permissions and semantic boundaries", () => {
       "utf8",
     );
     const shell = readFileSync(
-      new URL("./components/admin-shell.tsx", import.meta.url),
+      new URL("./ui/shell.tsx", import.meta.url),
       "utf8",
     );
+    const nav = readFileSync(new URL("./lib/nav.ts", import.meta.url), "utf8");
 
-    expect(people).toMatch(/<div class="admin-shell(?: [^"]+)?"[^>]*>/);
-    expect([...people.matchAll(/<main\b/g)]).toHaveLength(1);
-    expect(people).toMatch(
-      /<main[^>]*class="admin-content"[^>]*id="admin-content"/,
-    );
+    // Pages render inside the shell's single <main>; they never add their own.
+    expect(people).not.toContain("<main");
+    expect(shell.match(/<main\b/g)).toHaveLength(1);
+    expect(shell).toContain('id="admin-content"');
     expect(layout).toContain('className="skip-link"');
     expect(layout).toContain('href="#admin-content"');
     expect(correction).not.toContain('href="/people/corrections"');
-    expect(shell).toContain('permissions: ["catalog_read"]');
-    expect(shell).toContain('permission: "learning_correct"');
-    expect(shell).toContain('permission: "enrollment_grant"');
+    expect(nav).toContain(
+      'any: ["catalog_read", "catalog_write", "catalog_publish"]',
+    );
+    expect(nav).toContain('any: ["learner_diagnose"]');
+    expect(nav).toContain('any: ["job_retry", "recovery_reconcile"]');
   });
 
   it("keeps Studio capacity metrics explicitly unavailable", () => {
@@ -465,25 +434,15 @@ describe("G1 admin permissions and semantic boundaries", () => {
     }
   });
 
-  it("keeps Clarity Grid navigation touch targets at least 44px high", () => {
+  it("keeps console navigation targets at the 32 px floor, 44 px in the phone sheet", () => {
     const styles = readFileSync(
-      new URL(
-        "../../../packages/typescript/operations-web/src/styles.css",
-        import.meta.url,
-      ),
+      new URL("./ui/shell.module.css", import.meta.url),
       "utf8",
     );
 
+    expect(styles).toMatch(/\.navLink \{[^}]*min-height: 32px;/s);
     expect(styles).toMatch(
-      /\.clarity-shell \.sidebar-nav a \{[^}]*min-height: 44px;/s,
-    );
-    expect(styles).toMatch(
-      /\.clarity-shell \.sidebar-subnav a \{[^}]*min-height: 44px;/s,
-    );
-    expect(styles).toMatch(/\.brand \{[^}]*min-height: 44px;/s);
-    expect(styles).toMatch(/\.back-link \{[^}]*min-height: 44px;/s);
-    expect(styles).toMatch(
-      /\.field input,\s*\.field select \{[^}]*min-height: 44px;/s,
+      /\.shell \.rail \.navLink \{[^}]*min-height: 44px;/s,
     );
   });
 });

@@ -124,9 +124,13 @@ describe("Sales Xray control center", () => {
     expect(host.textContent).toContain("Setup approval pending");
     expect(host.textContent).toContain("Approved budget ceilingNot available");
     expect(host.textContent).toContain("do not train the provider model");
-    expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeTruthy();
-    expect(host.querySelector('a[href="/sales-xray/review"]')).toBeTruthy();
-    expect(host.querySelector('a[href="/sales-xray/benchmark"]')).toBeTruthy();
+    expect(
+      host.querySelector('a[href="/sales-xray/providers?tab=providers"]'),
+    ).toBeTruthy();
+    expect(host.querySelector('a[href="/calls"]')).toBeTruthy();
+    expect(
+      host.querySelector('a[href="/sales-xray/providers?tab=benchmark"]'),
+    ).toBeTruthy();
     expect(host.textContent).not.toContain("execution_activated false");
     expect(host.textContent).not.toContain("Start benchmark");
     expect(host.textContent).not.toContain("₹0 spend ceiling");
@@ -155,9 +159,7 @@ describe("Sales Xray control center", () => {
     expect(host.textContent).toContain("Latest saved revision#4");
     expect(host.textContent).toContain("₹900");
     expect(host.textContent).toContain("not spend or remaining balance");
-    expect(
-      host.querySelector('a[href="/sales-xray/review#recordings-title"]'),
-    ).toBeTruthy();
+    expect(host.querySelector('a[href="/calls"]')).toBeTruthy();
   });
 
   it("fails closed when the provider status adapter denies access", async () => {
@@ -167,6 +169,8 @@ describe("Sales Xray control center", () => {
 
     expect(host.textContent).toContain("Verified AC admin account required");
     expect(host.querySelector('a[href="/login"]')).toBeTruthy();
-    expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeNull();
+    expect(
+      host.querySelector('a[href="/sales-xray/providers?tab=providers"]'),
+    ).toBeNull();
   });
 });

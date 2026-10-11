@@ -1,0 +1,107 @@
+"use client";
+
+/**
+ * The queue's filter bar. Each change rewrites the address (dropping the page
+ * cursor), so the server renders the filtered queue and links keep the view.
+ */
+import { X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useTransition } from "react";
+
+import { kitStyles, Toolbar } from "../ui/kit";
+import { languageLabel, type Queue } from "./call-data";
+import { filterQuery, type QueueFilters as Filters } from "./queue-query";
+
+export function QueueFilters({
+  filters,
+  facets,
+}: {
+  filters: Filters;
+  facets: Queue["facets"];
+}) {
+  const router = useRouter();
+  const pathname = usePathname() ?? "/calls";
+  const [pending, start] = useTransition();
+  const set = (key: keyof Filters, value: string) => {
+    const next = { ...filters, [key]: value || undefined };
+    const query = filterQuery(next, ["cursor"]);
+    start(() =>
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false }),
+    );
+  };
+  const select = (
+    key: "organisation" | "rep" | "language" | "provider",
+    label: string,
+    options: Queue["facets"]["organisations"],
+    name: (value: string, fallback: string) => string = (_value, fallback) =>
+      fallback,
+  ) => (
+    <select
+      aria-label={label}
+      value={filters[key] ?? ""}
+      onChange={(event) => set(key, event.target.value)}
+    >
+      <option value="">{label}: all</option>
+      {/* Keep a chosen value listed even when the current window has no calls for it. */}
+      {filters[key] &&
+      !options.some((option) => option.value === filters[key]) ? (
+        <option value={filters[key]}>{name(filters[key]!, "Selected")}</option>
+      ) : null}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {name(option.value, option.label)} ({option.count})
+        </option>
+      ))}
+    </select>
+  );
+  const active = Object.entries(filters).some(
+    ([key, value]) => key !== "status" && key !== "cursor" && value,
+  );
+  return (
+    <Toolbar label="Filter calls">
+      {select("organisation", "Organisation", facets.organisations)}
+      {select("rep", "Rep", facets.reps)}
+      {select("language", "Language", facets.languages, (value) =>
+        languageLabel(value),
+      )}
+      {select("provider", "Provider", facets.providers)}
+      <input
+        type="date"
+        aria-label="Uploaded from"
+        title="Uploaded from"
+        value={filters.since ?? ""}
+        onChange={(event) => set("since", event.target.value)}
+      />
+      <input
+        type="date"
+        aria-label="Uploaded until"
+        title="Uploaded until"
+        value={filters.until ?? ""}
+        onChange={(event) => set("until", event.target.value)}
+      />
+      {active ? (
+        <button
+          type="button"
+          className={kitStyles.button}
+          data-variant="ghost"
+          onClick={() => {
+            const query = filterQuery({ status: filters.status });
+            start(() =>
+              router.push(query ? `${pathname}?${query}` : pathname, {
+                scroll: false,
+              }),
+            );
+          }}
+        >
+          <X size={14} aria-hidden="true" />
+          Clear filters
+        </button>
+      ) : null}
+      {pending ? (
+        <span className={kitStyles.muted} role="status">
+          Loading…
+        </span>
+      ) : null}
+    </Toolbar>
+  );
+}

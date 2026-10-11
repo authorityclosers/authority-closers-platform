@@ -1,5 +1,9 @@
 "use client";
 
+import { RotateCcw } from "lucide-react";
+
+import { Page, kitStyles } from "./ui/kit";
+
 export default function ErrorBoundary({
   error,
   reset,
@@ -8,24 +12,25 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   return (
-    <main
-      className="route-boundary route-boundary-error"
-      id="admin-content"
-      aria-labelledby="error-title"
-      tabIndex={-1}
-    >
-      <span className="route-boundary-code">Error / retryable boundary</span>
-      <h1 id="error-title">The admin route could not be rendered.</h1>
-      <p>
-        No action was performed and no operational data is assumed. Retry the
-        route, then escalate with the trace reference if the boundary repeats.
-      </p>
-      {error.digest ? (
-        <code className="route-boundary-trace">Trace {error.digest}</code>
-      ) : null}
-      <button className="button" type="button" onClick={reset}>
-        Retry route
-      </button>
+    <main id="admin-content" tabIndex={-1}>
+      <Page>
+        <section className={kitStyles.panel} role="alert">
+          <div className={kitStyles.empty}>
+            <p className={kitStyles.emptyTitle}>This page couldn’t be shown</p>
+            <p className={kitStyles.emptyText}>
+              No action was performed. Try again; if it keeps happening, send
+              the reference to the team.
+            </p>
+            {error.digest ? (
+              <code className={kitStyles.muted}>Trace {error.digest}</code>
+            ) : null}
+            <button className={kitStyles.button} type="button" onClick={reset}>
+              <RotateCcw size={14} aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        </section>
+      </Page>
     </main>
   );
 }
