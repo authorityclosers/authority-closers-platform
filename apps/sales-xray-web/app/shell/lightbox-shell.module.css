@@ -1076,6 +1076,21 @@
   }
 }
 
+/* Narrow phones: six labels don't fit six equal columns ("Prospects" met
+   "Coaching" at 360 px). Each tab takes its label plus an equal share of
+   the spare width, never under the 44 px target. */
+@media (max-width: 419.98px) {
+  .bottomNav {
+    display: flex;
+    padding-inline: var(--lx-space-1);
+  }
+
+  .bottomLink {
+    flex: 1 0 auto;
+    min-width: 44px;
+  }
+}
+
 /* Short viewports and 200% zoom: chrome joins the document flow, so it can
    never cover essential actions, and the whole page scrolls. */
 @media (max-height: 560px) {
