@@ -28,7 +28,15 @@
 .momentTag[data-tone="good"],
 .skillState[data-tone="good"],
 .pin[data-tone="good"],
-.quality[data-tone="good"] {
+.quality[data-tone="good"],
+/* One teal accent (owner): "info" (a price moment) is teal too, not blue. */
+.dot[data-tone="info"],
+.card[data-tone="info"],
+.outcomeStatus[data-tone="info"],
+.momentTag[data-tone="info"],
+.skillState[data-tone="info"],
+.pin[data-tone="info"],
+.quality[data-tone="info"] {
   --tone: var(--sx-accent);
 }
 
@@ -50,16 +58,6 @@
 .pin[data-tone="bad"],
 .quality[data-tone="bad"] {
   --tone: var(--sx-bad);
-}
-
-.dot[data-tone="info"],
-.card[data-tone="info"],
-.outcomeStatus[data-tone="info"],
-.momentTag[data-tone="info"],
-.skillState[data-tone="info"],
-.pin[data-tone="info"],
-.quality[data-tone="info"] {
-  --tone: var(--lx-info);
 }
 
 .dot {
