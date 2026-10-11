@@ -10,6 +10,7 @@ import { Clip } from "./report-kit";
 import { basisChip } from "./coaching/call-coaching";
 import { CALL_PILLARS, NEXT, WHY } from "./coaching/coaching-copy";
 import {
+  dipakTake,
   FocusHero,
   LessonPanel,
   MissionPanel,
@@ -282,6 +283,7 @@ function CanonicalCallCoaching({
             reason={focus.selected_reason}
             mission={mission.behavior}
             missionAnchor="report-coaching-mission"
+            take={dipakTake(coaching.media_clips)}
           />
         </Pillar>
         <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>

@@ -90,6 +90,7 @@ export const FOCUS = {
   whyFocus: "Why this focus",
   onNextCall: "On your next call",
   seeMission: "See the mission",
+  take: "Hear Dipak’s take",
   active: "Active focus",
   provisional: "From one call so far",
   fromReport: "From this call’s report",

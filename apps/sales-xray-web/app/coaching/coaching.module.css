@@ -145,6 +145,11 @@
   font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
 }
 
+/* "Hear Dipak's take": a quiet button under the focus, never the hero. */
+.take {
+  justify-self: start;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

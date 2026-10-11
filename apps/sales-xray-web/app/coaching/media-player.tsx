@@ -41,6 +41,17 @@ const PLAY_LABEL: Record<ClipState, string> = {
  * Where the learner stopped a reviewed clip, on this device only (spec 3.4,
  * "resume playback if learner returns"). A position, never progress.
  */
+/** Stable identity of one reviewed clip (also the "Hear Dipak's take" target). */
+export const clipKey = (clip: CoachingClip) =>
+  `${clip.topic_id}:${clip.revision}:${clip.review_id}`;
+
+/** Asks the page's card for this clip to come into view and play. */
+export function requestClip(clip: CoachingClip) {
+  window.dispatchEvent(
+    new CustomEvent("sx-coaching-clip-request", { detail: clipKey(clip) }),
+  );
+}
+
 const resumeKey = (clip: CoachingClip) =>
   `sx-coaching-clip:${clip.topic_id}:${clip.revision}:${clip.review_id}`;
 function readResume(key: string): number {
@@ -119,6 +130,7 @@ function ClipCard({
   recommended: boolean;
 }) {
   const identity = useId();
+  const card = useRef<HTMLElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
   const [playState, setState] = useState<ClipState>("idle");
@@ -206,6 +218,22 @@ function ClipCard({
     if (!resume) setPosition(0);
     begin(audio, resume ? clip.start_ms + position : clip.start_ms);
   };
+  // "Hear Dipak's take" in pillar 1: bring this card into view and play it.
+  const latestToggle = useRef(toggle);
+  useEffect(() => {
+    latestToggle.current = toggle;
+  });
+  const playing = state === "playing";
+  useEffect(() => {
+    const onRequest = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== clipKey(clip)) return;
+      card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!playing) latestToggle.current();
+    };
+    window.addEventListener("sx-coaching-clip-request", onRequest);
+    return () =>
+      window.removeEventListener("sx-coaching-clip-request", onRequest);
+  }, [clip, playing]);
   const currentSlide = clip.slides[slide];
   const preview =
     clip.access === "preview" && clip.preview_end_ms
@@ -221,6 +249,7 @@ function ClipCard({
           : Play;
   return (
     <article
+      ref={card}
       className={styles.clip}
       data-recommended={recommended ? "" : undefined}
       data-access={clip.access}
@@ -403,11 +432,7 @@ export function CoachingMedia({ clips }: { clips?: CoachingClip[] }) {
   return (
     <div className={styles.clips}>
       {clips.map((clip, index) => (
-        <ClipCard
-          key={`${clip.topic_id}:${clip.revision}:${clip.review_id}`}
-          clip={clip}
-          recommended={index === 0}
-        />
+        <ClipCard key={clipKey(clip)} clip={clip} recommended={index === 0} />
       ))}
     </div>
   );

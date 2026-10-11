@@ -7,6 +7,7 @@ import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { CALL_PILLARS, FOCUS, NEXT, WHY } from "./coaching-copy";
 import {
+  dipakTake,
   FocusHero,
   LessonPanel,
   MissionPanel,
@@ -69,6 +70,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           reason={focus.selected_reason}
           mission={mission.behavior}
           missionAnchor="call-mission"
+          take={dipakTake(coaching.media_clips)}
         />
       </Pillar>
       <Pillar id="coaching-why" copy={CALL_PILLARS.why}>

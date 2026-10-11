@@ -1,8 +1,15 @@
 "use client";
 
-import { ArrowDown, PencilLine, Sparkles, Target } from "lucide-react";
+import {
+  ArrowDown,
+  Headphones,
+  PencilLine,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { PillarHeading, StoryCard } from "../report-visuals/visuals";
+import { kitStyles } from "../ui/kit";
 import type {
   Coaching,
   Evidence,
@@ -18,7 +25,7 @@ import {
 } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import { EvidencePlayer } from "./evidence-player";
-import { CoachingMedia } from "./media-player";
+import { CoachingMedia, requestClip } from "./media-player";
 import type { CoachingClip } from "./media-contract";
 import styles from "./coaching.module.css";
 
@@ -70,6 +77,15 @@ export function CardLabel({ children }: { children: ReactNode }) {
 
 export type Chip = { text: string; tone?: "accent" | "good" | "neutral" };
 
+/**
+ * Spec pillar 1, optional coach media: Dipak's recommended clip, if it is
+ * open to play, one tap away from the focus. Locked clips are never offered.
+ */
+export function dipakTake(clips?: CoachingClip[]) {
+  const first = clips?.[0];
+  return first && first.access !== "locked" ? first : null;
+}
+
 /** Pillar 1: the one focus, readable in a few seconds. */
 export function FocusHero({
   label,
@@ -79,6 +95,7 @@ export function FocusHero({
   reason,
   mission,
   missionAnchor,
+  take,
   children,
 }: {
   label: string;
@@ -88,6 +105,8 @@ export function FocusHero({
   reason: string;
   mission: string;
   missionAnchor: string;
+  /** Dipak's recommended clip in pillar 3 ("Hear Dipak's take"). */
+  take?: CoachingClip | null;
   children?: ReactNode;
 }) {
   return (
@@ -107,6 +126,16 @@ export function FocusHero({
       ) : null}
       <p className={styles.focusTitle}>{label}</p>
       <p className={styles.lead}>{explanation}</p>
+      {take ? (
+        <button
+          type="button"
+          className={`${kitStyles.button} ${styles.take}`}
+          onClick={() => requestClip(take)}
+        >
+          <Headphones size={14} aria-hidden="true" />
+          {FOCUS.take} · {timeLabel(take.end_ms - take.start_ms)}
+        </button>
+      ) : null}
       {children}
       <div className={styles.pair}>
         <div className={styles.fact}>

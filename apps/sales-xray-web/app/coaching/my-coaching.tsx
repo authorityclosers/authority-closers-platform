@@ -30,6 +30,7 @@ import {
 } from "./coaching-copy";
 import {
   callDate,
+  dipakTake,
   FocusHero,
   LessonPanel,
   MissionPanel,
@@ -307,6 +308,7 @@ export function CoachingStory({
           reason={focus.selected_reason}
           mission={mission.behavior}
           missionAnchor="mission"
+          take={dipakTake(coaching.media_clips)}
         >
           {requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
