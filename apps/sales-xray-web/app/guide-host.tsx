@@ -171,7 +171,8 @@ export function FirstCallGuide() {
     !access.context ||
     workspace?.sales_xray_enabled === false ||
     pathname === "/account" ||
-    pathname === "/organisation"
+    pathname === "/organisation" ||
+    pathname === "/organisation/invites"
   )
     return null;
   return (

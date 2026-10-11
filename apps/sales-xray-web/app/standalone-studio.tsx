@@ -21,6 +21,7 @@ import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
+import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -269,7 +270,8 @@ function StandaloneStudioView({
     path: string,
   ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
     if (path === "/dashboard") return "dashboard";
-    if (path === "/organisation") return "organisation";
+    if (path === "/organisation" || path === "/organisation/invites")
+      return "organisation";
     if (
       path === "/calls" ||
       path === "/analysis" ||
@@ -667,6 +669,8 @@ function StandaloneStudioView({
             {/* The page's own skeleton where it has one, so nothing moves. */}
             {pathname === "/organisation" ? (
               <OrganisationPageSkeleton />
+            ) : pathname === "/organisation/invites" ? (
+              <InvitesSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
             ) : (

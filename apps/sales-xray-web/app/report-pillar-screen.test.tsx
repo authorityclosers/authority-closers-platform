@@ -19,7 +19,7 @@ it("renders the six Report pillars, eight expandable skills and exact clickable 
       root.render(
         <ReportModes
           structure="pillars"
-          initialView="reading"
+          initialView="story"
           panels={[
             {
               id: "prospect",
@@ -54,6 +54,12 @@ it("renders the six Report pillars, eight expandable skills and exact clickable 
     await act(async () => button.click());
     expect(select).toHaveBeenCalledWith(source, expect.any(String));
     expect(host.querySelector('a[href="/prospects"]')).not.toBeNull();
+    expect(host.querySelectorAll('a[href^="/coaching?focus="]')).toHaveLength(
+      8,
+    );
+    expect(host.querySelectorAll('[data-pulse-adapted="true"]')).toHaveLength(
+      6,
+    );
   } finally {
     await act(async () => root.unmount());
     host.remove();

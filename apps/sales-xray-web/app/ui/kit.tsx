@@ -779,3 +779,60 @@ export function InlineEdit({
     </span>
   );
 }
+
+/* ---------- Dialog ---------- */
+
+/**
+ * A small modal: one title, a line of context, the body and its actions.
+ * Native <dialog>, so focus stays inside and Escape closes it.
+ */
+export function Dialog({
+  open,
+  title,
+  description,
+  onClose,
+  actions,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  description?: ReactNode;
+  onClose: () => void;
+  actions?: ReactNode;
+  children?: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      className={styles.dialog}
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      {open ? (
+        <>
+          <h2 id={titleId} className={styles.dialogTitle}>
+            {title}
+          </h2>
+          {description ? (
+            <p className={styles.dialogText}>{description}</p>
+          ) : null}
+          {children}
+          {actions ? (
+            <div className={styles.dialogActions}>{actions}</div>
+          ) : null}
+        </>
+      ) : null}
+    </dialog>
+  );
+}

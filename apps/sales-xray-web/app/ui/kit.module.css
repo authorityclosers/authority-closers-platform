@@ -860,3 +860,44 @@ a.rowTitle:hover {
     animation: none;
   }
 }
+
+/* ---------- Dialog ---------- */
+
+.dialog {
+  width: min(420px, calc(100vw - 2 * var(--sx-gutter)));
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--lx-shadow-2, var(--lx-shadow-1));
+}
+
+.dialog::backdrop {
+  background: color-mix(in oklab, var(--sx-ink) 32%, transparent);
+}
+
+.dialog[open] {
+  display: grid;
+  gap: 14px;
+}
+
+.dialogTitle {
+  margin: 0;
+  font: var(--sx-text-panel);
+}
+
+.dialogText {
+  margin: -8px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}

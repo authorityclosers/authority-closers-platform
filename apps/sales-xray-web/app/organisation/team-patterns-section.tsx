@@ -211,24 +211,50 @@ export function TeamPatternsSection({
                 <ul className={styles.fixList}>
                   {patterns.fixFirst
                     .slice(0, FIX_SHOWN)
-                    .map(({ call, text }) => {
+                    .map(({ calls, text }) => {
+                      const [call] = calls;
                       const owner = call.ownerName ?? "Unnamed member";
+                      const people = [
+                        ...new Set(
+                          calls.map(
+                            (item) => item.ownerName ?? "Unnamed member",
+                          ),
+                        ),
+                      ];
                       return (
                         <li key={call.id}>
                           <Link href={callHref(call.id)}>
                             <span className={styles.fixText}>{text}</span>
-                            <span className={styles.fixMeta}>
-                              <i className={styles.avatar} aria-hidden="true">
-                                {initials(owner)}
-                              </i>
-                              <span>{owner}</span>
-                              <span aria-hidden="true">·</span>
-                              <span className={styles.fixCall}>
-                                {call.label ?? unnamedCallName(call.createdAt)}
+                            {calls.length > 1 ? (
+                              // Repeated: how often and by whom; opens the newest.
+                              <span className={styles.fixMeta}>
+                                <b className={styles.fixCount}>
+                                  {calls.length} reports
+                                </b>
+                                <span aria-hidden="true">·</span>
+                                <span className={styles.fixCall}>
+                                  {people.length > 2
+                                    ? `${people.slice(0, 2).join(", ")} +${people.length - 2}`
+                                    : people.join(", ")}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span>latest {callDate(call.createdAt)}</span>
                               </span>
-                              <span aria-hidden="true">·</span>
-                              <span>{callDate(call.createdAt)}</span>
-                            </span>
+                            ) : (
+                              <span className={styles.fixMeta}>
+                                <i className={styles.avatar} aria-hidden="true">
+                                  {initials(owner)}
+                                </i>
+                                <span>{owner}</span>
+                                <span aria-hidden="true">·</span>
+                                <span className={styles.fixCall}>
+                                  {call.label ??
+                                    unnamedCallName(call.createdAt)}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span>{callDate(call.createdAt)}</span>
+                              </span>
+                            )}
                           </Link>
                         </li>
                       );

@@ -42,10 +42,12 @@ function ObservedStatus({
   title,
   description,
   suspended,
+  quiet,
 }: {
   title: string;
   description: string;
   suspended: boolean;
+  quiet: boolean;
 }) {
   const [delayed, setDelayed] = useState(false);
   useEffect(() => {
@@ -71,7 +73,7 @@ function ObservedStatus({
   }, [suspended]);
   return (
     <div className={styles.copy} data-update-delayed={delayed}>
-      <p className={styles.kicker}>LAST CONFIRMED STATUS</p>
+      {quiet ? null : <p className={styles.kicker}>LAST CONFIRMED STATUS</p>}
       <h3>{title}</h3>
       <p>{description}</p>
       {delayed && !suspended && (
@@ -91,6 +93,7 @@ export function ProcessingStatusCopy({
   needsAttention,
   refreshProblem = false,
   waitingForApproval = false,
+  quiet = false,
 }: {
   submissionId: string;
   progress: Progress | null;
@@ -99,11 +102,13 @@ export function ProcessingStatusCopy({
   needsAttention: boolean;
   refreshProblem?: boolean;
   waitingForApproval?: boolean;
+  /** No caps label above the title (the calm progress screen, Strike A). */
+  quiet?: boolean;
 }) {
   if (progress?.run_state === "failed")
     return (
       <div className={styles.copy}>
-        <p className={styles.kicker}>LAST CONFIRMED STATUS</p>
+        {quiet ? null : <p className={styles.kicker}>LAST CONFIRMED STATUS</p>}
         <h3>Analysis failed</h3>
         <p>
           {progress.minute_state === "released"
@@ -147,9 +152,11 @@ export function ProcessingStatusCopy({
   if (needsAttention && !progress?.run_state)
     return (
       <div className={styles.copy}>
-        <p className={styles.kicker}>
-          {paused ? "SAVED WORK · PAUSED" : "STATUS NEEDS ATTENTION"}
-        </p>
+        {quiet ? null : (
+          <p className={styles.kicker}>
+            {paused ? "SAVED WORK · PAUSED" : "STATUS NEEDS ATTENTION"}
+          </p>
+        )}
         <h3>{paused ? "Analysis paused" : "Your call needs attention"}</h3>
         <p>{description}</p>
       </div>
@@ -172,6 +179,7 @@ export function ProcessingStatusCopy({
       suspended={
         refreshProblem || waitingForApproval || Boolean(progress?.has_report)
       }
+      quiet={quiet}
     />
   );
 }

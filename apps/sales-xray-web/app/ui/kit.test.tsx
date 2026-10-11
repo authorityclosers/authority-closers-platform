@@ -10,6 +10,7 @@ import { Inbox } from "lucide-react";
 import {
   Avatar,
   Delta,
+  Dialog,
   Empty,
   InlineEdit,
   Kpi,
@@ -198,4 +199,38 @@ it("uses only the shared tokens: no raw colours in the kit's styles", () => {
     (match) => Number(match[1]),
   );
   expect(sizes.every((size) => size >= 12)).toBe(true);
+});
+
+it("opens a dialog as a modal with its title, and closes on Escape", async () => {
+  const onClose = vi.fn();
+  const render = (open: boolean) =>
+    act(async () =>
+      root.render(
+        <Dialog
+          open={open}
+          title="Create an organisation"
+          description="One line of context."
+          onClose={onClose}
+          actions={<button type="button">Create</button>}
+        >
+          <input aria-label="Name" />
+        </Dialog>,
+      ),
+    );
+  await render(true);
+  const dialog = host.querySelector("dialog")!;
+  expect(dialog.open).toBe(true);
+  expect(
+    host.querySelector(
+      `#${CSS.escape(dialog.getAttribute("aria-labelledby")!)}`,
+    )?.textContent,
+  ).toBe("Create an organisation");
+  expect(dialog.textContent).toContain("One line of context.");
+  await act(async () => {
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+  });
+  expect(onClose).toHaveBeenCalledTimes(1);
+  await render(false);
+  expect(dialog.open).toBe(false);
+  expect(dialog.textContent).toBe("");
 });

@@ -1,6 +1,8 @@
+import { syntheticProspect } from "./review-fixture/prospects/synthetic-prospect";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  confirmDetectedProspect,
   fetchProspectDetail,
   fetchProspectsList,
   parseProspectCall,
@@ -11,6 +13,48 @@ import {
   ProspectsContractError,
   PROSPECTS_API,
 } from "./prospects-client";
+
+it("requires the same prospect and a persisted confirmation receipt", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const receipt = {
+    schema: "ac.sales-xray.prospect-confirmation/1",
+    prospect_id: id,
+    revision: 3,
+    confirmed_at: "2026-10-10T08:00:00Z",
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify(receipt)));
+  vi.stubGlobal("fetch", fetch);
+  try {
+    await confirmDetectedProspect(id, 2);
+    expect(fetch).toHaveBeenCalledWith(
+      `${PROSPECTS_API}/${id}/confirm`,
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        redirect: "error",
+        body: JSON.stringify({ expected_revision: 2 }),
+      }),
+    );
+    for (const value of [
+      { ...receipt, prospect_id: "22222222-2222-4222-8222-222222222222" },
+      { ...receipt, revision: 1 },
+      { ...receipt, confirmed_at: null },
+    ]) {
+      fetch.mockResolvedValueOnce(new Response(JSON.stringify(value)));
+      await expect(confirmDetectedProspect(id, 2)).rejects.toThrow(
+        "confirmation_response",
+      );
+    }
+    fetch.mockResolvedValueOnce(new Response("{}", { status: 409 }));
+    await expect(confirmDetectedProspect(id, 2)).rejects.toThrow(
+      "Reload before confirming",
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 describe("prospects-client contract parsers", () => {
   const validSummary = {
@@ -276,6 +320,35 @@ describe("prospects-client fetchers", () => {
     );
     expect(result.prospect.name).toBe("Test Person");
     fetchSpy.mockRestore();
+  });
+
+  it("withholds a valid detail response for a different customer identity", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          schema: "ac.sales-xray.prospects/1",
+          prospect: syntheticProspect,
+          calls: [],
+          next_offset: null,
+          promises: [],
+          next_steps: [],
+          buyer_intent_history: [],
+        }),
+      ),
+    );
+    try {
+      await expect(
+        fetchProspectDetail({
+          prospectId: "33333333-3333-4333-8333-333333333333",
+        }),
+      ).rejects.toThrow("prospect_detail_binding");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ redirect: "error", cache: "no-store" }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("rejects non-UUID prospect id before fetching", async () => {

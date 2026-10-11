@@ -39,6 +39,15 @@ class _Confirm(BaseModel):
     expected_membership_id: UUID | None
 
 
+class _Detect(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class _ConfirmDetected(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(gt=0)
+
+
 class _Edit(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     display_name: str = Field(min_length=1, max_length=160)
@@ -130,7 +139,14 @@ def install_prospect_http(
                 raise HTTPException(
                     403, "Confirm from this Sales Xray page.", headers=_PRIVATE
                 ) from None
-            body = await _body(request, _Create if operation == "create" else _Confirm)
+            body = await _body(
+                request,
+                _Detect
+                if operation == "detect"
+                else _Create
+                if operation == "create"
+                else _Confirm,
+            )
         try:
             async with asynccontextmanager(read_actor if operation == "suggest" else require_actor)(
                 request
@@ -144,7 +160,10 @@ def install_prospect_http(
                 store = ProspectStore(GuestOwnership(sessions))
                 if operation == "suggest":
                     return await suggestions(store, actor, submission_id, offset=offset)
-                if isinstance(body, _Create):
+                if isinstance(body, _Detect):
+                    await store.ensure_detected(actor, submission_id)
+                    member = await store._active(await store._write_scope(actor, submission_id))
+                elif isinstance(body, _Create):
                     await store.create_from_call(
                         actor, submission_id, display_name=body.display_name
                     )
@@ -185,6 +204,51 @@ def install_prospect_http(
     @router.post("/calls/{submission_id}/create", status_code=201)
     async def create_prospect(submission_id: UUID, request: Request, response: Response) -> Any:
         return await call_link(request, response, submission_id, operation="create")
+
+    @router.post("/calls/{submission_id}/detect")
+    async def detect_prospect(submission_id: UUID, request: Request, response: Response) -> Any:
+        return await call_link(request, response, submission_id, operation="detect")
+
+    @router.post("/{prospect_id}/confirm")
+    async def confirm_detected(prospect_id: UUID, request: Request, response: Response) -> Any:
+        response.headers.update(_PRIVATE)
+        if (
+            settings.sales_xray_app_url is None
+            or request.url.hostname != settings.sales_xray_app_url.host
+        ):
+            raise HTTPException(404, "Prospects are unavailable.", headers=_PRIVATE)
+        if request.query_params:
+            raise HTTPException(422, "Use the current prospect and workspace.", headers=_PRIVATE)
+        try:
+            require_safe_origin(request, settings)
+        except DomainError:
+            raise HTTPException(
+                403, "Confirm from this Sales Xray page.", headers=_PRIVATE
+            ) from None
+        body = await _body(request, _ConfirmDetected)
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                actor = auth.resolved.actor
+                if actor.tenant_id is None or actor.tenant_id not in served:
+                    raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE, headers=_PRIVATE)
+                sessions = factory(auth.database, actor.tenant_id)
+                if sessions.tenant_id != actor.tenant_id:
+                    raise RuntimeError("Prospect confirmation must use the selected workspace.")
+                row = await ProspectStore(GuestOwnership(sessions)).confirm_detected(
+                    actor, prospect_id, expected_revision=body.expected_revision
+                )
+                return {
+                    "schema": "ac.sales-xray.prospect-confirmation/1",
+                    "prospect_id": str(row.id),
+                    "revision": row.revision,
+                    "confirmed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
+                }
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error), headers=_PRIVATE) from None
+        except DomainError:
+            raise HTTPException(
+                401, "Sign in to confirm your prospect.", headers=_PRIVATE
+            ) from None
 
     async def edit(
         prospect_id: str,

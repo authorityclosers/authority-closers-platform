@@ -217,7 +217,7 @@
   color: var(--lx-muted);
   cursor: pointer;
   opacity: 1 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--lx-shadow-1);
   transition:
     opacity 140ms ease,
     background-color 140ms ease,
@@ -264,7 +264,7 @@
 
 .workspaceTrigger:not([aria-disabled="true"]):hover,
 .workspaceTrigger[aria-expanded="true"] {
-  background: rgba(255, 255, 255, 0.65);
+  background: color-mix(in oklab, var(--lx-surface) 65%, transparent);
 }
 
 .workspaceTrigger:focus-visible {
@@ -332,7 +332,7 @@
   border: 1px solid var(--lx-line);
   border-radius: 10px;
   background: var(--lx-surface);
-  box-shadow: 0 8px 24px rgba(15, 27, 51, 0.1);
+  box-shadow: var(--lx-shadow-2);
   z-index: 60;
   animation: menuIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -404,7 +404,7 @@
 }
 
 .navRow:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: color-mix(in oklab, var(--lx-surface) 60%, transparent);
   color: var(--lx-ink);
 }
 
@@ -417,7 +417,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .navRowActive svg,
@@ -460,7 +460,7 @@
 }
 
 .subRow:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: color-mix(in oklab, var(--lx-surface) 60%, transparent);
   color: var(--lx-ink);
 }
 
@@ -473,7 +473,7 @@
   background: var(--lx-surface);
   color: var(--lx-ink);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .subRowActive svg,
@@ -528,7 +528,7 @@
 }
 
 .recentsToggleBtn:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: color-mix(in oklab, var(--lx-surface) 60%, transparent);
   color: var(--lx-ink);
 }
 
@@ -598,7 +598,7 @@
 }
 
 .recentItem:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in oklab, var(--lx-surface) 70%, transparent);
 }
 
 .recentIcon {
@@ -728,19 +728,19 @@
   border: 1px solid var(--lx-line);
   border-radius: 10px;
   padding: 0 12px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--lx-shadow-1);
   transition: all 140ms ease;
 }
 
 .searchBox:hover {
   border-color: var(--lx-line-strong);
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--lx-shadow-2);
 }
 
 .searchBox:focus-within {
   background: var(--lx-surface);
   border-color: var(--lx-teal);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
 }
 
 .searchIcon {

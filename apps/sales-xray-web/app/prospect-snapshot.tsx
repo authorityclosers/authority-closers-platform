@@ -10,7 +10,6 @@ import type {
 } from "./report-contract";
 import { RichText } from "./report-entities";
 import {
-  Card,
   Clip,
   Empty,
   KitSection,
@@ -77,12 +76,7 @@ export function ProspectSnapshot({
         {interpretations.length ? (
           <div className={styles.cards}>
             {interpretations.map((item, index) => (
-              <Card
-                key={index}
-                tone="hypothesis"
-                index={index}
-                className={styles.card}
-              >
+              <article key={index} className={styles.card}>
                 <ol
                   data-prospect-index={index}
                   className={styles.parts}
@@ -139,7 +133,7 @@ export function ProspectSnapshot({
                     </div>
                   </li>
                 </ol>
-              </Card>
+              </article>
             ))}
           </div>
         ) : (
@@ -188,7 +182,7 @@ export function ProspectSnapshot({
             </div>
           ) : (
             <Empty icon={Quote}>
-              The prospect did not describe a problem in their own words.
+              No supported problem statement was found in this call.
             </Empty>
           )}
         </KitSection>

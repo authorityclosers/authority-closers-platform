@@ -381,3 +381,27 @@ it("requires an explicit role for an unresolved third speaker before sending the
   expect(JSON.parse(puts()[0][1]!.body as string).speakers).toHaveLength(3);
   expect(host.querySelector('[role="dialog"]')).toBeNull();
 });
+
+it("shows source-resolved seller and prospect suggestions with one-tap confirmation, never an automatic authority write", async () => {
+  data = {
+    ...initial(),
+    status: "predicted",
+    user_revision: 0,
+    speakers: initial().speakers.map((row, i) => ({
+      ...row,
+      role: i ? "prospect" : "salesperson",
+      role_source: "predicted",
+    })),
+  };
+  await render();
+  expect(
+    host.querySelector('[aria-label="Detected speakers"]')?.textContent,
+  ).toContain("Fictional Buyer");
+  expect(puts()).toHaveLength(0);
+  await act(async () => button("Confirm speakers").click());
+  expect(puts()).toHaveLength(1);
+  expect(host.querySelector('[aria-label="Detected speakers"]')).toBeNull();
+  expect(host.querySelector("output")!.textContent).toContain(
+    '"role":"prospect"',
+  );
+});

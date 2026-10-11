@@ -28,6 +28,7 @@ from ac_platform.kernel.errors import (
 from ac_platform.organisations.invitations import (
     INVITATION_LIFETIME,
     INVITATION_POLICY_SCHEMA,
+    OPERATOR_INVITATION_POLICY_SCHEMA,
     invitation_policies,
 )
 from ac_platform.organisations.invite_email import enqueue_invitation_email
@@ -797,19 +798,24 @@ class OrganisationService:
         actor_person_id: UUID,
         operator_reference: str | None = None,
         require_acceptance: bool = False,
+        operator_auto_join: bool = False,
     ) -> dict[str, object]:
         role = _member_role(role)
         intent = {"email": "", "role": role, "actor_person_id": str(actor_person_id)}
         if require_acceptance:
             intent["invitation_policy"] = INVITATION_POLICY_SCHEMA
         acting = await self._acting(tenant_id, actor_person_id, operator_reference, intent)
+        if operator_auto_join:
+            if acting != "operator" or require_acceptance:
+                raise AuthorizationDenied("Audited operator provisioning is required.")
+            intent["invitation_policy"] = OPERATOR_INVITATION_POLICY_SCHEMA
         if acting not in {"owner", "admin", "operator"}:
             raise AuthorizationDenied("Organisation administration is required.")
         if acting == "admin" and role != "member":
             raise AuthorizationDenied("Only the owner can add an admin.")
         try:
             email = normalize_email(email)
-            if require_acceptance:
+            if require_acceptance or operator_auto_join:
                 email = email.lower()
         except ValueError as error:
             raise OrganisationCommandError("A valid email is required.") from error
@@ -834,7 +840,17 @@ class OrganisationService:
         person = await self.session.scalar(
             select(Person).where(func.lower(Person.email) == email.lower())
         )
-        if person is not None and not require_acceptance:
+        if operator_auto_join and person is not None and person.status != "active":
+            raise OrganisationCommandError("member must be active")
+        if (
+            person is not None
+            and not require_acceptance
+            and (
+                not operator_auto_join
+                or person.status == "active"
+                and person.email_verified_at is not None
+            )
+        ):
             target = await self.session.get(Membership, (tenant_id, person.id))
             if acting == "admin" and target is not None and target.role != "member":
                 raise AuthorizationDenied("An admin can add members only.")
@@ -867,7 +883,7 @@ class OrganisationService:
                     OrganisationInvite.tenant_id == tenant_id,
                     (
                         func.lower(OrganisationInvite.email_normalized) == email
-                        if require_acceptance
+                        if require_acceptance or operator_auto_join
                         else OrganisationInvite.email_normalized == email
                     ),
                     OrganisationInvite.status == "pending",
@@ -919,19 +935,23 @@ class OrganisationService:
                 **(
                     {
                         "invitation_policy": {
-                            "schema": INVITATION_POLICY_SCHEMA,
-                            "explicit_acceptance": True,
+                            "schema": (
+                                OPERATOR_INVITATION_POLICY_SCHEMA
+                                if operator_auto_join
+                                else INVITATION_POLICY_SCHEMA
+                            ),
+                            "explicit_acceptance": not operator_auto_join,
                             "expires_at": (now + INVITATION_LIFETIME).isoformat(),
                         }
                     }
-                    if require_acceptance
+                    if require_acceptance or operator_auto_join
                     else {}
                 ),
             },
             operator_reference,
             actor_person_id=actor_person_id,
         )
-        if require_acceptance:
+        if require_acceptance or operator_auto_join:
             await enqueue_invitation_email(self.session, invite)
         return result
 

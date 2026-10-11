@@ -1,0 +1,84 @@
+.coaching {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  color: var(--lx-ink);
+  font: 400 14px/1.6 var(--lx-font-ui);
+  overflow-wrap: anywhere;
+}
+.coaching p,
+.coaching h3,
+.coaching h4,
+.coaching blockquote {
+  margin: 0;
+}
+.coaching figure {
+  margin: 0;
+}
+.coaching section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--lx-line-soft);
+}
+.coaching h3,
+.coaching h4,
+.label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.focus {
+  font-weight: 600;
+}
+.context,
+.coaching small {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+.sources,
+.practice,
+.lesson {
+  display: grid;
+  gap: 8px;
+}
+.lesson {
+  padding-top: 8px;
+}
+.coaching summary,
+.coaching > button {
+  min-height: 32px;
+  cursor: pointer;
+}
+.coaching > button {
+  color: var(--lx-teal);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 8px;
+}
+.sources button {
+  min-height: 32px;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--lx-teal);
+  text-underline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .links a {
+    min-height: 44px;
+  }
+  .sources button {
+    min-height: 44px;
+  }
+  .coaching summary,
+  .coaching > button {
+    min-height: 44px;
+  }
+}

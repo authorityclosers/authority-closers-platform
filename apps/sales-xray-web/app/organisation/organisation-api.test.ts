@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  acceptInvite,
+  createOrganisation,
+  parsePendingInvites,
+  readPendingInvites,
   addMember,
   changeRole,
   removeMember,
@@ -532,4 +536,138 @@ it("lists only calls it can open: a real call id and date", async () => {
   expect(activity.calls.map((item) => item.id)).toEqual([
     "aaaaaaaa-0000-4000-8000-000000000001",
   ]);
+});
+
+const tenant = "00000000-0000-4000-8000-000000000003";
+const retryKey = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+
+it("keeps only invitation rows that match the contract", () => {
+  const row = {
+    invite_id: invite,
+    tenant_id: tenant,
+    organisation_name: " Brightline Coaching ",
+    role: "member",
+    invited_at: "2026-10-10T09:00:00Z",
+    expires_at: "2026-10-17T09:00:00Z",
+  };
+  expect(
+    parsePendingInvites({
+      invites: [
+        row,
+        { ...row, invite_id: "not-an-id" },
+        { ...row, role: "owner" },
+        { ...row, organisation_name: "  " },
+        { ...row, invite_id: person, expires_at: null, invited_at: 7 },
+      ],
+    }),
+  ).toEqual([
+    {
+      inviteId: invite,
+      tenantId: tenant,
+      organisationName: "Brightline Coaching",
+      role: "member",
+      invitedAt: "2026-10-10T09:00:00Z",
+      expiresAt: "2026-10-17T09:00:00Z",
+    },
+    {
+      inviteId: person,
+      tenantId: tenant,
+      organisationName: "Brightline Coaching",
+      role: "member",
+      invitedAt: null,
+      expiresAt: null,
+    },
+  ]);
+  expect(parsePendingInvites(null)).toEqual([]);
+});
+
+it("reads invitations as a GET, and says null where the server has none yet", async () => {
+  const fetchMock = vi.fn(async () => json({ invites: [] }));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(readPendingInvites()).resolves.toEqual([]);
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [
+    string,
+    RequestInit,
+  ];
+  expect(url).toBe("/v1/organisation/invites");
+  expect(init.method).toBeUndefined();
+  expect(new Headers(init.headers).has("Idempotency-Key")).toBe(false);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ detail: "Not Found" }, 404)),
+  );
+  await expect(readPendingInvites()).resolves.toBeNull();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ detail: "Authentication is required" }, 401)),
+  );
+  await expect(readPendingInvites()).rejects.toMatchObject({ status: 401 });
+});
+
+it("accepts and creates with the caller's key, so a retry is the same request", async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(
+      json({
+        invite_id: invite,
+        tenant_id: tenant,
+        person_id: person,
+        role: "member",
+        status: "accepted",
+      }),
+    )
+    .mockResolvedValueOnce(
+      json(
+        {
+          tenant_id: tenant,
+          handle: "brightline",
+          name: "Brightline",
+          your_role: "owner",
+        },
+        201,
+      ),
+    );
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(acceptInvite(invite, retryKey)).resolves.toEqual({
+    tenantId: tenant,
+    role: "member",
+  });
+  await expect(createOrganisation("Brightline", retryKey)).resolves.toEqual({
+    tenantId: tenant,
+    name: "Brightline",
+  });
+  const [[acceptUrl, acceptInit], [createUrl, createInit]] = fetchMock.mock
+    .calls as unknown as [string, RequestInit][];
+  expect(acceptUrl).toBe(`/v1/organisation/invites/${invite}/accept`);
+  expect(acceptInit.method).toBe("POST");
+  expect(new Headers(acceptInit.headers).get("Idempotency-Key")).toBe(retryKey);
+  expect(createUrl).toBe("/v1/organisation");
+  expect(createInit.method).toBe("POST");
+  expect(JSON.parse(String(createInit.body))).toEqual({ name: "Brightline" });
+  expect(new Headers(createInit.headers).get("Idempotency-Key")).toBe(retryKey);
+});
+
+it("refuses an answer it can't read instead of moving anywhere", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({ status: "pending", tenant_id: tenant })),
+  );
+  await expect(acceptInvite(invite, retryKey)).rejects.toBeInstanceOf(
+    OrgApiError,
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      json(
+        { detail: "Verify your email before creating an organisation." },
+        403,
+      ),
+    ),
+  );
+  await expect(
+    createOrganisation("Brightline", retryKey),
+  ).rejects.toMatchObject({
+    status: 403,
+    message: "Verify your email before creating an organisation.",
+  });
 });

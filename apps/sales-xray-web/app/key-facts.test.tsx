@@ -1,231 +1,249 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-
 import fixture from "../tests/fixtures/dipak-overview.json";
-import { readCallFacts, saveCallFact } from "./call-facts";
 import { KeyFacts } from "./key-facts";
 import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport, Transcript } from "./report-contract";
-import { saveSpeakerProfiles } from "./speaker-profiles";
+import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
+import { syntheticProspect } from "./review-fixture/prospects/synthetic-prospect";
+import * as client from "./prospects-client";
+import * as notices from "./notice-center";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
-
 const CALL = "5b7a0d2e-8c4f-4a61-9d3e-2f1b0c9a8e77";
-const report = {
-  ...(fixture.report as SalesReport),
-  summary: "A carpentry business owner in Ahmedabad asked about growth.",
+const report = fixture.report as SalesReport;
+const transcript = fixture.transcript as Transcript;
+const access: WorkspaceAccessValue = {
+  status: "ready",
+  authenticated: true,
+  context: {
+    personId: "person-one",
+    sessionId: "session-one",
+    tenantId: "tenant-one",
+  },
+  retry: vi.fn(),
 };
-const transcript: Transcript = {
-  ...(fixture.transcript as Transcript),
-  duration_ms: 1_440_000,
-  segments: [
-    {
-      id: "a1",
-      speaker_id: "rep",
-      start_ms: 0,
-      end_ms: 9_000,
-      text: "नमस्ते, मुझे 10 15 minute का time लगेगा।",
-    },
-    {
-      id: "a2",
-      speaker_id: "buyer",
-      start_ms: 9_500,
-      end_ms: 14_000,
-      text: "10 minute तक चलेगा।",
-    },
-    {
-      id: "a3",
-      speaker_id: "buyer",
-      start_ms: 240_000,
-      end_ms: 250_000,
-      text: "हां turnover ₹1 CR होता है yearly.",
-    },
-    {
-      id: "a4",
-      speaker_id: "rep",
-      start_ms: 1_300_000,
-      end_ms: 1_320_000,
-      text: "इसका price अलग अलग category का है।",
-    },
-  ],
-};
-
-let root: Root;
-let host: HTMLDivElement;
-let onSeek: ReturnType<typeof vi.fn<(ms: number) => void>>;
-
-beforeEach(async () => {
+let root: Root, host: HTMLDivElement;
+let fetcher: ReturnType<typeof vi.fn>;
+const detail = (prospect = syntheticProspect) => ({
+  schema: "ac.sales-xray.prospects/1",
+  prospect,
+  calls: [],
+  next_offset: null,
+  promises: [],
+  next_steps: [],
+  buyer_intent_history: [],
+});
+beforeEach(() => {
   localStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  onSeek = vi.fn();
-  await render();
+  fetcher = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          schema: "ac.sales-xray.prospect-link/1",
+          submission_id: CALL,
+          membership: {
+            prospect_id: syntheticProspect.prospect_id,
+            membership_id: "22222222-2222-4222-8222-222222222222",
+          },
+        }),
+      ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  vi.spyOn(client, "fetchProspectDetail").mockResolvedValue(detail());
+  vi.spyOn(notices, "notify").mockImplementation(() => {});
 });
-
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  localStorage.clear();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
-
-async function render(source: Transcript = transcript, documentView = false) {
+async function render(value = access, documentView = false) {
   await act(async () =>
     root.render(
-      <ReportReadingProvider reading={documentView} documentView={documentView}>
-        <KeyFacts
-          callId={CALL}
-          transcript={source}
-          report={report}
-          durationMs={transcript.duration_ms}
-          onSeek={onSeek}
-        />
-      </ReportReadingProvider>,
+      <WorkspaceAccessContext.Provider value={value}>
+        <ReportReadingProvider
+          reading={documentView}
+          documentView={documentView}
+        >
+          <KeyFacts
+            callId={CALL}
+            transcript={transcript}
+            report={report}
+            durationMs={transcript.duration_ms}
+            onSeek={vi.fn()}
+          />
+        </ReportReadingProvider>
+      </WorkspaceAccessContext.Provider>,
     ),
   );
 }
-
-function row(label: string) {
-  return Array.from(host.querySelectorAll("div")).find(
-    (element) => element.firstElementChild?.textContent === label,
-  )!;
-}
-
-it("shows only what the call really said, with a play button for each", async () => {
-  expect(row("Time asked for").textContent).toContain("Up to 15 min");
-  expect(row("Time asked for").textContent).toContain("call took 24 min");
-  expect(row("Price or budget").textContent).toContain("no amount said");
-  expect(row("Industry").textContent).toContain("Not found");
-  const play = row("Time asked for").querySelector("button")!;
-  await act(async () => play.click());
-  expect(onSeek).toHaveBeenCalledWith(0);
-});
-
-it("does not infer industry from report prose and saves a user choice", async () => {
-  expect(row("Industry").textContent).toContain("Not found");
-  expect(
-    Array.from(row("Industry").querySelectorAll("button")).some(
-      (button) => button.textContent === "Yes",
-    ),
-  ).toBe(false);
-  await act(async () =>
-    Array.from(row("Industry").querySelectorAll("button"))[0].click(),
+it("reads server fields and their sources without using or changing legacy device facts", async () => {
+  const legacy = JSON.stringify({
+    values: { industry: "Invented local industry" },
+  });
+  localStorage.setItem(`ac.xray.facts.v1:${CALL}`, legacy);
+  await render();
+  expect(host.textContent).toContain("अदिती");
+  expect(host.textContent).toContain("Example company");
+  expect(host.textContent).not.toContain("Invented local industry");
+  expect(host.textContent).not.toContain("Saved on this device");
+  expect(host.querySelectorAll("[data-server-prospect-facts] dt")).toHaveLength(
+    6,
   );
-  const select = row("Industry").querySelector<HTMLSelectElement>(
-    'select[aria-label="Industry"]',
-  )!;
-  await act(async () => {
-    select.value = "Carpentry & building";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(readCallFacts(CALL).values.industry).toBe("Carpentry & building");
-  expect(readCallFacts(CALL).confirmed.industry).toBe(true);
-  expect(row("Industry").textContent).toContain("Confirmed");
+  expect(fetcher.mock.calls[0][0]).toContain(`/calls/${CALL}/suggestions`);
+  expect(localStorage.getItem(`ac.xray.facts.v1:${CALL}`)).toBe(legacy);
 });
-
-it("does not infer or offer to confirm industry from prospect statements", async () => {
-  await act(async () => {
-    saveSpeakerProfiles(CALL, {
-      rep: { name: "Fictional Rep", role: "salesperson", icon: null },
-      buyer: { name: "Fictional Buyer", role: "prospect", icon: null },
-    });
-  });
-
-  const statements = [
-    "If I run a carpentry business, I will need new tools.",
-    "I have a carpentry business plan.",
-    "मेरा carpentry का business nahi hai.",
-  ];
-  for (const text of statements) {
-    await render({
-      ...transcript,
-      segments: [
-        {
-          id: "seller",
-          speaker_id: "rep",
-          start_ms: 0,
-          end_ms: 500,
-          text: "Hello.",
-        },
-        {
-          id: "prospect",
-          speaker_id: "buyer",
-          start_ms: 500,
-          end_ms: 1_000,
-          text,
-        },
-      ],
-    });
-    expect(row("Industry").textContent).toContain("Not found");
-    expect(row("Industry").textContent).not.toContain("Carpentry & building");
-    expect(
-      [...row("Industry").querySelectorAll("button")].some(
-        (button) => button.textContent === "Yes",
-      ),
-    ).toBe(false);
-    expect(readCallFacts(CALL).values.industry).toBeFalsy();
-    expect(readCallFacts(CALL).confirmed.industry).not.toBe(true);
-  }
-});
-
-it("lets the person say what a heard number means", async () => {
-  // A chip opens a small panel of choices instead of a dropdown.
+it("Enter writes the locked field API, then reads back the server revision", async () => {
+  const edit = vi.spyOn(client, "editProspectField").mockResolvedValue();
+  await render();
   await act(async () =>
     host
-      .querySelector<HTMLButtonElement>('button[aria-label^="What is"]')!
+      .querySelector<HTMLButtonElement>('button[aria-label^="Industry:"]')!
       .click(),
+  );
+  const input = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Industry"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "Typed industry");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  expect(edit).toHaveBeenCalledWith(
+    syntheticProspect.prospect_id,
+    3,
+    "industry",
+    "Typed industry",
+  );
+  expect(client.fetchProspectDetail).toHaveBeenCalledTimes(2);
+  expect(localStorage.length).toBe(0);
+});
+it("distinguishes a successful write from a failed readback and withholds stale edits", async () => {
+  vi.spyOn(client, "editProspectField").mockResolvedValue();
+  await render();
+  vi.mocked(client.fetchProspectDetail).mockRejectedValue(
+    new Error("Unavailable"),
   );
   await act(async () =>
-    [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
-      .find((button) => button.textContent === "Yearly sales")!
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label^="Industry:"]')!
       .click(),
   );
-  expect(readCallFacts(CALL).numberLabels["a3:0"]).toBe("Yearly sales");
-});
-
-it("names the people once the call map has them", async () => {
-  expect(row("Who is on the call").textContent).toContain("Not named yet");
+  const input = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Industry"]',
+  )!;
   await act(async () => {
-    saveSpeakerProfiles(CALL, {
-      rep: { name: "Manas", role: "salesperson", icon: null },
-      buyer: { name: "Nandlal ji", role: "prospect", icon: null },
-    });
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "Typed industry");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(row("Who is on the call").textContent).toContain(
-    "Manas (salesperson) · Nandlal ji (prospect)",
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
   );
+  expect(notices.notify).toHaveBeenCalledWith(
+    expect.objectContaining({ title: "Fact saved · refresh unavailable" }),
+  );
+  expect(host.textContent).toContain(
+    "Your edit was saved. Latest facts are unavailable.",
+  );
+  expect(
+    host.querySelector(
+      "[data-server-prospect-facts] input, [data-server-prospect-facts] button",
+    ),
+  ).toBeNull();
 });
-
-it("shows saved speaker names before a role is selected", async () => {
-  await act(async () => {
-    saveSpeakerProfiles(CALL, {
-      buyer: { name: "Fictional Buyer", role: null, icon: null },
-    });
-  });
-  expect(row("Who is on the call").textContent).toContain("Fictional Buyer");
-  expect(row("Who is on the call").textContent).not.toContain("prospect");
-});
-
-it("prints saved facts rather than an open editor or interactive choices", async () => {
-  await act(async () => {
-    saveCallFact(CALL, { kind: "value", id: "firmness", value: "Invite sent" });
-    saveCallFact(CALL, { kind: "number", id: "a3:0", value: "Yearly sales" });
-    [...row("Time asked for").querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "Fix")!
-      .click();
-  });
-  expect(host.querySelector("form")).not.toBeNull();
-  await render(transcript, true);
-  expect(host.querySelector("button, input, select, form")).toBeNull();
-  expect(row("Time asked for").textContent).toContain("Up to 15 min");
-  expect(row("Time asked for").textContent).toContain("00:00");
-  expect(row("Industry").textContent).toContain("Not found");
-  expect(row("How firm is the next step").textContent).toContain("Invite sent");
-  expect(host.textContent).toContain("Yearly sales");
-  expect(host.textContent).toContain("₹1 CR");
+it("keeps the report usable and offers a corner retry when the field service is missing", async () => {
+  fetcher.mockResolvedValue(new Response("", { status: 404 }));
   await render();
-  expect(host.querySelector("form")).not.toBeNull();
+  expect(host.textContent).toContain("Key facts are unavailable");
+  expect(host.textContent).toContain("Facts heard in this call");
+  expect(notices.notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: "Key facts unavailable",
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
+  expect(host.querySelector("input")).toBeNull();
+});
+it("does not create or match a prospect when there is no canonical link", async () => {
+  fetcher.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        schema: "ac.sales-xray.prospect-link/1",
+        submission_id: CALL,
+        membership: null,
+      }),
+    ),
+  );
+  await render();
+  expect(host.textContent).toContain("Link this call to a prospect");
+  expect(client.fetchProspectDetail).not.toHaveBeenCalled();
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+it("keeps shared customer and document fields read-only", async () => {
+  vi.mocked(client.fetchProspectDetail).mockResolvedValue(
+    detail({ ...syntheticProspect, can_edit: false }),
+  );
+  await render();
+  expect(host.querySelector("[data-server-prospect-facts] button")).toBeNull();
+  vi.mocked(client.fetchProspectDetail).mockResolvedValue(detail());
+  await render(access, true);
+  expect(host.querySelector("button, input, select, form")).toBeNull();
+});
+it("withholds old prospect edits immediately when the call link refreshes", async () => {
+  await render();
+  expect(
+    host.querySelector("[data-server-prospect-facts] button"),
+  ).not.toBeNull();
+  vi.mocked(client.fetchProspectDetail).mockImplementationOnce(
+    () => new Promise(() => {}),
+  );
+  await act(async () =>
+    window.dispatchEvent(new Event("ac:prospect-facts-changed")),
+  );
+  expect(host.textContent).not.toContain("अदिती");
+  expect(host.querySelector("[data-server-prospect-facts] button")).toBeNull();
+  expect(host.querySelector('[aria-label="Loading key facts"]')).not.toBeNull();
+});
+it("withholds the previous workspace data as soon as account access is lost", async () => {
+  await render();
+  expect(host.textContent).toContain("अदिती");
+  await render({
+    ...access,
+    status: "unauthenticated",
+    authenticated: false,
+    context: null,
+  });
+  expect(host.textContent).not.toContain("अदिती");
+  expect(host.textContent).toContain("Sign in to save prospect facts");
 });

@@ -61,6 +61,35 @@ a.trigger {
   color: var(--lx-surface);
 }
 
+/* Invitations and "Create": quiet tiles, so only workspaces carry colour. */
+.tile[data-kind="invite"],
+.tile[data-kind="action"] {
+  border: 1px dashed var(--lx-line-strong);
+  background: transparent;
+  color: var(--lx-ink-2);
+}
+
+.tile[data-kind="invite"] {
+  border-style: solid;
+  color: var(--lx-teal);
+}
+
+/* Something waits in the menu: an invitation. */
+.trigger .tile {
+  position: relative;
+}
+
+.dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--lx-paper);
+  border-radius: 50%;
+  background: var(--lx-teal);
+}
+
 .copy {
   display: grid;
   min-width: 0;
@@ -185,6 +214,28 @@ a.trigger {
   flex: none;
   color: var(--lx-teal);
   animation: check-in 260ms var(--lx-ease-pop, ease) both;
+}
+
+.item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.join {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 2px;
+  border: 0;
+  background: var(--lx-line);
 }
 
 .empty {

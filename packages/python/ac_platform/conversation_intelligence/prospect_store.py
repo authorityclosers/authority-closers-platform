@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, and_, case, func, or_, select
+from sqlalchemy import Select, and_, case, false, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.sensitive_segments import (
 )
 from ac_platform.conversation_intelligence.sensitive_segments_store import _effective_statement
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Membership, Organisation
 
 
 def validated_tags(value: object) -> list[str]:
@@ -79,12 +80,41 @@ class ProspectStore:
         self.ownership = ownership
         self.database: AsyncSession = ownership.database
 
+    async def shared_customers(self, actor: ActorContext) -> bool:
+        """AUT-1592 shares customer identity in an active organisation.
+
+        This grants no call, audio, quote, ownership or person-edit permission.
+        Personal/operations workspaces retain their existing owner scope.
+        """
+        if (
+            actor.tenant_id != self.ownership.tenant_id
+            or actor.tenant_id == self.ownership.sessions.operations_tenant_id
+        ):
+            return False
+        member = await self.database.scalar(
+            select(Membership)
+            .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
+            .where(
+                Membership.tenant_id == actor.tenant_id,
+                Membership.person_id == actor.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        return bool(
+            member
+            and member.status == "active"
+            and member.ended_at is None
+            and member.role in {"owner", "admin", "member", "learner"}
+        )
+
     async def queries(self, actor: ActorContext) -> ProspectQueries:
         now = await self.ownership.sessions._admit()
         await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
         if actor.tenant_id != self.ownership.tenant_id:
             raise ConversationDenied("Select the same workspace as this prospect library.")
         every_owner = await self.ownership.organisation_call_reader(actor)
+        shared = await self.shared_customers(actor)
         usage, member, prospect = (
             ConversationAcquisitionUsage,
             ConversationProspectMembership,
@@ -101,6 +131,7 @@ class ProspectStore:
         prospects = select(prospect).where(
             prospect.tenant_id == actor.tenant_id,
             or_(
+                true() if shared else false(),
                 prospect.created_by_person_id == actor.person_id,
                 prospect.owner_person_id == actor.person_id,
                 prospect.id.in_(memberships.with_only_columns(member.prospect_id)),
@@ -234,12 +265,17 @@ class ProspectStore:
         person_rows = await self._latest_fields(row, basis="person")
         return row, [r for r in history if r.basis == "heard_in_call"] + list(person_rows.values())
 
-    async def _field_target(self, actor: ActorContext, prospect_id: UUID) -> ConversationProspect:
+    async def _field_target(
+        self, actor: ActorContext, prospect_id: UUID, *, detected: bool = False
+    ) -> ConversationProspect:
         query = (await self.queries(actor)).prospects
         row = await self.database.scalar(
             query.where(
                 ConversationProspect.id == prospect_id,
-                ConversationProspect.owner_person_id == actor.person_id,
+                or_(
+                    ConversationProspect.owner_person_id == actor.person_id,
+                    true() if detected and await self.shared_customers(actor) else false(),
+                ),
             )
             .with_for_update(of=ConversationProspect)
             .execution_options(populate_existing=True)
@@ -346,7 +382,7 @@ class ProspectStore:
             for key, value in values.items()
         ):
             raise ConversationError("Supply supported detected prospect fields.")
-        row = await self._field_target(actor, prospect_id)
+        row = await self._field_target(actor, prospect_id, detected=True)
         latest = await self._latest_fields(row, basis="heard_in_call")
         changed = {
             key: value
@@ -373,6 +409,8 @@ class ProspectStore:
             evidence=refs,
             extractor_revision=extractor_revision,
         )
+        if "name" in changed and "name" not in await self._latest_fields(row, basis="person"):
+            row.display_name = str(changed["name"]["text"])
         await self.database.flush()
         await self._audit(
             actor,
@@ -705,6 +743,126 @@ class ProspectStore:
         await self._append(actor, scope, prospect.id, now)
         return prospect
 
+    async def ensure_detected(
+        self, actor: ActorContext, submission_id: UUID
+    ) -> ConversationProspect | None:
+        """Create once from a retained, source-verified sales C5; never match names.
+
+        The exclusive recording fence serializes this with manual linking.
+        A person's explicit unlink is respected on subsequent automatic runs.
+        Callers own the transaction; post-C5 orchestration and the view-time
+        fallback can use this same entry point without a provider request.
+        """
+        from ac_platform.conversation_intelligence.prospect_library import ProspectLibrary
+
+        scope = await self._write_scope(actor, submission_id)
+        current = await self._active(scope)
+        if current is not None:
+            return await self.read(actor, current.prospect_id)
+        previous = await self.database.scalar(
+            select(ConversationProspectMembership.id).where(
+                ConversationProspectMembership.tenant_id == scope.tenant_id,
+                ConversationProspectMembership.submission_id == submission_id,
+                ConversationProspectMembership.ended_reason == "unlinked",
+            )
+        )
+        if previous is not None:
+            return None
+        recording = await self.database.get(ConversationRecording, scope.recording_id)
+        assert recording is not None
+        snapshot = (await ProspectLibrary(self)._snapshots([recording], include_facts=True)).get(
+            recording.id, {}
+        )
+        if snapshot.get("customer_call") is not True:
+            return None
+        now = utc(self.ownership.clock())
+        row = ConversationProspect(
+            id=uuid4(),
+            tenant_id=scope.tenant_id,
+            display_name="Prospect — name not heard",
+            created_by_person_id=actor.person_id,
+            owner_person_id=actor.person_id,
+            created_at=now,
+            updated_at=now,
+            revision=1,
+            origin="detected",
+        )
+        self.database.add(row)
+        await self.database.flush()
+        await self._audit(actor, row.id, "detected", {"submission_id": str(submission_id)}, now)
+        await self._append(actor, scope, row.id, now, link_kind="detected")
+        fields, evidence = {}, {}
+        for fact in snapshot.get("facts", []):
+            key = "business" if fact["key"] == "company" else fact["key"]
+            refs = fact["evidence"]
+            if (
+                key not in {"business", "industry", "role", "team_size"}
+                or key in fields
+                or not refs
+                or fact["text"] == WITHHELD_MARKER
+                or refs[0]["quote"] == WITHHELD_MARKER
+            ):
+                continue
+            fields[key] = {"kind": "text", "text": fact["text"]}
+            evidence[key] = refs[0]
+        if fields:
+            await self.record_detected(
+                actor,
+                row.id,
+                submission_id=submission_id,
+                fields=fields,
+                evidence=evidence,
+                extractor_revision="c5-prospect-facts/1",
+            )
+        return row
+
+    async def confirm_detected(
+        self, actor: ActorContext, prospect_id: UUID, *, expected_revision: int
+    ) -> ConversationProspect:
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise ConversationError("Supply a valid prospect revision.")
+        # Confirm from one currently owned, retained call, even for an admin
+        # whose read library also includes colleagues' calls. No new call rights.
+        await self.queries(actor)
+        own_calls = _account_library_query(actor, utc(self.ownership.clock())).with_only_columns(
+            ConversationAcquisitionUsage.submission_id
+        )
+        member = ConversationProspectMembership
+        candidate = await self.database.scalar(
+            select(member)
+            .where(
+                member.tenant_id == actor.tenant_id,
+                member.prospect_id == prospect_id,
+                member.ended_at.is_(None),
+                member.submission_id.in_(own_calls),
+            )
+            .order_by(member.id)
+            .limit(1)
+        )
+        if candidate is None:
+            raise ConversationNotFound("This prospect is unavailable.")
+        scope = await self._write_scope(actor, candidate.submission_id, read_only=True)
+        active = await self._active(scope)
+        if active is None or active.prospect_id != prospect_id:
+            raise ConversationNotFound("This prospect is unavailable.")
+        row = await self._field_target(actor, prospect_id)
+        if row.origin != "detected" or row.confirmed_at is not None:
+            return row
+        if row.revision != expected_revision:
+            raise ConversationConflict("The prospect changed. Reload before confirming.")
+        now, before = utc(self.ownership.clock()), row.revision
+        row.confirmed_at, row.confirmed_by_person_id = now, actor.person_id
+        row.revision, row.updated_at = before + 1, now
+        await self.database.flush()
+        await self._audit(
+            actor,
+            row.id,
+            "confirmed",
+            {"previous_revision": str(before), "current_revision": str(row.revision)},
+            now,
+        )
+        return row
+
     async def confirm_link(
         self,
         actor: ActorContext,
@@ -715,7 +873,7 @@ class ProspectStore:
     ) -> ConversationProspectMembership:
         scope = await self._write_scope(actor, submission_id)
         prospect = await self.read(actor, prospect_id)
-        if prospect.owner_person_id != actor.person_id:
+        if prospect.owner_person_id != actor.person_id and not await self.shared_customers(actor):
             raise ConversationNotFound("This prospect is unavailable.")
         current = await self._active(scope)
         if current is not None and current.prospect_id == prospect_id:
@@ -737,7 +895,13 @@ class ProspectStore:
         await self._end(current, "unlinked", utc(self.ownership.clock()), actor)
 
     async def _append(
-        self, actor: ActorContext, scope: SubmissionScope, prospect_id: UUID, now: datetime
+        self,
+        actor: ActorContext,
+        scope: SubmissionScope,
+        prospect_id: UUID,
+        now: datetime,
+        *,
+        link_kind: str = "person",
     ) -> ConversationProspectMembership:
         row = ConversationProspectMembership(
             id=uuid4(),
@@ -746,6 +910,7 @@ class ProspectStore:
             submission_id=scope.submission_id,
             linked_by_person_id=actor.person_id,
             created_at=now,
+            link_kind=link_kind,
         )
         self.database.add(row)
         await self.database.flush()

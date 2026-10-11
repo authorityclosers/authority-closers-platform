@@ -67,10 +67,12 @@ it("saves only text typed by a person, then requests a fresh server read", async
       ),
     );
     await act(async () =>
-      host.querySelector<HTMLButtonElement>("button")!.click(),
+      Array.from(host.querySelectorAll("button"))
+        .find((b) => b.getAttribute("aria-label")?.startsWith("Name:"))!
+        .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
-    expect(input.value).toBe(""); // Never copy AI text into a human-confirmed edit.
+    expect(input.value).toBe("अदिती"); // Inline editing starts from the displayed value.
     const setter = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",
@@ -80,11 +82,13 @@ it("saves only text typed by a person, then requests a fresh server read", async
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () =>
-      host
-        .querySelector<HTMLFormElement>("form")!
-        .dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }),
-        ),
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
     );
     expect(edit).toHaveBeenCalledWith(
       syntheticProspect.prospect_id,
@@ -152,7 +156,9 @@ it("keeps the current value on a failed save and refreshes before an explicit re
       ),
     );
     await act(async () =>
-      host.querySelector<HTMLButtonElement>("button")!.click(),
+      Array.from(host.querySelectorAll("button"))
+        .find((b) => b.getAttribute("aria-label")?.startsWith("Name:"))!
+        .click(),
     );
     const input = host.querySelector<HTMLInputElement>("input")!;
     await act(async () => {
@@ -163,16 +169,22 @@ it("keeps the current value on a failed save and refreshes before an explicit re
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () =>
-      host
-        .querySelector("form")!
-        .dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }),
-        ),
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
     );
-    expect(
-      host.querySelector('[data-prospect-section="1"] dd')?.textContent,
-    ).toBe("अदिती");
+    expect(host.querySelector('[data-prospect-section="1"] dd input')).toBe(
+      input,
+    );
+    expect(syntheticProspect.profile_fields!.name).toEqual(
+      expect.objectContaining({ state: "known" }),
+    );
     expect(onSaved).not.toHaveBeenCalled();
+    expect(input.value).toBe("Typed edit");
     expect(notice).toHaveBeenCalledWith(
       expect.objectContaining({
         tone: "error",
@@ -187,5 +199,60 @@ it("keeps the current value on a failed save and refreshes before an explicit re
     await act(async () => root.unmount());
     edit.mockRestore();
     notice.mockRestore();
+  }
+});
+
+it("confirms a detected prospect without turning heard values into person edits", async () => {
+  const host = document.createElement("div"),
+    root = createRoot(host),
+    onSaved = vi.fn();
+  const confirm = vi
+    .spyOn(client, "confirmDetectedProspect")
+    .mockResolvedValue();
+  const edit = vi.spyOn(client, "editProspectField").mockResolvedValue();
+  try {
+    await act(async () =>
+      root.render(
+        <ProspectInformation prospect={syntheticProspect} onSaved={onSaved} />,
+      ),
+    );
+    const button = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.textContent === "Confirm prospect",
+    )!;
+    expect(confirm).not.toHaveBeenCalled();
+    await act(async () => button.click());
+    expect(confirm).toHaveBeenCalledWith(syntheticProspect.prospect_id, 3);
+    expect(edit).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledOnce();
+    // Confirmation is shown only from the refreshed server payload.
+    expect(host.textContent).toContain("not yet confirmed");
+  } finally {
+    await act(async () => root.unmount());
+    confirm.mockRestore();
+    edit.mockRestore();
+  }
+});
+
+it("keeps shared customer pages read-only when the server withholds edit and confirmation permission", async () => {
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <ProspectInformation
+          prospect={{
+            ...syntheticProspect,
+            can_edit: false,
+            can_confirm: false,
+          }}
+          onSaved={vi.fn()}
+        />,
+      ),
+    );
+    expect(host.querySelector('[aria-label^="Name:"]')).toBeNull();
+    expect(host.textContent).not.toContain("Confirm prospect");
+    expect(host.querySelectorAll("[data-prospect-section]")).toHaveLength(6);
+  } finally {
+    await act(async () => root.unmount());
   }
 });

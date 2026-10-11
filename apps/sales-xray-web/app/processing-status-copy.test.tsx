@@ -30,6 +30,7 @@ const defaults = {
   needsAttention: false,
   refreshProblem: false,
   waitingForApproval: false,
+  quiet: false,
 };
 async function render(props: Partial<typeof defaults> = {}) {
   await act(async () =>
@@ -98,6 +99,26 @@ it("shows a terminal failure and safe retry after the server releases minutes", 
   expect(container.textContent).toContain("Your minutes have been released");
   expect(container.querySelector("button")?.textContent).toBe("Try again");
   expect(container.textContent).not.toContain("Analysis paused");
+});
+
+it("drops the caps label when quiet (the progress screen), keeping the status", async () => {
+  for (const progress of [
+    {
+      ...running,
+      recording_id: recordingId,
+      run_state: "failed" as const,
+      minute_state: "released" as const,
+      retry_available: true,
+    },
+    { ...running, run_state: "working" as const },
+    running,
+  ]) {
+    await render({ submissionId, needsAttention: true, progress, quiet: true });
+    expect(container.textContent).not.toMatch(
+      /LAST CONFIRMED STATUS|STATUS NEEDS ATTENTION|SAVED WORK/,
+    );
+    expect(container.querySelector("h3")?.textContent).toBeTruthy();
+  }
 });
 
 it.each(["queued", "working", "retrying", "done"] as const)(

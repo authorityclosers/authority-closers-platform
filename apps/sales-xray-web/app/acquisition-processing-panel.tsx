@@ -18,9 +18,12 @@ import { ProcessingStatusCopy } from "./processing-status-copy";
 import { projectProcessing, type ProcessingStage } from "./processing-state";
 import {
   formatElapsed,
+  livePlanFromProgress,
   PROCESSING_STEPS,
   projectSteps,
   readLivePlan,
+  serverStartedAt,
+  serverStepDuration,
   stepIndexForStage,
   type LivePlan,
   type StepState,
@@ -213,10 +216,16 @@ export function AcquisitionProcessingPanel({
   const access = useWorkspaceAccess();
   const offline = useOffline();
   const projection = projectProcessing(progress ?? null, waitingForApproval);
-  const live = useLivePlan(submissionId, !staticPreview);
+  // Newer servers report the stage and its times in the progress read the
+  // page already polls; older ones need this panel's own plan read.
+  const serverPlan = livePlanFromProgress(progress);
+  const polled = useLivePlan(submissionId, !staticPreview && !serverPlan);
+  const live = serverPlan ? { ...polled, plan: serverPlan } : polled;
+  const stageTimes = progress?.stage_progress;
   const needsAttention =
     paused ||
     projection.paused ||
+    progress?.run_state === "failed" ||
     stageRows.some((row) =>
       ["held", "failed", "cancelled", "uncertain"].includes(row.state ?? ""),
     ) ||
@@ -231,7 +240,9 @@ export function AcquisitionProcessingPanel({
   const notStarted = waitingForApproval && !accepted && !live.plan?.stage;
   const working =
     !staticPreview && !needsAttention && !hasReport && !notStarted;
-  const started = startedAt ? Date.parse(startedAt) : NaN;
+  // The server's first recorded start wins over when this page saw it begin.
+  const started =
+    serverStartedAt(stageTimes) ?? (startedAt ? Date.parse(startedAt) : NaN);
   const now = useNow(working && Number.isFinite(started));
   const elapsed =
     now !== null && Number.isFinite(started)
@@ -318,6 +329,7 @@ export function AcquisitionProcessingPanel({
               needsAttention
               refreshProblem={refreshProblem || offline}
               waitingForApproval={waitingForApproval}
+              quiet
             />
           ) : (
             <>
@@ -334,7 +346,8 @@ export function AcquisitionProcessingPanel({
           const start = live.times.start[index];
           const end = live.times.end[index];
           const duration =
-            start !== null && end !== null ? Math.max(0, end - start) : null;
+            serverStepDuration(stageTimes, index) ??
+            (start !== null && end !== null ? Math.max(0, end - start) : null);
           return (
             <li
               key={step.id}

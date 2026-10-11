@@ -2,8 +2,11 @@ import { expect, it } from "vitest";
 
 import {
   formatElapsed,
+  livePlanFromProgress,
   projectSteps,
   readLivePlan,
+  serverStartedAt,
+  serverStepDuration,
   stepIndexForStage,
 } from "./processing-steps";
 
@@ -94,4 +97,64 @@ it("formats measured durations plainly", () => {
   expect(formatElapsed(125_400)).toBe("2:05");
   expect(formatElapsed(3_730_000)).toBe("1:02:10");
   expect(formatElapsed(-5)).toBe("0:00");
+});
+
+const row = (
+  stage: string,
+  started: string | null,
+  finished: string | null,
+) => ({
+  stage,
+  state: finished ? "completed" : "running",
+  started_at: started ? `2026-10-10T12:${started}Z` : null,
+  finished_at: finished ? `2026-10-10T12:${finished}Z` : null,
+});
+
+it("times each step by the server's clock, only when both ends were recorded", () => {
+  const rows = [
+    row("C0", null, "00:05"),
+    row("C1", "00:05", "00:20"),
+    row("C2", "00:20", "01:25"),
+    // C3 records no start; C4 starts and finishes.
+    row("C3", null, "01:30"),
+    row("C4", "01:30", "02:40"),
+    row("C5", "02:40", null),
+  ];
+  expect(serverStepDuration(rows, 0)).toBe(80_000); // 00:05 to 01:25
+  expect(serverStepDuration(rows, 1)).toBe(70_000); // 01:30 to 02:40
+  expect(serverStepDuration(rows, 2)).toBeNull(); // not finished
+  expect(serverStepDuration(undefined, 0)).toBeNull();
+  expect(serverStartedAt(rows)).toBe(Date.parse("2026-10-10T12:00:05Z"));
+  expect(serverStartedAt([row("C0", null, null)])).toBeNull();
+});
+
+it("reads the live stage from the progress read on newer servers only", () => {
+  const base = {
+    state: "active",
+    local_state: "completed",
+    failure_code: null,
+    has_report: false,
+    automatic_progression: true,
+    stages: [],
+  };
+  expect(livePlanFromProgress(base)).toBeNull();
+  expect(livePlanFromProgress({ ...base, current_stage: "C4" })).toEqual({
+    state: "active",
+    stage: "C4",
+    reportReady: false,
+  });
+  expect(
+    livePlanFromProgress({
+      ...base,
+      current_stage: "C3",
+      run_state: "failed",
+    })?.state,
+  ).toBe("failed");
+  expect(
+    livePlanFromProgress({
+      ...base,
+      current_stage: "C6",
+      terminal_state: "done",
+    })?.reportReady,
+  ).toBe(true);
 });
