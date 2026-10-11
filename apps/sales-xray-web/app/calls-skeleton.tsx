@@ -43,28 +43,31 @@ export function CallsBodySkeleton({
           ))}
         </dl>
       ) : null}
-      {/* The toolbar's own boxes (search, chips, sort; on phones also
-          Select), so its one or two rows keep their height. */}
-      <div className={styles.toolbar}>
-        <span className={`${styles.search} ${styles.phControl}`} />
-        <span className={styles.filters}>
-          {[0, 1, 2].map((chip) => (
-            <i key={chip} className={styles.phChip} />
+      {/* The list's own frame (toolbar and table 10 px apart) and the
+          toolbar's own boxes (search, chips, sort; on phones also Select),
+          so its one or two rows keep their height. */}
+      <div className={styles.list}>
+        <div className={styles.toolbar}>
+          <span className={`${styles.search} ${styles.phControl}`} />
+          <span className={styles.filters}>
+            {[0, 1, 2].map((chip) => (
+              <i key={chip} className={styles.phChip} />
+            ))}
+          </span>
+          <span className={`${styles.sort} ${styles.phControl}`} />
+          <span
+            className={`${styles.tool} ${styles.selectToggle} ${styles.phControl}`}
+          />
+        </div>
+        <div className={styles.table}>
+          <div className={styles.head} aria-hidden="true" />
+          {Array.from({ length: 8 }, (_, row) => (
+            <div className={styles.skeletonRow} key={row}>
+              <i data-w="title" />
+              <i data-w="meta" />
+            </div>
           ))}
-        </span>
-        <span className={`${styles.sort} ${styles.phControl}`} />
-        <span
-          className={`${styles.tool} ${styles.selectToggle} ${styles.phControl}`}
-        />
-      </div>
-      <div className={styles.table}>
-        <div className={styles.head} aria-hidden="true" />
-        {Array.from({ length: 8 }, (_, row) => (
-          <div className={styles.skeletonRow} key={row}>
-            <i data-w="title" />
-            <i data-w="meta" />
-          </div>
-        ))}
+        </div>
       </div>
     </div>
   );
