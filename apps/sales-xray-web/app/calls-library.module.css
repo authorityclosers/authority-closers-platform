@@ -701,13 +701,17 @@
   font-weight: 500;
 }
 
+/* The phone row's quiet line wraps between its parts rather than cutting
+   the rep's name ("Rahul …" at 360 px). */
 .meta {
   display: none;
   min-width: 0;
   overflow: hidden;
   color: var(--lx-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
+}
+
+.meta > span {
   white-space: nowrap;
 }
 
@@ -1164,7 +1168,7 @@
  * names are never cut; at 820 px the Call column was 166 px). Length stays
  * in the Call time figure, the preview and the call itself.
  */
-@container calls-page (max-width: 960px) {
+@container calls-page (max-width: 840px) {
   .headCells,
   .item {
     grid-template-columns: minmax(0, 1fr) 96px 132px 16px;
@@ -1216,13 +1220,20 @@
   }
 
   /* r17 S5: compact figures on phones, each name and number on one line
-     and what it counts below, so the list starts sooner. */
+     (the number takes its own line when both don't fit) and what it counts
+     below, so the list starts sooner. */
   .kpi {
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
     align-items: baseline;
     column-gap: 8px;
     row-gap: 2px;
     padding: 10px 12px;
+  }
+
+  .kpi dt {
+    flex: 1 0 auto;
   }
 
   .kpi dd:first-of-type {
@@ -1400,7 +1411,7 @@
      its words (and the loading outline lands on the same lines). */
   .kpiContext {
     display: -webkit-box;
-    grid-column: 1 / -1;
+    flex-basis: 100%;
     min-height: 2lh;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
