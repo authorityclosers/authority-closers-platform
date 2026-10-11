@@ -20,6 +20,9 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
+import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
+import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
+import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { ConnectionNotice } from "./connection-notice";
@@ -287,11 +290,18 @@ function StandaloneStudioView({
   ): "dashboard" | "list" | "account" | "studio" | "call" => {
     if (path === "/dashboard") return "dashboard";
     if (callIdFromPath(path) !== null) return "call";
-    if (path === "/calls" || path === "/analysis" || path === "/analysis/calls")
-      return "list";
     if (path === "/account") return "account";
+    if (path === "/prospects" || path === "/coaching") return "list";
     return "studio";
   };
+  // New analysis and a saved call: the studio's own outline in its shell.
+  const callPath = openingExistingCall || callIdFromPath(pathname) !== null;
+  const studioPath =
+    !callPath && (pathname === "/" || pathname === "/analysis/new");
+  const callsPath =
+    pathname === "/calls" ||
+    pathname === "/analysis" ||
+    pathname === "/analysis/calls";
   const [attempt, setAttempt] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
@@ -665,6 +675,8 @@ function StandaloneStudioView({
             authenticated={false}
             loading
             active={activeFor(pathname)}
+            mobileFit={studioPath || callPath}
+            heroStage={studioPath ? "welcome" : undefined}
           >
             {/* The page's own skeleton where it has one, so nothing moves. */}
             {pathname === "/organisation" ? (
@@ -673,6 +685,12 @@ function StandaloneStudioView({
               <InvitesSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
+            ) : studioPath ? (
+              <NewAnalysisSkeletonContent />
+            ) : callPath ? (
+              <CallOpeningSkeletonContent />
+            ) : callsPath ? (
+              <CallsSkeleton />
             ) : (
               <PageSkeleton variant={skeletonVariant(pathname)} />
             )}

@@ -15,9 +15,10 @@
   color: var(--lx-ink);
 }
 
+/* No entrance motion: the page's loading screen draws this same heading, so
+   it simply stays put when the page arrives (owner, 11 Oct). */
 .line {
   display: inline-block;
-  animation: rise-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .name {
@@ -38,14 +39,12 @@
 .mark {
   display: inline-block;
   font-size: 0.85em;
-  animation: bob 2.8s ease-in-out 600ms infinite;
 }
 
 .subtitle {
   margin: 0;
   font-size: 14px;
   color: var(--lx-muted);
-  animation: rise-in 600ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .footer {
@@ -57,7 +56,6 @@
   padding: 0 4px;
   color: var(--lx-muted);
   font-size: 13px;
-  animation: rise-in 600ms 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .allowance {
@@ -103,29 +101,6 @@
   font-weight: 700;
 }
 
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
-  }
-}
-
-@keyframes bob {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-3px) rotate(-6deg);
-  }
-}
-
 @keyframes shimmer {
   0%,
   100% {
@@ -143,11 +118,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .line,
-  .name,
-  .mark,
-  .subtitle,
-  .footer {
+  .name {
     animation: none;
   }
 }
