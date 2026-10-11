@@ -17,6 +17,7 @@ import {
 } from "./report-contract";
 import {
   countReportMoments,
+  momentMapPositions,
   ReportMoments,
   timelineMoments,
 } from "./report-moments";
@@ -164,6 +165,83 @@ it("puts one moment per finding on a single timeline in call order", () => {
   ]);
   // Both clips stay with their finding.
   expect(moments[3].evidence).toHaveLength(2);
+});
+
+it("keeps every nearby clip reachable on separate rows at desktop and touch sizes", () => {
+  const moments = timelineMoments(mixed());
+  const before = JSON.stringify(moments);
+  for (const controlSize of [32, 44]) {
+    for (const width of [240, 960]) {
+      const layout = momentMapPositions(moments, 25_000, width, controlSize);
+      expect(layout.positions.map((position) => position.id)).toEqual(
+        moments.map((moment) => moment.id),
+      );
+      for (const [index, position] of layout.positions.entries()) {
+        expect(position.x).toBe(moments[index].evidence[0].start_ms / 25_000);
+        const left = position.x * (width - controlSize);
+        expect(left).toBeGreaterThanOrEqual(0);
+        expect(left + controlSize).toBeLessThanOrEqual(width);
+        for (const other of layout.positions.slice(index + 1)) {
+          if (position.row === other.row) {
+            expect(Math.abs(position.x - other.x) * (width - controlSize))
+              .toBeGreaterThanOrEqual(controlSize + 4);
+          }
+        }
+      }
+    }
+  }
+  expect(momentMapPositions(moments, 25_000, 240, 44).rows).toBeGreaterThan(
+    momentMapPositions(moments, 25_000, 960, 44).rows,
+  );
+  expect(JSON.stringify(moments)).toBe(before);
+});
+
+it("stacks coincident pins and places selected rewatch evidence at its own time", () => {
+  const moments = timelineMoments(mixed()).map((moment, index) => ({
+    ...moment,
+    listenEvidence: { ...excerpt(index), start_ms: index < 4 ? 0 : 25_000 },
+  }));
+  const layout = momentMapPositions(moments, 25_000, 240, 44);
+  expect(layout.positions.slice(0, 4).map(({ x, row }) => [x, row])).toEqual([
+    [0, 0], [0, 1], [0, 2], [0, 3],
+  ]);
+  expect(layout.positions[4]).toMatchObject({ x: 1, row: 0 });
+});
+
+it("opens each clustered standalone listen clip and plays its exact source", async () => {
+  const report = suppliedReport();
+  const clips = [0, 1, 2, 3].map((index) => ({
+    ...excerpt(index),
+    start_ms: 1_000 + index * 123,
+    end_ms: 2_000 + index * 123,
+  }));
+  report.overview!.rewatch = clips.map((evidence, index) => ({
+    purpose: "watch",
+    text: `Standalone listen ${index}`,
+    evidence: [evidence],
+  }));
+  const onSelectEvidence = await render(report);
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  for (const [index, clip] of clips.entries()) {
+    const pin = container.querySelector<HTMLButtonElement>(
+      `[data-map-moment="rewatch:${index}"]`,
+    )!;
+    expect(pin.getAttribute("aria-label")).toContain(`Standalone listen ${index}`);
+    await act(async () => {
+      pin.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    const row = container.querySelector<HTMLElement>(
+      `[data-moment="rewatch:${index}"]`,
+    )!;
+    expect(row.hasAttribute("data-open")).toBe(true);
+    await act(async () => row.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Play"]',
+    )!.click());
+    expect(onSelectEvidence).toHaveBeenNthCalledWith(
+      index + 1, clip, `Standalone listen ${index}`,
+    );
+  }
 });
 
 it("marks rewatch picks on the finding that cites the same clip, never inventing one", () => {
