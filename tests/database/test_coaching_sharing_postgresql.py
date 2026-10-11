@@ -539,3 +539,106 @@ def test_storage_checks_the_current_pair_before_any_append(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_concurrent_commands_append_once_and_keep_notes_out_of_audit(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Racing copies of one command: one row and one audit event, never two.
+
+    Every copy passes the "already recorded?" read before any inserts (a
+    barrier inside the current-focus check), so the unique command index is
+    what decides. A changed copy racing the original conflicts.
+    """
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        actor, tenant = setup.state.actor, setup.state.tenant_id
+        origin = uuid4()
+        note_text = "Fictional: the buyer's finance lead joined late."
+
+        def racing(copies: int) -> Any:
+            barrier = asyncio.Barrier(copies)
+
+            async def read() -> tuple[str, Any]:
+                await barrier.wait()
+                return ("qualification", origin)
+
+            return read
+
+        async def feedback(command: Any, focus: Any, agreement: Any = "agree") -> str:
+            try:
+                async with setup.sessions() as db, db.begin():
+                    await record_feedback(
+                        db,
+                        actor=actor,
+                        tenant_id=tenant,
+                        command_id=command,
+                        agreement=agreement,
+                        focus_skill_id="qualification",
+                        mission_origin_submission_id=origin,
+                        current_focus=focus,
+                    )
+            except ConversationConflict:
+                return "conflict"
+            return "ok"
+
+        async def context(command: Any, focus: Any) -> str:
+            async with setup.sessions() as db, db.begin():
+                await record_context(
+                    db,
+                    actor=actor,
+                    tenant_id=tenant,
+                    command_id=command,
+                    focus_skill_id="qualification",
+                    mission_origin_submission_id=origin,
+                    context=note_text,
+                    current_focus=focus,
+                )
+            return "ok"
+
+        try:
+            same_feedback, same_note = uuid4(), uuid4()
+            focus = racing(3)
+            assert await asyncio.gather(*(feedback(same_feedback, focus) for _ in range(3))) == [
+                "ok",
+                "ok",
+                "ok",
+            ]
+            focus = racing(3)
+            assert await asyncio.gather(*(context(same_note, focus) for _ in range(3))) == [
+                "ok",
+                "ok",
+                "ok",
+            ]
+            # The original and a changed copy race: one lands, the other conflicts.
+            changed, focus = uuid4(), racing(2)
+            outcomes = await asyncio.gather(
+                feedback(changed, focus), feedback(changed, focus, "not_completely")
+            )
+            assert sorted(outcomes) == ["conflict", "ok"]
+            async with setup.sessions() as db:
+                feedback_rows = (await db.scalars(select(CoachingFeedback))).all()
+                assert sorted(row.command_id for row in feedback_rows) == sorted(
+                    [same_feedback, changed]
+                )
+                notes = (await db.scalars(select(CoachingLearnerContext))).all()
+                assert [row.command_id for row in notes] == [same_note]
+                events = (
+                    await db.scalars(select(AuditEvent).where(AuditEvent.action.like("coaching.%")))
+                ).all()
+                assert sorted((event.action, event.resource_id) for event in events) == sorted(
+                    [
+                        ("coaching.feedback_recorded", str(same_feedback)),
+                        ("coaching.feedback_recorded", str(changed)),
+                        ("coaching.context_added", str(same_note)),
+                    ]
+                )
+                # The note itself is never copied into the audit trail.
+                added = next(e for e in events if e.action == "coaching.context_added")
+                assert added.payload == {"length": len(note_text)}
+                assert all("finance lead" not in str(event.payload) for event in events)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
