@@ -6,6 +6,10 @@
   animation: skeleton-in 240ms ease-out 150ms both;
 }
 
+.skeleton[data-instant] {
+  animation: none;
+}
+
 .block {
   display: block;
   flex: none;
@@ -136,6 +140,15 @@
 }
 
 /* ---------- A call (processing / report) ---------- */
+/* The route's own frame for a saved call: the studio's opening frame (no
+   panel, no padding), so this outline and the studio's sit in one place. */
+.frame.frame {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
 /* A saved call's Report, laid out where the Report will be (24 px into the
    studio column on desktop, 16 px on a phone; one column, 984 px at most). */
 .report {

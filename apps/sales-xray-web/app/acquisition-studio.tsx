@@ -2160,7 +2160,8 @@ export function AcquisitionStudio({
                 <p className="visually-hidden" role="status" aria-live="polite">
                   Opening your saved call
                 </p>
-                <PageSkeleton variant="report" />
+                {/* Takes over from the route's identical outline: no fade. */}
+                <PageSkeleton variant="report" instant />
               </>
             ) : (
               <section

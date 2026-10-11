@@ -42,9 +42,21 @@ function Bar({
  * loading lasts long enough to notice, so quick loads never flash; one light
  * sheen passes across every placeholder together.
  */
-export function PageSkeleton({ variant }: { variant: SkeletonVariant }) {
+export function PageSkeleton({
+  variant,
+  instant = false,
+}: {
+  variant: SkeletonVariant;
+  /** Takes over from the same outline already on screen: no fade-in. */
+  instant?: boolean;
+}) {
   return (
-    <div className={styles.skeleton} data-variant={variant} aria-hidden="true">
+    <div
+      className={styles.skeleton}
+      data-variant={variant}
+      data-instant={instant ? "" : undefined}
+      aria-hidden="true"
+    >
       {variant === "dashboard" ? (
         <div className={styles.dashboard}>
           <div className={styles.stack}>

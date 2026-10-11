@@ -3579,13 +3579,19 @@ a.overviewCard:hover {
   :global(.studio-main) {
   background: transparent;
 }
-.app.app:is([data-stage="opening"], [data-stage="recovery"])
-  :global(.studio-main) {
+.app.app[data-stage="recovery"] :global(.studio-main) {
   display: grid;
   min-height: calc(100dvh - var(--lx-topbar-h, 64px) - 48px);
   max-width: none;
   place-items: center;
   padding: 24px;
+}
+/* Opening: the Report's outline, from the top-left where the Report goes. */
+.app.app[data-stage="opening"] :global(.studio-main) {
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .processingPanel {
   display: grid;

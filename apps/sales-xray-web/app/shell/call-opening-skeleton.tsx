@@ -3,6 +3,7 @@
 import { AcquisitionShell } from "../acquisition-shell";
 import { useWorkspaceAccess } from "../workspace-access";
 import { PageSkeleton } from "./page-skeleton";
+import styles from "./page-skeleton.module.css";
 
 /**
  * A saved call while its route or session loads. The studio shows the same
@@ -10,8 +11,8 @@ import { PageSkeleton } from "./page-skeleton";
  */
 export function CallOpeningSkeletonContent() {
   return (
-    <div className="xray-app simple-app" data-stage="opening">
-      <div className="studio-main">
+    <div className={`xray-app simple-app ${styles.frame}`} data-stage="opening">
+      <div className={`studio-main ${styles.frame}`}>
         <p className="visually-hidden" role="status" aria-live="polite">
           Opening your saved call
         </p>
