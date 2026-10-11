@@ -265,3 +265,18 @@ def test_the_pattern_line_counts_every_flagged_call_not_only_the_four_moments() 
 def test_a_call_without_a_comparable_evaluator_version_cannot_recur() -> None:
     first, second = call(1, version="unlinked:a"), call(2, version="unlinked:a")
     assert set(recurring_focus((first, second)).values()) == {None}
+
+
+def test_a_repeated_focus_comes_before_a_one_call_focus_and_then_stays() -> None:
+    # A one-call focus first, then a skill that is the focus on two calls.
+    result = view(call(1, skill="qualification"), call(2), call(3))
+    assert result.focus.skill_id == "problem_impact_desire"
+    assert result.focus.status == "active"
+    assert result.mission.origin_submission_id == UUID(int=102)
+    # The first skill also repeats later: the earlier pattern stays the focus.
+    later = view(call(1, skill="qualification"), call(2), call(3), call(4, skill="qualification"))
+    assert later.focus.skill_id == "problem_impact_desire"
+    assert later.mission == result.mission
+    # No pattern at all: the first supported mission stays, as before.
+    single = view(call(1, skill="qualification"), call(2))
+    assert single.focus.skill_id == "qualification" and single.focus.status == "provisional"

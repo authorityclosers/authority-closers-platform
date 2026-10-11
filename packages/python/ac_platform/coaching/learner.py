@@ -81,7 +81,7 @@ def build_learner(
     unavailable_calls: int = 0,
     history_limited: bool = False,
 ) -> CoachingView:
-    """Keep the first supported mission until explicit evidence can supersede it.
+    """One focus: the first skill to repeat as a call's focus, else the first mission.
 
     A source is counted once even if reuploaded/reanalysed. Version boundaries
     start a new comparison group; an unlinked report revision is not progress.
@@ -101,17 +101,31 @@ def build_learner(
     if history_limited:
         limitations.append("Only your 40 most recent calls are included.")
     groups: dict[tuple[str, str], list[SkillObservation]] = defaultdict(list)
+    # Per comparable skill: (call position, row) where the report chose it as
+    # that call's focus, oldest first.
+    flagged: dict[tuple[str, str], list[tuple[int, SkillObservation]]] = defaultdict(list)
     selected: tuple[str, str] | None = None
     origin: SkillObservation | None = None
-    for call in calls:
+    for position, call in enumerate(calls):
         for skill in call.skills:
             key = (
                 call.comparison_key if skill.basis == "skill_evidence" else str(call.submission_id),
                 skill.skill_id,
             )
             groups[key].append(skill)
-            if selected is None and skill.improvement and skill.mission:
-                selected, origin = key, skill
+            if skill.improvement and skill.mission:
+                if selected is None:
+                    selected, origin = key, skill
+                if skill.basis == "skill_evidence":
+                    flagged[key].append((position, skill))
+    # A pattern comes first (spec pillar 1, selection steps 1-2 and 7): the
+    # skill that was a call's focus on two calls earliest, with the mission
+    # from its first call. It stays as later calls arrive; without any pattern
+    # the first supported mission stays.
+    patterns = [(rows[1][0], rows[0][0], key) for key, rows in flagged.items() if len(rows) >= 2]
+    if patterns:
+        *_, key = min(patterns)
+        selected, origin = key, flagged[key][0][1]
     common = dict(
         person_id=person_id,
         tenant_id=tenant_id,
