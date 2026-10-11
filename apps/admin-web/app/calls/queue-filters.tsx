@@ -9,7 +9,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { kitStyles, Toolbar } from "../ui/kit";
-import { languageLabel, type Queue } from "./call-data";
+import {
+  CALL_STATUSES,
+  STATUS_LABEL,
+  languageLabel,
+  type Queue,
+} from "./call-data";
 import styles from "./calls.module.css";
 import { filterQuery, type QueueFilters as Filters } from "./queue-query";
 
@@ -60,10 +65,10 @@ export function QueueFilters({
     </select>
   );
   const active = Object.entries(filters).some(
-    ([key, value]) => key !== "status" && key !== "cursor" && value,
+    ([key, value]) => key !== "review" && key !== "cursor" && value,
   );
   const chosen = Object.entries(filters).filter(
-    ([key, value]) => key !== "status" && key !== "cursor" && value,
+    ([key, value]) => key !== "review" && key !== "cursor" && value,
   ).length;
   return (
     <div className={styles.filterArea} data-shown={shown ? "" : undefined}>
@@ -77,6 +82,19 @@ export function QueueFilters({
         {chosen ? `Filters · ${chosen}` : "Filters"}
       </button>
       <Toolbar label="Filter calls">
+        <select
+          aria-label="Analysis"
+          className={styles.filterSelect}
+          value={filters.status ?? ""}
+          onChange={(event) => set("status", event.target.value)}
+        >
+          <option value="">Analysis: all</option>
+          {CALL_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {STATUS_LABEL[status]}
+            </option>
+          ))}
+        </select>
         {select("organisation", "Organisation", facets.organisations)}
         {select("rep", "Rep", facets.reps)}
         {select("language", "Language", facets.languages, (value) =>
@@ -110,7 +128,7 @@ export function QueueFilters({
             className={kitStyles.button}
             data-variant="ghost"
             onClick={() => {
-              const query = filterQuery({ status: filters.status });
+              const query = filterQuery({ review: filters.review });
               start(() =>
                 router.push(query ? `${pathname}?${query}` : pathname, {
                   scroll: false,

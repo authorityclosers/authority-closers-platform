@@ -5,6 +5,7 @@
  */
 import { normalizeFailedJob, type FailedJob } from "../health/health-data";
 import { read } from "../lib/read";
+import { asReviewState, REVIEW_STATES, type ReviewState } from "./labels-data";
 
 export const CALL_STATUSES = [
   "ready",
@@ -64,12 +65,14 @@ export type QueueItem = {
   promptRevision: string | null;
   runs: number;
   reportRunId: string | null;
+  review: ReviewState;
 };
 export type Facet = { value: string; label: string; count: number };
 export type Queue = {
   items: QueueItem[];
   total: number;
   counts: Record<CallStatus, number>;
+  reviewCounts: Record<ReviewState, number>;
   facets: {
     organisations: Facet[];
     reps: Facet[];
@@ -127,12 +130,19 @@ export function normalizeQueue(raw: unknown): Queue {
         promptRevision: read.optionalString(row.prompt_revision),
         runs: read.number(row.runs),
         reportRunId: read.optionalString(row.report_run_id),
+        review: asReviewState(row.review),
       };
     }),
     total: read.number(body.total),
     counts: Object.fromEntries(
       CALL_STATUSES.map((status) => [status, read.number(counts[status])]),
     ) as Record<CallStatus, number>,
+    reviewCounts: Object.fromEntries(
+      REVIEW_STATES.map((state) => [
+        state,
+        read.number(read.object(body.review_counts)[state]),
+      ]),
+    ) as Record<ReviewState, number>,
     facets: {
       organisations: facets(facetBody.organisations),
       reps: facets(facetBody.reps),

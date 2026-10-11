@@ -71,9 +71,10 @@ describe("console navigation", () => {
     );
   });
 
-  it("never lists a section before its screen exists", () => {
+  it("lists every built section in local preview", () => {
     const everything = hrefs({ ...base, state: "preview" });
-    expect(everything).not.toContain("/gold");
+    expect(everything).toContain("/gold");
+    expect(everything).toContain("/safety");
   });
 
   it("marks the most specific matching section, including query-addressed tabs", () => {

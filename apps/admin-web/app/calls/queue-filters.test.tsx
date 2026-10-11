@@ -36,13 +36,13 @@ it("counts chosen filters on the phone toggle, which opens and closes them", asy
   await act(async () =>
     root.render(
       <QueueFilters
-        filters={{ status: "ready", prompt: "coaching-v5", language: "en" }}
+        filters={{ review: "new", prompt: "coaching-v5", language: "en" }}
         facets={facets}
       />,
     ),
   );
   const toggle = host.querySelector("button[aria-expanded]")!;
-  // The status tab isn't a filter here; prompt and language are.
+  // The review tab isn't a filter here; prompt and language are.
   expect(toggle.textContent).toBe("Filters · 2");
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   await act(async () => (toggle as HTMLButtonElement).click());
