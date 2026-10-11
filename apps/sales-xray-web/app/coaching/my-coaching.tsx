@@ -91,7 +91,8 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
 
 /**
  * Every analysed call has its own coaching, even before a pattern exists.
- * One-column screens open with the three newest calls (spec 12.7).
+ * Wide screens open with the eight newest calls and one-column screens with
+ * three (spec 12.7); the rest stay one tap away.
  */
 function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -134,6 +135,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreCalls}`}
+          data-many={calls.length > 8 ? "" : undefined}
           onClick={() => setExpanded(true)}
         >
           Show all {calls.length} calls

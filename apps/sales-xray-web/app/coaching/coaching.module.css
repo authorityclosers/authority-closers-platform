@@ -61,11 +61,12 @@
   /* The rail already shows the mission beside the focus. */
   .hero .nextCall,
   .root .moreMoments:not([data-many]),
-  .root .moreCalls {
+  .root .moreCalls:not([data-many]) {
     display: none;
   }
 
-  .moments:not([data-expanded]) > [data-extra]:nth-child(n + 3) {
+  .moments:not([data-expanded]) > [data-extra]:nth-child(n + 3),
+  .callList:not([data-expanded]) li:nth-child(n + 9) {
     display: none;
   }
 }
