@@ -1,5 +1,7 @@
 """Default organisation processing reuses sealed routes without granting access."""
 
+import hashlib
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -12,9 +14,21 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
+from ac_platform.conversation_intelligence.broker_router import (
+    FixedProviderRouter,
+    ProviderRoute,
+    ProviderRouterError,
+)
+from ac_platform.conversation_intelligence.checkpoints import SourceBinding
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
+from ac_platform.conversation_intelligence.entitlements import (
+    ExecutionPermission,
+    Quote,
+    Reservation,
+)
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from tests.unit.conversation_intelligence.test_acquisition_provider_policy import SOURCE_SHA
+from tests.unit.conversation_intelligence.test_broker_router import FakeChild
 from tests.unit.conversation_intelligence.test_organisation_acquisition_policies import (
     CONTROL_ID,
     ORG_ID,
@@ -95,6 +109,104 @@ def test_personal_template_can_supply_routes_when_no_organisation_override_is_se
     policy = bundle.acquisition_policy_for(uuid4(), registered_organisation=True)
     assert policy.stage_sets() == bundle.acquisition_policy.stage_sets()
     assert policy.max_recordings == 2000
+
+
+def default_reservation(bundle, tenant_id, stage_name, source_sha):
+    policy = bundle.acquisition_policy_for(tenant_id, registered_organisation=True)
+    actor = ProcessingActor(policy.processing_person_id, tenant_id, uuid4())
+    stage = ConversationAuthority.stage_approval(
+        bundle, actor, source_sha256=source_sha, stage=stage_name
+    )
+    quote = Quote(
+        quote_id="fictional-default-org-quote",
+        source=SourceBinding(str(tenant_id), str(uuid4()), source_sha, "1"),
+        account_id=str(actor.person_id),
+        budget_scope_id=str(bundle.budget_scope_id),
+        provider_id=stage.provider_id,
+        provider_model=stage.model_id,
+        recipe_revision=stage.recipe_revision,
+        operation="transcribe_scribe_v2" if stage_name == "C2" else "extract_context_evidence",
+        input_sha256=source_sha,
+        provider_configuration_sha256=stage.configuration_sha256,
+        privacy_revision=stage.privacy_revision,
+        permission_ref=stage.permission_ref,
+        provider_terms_ref=stage.provider_terms_ref,
+        retention_ref=stage.retention_ref,
+        professional_gate_ref=stage.professional_gate_ref,
+        pricing_ref=stage.pricing_ref,
+        entitlement_seconds=0,
+        max_cost_paise=stage.max_cost_paise,
+        created_at_epoch=1100,
+        expires_at_epoch=1600,
+    )
+    reservation = Reservation(
+        reservation_id="fictional-default-org-reservation",
+        quote=quote,
+        permission=ExecutionPermission(
+            authorization_ref=f"hosted-stage-v1:{stage.id}:{bundle.digest}",
+            quote_fingerprint=quote.fingerprint,
+            approved_by=quote.account_id,
+            expires_at_epoch=1600,
+        ),
+        state="in_flight",
+        attempt_id="fictional-default-org-attempt",
+    )
+    return stage, reservation
+
+
+@pytest.mark.parametrize("stage_name", ["C2", "C4", "C5"])
+def test_default_stages_reach_router_with_exact_org_source_binding(stage_name):
+    bundle = organisation_bundle()
+    tenant_id = uuid4()
+    stage, reservation = default_reservation(bundle, tenant_id, stage_name, SOURCE_SHA)
+    assert FixedProviderRouter._stage(reservation, bundle) == stage
+    assert stage.configuration_sha256 == "e" * 64
+    for forged_quote in (
+        replace(reservation.quote, account_id=str(ORG_PERSON_ID)),
+        replace(
+            reservation.quote,
+            source=replace(reservation.quote.source, tenant_id=str(uuid4())),
+        ),
+    ):
+        forged = replace(
+            reservation,
+            quote=forged_quote,
+            permission=replace(
+                reservation.permission,
+                quote_fingerprint=forged_quote.fingerprint,
+                approved_by=forged_quote.account_id,
+            ),
+        )
+        with pytest.raises(ProviderRouterError, match="broker_router_route_mismatch"):
+            FixedProviderRouter._stage(forged, bundle)
+
+
+async def test_default_router_dispatches_only_with_matching_signed_permission():
+    bundle = organisation_bundle()
+    source = b"fictional default organisation audio"
+    source_sha = hashlib.sha256(source).hexdigest()
+    stage, reservation = default_reservation(bundle, uuid4(), "C2", source_sha)
+    child = FakeChild()
+    router = FixedProviderRouter(
+        {stage.provider_id: ProviderRoute(stage.provider_id, stage.credential_ref, child)},
+        authority=ConversationAuthority(
+            lambda: bundle, environment="test", operations_tenant_id=CONTROL_ID
+        ),
+        clock=lambda: datetime.fromtimestamp(1100, UTC),
+    )
+    result = await router.execute(reservation, source)
+    assert result.provider == stage.provider_id and len(child.calls) == 1
+    other_stage, _ = default_reservation(bundle, uuid4(), "C2", source_sha)
+    forged = replace(
+        reservation,
+        permission=replace(
+            reservation.permission,
+            authorization_ref=f"hosted-stage-v1:{other_stage.id}:{bundle.digest}",
+        ),
+    )
+    with pytest.raises(ProviderRouterError, match="broker_router_authorization_mismatch"):
+        await router.execute(forged, source)
+    assert len(child.calls) == 1
 
 
 @pytest.mark.parametrize("limit", ["count", "source", "organisation_storage", "shared_storage"])

@@ -45,5 +45,13 @@ combined run passed 83 unit/HTTP cases before a transient native-preflight rejec
 standalone measurement and the isolated full upload/read/isolation journey passed.
 Final command results are recorded in Strike E's NOTES.md.
 
+Additional provider-boundary proof covers all three default C2/C4/C5 stage
+bindings and rejects a different processing person or tenant. A fictional C2
+child dispatch succeeds once with the exact signed permission, then refuses a
+borrowed other-organisation permission before another child call. The changed
+module passes all 13 cases; total focused coverage is 98 cases. The shared
+browser acquisition check and Python gates pass at the published implementation
+SHA; CI and the open Insights overlap remain separate final-head requirements.
+
 No live approval, staging/production data, host service, provider credential,
 manual merge or deployment was changed. No UI file changed or screenshot build ran.
