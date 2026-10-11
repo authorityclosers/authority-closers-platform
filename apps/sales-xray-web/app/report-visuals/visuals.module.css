@@ -689,9 +689,10 @@ button.pin {
   cursor: pointer;
 }
 
+/* A 32 px tap target around the 10 px dot (Pulse floor). */
 button.pin::after {
   position: absolute;
-  inset: -9px;
+  inset: -11px;
   content: "";
 }
 
