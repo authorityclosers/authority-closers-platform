@@ -112,6 +112,8 @@ it("separates the report observation, exact source words, and hypothesis", async
   ).toContain(interpretation.source.evidence[0].quote);
   const hypothesis = card.querySelector('[data-prospect-part="hypothesis"]')!;
   expect(hypothesis.textContent).toContain("A guess, not a fact");
+  expect(container.textContent).toContain("From this call only");
+  expect(container.textContent).not.toMatch(/supported|ongoing profile/);
   expect(hypothesis.textContent).toContain(interpretation.possible_concern);
   expect(hypothesis.textContent).not.toContain(
     interpretation.source.evidence[0].quote,

@@ -182,15 +182,16 @@ export function ProspectSnapshot({
             </div>
           ) : (
             <Empty icon={Quote}>
-              No supported problem statement was found in this call.
+              The prospect didn’t describe their problem in their own words on
+              this call.
             </Empty>
           )}
         </KitSection>
       ) : null}
 
       <p className={styles.footnote}>
-        This reflects this call only. It is not an ongoing profile of the
-        prospect, and it cannot show what happened after the call.
+        From this call only, not everything you know about them. It can’t show
+        what happened after the call.
       </p>
     </div>
   );
