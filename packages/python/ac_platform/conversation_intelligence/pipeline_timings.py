@@ -25,7 +25,8 @@ RUNS_SQL = """
 SELECT CASE WHEN j.kind = 'conversation.inspect_local.v1' THEN 'C0_C1'
             ELSE t.stage END AS stage,
        r.state, j.attempt_count AS claims,
-       r.created_at AS enqueue, j.dispatch_started_at AS dispatch,
+       CASE WHEN t.stage IS NULL THEN r.created_at ELSE t.created_at END AS enqueue,
+       j.dispatch_started_at AS dispatch,
        j.receipt_recorded_at AS receipt, r.completed_at AS completed,
        cp.created_at AS published,
        signal.published AS c1_published, signal.matches AS c1_matches
