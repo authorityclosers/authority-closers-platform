@@ -113,11 +113,11 @@ export function FocusHero({
       <p className={styles.lead}>{explanation}</p>
       {children}
       <div className={styles.pair}>
-        <div className={styles.callout}>
+        <div className={styles.fact}>
           <CardLabel>{FOCUS.whyMatters}</CardLabel>
           <p>{why}</p>
         </div>
-        <div className={styles.callout}>
+        <div className={styles.fact}>
           <CardLabel>{FOCUS.whyFocus}</CardLabel>
           <p>{reason}</p>
         </div>

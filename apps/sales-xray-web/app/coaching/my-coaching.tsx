@@ -62,6 +62,10 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   const firstAfter = points.findIndex((point) => point.after_mission);
   return (
     <div className={styles.progress}>
+      <span className={styles.cardLabel} aria-hidden="true">
+        {PROGRESS.callsLabel}
+        <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
+      </span>
       <ol className={styles.timeline} aria-label={PROGRESS.calls}>
         {points.map((point, index) => (
           <li

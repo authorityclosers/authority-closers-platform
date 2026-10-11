@@ -245,6 +245,8 @@ export const PROGRESS = {
   trend: "Trend",
   journey: "Mastery journey",
   calls: "Your calls on this skill, oldest first",
+  callsLabel: "Your calls on this skill",
+  oldestFirst: "oldest first",
   correct: (correct: number, relevant: number) =>
     `Done well in ${correct} of ${relevant} relevant moments`,
   sinceMission: (quiet: number, after: number) =>
