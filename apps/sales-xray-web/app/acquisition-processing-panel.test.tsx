@@ -8,6 +8,13 @@ import type { Progress } from "./acquisition-client";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => null,
+}));
+
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,7 +107,7 @@ it("says one true thing and moves the steps with the plan's live stage", async (
     `/v1/conversation/acquisition/submissions/${callId}/plan`,
   );
   expect(host.querySelector("h2")?.textContent).toBe("Analysing your call");
-  expect(host.textContent).toContain("Usually about 2–4 minutes");
+  expect(host.textContent).toContain("Usually 2–3 minutes");
   expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
     "active",
     "waiting",

@@ -53,6 +53,12 @@ const secondReportSummary =
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => null,
+}));
 vi.mock("./upload-check", () => ({
   UploadCheck: ({ onToken }: { onToken: (token: string) => void }) => (
     <button onClick={() => onToken("synthetic-one-use-challenge")}>
@@ -1863,7 +1869,7 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.querySelector('[role="status"] h2')?.textContent).toBe(
     "Analysing your call",
   );
-  expect(container.textContent).toContain("Usually about 2–4 minutes");
+  expect(container.textContent).toContain("Usually 2–3 minutes");
   expect(
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
