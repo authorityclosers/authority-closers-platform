@@ -155,6 +155,8 @@ class Journey:
               for (const el of document.querySelectorAll('main *, [data-report-modes] *')) {
                 // Decorative initials accompany a separately rendered speaker name.
                 if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
+                // Closed details can retain layout bounds without painting their content.
+                if (!el.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
                 const text = Array.from(el.childNodes).some(n => {
                   if (n.nodeType !== Node.TEXT_NODE || !n.textContent.trim()) return false;
                   const range = document.createRange();
@@ -285,6 +287,22 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         assert nav.get_by_role("link").evaluate_all(
             "els => els.map(el => el.getAttribute('aria-label'))"
         ) == [label for _, label in REPORT_SECTIONS], "Report order differs from Dipak's spec"
+        actions = page.locator('summary[aria-label="More report actions"]')
+        actions.click()
+        expect(page.get_by_role("button", name="Download report", exact=False)).to_be_visible()
+        journey.snapshot("actions")
+        # Hit-test without copying a link or invoking a disabled fixture download.
+        reachable = page.get_by_role("button", name="Copy link", exact=True).evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return hit === el || el.contains(hit);
+            }"""
+        )
+        journey.observations[-1]["actions_pointer_reachable"] = reachable
+        if not reachable:
+            journey.visual_errors.append("actions: Copy link is covered by another element")
+        actions.click()
         for section, label in REPORT_SECTIONS:
             nav.get_by_role("link", name=label, exact=True).click()
             pillar = page.locator(f'[data-report-pillar="{section}"]:visible')

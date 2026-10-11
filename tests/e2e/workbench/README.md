@@ -39,8 +39,10 @@ routes; it never tries to enable development-only fixtures on staging.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.
+Use a fresh output directory for each readback to preserve earlier evidence.
 No traces or storage-state files are generated. Read the screenshots yourself;
-font floors, root overflow, cleared loading state, browser exceptions and HTTP
+font floors, menu pointer reachability, root overflow, cleared loading state,
+browser exceptions and HTTP
 500s cannot establish visual quality alone. Document pages intentionally remain
 paper-coloured in both application themes.
 
