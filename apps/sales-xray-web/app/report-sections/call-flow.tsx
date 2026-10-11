@@ -116,9 +116,6 @@ export function CallFlow({
             names={names?.bottom ? names : null}
             onSelect={onSelect}
           />
-          {!flow.phases ? (
-            <p className={styles.note}>{CALL_FLOW.noStages}</p>
-          ) : null}
         </StoryCard>
       ) : null}
       {/* 2.3 Key change, then 2.4 before / the switch / after. */}
