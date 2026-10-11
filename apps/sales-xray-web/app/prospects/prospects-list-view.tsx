@@ -35,6 +35,8 @@ export function ProspectsListView() {
   const [prospects, setProspects] = useState<ProspectSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
+  // No stage is stored yet; stage filters appear once the API offers stages.
+  const [stagesOffered, setStagesOffered] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function ProspectsListView() {
         setProspects(page.prospects);
         setTotal(page.total);
         setNextOffset(page.next_offset);
+        setStagesOffered(page.stage_filters.length > 0);
         setLoadedContext(contextKey);
         setError(null);
         setLoading(false);
@@ -205,32 +208,34 @@ export function ProspectsListView() {
               />
             </div>
 
-            <div
-              className={styles.filterGroup}
-              role="group"
-              aria-label="Stage filters"
-            >
-              <button
-                type="button"
-                className={`${styles.filterBtn}${stageFilter === null ? ` ${styles.filterBtnActive}` : ""}`}
-                onClick={() => setStageFilter(null)}
-                aria-pressed={stageFilter === null}
+            {stagesOffered || stageFilter !== null ? (
+              <div
+                className={styles.filterGroup}
+                role="group"
+                aria-label="Stage filters"
               >
-                All
-              </button>
-              <button
-                type="button"
-                className={`${styles.filterBtn}${stageFilter === "__missing__" ? ` ${styles.filterBtnActive}` : ""}`}
-                onClick={() =>
-                  setStageFilter((prev) =>
-                    prev === "__missing__" ? null : "__missing__",
-                  )
-                }
-                aria-pressed={stageFilter === "__missing__"}
-              >
-                Missing stage
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className={`${styles.filterBtn}${stageFilter === null ? ` ${styles.filterBtnActive}` : ""}`}
+                  onClick={() => setStageFilter(null)}
+                  aria-pressed={stageFilter === null}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.filterBtn}${stageFilter === "__missing__" ? ` ${styles.filterBtnActive}` : ""}`}
+                  onClick={() =>
+                    setStageFilter((prev) =>
+                      prev === "__missing__" ? null : "__missing__",
+                    )
+                  }
+                  aria-pressed={stageFilter === "__missing__"}
+                >
+                  Missing stage
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {showLoading ? (
