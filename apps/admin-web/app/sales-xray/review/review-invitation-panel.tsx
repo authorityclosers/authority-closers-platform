@@ -348,22 +348,27 @@ export function ReviewInvitationPanel({
               {revoking ? "Revoking…" : "Revoke known invitation"}
             </Button>
           </span>
+        </div>
+      </details>
+      {/* Outside the collapsed section: a revoke from a receipt row reports here too. */}
+      {revokeMutation.status === "error" ||
+      revokeMutation.status === "success" ? (
+        <div className={styles.body}>
           {revokeMutation.status === "error" ? (
             <p className={styles.note} data-tone="warn" role="alert">
               <CircleAlert size={14} aria-hidden="true" />
               <span>{revokeMutation.message}</span>
             </p>
-          ) : null}
-          {revokeMutation.status === "success" ? (
+          ) : (
             <p className={styles.note} data-tone="good" role="status">
               <CheckCircle2 size={14} aria-hidden="true" />
               <span>
                 Invitation revoked. Its link can no longer grant review access.
               </span>
             </p>
-          ) : null}
+          )}
         </div>
-      </details>
+      ) : null}
     </Panel>
   );
 }
