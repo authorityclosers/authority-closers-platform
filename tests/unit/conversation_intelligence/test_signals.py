@@ -284,11 +284,13 @@ def test_process_derivative_size_is_bounded(tmp_path: Path) -> None:
 
 def test_process_excludes_provider_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AC_SYNTHETIC_PROVIDER_SECRET", "test-only-placeholder")
+    monkeypatch.setenv("AC_HEAVY_GUARDIAN", "synthetic-slot-marker")
     result = signals._run_bounded(
         [
             sys.executable,
             "-c",
             "import os; "
+            "assert os.environ.get('AC_HEAVY_GUARDIAN') == 'synthetic-slot-marker'; "
             "print('present' if 'AC_SYNTHETIC_PROVIDER_SECRET' in os.environ else 'absent')",
         ],
         timeout=5,
