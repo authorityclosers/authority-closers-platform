@@ -20,7 +20,15 @@ import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  fictionalCallCoaching,
+  fictionalCoaching,
+  fictionalTeamCoaching,
+} from "../app/coaching/coaching.fixture.ts";
 import { answer, fixtureFor } from "./page-matrix-fixtures.mjs";
+
+/** The call whose coaching the per-call journey opens (Strike D's fixture). */
+export const COACHING_CALL = fictionalCallCoaching.submission_id;
 
 export const VARIANTS = [
   [1440, 900, "light"],
@@ -32,6 +40,12 @@ export const VARIANTS = [
 const SNAG =
   /This screen hit a snag|Application error: a client-side exception/;
 const ACQ = "/v1/conversation/acquisition";
+
+/** Who the page-matrix owner is (page-matrix-fixtures.mjs). */
+const OWNER_SCOPE = {
+  person_id: "00000000-0000-4000-8000-000000000001",
+  tenant_id: "22222222-2222-4222-8222-222222222222",
+};
 
 /** The page-matrix owner, plus the studio's reads and a sign-in switch. */
 export function journeyApi({ signedIn = true, failing = [] } = {}) {
@@ -58,6 +72,14 @@ export function journeyApi({ signedIn = true, failing = [] } = {}) {
       retention_days: 30,
     },
     [`${ACQ}/availability`]: { paused: false },
+    // Coaching (Strike D): its own invented contract fixtures, for the
+    // page-matrix owner in the page-matrix organisation.
+    "/v1/me/coaching": { ...fictionalCoaching, ...OWNER_SCOPE },
+    "/v1/me/coaching/team": { ...fictionalTeamCoaching, ...OWNER_SCOPE },
+    [`/v1/me/coaching/calls/${COACHING_CALL}`]: {
+      ...fictionalCallCoaching,
+      ...OWNER_SCOPE,
+    },
   };
   const respond = (method, pathname, search) => {
     if (method === "POST" && pathname === "/v1/auth/password/login") {
@@ -231,16 +253,25 @@ export const JOURNEYS = {
   },
 
   async coaching(page, { origin }) {
-    await page.goto(`${origin}/coaching`, { waitUntil: "domcontentloaded" });
-    await settled(page);
-    await page.locator("main h1, main h2").first().waitFor({ timeout: 10_000 });
-    await noSnag(page, "Coaching");
-    await page.goto(`${origin}/coaching?view=team`, {
-      waitUntil: "domcontentloaded",
-    });
-    await settled(page);
-    await page.locator("main h1, main h2").first().waitFor({ timeout: 10_000 });
-    await noSnag(page, "team Coaching");
+    // Mine: the focus skill; team: the team's skills; one call: its coaching.
+    for (const [path, expected] of [
+      ["/coaching", fictionalCoaching.focus.label],
+      ["/coaching?view=team", fictionalTeamCoaching.suggestions?.[0]?.label],
+      [`/coaching?call=${COACHING_CALL}`, "Coaching for this call"],
+    ]) {
+      await page.goto(`${origin}${path}`, { waitUntil: "domcontentloaded" });
+      await settled(page);
+      await noSnag(page, path);
+      if (expected)
+        await page
+          .locator("main")
+          .getByText(expected, { exact: false })
+          .first()
+          .waitFor({ timeout: 10_000 })
+          .catch(() => {
+            throw new Error(`${path}: "${expected}" did not show`);
+          });
+    }
   },
 
   async settings(page, { origin }) {
