@@ -293,3 +293,21 @@ async def test_call_audio_needs_private_storage(admin_client) -> None:
     client, database = admin_client
     response = await client.get(f"/v1/admin/conversation/runs/{database.runs[0].id}/source")
     assert response.status_code == 503
+
+
+async def test_analysis_health_route_bounds_the_window(admin_client, monkeypatch) -> None:
+    from ac_platform.conversation_intelligence.admin_analysis_health import AdminAnalysisHealth
+
+    client, _database = admin_client
+    seen: dict[str, Any] = {}
+
+    async def summary(service, actor, *, days):
+        seen.update(days=days, scope=service.recording_tenant_ids)
+        return {"window": {"days": days}}
+
+    monkeypatch.setattr(AdminAnalysisHealth, "summary", summary)
+    response = await client.get("/v1/admin/conversation/health", params={"days": "30"})
+    assert response.status_code == 200 and seen["days"] == 30
+    assert set(seen["scope"]) == {PERSONAL, ORGANISATION}
+    for params in ({"days": "0"}, {"days": "31"}, {"days": "7", "other": "1"}):
+        assert (await client.get("/v1/admin/conversation/health", params=params)).status_code == 422

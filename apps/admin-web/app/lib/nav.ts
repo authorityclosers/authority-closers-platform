@@ -120,7 +120,6 @@ export const NAVIGATION: readonly NavGroup[] = [
     items: [
       {
         href: "/health",
-        soon: true,
         label: "Analysis health",
         icon: "health",
         need: { kind: "salesXray" },

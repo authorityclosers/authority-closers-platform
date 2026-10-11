@@ -129,3 +129,33 @@ def test_only_the_operations_control_account_is_admitted(review_case: ReviewCase
                 await service.queue(case.admin_actor, cursor="not-a-cursor")
 
     run(exercise())
+
+
+def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) -> None:
+    from ac_platform.conversation_intelligence.admin_analysis_health import AdminAnalysisHealth
+
+    case = review_case
+
+    async def exercise() -> None:
+        async with case.sessions() as database, database.begin():
+            health = await AdminAnalysisHealth(
+                ConversationApplication(database, clock=lambda: case.prepared.state.now),
+                case.operations_tenant_id,
+                recording_tenant_ids=(case.prepared.state.tenant_id, case.operations_tenant_id),
+            ).summary(case.admin_actor, days=30)
+            assert health["jobs"]["total"] >= 1
+            assert set(health["jobs"]["by_status"]) == {
+                "queued",
+                "leased",
+                "retry_wait",
+                "held",
+                "succeeded",
+                "dead_letter",
+            }
+            assert len(health["daily"]) == 30
+            assert health["durations"]["runs"]["count"] >= 1
+            assert health["cost"]["basis"] == "admin_pricing_estimate_not_settlement"
+            for item in health["failed"]:
+                assert " " not in item["code"]
+
+    run(exercise())

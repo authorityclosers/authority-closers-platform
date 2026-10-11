@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.admin_analysis_health import AdminAnalysisHealth
 from ac_platform.conversation_intelligence.admin_call_review import (
     LANGUAGES,
     STATUSES,
@@ -114,6 +115,27 @@ def install_call_review_routes(
                 cursor=cursor,
                 limit=limit,
             )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/health")
+    async def health(
+        request: Request,
+        response: Response,
+        days: Annotated[int, Query(ge=1, le=30)] = 7,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Analysis health for a window of days: jobs, failures, stuck work, time, cost."""
+
+        scope(request, response, {"days"})
+        if settings.operations_tenant_id is None:
+            raise HTTPException(503, "Analysis health is not configured.")
+        try:
+            return await AdminAnalysisHealth(
+                ConversationApplication(auth.database),
+                settings.operations_tenant_id,
+                recording_tenant_ids=recording_tenant_ids,
+            ).summary(auth.resolved.actor, days=days)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
