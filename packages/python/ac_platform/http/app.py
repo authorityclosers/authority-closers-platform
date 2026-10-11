@@ -29,6 +29,7 @@ from ac_platform.http.conversation_acquisition_runtime import (
 )
 from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_execution_control import install_execution_control_http
+from ac_platform.http.conversation_insights import install_insights_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
@@ -211,6 +212,14 @@ def create_app(
         # draft importer remains an explicit test-only seam and is not enabled
         # by passing the raw caller-supplied runtime here.
         recovery_storage=resolved_conversation.storage if resolved_conversation else None,
+    )
+    # The company view (AUT-1798): Sales Xray Insights and its Admin counterpart.
+    install_insights_routes(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+        acquisition_intake=resolved_acquisition.intake if resolved_acquisition else None,
     )
     install_execution_control_http(
         application, settings=settings, sessions=session_factory, require_actor=require_actor
