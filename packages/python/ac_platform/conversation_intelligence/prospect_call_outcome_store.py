@@ -158,6 +158,8 @@ class CallOutcomeStore:
         current: ConversationCallOutcomeRevision | None,
         member: ConversationProspectMembership | None,
         stage_revision: int | None,
+        *,
+        can_edit: bool = True,
     ) -> dict[str, Any]:
         return {
             "schema": SCHEMA,
@@ -180,12 +182,15 @@ class CallOutcomeStore:
                 if member is not None
                 else None
             ),
-            # Only the owner reaches this point; everyone else gets NotCallOwner.
-            "can_edit": True,
+            # The owner may edit; an organisation owner or admin only reads.
+            "can_edit": can_edit,
         }
 
     async def read(self, actor: ActorContext, submission_id: UUID) -> dict[str, Any]:
-        scope = await self._scope(actor, submission_id, read_only=True)
+        try:
+            scope = await self._scope(actor, submission_id, read_only=True)
+        except NotCallOwner:
+            return await self._read_as_organisation_reader(actor, submission_id)
         current = await self._current(scope)
         member = await self.prospects._active(scope)
         stage = (
@@ -194,6 +199,36 @@ class CallOutcomeStore:
             else None
         )
         return self._json(actor, scope, current, member, stage)
+
+    async def _read_as_organisation_reader(
+        self, actor: ActorContext, submission_id: UUID
+    ) -> dict[str, Any]:
+        """An organisation owner or admin sees what the call's owner recorded; nobody else.
+
+        The same organisation-read admission as the report applies (active owner or
+        admin of the call's organisation, retained and claimed call). Nothing here can
+        edit: the owner alone records, and `can_edit` says so to the client.
+        """
+
+        try:
+            scope = await self.prospects.ownership.require_submission_owner(
+                submission_id,
+                actor=actor,
+                shared_identity_locks=True,
+                allow_organisation_read=True,
+            )
+        except (ConversationDenied, ConversationNotFound):
+            raise NotCallOwner(NOT_CALL_OWNER) from None
+        if scope.tenant_id != actor.tenant_id:
+            raise NotCallOwner(NOT_CALL_OWNER)
+        current = await self._current(scope)
+        member = await self.prospects._active(scope)
+        stage = (
+            await self._stage_revision(scope.tenant_id, member.prospect_id)
+            if member is not None
+            else None
+        )
+        return self._json(actor, scope, current, member, stage, can_edit=False)
 
     async def save(
         self, actor: ActorContext, submission_id: UUID, command: HumanOutcomeCommand

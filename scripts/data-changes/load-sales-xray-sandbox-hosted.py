@@ -55,6 +55,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.org_insights import OrganisationInsights
+from ac_platform.conversation_intelligence.prospect_call_outcome import HumanOutcome
+from ac_platform.conversation_intelligence.prospect_call_outcome_models import (
+    ConversationCallOutcomeRevision,
+)
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import load_report_profile, parse_report_draft
 from ac_platform.conversation_intelligence.speaker_map import (
@@ -153,6 +157,96 @@ def subset(root: Path, per_business: int) -> frozenset[str] | None:
         )
         chosen.update(row["call_id"] for row in ordered[:per_business])
     return frozenset(chosen)
+
+
+def dataset_outcome(deal: Any) -> dict[str, Any] | None:
+    """The authored Where-the-Deal-Stands status as the app's human outcome, or None."""
+    if not isinstance(deal, dict):
+        return None
+    status = deal.get("current_status")
+    payload: dict[str, Any]
+    if status == "Won":
+        value = deal.get("deal_value_inr")
+        payload = {"outcome": "won"}
+        if type(value) is int and value > 0:
+            payload["deal_value"] = {"amount": str(value), "currency_code": "INR"}
+    elif status == "Lost":
+        reason = deal.get("prospects_position")
+        if not isinstance(reason, str) or not reason.strip():
+            return None
+        payload = {"outcome": "lost", "lost_reason": " ".join(reason.split())[:1000]}
+    elif status in {"Follow-up Set", "Meeting Booked"}:
+        event = deal.get("next_event")
+        if not isinstance(event, dict) or event.get("agreed") is not True:
+            return None
+        when = event.get("at")
+        if not isinstance(when, str):
+            return None
+        payload = {
+            "outcome": "follow_up",
+            "follow_up_on": datetime.fromisoformat(when).date().isoformat(),
+        }
+    elif status in {
+        "Decision Pending",
+        "Deferred",
+        "Still Open",
+        "No Clear Next Step",
+        "Disqualified",
+    }:
+        payload = {"outcome": "no_decision"}
+    else:
+        return None
+    HumanOutcome.parse(payload)
+    return payload
+
+
+async def record_outcome(
+    db: AsyncSession,
+    *,
+    submission: UUID,
+    owner_id: UUID,
+    deal: Any,
+    at: datetime,
+    apply: bool,
+    counts: Counter,
+) -> None:
+    """Record the authored outcome once, as the fictional seller, never replacing a later choice."""
+    payload = dataset_outcome(deal)
+    if payload is None:
+        counts["outcomes_unsupported"] += 1
+        return
+    existing = await db.scalar(
+        select(ConversationCallOutcomeRevision.revision)
+        .where(
+            ConversationCallOutcomeRevision.tenant_id == TARGET,
+            ConversationCallOutcomeRevision.submission_id == submission,
+        )
+        .order_by(ConversationCallOutcomeRevision.revision.desc())
+        .limit(1)
+    )
+    if existing is not None:
+        counts["outcomes_preserved"] += 1
+        return
+    counts["outcomes_created"] += 1
+    if not apply:
+        return
+    value = HumanOutcome.parse(payload)
+    db.add(
+        ConversationCallOutcomeRevision(
+            id=identifier("outcome", str(submission)),
+            tenant_id=TARGET,
+            submission_id=submission,
+            revision=1,
+            outcome=value.outcome,
+            lost_reason=value.lost_reason,
+            follow_up_on=value.follow_up_on,
+            deal_amount=value.deal_value.amount if value.deal_value else None,
+            deal_currency=value.deal_value.currency_code if value.deal_value else None,
+            set_by_person_id=owner_id,
+            prospect_id=None,
+            created_at=at,
+        )
+    )
 
 
 def representatives(root: Path) -> list[dict[str, Any]]:
@@ -715,6 +809,7 @@ async def load(
     include_history: bool = False,
     per_business: int = 0,
     history_max_rows: int = 0,
+    record_outcomes: bool = False,
 ) -> dict:
     """Caller owns one transaction. Dry-run reads and validates without adding rows."""
     await target(db, approver)
@@ -751,6 +846,9 @@ async def load(
             "summaries_skipped": 0,
             "summaries_validated": 0,
             "calls_excluded": 0,
+            "outcomes_created": 0,
+            "outcomes_preserved": 0,
+            "outcomes_unsupported": 0,
         }
     )
     selected = subset(root, per_business)
@@ -926,6 +1024,16 @@ async def load(
                 counts=counts,
             )
             counts["calls_skipped"] += 1
+            if record_outcomes:
+                await record_outcome(
+                    db,
+                    submission=submission,
+                    owner_id=identifier("person", bundle.metadata["rep_id"]),
+                    deal=bundle.report.get("where_the_deal_stands"),
+                    at=bundle.occurred_at + timedelta(milliseconds=bundle.metadata["duration_ms"]),
+                    apply=apply,
+                    counts=counts,
+                )
             continue
         counts["calls_created"] += 1
         if not apply:
@@ -1062,6 +1170,16 @@ async def load(
                 created_at=at,
             )
         )
+        if record_outcomes:
+            await record_outcome(
+                db,
+                submission=submission,
+                owner_id=owner_id,
+                deal=bundle.report.get("where_the_deal_stands"),
+                at=at + timedelta(milliseconds=bundle.metadata["duration_ms"]),
+                apply=True,
+                counts=counts,
+            )
         await preserved(
             db,
             kind="call",
@@ -1116,6 +1234,7 @@ async def load(
         "issue": "AUT-1676",
         "per_business": per_business,
         "history_max_rows": history_max_rows,
+        "record_outcomes": record_outcomes,
         "approval_reference": approval,
         "approver_person_id": str(approver),
         "applied": apply,
@@ -1166,6 +1285,7 @@ async def execute(args: argparse.Namespace) -> dict:
                 include_history=args.include_history,
                 per_business=args.per_business,
                 history_max_rows=args.history_max_rows,
+                record_outcomes=args.record_outcomes,
             )
     finally:
         await engine.dispose()
@@ -1185,6 +1305,11 @@ def main() -> None:
     parser.add_argument("--expect-db-host", required=True, help="environment PostgreSQL host")
     parser.add_argument("--per-business", type=int, default=0, help="0 = all calls per seller")
     parser.add_argument("--history-max-rows", type=int, default=0, help="0 = all summaries")
+    parser.add_argument(
+        "--record-outcomes",
+        action="store_true",
+        help="also record each call outcome from the dataset, once, as the fictional seller",
+    )
     args = parser.parse_args()
     if args.per_business < 0 or args.history_max_rows < 0:
         parser.error("Bounds must be non-negative.")
