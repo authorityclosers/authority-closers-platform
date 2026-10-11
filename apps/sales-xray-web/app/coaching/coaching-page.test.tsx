@@ -518,10 +518,17 @@ describe("Coaching story", () => {
               state: "no_suggestion",
               after_mission: true,
             },
+            {
+              submission_id: "00000000-0000-4000-8000-0000000000c3",
+              created_at: "2026-10-11T10:00:00Z",
+              state: "not_covered",
+              after_mission: true,
+            },
           ],
         }}
       />,
     );
+    // The third call gave no chance to use the skill, so it isn't counted.
     expect(html).toContain(
       "Since your mission started: 1 of 1 call on this skill needed no fix. Too early to call it a change.",
     );

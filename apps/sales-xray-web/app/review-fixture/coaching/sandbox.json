@@ -229,14 +229,14 @@
       "label": "Explain value before trading price",
       "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
       "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
-      "selected_reason": "It needed work in 5 of your last 7 calls on this skill.",
+      "selected_reason": "It needed work in 4 of your last 6 calls on this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
     },
     "pattern": {
-      "relevant_call_count": 7,
-      "attention_call_count": 5,
+      "relevant_call_count": 6,
+      "attention_call_count": 4,
       "summary": "It needed work on 4 different calls. Replay the moments below and see what you did each time."
     },
     "root_cause": {

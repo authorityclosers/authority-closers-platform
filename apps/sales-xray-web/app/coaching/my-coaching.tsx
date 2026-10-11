@@ -70,7 +70,10 @@ function statusText(mastery: Coaching["mastery"]) {
 function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   const they = useTheirCoaching();
   if (!points?.length) return null;
-  const after = points.filter((point) => point.after_mission);
+  // "calls on this skill": a call that gave no chance to use it isn't one.
+  const after = points.filter(
+    (point) => point.after_mission && point.state !== "not_covered",
+  );
   const quiet = after.filter((point) => point.state === "no_suggestion");
   const firstAfter = points.findIndex((point) => point.after_mission);
   const count = (state: ProgressPoint["state"]) =>
