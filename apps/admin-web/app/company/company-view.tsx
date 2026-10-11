@@ -186,7 +186,13 @@ function CallList({ rows }: { rows: CallRow[] }) {
       {rows.map((row) => (
         <li key={row.key}>
           <span>
-            <strong>{row.person}</strong>
+            {row.recordingId ? (
+              <Link href={`/calls/${row.recordingId}`}>
+                <strong>{row.person}</strong>
+              </Link>
+            ) : (
+              <strong>{row.person}</strong>
+            )}
             <small>
               {dateLabel(row.at)} · {outcomeLabel(row.outcome)} ·{" "}
               {duration(row.durationMs)}
@@ -566,7 +572,13 @@ export function CompanyView({
                 <tr key={row.key}>
                   <td>{dateLabel(row.at, true)}</td>
                   <td>
-                    {row.person}
+                    {row.recordingId ? (
+                      <Link href={`/calls/${row.recordingId}`}>
+                        {row.person}
+                      </Link>
+                    ) : (
+                      row.person
+                    )}
                     {row.team ? (
                       <small className={styles.sub}>{row.team}</small>
                     ) : null}

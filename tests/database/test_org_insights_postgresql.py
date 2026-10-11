@@ -36,6 +36,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 import ac_platform.db.models  # noqa: F401 - register every mapper
 from ac_platform.conversation_intelligence import org_insights
 from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.insight_models import (
     SKILL_ORDER,
     ConversationInsightCall,
@@ -63,6 +64,7 @@ MODELS = (
     ConversationProcessingPlan,
     ConversationSandboxOrganisation,
     ConversationSyntheticRecord,
+    ConversationGuestSubmission,
     Person,
 )
 
@@ -177,6 +179,13 @@ async def seed_calls(
                     owner=ids[owner],
                     created_at=at,
                     seconds=seconds,
+                    recording_id=ids[recording],
+                )
+            )
+            await db.execute(
+                insert(ConversationGuestSubmission.__table__).values(
+                    tenant_id=tenant,
+                    submission_id=ids[submission],
                     recording_id=ids[recording],
                 )
             )
@@ -313,6 +322,9 @@ def test_real_calls_project_aggregate_and_leave_with_the_library(database_url: U
             page = await library(db, tenant).calls(InsightFilters.window(NOW, span="12m"))
             assert [item["key"] for item in page["items"]] == [str(ids["s1"]), str(ids["s2"])]
             assert page["items"][0]["objections"] == ["price"] and page["next_offset"] is None
+            # Admin opens a real call in the review console by its recording.
+            assert page["items"][0]["recording_id"] == str(ids["r1"])
+            assert strongest[0]["recording_id"] == str(ids["r1"])
 
             # A call the library no longer shows drops out of every read at once ...
             await db.execute(scope_table.delete().where(scope_table.c.submission_id == ids["s2"]))
@@ -532,6 +544,7 @@ def test_sandbox_history_projects_in_sql_and_is_labelled_synthetic(database_url:
             assert page["synthetic"] is True
             assert [item["key"] for item in page["items"]] == ["syn-x-C1", "syn-x-C2", "syn-x-C3"]
             assert page["items"][0]["person"] == "Meera Joshi"
+            assert page["items"][0]["recording_id"] is None
 
             # Cached per projection state: a repeat read is served from the cache,
             # a refresh that projects new rows reads fresh.

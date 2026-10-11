@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement, Select
 
 from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.insight_models import (
     OUTCOMES,
     SKILL_ORDER,
@@ -1048,10 +1049,12 @@ class OrganisationInsights:
             .order_by(*order, row.call_key)
             .limit(5)
         )
-        return [
-            self._call_row(key, person, at, outcome, skills, duration, names=names)
-            for key, person, at, outcome, skills, duration in rows
-        ]
+        return await self._with_recordings(
+            [
+                self._call_row(key, person, at, outcome, skills, duration, names=names)
+                for key, person, at, outcome, skills, duration in rows
+            ]
+        )
 
     def _call_row(
         self,
@@ -1116,34 +1119,64 @@ class OrganisationInsights:
             "total": total,
             "offset": offset,
             "next_offset": offset + len(rows) if offset + len(rows) < total else None,
-            "items": [
-                self._call_row(
-                    key,
-                    person,
-                    at,
-                    outcome,
-                    skills,
-                    duration,
-                    names=names,
-                    language=language,
-                    talk_share=talk,
-                    objections=[] if not objection else objection.split("|"),
-                    deal_value=value,
-                )
-                for (
-                    key,
-                    person,
-                    at,
-                    outcome,
-                    skills,
-                    duration,
-                    language,
-                    talk,
-                    objection,
-                    value,
-                ) in rows
-            ],
+            "items": await self._with_recordings(
+                [
+                    self._call_row(
+                        key,
+                        person,
+                        at,
+                        outcome,
+                        skills,
+                        duration,
+                        names=names,
+                        language=language,
+                        talk_share=talk,
+                        objections=[] if not objection else objection.split("|"),
+                        deal_value=value,
+                    )
+                    for (
+                        key,
+                        person,
+                        at,
+                        outcome,
+                        skills,
+                        duration,
+                        language,
+                        talk,
+                        objection,
+                        value,
+                    ) in rows
+                ]
+            ),
         }
+
+    async def _with_recordings(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Each real call's recording, so Admin can open it in the review console."""
+        if await self.source() != "call" or not items:
+            for item in items:
+                item["recording_id"] = None
+            return items
+        submissions = []
+        for item in items:
+            try:
+                submissions.append(UUID(item["key"]))
+            except ValueError:
+                continue
+        recordings = {
+            str(submission): str(recording)
+            for submission, recording in await self.database.execute(
+                select(
+                    ConversationGuestSubmission.submission_id,
+                    ConversationGuestSubmission.recording_id,
+                ).where(
+                    ConversationGuestSubmission.tenant_id == self.tenant_id,
+                    ConversationGuestSubmission.submission_id.in_(submissions),
+                )
+            )
+        }
+        for item in items:
+            item["recording_id"] = recordings.get(item["key"])
+        return items
 
     # --- names and facets ------------------------------------------------------
 
