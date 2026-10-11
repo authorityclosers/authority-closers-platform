@@ -604,6 +604,11 @@
   gap: 2px;
 }
 
+/* The phone set (fewer, wider bars) shows only when the stages stack. */
+.bars[data-set="rows"] {
+  display: none;
+}
+
 .bars > i {
   position: relative;
   flex: 1 1 0;
@@ -828,14 +833,37 @@ button.pin:focus-visible {
     display: inline;
   }
 
-  .timeline:not([data-single]) .wave {
+  /* One track of the whole call: each stage's stretch sits at its true place
+     and length, so the rows step from left to right as the call moves on. */
+  .timeline:not([data-single]) .block::after {
     grid-row: 1;
     grid-column: 3;
+    align-self: center;
+    height: 1px;
+    background: color-mix(in oklab, var(--sx-ink) 12%, transparent);
+    content: "";
+  }
+
+  .timeline:not([data-single]) .wave {
+    --stretch: max(12px, calc(var(--span, 1) * 100%));
+    grid-row: 1;
+    grid-column: 3;
+    justify-self: start;
+    width: var(--stretch);
+    margin-left: min(calc(var(--from, 0) * 100%), calc(100% - var(--stretch)));
   }
 
   .timeline:not([data-single]) .bars {
-    inset: 4px 2px;
+    inset: 4px 1px;
     gap: 1px;
+  }
+
+  .timeline:not([data-single]) .bars[data-set="wide"] {
+    display: none;
+  }
+
+  .timeline:not([data-single]) .bars[data-set="rows"] {
+    display: flex;
   }
 
   .timeline:not([data-single]) .changeLabel {

@@ -47,6 +47,7 @@ import {
 } from "../source-waveform";
 import { Avatar } from "../ui/kit";
 import {
+  ROW_BARS,
   WAVE_BARS,
   activityBins,
   allocateBars,
@@ -582,11 +583,11 @@ export function CallTimeline({
   const blocks = stages.length
     ? stages
     : [{ label: "", start_ms: 0, end_ms: durationMs }];
-  const bars = allocateBars(
-    blocks.map((block) => block.end_ms - block.start_ms),
-    WAVE_BARS,
-    3,
-  );
+  const lengths = blocks.map((block) => block.end_ms - block.start_ms);
+  const bars = allocateBars(lengths, WAVE_BARS, 3);
+  // Phones draw the stages as rows on one track of the whole call, with fewer,
+  // wider bars, so a bar is the same width in every row.
+  const rowBars = allocateBars(lengths, ROW_BARS, 2);
   const mode = speech?.top.length
     ? "speech"
     : sound
@@ -627,26 +628,47 @@ export function CallTimeline({
           const last = index === blocks.length - 1;
           const inside = (atMs: number) =>
             atMs >= block.start_ms && (atMs < block.end_ms || last);
-          const count = bars[index] ?? 3;
-          const levels = sound
-            ? waveformBins(sound, block.start_ms, block.end_ms, count)
-            : null;
-          const { top, bottom } =
-            mode === "speech" && speech
-              ? voiceBars(
-                  activityBins(speech.top, block.start_ms, block.end_ms, count),
-                  activityBins(
-                    speech.bottom,
-                    block.start_ms,
-                    block.end_ms,
-                    count,
-                  ),
-                  levels,
-                )
-              : {
-                  top: (levels ?? []).map((level) => level ?? 0),
-                  bottom: (levels ?? []).map((level) => level ?? 0),
-                };
+          const drawBars = (count: number, set: "wide" | "rows") => {
+            const levels = sound
+              ? waveformBins(sound, block.start_ms, block.end_ms, count)
+              : null;
+            const { top, bottom } =
+              mode === "speech" && speech
+                ? voiceBars(
+                    activityBins(
+                      speech.top,
+                      block.start_ms,
+                      block.end_ms,
+                      count,
+                    ),
+                    activityBins(
+                      speech.bottom,
+                      block.start_ms,
+                      block.end_ms,
+                      count,
+                    ),
+                    levels,
+                  )
+                : {
+                    top: (levels ?? []).map((level) => level ?? 0),
+                    bottom: (levels ?? []).map((level) => level ?? 0),
+                  };
+            return (
+              <span className={styles.bars} data-set={set} aria-hidden="true">
+                {top.map((level, bar) => (
+                  <i
+                    key={bar}
+                    style={
+                      {
+                        "--t": lift(level),
+                        "--b": lift(bottom[bar] ?? 0),
+                      } as CSSProperties
+                    }
+                  />
+                ))}
+              </span>
+            );
+          };
           const pins = moments.filter((moment) => inside(moment.at_ms));
           const at = (ms: number) =>
             `${positionIn(ms, block.start_ms, block.end_ms) * 100}%`;
@@ -655,23 +677,18 @@ export function CallTimeline({
               key={`${block.label}-${block.start_ms}`}
               className={styles.block}
               data-stage={index % 4}
-              style={{ flexGrow: block.end_ms - block.start_ms }}
+              style={
+                {
+                  flexGrow: block.end_ms - block.start_ms,
+                  "--from": block.start_ms / durationMs,
+                  "--span": (block.end_ms - block.start_ms) / durationMs,
+                } as CSSProperties
+              }
             >
               {mode !== "none" ? (
                 <div className={styles.wave}>
-                  <span className={styles.bars} aria-hidden="true">
-                    {top.map((level, bar) => (
-                      <i
-                        key={bar}
-                        style={
-                          {
-                            "--t": lift(level),
-                            "--b": lift(bottom[bar] ?? 0),
-                          } as CSSProperties
-                        }
-                      />
-                    ))}
-                  </span>
+                  {drawBars(bars[index] ?? 3, "wide")}
+                  {stages.length ? drawBars(rowBars[index] ?? 2, "rows") : null}
                   {change && inside(change.at_ms) ? (
                     <span
                       className={styles.change}
