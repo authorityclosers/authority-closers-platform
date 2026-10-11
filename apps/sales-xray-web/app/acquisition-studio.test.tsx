@@ -1357,6 +1357,14 @@ it("shows the advertised trial allowance for a clean visitor", async () => {
   expect(container.textContent).not.toContain("unavailable until your session");
 });
 
+it("never shows a signed-in account the guest trial cap while its balance loads", async () => {
+  await mountWithAccountAccess();
+  expect(container.textContent).not.toContain("trial allowance");
+  expect(container.textContent).toContain(
+    "Remaining analysis time · checking…",
+  );
+});
+
 it("clears consent when the selected file changes", async () => {
   await mount();
   await select();

@@ -300,6 +300,10 @@ export function AcquisitionStudio({
   // The chosen file's wave, measured in this browser (shared with its card),
   // carries the call's shape into sending and the steps.
   const fileWave = useFileWave(file);
+  // The advertised trial cap is a guest's figure; a signed-in account shows
+  // "checking…" until its own balance arrives (the minutes pill shows it too).
+  const advertisedTrial =
+    access?.authenticated === true ? null : (entry?.allowance_seconds ?? null);
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -2694,7 +2698,7 @@ export function AcquisitionStudio({
                         <ShieldCheck size={19} aria-hidden="true" />
                         {remainingAllowanceLabel(
                           allowance,
-                          entry?.allowance_seconds ?? null,
+                          advertisedTrial,
                           allowanceUnknown,
                         )}
                       </span>
@@ -2969,7 +2973,7 @@ export function AcquisitionStudio({
                     <span>
                       {remainingAllowanceLabel(
                         allowance,
-                        entry?.allowance_seconds ?? null,
+                        advertisedTrial,
                         allowanceUnknown,
                       )}
                     </span>
@@ -3266,7 +3270,7 @@ export function AcquisitionStudio({
                     allowanceLabel={
                       remainingAllowanceLabel(
                         allowance,
-                        entry?.allowance_seconds ?? null,
+                        advertisedTrial,
                         allowanceUnknown,
                       ) ?? undefined
                     }
@@ -3400,7 +3404,7 @@ export function AcquisitionStudio({
                 <NewAnalysisFooter
                   allowanceLabel={remainingAllowanceLabel(
                     allowance,
-                    entry?.allowance_seconds ?? null,
+                    advertisedTrial,
                     allowanceUnknown,
                   )}
                 />
