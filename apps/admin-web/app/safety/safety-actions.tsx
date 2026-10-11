@@ -9,7 +9,7 @@ import { EyeOff, Undo2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { command, newKey } from "../lib/client-api";
+import { command, keyFor, type Intent } from "../lib/client-api";
 import { Field, kitStyles } from "../ui/kit";
 import { CATEGORIES, REASON_PATTERN } from "./safety-data";
 import styles from "./safety.module.css";
@@ -22,7 +22,7 @@ export function MarkSegments({
   revisions: string[];
 }) {
   const router = useRouter();
-  const key = useRef(newKey());
+  const intent = useRef<Intent | null>(null);
   const [revision, setRevision] = useState(revisions[0] ?? "");
   const [segments, setSegments] = useState("");
   const [category, setCategory] = useState<string>(CATEGORIES[0].value);
@@ -49,20 +49,22 @@ export function MarkSegments({
         event.preventDefault();
         if (!valid || state.kind === "saving") return;
         setState({ kind: "saving" });
+        const body = {
+          transcript_revision: revision,
+          segments: ids.map((segment_id) => ({ segment_id, category })),
+          reason_ref: reason.trim(),
+        };
+        intent.current = keyFor(intent.current, body);
         const result = await command(
           `/v1/platform/sensitive-segments/recordings/${recordingId}/marks`,
-          {
-            transcript_revision: revision,
-            segments: ids.map((segment_id) => ({ segment_id, category })),
-            reason_ref: reason.trim(),
-          },
-          key.current,
+          body,
+          intent.current.key,
         );
         if (!result.ok) {
           setState({ kind: "error", message: result.message });
           return;
         }
-        key.current = newKey();
+        intent.current = null;
         setSegments("");
         setState({
           kind: "done",
@@ -146,7 +148,7 @@ export function MarkSegments({
 
 export function ReleaseMark({ markId }: { markId: string }) {
   const router = useRouter();
-  const key = useRef(newKey());
+  const intent = useRef<Intent | null>(null);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
@@ -170,10 +172,12 @@ export function ReleaseMark({ markId }: { markId: string }) {
         event.preventDefault();
         if (!REASON_PATTERN.test(reason.trim()) || saving) return;
         setSaving(true);
+        const body = { reason_ref: reason.trim() };
+        intent.current = keyFor(intent.current, body);
         const result = await command(
           `/v1/platform/sensitive-segments/marks/${markId}/release`,
-          { reason_ref: reason.trim() },
-          key.current,
+          body,
+          intent.current.key,
         );
         setSaving(false);
         if (!result.ok) {

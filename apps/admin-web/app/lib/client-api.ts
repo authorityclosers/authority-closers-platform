@@ -62,3 +62,18 @@ export const newKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+/** One command's idempotency key and the request body it was made for. */
+export type Intent = { key: string; body: string };
+
+/**
+ * The key for this request: the same key when the body is unchanged (a retry
+ * is recognised and never applied twice), a new key once it was edited (so a
+ * changed request isn't refused as "changed meanwhile").
+ */
+export function keyFor(previous: Intent | null, body: unknown): Intent {
+  const text = JSON.stringify(body);
+  return previous && previous.body === text
+    ? previous
+    : { key: newKey(), body: text };
+}

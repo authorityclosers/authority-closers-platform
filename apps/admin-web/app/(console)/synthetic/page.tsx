@@ -19,11 +19,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// The API's limits: free text up to 80 characters, filter values up to 64
+// (a longer hand-edited value is dropped rather than failing the whole list).
 const SAFE = /^[A-Za-z0-9 ._+:-]{1,80}$/;
 type Params = Record<string, string | string[] | undefined>;
-const one = (value: string | string[] | undefined) => {
+const one = (value: string | string[] | undefined, max = 64) => {
   const text = Array.isArray(value) ? value[0] : value;
-  return text && SAFE.test(text) ? text : undefined;
+  return text && text.length <= max && SAFE.test(text) ? text : undefined;
 };
 
 export default async function SyntheticPage({
@@ -36,7 +38,7 @@ export default async function SyntheticPage({
     business: one(params.business),
     language: one(params.language),
     outcome: one(params.outcome),
-    q: one(params.q),
+    q: one(params.q, 80),
   };
   const offset = Math.max(
     0,

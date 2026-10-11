@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 
-import { command } from "../lib/client-api";
+import { command, keyFor } from "../lib/client-api";
 import { REASON_PATTERN, activeMarks, normalizeMarks } from "./safety-data";
 
 describe("safety marks", () => {
@@ -65,5 +65,19 @@ describe("admin commands", () => {
       ok: false,
       status: 0,
     });
+  });
+});
+
+describe("safety command keys", () => {
+  it("retries an unchanged request with its key, and gives an edited one a new key", () => {
+    const first = keyFor(null, { segments: ["s1"], reason_ref: "AUT-519" });
+    expect(keyFor(first, { segments: ["s1"], reason_ref: "AUT-519" })).toBe(
+      first,
+    );
+    const edited = keyFor(first, {
+      segments: ["s1", "s2"],
+      reason_ref: "AUT-519",
+    });
+    expect(edited.key).not.toBe(first.key);
   });
 });
