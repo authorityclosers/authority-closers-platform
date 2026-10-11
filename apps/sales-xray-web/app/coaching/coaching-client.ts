@@ -132,6 +132,10 @@ export type Coaching = {
   };
   reflection_question: string | null;
   feedback_available: false;
+  /** Fictional AC Sandbox data, read only by the person who imported it. */
+  sandbox?: boolean;
+  /** Whose coaching this is, when it is not the viewer's own. */
+  person_name?: string | null;
   limitations: string[];
 };
 
@@ -310,6 +314,11 @@ export function parseCoaching(value: unknown): Coaching {
     strength: item.state === "ready" ? parseStrength(item.strength) : null,
     calls: parseCallSummaries(item.calls),
     progress: parseProgress(item.progress),
+    sandbox: item.sandbox === true,
+    person_name:
+      typeof item.person_name === "string" && item.person_name.trim()
+        ? item.person_name.slice(0, 120)
+        : null,
   } as Coaching;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileSearch, FileText, GraduationCap } from "lucide-react";
+import { FileSearch, FileText, GraduationCap, Users } from "lucide-react";
 import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { FocusHero, LessonPanel, MissionPanel } from "./coaching-ui";
@@ -18,6 +18,13 @@ const BASIS = {
 /** Level 1: one call → one focus, its moments, a lesson and one mission. */
 export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
   const { focus, lesson, mission, practice, evidence } = coaching;
+  // AC Sandbox calls are fictional records with no report page; Team lists them.
+  const report = coaching.sandbox
+    ? { href: "/coaching?view=team", title: "Back to team coaching" }
+    : {
+        href: `/analysis/calls/${coaching.submission_id}`,
+        title: "Back to this call’s report",
+      };
   if (!focus || !lesson || !mission || !practice)
     return (
       <Panel title="Coaching for this call">
@@ -26,8 +33,8 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           title="This call’s coaching is unavailable"
           text="Its evidence is withheld or not ready. The report shows what is available."
           action={{
-            href: `/analysis/calls/${coaching.submission_id}`,
-            label: "Open the report",
+            href: report.href,
+            label: coaching.sandbox ? "Open team coaching" : "Open the report",
           }}
         />
       </Panel>
@@ -42,6 +49,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
             text: BASIS[coaching.basis],
             tone: coaching.basis === "general_practice" ? "neutral" : "accent",
           },
+          ...(coaching.sandbox ? [{ text: "Fictional AC Sandbox" }] : []),
         ]}
         explanation={focus.explanation}
         why={focus.why_it_matters}
@@ -67,10 +75,8 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           <div className={styles.body}>
             <p className={styles.momentNote}>
               This report kept no timestamp for this suggestion.{" "}
-              <Link href={`/analysis/calls/${coaching.submission_id}`}>
-                Open the report
-              </Link>{" "}
-              to read it in context.
+              <Link href={report.href}>Open the report</Link> to read it in
+              context.
             </p>
           </div>
         )}
@@ -91,9 +97,15 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
         <Panel title="Keep going">
           <List label="Keep going">
             <Row
-              icon={<FileText size={15} aria-hidden="true" />}
-              title="Back to this call’s report"
-              href={`/analysis/calls/${coaching.submission_id}`}
+              icon={
+                coaching.sandbox ? (
+                  <Users size={15} aria-hidden="true" />
+                ) : (
+                  <FileText size={15} aria-hidden="true" />
+                )
+              }
+              title={report.title}
+              href={report.href}
               meta={
                 coaching.other_suggestions
                   ? [

@@ -16,12 +16,14 @@ from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions, verified_narration
 from ac_platform.coaching.library import CoachingLibrary
+from ac_platform.coaching.sandbox import SandboxCoaching
 from ac_platform.coaching.team import TeamCoachingView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
-from ac_platform.conversation_intelligence.application import ConversationError
+from ac_platform.conversation_intelligence.application import ConversationDenied, ConversationError
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
+from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImports
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
 from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.authz import ActorContext
@@ -115,6 +117,20 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         except DomainError:
             raise HTTPException(401, "Sign in to see your Coaching.", headers=PRIVATE) from None
 
+    async def sandbox_for(library: CoachingLibrary, actor: ActorContext) -> SandboxCoaching | None:
+        """AC Sandbox reads for a current owner/admin of a flagged sandbox org.
+
+        Everyone else, and every other organisation, keeps the normal reads.
+        """
+        sandbox = SandboxCoaching(library.database, library.ownership.tenant_id)
+        if not await sandbox.flagged():
+            return None
+        try:
+            await SyntheticImports(library.ownership).admit(actor)
+        except ConversationDenied:
+            return None
+        return sandbox
+
     @router.get("", response_model=CoachingView, response_model_by_alias=True)
     async def coaching(request: Request, response: Response) -> CoachingView:
         async with account_library(request, response) as (library, actor):
@@ -131,7 +147,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         submission_id: UUID, request: Request, response: Response
     ) -> CallCoachingView:
         async with account_library(request, response) as (library, actor):
-            view = await library.read_call(actor, submission_id, call_cache)
+            sandbox = await sandbox_for(library, actor)
+            fictional = await sandbox.read_call(actor.person_id, submission_id) if sandbox else None
+            view = fictional or await library.read_call(actor, submission_id, call_cache)
             view = await with_media(view)
             return CallCoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
@@ -140,8 +158,30 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     @router.get("/team", response_model=TeamCoachingView, response_model_by_alias=True)
     async def team_coaching(request: Request, response: Response) -> TeamCoachingView:
         async with account_library(request, response) as (library, actor):
-            view = await library.read_team(actor)
+            sandbox = await sandbox_for(library, actor)
+            fictional = await sandbox.read_team(actor.person_id) if sandbox else None
+            view = (
+                fictional
+                if fictional is not None and fictional.analysed_calls
+                else await library.read_team(actor)
+            )
             return view.model_copy(update={"session_id": actor.session_id})
+
+    @router.get("/people/{person_id}", response_model=CoachingView, response_model_by_alias=True)
+    async def person_coaching(
+        person_id: UUID, request: Request, response: Response
+    ) -> CoachingView:
+        # A fictional AC Sandbox rep's coaching for the person who imported it.
+        # Real reps' coaching opens here only after they share it (pending).
+        async with account_library(request, response) as (library, actor):
+            sandbox = await sandbox_for(library, actor)
+            view = await sandbox.read_rep(actor.person_id, person_id) if sandbox else None
+            if view is None:
+                raise HTTPException(404, "This coaching is not shared with you.", headers=PRIVATE)
+            view = await with_media(view)
+            return CoachingView.model_validate(
+                view.model_copy(update={"session_id": actor.session_id})
+            )
 
     @router.get("/media/{topic_id}/{revision}/{review_id}/source")
     async def media_source(

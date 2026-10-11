@@ -347,4 +347,8 @@ class CoachingView(Model):
     development_path: Path
     reflection_question: str | None
     feedback_available: Literal[False] = False
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
+    # Whose coaching this is when it is not the viewer's own (a fictional rep).
+    person_name: str | None = Field(default=None, max_length=120)
     limitations: tuple[str, ...]

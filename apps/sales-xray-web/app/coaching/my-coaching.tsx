@@ -192,9 +192,12 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
 export function CoachingStory({
   coaching,
   requestedFocus,
+  readOnly = false,
 }: {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
+  /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
+  readOnly?: boolean;
 }) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
@@ -224,6 +227,7 @@ export function CoachingStory({
           ...(mastery.state !== "not_enough_evidence"
             ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
             : []),
+          ...(coaching.sandbox ? [{ text: "Fictional AC Sandbox" }] : []),
         ]}
         explanation={focus.explanation}
         why={focus.why_it_matters}
@@ -358,10 +362,12 @@ export function CoachingStory({
           {coaching.limitations.map((limitation) => (
             <li key={limitation}>{limitation}</li>
           ))}
-          <li>
-            Saving your agreement, disagreement and reflection comes with
-            sharing.
-          </li>
+          {readOnly ? null : (
+            <li>
+              Saving your agreement, disagreement and reflection comes with
+              sharing.
+            </li>
+          )}
         </ul>
       </details>
     </div>

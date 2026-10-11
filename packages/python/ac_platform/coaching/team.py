@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ac_platform.coaching.contracts import CallHistory, Model
 
@@ -29,6 +29,18 @@ class TeamSuggestion(Model):
     suggestion_calls: int = Field(ge=1)
 
 
+class TeamRep(Model):
+    """A named rep row. Only fictional AC Sandbox reps today; real reps appear
+    here only after they share their coaching (owner decision 2)."""
+
+    person_id: UUID
+    name: str = Field(min_length=1, max_length=120)
+    skill_id: str | None = None
+    focus_label: str | None = Field(default=None, max_length=240)
+    calls: int = Field(ge=0)
+    latest_call_at: datetime | None = None
+
+
 class TeamCoachingView(Model):
     schema_id: Literal["ac.sales-xray.team-coaching/1"] = Field(
         default="ac.sales-xray.team-coaching/1", alias="schema"
@@ -38,8 +50,10 @@ class TeamCoachingView(Model):
     session_id: UUID | None = None
     entitlement: Literal["coaching"] = "coaching"
     entitlement_policy: Literal["AUT-1678-open-access"] = "AUT-1678-open-access"
-    scope: Literal["anonymous"] = "anonymous"
-    named_rep_details: Literal[False] = False
+    scope: Literal["anonymous", "sandbox"] = "anonymous"
+    named_rep_details: bool = False
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
     analysed_calls: int = Field(ge=0)
     # How many people those calls belong to: a count, never who they are.
     rep_count: int = Field(default=0, ge=0)
@@ -49,7 +63,16 @@ class TeamCoachingView(Model):
     # When the newest counted report's call happened; a date, never whose call.
     latest_call_at: datetime | None = None
     suggestions: tuple[TeamSuggestion, ...]
+    reps: tuple[TeamRep, ...] = ()
     limitations: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def names_only_for_fictional_reps(self) -> "TeamCoachingView":
+        if (self.named_rep_details or self.reps) and not (
+            self.sandbox and self.scope == "sandbox" and self.named_rep_details
+        ):
+            raise ValueError("Team totals name no real rep until sharing exists.")
+        return self
 
 
 def summarize_team(

@@ -106,6 +106,7 @@
       "hypothesis": "We do not yet have enough evidence to say why this happens.",
       "learner_context": null
     },
+    "sandbox": false,
     "schema": "ac.sales-xray.call-coaching/1",
     "session_id": "00000000-0000-0000-0000-000000000003",
     "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -262,6 +263,7 @@
     },
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
+    "person_name": null,
     "practice": {
       "estimated_minutes": null,
       "exercise": "Practise one follow-up.",
@@ -290,6 +292,7 @@
       "hypothesis": "We do not yet have enough evidence to say why this happens.",
       "learner_context": null
     },
+    "sandbox": false,
     "schema": "ac.sales-xray.coaching/1",
     "session_id": "00000000-0000-0000-0000-000000000003",
     "state": "ready",
@@ -332,6 +335,8 @@
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
     "rep_count": 1,
+    "reps": [],
+    "sandbox": false,
     "schema": "ac.sales-xray.team-coaching/1",
     "scope": "anonymous",
     "session_id": "00000000-0000-0000-0000-000000000003",

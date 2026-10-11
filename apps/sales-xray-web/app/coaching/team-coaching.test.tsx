@@ -1,9 +1,44 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamCoachingStory } from "./team-coaching";
 import { parseTeamCoaching } from "./team-contract";
 import { readCoaching } from "./coaching-read";
-import { fictionalTeamCoaching } from "./coaching.fixture";
+import { fictionalCoaching, fictionalTeamCoaching } from "./coaching.fixture";
+
+const rep = (id: number, name: string, skill: string, calls = 3) => ({
+  person_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+  name,
+  skill_id: skill,
+  focus_label: `Focus for ${name}`,
+  calls,
+  latest_call_at: "2026-09-01T10:00:00Z",
+});
+const sandboxTeam = {
+  ...fictionalTeamCoaching,
+  scope: "sandbox",
+  named_rep_details: true,
+  sandbox: true,
+  suggestions: [
+    {
+      skill_id: "closing_decision_management",
+      label: "Closing & Decision Management",
+      suggestion_calls: 3,
+    },
+    {
+      skill_id: "qualification",
+      label: "Qualification",
+      suggestion_calls: 1,
+    },
+  ],
+  reps: [
+    ...Array.from({ length: 9 }, (_, i) =>
+      rep(i + 1, `Closer ${i + 1}`, "closing_decision_management"),
+    ),
+    rep(20, "Asha Rao", "qualification", 1),
+  ],
+};
 
 afterEach(() => vi.unstubAllGlobals());
 describe("anonymous Team coaching", () => {
@@ -51,6 +86,87 @@ describe("anonymous Team coaching", () => {
       },
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
+  });
+  it("names only fictional AC Sandbox reps, with links to their coaching", () => {
+    const team = parseTeamCoaching(sandboxTeam)!;
+    expect(team.sandbox).toBe(true);
+    expect(team.reps).toHaveLength(10);
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("Fictional AC Sandbox");
+    expect(html).toContain("10 fictional reps");
+    expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
+    expect(html).toContain("Focus for Closer 1");
+    expect(html).toContain("Show all 10 people");
+    expect(html).not.toContain("Named coaching appears when a rep shares it");
+    // Malformed rows drop; the rest of the team still shows.
+    const partial = parseTeamCoaching({
+      ...sandboxTeam,
+      reps: [{ name: "No id" }, sandboxTeam.reps[0], sandboxTeam.reps[0]],
+    })!;
+    expect(partial.reps.map((row) => row.name)).toEqual(["Closer 1"]);
+  });
+  it("rejects names on a real team, however they are labelled", () => {
+    for (const raw of [
+      { ...fictionalTeamCoaching, reps: sandboxTeam.reps },
+      { ...sandboxTeam, sandbox: false },
+      { ...sandboxTeam, scope: "anonymous" },
+      { ...sandboxTeam, named_rep_details: false },
+      { ...fictionalTeamCoaching, sandbox: true },
+    ])
+      expect(parseTeamCoaching(raw)).toBeNull();
+  });
+  it("filters fictional reps by coaching area", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory coaching={parseTeamCoaching(sandboxTeam)!} />,
+      ),
+    );
+    const select = host.querySelector<HTMLSelectElement>(
+      'select[aria-label="Coaching area"]',
+    )!;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "All areas",
+      "Closing",
+      "Qualification",
+    ]);
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const names = [...host.querySelectorAll("li a")].map((a) => a.textContent);
+    expect(names).toEqual(["Asha Rao"]);
+    await act(async () => root.unmount());
+    host.remove();
+  });
+  it("reads another rep's coaching only as that rep's view", async () => {
+    const person = "00000000-0000-4000-8000-000000000001";
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...fictionalCoaching, person_id: person }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetch);
+    expect((await readCoaching(`person:${person}`)).data?.person_id).toBe(
+      person,
+    );
+    expect(fetch.mock.calls[0][0]).toBe(`/v1/me/coaching/people/${person}`);
+    // The viewer's own coaching answered for another person is refused.
+    fetch.mockResolvedValue(
+      new Response(JSON.stringify(fictionalCoaching), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    expect((await readCoaching(`person:${person}`)).data).toBeNull();
+    expect((await readCoaching("person:not-a-person")).error).toContain(
+      "invalid",
+    );
   });
   it("loads the team projection in one same-account request", async () => {
     const fetch = vi.fn().mockResolvedValue(
