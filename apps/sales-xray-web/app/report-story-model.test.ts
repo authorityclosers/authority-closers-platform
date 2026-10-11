@@ -288,11 +288,25 @@ describe("Sandbox-style findings and prices (G's findings, 11 Oct)", () => {
   it("never shows the prospect's own budget as the price stated", () => {
     const transcript = withLines({
       a27: "Our budget is about one lakh, what does this cost?",
+      a28: "Let me first explain what the program includes.",
     });
     const model = reportStoryModel(amitReport, transcript, {
       roles: AMIT_SPEAKERS,
     });
     expect(model.moments.some((m) => m.kind === "Price Moment")).toBe(false);
+  });
+
+  it("claims no 'Price stated' when nobody knows who said what", () => {
+    const transcript = withLines({
+      a27: "What is the price? Our budget is about one lakh.",
+      a28: "The price is two lakh rupees for the full twelve weeks.",
+    });
+    const price = reportStoryModel(amitReport, transcript).moments.find(
+      (m) => m.kind === "Price Moment",
+    );
+    expect(price?.source.segment_id).toBe("a27");
+    expect(price?.priceStated).toBeUndefined();
+    expect(price?.prospectResponse).toBeUndefined();
   });
 });
 

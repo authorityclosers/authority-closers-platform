@@ -20,7 +20,12 @@ export function reportScreenPanels(
   onSelect?: Select,
   _onContext?: SelectContext,
   prospectControls?: ReactNode,
-  options: { callId?: string | null; onOpenCoaching?: () => void } = {},
+  options: {
+    callId?: string | null;
+    onOpenCoaching?: () => void;
+    /** False on fictional fixtures: the Report then reads nothing live. */
+    liveReads?: boolean;
+  } = {},
 ): ReportPanel[] {
   if (!data.report) return [];
   return STORY_PILLARS.map((pillar, index) => ({
@@ -36,6 +41,7 @@ export function reportScreenPanels(
         onSelect={onSelect}
         prospectControls={index === 5 ? prospectControls : undefined}
         onOpenCoaching={index === 5 ? options.onOpenCoaching : undefined}
+        liveReads={options.liveReads ?? true}
       />
     ),
   }));

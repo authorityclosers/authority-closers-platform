@@ -163,6 +163,7 @@ export function FullShellPreview() {
                     onRequestDeletion={() => {}}
                   />
                   <ReportModes
+                    fixture
                     documentData={{
                       report: syntheticReport,
                       transcript,

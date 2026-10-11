@@ -594,8 +594,12 @@ function momentsFor(
         title: MOMENTS.titlePrice,
         source: price.stated.sources[0],
         why: null,
-        priceStated: price.stated,
-        prospectResponse: price.response ?? undefined,
+        ...(price.attributed
+          ? {
+              priceStated: price.stated,
+              prospectResponse: price.response ?? undefined,
+            }
+          : {}),
       });
   }
   // "Watch this again" clips are Coaching material; only the ones to repeat
@@ -613,44 +617,69 @@ function momentsFor(
   return moments;
 }
 
-/** The words that named a price, and the next thing someone else said. */
+/** A line that names an amount: digits, or a currency or amount word. */
+const FIGURE =
+  /([0-9०-९][0-9०-९,.]*|₹|\$|€|£|\brs\.?|\brupees?\b|\blakhs?\b|\blacs?\b|\bcrores?\b|\bdollars?\b|लाख|रुपये|रुपए|हजार|हज़ार)/iu;
+
+/**
+ * The words that named a price, and what the prospect said back. With known
+ * roles the price is the seller's first line naming an amount, at or just
+ * after a moment where money came up; the response is the prospect's next
+ * line. A figure only the prospect names is their budget, not a price. With
+ * roles unknown nobody can say who quoted what: the moment keeps its quote
+ * and no "Price stated" is claimed.
+ */
 function priceExchange(
   transcript: Transcript,
   moments: { segment_id: string }[],
   roles?: { seller?: string | null; prospect?: string | null },
-): { stated: Line; response: Line | null } | null {
-  const lines = moments
-    .map((moment) =>
-      transcript.segments.findIndex((s) => s.id === moment.segment_id),
-    )
+): { stated: Line; response: Line | null; attributed: boolean } | null {
+  const segments = transcript.segments;
+  const starts = moments
+    .map((moment) => segments.findIndex((s) => s.id === moment.segment_id))
     .filter((index) => index >= 0);
-  // With known roles a price is what the seller states; a figure only the
-  // prospect names is their budget, not a price, so it is not shown as one.
-  const seller = roles?.seller ?? null;
-  const prospect = roles?.prospect ?? null;
-  const at =
-    seller && prospect
-      ? lines.find((index) => transcript.segments[index].speaker_id === seller)
-      : lines[0];
-  const segment = at === undefined ? undefined : transcript.segments[at];
-  if (at === undefined || !segment) return null;
+  if (!starts.length) return null;
   const evidence = (s: Transcript["segments"][number]): ReportEvidence => ({
     segment_id: s.id,
     quote: s.text,
     start_ms: s.start_ms,
     end_ms: s.end_ms,
   });
-  const reply = transcript.segments
-    .slice(at + 1, at + 4)
-    .find(
-      (s) =>
-        s.speaker_id &&
-        s.speaker_id !== segment.speaker_id &&
-        (!prospect || s.speaker_id === prospect),
-    );
+  const seller = roles?.seller ?? null;
+  const prospect = roles?.prospect ?? null;
+  if (!seller || !prospect) {
+    const first = segments[starts[0]];
+    return {
+      stated: { text: first.text, sources: [evidence(first)] },
+      response: null,
+      attributed: false,
+    };
+  }
+  let at = -1;
+  for (const start of starts) {
+    for (
+      let index = start;
+      index < Math.min(segments.length, start + 5);
+      index++
+    )
+      if (
+        segments[index].speaker_id === seller &&
+        FIGURE.test(segments[index].text)
+      ) {
+        at = index;
+        break;
+      }
+    if (at >= 0) break;
+  }
+  if (at < 0) return null;
+  const segment = segments[at];
+  const reply = segments
+    .slice(at + 1, at + 5)
+    .find((s) => s.speaker_id === prospect);
   return {
     stated: { text: segment.text, sources: [evidence(segment)] },
     response: reply ? { text: reply.text, sources: [evidence(reply)] } : null,
+    attributed: true,
   };
 }
 

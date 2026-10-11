@@ -564,6 +564,7 @@ export function ReportModes({
   onSelectContextualPlayback,
   prospectControls,
   structure = "custom",
+  fixture = false,
 }: {
   label?: string;
   initialView?: View;
@@ -581,6 +582,8 @@ export function ReportModes({
   ) => void;
   structure?: "custom" | "pillars";
   prospectControls?: ReactNode;
+  /** A fictional fixture: the Report shows its data but reads nothing live. */
+  fixture?: boolean;
 }) {
   const storyPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
@@ -594,6 +597,7 @@ export function ReportModes({
           prospectControls,
           {
             callId: boundCallId ?? null,
+            liveReads: !fixture,
             // Guests have no Coaching view, so no button that does nothing.
             onOpenCoaching: documentData.report.preview
               ? undefined
