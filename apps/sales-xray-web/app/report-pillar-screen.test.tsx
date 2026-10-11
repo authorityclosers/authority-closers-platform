@@ -1,6 +1,7 @@
-import { act } from "react";
+import { act, useContext, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+import { LinkedProspectContext } from "./prospect-link-control";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
 import {
@@ -142,4 +143,35 @@ it("opens a sparse older report with honest, one-line gaps", async () => {
   ).toBeGreaterThanOrEqual(8);
   // Never invents a strength or a next event to fill the page.
   expect(pillar(host, "facts").textContent).toContain("Next event");
+});
+
+function LinkedTo({ id }: { id: string }) {
+  const report = useContext(LinkedProspectContext);
+  useEffect(() => report?.(id), [report, id]);
+  return <span>Linked prospect</span>;
+}
+
+it("opens this call's own prospect from the end of the Report", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        structure="pillars"
+        initialView="story"
+        panels={[]}
+        prospectControls={<LinkedTo id="prospect-7" />}
+        documentData={{ report: amitReport, transcript: amitTranscript }}
+      />,
+    ),
+  );
+  cleanup = () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+  const deal = pillar(host, "facts");
+  expect(
+    deal.querySelector('a[href="/prospects/prospect-7"]')?.textContent,
+  ).toContain("View Prospect Information");
 });

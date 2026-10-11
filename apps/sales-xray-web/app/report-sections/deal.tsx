@@ -2,9 +2,10 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { formatClock } from "../lightbox/time";
+import { LinkedProspectContext } from "../prospect-link-control";
 import {
   COMMITMENT_MEANING,
   DEAL,
@@ -70,6 +71,8 @@ export function DealStands({
 }) {
   const { deal } = model;
   const prospectName = people.prospect?.name.split(" ")[0] ?? null;
+  // The call's own prospect once the link control knows it; else the list.
+  const [prospectId, setProspectId] = useState<string | null>(null);
   return (
     <div className={styles.stack}>
       <StoryCard>
@@ -168,11 +171,20 @@ export function DealStands({
           aria-label={DEAL.prospectSection}
         >
           <h3 className={styles.columnHead}>{DEAL.prospectSection}</h3>
-          {prospectControls}
+          <LinkedProspectContext.Provider value={setProspectId}>
+            {prospectControls}
+          </LinkedProspectContext.Provider>
         </section>
       ) : null}
       <div className={styles.ctas}>
-        <Link className={styles.cta} href="/prospects">
+        <Link
+          className={styles.cta}
+          href={
+            prospectId
+              ? `/prospects/${encodeURIComponent(prospectId)}`
+              : "/prospects"
+          }
+        >
           {DEAL.viewProspect}
           <ArrowRight size={14} aria-hidden="true" />
         </Link>
