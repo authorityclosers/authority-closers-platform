@@ -226,6 +226,10 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
       (link) => link.textContent,
     ),
   ).toContainEqual(expect.stringContaining("Discovery · Amit, Pixel Digital"));
+  // The full list, searchable, is Calls filtered to this person.
+  expect(
+    host.querySelector(`a[href="/analysis/calls?rep=${ashaId}"]`)?.textContent,
+  ).toContain("Open in Calls");
   // Coaching stays private to them.
   expect(host.textContent).toContain(
     "Asha's coaching stays private to them unless they share it.",
