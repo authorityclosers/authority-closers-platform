@@ -234,6 +234,7 @@ function BriefUnknown({
       </span>
       {plain.map((item, index) => (
         <span key={item.label} data-unknown-locked={item.locked || undefined}>
+          {index > 0 ? "· " : ""}
           {item.locked ? (
             <LockKeyhole
               size={12}
@@ -242,7 +243,6 @@ function BriefUnknown({
             />
           ) : null}
           {item.label}
-          {index < plain.length - 1 ? " ·" : ""}
         </span>
       ))}
       {addable.map((item) => (

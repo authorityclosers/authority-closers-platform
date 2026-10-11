@@ -117,7 +117,6 @@ describe("prospectBrief", () => {
     ]);
     expect(labels(brief.sections[5])).toEqual([
       "Recommended next move",
-      "Next step",
       "Next event",
       "Prospect agreed to",
       "You agreed to",

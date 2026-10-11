@@ -225,7 +225,11 @@ function section(
           ? { label: item[0], editKey: item[1], locked: true }
           : { label: item[0], editKey: item[1] };
       })
-      .filter((item) => !named.has(item.label)),
+      .filter(
+        (item) =>
+          !named.has(item.label) &&
+          !(item.editKey && fields[item.editKey]?.state === "known"),
+      ),
   };
 }
 
@@ -359,7 +363,6 @@ export function prospectBrief(
       field("team_size"),
       field("turnover", "Revenue / turnover"),
       field("city"),
-      field("main_pain"),
       field("timeline"),
       ownWords(latest),
     ],
@@ -457,7 +460,6 @@ export function prospectBrief(
             basis: "call",
           }
         : null,
-      nextStep,
       followUp && { ...followUp, label: "Next event" },
       ...(deal?.prospectCommitments ?? []).map((item) =>
         lineFact("Prospect agreed to", item, callId),
