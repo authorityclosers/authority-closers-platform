@@ -6,19 +6,28 @@ send learner feedback or change sharing/billing. Run under the shared heavy slot
 WB_BASE_URL=http://127.0.0.1:3026 \
 WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-11-workbench \
 LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
-ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py -q --tb=short
+ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
+  -k 'not dashboard' -q --tb=short
 ```
 
 Without `WB_BASE_URL` all browser cases skip, so ordinary test collection does
 not contact a live server. There are four viewport/theme pairs: 1440/light,
 1440/dark, 390/light and 390/dark. Each checks dashboard-to-report, six report
 sections in Dipak's order, reload/Document/valid DOCX/return, independent Document,
-and call/personal/team/sandbox Coaching. A sign-in or empty dashboard is a failure.
+and call/personal/team/sandbox Coaching. The current More views menu is opened
+before selecting Document; older direct view controls also work. A sign-in or
+empty dashboard is a failure.
 
-Default routes are `/review-fixture/dashboard`, `/review-fixture/report/story`,
-`/review-fixture/document`, `/review-fixture/coaching`. These contain labelled
-fictional content and are development-only. A missing fixture is an acceptance
-gap, not proof that the protected product route is broken.
+The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
+Dashboard is outside this chunk, per the coordinator's 11 October scope order.
+Its four cases remain available for a later populated, approved-session run by
+omitting `-k 'not dashboard'`. `/review-fixture/dashboard` does not exist;
+the retained dashboard journey requires a populated `WB_DASHBOARD_PATH` or live
+mode. A missing fixture does not prove the protected product route is broken.
+
+The other default routes are `/review-fixture/report/story`,
+`/review-fixture/document`, `/review-fixture/coaching`. They contain labelled
+fictional content and are development-only.
 
 For coordinator-run staging smoke, set `WB_MODE=live`, `WB_BASE_URL` to the
 approved staging origin, `WB_STORAGE_STATE` to an existing private Playwright

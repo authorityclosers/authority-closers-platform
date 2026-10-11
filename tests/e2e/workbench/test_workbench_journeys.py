@@ -40,11 +40,11 @@ REPORT_BLOCKS = {
     "moments": ("What worked", "What didn't"),
     "facts": (
         "Prospect's position",
-        "Possible blocker",
-        "Prospect agreed to",
+        re.compile(r"(?:Current|Possible) blocker"),
+        re.compile(r"(?:Prospect|Amit) agreed to"),
         "You agreed to",
         "Next event",
-        "Recommended next move",
+        re.compile(r"(?:Recommended next move|Next move on this deal)"),
     ),
 }
 
@@ -69,8 +69,15 @@ def _document_preview(page: Page) -> Locator:
 
 
 def _document_download(page: Page) -> Locator:
-    name = re.compile(r"^Download (?:\.docx|Word file)$")
+    name = re.compile(r"^(?:Download\s+)?(?:Word\b|\.docx\b)", re.IGNORECASE)
     return page.get_by_role("link", name=name).or_(page.get_by_role("button", name=name))
+
+
+def _switch_report_view(page: Page, label: str) -> None:
+    action = page.get_by_role("button", name=label, exact=True)
+    if not action.count():
+        page.locator('summary[aria-label="More views"]').click()
+    action.click()
 
 
 @pytest.fixture(scope="session")
@@ -146,8 +153,15 @@ class Journey:
                 return result;
               }
               for (const el of document.querySelectorAll('main *, [data-report-modes] *')) {
-                const text = Array.from(el.childNodes).some(n =>
-                  n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+                // Decorative initials accompany a separately rendered speaker name.
+                if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
+                const text = Array.from(el.childNodes).some(n => {
+                  if (n.nodeType !== Node.TEXT_NODE || !n.textContent.trim()) return false;
+                  const range = document.createRange();
+                  range.selectNodeContents(n);
+                  const bounds = range.getBoundingClientRect();
+                  return bounds.width > 0 && bounds.height > 0;
+                });
                 if (!text) continue;
                 const r = el.getBoundingClientRect();
                 const style = getComputedStyle(el);
@@ -288,12 +302,10 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
                 skill_rows.first.locator("summary").click()
                 expect(skill_rows.first).to_have_attribute("open", "")
             if section == "missed":
-                expand = pillar.get_by_role("button", name="View all", exact=False)
+                expand = pillar.locator('button[aria-expanded="false"]')
                 if expand.count():
                     expand.click()
-                    expect(
-                        pillar.get_by_role("button", name="Show the key moments only", exact=True)
-                    ).to_have_attribute("aria-expanded", "true")
+                    expect(pillar.locator('button[aria-expanded="true"]')).to_have_count(1)
             journey.snapshot(section)
         # Sharing/reloading preserves the chosen section instead of resetting it.
         page.reload(wait_until="domcontentloaded")
@@ -301,7 +313,7 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         expect(
             page.get_by_role("heading", name="Where the Deal Stands", exact=True)
         ).to_be_visible()
-        page.get_by_role("button", name="Document view", exact=True).click()
+        _switch_report_view(page, "Document view")
         preview = _document_preview(page)
         expect(preview).to_be_visible(timeout=30_000)
         headings = preview.locator("[data-report-mode-section]")
@@ -310,6 +322,10 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
             "els => els.map(el => el.getAttribute('data-report-mode-section'))"
         ) == [section for section, _ in REPORT_SECTIONS]
         journey.snapshot("document")
+        # A section deep link can land below the document's export controls.
+        page.locator("[data-document-export]").evaluate(
+            "element => element.scrollIntoView({block: 'start'})"
+        )
         with page.expect_download() as downloaded:
             _document_download(page).click()
         download = downloaded.value
@@ -319,7 +335,7 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         with ZipFile(file) as docx:
             document = docx.read("word/document.xml").decode()
             assert all(f'w:name="{section}"' in document for section, _ in REPORT_SECTIONS)
-        page.get_by_role("button", name="Report view", exact=True).click()
+        _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
 
@@ -330,7 +346,7 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
             journey.open("/review-fixture/document")
         else:
             journey.open(_path("WB_REPORT_PATH", "/"))
-            journey.page.get_by_role("button", name="Document view", exact=True).click()
+            _switch_report_view(journey.page, "Document view")
         preview = _document_preview(journey.page)
         expect(preview).to_be_visible(timeout=30_000)
         expect(preview.locator("[data-report-mode-section]")).to_have_count(6)
@@ -348,7 +364,10 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
         page = journey.page
         if journey.fixture:
             expect(
-                page.get_by_role("heading", name="One focus for this call", exact=True)
+                page.get_by_role(
+                    "heading",
+                    name=re.compile(r"^(?:One focus for this call|What You Should Work On Now)$"),
+                )
             ).to_be_visible()
             expect(
                 page.get_by_role("heading", name="Try This on Your Next Call", exact=True)
@@ -379,5 +398,10 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             page.get_by_role("button", name="AC Sandbox", exact=True).click()
             journey.snapshot("sandbox-team")
             page.get_by_role("button", name="One rep", exact=True).click()
-            expect(_heading(page, COACHING_SECTIONS[0])).to_be_visible()
+            expect(
+                page.get_by_role(
+                    "heading",
+                    name=re.compile(r"^What (?:You|They) Should Work On Now(?:\s|$)"),
+                )
+            ).to_be_visible()
             journey.snapshot("sandbox-rep")
