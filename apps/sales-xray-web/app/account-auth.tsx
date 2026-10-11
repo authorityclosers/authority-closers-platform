@@ -1212,7 +1212,11 @@ export function AccountAuth({
               </button>
             )}
             <p className={styles.footnote}>
-              <svg className={styles.footnoteIcon} viewBox="0 0 16 16" aria-hidden="true">
+              <svg
+                className={styles.footnoteIcon}
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
                 <path
                   d="M8 1.5 2.5 4v3.6c0 3.2 2.3 5.9 5.5 6.9 3.2-1 5.5-3.7 5.5-6.9V4L8 1.5Z"
                   fill="none"
