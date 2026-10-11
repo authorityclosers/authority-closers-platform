@@ -1,6 +1,33 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Latest automated shared-dev matrix: **16/16 PASS**, 18:48:00–18:50:33 UTC,
+Latest strengthened dev matrix: **8 PASS / 8 FAIL**, 19:03:00–19:06:28 UTC,
+`975c8eeb` → `847f748a`. All four outcome-format cases pass, including phone
+notice/nav geometry and every navigation target reachable, after B's
+`bc2e4cea`. Cards end at y=776, navigation begins at y=788: 12 px clear.
+Inspected light/dark notices are readable. Coaching is 4/4 PASS, thirteen
+observations each; current desktop/dark focus and phone/dark mission inspected.
+No runtime/server/font/overflow errors or outcome API requests.
+
+The eight failures are the same unresolved Document-name defect: each Report
+journey completes six pillars/eight Report skills/four deeper groups, then its
+Document row-name check fails; each independent Document journey fails its
+section-5 row names. G owns the exact request/earlier section-5 screenshot.
+This is a copy mismatch, not a page crash. Word section-5 names remain unverified
+because the Report stops at Document names before that download. Canonical
+shared-dev persistence and staging smoke remain **NOT RUN**. Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-visual-repair-readback/receipt.json`.
+
+Independent agreed canonical PG proof **PASS (1 case, no skips)**, 19:10:27–
+19:10:40 UTC, source `8109676c` → `db7f620d`, existing explicit
+`AC_TEST_DATABASE_URL`, disposable loopback harness only. Real HTTP saves/new
+request reads, append-only history, idempotence, ownership, validation and
+revision/link/stage fences pass. Test digest:
+`551cd4e093ae8fc32bdfa3628f0f9111e449c998881a8f2bd6629658b0a851d4`.
+JUnit/receipt: `/home/acdev/strikes/1694/workbench-release-ci-outcomes-pg-20261011.*`.
+This does not prove shared-dev browser reload or compiled CI execution.
+All owned browser/test/background launcher jobs have exited.
+
+Prior automated shared-dev matrix: **16/16 PASS**, 18:48:00–18:50:33 UTC,
 `50af5fcc` → `7d3361d0`, with recorded dirty paths and refresh counts. Report
 has 13 observations per pair, Document seven (top + six actual sections),
 Coaching 13, independent outcome formats ten (four statuses + required reason
@@ -8,8 +35,8 @@ and date states). All four choices agree with Deal/Document/Word 1.1; optional
 value works. Runtime/server/font/overflow errors and fixture outcome API
 requests are zero. Background launch finishes normally. API readiness: 200.
 
-**Visual repairs pending:** inspected phone validation cards overlap the bottom
-navigation (B INBOX), and Document/Word rows use long source skill names instead
+**Findings at that source:** phone validation cards overlap the bottom
+navigation (subsequently fixed/verified above), and Document/Word rows use long source skill names instead
 of the approved short Report/Dipak names (G INBOX). All six phone Document
 sections were inspected and remain readable. This is an automated PASS with
 two visual findings, not finished visual acceptance. QA adds corner-card/nav
