@@ -16,6 +16,7 @@ import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
 import {
   Badge,
+  Card,
   Empty,
   Page,
   PageHeader,
@@ -118,7 +119,19 @@ export default async function CallReviewPage({
         ) : null}
         {call.data.runs.length ? (
           <Panel title="Runs" sub={`${call.data.runs.length} on this call`}>
-            <Table label="Runs">
+            <Table
+              label="Runs"
+              cards={call.data.runs.map((item) => (
+                <Card key={item.id}>
+                  <strong>{when(item.createdAt)}</strong>
+                  <span>
+                    {item.reportId ? "Report" : item.state} ·{" "}
+                    {item.model ?? item.provider ?? "model not recorded"} ·{" "}
+                    {item.promptRevision ?? "prompt not recorded"}
+                  </span>
+                </Card>
+              ))}
+            >
               <thead>
                 <tr>
                   <th scope="col">Started</th>
