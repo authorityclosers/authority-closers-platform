@@ -463,8 +463,7 @@ export function PersonCalls({
       foot={
         !data.complete ? (
           <span>
-            Showing the {data.listed.length} calls in the organisation&apos;s
-            latest list; {data.calls} in all.
+            Showing the newest {data.listed.length} of {data.calls} calls.
           </span>
         ) : undefined
       }
