@@ -144,13 +144,15 @@ it("draws the call in stages with moments and the change point", () => {
       onSelect={onSelect}
     />,
   );
-  expect(markup).toContain(
-    'aria-label="How the call moved: 2 stages over 25:08"',
-  );
   expect(markup).toContain("Business Context");
   expect(markup).toContain("02:30");
   expect(markup).toContain('aria-label="Play Strong Moment · 06:35: Goal"');
-  expect(markup).toContain("The call changed · 11:18");
+  // Where the call changed: a dashed line on the wave, named in the key and
+  // the figure's label (its words never sit over the bars).
+  expect(markup).toContain(
+    'aria-label="How the call moved: 2 stages over 25:08; The call changed · 11:18"',
+  );
+  expect(markup).toMatch(/data-key="change">.*The call changed · 11:18/);
   expect(markup).toContain('data-mode="speech"');
   // Phones: each stage sits on one track of the call at its own place and
   // length, with its own set of wider bars (40 across the whole call).

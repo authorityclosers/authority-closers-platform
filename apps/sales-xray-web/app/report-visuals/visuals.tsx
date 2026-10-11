@@ -534,8 +534,8 @@ export type TimelineMoment = {
 /**
  * The whole call as one wave, in stages: who talked when (you above the line,
  * the prospect below), the stage blocks with their times, the moments worth
- * replaying as pins, and where the call changed. On a phone the stages stack
- * as rows, each with its own stretch of the wave.
+ * replaying as pins, and where the call changed (a dashed line, named in the
+ * key). On a phone the stages stack as rows on one track of the whole call.
  */
 export function CallTimeline({
   durationMs,
@@ -593,9 +593,18 @@ export function CallTimeline({
     : sound
       ? "level"
       : ("none" as const);
-  const summary = stages.length
-    ? `${label}: ${stages.length} stages over ${formatClock(durationMs)}`
-    : `${label}: ${formatClock(durationMs)}`;
+  const changeText = change
+    ? `${change.label ?? "Changed here"} · ${formatClock(change.at_ms)}`
+    : null;
+  const summary = [
+    stages.length
+      ? `${label}: ${stages.length} stages over ${formatClock(durationMs)}`
+      : `${label}: ${formatClock(durationMs)}`,
+    changeText,
+  ]
+    .filter(Boolean)
+    .join("; ");
+  const people = mode === "speech" && names;
   return (
     <figure
       className={styles.timeline}
@@ -603,13 +612,17 @@ export function CallTimeline({
       data-single={stages.length ? undefined : ""}
       aria-label={summary}
     >
-      {mode === "speech" && names ? (
+      {/* The key, with where the call changed: its words never sit on the
+          wave, so they never hide bars and read the same on a phone. */}
+      {people || moments.length || changeText ? (
         <p className={styles.legend} aria-hidden="true">
-          <span>
-            <i data-side="top" />
-            {names.top}
-          </span>
-          {names.bottom && speech?.bottom.length ? (
+          {people ? (
+            <span>
+              <i data-side="top" />
+              {names.top}
+            </span>
+          ) : null}
+          {people && names.bottom && speech?.bottom.length ? (
             <span>
               <i data-side="bottom" />
               {names.bottom}
@@ -619,6 +632,12 @@ export function CallTimeline({
             <span>
               <i data-side="pin" />
               Moments
+            </span>
+          ) : null}
+          {changeText ? (
+            <span data-key="change">
+              <i data-side="change" />
+              {changeText}
             </span>
           ) : null}
         </p>
@@ -692,19 +711,9 @@ export function CallTimeline({
                   {change && inside(change.at_ms) ? (
                     <span
                       className={styles.change}
-                      data-flip={
-                        positionIn(change.at_ms, block.start_ms, block.end_ms) >
-                        0.6
-                          ? ""
-                          : undefined
-                      }
                       style={{ left: at(change.at_ms) }}
-                    >
-                      <span className={styles.changeLabel}>
-                        {change.label ?? "Changed here"} ·{" "}
-                        {formatClock(change.at_ms)}
-                      </span>
-                    </span>
+                      aria-hidden="true"
+                    />
                   ) : null}
                   {head != null && inside(head) ? (
                     <span

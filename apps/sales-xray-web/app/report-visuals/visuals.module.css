@@ -544,6 +544,14 @@
   background: var(--speaker-b);
 }
 
+.legend i[data-side="change"] {
+  width: 0;
+  height: 12px;
+  border-left: 1.5px dashed var(--sx-ink-2);
+  border-radius: 0;
+  background: none;
+}
+
 .legend i[data-side="pin"] {
   width: 8px;
   height: 8px;
@@ -693,24 +701,7 @@ button.pin:focus-visible {
   border-left: 1.5px dashed var(--sx-ink-2);
 }
 
-.changeLabel {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in oklab, var(--sx-surface) 88%, transparent);
-  color: var(--sx-ink);
-  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
-  white-space: nowrap;
-}
-
-.change[data-flip] .changeLabel {
-  right: 4px;
-  left: auto;
-}
-
-/* A dot on top of the line marks the change when its words don't fit. */
+/* A dot on top of the line; the legend names it. */
 .change::before {
   position: absolute;
   top: -3px;
@@ -720,13 +711,6 @@ button.pin:focus-visible {
   border-radius: 50%;
   background: var(--sx-ink-2);
   content: "";
-}
-
-/* The words only where the stage is wide enough; never over the next one. */
-@container stage (max-width: 179px) {
-  .changeLabel {
-    display: none;
-  }
 }
 
 .playhead {
@@ -800,7 +784,7 @@ button.pin:focus-visible {
   display: none;
 }
 
-/* Narrow: the stages stack as rows, each with its own stretch of the wave. */
+/* Narrow: the stages stack as rows on one track of the whole call. */
 @container timeline (max-width: 679px) {
   .timeline:not([data-single]) .blocks {
     --wave-h: 36px;
@@ -864,10 +848,6 @@ button.pin:focus-visible {
 
   .timeline:not([data-single]) .bars[data-set="rows"] {
     display: flex;
-  }
-
-  .timeline:not([data-single]) .changeLabel {
-    display: none;
   }
 }
 
