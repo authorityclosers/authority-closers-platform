@@ -1373,3 +1373,13 @@
     min-height: 44px;
   }
 }
+
+/* Phones: the six pillars go by their short names, so more fit in a row. */
+@media (max-width: 640px) {
+  .workspace[data-view="story"] .contents .fullLabel {
+    display: none;
+  }
+  .workspace[data-view="story"] .contents .compactLabel {
+    display: inline;
+  }
+}
