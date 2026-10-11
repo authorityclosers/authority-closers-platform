@@ -818,7 +818,7 @@ export function ChangeSteps({
     <div className={styles.stepsWrap}>
       <ol className={styles.steps}>
         <li>
-          <span className={styles.stepLabel}>Before</span>
+          <span className={styles.stepLabel}>{CALL_FLOW.before}</span>
           <div className={styles.stepText}>{before}</div>
         </li>
         <li className={styles.stepArrow} aria-hidden="true">
@@ -834,7 +834,7 @@ export function ChangeSteps({
           <ArrowDown size={14} className={styles.arrowNarrow} />
         </li>
         <li>
-          <span className={styles.stepLabel}>After</span>
+          <span className={styles.stepLabel}>{CALL_FLOW.after}</span>
           <div className={styles.stepText}>{after}</div>
         </li>
       </ol>
