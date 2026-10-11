@@ -101,6 +101,12 @@ describe("report Word file", () => {
     expect(doc.bookmarks).toEqual(REPORT_PILLARS.map((pillar) => pillar.id));
     expect(doc.text).toContain("Sales call");
     expect(doc.text).toContain("This report doesn't cover:");
+    expect(doc.text).toContain(
+      "The buyer declined a next step and asked the seller not to follow up.",
+    );
+    expect(doc.text).toContain("Respect the buyer's request not to follow up.");
+    expect(doc.text).not.toContain("The closer clarified a follow-up time.");
+    expect(doc.text).not.toContain("Sure, which time works for you?");
   });
 
   it("an observed skill without a note keeps its row: state and times", async () => {

@@ -93,12 +93,50 @@ export const syntheticReport = {
   verdict: "Synthetic display only. No next action was agreed in this example.",
   dimensions,
   overview: {
-    ...base.overview!,
+    // The base supplies report structure, never another call's analysis/quotes.
+    version: "dipak-14-point-v1",
+    diagnosis: {
+      text: "The buyer declined a next step and asked the seller not to follow up.",
+      evidence: [syntheticEvidence.boundary],
+    },
     outcome: {
       kind: "no_sale",
       text: "No sale was agreed. The buyer declined a next step and asked the seller not to follow up.",
       evidence: [syntheticEvidence.boundary],
     },
+    strength_details: [],
+    improvement_details: [
+      {
+        finding_index: 0,
+        what_happened: {
+          text: "The buyer mentioned uncertain timing.",
+          evidence: [syntheticEvidence.concern],
+        },
+        why_it_matters: "The stated barrier needs clarification.",
+        replacement_behavior:
+          "In a future conversation, ask one neutral question about timing before offering a plan.",
+        business_impact: {
+          status: "insufficient_data",
+          missing_inputs: ["Comparable conversion history", "Lead volume"],
+        },
+      },
+    ],
+    golden_moments: [],
+    missed_details: [],
+    prospect_interpretations: [
+      {
+        source: {
+          text: "The buyer said timing was uncertain.",
+          evidence: [syntheticEvidence.concern],
+        },
+        possible_concern:
+          "They said timing was uncertain. The call doesn't say why.",
+        interpretation_kind: "inference",
+      },
+    ],
+    rewatch: [],
+    conversation_change: null,
+    ethics_notes: [],
     next_call_focus: {
       improvement_index: 0,
       behavior:
@@ -112,6 +150,15 @@ export const syntheticReport = {
         "Rehearse a permission-based question, then accept a decline without pressing for a next step.",
       success_condition:
         "You ask once, listen, and leave the decision with the buyer.",
+    },
+    progress: null,
+    final_assessment: {
+      repeat: "Respect the buyer's boundary.",
+      fix_first: "Clarify timing earlier.",
+      next_focus: "Respect the buyer's request not to follow up.",
+      assessment:
+        "Synthetic display only. No next action was agreed in this example.",
+      evidence: [syntheticEvidence.boundary],
     },
   },
 } satisfies SalesReport;

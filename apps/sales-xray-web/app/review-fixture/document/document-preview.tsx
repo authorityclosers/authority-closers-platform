@@ -6,8 +6,13 @@ import { syntheticEvidence, syntheticReport } from "../report/synthetic-report";
 import styles from "../report/synthetic-report-preview.module.css";
 
 const callId = "00000000-0000-4000-8000-000000000002";
-const quotes = Object.values(syntheticEvidence);
 const VOICES = ["fictional-seller", "fictional-buyer"];
+const dialogue = [
+  { evidence: syntheticEvidence.concern, speaker_id: VOICES[1] },
+  { evidence: syntheticEvidence.boundary, speaker_id: VOICES[1] },
+  { evidence: syntheticEvidence.respect, speaker_id: VOICES[0] },
+];
+const quotes = dialogue.map(({ evidence }) => evidence);
 
 /** The fictional call the Document view shows (also checked whole in the test). */
 export const DOCUMENT_FIXTURE_DATA: DocumentReportData = {
@@ -17,9 +22,9 @@ export const DOCUMENT_FIXTURE_DATA: DocumentReportData = {
     revision: syntheticReport.transcript_revision,
     timebase_id: "synthetic",
     duration_ms: 35000,
-    segments: quotes.map((e, i) => ({
+    segments: dialogue.map(({ evidence: e, speaker_id }) => ({
       id: e.segment_id,
-      speaker_id: VOICES[i % 2],
+      speaker_id,
       start_ms: e.start_ms,
       end_ms: e.end_ms,
       text: e.quote,
