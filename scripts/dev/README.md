@@ -59,6 +59,13 @@ show the skill's state and evidence without an observation line. An uncited skil
 keeps its insufficient-evidence state and the existing no-citation explanation.
 
 Synthetic usage is released immediately and has a zero-second no-work settlement.
+Source-declared fictional speakers are saved through the existing speaker-map
+revision model in the same audited transaction: the published representative is
+the salesperson, and the published prospect is the prospect. Both must match the
+participant and transcript person IDs. An explicitly declared third participant
+stays `other`. The importing viewer is never marked as
+the seller. This enables the normal Report metrics and price/response attribution.
+Replay preserves any existing speaker choice and appends no replacement revision.
 Completed local jobs cannot enter the provider queue. Member identities have no
 password, provider identity or verified-email assertion. Replays skip identical
 calls and refuse changes to preserved content or existing membership state.

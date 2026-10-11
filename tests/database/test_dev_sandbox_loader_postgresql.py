@@ -32,6 +32,8 @@ from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import ConversationReportDraft
 from ac_platform.conversation_intelligence.org_insights import OrganisationInsights
 from ac_platform.conversation_intelligence.run_budget_alarm import overdue_processing_plans
+from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
+from ac_platform.conversation_intelligence.speaker_map_service import read_speaker_map
 from ac_platform.conversation_intelligence.synthetic_import_contracts import (
     SyntheticCallBundle,
     SyntheticRecordInput,
@@ -118,6 +120,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
 
             preview = await load(apply=False)
             assert preview["calls_created"] == 1 and preview["after_calls"] == 0
+            assert preview["speaker_maps_created"] == 1
             async with AsyncSession(engine) as db:
                 assert (
                     await db.scalar(select(func.count()).select_from(ConversationAcquisitionUsage))
@@ -127,6 +130,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
             assert sorted([first["calls_created"], second["calls_created"]]) == [0, 1]
             assert first["reports_with_pillars"] == second["reports_with_pillars"] == 1
             assert first["reports_without_pillars"] == second["reports_without_pillars"] == 0
+            assert sorted([first["speaker_maps_created"], second["speaker_maps_created"]]) == [0, 1]
             async with AsyncSession(engine) as db, db.begin():
                 ownership = GuestOwnership(
                     AcquisitionSessions(
@@ -172,6 +176,20 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert stored_report.payload["improvements"][0]["title"] == "Agree a date"
                 assert stored_report.payload["dimensions"][0]["call_state"] == "observed"
                 normalized = stored_report.transcript["normalized"]
+                mapping = await read_speaker_map(
+                    ownership, submission, actor=owner.actor, allow_organisation_read=True
+                )
+                assert mapping["status"] == "confirmed"
+                assert mapping["transcript_revision"] == report["transcript_revision"]
+                assert {s["speaker_id"]: s["role"] for s in mapping["speakers"]} == {
+                    "rep": "salesperson",
+                    "prospect": "prospect",
+                }
+                assert all(s["role_source"] == "confirmed" for s in mapping["speakers"])
+                seeded_map = await db.scalar(select(ConversationSpeakerMapRevision))
+                assert seeded_map.actor_person_id == owner.person_id
+                assert seeded_map.revision == 1
+                authored_choices = deepcopy(seeded_map.speakers)
                 coaching = from_report(
                     report,
                     submission_id=submission,
@@ -331,9 +349,42 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 )
             history = await load(include_history=True)
             assert history["summaries_created"] == 1 and history["calls_created"] == 0
+            assert history["speaker_maps_created"] == 0 and history["speaker_maps_preserved"] == 1
             again = await load(include_history=True)
             assert again["summaries_skipped"] == 1
+            # An existing later speaker choice always wins over a source replay.
+            async with AsyncSession(engine) as db, db.begin():
+                choices = deepcopy(authored_choices)
+                next(s for s in choices if s["speaker_id"] == "rep")["display_name"] = (
+                    "Reviewed synthetic representative"
+                )
+                db.add(
+                    ConversationSpeakerMapRevision(
+                        id=uuid4(),
+                        tenant_id=module.TARGET,
+                        submission_id=submission,
+                        revision=2,
+                        transcript_revision=report["transcript_revision"],
+                        speakers=choices,
+                        actor_person_id=owner.person_id,
+                        created_at=owner.now,
+                    )
+                )
+            replay = await load()
+            assert replay["speaker_maps_created"] == 0 and replay["speaker_maps_preserved"] == 1
             async with AsyncSession(engine) as db:
+                assert (
+                    await db.scalar(
+                        select(func.count()).select_from(ConversationSpeakerMapRevision)
+                    )
+                    == 2
+                )
+                latest = await db.scalar(
+                    select(ConversationSpeakerMapRevision)
+                    .order_by(ConversationSpeakerMapRevision.revision.desc())
+                    .limit(1)
+                )
+                assert latest.speakers == choices
                 stored_summary = await db.scalar(
                     select(ConversationSyntheticRecord).where(
                         ConversationSyntheticRecord.kind == "call_summary"

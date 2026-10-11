@@ -47,6 +47,12 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.org_insights import OrganisationInsights
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import load_report_profile, parse_report_draft
+from ac_platform.conversation_intelligence.speaker_map import (
+    project_speaker_roles,
+    resolve_speaker_map,
+)
+from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
+from ac_platform.conversation_intelligence.speaker_map_store import normalize_speaker_decisions
 from ac_platform.conversation_intelligence.submission_label_models import (
     ConversationSubmissionLabelRevision,
 )
@@ -132,6 +138,83 @@ def representatives(root: Path) -> list[dict[str, Any]]:
     return result
 
 
+def authored_speaker_decisions(bundle: SyntheticCallBundle, transcript: dict) -> list[dict]:
+    """Copy declared fictional participants, never identify a real voice."""
+    known = {row["speaker_id"] for row in transcript["segments"]}
+    participants = {}
+    for row in bundle.transcript["participants"]:
+        label = row.get("speaker")
+        if label not in known:
+            continue
+        role = {"rep": "salesperson", "prospect": "prospect", "other": "other"}.get(label)
+        expected = (
+            bundle.metadata.get("rep_id")
+            if label == "rep"
+            else bundle.metadata.get("prospect_id")
+            if label == "prospect"
+            else row.get("person_id")
+        )
+        if (
+            not role
+            or not isinstance(expected, str)
+            or not expected
+            or row.get("synthetic") is not True
+            or row.get("person_id") != expected
+            or label in participants
+            or any(
+                line.get("person_id") != expected
+                for line in bundle.transcript["lines"]
+                if line.get("speaker") == label
+            )
+        ):
+            raise ValueError("Synthetic speaker roles must match the declared source participants.")
+        participants[label] = {
+            "speaker_id": label,
+            "role": role,
+            "display_name": row.get("name"),
+        }
+    return normalize_speaker_decisions(list(participants.values()), transcript)
+
+
+async def preserve_speaker_map(
+    db: AsyncSession,
+    *,
+    bundle: SyntheticCallBundle,
+    transcript: dict,
+    approver: UUID,
+    now: datetime,
+    apply: bool,
+    counts: Counter,
+) -> None:
+    submission = identifier("submission", bundle.metadata["call_id"])
+    existing = await db.scalar(
+        select(ConversationSpeakerMapRevision)
+        .where(
+            ConversationSpeakerMapRevision.tenant_id == TARGET,
+            ConversationSpeakerMapRevision.submission_id == submission,
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        counts["speaker_maps_preserved"] += 1
+        return
+    decisions = authored_speaker_decisions(bundle, transcript)
+    counts["speaker_maps_created"] += 1
+    if apply:
+        db.add(
+            ConversationSpeakerMapRevision(
+                id=identifier("speaker-map", bundle.metadata["call_id"]),
+                tenant_id=TARGET,
+                submission_id=submission,
+                revision=1,
+                transcript_revision=transcript["revision"],
+                speakers=decisions,
+                actor_person_id=approver,
+                created_at=now,
+            )
+        )
+
+
 def authored_pillars(
     bundle: SyntheticCallBundle, transcript: dict, evidence: Callable[[Any], list[dict]]
 ) -> dict | None:
@@ -199,6 +282,15 @@ def authored_pillars(
         return result[:3]
 
     try:
+        speaker_map = resolve_speaker_map(
+            transcript,
+            account_holder_name=None,
+            user_revision={
+                "revision": 1,
+                "transcript_revision": transcript["revision"],
+                "speakers": authored_speaker_decisions(bundle, transcript),
+            },
+        )
         timeline = []
         for phase in report["how_the_call_played_out"].get("timeline", []):
             if not isinstance(phase, dict):
@@ -359,7 +451,7 @@ def authored_pillars(
         return normalize_pillars(
             candidate,
             transcript=transcript,
-            speaker_roles=None,
+            speaker_roles=project_speaker_roles(speaker_map),
             normalize_evidence=lambda ref: ref,
             canonical_read=True,
             canonical_synthetic=transcript.get("synthetic") is True,
@@ -616,6 +708,8 @@ async def load(
             "calls_skipped": 0,
             "reports_with_pillars": 0,
             "reports_without_pillars": 0,
+            "speaker_maps_created": 0,
+            "speaker_maps_preserved": 0,
             "summaries_created": 0,
             "summaries_skipped": 0,
             "summaries_validated": 0,
@@ -780,10 +874,28 @@ async def load(
             source = await db.get(ConversationSyntheticRecord, (TARGET, "call", key, 1))
             if source is None or source.payload_sha256 != source_hashes[-1]:
                 raise ValueError("The original authored bundle changed; supersede it explicitly.")
+            await preserve_speaker_map(
+                db,
+                bundle=bundle,
+                transcript=transcript["normalized"],
+                approver=approver,
+                now=now,
+                apply=apply,
+                counts=counts,
+            )
             counts["calls_skipped"] += 1
             continue
         counts["calls_created"] += 1
         if not apply:
+            await preserve_speaker_map(
+                db,
+                bundle=bundle,
+                transcript=transcript["normalized"],
+                approver=approver,
+                now=now,
+                apply=False,
+                counts=counts,
+            )
             continue
         owner_id = identifier("person", bundle.metadata["rep_id"])
         usage_id, lease_id, job_id = (identifier(kind, key) for kind in ("usage", "lease", "job"))
@@ -887,6 +999,15 @@ async def load(
             )
         )
         await db.flush()
+        await preserve_speaker_map(
+            db,
+            bundle=bundle,
+            transcript=transcript["normalized"],
+            approver=approver,
+            now=now,
+            apply=True,
+            counts=counts,
+        )
         db.add(draft)
         db.add(
             ConversationSubmissionLabelRevision(
