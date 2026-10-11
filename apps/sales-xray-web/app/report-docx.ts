@@ -414,9 +414,14 @@ function blocks(
                   ),
                   cellOf(
                     [
-                      para([{ text: row.observation }], {
-                        after: row.clips.length ? 40 : 0,
-                      }),
+                      // A cell needs one paragraph, even with no note or clip.
+                      ...(row.observation || !row.clips.length
+                        ? [
+                            para([{ text: row.observation }], {
+                              after: row.clips.length ? 40 : 0,
+                            }),
+                          ]
+                        : []),
                       ...(row.clips.length
                         ? [
                             para(

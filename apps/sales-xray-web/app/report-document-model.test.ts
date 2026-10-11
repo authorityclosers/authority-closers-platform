@@ -146,6 +146,39 @@ describe("report document model", () => {
     );
   });
 
+  it("an observed skill without a note shows its state and play times only", () => {
+    // C's sandbox writes `observation: ""` (or a stock note) for a cited skill.
+    const report = structuredClone(amitReport) as SalesReport;
+    const notes: Record<string, string> = {
+      human_connection_trust: "",
+      qualification: "Relevant behaviour is evidenced by the cited turn.",
+    };
+    for (const d of report.dimensions)
+      if (d.dimension_id in notes) d.observation = notes[d.dimension_id];
+    report.dimensions = report.dimensions.filter(
+      (d) => d.dimension_id !== "closing_decision_management",
+    );
+    const doc = reportDocumentModel(
+      { report, transcript: amitTranscript as Transcript },
+      { roles: AMIT_SPEAKERS },
+    );
+    const skills = doc.sections[4].parts[0].items[0];
+    if (skills.type !== "skills") throw new Error("no skills");
+    const row = (name: string) => skills.rows.find((r) => r.name === name)!;
+    for (const name of ["Human Connection & Trust", "Qualification"]) {
+      expect(row(name).state).toBe(
+        name === "Qualification" ? "Observed" : "Strongly Demonstrated",
+      );
+      expect(row(name).observation).toBe("");
+      expect(row(name).clips.length).toBeGreaterThan(0);
+    }
+    // A skill the report doesn't cover still says so.
+    expect(row("Closing & Decision Management").state).toBe("Not covered");
+    expect(row("Closing & Decision Management").observation).toBe(
+      "This report doesn't cover this skill.",
+    );
+  });
+
   it("opens Deep Analysis in the spec's groups and order", () => {
     const deeper = amitDoc().sections[4].parts.find(
       (p) => p.heading === "Deeper Analysis",

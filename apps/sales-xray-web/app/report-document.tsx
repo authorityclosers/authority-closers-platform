@@ -284,7 +284,9 @@ function Item({
                 </span>
               </p>
               <div className={styles.skillBody} role="cell">
-                <p className={styles.text}>{row.observation}</p>
+                {row.observation ? (
+                  <p className={styles.text}>{row.observation}</p>
+                ) : null}
                 {row.clips.length ? (
                   <p className={styles.plays}>
                     {row.clips.map((clip, index) => (

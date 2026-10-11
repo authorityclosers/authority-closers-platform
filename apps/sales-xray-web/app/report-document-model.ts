@@ -116,6 +116,7 @@ export type DocItem =
         state: string;
         tone: DocTone;
         meaning: string | null;
+        /** Empty when the skill was seen but the analysis wrote no note. */
         observation: string;
         clips: DocClip[];
       }[];
@@ -648,7 +649,10 @@ export function reportDocumentModel(
                 ? (STATE_TONE[skill.state] ?? "neutral")
                 : "neutral",
               meaning: skill.state ? SKILL_STATE_MEANING[skill.state] : null,
-              observation: skill.observation ?? SKILLS.notCoveredText,
+              // An observed skill without a note (or with a stock one) shows
+              // its state and play times only, as on the Report screen.
+              observation:
+                skill.observation ?? (skill.state ? "" : SKILLS.notCoveredText),
               clips: skill.sources
                 .slice(0, 3)
                 .map((source) => clip(source))

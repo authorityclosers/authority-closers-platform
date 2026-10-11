@@ -102,6 +102,21 @@ describe("report Word file", () => {
     expect(doc.text).toContain("This report doesn't cover:");
   });
 
+  it("an observed skill without a note keeps its row: state and times", async () => {
+    const report = structuredClone(amitReport) as SalesReport;
+    for (const d of report.dimensions) d.observation = "";
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          { report, transcript: amitTranscript as Transcript },
+          { roles: AMIT_SPEAKERS },
+        ),
+      ),
+    );
+    expect(doc.text).toContain("Human Connection & TrustStrongly Demonstrated");
+    expect(doc.text).not.toContain("This report doesn't cover this skill.");
+  });
+
   it("refuses to build without a report", async () => {
     await expect(createReportDocx({ title: "No report" })).rejects.toThrow(
       "document_report_missing",
