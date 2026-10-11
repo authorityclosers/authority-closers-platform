@@ -6,6 +6,7 @@ import type {
   Transcript,
 } from "./report-contract";
 import { STAGE_LABELS } from "./report-copy";
+import type { PillarNote, ReportPillars } from "./report-pillars-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 
 /**
@@ -76,7 +77,13 @@ export type Moment = {
   prospectResponse?: Line;
 };
 
-export type Item = { title: string; what: Line; why: Line | null };
+export type Item = {
+  title: string;
+  what: Line;
+  why: Line | null;
+  /** What Didn't only: the possible areas left open (spec 3.2). */
+  areas?: string[];
+};
 
 export type SkillRow = {
   id: string;
@@ -109,6 +116,9 @@ export type StoryModel = {
       turn: Line;
       after: Line;
       effect: string | null;
+      /** Stage names either side of the switch, when the analysis gives them. */
+      beforeLabel?: string | null;
+      afterLabel?: string | null;
     } | null;
   };
   worked: Item[];
@@ -135,6 +145,12 @@ export type StoryModel = {
     communication: {
       longest: string | null;
       observation: Line | null;
+      listening?: string | null;
+    };
+    presentation?: {
+      relevant: string[];
+      lessRelevant: string | null;
+      valueConnection: string | null;
     };
   };
   deal: {
@@ -770,7 +786,7 @@ export function reportStoryModel(
     nextEvent: deal.nextEvent?.text ?? null,
   };
 
-  return {
+  const model: StoryModel = {
     picture,
     flow,
     worked,
@@ -782,5 +798,231 @@ export function reportStoryModel(
     deal,
     missing,
     end,
+  };
+  return report.pillars
+    ? withPillars(
+        model,
+        report.pillars,
+        transcript?.duration_ms,
+        options.recorded,
+      )
+    : model;
+}
+
+const note = (value: PillarNote | null | undefined, inferred = false) =>
+  value ? line(value.text, value.evidence, inferred) : null;
+
+/**
+ * The analysis' own pillar words (report-pillars/1) replace what the Report
+ * would otherwise derive, part by part; anything it leaves out keeps the
+ * derived value, so older and newer reports read the same way.
+ */
+function withPillars(
+  base: StoryModel,
+  p: ReportPillars,
+  durationMs: number | undefined,
+  recorded: { status: OutcomeStatus; note?: string | null } | null | undefined,
+): StoryModel {
+  const outcome: Outcome =
+    !recorded && p.outcome
+      ? {
+          status: p.outcome.status,
+          origin: "call",
+          detail:
+            line(p.outcome.line, p.outcome.evidence) ??
+            base.picture.outcome.detail,
+        }
+      : base.picture.outcome;
+  const nextStep = note(p.next_step) ?? base.picture.nextStep;
+  const picture = {
+    ...base.picture,
+    outcome,
+    summary: p.summary
+      ? { text: p.summary, sources: [] }
+      : base.picture.summary,
+    // The supplied summary is already the three to five sentences.
+    assessment: p.summary ? null : base.picture.assessment,
+    influence: note(p.biggest_influence) ?? base.picture.influence,
+    strongest: note(p.strongest_part) ?? base.picture.strongest,
+    concern: note(p.biggest_concern) ?? base.picture.concern,
+    nextStep,
+  };
+
+  const phases =
+    p.timeline && durationMs
+      ? p.timeline
+          .filter((stage) => stage.start_ms < durationMs)
+          .map((stage, index, all) => ({
+            label: stage.label,
+            start_ms: stage.start_ms,
+            end_ms: all[index + 1]?.start_ms ?? durationMs,
+          }))
+      : null;
+  const change = p.key_change
+    ? {
+        before: { text: p.key_change.before.text, sources: [] },
+        turn: { text: p.key_change.text, sources: p.key_change.evidence },
+        after: { text: p.key_change.after.text, sources: [] },
+        effect: null,
+        beforeLabel: p.key_change.before.label,
+        afterLabel: p.key_change.after.label,
+      }
+    : base.flow.change;
+  const flow = {
+    ...base.flow,
+    phases: phases?.length ? phases : base.flow.phases,
+    change,
+  };
+
+  const worked = p.worked?.length
+    ? p.worked.map((item) => ({
+        title: item.title,
+        what: { text: item.what, sources: item.evidence.slice(0, 1) },
+        why: line(item.why_it_helped, []),
+      }))
+    : base.worked;
+  const didnt = p.didnt?.length
+    ? p.didnt.map((item) => ({
+        title: item.title,
+        what: { text: item.what, sources: item.evidence.slice(0, 1) },
+        why: line(item.what_it_affected, []),
+        areas: item.possible_areas,
+      }))
+    : base.didnt;
+
+  let moments = base.moments;
+  let top = base.topMoments;
+  let keyMoment = base.end.moment;
+  if (p.moments?.length) {
+    // Supplied in order of importance: the first five are the key moments.
+    moments = p.moments.map((item, index) => ({
+      key: `pillar-${index}-${evidenceKey(item.evidence[0])}`,
+      kind: item.kind,
+      title: item.title,
+      source: item.evidence[0],
+      why: line(item.why, []),
+      movedToward: line(item.moved_toward, []) ?? undefined,
+      couldExplore: item.what_was_missed ?? undefined,
+      priceStated: note(item.price_stated) ?? undefined,
+      prospectResponse: note(item.prospect_response) ?? undefined,
+    }));
+    top = moments
+      .slice(0, 5)
+      .sort((a, b) => a.source.start_ms - b.source.start_ms);
+    keyMoment =
+      p.most_important_moment !== undefined
+        ? moments[p.most_important_moment]
+        : (top.find((m) => m.kind === "Turning Point") ?? moments[0]);
+  }
+
+  const d = p.deeper;
+  const deeper = d
+    ? {
+        ...base.deeper,
+        discovery: {
+          clear: d.became_clear,
+          unclear: d.still_unclear.length
+            ? d.still_unclear
+            : base.deeper.discovery.unclear,
+          openingMissed:
+            note(d.opening_missed) ?? base.deeper.discovery.openingMissed,
+        },
+        decision: {
+          price: note(d.price) ?? base.deeper.decision.price,
+          response: note(d.prospect_response) ?? base.deeper.decision.response,
+          likely: d.likely_status.length
+            ? d.likely_status.map((text) => ({
+                text,
+                sources: [],
+                inferred: true,
+              }))
+            : base.deeper.decision.likely,
+        },
+        communication: {
+          ...base.deeper.communication,
+          listening: d.listening,
+          observation:
+            note(d.communication_note) ?? base.deeper.communication.observation,
+        },
+        presentation:
+          d.relevant.length || d.less_relevant || d.value_connection
+            ? {
+                relevant: d.relevant,
+                lessRelevant: d.less_relevant,
+                valueConnection: d.value_connection,
+              }
+            : undefined,
+      }
+    : base.deeper;
+
+  const pd = p.deal;
+  const nextEvent = pd?.next_event
+    ? {
+        text: pd.next_event.when ?? pd.next_event.text,
+        sources: pd.next_event.evidence,
+      }
+    : p.next_step?.when
+      ? { text: p.next_step.when, sources: p.next_step.evidence }
+      : base.deal.nextEvent;
+  const deal = {
+    ...base.deal,
+    outcome,
+    position: note(pd?.position) ?? base.deal.position,
+    blocker: pd?.blocker
+      ? note(pd.blocker, pd.blocker.basis === "inferred")
+      : base.deal.blocker,
+    prospectCommitments: pd?.prospect_commitments.length
+      ? pd.prospect_commitments.map((item) => note(item)!)
+      : base.deal.prospectCommitments,
+    sellerCommitments: pd?.seller_commitments.length
+      ? pd.seller_commitments.map((item) => note(item)!)
+      : base.deal.sellerCommitments,
+    nextEvent,
+    quality: pd?.commitment_quality ?? base.deal.quality,
+    unclear: pd?.still_unclear.length ? pd.still_unclear : base.deal.unclear,
+    action: pd?.deal_action ?? base.deal.action,
+    coachingMission: pd?.coaching_mission ?? base.deal.coachingMission,
+  };
+
+  const missing = base.missing.map((list) => [
+    ...list,
+  ]) as StoryModel["missing"];
+  const drop = (index: number, name: string, has: unknown) => {
+    if (has) missing[index] = missing[index].filter((item) => item !== name);
+  };
+  drop(0, "Call outcome", outcome.status);
+  drop(0, "Summary", picture.summary);
+  drop(0, "What most affected this call", picture.influence);
+  drop(0, "Strongest part", picture.strongest);
+  drop(0, "Biggest concern", picture.concern);
+  drop(0, "Next agreed step", picture.nextStep);
+  drop(1, "Conversation stages", flow.phases);
+  drop(1, "Key change", flow.change);
+  drop(2, "What worked", worked.length);
+  drop(2, "What didn't", didnt.length);
+  drop(3, "Moments", moments.length);
+  drop(5, "Current blocker", deal.blocker);
+  drop(5, "Prospect commitment", deal.prospectCommitments.length);
+  drop(5, "Seller commitment", deal.sellerCommitments.length);
+  drop(5, "Next event date", deal.nextEvent);
+  drop(5, "Commitment quality", deal.quality);
+
+  return {
+    ...base,
+    picture,
+    flow,
+    worked,
+    didnt,
+    moments,
+    topMoments: top,
+    deeper,
+    deal,
+    missing,
+    end: {
+      strongest: p.strongest_part?.short ?? worked[0]?.title ?? null,
+      issue: p.biggest_concern?.short ?? didnt[0]?.title ?? null,
+      moment: keyMoment,
+      nextEvent: nextEvent?.text ?? null,
+    },
   };
 }

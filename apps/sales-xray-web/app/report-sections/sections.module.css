@@ -143,6 +143,12 @@
   font-weight: 600;
   line-height: 1.4;
 }
+.stepName {
+  display: block;
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
 .momentHead {
   display: flex;
   align-items: center;

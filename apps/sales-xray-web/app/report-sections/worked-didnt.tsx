@@ -3,7 +3,7 @@
 import { WORKED_DIDNT } from "../report-copy";
 import type { Item, StoryModel } from "../report-story-model";
 import { PlayChip, StoryCard, ToneDot } from "../report-visuals/visuals";
-import { Field, Gap, Text, type Select } from "./shared";
+import { Bullets, Field, Gap, Text, type Select } from "./shared";
 import styles from "./sections.module.css";
 
 /** One card: what happened → evidence → why it helped / what it affected. */
@@ -24,6 +24,7 @@ function ItemRow({
       <p className={styles.line}>
         <Text text={item.what.text} />
       </p>
+      {item.areas?.length ? <Bullets items={item.areas} /> : null}
       <PlayChip
         source={item.what.sources[0]}
         title={item.title}

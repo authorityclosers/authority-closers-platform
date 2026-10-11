@@ -11,7 +11,8 @@ import styles from "./sections.module.css";
 
 /** Deep analysis (spec 5): four groups, each only with what this call has. */
 function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
-  const { discovery, decision, communication, findings } = model.deeper;
+  const { discovery, decision, communication, findings, presentation } =
+    model.deeper;
   const groups = [
     discovery.clear.length ||
     discovery.unclear.length ||
@@ -35,6 +36,28 @@ function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
               title={SKILLS.openingMissed}
               onSelect={onSelect}
             />
+          </Field>
+        ) : null}
+      </section>
+    ) : null,
+    presentation ? (
+      <section key="presentation" className={styles.group}>
+        <h4>{SKILLS.deeperPresentation}</h4>
+        {presentation.relevant.length ? (
+          <Field label={SKILLS.relevant}>
+            <Bullets items={presentation.relevant} />
+          </Field>
+        ) : null}
+        {presentation.lessRelevant ? (
+          <Field label={SKILLS.lessRelevant}>
+            <p className={styles.line}>
+              <Text text={presentation.lessRelevant} />
+            </p>
+          </Field>
+        ) : null}
+        {presentation.valueConnection ? (
+          <Field label={SKILLS.valueConnection}>
+            <p className={styles.line}>{presentation.valueConnection}</p>
           </Field>
         ) : null}
       </section>
@@ -91,9 +114,18 @@ function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
         ) : null}
       </section>
     ) : null,
-    communication.longest || communication.observation ? (
+    communication.longest ||
+    communication.observation ||
+    communication.listening ? (
       <section key="communication" className={styles.group}>
         <h4>{SKILLS.deeperCommunication}</h4>
+        {communication.listening ? (
+          <Field label={SKILLS.listening}>
+            <p className={styles.line}>
+              <Text text={communication.listening} />
+            </p>
+          </Field>
+        ) : null}
         {communication.longest ? (
           <Field label={SKILLS.longestMonologue}>
             <p className={styles.line}>{communication.longest}</p>

@@ -141,9 +141,27 @@ export function CallFlow({
             />
           )}
           <ChangeSteps
-            before={<Text text={flow.change.before.text} />}
+            before={
+              <>
+                {flow.change.beforeLabel ? (
+                  <strong className={styles.stepName}>
+                    {flow.change.beforeLabel}
+                  </strong>
+                ) : null}
+                <Text text={flow.change.before.text} />
+              </>
+            }
             turn={<Text text={flow.change.turn.text} />}
-            after={<Text text={flow.change.after.text} />}
+            after={
+              <>
+                {flow.change.afterLabel ? (
+                  <strong className={styles.stepName}>
+                    {flow.change.afterLabel}
+                  </strong>
+                ) : null}
+                <Text text={flow.change.after.text} />
+              </>
+            }
             turnLabel={CALL_FLOW.switch}
           />
           {flow.change.effect ? (
