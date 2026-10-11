@@ -1,10 +1,10 @@
 .panel {
   display: grid;
   gap: 18px;
-  border: 1px solid var(--ops-border, #d8e1df);
-  border-radius: 18px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
   padding: 24px;
-  background: var(--ops-surface, #fff);
+  background: var(--sx-surface);
 }
 
 .panelHeader,
@@ -28,16 +28,16 @@
 }
 
 .panelHeader h2 {
-  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  font-size: 15px;
 }
 
 .feedbackHeader h3 {
-  font-size: 1rem;
+  font-size: 15px;
 }
 
 .kicker {
-  color: var(--ops-muted, #516662);
-  font-size: 0.72rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -48,7 +48,7 @@
 .empty,
 .truncated {
   margin: 0;
-  color: var(--ops-muted, #516662);
+  color: var(--sx-muted);
   line-height: 1.55;
 }
 
@@ -57,9 +57,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 12px;
+  border-radius: var(--sx-radius-md);
   padding: 13px 15px;
-  background: #f4f8f7;
+  background: var(--sx-surface);
 }
 
 .state {
@@ -71,8 +71,8 @@
 }
 
 .inlineError {
-  color: #8f2e2e;
-  background: #fff3f1;
+  color: var(--sx-bad);
+  background: var(--sx-bad-soft);
 }
 
 .inlineError button {
@@ -89,13 +89,13 @@
 .feedbackItem {
   display: grid;
   gap: 14px;
-  border: 1px solid var(--ops-border, #d8e1df);
-  border-radius: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
   padding: 16px;
 }
 
 .lifecycle {
-  background: #f8fbfa;
+  background: var(--sx-surface);
 }
 
 .lifecycleTitle {
@@ -115,8 +115,8 @@
 }
 
 .metadata dt {
-  color: var(--ops-muted, #516662);
-  font-size: 0.75rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   font-weight: 700;
 }
 
@@ -130,8 +130,8 @@
 .revocation {
   gap: 6px;
   margin: 0;
-  color: #8f2e2e;
-  font-size: 0.88rem;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-md);
 }
 
 .feedbackList {
@@ -140,38 +140,38 @@
 }
 
 .feedbackItem {
-  background: #fff;
+  background: var(--sx-surface);
 }
 
 .available,
 .erased {
   border-radius: 999px;
   padding: 5px 9px;
-  font-size: 0.76rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
 }
 
 .available {
-  color: #1d6b50;
-  background: #e8f6ed;
+  color: var(--sx-good);
+  background: var(--sx-accent-soft);
 }
 
 .erased {
-  color: #6b6660;
-  background: #efeeeb;
+  color: var(--sx-muted);
+  background: var(--sx-sunken);
 }
 
 .feedbackFacts {
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--ops-muted, #516662);
-  font-size: 0.8rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
 .feedbackFacts span {
-  border-radius: 6px;
+  border-radius: var(--sx-radius-sm);
   padding: 4px 7px;
-  background: #f0f5f3;
+  background: var(--sx-sunken);
 }
 
 .feedbackCopy,
@@ -184,22 +184,22 @@
 .correction {
   display: grid;
   gap: 6px;
-  border-left: 3px solid #7b9c91;
+  border-left: 3px solid var(--sx-line-strong);
   padding-left: 12px;
 }
 
 .erasedCopy {
-  font-size: 0.9rem;
+  font-size: var(--sx-text-md);
 }
 
 .empty {
-  border: 1px dashed var(--ops-border, #d8e1df);
-  border-radius: 12px;
+  border: 1px dashed var(--sx-line);
+  border-radius: var(--sx-radius-md);
   padding: 18px;
 }
 
 .truncated {
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
 }
 
 @media (max-width: 620px) {

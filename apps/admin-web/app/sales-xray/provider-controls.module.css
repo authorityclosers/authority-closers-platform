@@ -55,7 +55,7 @@
   border: 1px solid var(--line-strong);
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.64rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -146,14 +146,14 @@
 .routeLabel {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .summaryCard strong {
-  font-size: 1.15rem;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -209,13 +209,13 @@
 
 .presetHeader h3 {
   margin: 4px 0 0;
-  font-size: 1rem;
+  font-size: 15px;
 }
 
 .presetRoutes {
   margin: 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
@@ -226,7 +226,7 @@
 .presetFooter small {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.7rem;
+  font-size: var(--sx-text-xs);
 }
 
 .stageCard {
@@ -255,7 +255,7 @@
 
 .revisionState {
   color: var(--quiet) !important;
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
 }
 
 .revisionState strong {
@@ -264,7 +264,7 @@
 
 .stageHeader h2 {
   margin: 4px 0 0;
-  font-size: 1.05rem;
+  font-size: 15px;
 }
 
 .stageStatus,
@@ -274,7 +274,7 @@
   border: 1px solid var(--info);
   color: var(--info);
   font-family: var(--font-mono), monospace;
-  font-size: 0.64rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -308,7 +308,7 @@
   min-height: 40px;
   padding: 7px 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--sx-radius-sm);
   background: var(--input);
   color: var(--text);
 }
@@ -328,7 +328,7 @@
 .stageLabel {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.62rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -336,7 +336,7 @@
 
 .stageRoute strong {
   overflow-wrap: anywhere;
-  font-size: 0.88rem;
+  font-size: var(--sx-text-md);
 }
 
 .stageData,
@@ -344,7 +344,7 @@
 .stageNote {
   margin: 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
@@ -399,7 +399,7 @@
 
 .sectionHeader h2 {
   margin-top: 4px;
-  font-size: 1.22rem;
+  font-size: 15px;
 }
 
 .providerList,
@@ -421,14 +421,14 @@
 
 .cardHeader h3,
 .catalogHeader strong {
-  font-size: 1rem;
+  font-size: 15px;
 }
 
 .providerMeta,
 .routeMeta {
   flex-wrap: wrap;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--sx-text-sm);
 }
 
 .providerMeta code,
@@ -437,7 +437,7 @@
   border: 1px solid var(--line);
   color: var(--text);
   font-family: var(--font-mono), monospace;
-  font-size: 0.72rem;
+  font-size: var(--sx-text-xs);
 }
 
 .fieldGrid {
@@ -459,7 +459,7 @@
   min-height: 44px;
   padding: 9px 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--sx-radius-sm);
   background: var(--input);
   color: var(--text);
 }
@@ -474,7 +474,7 @@
   min-height: 170px;
   resize: vertical;
   font-family: var(--font-mono), monospace;
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
@@ -486,7 +486,7 @@
 .field small,
 .helper {
   color: var(--quiet);
-  font-size: 0.76rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
@@ -507,7 +507,7 @@
   width: fit-content;
   color: var(--signal);
   cursor: pointer;
-  font-size: 0.84rem;
+  font-size: var(--sx-text-sm);
   font-weight: 700;
 }
 
@@ -531,7 +531,7 @@
 .routeGrid .field select,
 .routeGrid .field input {
   min-height: 40px;
-  font-size: 0.86rem;
+  font-size: var(--sx-text-md);
 }
 
 .catalogList {
@@ -544,13 +544,13 @@
 }
 
 .catalogItem p {
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
 }
 
 .catalogStatus {
   color: var(--muted);
   font-family: var(--font-mono), monospace;
-  font-size: 0.68rem;
+  font-size: var(--sx-text-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

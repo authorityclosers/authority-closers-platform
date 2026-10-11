@@ -1,25 +1,25 @@
 .panel {
   display: grid;
   gap: 1.2rem;
-  padding: clamp(1.2rem, 3vw, 2rem);
-  border: 1px solid #d8e0ea;
-  border-radius: 18px;
-  background: #fff;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
 .heading h2 {
   margin: 0.25rem 0 0.5rem;
-  color: #14243a;
+  color: var(--sx-ink);
 }
 .heading p,
 .empty,
 .errorText {
   max-width: 72ch;
-  color: #65748a;
+  color: var(--sx-muted);
   line-height: 1.55;
 }
 .eyebrow {
-  color: #64748b;
-  font-size: 0.72rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -33,8 +33,8 @@
 .known label {
   display: grid;
   gap: 0.35rem;
-  color: #26364d;
-  font-size: 0.88rem;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
   font-weight: 650;
 }
 .form label span,
@@ -46,29 +46,29 @@
 }
 .form small,
 .known small {
-  color: #7a8798;
-  font-size: 0.72rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   font-weight: 500;
 }
 .form input,
 .known input {
   min-height: 2.55rem;
   padding: 0.6rem 0.7rem;
-  border: 1px solid #b9c6d6;
-  border-radius: 8px;
-  color: #14243a;
-  background: #fff;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  background: var(--sx-surface);
 }
 .form fieldset {
   grid-column: 1 / -1;
   padding: 0.8rem;
-  border: 1px solid #d8e0ea;
-  border-radius: 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
 }
 .form legend {
   padding: 0 0.3rem;
-  color: #26364d;
-  font-size: 0.88rem;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
   font-weight: 650;
 }
 .lenses {
@@ -91,16 +91,16 @@
   gap: 0.6rem;
   align-items: flex-start;
   padding: 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--sx-radius-sm);
   line-height: 1.45;
 }
 .success {
-  color: #14532d;
-  background: #ecfdf3;
+  color: var(--sx-good);
+  background: var(--sx-accent-soft);
 }
 .error {
-  color: #991b1b;
-  background: #fef2f2;
+  color: var(--sx-bad);
+  background: var(--sx-bad-soft);
 }
 .error button {
   margin-left: auto;
@@ -112,7 +112,7 @@
 }
 .known {
   padding-top: 0.9rem;
-  border-top: 1px solid #e5eaf0;
+  border-top: 1px solid var(--sx-line);
 }
 .known summary {
   cursor: pointer;
@@ -125,7 +125,7 @@
   margin-bottom: 0.75rem;
 }
 .panel :is(summary, button, input):focus-visible {
-  outline: 3px solid #3156d3;
+  outline: 3px solid var(--sx-accent);
   outline-offset: 3px;
 }
 .known label {
@@ -137,8 +137,8 @@
 }
 .receipts h3 {
   margin: 0;
-  color: #26364d;
-  font-size: 0.95rem;
+  color: var(--sx-ink);
+  font-size: 15px;
 }
 .receipts article {
   display: grid;
@@ -146,24 +146,24 @@
   gap: 0.75rem;
   align-items: center;
   padding: 0.75rem;
-  border: 1px solid #e5eaf0;
-  border-radius: 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
 }
 .receipts article div {
   display: grid;
   gap: 0.2rem;
 }
 .receipts article span {
-  color: #65748a;
-  font-size: 0.8rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 .receipts article code {
-  color: #65748a;
-  font-size: 0.72rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 .receipts article button {
   border: 0;
-  color: #991b1b;
+  color: var(--sx-bad);
   background: transparent;
   text-decoration: underline;
   cursor: pointer;

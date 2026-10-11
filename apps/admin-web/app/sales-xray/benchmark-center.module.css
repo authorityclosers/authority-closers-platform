@@ -28,7 +28,7 @@
   background: var(--panel);
   color: var(--signal);
   cursor: pointer;
-  font-size: 0.84rem;
+  font-size: var(--sx-text-sm);
   font-weight: 700;
 }
 
@@ -74,7 +74,7 @@
 .eyebrow {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -92,7 +92,7 @@
 }
 
 .endpoint h3 {
-  font-size: 0.95rem;
+  font-size: 15px;
 }
 
 .endpoint p {
@@ -107,14 +107,14 @@
   border: 1px solid var(--line-strong);
   color: var(--text);
   font-family: var(--font-mono), monospace;
-  font-size: 0.68rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
 }
 
 .endpoint code {
   color: var(--text);
   font-family: var(--font-mono), monospace;
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   overflow-wrap: anywhere;
 }
 

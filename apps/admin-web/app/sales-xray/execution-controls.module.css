@@ -1,9 +1,9 @@
 .panel {
-  padding: 1.5rem;
-  border: 1px solid #d8e0e9;
-  border-radius: 1rem;
-  background: #fff;
-  color: #1c2a39;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
 }
 .header {
   display: flex;
@@ -13,30 +13,30 @@
 }
 .header h2 {
   margin: 0.4rem 0;
-  font-size: 1.45rem;
+  font-size: 15px;
 }
 .eyebrow {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  color: #526579;
-  font-size: 0.85rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-md);
 }
 .panel button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 1px solid #bac7d8;
-  border-radius: 0.55rem;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
   padding: 0.75rem 1rem;
   cursor: pointer;
   background: white;
-  color: #203c65;
+  color: var(--sx-ink);
   font: inherit;
 }
 .panel button:focus-visible {
-  outline: 3px solid #9eaefa;
+  outline: 3px solid var(--sx-accent);
   outline-offset: 3px;
 }
 .panel button:disabled {
@@ -44,7 +44,7 @@
   opacity: 0.65;
 }
 .panel .action {
-  background: #203c65;
+  background: var(--lx-film);
   color: white;
 }
 .metrics {
@@ -55,60 +55,60 @@
 }
 .metrics div {
   padding: 1rem;
-  border-radius: 0.6rem;
-  background: #f3f6f8;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
 }
 .metrics dt {
-  color: #526579;
-  font-size: 0.85rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-md);
 }
 .metrics dd {
   margin: 0.4rem 0 0;
-  font-size: 1.35rem;
+  font-size: 15px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 .alert {
   padding: 0.85rem 1rem;
-  background: #fff4dc;
-  border-left: 3px solid #ae6b15;
-  color: #5c3d14;
+  background: color-mix(in oklab, var(--sx-warn) 10%, var(--sx-surface));
+  border-left: 3px solid var(--sx-warn);
+  color: var(--sx-warn);
 }
 .hint {
-  color: #526579;
-  font-size: 0.85rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-md);
 }
 .budgetEditor {
   display: grid;
   gap: 0.85rem;
   margin-top: 1.25rem;
   padding-top: 1.25rem;
-  border-top: 1px solid #d8e0e9;
+  border-top: 1px solid var(--sx-line);
 }
 .field {
   display: grid;
   gap: 0.35rem;
   max-width: 28rem;
-  color: #31475e;
+  color: var(--sx-ink);
   font-weight: 600;
 }
 .field input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #bac7d8;
-  border-radius: 0.55rem;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
   padding: 0.7rem 0.8rem;
-  color: #1c2a39;
-  background: #fff;
+  color: var(--sx-ink);
+  background: var(--sx-surface);
   font: inherit;
 }
 .field input:focus-visible {
-  outline: 3px solid #9eaefa;
+  outline: 3px solid var(--sx-accent);
   outline-offset: 2px;
 }
 .field small {
-  color: #526579;
-  font-size: 0.8rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
   font-weight: 400;
 }
 .budgetActions {
@@ -118,8 +118,8 @@
   flex-wrap: wrap;
 }
 .budgetActions > span {
-  color: #526579;
-  font-size: 0.85rem;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-md);
 }
 @media (max-width: 750px) {
   .metrics {

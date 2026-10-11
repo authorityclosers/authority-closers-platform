@@ -27,14 +27,14 @@
 .statusLabel {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .summaryCard strong {
-  font-size: 1.18rem;
+  font-size: 15px;
 }
 
 .summaryCard small,
@@ -59,7 +59,7 @@
 .statusPanel h2,
 .gapPanel h2 {
   margin: 0;
-  font-size: 1.02rem;
+  font-size: 15px;
 }
 
 .capabilityCard p,
@@ -99,7 +99,7 @@
   border: 1px solid var(--info);
   color: var(--info);
   font-family: var(--font-mono), monospace;
-  font-size: 0.64rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;

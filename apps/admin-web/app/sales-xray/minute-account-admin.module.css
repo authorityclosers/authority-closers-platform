@@ -24,7 +24,7 @@
 }
 
 .header h2 {
-  font-size: 1.25rem;
+  font-size: 15px;
 }
 
 .header p,
@@ -41,7 +41,7 @@
 .eyebrow {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -66,7 +66,7 @@
   gap: 6px;
   min-width: 0;
   color: var(--text);
-  font-size: 0.84rem;
+  font-size: var(--sx-text-sm);
   font-weight: 650;
 }
 
@@ -76,7 +76,7 @@
   min-height: 44px;
   padding: 9px 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--sx-radius-sm);
   background: var(--input);
   color: var(--text);
   font: inherit;
@@ -102,7 +102,7 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--quiet);
-  font-size: 0.76rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
@@ -157,11 +157,11 @@
 }
 
 .subheading h3 {
-  font-size: 1.02rem;
+  font-size: 15px;
 }
 
 .subheading p {
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -169,7 +169,7 @@
   flex: 0 0 auto;
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.68rem;
+  font-size: var(--sx-text-xs);
 }
 
 .balanceGrid {
@@ -191,14 +191,14 @@
 .balanceCard > span {
   color: var(--quiet);
   font-family: var(--font-mono), monospace;
-  font-size: 0.65rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .balanceCard strong {
-  font-size: 1.12rem;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
 
@@ -206,7 +206,7 @@
 .uploadBalance small,
 .history small {
   color: var(--quiet);
-  font-size: 0.74rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.45;
 }
 
@@ -244,7 +244,7 @@
 
 .warning {
   color: var(--danger);
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   line-height: 1.45;
 }
 
@@ -269,14 +269,14 @@
 
 .history li > div span {
   color: var(--quiet);
-  font-size: 0.74rem;
+  font-size: var(--sx-text-xs);
   text-align: right;
 }
 
 .history p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }

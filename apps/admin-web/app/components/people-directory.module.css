@@ -9,7 +9,7 @@
   margin: 0;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--sx-radius-md);
   overflow: hidden;
 }
 .metrics > div {
@@ -21,11 +21,11 @@
 }
 .metrics dt {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--sx-text-sm);
 }
 .metrics dd {
   margin: 8px 0 0;
-  font-size: 2.2rem;
+  font-size: 15px;
   line-height: 1.1;
   font-weight: 750;
   letter-spacing: -0.04em;
@@ -35,7 +35,7 @@
 .detail {
   border: 1px solid var(--line);
   background: var(--panel);
-  border-radius: 16px;
+  border-radius: var(--sx-radius-md);
   min-width: 0;
   overflow: hidden;
 }
@@ -48,13 +48,13 @@
 }
 .header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 15px;
   letter-spacing: -0.025em;
 }
 .header p {
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
   overflow-wrap: anywhere;
 }
 .iconButton {
@@ -63,7 +63,7 @@
   width: 40px;
   height: 40px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--sx-radius-sm);
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
@@ -84,7 +84,7 @@
   border: 1px solid var(--line);
   background: var(--panel);
   padding-left: 12px;
-  border-radius: 9px;
+  border-radius: var(--sx-radius-sm);
   min-width: 0;
   color: var(--muted);
 }
@@ -97,11 +97,11 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
 }
 .search button {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--sx-text-xs);
   border: 0;
   border-left: 1px solid var(--line);
   background: transparent;
@@ -114,9 +114,9 @@
   padding: 12px;
   background: var(--panel);
   color: var(--ink);
-  border-radius: 9px;
+  border-radius: var(--sx-radius-sm);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--sx-text-sm);
   min-height: 44px;
 }
 .tableWrap {
@@ -126,12 +126,12 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: var(--sx-text-sm);
   white-space: nowrap;
 }
 .table th {
   text-align: left;
-  font-size: 0.7rem;
+  font-size: var(--sx-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.065em;
   color: var(--muted);
@@ -171,7 +171,7 @@
   display: block;
   margin-top: 5px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--sx-text-xs);
 }
 .avatar {
   display: grid;
@@ -183,7 +183,7 @@
   width: 37px;
   height: 37px;
   flex: none;
-  font-size: 0.72rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
 }
 .status {
@@ -192,22 +192,22 @@
   gap: 4px;
   border: 1px solid var(--line);
   background: var(--panel-soft);
-  border-radius: 20px;
+  border-radius: var(--sx-radius-md);
   padding: 4px 8px;
-  font-size: 0.7rem;
+  font-size: var(--sx-text-xs);
 }
 .status[data-status="Active"] {
-  color: var(--positive, #237447);
+  color: var(--sx-good);
 }
 .open {
   display: flex;
   align-items: center;
   gap: 8px;
   font: inherit;
-  font-size: 0.76rem;
+  font-size: var(--sx-text-xs);
   padding: 8px 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--sx-radius-sm);
   background: transparent;
   color: var(--signal);
   cursor: pointer;
@@ -222,7 +222,7 @@
   justify-content: space-between;
   padding: 16px 24px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--sx-text-xs);
   flex-wrap: wrap;
 }
 .pagination > div {
@@ -235,7 +235,7 @@
   align-items: center;
   gap: 5px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--sx-radius-sm);
   padding: 8px 10px;
   font: inherit;
   background: var(--panel);
@@ -265,14 +265,14 @@
 }
 .skeleton span {
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--sx-radius-sm);
   background: var(--panel-soft);
   animation: pulse 1.4s ease-in-out infinite alternate;
 }
 .eyebrow {
   display: block;
   color: var(--signal);
-  font-size: 0.68rem;
+  font-size: var(--sx-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -286,14 +286,14 @@
 }
 .facts dt,
 .note {
-  font-size: 0.8rem;
+  font-size: var(--sx-text-sm);
   color: var(--muted);
   line-height: 1.6;
 }
 .facts dd {
   margin: 5px 0 0;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--sx-text-md);
 }
 .detail > .note {
   margin: 16px 24px 24px;
@@ -311,7 +311,7 @@
 }
 .footnote {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--sx-text-xs);
   margin: 0;
 }
 @keyframes pulse {
@@ -334,7 +334,7 @@
     border-bottom: 0;
   }
   .metrics dd {
-    font-size: 1.9rem;
+    font-size: 15px;
   }
   .header {
     padding: 20px 16px;
