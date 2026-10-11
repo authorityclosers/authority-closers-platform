@@ -1476,6 +1476,26 @@ it("keeps the home preview hidden when there are no saved calls", async () => {
   expect(host.querySelector("h1")).toBeNull();
 });
 
+it("holds the home preview's three rows while a signed-in read is pending", async () => {
+  let answer: (response: Response) => void = () => {};
+  fetchMock.mockReturnValueOnce(
+    new Promise<Response>((resolve) => (answer = resolve)),
+  );
+  await act(async () => renderLibrary({ preview: true }));
+  await flush();
+  const card = host.querySelector(".calls-library-preview");
+  expect(card?.textContent).toContain("Recent calls");
+  expect(
+    card?.querySelectorAll('[aria-label="Loading recent calls"] li'),
+  ).toHaveLength(3);
+  // No saved calls: the card goes, as before.
+  await act(async () =>
+    answer(new Response(JSON.stringify(page([])), { status: 200 })),
+  );
+  await flush();
+  expect(host.querySelector(".calls-library-preview")).toBeNull();
+});
+
 it("keeps a home preview hidden before authentication and after a failed first read", async () => {
   await act(async () => renderLibrary({ authenticated: false, preview: true }));
   await flush();
