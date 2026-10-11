@@ -55,6 +55,7 @@ import {
 } from "../source-waveform";
 import { Avatar } from "../ui/kit";
 import {
+  NARROW_BARS,
   ROW_BARS,
   WAVE_BARS,
   activityBins,
@@ -589,9 +590,13 @@ export function CallTimeline({
     : [{ label: "", start_ms: 0, end_ms: durationMs }];
   const lengths = blocks.map((block) => block.end_ms - block.start_ms);
   const bars = allocateBars(lengths, WAVE_BARS, 3);
-  // Phones draw the stages as rows on one track of the whole call, with fewer,
-  // wider bars, so a bar is the same width in every row.
-  const rowBars = allocateBars(lengths, ROW_BARS, 2);
+  // Phones draw fewer, wider bars: the stages as rows on one track of the
+  // whole call (a bar the same width in every row), or one strip without them.
+  const rowBars = allocateBars(
+    lengths,
+    stages.length ? ROW_BARS : NARROW_BARS,
+    2,
+  );
   const mode = speech?.top.length
     ? "speech"
     : sound
@@ -711,7 +716,7 @@ export function CallTimeline({
               {mode !== "none" ? (
                 <div className={styles.wave}>
                   {drawBars(bars[index] ?? 3, "wide")}
-                  {stages.length ? drawBars(rowBars[index] ?? 2, "rows") : null}
+                  {drawBars(rowBars[index] ?? 2, "rows")}
                   {change && inside(change.at_ms) ? (
                     <span
                       className={styles.change}

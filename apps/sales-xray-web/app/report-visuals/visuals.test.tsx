@@ -245,6 +245,13 @@ it("draws the measured sound when there is no speech, and the player's position"
   );
   expect(markup).toContain('data-mode="level"');
   expect(markup).toContain("left:50%");
+  // Without stages a phone gets one strip of 60 wider bars (96 on desktop).
+  const sets = (set: string) =>
+    (
+      markup.match(new RegExp(`data-set="${set}"[^>]*>(.*?)</span>`))?.[1] ?? ""
+    ).split("<i ").length - 1;
+  expect(sets("wide")).toBe(96);
+  expect(sets("rows")).toBe(60);
   // Outside a report (no player) and no explicit position: no playhead.
   expect(
     html(<CallTimeline durationMs={10_000} envelope={envelope} />),

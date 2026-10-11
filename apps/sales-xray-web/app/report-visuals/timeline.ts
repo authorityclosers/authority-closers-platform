@@ -18,6 +18,9 @@ export const WAVE_BARS = 96;
 /** The same on a phone, where the stages stack on one narrow track. */
 export const ROW_BARS = 40;
 
+/** A phone's timeline without stages: one strip the card's width. */
+export const NARROW_BARS = 60;
+
 /**
  * The two people to draw, from the transcript: the seller on top and the
  * prospect below when roles are known, else the two who talked most.

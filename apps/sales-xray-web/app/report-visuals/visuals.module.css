@@ -798,8 +798,17 @@ button.pin:focus-visible {
   display: none;
 }
 
-/* Narrow: the stages stack as rows on one track of the whole call. */
+/* Narrow: fewer, wider bars; the stages stack as rows on one track of the
+   whole call. */
 @container timeline (max-width: 679px) {
+  .timeline .bars[data-set="wide"] {
+    display: none;
+  }
+
+  .timeline .bars[data-set="rows"] {
+    display: flex;
+  }
+
   .timeline:not([data-single]) .blocks {
     --wave-h: 36px;
     flex-direction: column;
@@ -854,14 +863,6 @@ button.pin:focus-visible {
   .timeline:not([data-single]) .bars {
     inset: 4px 1px;
     gap: 1px;
-  }
-
-  .timeline:not([data-single]) .bars[data-set="wide"] {
-    display: none;
-  }
-
-  .timeline:not([data-single]) .bars[data-set="rows"] {
-    display: flex;
   }
 }
 
