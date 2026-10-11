@@ -87,6 +87,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V5,
     COACHING_PROMPT_V6,
     COACHING_PROMPT_V7,
+    COACHING_PROMPT_V8,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -267,6 +268,7 @@ class PlanManifest(BaseModel):
         "coaching-v5",
         "coaching-v6",
         "coaching-v7",
+        "coaching-v8",
     ] = COACHING_PROMPT_LEGACY
     report_language: ReportLanguage | None = None
     qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
@@ -301,6 +303,7 @@ class PlanManifest(BaseModel):
         if self.coaching_prompt_revision in {
             COACHING_PROMPT_V6,
             COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
         } and not supports_coaching_v6_route(c5.provider_id, c5.model_id):
             raise ValueError("processing_plan_coaching_v6_route_unsupported")
         repair_cost = self.automatic_c5_repair_cost_paise or 0
@@ -329,6 +332,7 @@ class PlanManifest(BaseModel):
             COACHING_PROMPT_V5,
             COACHING_PROMPT_V6,
             COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
         }:
             if (
                 self.report_language is None
@@ -937,6 +941,7 @@ class ConversationProcessingPlans:
         if coaching_prompt_revision in {
             COACHING_PROMPT_V6,
             COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
         } and not supports_coaching_v6_route(approvals["C5"].provider_id, approvals["C5"].model_id):
             raise ConversationDenied(
                 "Coaching v6 needs the approved Gemini 3.8 Flash or OpenAI C5 route. "
@@ -950,7 +955,13 @@ class ConversationProcessingPlans:
         qualitative_pack_sha256 = (
             load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
             if coaching_prompt_revision
-            in {COACHING_PROMPT_V4, COACHING_PROMPT_V5, COACHING_PROMPT_V6, COACHING_PROMPT_V7}
+            in {
+                COACHING_PROMPT_V4,
+                COACHING_PROMPT_V5,
+                COACHING_PROMPT_V6,
+                COACHING_PROMPT_V7,
+                COACHING_PROMPT_V8,
+            }
             else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
@@ -1030,6 +1041,7 @@ class ConversationProcessingPlans:
                         COACHING_PROMPT_V5,
                         COACHING_PROMPT_V6,
                         COACHING_PROMPT_V7,
+                        COACHING_PROMPT_V8,
                     }
                     or report_language is not None
                     else None

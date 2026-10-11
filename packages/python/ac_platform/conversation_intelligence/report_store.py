@@ -179,7 +179,9 @@ class ConversationReports:
                 source_label=report.source_label,
                 profile=profile,
                 canonical_read=True,
-                coaching_prompt_revision="coaching-v7"
+                coaching_prompt_revision="coaching-v8"
+                if report.pillars is not None
+                else "coaching-v7"
                 if report.call_map is not None
                 else "coaching-v4",
             )

@@ -49,6 +49,8 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V6_MARKER,
     COACHING_PROMPT_V7,
     COACHING_PROMPT_V7_MARKER,
+    COACHING_PROMPT_V8,
+    COACHING_PROMPT_V8_MARKER,
     FACT_PROMPT_COMPACT_MARKER,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
@@ -1187,7 +1189,9 @@ def validate_coaching_result(
             profile=resolved_profile,
             speaker_roles=speaker_roles,
             coaching_prompt_revision=(
-                COACHING_PROMPT_V7
+                COACHING_PROMPT_V8
+                if COACHING_PROMPT_V8_MARKER in prompt["messages"][0]["content"]
+                else COACHING_PROMPT_V7
                 if COACHING_PROMPT_V7_MARKER in prompt["messages"][0]["content"]
                 else COACHING_PROMPT_V6
                 if COACHING_PROMPT_V6_MARKER in prompt["messages"][0]["content"]
@@ -1200,7 +1204,11 @@ def validate_coaching_result(
         error = InferenceTaskError(str(exc))
         error.dimension_ids = exc.dimension_ids
         raise error from None
-    if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
+    if (
+        OVERVIEW_MARKER in prompt["messages"][0]["content"]
+        and draft.overview is None
+        and draft.pillars is None
+    ):
         _fail("report_overview_missing")
     return _output(
         "coaching",
