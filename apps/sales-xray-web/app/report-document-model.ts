@@ -91,7 +91,14 @@ export type DocItem =
     }
   | {
       type: "steps";
-      steps: { label: string; title?: string; text: string }[];
+      steps: {
+        label: string;
+        title?: string;
+        text: string;
+        /** Someone's own words: shown in quotes, with who said it. */
+        quoted?: boolean;
+        speaker?: string | null;
+      }[];
     }
   /** One worked/didn't item or one moment: a titled block of items. */
   | {
@@ -202,20 +209,6 @@ const RELATIVE_WORD =
 const inSentence = (text: string) =>
   text.replace(RELATIVE_WORD, (word) => word.toLowerCase());
 
-/**
- * A title that only repeats the start of its own sentence (the same words, or
- * the sentence cut short at a title's length) isn't a headline: the sentence
- * becomes the title, once, without its full stop.
- */
-function sentenceAsTitle(title: string, text: string): string | null {
-  const head = title.trim().replace(/[\s.…]+$/u, "");
-  const body = text.trim();
-  if (!head || !body.startsWith(head)) return null;
-  const rest = body.slice(head.length).replace(/^[\s.]+$/u, "");
-  const cut = /^[\p{L}\p{N}]/u.test(rest) || head.length >= 40;
-  return !rest || cut ? body.replace(/(?<!\.)\.$/u, "") : null;
-}
-
 /** Blocks without the ones a report can't fill. */
 const keep = (list: (DocItem | null | undefined | false)[]): DocItem[] =>
   list.filter(present);
@@ -256,6 +249,15 @@ export function reportDocumentModel(
     nameOf(segmentSpeaker.get(segmentId));
   const clip = (source: ReportEvidence | undefined) =>
     clipOf(source, speakerOf);
+  /** A Before / switch / After line; someone's own words keep who said them. */
+  const stepWords = (line: Line) =>
+    line.quoted
+      ? {
+          text: line.text,
+          quoted: true,
+          speaker: clip(line.sources[0])?.speaker ?? null,
+        }
+      : { text: line.text };
 
   const model: StoryModel = reportStoryModel(data.report, transcript, {
     roles: people.roles,
@@ -405,17 +407,17 @@ export function reportDocumentModel(
                 {
                   label: CALL_FLOW.before,
                   title: flow.change.beforeLabel ?? undefined,
-                  text: flow.change.before.text,
+                  ...stepWords(flow.change.before),
                 },
                 {
                   label: CALL_FLOW.switch,
                   title: turnClip?.at,
-                  text: flow.change.turn.text,
+                  ...stepWords(flow.change.turn),
                 },
                 {
                   label: CALL_FLOW.after,
                   title: flow.change.afterLabel ?? undefined,
-                  text: flow.change.after.text,
+                  ...stepWords(flow.change.after),
                 },
               ],
             },
@@ -435,13 +437,12 @@ export function reportDocumentModel(
   const itemCard = (item: Item, why: string, tone: DocTone): DocItem => {
     const play = clip(item.what.sources[0]);
     const areas = item.areas?.filter((area) => area?.trim()) ?? [];
-    const sentence = sentenceAsTitle(item.title, item.what.text);
     return {
       type: "card",
-      title: sentence ?? item.title,
+      title: item.title,
       tone,
       items: keep([
-        sentence ? null : { type: "text", text: item.what.text },
+        item.sentence ? null : { type: "text", text: item.what.text },
         areas.length ? { type: "label", text: WORKED_DIDNT.areasLead } : null,
         areas.length ? { type: "list", items: areas } : null,
         play ? { type: "play", clip: play } : null,
@@ -495,9 +496,7 @@ export function reportDocumentModel(
         moment.movedToward
           ? { type: "label", text: MOMENTS.movedToward }
           : null,
-        moment.movedToward
-          ? { type: "text", text: moment.movedToward.text }
-          : null,
+        moment.movedToward ? quoteOf(moment.movedToward, false) : null,
         moment.couldExplore
           ? { type: "label", text: MOMENTS.whatMissed }
           : null,
@@ -511,12 +510,18 @@ export function reportDocumentModel(
       ]),
     };
   };
-  /** Their exact words as a quote; a figure the analysis names stays plain. */
-  function quoteOf(said: Line): DocItem {
+  /**
+   * Their exact words as a quote, with who said it; anything else (a figure
+   * the analysis names, a summary) stays plain text.
+   */
+  function quoteOf(said: Line, strong = true): DocItem {
     const at = clip(said.sources[0]);
-    return at && same(said.text, said.sources[0]?.quote)
+    const words = said.quoted || same(said.text, said.sources[0]?.quote);
+    return at && words
       ? { type: "quote", clip: { ...at, quote: said.text } }
-      : { type: "text", text: said.text, strong: true, clip: at };
+      : strong
+        ? { type: "text", text: said.text, strong, clip: at }
+        : { type: "text", text: said.text };
   }
   const topKeys = new Set(model.topMoments.map((m) => m.key));
   const otherMoments = [...model.moments]
@@ -796,7 +801,9 @@ export function docItemText(item: DocItem): string {
     case "timeline":
       return item.stages.map((s) => `${s.label} ${s.from}–${s.to}`).join(" · ");
     case "steps":
-      return item.steps.map((s) => `${s.label}: ${s.text}`).join("\n");
+      return item.steps
+        .map((s) => `${s.label}: ${s.quoted ? `“${s.text}”` : s.text}`)
+        .join("\n");
     case "card":
       return [item.kicker, item.title, ...item.items.map(docItemText)]
         .filter(Boolean)

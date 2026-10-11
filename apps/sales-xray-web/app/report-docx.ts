@@ -324,7 +324,26 @@ function blocks(
               }),
             ]
           : []),
-        para([{ text: step.text }], { border: index === 1 ? C.teal : C.line }),
+        ...(step.quoted
+          ? [
+              para([{ text: `“${step.text}”`, italics: true, color: C.ink2 }], {
+                after: step.speaker ? 0 : undefined,
+                keepNext: Boolean(step.speaker),
+                border: index === 1 ? C.teal : C.line,
+              }),
+              ...(step.speaker
+                ? [
+                    para([{ text: step.speaker, bold: true, size: 17 }], {
+                      border: index === 1 ? C.teal : C.line,
+                    }),
+                  ]
+                : []),
+            ]
+          : [
+              para([{ text: step.text }], {
+                border: index === 1 ? C.teal : C.line,
+              }),
+            ]),
       ]);
     case "card": {
       const edge = TONE[item.tone];

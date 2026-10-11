@@ -239,7 +239,14 @@ function Item({
               {step.title ? (
                 <strong className={styles.stepTitle}>{step.title}</strong>
               ) : null}
-              <p>{step.text}</p>
+              {step.quoted ? (
+                <p className={styles.stepSaid}>
+                  “{step.text}”
+                  {step.speaker ? <cite>{step.speaker}</cite> : null}
+                </p>
+              ) : (
+                <p>{step.text}</p>
+              )}
             </li>
           ))}
         </ol>

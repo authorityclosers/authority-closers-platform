@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MOMENTS } from "./report-copy";
 import type { SalesReport, Transcript } from "./report-contract";
 import {
   docItemText,
@@ -184,6 +185,42 @@ describe("report document model", () => {
     for (const section of doc.sections)
       for (const part of section.parts)
         expect(part.items.length).toBeGreaterThan(0);
+  });
+
+  it("someone's own words in Before / After and 'You moved toward' read as quotes", () => {
+    const names: Record<string, string> = {
+      speaker_0: "Riya",
+      speaker_1: "Mr Kulkarni",
+    };
+    const doc = reportDocumentModel(
+      {
+        report: callB.report as unknown as SalesReport,
+        transcript: callB.transcript as unknown as Transcript,
+      },
+      {
+        roles: { seller: "speaker_0", prospect: "speaker_1" },
+        speakerName: (id) => names[id],
+      },
+    );
+    const steps = items(doc).find((i) => i.type === "steps");
+    if (steps?.type !== "steps") throw new Error("no Before / After");
+    const [before, , after] = steps.steps;
+    expect(before.quoted).toBe(true);
+    expect(after.quoted).toBe(true);
+    expect(Object.values(names)).toContain(before.speaker);
+    expect(docItemText(steps)).toContain(`Before: “${before.text}”`);
+    const miss = items(doc).find(
+      (i) => i.type === "card" && i.kicker?.startsWith("Important Miss"),
+    );
+    if (miss?.type !== "card") throw new Error("no Important Miss");
+    const moved = miss.items.findIndex(
+      (i) => i.type === "label" && i.text === MOMENTS.movedToward,
+    );
+    expect(miss.items[moved + 1]?.type).toBe("quote");
+    // Dipak's example: Before / After are summaries, not anyone's words.
+    const amit = items(amitDoc()).find((i) => i.type === "steps");
+    if (amit?.type !== "steps") throw new Error("no Before / After");
+    expect(amit.steps.some((step) => step.quoted)).toBe(false);
   });
 
   it("a report whose analysis writes the six pillars (v8) fills the whole document", () => {

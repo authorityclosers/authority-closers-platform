@@ -503,6 +503,18 @@
 .steps p {
   margin: 2px 0 0;
 }
+/* Someone's own words in a step: in quotes, with who said it. */
+.stepSaid {
+  color: var(--sx-ink-2);
+  font-family: var(--lx-font-quote);
+}
+.stepSaid cite {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-ink);
+  font: 700 var(--sx-text-xs) / 1.5 var(--lx-font-ui);
+  font-style: normal;
+}
 .stepTitle {
   display: block;
   margin-top: 2px;

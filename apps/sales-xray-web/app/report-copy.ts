@@ -221,7 +221,10 @@ export const WORKED_DIDNT = {
 
 /* ── 4. Moments That Mattered ────────────────────────────────────────── */
 
-/** Dipak's moment labels (spec 4), plus one for a moment worth a replay. */
+/**
+ * Dipak's ten moment labels (spec 4). "Worth Replaying" stays only for older
+ * consumers: the Report no longer makes such moments (B, `9c2abc63`).
+ */
 export const MOMENT_KINDS = [
   "Strong Moment",
   "Turning Point",

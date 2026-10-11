@@ -74,6 +74,6 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
     details: "Report details · रिपोर्ट का विवरण",
     detailNote:
       "यह draft authorized recording के evidence पर आधारित है। Speaker identities अभी verified नहीं हैं।",
-    another: "Analyze another call · दूसरी कॉल चुनें",
+    another: "Analyse another call · दूसरी कॉल चुनें",
   },
 };
