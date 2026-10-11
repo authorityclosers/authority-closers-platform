@@ -143,10 +143,13 @@ class SyntheticDataset:
         raw = next((row for row in self._manifest() if row["call_id"] == call_id), None)
         if raw is None:
             raise ConversationNotFound("Synthetic call not found.")
-        transcript = self._read(raw.get("transcript"))
+        loaded = self._read(raw.get("transcript"))
+        # A file that parses but isn't an object reads as an empty transcript.
+        transcript: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         key = self._read(raw.get("answer_key"))
+        raw_lines = transcript.get("lines")
         lines = []
-        for line in (transcript or {}).get("lines") or []:
+        for line in raw_lines if isinstance(raw_lines, list) else []:
             if isinstance(line, dict):
                 lines.append(
                     {
@@ -171,7 +174,11 @@ class SyntheticDataset:
             "synthetic": True,
             "label": LABEL,
             "call": _row(raw),
-            "participants": (transcript or {}).get("participants") or [],
+            "participants": [
+                item for item in transcript.get("participants") or [] if isinstance(item, dict)
+            ]
+            if isinstance(transcript.get("participants"), list)
+            else [],
             "lines": lines,
             "answer_key": answer,
         }

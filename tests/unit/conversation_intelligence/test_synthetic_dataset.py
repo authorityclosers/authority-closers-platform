@@ -95,3 +95,16 @@ def test_unmounted_dataset_says_so(tmp_path: Path) -> None:
         with pytest.raises(SyntheticDatasetUnavailable) as raised:
             SyntheticDataset(root).index()
         assert raised.value.status == 503
+
+
+def test_a_transcript_that_is_not_an_object_reads_as_empty(tmp_path: Path) -> None:
+    root = _dataset(tmp_path)
+    (root / "transcripts" / "syn-x-J00-C-01.json").write_text(json.dumps(["not", "an", "object"]))
+    (root / "transcripts" / "syn-x-J01-C-01.json").write_text(
+        json.dumps({"lines": "oops", "participants": ["x", {"role": "rep"}]})
+    )
+    dataset = SyntheticDataset(root)
+    listed = dataset.call("syn-x-J00-C-01")
+    assert listed["lines"] == [] and listed["participants"] == []
+    odd = dataset.call("syn-x-J01-C-01")
+    assert odd["lines"] == [] and odd["participants"] == [{"role": "rep"}]
