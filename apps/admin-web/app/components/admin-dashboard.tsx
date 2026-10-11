@@ -213,3 +213,10 @@ export function AdminDashboard() {
     </div>
   );
 }
+
+/** The academy's course activity alone, for Home: shown once the session can browse the catalogue. */
+export function CourseActivity() {
+  const state = useAdminSession();
+  if (state.status !== "ready" || !canBrowseStudio(state)) return null;
+  return <CourseSnapshot tenantId={state.session.tenantId} />;
+}

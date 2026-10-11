@@ -1,5 +1,6 @@
 import { ChevronRight, Compass } from "lucide-react";
 
+import { CourseActivity } from "@/app/components/admin-dashboard";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { visibleNavigation } from "@/app/lib/nav";
 import { Empty, List, Page, PageHeader, Panel, Row } from "@/app/ui/kit";
@@ -66,6 +67,7 @@ export default async function HomePage() {
           </Panel>
         ))
       )}
+      <CourseActivity />
     </Page>
   );
 }
