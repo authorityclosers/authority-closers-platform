@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded checks for a clean, locally available workbench commit, without installs."""
+"""Run bounded checks on an exported local commit while the workbench stays live."""
 
 from __future__ import annotations
 
@@ -13,15 +13,21 @@ import resource
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import xml.etree.ElementTree as element_tree
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci import committed_snapshot as SNAPSHOT  # noqa: E402
 
 SCHEMA = "ac.ci.fast-check/1"
 PYTHON_ROOTS = ("packages/python", "tests", "scripts")
@@ -56,6 +62,7 @@ class Check:
     argv: tuple[str, ...]
     cwd: Path
     scope: tuple[str, ...]
+    source_root: Path | None = None
 
 
 def git(root: Path, *args: str) -> str:
@@ -93,7 +100,8 @@ def changed_files(root: Path, base: str, commit: str) -> tuple[str, ...]:
     values = git(root, "diff", "--name-only", "-z", base + "..." + commit, "--").split("\0")
     paths = tuple(sorted({value for value in values if value}))
     for path in paths:
-        safe_path(root, path)
+        if Path(path).is_absolute() or ".." in Path(path).parts:
+            raise FastCheckError("Changed file identity is not relative to the checkout")
     return paths
 
 
@@ -651,7 +659,7 @@ def run_vitest_check(check: Check, seconds: float, cpu_remaining: float) -> dict
             f"--outputFile={report}",
             *check.argv[separator:],
         )
-        result = _run_check(Check(check.name, argv, check.cwd, check.scope), seconds, cpu_remaining)
+        result = _run_check(replace(check, argv=argv), seconds, cpu_remaining)
         if result["status"] not in {"passed", "failed"}:
             return result
         try:
@@ -681,7 +689,7 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
         report = Path(directory) / "results.xml"
         separator = check.argv.index("--") if "--" in check.argv else len(check.argv)
         argv = (*check.argv[:separator], f"--junitxml={report}", *check.argv[separator:])
-        result = _run_check(Check(check.name, argv, check.cwd, check.scope), seconds, cpu_remaining)
+        result = _run_check(replace(check, argv=argv), seconds, cpu_remaining)
         if result["status"] not in {"passed", "failed"}:
             return result
         try:
@@ -709,6 +717,19 @@ def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, 
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "true",
         "AC_EMAIL_PROVIDER": "fake",
     }
+    if check.source_root is not None:
+        environment.update(
+            {
+                "PYTHONPATH": os.pathsep.join(
+                    (str(check.source_root / "packages/python"), str(check.source_root))
+                ),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "VIRTUAL_ENV": str(check.source_root / ".venv"),
+                "NODE_PATH": str(check.source_root / "node_modules/.pnpm/node_modules"),
+                "NODE_OPTIONS": "--preserve-symlinks --preserve-symlinks-main",
+                "XDG_CACHE_HOME": str(check.source_root / ".ac-fast-cache"),
+            }
+        )
     if check.name == "pytest" and not environment.get("AC_TEST_DATABASE_URL"):
         return {
             "name": check.name,
@@ -791,6 +812,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "schema": SCHEMA,
         "started_at": datetime.now(UTC).isoformat(),
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "snapshot_runner_sha256": hashlib.sha256(Path(SNAPSHOT.__file__).read_bytes()).hexdigest(),
         "checks": [],
     }
     try:
@@ -800,58 +822,71 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FastCheckError("Wall and CPU budgets must be positive")
         commit = commit_sha(root, args.commit)
         receipt["commit"] = commit
-        if commit_sha(root, "HEAD") != commit:
-            raise FastCheckError("Check out the requested commit before running the fast check")
-        if git(root, "status", "--porcelain", "--untracked-files=normal").strip():
-            raise FastCheckError("The requested commit needs a clean checkout")
         base = git(root, "merge-base", commit_sha(root, args.base), commit).strip()
         changed = changed_files(root, base, commit)
-        receipt.update({"base": base, "changed_files": list(changed)})
-        checks, metadata = plan(root, changed, args.test_file_cap)
-        receipt.update(metadata)
-        receipt["planned_checks"] = [
-            {
-                "name": check.name,
-                "argv": list(check.argv),
-                "cwd": str(check.cwd),
-                "scope": list(check.scope),
-            }
-            for check in checks
-        ]
-        for check in checks:
-            if args.plan:
-                receipt["checks"].append(
-                    {"name": check.name, "status": "planned", "scope": list(check.scope)}
+        receipt.update(
+            {"base": base, "changed_files": list(changed), "source_mode": "committed-snapshot"}
+        )
+        with SNAPSHOT.committed_snapshot(root, commit) as snapshot:
+            receipt["source_sha256"] = snapshot.sha256
+            checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
+            checks = tuple(replace(check, source_root=snapshot.root) for check in checks)
+            metadata["omitted_generated_frontend_types"] = [
+                check.cwd.relative_to(snapshot.root).as_posix()
+                for check in checks
+                if check.name.startswith("tsc:")
+                and (check.cwd / "next-env.d.ts").is_file()
+                and ".next/" in (check.cwd / "next-env.d.ts").read_text()
+            ]
+            receipt.update(metadata)
+            receipt["planned_checks"] = [
+                {
+                    "name": check.name,
+                    "argv": list(check.argv),
+                    "cwd": str(check.cwd),
+                    "scope": list(check.scope),
+                }
+                for check in checks
+            ]
+            for check in checks:
+                if args.plan:
+                    receipt["checks"].append(
+                        {"name": check.name, "status": "planned", "scope": list(check.scope)}
+                    )
+                    continue
+                wall_remaining = args.wall_seconds - (time.monotonic() - started)
+                cpu_remaining = args.cpu_seconds - (cpu_seconds() - cpu_start)
+                if min(wall_remaining, cpu_remaining) <= 0:
+                    receipt["checks"].append({"name": check.name, "status": "budget_exhausted"})
+                    continue
+                receipt["checks"].append(run_check(check, wall_remaining, cpu_remaining))
+            statuses = {result["status"] for result in receipt["checks"]}
+            if (
+                not snapshot.unchanged()
+                or hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+                != receipt["runner_sha256"]
+                or hashlib.sha256(Path(SNAPSHOT.__file__).read_bytes()).hexdigest()
+                != receipt["snapshot_runner_sha256"]
+            ):
+                raise FastCheckError(
+                    "Exported source or runner changed during the checks; the receipt is unusable"
                 )
-                continue
-            wall_remaining = args.wall_seconds - (time.monotonic() - started)
-            cpu_remaining = args.cpu_seconds - (cpu_seconds() - cpu_start)
-            if min(wall_remaining, cpu_remaining) <= 0:
-                receipt["checks"].append({"name": check.name, "status": "budget_exhausted"})
-                continue
-            receipt["checks"].append(run_check(check, wall_remaining, cpu_remaining))
-        statuses = {result["status"] for result in receipt["checks"]}
-        if (
-            commit_sha(root, "HEAD") != commit
-            or git(root, "status", "--porcelain", "--untracked-files=normal").strip()
-            or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != receipt["runner_sha256"]
-        ):
-            raise FastCheckError("Source changed during the checks; the receipt is unusable")
-        if statuses - {"passed", "planned", "partial"}:
-            receipt["status"] = "failed"
-        elif (
-            "partial" in statuses
-            or metadata["omitted_pytest"]
-            or metadata["import_graph_errors"]
-            or metadata["deleted_files"]
-            or metadata["unmapped_python_sources"]
-            or metadata["unmapped_frontend_sources"]
-            or metadata["unmapped_ci_inputs"]
-        ):
-            receipt["status"] = "partial"
-        else:
-            receipt["status"] = "planned" if args.plan else "passed"
-    except FastCheckError as error:
+            if statuses - {"passed", "planned", "partial"}:
+                receipt["status"] = "failed"
+            elif (
+                "partial" in statuses
+                or metadata["omitted_pytest"]
+                or metadata["import_graph_errors"]
+                or metadata["deleted_files"]
+                or metadata["unmapped_python_sources"]
+                or metadata["unmapped_frontend_sources"]
+                or metadata["unmapped_ci_inputs"]
+                or metadata["omitted_generated_frontend_types"]
+            ):
+                receipt["status"] = "partial"
+            else:
+                receipt["status"] = "planned" if args.plan else "passed"
+    except (FastCheckError, SNAPSHOT.SnapshotError) as error:
         receipt.update({"status": "unavailable", "reason": str(error)})
     except (OSError, subprocess.SubprocessError) as error:
         receipt.update(

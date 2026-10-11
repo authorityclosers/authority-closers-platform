@@ -554,13 +554,21 @@ def test_unknown_workflow_receipt_reports_partial_coverage(
 
 
 @pytest.mark.parametrize("dirty", [False, True])
-def test_workbench_default_head_and_actionable_refusal(
+def test_workbench_default_head_exports_committed_source_despite_live_edits(
     repository: Path,
     tmp_path: Path,
     dirty: bool,
-    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sha = git(repository, "rev-parse", "HEAD")
+    original_plan = FAST.plan
+
+    def inspect(root, changed, cap):
+        assert root != repository
+        assert (root / "README.md").read_text() == "synthetic fixture\n"
+        return original_plan(root, changed, cap)
+
+    monkeypatch.setattr(FAST, "plan", inspect)
     if dirty:
         write(repository, "README.md", "builder has uncommitted edits\n")
     receipt = tmp_path.parent / (tmp_path.name + "-workbench.json")
@@ -568,12 +576,13 @@ def test_workbench_default_head_and_actionable_refusal(
     data = json.loads(receipt.read_text())
     assert data["commit"] == sha
     assert data["checks"] == []
-    if dirty:
-        assert exit_code == 1 and data["status"] == "unavailable"
-        assert "reason: The requested commit needs a clean checkout" in capsys.readouterr().out
-    else:
-        assert exit_code == 0 and data["status"] == "passed"
-        assert data["changed_files"] == []
+    assert exit_code == 0 and data["status"] == "passed"
+    assert data["changed_files"] == []
+    assert data["source_mode"] == "committed-snapshot"
+    assert len(data["source_sha256"]) == 64
+    assert (repository / "README.md").read_text() == (
+        "builder has uncommitted edits\n" if dirty else "synthetic fixture\n"
+    )
 
 
 @pytest.mark.parametrize("target", ["new", "tracked", "symlink"])
@@ -615,7 +624,7 @@ def test_source_mutation_during_a_check_invalidates_the_receipt(
         return (FAST.Check("synthetic", (), root, ()),), metadata
 
     def mutate(check, *args):
-        write(repository, "README.md", "changed while checking\n")
+        write(check.cwd, "README.md", "changed while checking\n")
         return {"name": check.name, "status": "passed"}
 
     monkeypatch.setattr(FAST, "plan", plan)
@@ -636,13 +645,15 @@ def test_source_mutation_during_a_check_invalidates_the_receipt(
         == 1
     )
     assert json.loads(receipt.read_text())["status"] == "unavailable"
+    assert (repository / "README.md").read_text() == "synthetic fixture\n"
 
 
 @pytest.mark.parametrize("failure", ["dirty", "wrong_commit"])
-def test_mixed_source_cannot_receive_a_passing_receipt(
+def test_pinned_source_excludes_dirty_files_and_newer_commits(
     repository: Path,
     tmp_path: Path,
     failure: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sha = git(repository, "rev-parse", "HEAD")
     write(repository, "README.md", "changed fixture\n")
@@ -650,6 +661,13 @@ def test_mixed_source_cannot_receive_a_passing_receipt(
         git(repository, "add", "README.md")
         git(repository, "commit", "-m", "different fixture head")
     receipt = tmp_path.parent / (tmp_path.name + "-unavailable.json")
+    original_plan = FAST.plan
+
+    def inspect(root, changed, cap):
+        assert (root / "README.md").read_text() == "synthetic fixture\n"
+        return original_plan(root, changed, cap)
+
+    monkeypatch.setattr(FAST, "plan", inspect)
     assert (
         FAST.main(
             [
@@ -663,10 +681,12 @@ def test_mixed_source_cannot_receive_a_passing_receipt(
                 str(receipt),
             ]
         )
-        == 1
+        == 0
     )
     data = json.loads(receipt.read_text())
-    assert data["status"] == "unavailable" and not data["checks"]
+    assert data["status"] == "passed" and not data["checks"]
+    assert data["commit"] == sha
+    assert (repository / "README.md").read_text() == "changed fixture\n"
 
 
 def test_runner_does_not_echo_child_output_or_environment(
@@ -874,6 +894,98 @@ def test_runner_requires_installed_shared_slot(
     result = FAST.run_check(check, 30, 5)
     assert result["status"] == "unavailable"
     assert result["reason"] == "The shared heavy slot is required"
+
+
+def test_exported_python_imports_take_precedence_over_live_editable_source(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write(repository, "packages/python/snapshot_fixture.py", "VALUE = 'committed'\n")
+    git(repository, "add", "packages")
+    git(repository, "commit", "-m", "python source fixture")
+    write(repository, "packages/python/snapshot_fixture.py", "VALUE = 'uncommitted'\n")
+    monkeypatch.setenv("PYTHONPATH", str(repository / "packages/python"))
+    with FAST.SNAPSHOT.committed_snapshot(repository, "HEAD") as exported:
+        check = FAST.Check(
+            "synthetic",
+            (
+                sys.executable,
+                "-c",
+                "import snapshot_fixture; assert snapshot_fixture.VALUE == 'committed'",
+            ),
+            exported.root,
+            ("packages/python/snapshot_fixture.py",),
+            source_root=exported.root,
+        )
+        assert FAST.run_check(check, 30, 5)["status"] == "passed"
+        assert exported.unchanged()
+        assert not (exported.root / "packages/python/__pycache__").exists()
+    assert (
+        repository / "packages/python/snapshot_fixture.py"
+    ).read_text() == "VALUE = 'uncommitted'\n"
+
+
+@pytest.mark.skipif(
+    shutil.which("node") is None, reason="Node is required for workspace resolution"
+)
+def test_installed_node_tool_imports_exported_nested_workspace_source(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write(repository, "packages/typescript/ui/index.js", "module.exports = 'committed';\n")
+    git(repository, "add", "packages")
+    git(repository, "commit", "-m", "node source fixture")
+    write(repository, "packages/typescript/ui/index.js", "module.exports = 'uncommitted';\n")
+    installed = repository / "node_modules/.pnpm/tool@1/node_modules"
+    write(
+        repository,
+        "node_modules/.pnpm/tool@1/node_modules/tool/index.js",
+        "require('node:assert/strict').equal(require('@ac/ui'), 'committed');\n",
+    )
+    (installed / "@ac").mkdir()
+    (installed / "@ac/ui").symlink_to(
+        repository / "packages/typescript/ui", target_is_directory=True
+    )
+    monkeypatch.setenv("NODE_OPTIONS", "--require /missing/live-builder-hook.js")
+    with FAST.SNAPSHOT.committed_snapshot(repository, "HEAD") as exported:
+        script = exported.root / "node_modules/.pnpm/tool@1/node_modules/tool/index.js"
+        node = shutil.which("node")
+        assert node is not None
+        check = FAST.Check(
+            "synthetic", (node, str(script)), exported.root, (), source_root=exported.root
+        )
+        assert FAST.run_check(check, 30, 5)["status"] == "passed"
+        assert exported.unchanged()
+    assert (
+        repository / "packages/typescript/ui/index.js"
+    ).read_text() == "module.exports = 'uncommitted';\n"
+
+
+def test_builder_commit_during_checks_keeps_the_original_snapshot(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sha = git(repository, "rev-parse", "HEAD")
+    original_plan = FAST.plan
+    exported_paths = []
+
+    def plan(root, changed, cap):
+        _, metadata = original_plan(root, changed, cap)
+        exported_paths.append(root)
+        return (FAST.Check("synthetic", (), root, ()),), metadata
+
+    def commit_during_check(check, *args):
+        write(repository, "README.md", "new committed work\n")
+        git(repository, "add", "README.md")
+        git(repository, "commit", "-m", "builder finishes work")
+        assert (check.cwd / "README.md").read_text() == "synthetic fixture\n"
+        return {"name": check.name, "status": "passed"}
+
+    monkeypatch.setattr(FAST, "plan", plan)
+    monkeypatch.setattr(FAST, "run_check", commit_during_check)
+    receipt = tmp_path.parent / (tmp_path.name + "-pinned-check.json")
+    assert FAST.main(["--root", str(repository), "--base", "HEAD", "--receipt", str(receipt)]) == 0
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "passed" and data["commit"] == sha
+    assert git(repository, "rev-parse", "HEAD") != sha
+    assert exported_paths and not exported_paths[0].parent.exists()
 
 
 def test_timeout_stops_a_child_without_claiming_success(tmp_path: Path) -> None:
