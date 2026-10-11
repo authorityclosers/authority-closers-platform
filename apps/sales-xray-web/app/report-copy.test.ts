@@ -97,6 +97,9 @@ describe("report copy", () => {
     expect(copy.changedAt("11:18")).toBe("The call changed here · 11:18");
     expect(copy.followUpDate("2026-10-16")).toBe("Follow-up: Friday, 16 Oct");
     expect(copy.followUpDate("soon")).toBe("Follow-up: soon");
+    expect(copy.backTo("Moments That Mattered")).toBe(
+      "Back to Moments That Mattered",
+    );
   });
 
   it("names the outcome buttons exactly like the status they set", () => {

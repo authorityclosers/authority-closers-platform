@@ -501,6 +501,16 @@ export const VIEWS = {
   more: "More views",
 };
 
+/** Getting around a long report. */
+export const NAV = {
+  /** Screen readers: the X beside "Back to …" after a jump. */
+  hideBack: "Hide the Back button",
+  backToTop: "Back to the top",
+};
+
+/** After a jump to a moment or a skill: "Back to Moments That Mattered". */
+export const backTo = (where: string) => `Back to ${where}`;
+
 export const DOCUMENT = {
   kicker: "Sales Xray · Call Report",
   untitled: "Sales call",
