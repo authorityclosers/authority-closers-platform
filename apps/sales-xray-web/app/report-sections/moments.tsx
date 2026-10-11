@@ -81,8 +81,9 @@ function MomentRow({
       ) : null}
       {moment.couldExplore ? (
         <Field label={MOMENTS.whatMissed}>
+          <p className={styles.line}>{MOMENTS.couldFirst}</p>
           <p className={styles.line}>
-            {MOMENTS.couldFirst} <Text text={moment.couldExplore} />
+            <Text text={moment.couldExplore} />
           </p>
         </Field>
       ) : null}

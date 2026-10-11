@@ -146,7 +146,7 @@
   background: var(--lx-ink);
   box-shadow: var(--lx-shadow-2);
   color: var(--lx-surface);
-  font: 600 11.5px/1 var(--lx-font-ui);
+  font: 600 var(--sx-text-xs, 12px) / 1 var(--lx-font-ui);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;

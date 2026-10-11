@@ -246,6 +246,10 @@ function repeats(
   return a.length > 2 && b.length > 2 && a[0] === b[0] && a[1] === b[1];
 }
 
+/** A line that stands alone starts with a capital ("next Tuesday" → "Next Tuesday"). */
+const upperFirst = (text: string) =>
+  text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : text;
+
 /** A spec heading in sentence case, for the one-line gaps. */
 const sentence = (heading: string) =>
   heading.charAt(0) + heading.slice(1).toLowerCase();
@@ -803,7 +807,7 @@ export function reportStoryModel(
     nextEvent:
       story?.outcome.next_step_when && story.outcome.evidence.length
         ? {
-            text: story.outcome.next_step_when,
+            text: upperFirst(story.outcome.next_step_when),
             sources: story.outcome.evidence,
           }
         : null,
@@ -1021,11 +1025,11 @@ function withPillars(
   const pd = p.deal;
   const nextEvent = pd?.next_event
     ? {
-        text: pd.next_event.when ?? pd.next_event.text,
+        text: upperFirst(pd.next_event.when ?? pd.next_event.text),
         sources: pd.next_event.evidence,
       }
     : p.next_step?.when
-      ? { text: p.next_step.when, sources: p.next_step.evidence }
+      ? { text: upperFirst(p.next_step.when), sources: p.next_step.evidence }
       : base.deal.nextEvent;
   const deal = {
     ...base.deal,
