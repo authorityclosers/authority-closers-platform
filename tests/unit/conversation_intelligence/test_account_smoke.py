@@ -22,6 +22,7 @@ from tests.conversation_overview_fixtures import overview_for
     [
         "success",
         "missing_coaching",
+        "transport_error",
         "wrong_source",
         "wrong_person",
         "wrong_report_revision",
@@ -99,6 +100,8 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
                     },
                 )
             if path == f"/v1/me/coaching/calls/{submission}":
+                if scenario == "transport_error":
+                    raise httpx.ReadTimeout("fictional-untrusted-transport-content")
                 return response(
                     404 if scenario == "missing_coaching" else 200,
                     {
@@ -131,14 +134,23 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
                 assert result["report_present"] and result["per_call_coaching_present"]
                 assert result["submission_id"] == submission
             else:
-                with pytest.raises(SmokeFailure):
+                with pytest.raises(SmokeFailure) as failure:
                     await account_smoke(client, **kwargs)
+                assert failure.value.submission_id == submission
+                assert "untrusted" not in str(failure.value)
         assert sum(method == "PUT" for method, _ in calls) == 1
         if scenario in {"held", "over_cap"}:
             assert not any(path.endswith("/plan") for _, path in calls)
 
     monkeypatch.setattr(asyncio, "sleep", lambda *args: _no_wait())
     asyncio.run(exercise())
+
+
+def test_failure_receipt_discards_unrecognized_exception_content():
+    failure = SmokeFailure("fictional-untrusted-error-content", submission_id=uuid4())
+    assert failure.code == "qa_smoke_failed"
+    assert str(failure) == "qa_smoke_failed"
+    assert "untrusted" not in str(failure)
 
 
 async def _no_wait():

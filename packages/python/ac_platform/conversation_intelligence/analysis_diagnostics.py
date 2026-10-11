@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.guest_models import ConversationProcessingLease
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
+    ConversationCommand,
     ConversationInferenceTask,
     ConversationProcessingPlan,
     ConversationRun,
@@ -118,16 +119,48 @@ async def analysis_inventory(
         .mappings()
         .all()
     )
+    deliveries = (
+        (
+            await database.execute(
+                select(
+                    usage.submission_id,
+                    event.plan_id,
+                    usage.reserved_seconds.label("source_duration_seconds"),
+                    usage.created_at.label("source_reserved_at"),
+                    ConversationCommand.created_at.label("plan_accepted_at"),
+                    event.created_at.label("report_delivered_at"),
+                )
+                .select_from(event)
+                .join(usage, usage.id == event.usage_id)
+                .outerjoin(plan, plan.id == event.plan_id)
+                .outerjoin(
+                    ConversationCommand,
+                    ConversationCommand.id == plan.acceptance_command_id,
+                )
+                .where(
+                    event.kind == "delivered",
+                    event.created_at >= now - timedelta(days=days),
+                    event.created_at <= now,
+                )
+                .order_by(event.created_at, event.usage_id)
+                .limit(LIMIT + 1)
+            )
+        )
+        .mappings()
+        .all()
+    )
     return {
         "checked_at": now,
         "window_days": days,
         "held_plans": [dict(row) for row in held[:LIMIT]],
         "runs": [dict(row) for row in timings[:LIMIT]],
         "checkpoints": [dict(row) for row in stages[:LIMIT]],
+        "delivered_calls": [dict(row) for row in deliveries[:LIMIT]],
         "truncated": {
             "held_plans": len(held) > LIMIT,
             "runs": len(timings) > LIMIT,
             "checkpoints": len(stages) > LIMIT,
+            "delivered_calls": len(deliveries) > LIMIT,
         },
     }
 
@@ -170,6 +203,14 @@ def summarize_timings(inventory: dict[str, Any]) -> dict[str, Any]:
             seconds = _seconds(start, end)
             if seconds is not None:
                 group[label].append(seconds)
+
+    def delivery_times(rows: list[dict[str, Any]], field: str) -> list[float]:
+        values = [_seconds(row[field], row["report_delivered_at"]) for row in rows]
+        return [value for value in values if value is not None]
+
+    deliveries = inventory.get("delivered_calls", [])
+    near_ten_minutes = [row for row in deliveries if 540 <= row["source_duration_seconds"] <= 660]
+    band_times = delivery_times(near_ten_minutes, "plan_accepted_at")
     return {
         "stages": {
             stage: {name: _distribution(values) for name, values in group.items()}
@@ -177,6 +218,21 @@ def summarize_timings(inventory: dict[str, Any]) -> dict[str, Any]:
         },
         "incomplete_runs": incomplete,
         "retries_observed": sum(max(0, row["attempt_count"] - 1) for row in inventory["runs"]),
+        "delivery": {
+            "calls": len(deliveries),
+            "source_reserved_to_delivery": _distribution(
+                delivery_times(deliveries, "source_reserved_at")
+            ),
+            "accepted_plan_to_delivery": _distribution(
+                delivery_times(deliveries, "plan_accepted_at")
+            ),
+            "near_ten_minute_sources": {
+                "duration_range_seconds": [540, 660],
+                "calls": len(near_ten_minutes),
+                "accepted_plan_to_delivery": _distribution(band_times),
+                "measured_under_120_seconds": sum(value < 120 for value in band_times),
+            },
+        },
         "limits": [
             "Before dispatch includes queue, scheduling and admission; it is not pure queue wait.",
             "Dispatch to receipt includes provider work and receipt persistence; "
@@ -184,5 +240,8 @@ def summarize_timings(inventory: dict[str, Any]) -> dict[str, Any]:
             "C0/C1 share a local run. C3/C6 have checkpoint timestamps, "
             "not independent run durations.",
             "No 10-minute-call speed claim is made without duration-bound end-to-end evidence.",
+            "Delivery uses the app minute journal; earlier reports are absent from this measure.",
+            "Reservation excludes upload preflight; acceptance excludes earlier stages.",
+            "The 9-to-11-minute duration band is explicit, not an exact 10-minute source claim.",
         ],
     }

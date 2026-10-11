@@ -39,3 +39,38 @@ def test_failed_and_missing_provider_timestamps_never_become_fast_samples():
 
 def test_no_runs_means_no_measured_latency():
     assert summarize_timings({"runs": []})["stages"] == {}
+
+
+def test_delivery_duration_band_keeps_missing_and_boundary_samples_honest():
+    start = datetime(2026, 10, 11, tzinfo=UTC)
+    delivery = {
+        "source_duration_seconds": 600,
+        "source_reserved_at": start - timedelta(seconds=30),
+        "plan_accepted_at": start,
+        "report_delivered_at": start + timedelta(seconds=119),
+    }
+    summary = summarize_timings(
+        {
+            "runs": [],
+            "delivered_calls": [
+                delivery,
+                {**delivery, "plan_accepted_at": None},
+                {**delivery, "source_duration_seconds": 60},
+                {**delivery, "report_delivered_at": start + timedelta(seconds=120)},
+            ],
+        }
+    )["delivery"]
+    assert summary["calls"] == 4
+    assert summary["source_reserved_to_delivery"]["p50_seconds"] == 149
+    band = summary["near_ten_minute_sources"]
+    assert band["calls"] == 3
+    assert band["accepted_plan_to_delivery"]["samples"] == 2
+    assert band["accepted_plan_to_delivery"]["p95_seconds"] == 120
+    assert band["measured_under_120_seconds"] == 1
+
+
+def test_absent_delivery_receipts_cannot_show_the_speed_target_met():
+    summary = summarize_timings({"runs": []})["delivery"]["near_ten_minute_sources"]
+    assert summary["calls"] == 0
+    assert summary["accepted_plan_to_delivery"]["p50_seconds"] is None
+    assert summary["measured_under_120_seconds"] == 0

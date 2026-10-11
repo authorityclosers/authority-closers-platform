@@ -23,10 +23,31 @@ ORIGINS = {
     "staging": "https://salesxray-staging.authorityclosers.com",
 }
 PREFIX = "/v1/conversation/acquisition"
+_FAILURE_CODES = frozenset(
+    {
+        "qa_runtime_refused",
+        "qa_endpoint_unavailable",
+        "qa_response_invalid",
+        "qa_workspace_required",
+        "qa_retention_refused",
+        "qa_fixture_changed",
+        "qa_analysis_failed_or_held",
+        "qa_quote_over_cap",
+        "qa_report_binding_invalid",
+        "qa_embedded_coaching_invalid",
+        "qa_call_coaching_binding_invalid",
+        "qa_browser_unavailable",
+    }
+)
 
 
 class SmokeFailure(ValueError):
     """Only fixed content-free error codes may cross the QA output boundary."""
+
+    def __init__(self, code: str, *, submission_id: UUID | None = None) -> None:
+        self.code = code if code in _FAILURE_CODES else "qa_smoke_failed"
+        self.submission_id = str(submission_id) if submission_id is not None else None
+        super().__init__(self.code)
 
 
 async def account_smoke(
@@ -37,6 +58,11 @@ async def account_smoke(
     password: str,
     timeout_seconds: int = 900,
 ) -> dict[str, Any]:
+    submission_id: UUID | None = None
+
+    def failure(code: str) -> SmokeFailure:
+        return SmokeFailure(code, submission_id=submission_id)
+
     origin = ORIGINS.get(environment)
     if (
         origin is None
@@ -45,21 +71,24 @@ async def account_smoke(
         or not password
         or not 1 <= timeout_seconds <= 1800
     ):
-        raise SmokeFailure("qa_runtime_refused")
+        raise failure("qa_runtime_refused")
     started = time.monotonic()
 
     async def request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        response = await client.request(
-            method, path, headers={"Origin": origin, **kwargs.pop("headers", {})}, **kwargs
-        )
+        try:
+            response = await client.request(
+                method, path, headers={"Origin": origin, **kwargs.pop("headers", {})}, **kwargs
+            )
+        except httpx.HTTPError:
+            raise failure("qa_endpoint_unavailable") from None
         if response.is_redirect or response.status_code >= 400:
-            raise SmokeFailure("qa_endpoint_unavailable")
+            raise failure("qa_endpoint_unavailable")
         try:
             body = response.json() if response.content else {}
         except ValueError:
-            raise SmokeFailure("qa_response_invalid") from None
+            raise failure("qa_response_invalid") from None
         if not isinstance(body, dict):
-            raise SmokeFailure("qa_response_invalid")
+            raise failure("qa_response_invalid")
         return body
 
     async with asyncio.timeout(timeout_seconds):
@@ -68,7 +97,7 @@ async def account_smoke(
         )
         identity = await request("GET", "/v1/me/workspaces")
         if identity.get("selected_tenant_id") is None:
-            raise SmokeFailure("qa_workspace_required")
+            raise failure("qa_workspace_required")
         person_id, tenant_id = (
             str(UUID(identity["person_id"])),
             str(UUID(identity["selected_tenant_id"])),
@@ -76,14 +105,14 @@ async def account_smoke(
         await request("GET", "/v1/me/sales-xray-profile/write-eligibility")
         policy = await request("GET", PREFIX + "/upload-policy")
         if environment == "production" and not 1 <= policy["retention_days"] <= 7:
-            raise SmokeFailure("qa_retention_refused")
+            raise failure("qa_retention_refused")
         fixture = (
             resources.files("ac_platform.conversation_intelligence")
             .joinpath("canary_fixture/sales_call_v1.wav")
             .read_bytes()
         )
         if hashlib.sha256(fixture).hexdigest() != FIXTURE_SHA256:
-            raise SmokeFailure("qa_fixture_changed")
+            raise failure("qa_fixture_changed")
         submission_id = uuid4()
         path = f"{PREFIX}/submissions/{submission_id}"
         await request(
@@ -111,7 +140,7 @@ async def account_smoke(
                     for stage in progress.get("stages", [])
                 )
             ):
-                raise SmokeFailure("qa_analysis_failed_or_held")
+                raise failure("qa_analysis_failed_or_held")
             if progress.get("local_state") == "completed" and not accepted:
                 quote = await request(
                     "POST",
@@ -122,7 +151,7 @@ async def account_smoke(
                     type(quote.get("max_cost_paise")) is not int
                     or not 0 <= quote["max_cost_paise"] <= MAX_QUOTE_PAISE
                 ):
-                    raise SmokeFailure("qa_quote_over_cap")
+                    raise failure("qa_quote_over_cap")
                 await request(
                     "POST",
                     path + "/plan",
@@ -141,8 +170,11 @@ async def account_smoke(
             report.get("source_sha256") != FIXTURE_SHA256
             or report.get("report", {}).get("access") != "claimed_account"
         ):
-            raise SmokeFailure("qa_report_binding_invalid")
-        check_report_coaching(report["report"]["content"])
+            raise failure("qa_report_binding_invalid")
+        try:
+            check_report_coaching(report["report"]["content"])
+        except ValueError:
+            raise failure("qa_embedded_coaching_invalid") from None
         coaching = await request("GET", f"/v1/me/coaching/calls/{submission_id}")
         if (
             coaching.get("schema") != "ac.sales-xray.call-coaching/1"
@@ -156,7 +188,7 @@ async def account_smoke(
             or coaching.get("tenant_id") != tenant_id
             or coaching.get("authority") != "provisional"
         ):
-            raise SmokeFailure("qa_call_coaching_binding_invalid")
+            raise failure("qa_call_coaching_binding_invalid")
         return {
             "schema": "ac.sales-xray.qa-account-smoke/1",
             "environment": environment,

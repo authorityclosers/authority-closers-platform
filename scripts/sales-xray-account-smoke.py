@@ -6,11 +6,16 @@ from __future__ import annotations
 import json
 import os
 import sys
+from uuid import UUID
 
 import httpx
 
 from ac_platform.application.asyncio_runtime import run_async
-from ac_platform.conversation_intelligence.account_smoke import ORIGINS, account_smoke
+from ac_platform.conversation_intelligence.account_smoke import (
+    ORIGINS,
+    SmokeFailure,
+    account_smoke,
+)
 from ac_platform.conversation_intelligence.processing_cli import _Parser
 
 
@@ -69,6 +74,10 @@ async def smoke(args):
                     if errors:
                         raise ValueError("Report page error.")
                     result["browser_report_and_coaching_visible"] = True
+                except Exception:
+                    raise SmokeFailure(
+                        "qa_browser_unavailable", submission_id=UUID(result["submission_id"])
+                    ) from None
                 finally:
                     await browser.close()
         return result
@@ -82,6 +91,19 @@ def main(argv=None):
     parser.add_argument("--browser", action="store_true")
     try:
         result = run_async(smoke(parser.parse_args(argv)))
+    except SmokeFailure as error:
+        print(
+            json.dumps(
+                {
+                    "schema": "ac.sales-xray.qa-account-smoke/1",
+                    "ok": False,
+                    "failure_code": error.code,
+                    "submission_id": error.submission_id,
+                },
+                sort_keys=True,
+            )
+        )
+        return 1
     except Exception:
         # Never echo request/response bodies, credentials, cookies or browser errors.
         print(

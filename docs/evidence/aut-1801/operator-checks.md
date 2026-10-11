@@ -35,6 +35,15 @@ duration-bound end-to-end evidence. The guest canary's observed intervals
 are now attributed to the preceding observed stage; polling intervals still
 limit their precision.
 
+The export also binds measured source seconds to the app's delivered minute
+journal and accepted-plan timestamp. It reports source-reservation-to-delivery
+and accepted-plan-to-delivery separately, plus an explicit 540–660-second
+source band with measured deliveries strictly under 120 seconds. Missing
+acceptance timestamps do not count as fast samples. Source reservation
+excludes upload preflight; acceptance excludes earlier stages. Reports before
+the journal was introduced are absent from this measure. No full upload-to-UI
+claim follows from these lower boundaries alone.
+
 ## QA account canary
 
 Browser QA supplies its existing environment-specific QA identity and
@@ -60,6 +69,11 @@ transcript, report revision, person and tenant and remain provisional.
 Browser mode checks the real Report and Coaching views with no page errors.
 Only a content-free receipt is printed. A passing guest canary alone does
 not certify this account route or its deployed interface.
+
+Expected QA failures also print a fixed failure code and, after upload, the
+submission UUID for app inspection. HTTP exception/response contents are
+discarded. The operator can inspect that exact call without uploading again
+or retrying an uncertain send.
 
 ## Internal synthetic quality loop
 
