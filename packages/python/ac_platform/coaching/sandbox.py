@@ -352,7 +352,7 @@ def authored(
         # A focus needs at least one inspectable moment (spec 12.2); without
         # one the call's coaching is unavailable, never a guessed moment.
         return None
-    pattern = _text(diagnosis.get("pattern")) or "This call's authored focus."
+    pattern = _text(diagnosis.get("pattern")) or "This call’s written focus."
     why = _text(lesson.get("why_it_matters")) or pattern
     better = _text(lesson.get("better_direction")) or behavior
     focus = Focus(
@@ -652,7 +652,7 @@ def team_view(
         limitations=(
             FICTIONAL,
             IMPORTER_ONLY,
-            "Counts are each fictional call's one authored focus, not measured mistakes.",
+            "The counts are each fictional call’s one written focus, not real mistakes.",
         ),
     )
 
