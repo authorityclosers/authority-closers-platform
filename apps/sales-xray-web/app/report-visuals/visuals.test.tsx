@@ -1,0 +1,191 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
+
+import {
+  CallTimeline,
+  ChangeSteps,
+  CommitmentQuality,
+  FactList,
+  MetricRow,
+  MomentTag,
+  OutcomeBadge,
+  PillarHeading,
+  PlayChip,
+  Quote,
+  ShareDial,
+  SkillStateMark,
+  SplitBar,
+  SummaryStrip,
+} from "./visuals";
+
+const source = {
+  segment_id: "a1",
+  quote: "I want to reach ten lakh consistently.",
+  start_ms: 395_000,
+  end_ms: 418_000,
+};
+
+const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
+
+it("names the pillar with its number and promise", () => {
+  const markup = html(
+    <PillarHeading
+      index={2}
+      title="How the Call Played Out"
+      subtitle="See how the conversation moved."
+    />,
+  );
+  expect(markup).toContain(">02<");
+  expect(markup).toContain("<h2");
+  expect(markup).toContain("See how the conversation moved.");
+});
+
+it("plays a clip when there is a player, else shows the time as text", () => {
+  expect(
+    html(<PlayChip source={source} title="Goal" onSelect={vi.fn()} />),
+  ).toContain('aria-label="Play 06:35: Goal"');
+  expect(html(<PlayChip source={source} title="Goal" />)).not.toContain(
+    "<button",
+  );
+  expect(html(<PlayChip source={source} title="Goal" range />)).toContain(
+    "06:35–06:58",
+  );
+  expect(html(<PlayChip source={undefined} title="Goal" />)).toBe("");
+});
+
+it("quotes in the UI face with who said it", () => {
+  const markup = html(
+    <Quote
+      text={source.quote}
+      speaker={{ name: "Amit Sharma", role: "prospect" }}
+    />,
+  );
+  expect(markup).toContain("“");
+  expect(markup).toContain("Amit Sharma");
+  expect(markup).toContain("Prospect");
+});
+
+it("says the outcome in words and who established it", () => {
+  const markup = html(<OutcomeBadge status="Decision Pending" origin="call" />);
+  expect(markup).toContain("Decision Pending");
+  expect(markup).toContain('data-tone="warn"');
+  expect(markup).toContain("As heard on the call");
+  expect(html(<OutcomeBadge status={null} origin={null} />)).toContain(
+    "Only a person records won or lost",
+  );
+});
+
+it("shows measured figures and splits without a score", () => {
+  const markup = html(
+    <MetricRow
+      items={[
+        { label: "Call length", value: "25:08" },
+        {
+          label: "Talk share",
+          value: "62 : 38",
+          visual: (
+            <SplitBar
+              unit="%"
+              parts={[
+                { label: "You", value: 62 },
+                { label: "Amit", value: 38 },
+              ]}
+            />
+          ),
+        },
+      ]}
+    />,
+  );
+  expect(markup).toContain("Call length");
+  expect(markup).toContain('aria-label="You 62%, Amit 38%"');
+  expect(
+    html(
+      <SplitBar
+        parts={[
+          { label: "You", value: 17 },
+          { label: "Amit", value: 8 },
+        ]}
+      />,
+    ),
+  ).toContain('aria-label="You 17, Amit 8"');
+  expect(
+    html(
+      <ShareDial value={62} total={100} label="You talked 62% of the time" />,
+    ),
+  ).toContain(">62%<");
+  expect(html(<MetricRow items={[]} />)).toBe("");
+});
+
+it("draws the call in stages with moments and the change point", () => {
+  const onSelect = vi.fn();
+  const markup = html(
+    <CallTimeline
+      durationMs={1_508_000}
+      speech={{
+        top: [{ start_ms: 0, end_ms: 60_000 }],
+        bottom: [{ start_ms: 60_000, end_ms: 400_000 }],
+      }}
+      names={{ top: "You", bottom: "Amit" }}
+      phases={[
+        { label: "Opening", start_ms: 0, end_ms: 150_000 },
+        { label: "Business Context", start_ms: 150_000, end_ms: 1_508_000 },
+      ]}
+      moments={[
+        {
+          key: "m1",
+          kind: "Strong Moment",
+          title: "Goal",
+          at_ms: 395_000,
+          source,
+        },
+      ]}
+      change={{ at_ms: 678_000, label: "The call changed" }}
+      onSelect={onSelect}
+    />,
+  );
+  expect(markup).toContain(
+    'aria-label="How the call moved: 2 stages over 25:08"',
+  );
+  expect(markup).toContain("Business Context");
+  expect(markup).toContain("02:30");
+  expect(markup).toContain('aria-label="Play Strong Moment · 06:35: Goal"');
+  expect(markup).toContain("The call changed · 11:18");
+  expect(markup).toContain('data-mode="speech"');
+  // No duration, no timeline; no speech or sound, stage blocks only.
+  expect(html(<CallTimeline durationMs={0} />)).toBe("");
+  expect(html(<CallTimeline durationMs={10_000} />)).toContain(
+    'data-mode="none"',
+  );
+});
+
+it("keeps skill states and moment kinds as words, never numbers", () => {
+  expect(html(<SkillStateMark state="Needs Attention" />)).toContain(
+    "Needs Attention",
+  );
+  expect(html(<SkillStateMark state={null} />)).toContain("Not established");
+  expect(html(<MomentTag kind="Important Miss" atMs={532_000} />)).toContain(
+    "08:52",
+  );
+  expect(html(<MomentTag kind="Something new" />)).toContain(
+    'data-tone="neutral"',
+  );
+});
+
+it("lays out the switch, commitment, facts and the end strip", () => {
+  expect(
+    html(
+      <ChangeSteps before="Discovery" turn="Amit asked" after="Presentation" />,
+    ),
+  ).toContain("The switch");
+  const quality = html(<CommitmentQuality quality="Clear" />);
+  expect(quality).toContain("A specific action with a specific date or time.");
+  expect(quality.match(/data-on/g)).toHaveLength(3);
+  expect(
+    html(
+      <FactList items={[{ label: "Next event", value: "Friday · 4:00 PM" }]} />,
+    ),
+  ).toContain("Friday · 4:00 PM");
+  expect(
+    html(<SummaryStrip cells={[{ label: "Only one", value: "x" }]} />),
+  ).toBe("");
+});
