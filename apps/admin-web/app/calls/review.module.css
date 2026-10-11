@@ -264,6 +264,11 @@
   outline: none;
 }
 
+/* The field drops its own outline, so the bar shows where focus is. */
+.find:focus-within {
+  box-shadow: inset 0 -2px 0 var(--sx-accent);
+}
+
 .find small {
   font-size: var(--sx-text-xs);
   white-space: nowrap;
