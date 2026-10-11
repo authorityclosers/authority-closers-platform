@@ -114,9 +114,13 @@ def quoted_strength(
         text = _text(finding.get("explanation"), 4000)
         if not title or not text or title == exclude:
             continue
-        moments = _moments(
-            envelope, _refs(finding.get("evidence")), text, submission_id, created_at
-        )
+        try:
+            moments = _moments(
+                envelope, _refs(finding.get("evidence")), text, submission_id, created_at
+            )
+        except (KeyError, TypeError, ValueError):
+            # Optional: a malformed strength is skipped, never the call.
+            continue
         if moments:
             return Strength(title=title, explanation=text, evidence=moments[:2])
     return None

@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+import pytest
+
 from ac_platform.coaching.report_adapter import from_report
 
 NOW, CALL = datetime(2026, 10, 10, tzinfo=UTC), UUID(int=10)
@@ -171,3 +173,16 @@ def test_history_keeps_the_first_quoted_strength_only() -> None:
     assert result.strength.evidence[0].quote == "Tell me more."
     data["report"]["content"]["strengths"] = []
     assert adapt(data).strength is None
+
+
+@pytest.mark.parametrize("bad", [{"quote": "x" * 2001}, {"segment_id": ""}])
+def test_a_malformed_strength_is_skipped_without_losing_the_call(bad: dict[str, Any]) -> None:
+    data = envelope()
+    ref = {"segment_id": "seg-2", "quote": "Tell me more.", "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "Broken", "explanation": "Bad moment.", "evidence": [{**ref, **bad}]},
+        {"title": "Follow-up", "explanation": "You asked a follow-up.", "evidence": [ref]},
+    ]
+    result = adapt(data)
+    assert result is not None and result.skills
+    assert result.strength is not None and result.strength.title == "Follow-up"

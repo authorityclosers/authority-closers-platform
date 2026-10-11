@@ -82,6 +82,16 @@ def test_a_quoted_report_strength_is_offered_to_build_on() -> None:
     assert build_call_coaching(data, **CONTEXT).strength is None
 
 
+def test_a_malformed_strength_never_fails_the_call_coaching() -> None:
+    data = envelope()
+    bad = {"segment_id": "seg-2", "quote": "x" * 2001, "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "Too long", "explanation": "Bad moment.", "evidence": [bad]}
+    ]
+    view = build_call_coaching(data, **CONTEXT)
+    assert view.state == "ready" and view.strength is None
+
+
 def test_the_strength_that_supplied_the_focus_is_not_repeated() -> None:
     data = envelope()
     report = data["report"]["content"]
