@@ -34,8 +34,9 @@ from ac_platform.conversation_intelligence.prospect_report_context import previo
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.db.models import model_metadata
+from tests.database.prospect_legacy_fixtures import legacy_person_projection
+from tests.database.test_conversation_postgresql import _migration_head, run, seed
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
-from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import _setup
 from tests.database.test_prospect_library_postgresql import snapshot
 from tests.database.test_prospect_profile_edit_postgresql import PREFIX, client_for, private
@@ -512,6 +513,7 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
 
     try:
         with monkeypatch.context() as patch:
+            legacy_person_projection(engine, legacy_registry, patch)
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
             # Seed the real 0077 schema using its pre-journal projections.
@@ -531,7 +533,7 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
                 "Isolated prior-schema upgrade failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261010_0080"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
             assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             row = dict(
                 db.execute(
