@@ -439,6 +439,35 @@ describe("Coaching story", () => {
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");
   });
+  it("ends a failed or missing read on the unavailable card, never on skeletons", async () => {
+    mocks.access = {
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "session-a",
+      },
+      retry: vi.fn(),
+    };
+    for (const answer of [
+      () => Promise.resolve(new Response("", { status: 404 })),
+      () => Promise.resolve(new Response("", { status: 409 })),
+      () => Promise.resolve(new Response("", { status: 500 })),
+      () => Promise.reject(new TypeError("network down")),
+    ]) {
+      vi.stubGlobal("fetch", vi.fn(answer));
+      for (const callId of [null, fictionalCallCoaching.submission_id]) {
+        await act(async () =>
+          root.render(<CoachingPage key={`${callId}`} callId={callId} />),
+        );
+        await act(async () => {});
+        expect(host.textContent).toContain("Coaching didn’t load");
+        expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+        expect(host.querySelector('[role="alert"]')).not.toBeNull();
+      }
+    }
+  });
   it("has a loading skeleton and makes no request without a confirmed account", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
