@@ -121,6 +121,7 @@ export async function preloadSavedReport(
           recordingId: submission.recordingId,
           sourceSha256: transcript.source_sha256,
           transcriptRevision: transcript.revision,
+          reportRevision: report.reportRevision,
           transcript,
         });
       } catch {
