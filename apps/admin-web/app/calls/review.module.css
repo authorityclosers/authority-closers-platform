@@ -667,6 +667,43 @@
   font-variant-numeric: tabular-nums;
 }
 
+.metrics [data-num] {
+  text-align: right;
+}
+
+/* Talk share as one stacked bar: the first speaker in the accent. */
+.share {
+  display: grid;
+  gap: 4px;
+}
+
+.shareBar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.shareBar i {
+  display: block;
+  height: 100%;
+  background: color-mix(in oklab, var(--sx-ink-2) 35%, var(--sx-sunken));
+}
+
+.shareBar i[data-index="0"] {
+  background: var(--sx-accent);
+}
+
+.shareLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
 .compare tbody th {
   width: 22%;
   font-weight: 600;

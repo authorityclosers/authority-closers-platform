@@ -435,38 +435,80 @@ export function Metrics({
     );
   const percent = (value: number | null) =>
     value === null ? "–" : `${Math.round(value * 100)}%`;
+  const speakers = Object.entries(metrics.speakers);
+  const shared = speakers.filter(([, row]) => row.talkShare !== null);
   return (
     <div className={styles.reading}>
       <p className={styles.muted}>
         Measured from the transcript (call-metrics/2). Metrics are evidence, not
         judgement.
       </p>
+      {shared.length ? (
+        <div className={styles.share}>
+          <div
+            className={styles.shareBar}
+            role="img"
+            aria-label={`Talk share: ${shared
+              .map(
+                ([id, row]) => `${names[id] ?? id} ${percent(row.talkShare)}`,
+              )
+              .join(", ")}`}
+          >
+            {shared.map(([id, row], index) => (
+              <i
+                key={id}
+                data-index={index}
+                style={{ width: `${(row.talkShare ?? 0) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className={styles.shareLegend} aria-hidden="true">
+            {shared.map(([id, row], index) => (
+              <span key={id} data-index={index}>
+                {names[id] ?? id} {percent(row.talkShare)}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <table className={styles.metrics}>
         <thead>
           <tr>
             <th scope="col">Speaker</th>
-            <th scope="col">Talk share</th>
-            <th scope="col">Talk time</th>
-            <th scope="col">Questions</th>
-            <th scope="col">Per minute</th>
-            <th scope="col">Talk-overs</th>
-            <th scope="col">Longest turn</th>
+            <th scope="col" data-num="">
+              Talk share
+            </th>
+            <th scope="col" data-num="">
+              Talk time
+            </th>
+            <th scope="col" data-num="">
+              Questions
+            </th>
+            <th scope="col" data-num="">
+              Per minute
+            </th>
+            <th scope="col" data-num="">
+              Talk-overs
+            </th>
+            <th scope="col" data-num="">
+              Longest turn
+            </th>
           </tr>
         </thead>
         <tbody>
-          {Object.entries(metrics.speakers).map(([id, row]) => (
+          {speakers.map(([id, row]) => (
             <tr key={id}>
               <th scope="row">{names[id] ?? id}</th>
-              <td>{percent(row.talkShare)}</td>
-              <td>{clock(row.talkMs)}</td>
-              <td>{row.questions}</td>
-              <td>
+              <td data-num="">{percent(row.talkShare)}</td>
+              <td data-num="">{clock(row.talkMs)}</td>
+              <td data-num="">{row.questions}</td>
+              <td data-num="">
                 {row.questionsPerMinute === null
                   ? "–"
                   : row.questionsPerMinute.toFixed(1)}
               </td>
-              <td>{row.cutIns}</td>
-              <td>{clock(row.longestMonologueMs)}</td>
+              <td data-num="">{row.cutIns}</td>
+              <td data-num="">{clock(row.longestMonologueMs)}</td>
             </tr>
           ))}
         </tbody>

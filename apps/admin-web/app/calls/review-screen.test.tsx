@@ -83,6 +83,13 @@ const bundle = normalizeBundle({
       { start_ms: 5000, level: 1 },
     ],
   },
+  metrics: {
+    time_used_ms: 6000,
+    speakers: {
+      A: { talk_ms: 4000, talk_share: 0.67, questions: 1, cut_ins: 0 },
+      B: { talk_ms: 2000, talk_share: 0.33, questions: 1, cut_ins: 0 },
+    },
+  },
 });
 
 let host: HTMLDivElement;
@@ -290,4 +297,14 @@ it("copies a link to this moment with Y, without the personal queue filters", as
   expect(host.querySelector('[role="status"]')?.textContent).toBe(
     "Link to 0:04 copied",
   );
+});
+
+it("shows talk share as one bar, named by role, with the numbers beside it", async () => {
+  await render();
+  await key("m");
+  expect(
+    host
+      .querySelector('[role="img"][aria-label^="Talk share"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Talk share: Rep 67%, Prospect 33%");
 });
