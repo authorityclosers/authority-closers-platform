@@ -106,6 +106,7 @@ const VIEWS = {
 
 const SNAG =
   /This screen hit a snag|Application error: a client-side exception/;
+const NOT_FOUND = /This page could not be found/;
 
 /** Extra widths for the sideways check, on the signed-in app pages. */
 export const SIDEWAYS_WIDTHS = [
@@ -306,9 +307,9 @@ async function visitOnce(
         problems.push("a member sees the company details form");
     }
     problems.push(...sidewaysProblems(await page.evaluate(measureSideways)));
-    // A page that is not served in this build (development fixtures answer
-    // 404 in production) has nothing to audit.
-    if (audit && status !== 404)
+    // A page this build does not serve has nothing to audit: development
+    // fixtures show Next's not-found page in production (some with HTTP 200).
+    if (audit && status !== 404 && !NOT_FOUND.test(text))
       problems.push(
         ...(await auditStyles(page, {
           scheme,
