@@ -608,10 +608,12 @@ export function CallTimeline({
             <i data-side="top" />
             {names.top}
           </span>
-          <span>
-            <i data-side="bottom" />
-            {names.bottom}
-          </span>
+          {names.bottom && speech?.bottom.length ? (
+            <span>
+              <i data-side="bottom" />
+              {names.bottom}
+            </span>
+          ) : null}
           {moments.length ? (
             <span>
               <i data-side="pin" />

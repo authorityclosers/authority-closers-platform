@@ -515,7 +515,7 @@
   gap: 10px;
   min-width: 0;
   margin: 0;
-  container-type: inline-size;
+  container: timeline / inline-size;
 }
 
 .legend {
@@ -561,6 +561,7 @@
 }
 
 .block {
+  container: stage / inline-size;
   display: grid;
   grid-template-rows: auto 6px auto;
   align-content: start;
@@ -704,6 +705,25 @@ button.pin:focus-visible {
   left: auto;
 }
 
+/* A dot on top of the line marks the change when its words don't fit. */
+.change::before {
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sx-ink-2);
+  content: "";
+}
+
+/* The words only where the stage is wide enough; never over the next one. */
+@container stage (max-width: 179px) {
+  .changeLabel {
+    display: none;
+  }
+}
+
 .playhead {
   position: absolute;
   top: 0;
@@ -776,7 +796,7 @@ button.pin:focus-visible {
 }
 
 /* Narrow: the stages stack as rows, each with its own stretch of the wave. */
-@container (max-width: 679px) {
+@container timeline (max-width: 679px) {
   .timeline:not([data-single]) .blocks {
     --wave-h: 36px;
     flex-direction: column;
@@ -826,7 +846,7 @@ button.pin:focus-visible {
 /* ---------- The switch ---------- */
 
 .stepsWrap {
-  container-type: inline-size;
+  container: steps / inline-size;
   min-width: 0;
 }
 
@@ -881,7 +901,7 @@ button.pin:focus-visible {
   display: none;
 }
 
-@container (max-width: 559px) {
+@container steps (max-width: 559px) {
   .steps {
     grid-template-columns: minmax(0, 1fr);
   }
