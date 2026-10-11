@@ -1153,7 +1153,9 @@ function PeopleActivity({
               </i>
               <span className={styles.personName}>
                 <b>
-                  <span className={styles.nameText}>{row.name}</span>
+                  <span className={styles.nameText} title={row.name}>
+                    {row.name}
+                  </span>
                   {row.test ? <span className={styles.tag}>Test</span> : null}
                 </b>
                 {row.duplicate && row.email ? <small>{row.email}</small> : null}
