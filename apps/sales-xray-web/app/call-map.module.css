@@ -912,7 +912,7 @@
   background: var(--lx-sunken);
 }
 .lenses button {
-  min-height: 28px;
+  min-height: 32px;
   padding: 0 12px;
   border: 0;
   border-radius: 9px;
@@ -1030,7 +1030,7 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .lenses button {
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 6px;
     font-size: 0;
     line-height: 0;

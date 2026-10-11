@@ -552,6 +552,7 @@ export function CallMap({
               <button
                 key={option.key}
                 type="button"
+                aria-label={option.label}
                 aria-pressed={activeLens === option.key}
                 data-short={option.short}
                 onClick={() => chooseLens(option.key)}
