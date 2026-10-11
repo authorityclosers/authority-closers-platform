@@ -67,6 +67,9 @@ export function useMeasuredWave(
   return have ? found.envelope : null;
 }
 
+/** The chosen file's wave and the sending panel's: one moves into the other. */
+export const CALL_WAVE_TRANSITION = "sx-call-wave";
+
 export type WaveState =
   | "idle"
   | "arriving"
@@ -98,6 +101,7 @@ export function AnalysisWave({
   played,
   state,
   compact,
+  transitionName,
 }: {
   envelope: WaveformEnvelope | null;
   /** Omitted when the upload doesn't report its progress. */
@@ -106,6 +110,11 @@ export function AnalysisWave({
   state: WaveState;
   /** A short strip, e.g. inside the chosen file's card. */
   compact?: boolean;
+  /**
+   * A view-transition name shared with another wave, so the browser moves
+   * one into the other (set inline: CSS modules would rename it per file).
+   */
+  transitionName?: string;
 }) {
   const bins = envelope
     ? waveformBins(envelope, 0, envelope.duration_ms, BARS)
@@ -134,7 +143,13 @@ export function AnalysisWave({
       data-compact={compact ? "" : undefined}
       role="img"
       aria-label={label}
-      style={{ "--played": played, "--arrived": arrived } as CSSProperties}
+      style={
+        {
+          "--played": played,
+          "--arrived": arrived,
+          viewTransitionName: transitionName,
+        } as CSSProperties
+      }
     >
       {levels.map((level, index) => {
         const at = (index + 0.5) / BARS;

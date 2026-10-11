@@ -30,7 +30,11 @@ import {
   type StepState,
 } from "./processing-steps";
 import { useWorkspaceAccess } from "./workspace-access";
-import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import {
+  AnalysisWave,
+  CALL_WAVE_TRANSITION,
+  useMeasuredWave,
+} from "./analysis-wave";
 import type { WaveformEnvelope } from "./source-waveform";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-processing-panel.module.css";
@@ -440,6 +444,8 @@ export function AcquisitionProcessingPanel({
           step's stretch listening; no percentage the server doesn't give. */}
       <AnalysisWave
         envelope={envelope}
+        // The chosen file's wave moves here from its card on "Analyse".
+        transitionName={phase === "sending" ? CALL_WAVE_TRANSITION : undefined}
         arrived={upload?.fraction ?? undefined}
         played={
           phase === "done"
