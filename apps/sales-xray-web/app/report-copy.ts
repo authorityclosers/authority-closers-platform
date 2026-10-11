@@ -114,10 +114,10 @@ export const COMMON = {
   seller: "Seller",
 };
 
-/** "Play · 18:42", or "Play 06:35–06:58" for a stretch of the call. */
-export const playAt = (clock: string) => `${COMMON.play} · ${clock}`;
+/** "18:42 · Play", or "06:35–06:58 · Play" for a stretch of the call. */
+export const playAt = (clock: string) => `${clock} · ${COMMON.play}`;
 export const playRange = (from: string, to: string) =>
-  `${COMMON.play} ${from}–${to}`;
+  `${from}–${to} · ${COMMON.play}`;
 /** Screen readers: "Play 18:42: Strongest part". */
 export const playLabel = (playing: boolean, clock: string, what: string) =>
   `${playing ? COMMON.pause : COMMON.play} ${clock}: ${what}`;

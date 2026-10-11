@@ -95,17 +95,8 @@ function Play({
           <ClipPlayIcon playing={playing} size={9} />
           {/* One flex item, so the word sits next to the time. */}
           <span>
-            {range ? (
-              <>
-                <span className={styles.playWord}>{COMMON.play} </span>
-                {at}
-              </>
-            ) : (
-              <>
-                {at}
-                <span className={styles.playWord}> · {COMMON.play}</span>
-              </>
-            )}
+            {at}
+            <span className={styles.playWord}> · {COMMON.play}</span>
           </span>
         </button>
       )}

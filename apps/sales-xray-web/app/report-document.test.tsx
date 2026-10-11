@@ -110,6 +110,14 @@ it("plays a moment through the report's player when one is given", async () => {
     'button[aria-label^="Play "]',
   )!;
   expect(play).not.toBeNull();
+  // Every chip reads time first, a moment's stretch too: "06:35–06:58 · Play".
+  const chips = [...container.querySelectorAll("button[aria-pressed]")].map(
+    (b) => b.textContent,
+  );
+  expect(chips.some((t) => /^\d\d:\d\d–\d\d:\d\d · Play$/.test(t ?? ""))).toBe(
+    true,
+  );
+  expect(chips.every((t) => /· Play$/.test(t ?? ""))).toBe(true);
   await act(async () => play.click());
   expect(onSelect).toHaveBeenCalledOnce();
   expect(onSelect.mock.calls[0][0]).toHaveProperty("start_ms");
