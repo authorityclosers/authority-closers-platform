@@ -1,10 +1,10 @@
 "use client";
 
-import { Pause, Play, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
-import { ClipPlayState } from "../source-waveform";
+import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
@@ -73,11 +73,7 @@ function ReportPlay({
           aria-label={`${playing ? "Pause" : "Play"} moment ${span}`}
           onClick={() => onPlay(evidence, "Coaching for this call")}
         >
-          {playing ? (
-            <Pause size={13} aria-hidden="true" />
-          ) : (
-            <Play size={13} aria-hidden="true" />
-          )}
+          <ClipPlayIcon playing={playing} size={9} />
           {timeLabel(evidence.start_ms)}
         </button>
       )}
@@ -158,8 +154,6 @@ export function EvidencePlayer({
     }
     if (audio.current) start(audio.current);
   };
-  const Icon =
-    state === "playing" ? Pause : state === "failed" ? RefreshCw : Play;
   return (
     <li className={styles.moment} data-extra={extra ? "" : undefined}>
       {evidence.playable && onPlay ? (
@@ -186,7 +180,11 @@ export function EvidencePlayer({
                 : `Play moment ${span}`
           }
         >
-          <Icon size={13} aria-hidden="true" />
+          {state === "failed" ? (
+            <RefreshCw size={13} aria-hidden="true" />
+          ) : (
+            <ClipPlayIcon playing={state === "playing"} size={9} />
+          )}
           {timeLabel(evidence.start_ms)}
         </button>
       ) : (
