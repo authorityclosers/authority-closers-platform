@@ -27,6 +27,9 @@ Coaching also reads all six fictional rep pillars with their own labels. Its
 progress accessibility snapshot must contain one summary of the forty calls
 (40 needed work in this fictional rep's data), rather than announcing
 one list row per call. Every rep pillar gets a readability screenshot.
+Team totals also check that rendered text fits its clipping containers; DOM
+visibility alone cannot pass an ellipsised count or context line. The sandbox's
+latest-call footnote must fit fully in view and gets its own screenshot.
 
 The separate fictional formatting journey checks Won, Lost with a required reason, Follow-up Set
 with a required date, Decision Pending (the no-decision choice), and optional

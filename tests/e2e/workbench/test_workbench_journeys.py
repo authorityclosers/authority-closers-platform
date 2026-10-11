@@ -284,6 +284,35 @@ class Journey:
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
 
+    def unclipped_text(self, target: Locator) -> None:
+        """Keep totals readable rather than passing on hidden ellipsised text."""
+        metrics = target.evaluate(
+            """root => {
+              const clipped = [];
+              let checked = 0;
+              for (const el of [root, ...root.querySelectorAll('*')]) {
+                if (!el.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
+                if (![...el.childNodes].some(n =>
+                    n.nodeType === Node.TEXT_NODE && n.textContent.trim())) continue;
+                const style = getComputedStyle(el);
+                const clips = value => ['hidden', 'clip'].includes(value);
+                checked += 1;
+                const horizontal = el.clientWidth > 0 && clips(style.overflowX) &&
+                  el.scrollWidth > el.clientWidth + 1;
+                const vertical = el.clientHeight > 0 && clips(style.overflowY) &&
+                  el.scrollHeight > el.clientHeight + 1;
+                if (horizontal || vertical) clipped.push({tag: el.tagName,
+                  width: el.clientWidth, contentWidth: el.scrollWidth,
+                  height: el.clientHeight, contentHeight: el.scrollHeight});
+              }
+              return {checked, clipped};
+            }"""
+        )
+        # Geometry only: never retain learner names or other page text.
+        self.observations[-1]["text_clipping"] = metrics
+        assert metrics["checked"] > 0, "No rendered total text was checked"
+        assert not metrics["clipped"], "Team totals cut off rendered text"
+
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""
         link = self.page.get_by_role("link", name="See the mission", exact=True)
@@ -879,10 +908,24 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(
             page.get_by_role("heading", name="Who needs help with what", exact=False)
         ).to_be_visible()
+        totals = page.get_by_role("region", name="Team coaching totals", exact=True)
+        totals.scroll_into_view_if_needed()
+        expect(totals.get_by_text("Analysed calls", exact=True)).to_be_visible()
         journey.snapshot("team")
+        journey.unclipped_text(totals)
         if journey.fixture:
             page.get_by_role("button", name="AC Sandbox", exact=True).click()
+            totals.scroll_into_view_if_needed()
             journey.snapshot("sandbox-team")
+            journey.unclipped_text(totals)
+            # Latest-call context must remain readable after leaving the small tile.
+            context = page.get_by_role(
+                "region", name=re.compile(r"^What the team should work on(?:\s|$)")
+            ).get_by_text(re.compile(r"Latest call .+\.$"))
+            context.scroll_into_view_if_needed()
+            expect(context).to_be_visible()
+            expect(context).to_be_in_viewport(ratio=1)
+            journey.snapshot("sandbox-team-context")
             page.get_by_role("button", name="One rep", exact=True).click()
             expect(
                 page.get_by_role(

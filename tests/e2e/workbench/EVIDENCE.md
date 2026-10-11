@@ -1,5 +1,11 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+New Team clipping guard is prepared after D's `4130bb91` phone repair.
+It checks all rendered total labels/values/notes and captures the full relocated
+latest-call context. Ruff check/format, required HTTP import, no-server collection
+(24 skips) and owned diff checks pass. Browser execution of this stronger guard
+is pending the next allowed wave, no earlier than 20:15:12 UTC.
+
 Latest bounded dev coverage: **PASS across two runs**. Report, Document, Word
 and outcome formats pass twelve cases at `2be67628` → `b24a23ec`
 (19:45:10–19:49:04 UTC). The newer Coaching repeat passes all four screen/theme
