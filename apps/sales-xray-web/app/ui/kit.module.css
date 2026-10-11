@@ -595,9 +595,10 @@ a.rowTitle:focus-visible {
   outline: none;
 }
 
+/* Inset, so a list's rounded, clipped frame never cuts the ring. */
 a.rowTitle:focus-visible::after {
   border-radius: var(--sx-radius-sm);
-  box-shadow: var(--sx-focus-ring);
+  box-shadow: inset 0 0 0 2px var(--sx-accent);
 }
 
 .rowEnd :is(a, button, input, select, textarea, summary, [tabindex]) {
