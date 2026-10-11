@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import { MOMENTS, viewAllMoments } from "../report-copy";
+import { COMMON, MOMENTS, viewAllMoments } from "../report-copy";
 import type { Moment, StoryModel } from "../report-story-model";
 import {
   MomentTag,
@@ -114,7 +114,7 @@ function MomentRow({
         }
         title={moment.title}
         onSelect={onSelect}
-        label="Play"
+        label={COMMON.play}
         range
       />
     </li>

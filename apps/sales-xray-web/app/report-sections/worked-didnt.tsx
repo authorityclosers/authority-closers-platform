@@ -1,6 +1,6 @@
 "use client";
 
-import { WORKED_DIDNT } from "../report-copy";
+import { COMMON, WORKED_DIDNT } from "../report-copy";
 import type { Item, StoryModel } from "../report-story-model";
 import { PlayChip, StoryCard, ToneDot } from "../report-visuals/visuals";
 import {
@@ -29,9 +29,11 @@ function ItemRow({
       <p className={styles.itemTitle}>
         <Text text={item.title} />
       </p>
-      <p className={styles.line}>
-        <Text text={item.what.text} />
-      </p>
+      {item.sentence ? null : (
+        <p className={styles.line}>
+          <Text text={item.what.text} />
+        </p>
+      )}
       {item.areas?.length ? (
         <Field label={WORKED_DIDNT.areasLead}>
           <Bullets items={item.areas} />
@@ -41,7 +43,7 @@ function ItemRow({
         source={item.what.sources[0]}
         title={item.title}
         onSelect={onSelect}
-        label="Play"
+        label={COMMON.play}
       />
       {item.why ? (
         <Field label={whyLabel}>

@@ -92,6 +92,8 @@ export type Item = {
   title: string;
   what: Line;
   why: Line | null;
+  /** The title is the whole sentence; `what` only repeats it (not shown). */
+  sentence?: boolean;
   /** What Didn't only: the possible areas left open (spec 3.2). */
   areas?: string[];
 };
@@ -242,6 +244,22 @@ function sourced(text: string, sources: ReportEvidence[]): Line {
     );
   });
   return quoted ? { text, sources, quoted } : { text, sources };
+}
+
+/**
+ * A card title that only repeats the start of its sentence (the same words,
+ * or the sentence cut mid-word) becomes the sentence itself, shown once.
+ * Same rule as the Document view (G, `sentenceAsTitle`).
+ */
+function asSentence(item: Item): Item {
+  const head = item.title.trim().replace(/[\s.…]+$/u, "");
+  const body = item.what.text.trim();
+  if (!head || !body.startsWith(head)) return item;
+  const rest = body.slice(head.length).replace(/^[\s.]+$/u, "");
+  const cut = /^[\p{L}\p{N}]/u.test(rest) || head.length >= 40;
+  return !rest || cut
+    ? { ...item, title: body.replace(/(?<!\.)\.$/u, ""), sentence: true }
+    : item;
 }
 
 const words = (text: string) =>
@@ -476,6 +494,7 @@ function phasesFor(report: SalesReport, durationMs: number | undefined) {
 function momentsFor(
   report: SalesReport,
   transcript: Transcript | undefined,
+  roles?: { seller?: string | null; prospect?: string | null },
 ): Moment[] {
   const overview = report.overview;
   const moments: Moment[] = [];
@@ -556,7 +575,7 @@ function momentsFor(
       transcript.segments,
       transcript.duration_ms,
     );
-    const price = priceExchange(transcript, measured.price_moments[0]);
+    const price = priceExchange(transcript, measured.price_moments, roles);
     if (price)
       add({
         kind: "Price Moment",
@@ -583,12 +602,24 @@ function momentsFor(
 /** The words that named a price, and the next thing someone else said. */
 function priceExchange(
   transcript: Transcript,
-  moment: { segment_id: string } | undefined,
+  moments: { segment_id: string }[],
+  roles?: { seller?: string | null; prospect?: string | null },
 ): { stated: Line; response: Line | null } | null {
-  if (!moment) return null;
-  const at = transcript.segments.findIndex((s) => s.id === moment.segment_id);
-  const segment = transcript.segments[at];
-  if (!segment) return null;
+  const lines = moments
+    .map((moment) =>
+      transcript.segments.findIndex((s) => s.id === moment.segment_id),
+    )
+    .filter((index) => index >= 0);
+  // With known roles a price is what the seller states; a figure only the
+  // prospect names is their budget, not a price, so it is not shown as one.
+  const seller = roles?.seller ?? null;
+  const prospect = roles?.prospect ?? null;
+  const at =
+    seller && prospect
+      ? lines.find((index) => transcript.segments[index].speaker_id === seller)
+      : lines[0];
+  const segment = at === undefined ? undefined : transcript.segments[at];
+  if (at === undefined || !segment) return null;
   const evidence = (s: Transcript["segments"][number]): ReportEvidence => ({
     segment_id: s.id,
     quote: s.text,
@@ -597,7 +628,12 @@ function priceExchange(
   });
   const reply = transcript.segments
     .slice(at + 1, at + 4)
-    .find((s) => s.speaker_id && s.speaker_id !== segment.speaker_id);
+    .find(
+      (s) =>
+        s.speaker_id &&
+        s.speaker_id !== segment.speaker_id &&
+        (!prospect || s.speaker_id === prospect),
+    );
   return {
     stated: { text: segment.text, sources: [evidence(segment)] },
     response: reply ? { text: reply.text, sources: [evidence(reply)] } : null,
@@ -759,7 +795,7 @@ export function reportStoryModel(
       : item;
   });
 
-  const moments = momentsFor(report, transcript);
+  const moments = momentsFor(report, transcript, options.roles);
 
   const skills = REPORT_SKILLS.map(([id, label]): SkillRow => {
     const dimension = report.dimensions.find((d) => d.dimension_id === id);
@@ -888,8 +924,8 @@ export function reportStoryModel(
   const model: StoryModel = {
     picture,
     flow,
-    worked,
-    didnt,
+    worked: worked.map(asSentence),
+    didnt: didnt.map(asSentence),
     moments,
     topMoments: top,
     skills,
@@ -974,19 +1010,23 @@ function withPillars(
   };
 
   const worked = p.worked?.length
-    ? p.worked.map((item) => ({
-        title: item.title,
-        what: { text: item.what, sources: item.evidence.slice(0, 1) },
-        why: line(item.why_it_helped, []),
-      }))
+    ? p.worked.map((item) =>
+        asSentence({
+          title: item.title,
+          what: { text: item.what, sources: item.evidence.slice(0, 1) },
+          why: line(item.why_it_helped, []),
+        }),
+      )
     : base.worked;
   const didnt = p.didnt?.length
-    ? p.didnt.map((item) => ({
-        title: item.title,
-        what: { text: item.what, sources: item.evidence.slice(0, 1) },
-        why: line(item.what_it_affected, []),
-        areas: item.possible_areas,
-      }))
+    ? p.didnt.map((item) =>
+        asSentence({
+          title: item.title,
+          what: { text: item.what, sources: item.evidence.slice(0, 1) },
+          why: line(item.what_it_affected, []),
+          areas: item.possible_areas,
+        }),
+      )
     : base.didnt;
 
   let moments = base.moments;

@@ -3,7 +3,7 @@
 import { ArrowRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
 
-import { SKILLS } from "../report-copy";
+import { COMMON, SKILLS } from "../report-copy";
 import type { StoryModel } from "../report-story-model";
 import { PlayChip, SkillStateMark, StoryCard } from "../report-visuals/visuals";
 import { Bullets, Field, Gap, LineText, Text, type Select } from "./shared";
@@ -214,7 +214,7 @@ export function Skills({
                             source={source}
                             title={skill.label}
                             onSelect={onSelect}
-                            label="Play"
+                            label={COMMON.play}
                           />
                         ))}
                       </p>

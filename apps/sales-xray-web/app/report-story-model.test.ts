@@ -241,3 +241,57 @@ describe("never breaks on a malformed older report", () => {
     expect(model.missing[0]).toContain("Strongest part");
   });
 });
+
+describe("Sandbox-style findings and prices (G's findings, 11 Oct)", () => {
+  it("shows a title that only repeats its sentence as the sentence, once", () => {
+    const what = amitReport.strengths[0].explanation;
+    const report: SalesReport = {
+      ...amitReport,
+      strengths: [
+        { ...amitReport.strengths[0], title: what.slice(0, 30) },
+        ...amitReport.strengths.slice(1),
+      ],
+    };
+    const model = reportStoryModel(report, amitTranscript);
+    expect(model.worked[0]).toMatchObject({
+      sentence: true,
+      title: what.replace(/\.$/, ""),
+    });
+    // Real headlines are untouched.
+    expect(model.worked[1].sentence).toBeUndefined();
+  });
+
+  const withLines = (lines: Record<string, string>): Transcript =>
+    ({
+      ...amitTranscript,
+      segments: amitTranscript.segments.map((segment) =>
+        lines[segment.id] ? { ...segment, text: lines[segment.id] } : segment,
+      ),
+    }) as Transcript;
+
+  it("takes the price from the seller's words and the reply from the prospect", () => {
+    const transcript = withLines({
+      a27: "What is the price? Our budget is about one lakh.",
+      a28: "The price is two lakh rupees for the full twelve weeks.",
+    });
+    const report = { ...amitReport };
+    const model = reportStoryModel(report, transcript, {
+      roles: AMIT_SPEAKERS,
+    });
+    const price = model.moments.find((m) => m.kind === "Price Moment");
+    expect(price?.priceStated?.text).toContain("two lakh");
+    expect(price?.prospectResponse?.text).toContain(
+      "discuss this with my partner",
+    );
+  });
+
+  it("never shows the prospect's own budget as the price stated", () => {
+    const transcript = withLines({
+      a27: "Our budget is about one lakh, what does this cost?",
+    });
+    const model = reportStoryModel(amitReport, transcript, {
+      roles: AMIT_SPEAKERS,
+    });
+    expect(model.moments.some((m) => m.kind === "Price Moment")).toBe(false);
+  });
+});
