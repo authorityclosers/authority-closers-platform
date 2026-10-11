@@ -53,6 +53,9 @@
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
 }
+.short {
+  display: none;
+}
 .action:disabled {
   opacity: 0.55;
   cursor: default;
@@ -647,6 +650,12 @@
   }
   .actions {
     justify-content: stretch;
+  }
+  .long {
+    display: none;
+  }
+  .short {
+    display: inline;
   }
   .action {
     flex: 1 1 0;

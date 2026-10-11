@@ -426,6 +426,9 @@ export const DOCUMENT = {
   analysed: "Analysed",
   download: "Download Word file",
   print: "Print or save as PDF",
+  /** Phones: the same two buttons, short. */
+  downloadShort: "Word file",
+  printShort: "Print",
   preparing: "Preparing your Word file…",
   wordFailed: "The Word file didn't build. Please try again.",
   contents: "In this report",

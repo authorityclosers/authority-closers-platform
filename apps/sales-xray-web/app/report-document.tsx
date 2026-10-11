@@ -483,7 +483,9 @@ export function ReportDocument({
           onClick={() => window.print()}
           disabled={!doc || doc === "unavailable"}
         >
-          <Printer aria-hidden="true" /> {DOCUMENT.print}
+          <Printer aria-hidden="true" />
+          <span className={styles.long}>{DOCUMENT.print}</span>
+          <span className={styles.short}>{DOCUMENT.printShort}</span>
         </button>
         <button
           type="button"
@@ -494,7 +496,14 @@ export function ReportDocument({
           aria-busy={word === "busy" || undefined}
         >
           <Download aria-hidden="true" />
-          {word === "busy" ? DOCUMENT.preparing : DOCUMENT.download}
+          {word === "busy" ? (
+            DOCUMENT.preparing
+          ) : (
+            <>
+              <span className={styles.long}>{DOCUMENT.download}</span>
+              <span className={styles.short}>{DOCUMENT.downloadShort}</span>
+            </>
+          )}
         </button>
         {word === "failed" ? (
           <p className={styles.failed} role="alert">
