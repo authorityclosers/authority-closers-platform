@@ -354,6 +354,37 @@ export const REFLECTION = {
   saved: "Saved as your context. It shows with the likely reason.",
 } as const;
 
+/** Who sees the learner's Coaching: private until they share it. */
+export const SHARING = {
+  title: "Who sees your coaching",
+  shared: "Shared",
+  private: "Private",
+  personal: "Personal workspace: only you can see this coaching.",
+  sharedText: (names?: string) =>
+    `Your admins can see your focus, its likely reason and your mission${names ? `: ${names}` : ""}.`,
+  privateText: (names?: string) =>
+    `Only you can see it. Sharing lets your admins${names ? ` (${names})` : ""} see your focus, its likely reason and your mission.`,
+  stop: "Stop sharing",
+  share: "Share with your admins",
+  note: "Your admins can already open your calls. Sharing also shows them this page. You can stop any time.",
+  unchanged: "Your sharing is shown as it is now.",
+} as const;
+
+/** Spec pillar 6: agree, disagree or add context. */
+export const FEEDBACK = {
+  group: "Your view",
+  agree: "Agree",
+  notCompletely: "Not completely",
+  addContext: "Add context",
+  noted: "Noted. Your mission stays the same.",
+  ask: "Does this focus fit you? Tell us, or add context.",
+  save: "Save",
+  cancel: "Cancel",
+  saving: "Saving…",
+  contextHint:
+    "Only you see it unless you share your coaching. It is deleted with your account.",
+} as const;
+
 /** Spec pillar 6 disagreement flow: the evidence first, then what we missed. */
 export const DISAGREE = {
   basis: "This focus is based on",

@@ -11,7 +11,7 @@ import {
   type SharingView,
 } from "./sharing-client";
 import type { Evidence } from "./coaching-client";
-import { DISAGREE, REFLECTION } from "./coaching-copy";
+import { DISAGREE, FEEDBACK, REFLECTION, SHARING } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
 
@@ -66,18 +66,18 @@ export function SharePanel({
       setError(null);
       setFailed(null);
     } else {
-      setFailed(`${result.error} Your sharing is shown as it is now.`);
+      setFailed(`${result.error} ${SHARING.unchanged}`);
       setAttempt((value) => value + 1);
     }
   };
   const names = view?.reaches.map((reach) => reach.name).join(", ");
   return (
     <Panel
-      title="Who sees your coaching"
+      title={SHARING.title}
       tools={
         view ? (
           <Badge tone={view.shared ? "accent" : "neutral"}>
-            {view.shared ? "Shared" : "Private"}
+            {view.shared ? SHARING.shared : SHARING.private}
           </Badge>
         ) : null
       }
@@ -93,14 +93,14 @@ export function SharePanel({
         ) : !view.available ? (
           <p className={styles.eyebrow}>
             <Lock size={14} aria-hidden="true" />
-            Personal workspace: only you can see this coaching.
+            {SHARING.personal}
           </p>
         ) : (
           <>
             <p>
               {view.shared
-                ? `Your admins can see your focus, its likely reason and your mission${names ? `: ${names}` : ""}.`
-                : `Only you can see it. Sharing lets your admins${names ? ` (${names})` : ""} see your focus, its likely reason and your mission.`}
+                ? SHARING.sharedText(names)
+                : SHARING.privateText(names)}
             </p>
             <div className={styles.actions}>
               <Button
@@ -109,19 +109,16 @@ export function SharePanel({
                 disabled={saving}
               >
                 {view.shared ? (
-                  "Stop sharing"
+                  SHARING.stop
                 ) : (
                   <>
                     <Share2 size={14} aria-hidden="true" />
-                    Share with your admins
+                    {SHARING.share}
                   </>
                 )}
               </Button>
             </div>
-            <p className={styles.note}>
-              Your admins can already open your calls. Sharing also shows them
-              this page. You can stop any time.
-            </p>
+            <p className={styles.note}>{SHARING.note}</p>
             {failed || error ? (
               <p role="status" className={styles.status}>
                 {failed ?? error}
@@ -234,8 +231,7 @@ function ContextForm({
           onChange={(event) => setText(event.target.value)}
         />
         <span className={kitStyles.fieldHint}>
-          {text.length}/{CONTEXT_LIMIT} · Only you see it unless you share your
-          coaching. It is deleted with your account.
+          {text.length}/{CONTEXT_LIMIT} · {FEEDBACK.contextHint}
         </span>
       </label>
       <div className={styles.actions}>
@@ -244,10 +240,10 @@ function ContextForm({
           disabled={!note || saving}
           onClick={() => void save()}
         >
-          Save
+          {FEEDBACK.save}
         </Button>
         <Button onClick={onCancel} disabled={saving}>
-          Cancel
+          {FEEDBACK.cancel}
         </Button>
       </div>
       {error ? (
@@ -319,7 +315,11 @@ function Reflection({
       </div>
       <p role="status" className={styles.note}>
         {error ??
-          (saving ? "Saving…" : chosen ? REFLECTION.saved : REFLECTION.hint)}
+          (saving
+            ? FEEDBACK.saving
+            : chosen
+              ? REFLECTION.saved
+              : REFLECTION.hint)}
       </p>
     </div>
   );
@@ -383,20 +383,20 @@ export function FocusFeedback({
           originSubmissionId={originSubmissionId}
         />
       ) : null}
-      <div className={styles.actions} role="group" aria-label="Your view">
+      <div className={styles.actions} role="group" aria-label={FEEDBACK.group}>
         <Button
           onClick={() => void send("agree")}
           disabled={state !== "idle"}
           aria-pressed={state === "agree"}
         >
-          Agree
+          {FEEDBACK.agree}
         </Button>
         <Button
           onClick={() => void send("not_completely")}
           disabled={state !== "idle"}
           aria-pressed={state === "not_completely"}
         >
-          Not completely
+          {FEEDBACK.notCompletely}
         </Button>
         {contextOpen ? null : (
           <Button
@@ -405,7 +405,7 @@ export function FocusFeedback({
               setContextOpen(true);
             }}
           >
-            Add context
+            {FEEDBACK.addContext}
           </Button>
         )}
       </div>
@@ -413,8 +413,8 @@ export function FocusFeedback({
         {state === "not_completely" && contextOpen
           ? DISAGREE.noted
           : done
-            ? "Noted. Your mission stays the same."
-            : (error ?? "Does this focus fit you? Tell us, or add context.")}
+            ? FEEDBACK.noted
+            : (error ?? FEEDBACK.ask)}
       </p>
       <ContextForm
         focusSkillId={focusSkillId}
