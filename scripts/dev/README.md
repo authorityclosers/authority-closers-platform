@@ -50,8 +50,10 @@ reads, two concurrent imports, exact history replay, changed-content refusal,
 atomic rollback, the audit chain and zero-charge accounting. It also reads the
 preserved authored Team, representative and call Coaching, checks the exact
 mission and transcript quote, refuses another viewer's private coaching and
-keeps text-only moments nonplayable. Run only these loader checks with the
-existing test database injection:
+keeps text-only moments nonplayable. Calls → Report → Coaching uses the same
+real submission and member IDs written by the loader, including mission and
+moment links; legacy Team links remain readable. Run only these loader checks
+with the existing test database injection:
 
 ```sh
 ac-heavy uv run pytest \

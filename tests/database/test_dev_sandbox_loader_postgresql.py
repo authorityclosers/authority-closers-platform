@@ -129,6 +129,9 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert row["has_report"] and row["state"] == "report_ready"
                 assert row["owner_name"] == "Synthetic Rep 1"
                 submission = module.identifier("submission", source.metadata["call_id"])
+                loaded_rep_id = module.identifier("person", source.metadata["rep_id"])
+                assert row["submission_id"] == str(submission)
+                assert row["owner_person_id"] == str(loaded_rep_id)
                 report = await AcquisitionReports(ownership).report(
                     submission, actor=owner.actor, allow_organisation_read=True
                 )
@@ -161,10 +164,35 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert call.mission.behavior == source.coaching["action"]["mission"]["behaviour"]
                 assert call.lesson.own_call.quote == source.transcript["lines"][0]["text"]
                 assert not any(moment.playable for moment in call.evidence)
+                # Calls -> Report -> Coaching retains the normal library's exact ids.
+                linked = await sandbox.read_call(owner.person_id, submission)
+                assert linked is not None and linked.state == "ready"
+                assert linked.submission_id == submission
+                assert linked.rep_person_id == loaded_rep_id
+                assert linked.focus == call.focus
+                assert linked.mission.origin_submission_id == submission
+                assert linked.mission.behavior == call.mission.behavior
+                assert linked.lesson.own_call.submission_id == submission
+                assert linked.lesson.own_call.quote == call.lesson.own_call.quote
+                assert {moment.submission_id for moment in linked.evidence} == {submission}
+                assert [
+                    (moment.quote, moment.start_ms, moment.end_ms, moment.playable)
+                    for moment in linked.evidence
+                ] == [
+                    (moment.quote, moment.start_ms, moment.end_ms, moment.playable)
+                    for moment in call.evidence
+                ]
+                linked_rep = await sandbox.read_rep(owner.person_id, loaded_rep_id)
+                assert linked_rep is not None and linked_rep.state == "ready"
+                assert linked_rep.person_id == loaded_rep_id
+                assert linked_rep.focus == rep.focus
+                assert {item.submission_id for item in linked_rep.calls} == {submission}
                 other_viewer = uuid4()
                 assert (await sandbox.read_team(other_viewer)).analysed_calls == 0
                 assert await sandbox.read_rep(other_viewer, rep_id) is None
                 assert await sandbox.read_call(other_viewer, authored_call_id) is None
+                assert await sandbox.read_rep(other_viewer, loaded_rep_id) is None
+                assert await sandbox.read_call(other_viewer, submission) is None
                 assert (
                     await db.scalar(
                         select(func.sum(ConversationAcquisitionSettlement.charged_seconds))
