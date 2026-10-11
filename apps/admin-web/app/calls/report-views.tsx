@@ -21,12 +21,8 @@ import {
   type Finding,
   type Report,
 } from "./call-data";
-import {
-  reportPillars,
-  REPORT_SKILLS,
-  skillState,
-  type ReportPillar,
-} from "./report-pillars";
+import { REPORT_SKILLS, skillState, type ReportPillar } from "./report-pillars";
+import { reportPillars } from "./report-story";
 import { FailedSteps } from "./failed-steps";
 import { compareReports, wordDiff, type DiffPart } from "./review-logic";
 import styles from "./review.module.css";
@@ -226,6 +222,19 @@ function PillarView({
         <span>{index + 1}</span>
         {pillar.label}
       </h3>
+      {pillar.metrics?.length ? (
+        <dl className={styles.pillarMetrics} aria-label="Call measures">
+          {pillar.metrics.map((metric) => (
+            <div key={metric.label}>
+              <dt>{metric.label}</dt>
+              <dd>
+                {metric.value}
+                {metric.note ? <small>{metric.note}</small> : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       {pillar.timeline?.length && durationMs ? (
         <div
           className={styles.timeline}
@@ -251,11 +260,15 @@ function PillarView({
           >
             <span className={styles.entryLabel}>
               {entry.label}
-              {entry.hypothesis ? (
-                <Badge tone="warn">Working hypothesis</Badge>
+              {entry.hypothesis ? <Badge tone="warn">Possibility</Badge> : null}
+              {entry.secondary ? (
+                <Badge tone="neutral">Under View all</Badge>
               ) : null}
             </span>
-            <p>{entry.text}</p>
+            {entry.text ? <p>{entry.text}</p> : null}
+            {entry.note ? (
+              <p className={styles.entryNote}>{entry.note}</p>
+            ) : null}
             <Quotes items={entry.evidence} onEvidence={onEvidence} />
           </li>
         ))}
@@ -264,17 +277,29 @@ function PillarView({
   );
 }
 
-/** The same report in the spec's six pillars, as the rep's Story view shows it. */
+/**
+ * The same report in the spec's six pillars, built by the rep's own story
+ * model (report-story.ts), so a verdict on a pillar is a verdict on what the
+ * rep reads there.
+ */
 export function Pillars({
-  report,
+  bundle,
   durationMs,
   onEvidence,
 }: {
-  report: Report;
+  bundle: Bundle;
   durationMs: number | null;
   onEvidence: OnEvidence;
 }) {
-  const pillars = reportPillars(report, durationMs);
+  const pillars = useMemo(
+    () =>
+      reportPillars(bundle.report, {
+        segments: bundle.transcript.segments,
+        metrics: bundle.metrics,
+        durationMs,
+      }),
+    [bundle, durationMs],
+  );
   return (
     <div className={styles.reading}>
       <nav className={styles.pillarNav} aria-label="Pillars">

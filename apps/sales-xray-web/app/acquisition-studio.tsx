@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -83,7 +84,6 @@ import {
   type Submission,
   type UploadPolicy,
 } from "./acquisition-client";
-import { XrayWave } from "./xray-wave";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
 import { CallMap, CallMapMini } from "./call-map";
@@ -92,6 +92,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { useFileWave } from "./analysis-wave-file";
 import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
@@ -153,6 +154,12 @@ type ExistingCallEntryState = {
 const STATUS_RETRY_MS = [3_000, 6_000, 12_000, 24_000, 30_000];
 // Misses in a row before the corner card; one blip shows only in the steps.
 const STATUS_CARD_AFTER = 3;
+/** How long "Your report is ready" holds before the report rises in. */
+const REVEAL_BEAT_MS = 1_100;
+const prefersStill = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Answers no retry changes: signed out, no access, gone, or superseded.
 const isFinalStatusAnswer = (error: unknown) =>
   error instanceof AcquisitionError &&
@@ -163,6 +170,31 @@ const isStatusBlip = (error: unknown) =>
   (error instanceof DOMException && error.name === "TimeoutError") ||
   (error instanceof AcquisitionError &&
     (error.status >= 500 || error.status === 408 || error.status === 429));
+/**
+ * Runs a state change as a view transition where the browser has them, so
+ * elements sharing a view-transition-name (the call's wave) move instead of
+ * jumping. Resolves once the new state is on screen; plain update otherwise.
+ */
+async function withWaveMorph(update: () => void) {
+  const start = (
+    document as Document & {
+      startViewTransition?: (callback: () => void) => {
+        updateCallbackDone: Promise<void>;
+      };
+    }
+  ).startViewTransition;
+  if (
+    !start ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ) {
+    update();
+    return;
+  }
+  await start
+    .call(document, () => flushSync(update))
+    .updateCallbackDone.catch(() => update());
+}
+
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -290,6 +322,9 @@ export function AcquisitionStudio({
   const file = pending
     ? (pending.selection?.file ?? retainedUploadFile)
     : (localFile ?? retainedUploadFile);
+  // The chosen file's wave, measured in this browser (shared with its card),
+  // carries the call's shape into sending and the steps.
+  const fileWave = useFileWave(file);
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -333,6 +368,45 @@ export function AcquisitionStudio({
   const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  // The analysis this page watched: its report arrives with a short reveal
+  // where the progress panel was (one continuous screen, owner 11 Oct).
+  const [watchedId, setWatchedId] = useState<string | null>(null);
+  // Watched means seen in progress here, not a saved call that is loading.
+  const watchingId =
+    submission &&
+    !result?.report &&
+    progress &&
+    !progress.has_report &&
+    planView(plan, progress).showProgress
+      ? submission.id
+      : null;
+  // Remembered as it renders (React's "adjust state on change" pattern).
+  if (watchingId && watchingId !== watchedId) setWatchedId(watchingId);
+  // The beat between "Your report is ready" and the report: the panel's wave
+  // finishes its last pass, then the report rises in where the panel was.
+  // Only for a report this page watched being made; reduced motion skips it.
+  const [revealHeld, setRevealHeld] = useState<string | null>(null);
+  const [revealShown, setRevealShown] = useState<string | null>(null);
+  const arrivedId =
+    result?.report && submission && watchedId === submission.id
+      ? submission.id
+      : null;
+  if (
+    arrivedId &&
+    arrivedId !== revealShown &&
+    arrivedId !== revealHeld &&
+    !prefersStill()
+  )
+    setRevealHeld(arrivedId);
+  useEffect(() => {
+    if (!revealHeld) return;
+    const timer = setTimeout(() => {
+      setRevealShown(revealHeld);
+      setRevealHeld(null);
+    }, REVEAL_BEAT_MS);
+    return () => clearTimeout(timer);
+  }, [revealHeld]);
+  const revealing = revealHeld !== null && revealHeld === submission?.id;
   // A new call or a finished report shows up in Recents straight away.
   const recentsCallId = submission?.id ?? null;
   const recentsRunId = result?.runId ?? null;
@@ -1267,12 +1341,14 @@ export function AcquisitionStudio({
     setPlanRequiresAction(false);
     if (
       !policy ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(next.name) ||
+      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+        next.name,
+      ) ||
       !next.size ||
       next.size > policy.maximum_file_bytes
     ) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        "Choose a supported audio recording within the displayed size limit.",
       );
       setLocalValidationError(true);
       return;
@@ -1298,7 +1374,9 @@ export function AcquisitionStudio({
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(candidate.name) &&
+        /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+          candidate.name,
+        ) &&
         candidate.size > 0 &&
         candidate.size <= policy.maximum_file_bytes,
     );
@@ -1306,7 +1384,7 @@ export function AcquisitionStudio({
     if (valid.length === 0) {
       if (hasInvalidFiles) {
         setError(
-          "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+          "Choose a supported audio recording within the displayed size limit.",
         );
         setLocalValidationError(true);
       }
@@ -1321,7 +1399,7 @@ export function AcquisitionStudio({
     if (!file) choose(valid[0]);
     if (hasInvalidFiles) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        "Choose a supported audio recording within the displayed size limit.",
       );
       setLocalValidationError(true);
     }
@@ -1523,7 +1601,8 @@ export function AcquisitionStudio({
       if (inFlight.current) return;
       if (access) uploadStore.observeAccount(access);
       inFlight.current = true;
-      setBusy("Preparing private upload…");
+      // The chosen file's wave glides into the panel that sends it.
+      await withWaveMorph(() => setBusy("Preparing private upload…"));
       setError("");
       try {
         await uploadStore.run(uploadMeta, selected, send, start);
@@ -1967,7 +2046,7 @@ export function AcquisitionStudio({
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
-        ? "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit."
+        ? "Choose a supported audio recording within the displayed size limit."
         : rootAnalysisState === "needs_action" &&
             !plan?.accepted &&
             !progress?.automatic_progression &&
@@ -2014,7 +2093,8 @@ export function AcquisitionStudio({
         </AcquisitionShell>
       );
     }
-    const report = result?.report;
+    // Held back for the reveal's beat: the panel shows "Your report is ready".
+    const report = revealing ? undefined : result?.report;
     const reportReady = Boolean(report);
     const processingNeedsAttention = projectProcessing(
       progress,
@@ -2647,7 +2727,9 @@ export function AcquisitionStudio({
                 )}
                 {/* The empty state already has its card heading; a step
                     header only earns its space once a call exists. */}
-                {reportReady || submission ? (
+                {/* While a call is analysed the panel says where it is; the
+                    step header returns with the report. */}
+                {reportReady ? (
                   <div
                     className={styles.stepHeader}
                     aria-label="Current analysis step"
@@ -2668,50 +2750,20 @@ export function AcquisitionStudio({
                   </div>
                 ) : null}
                 {busy && !submission ? (
-                  <div
-                    className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <XrayWave mode="scanning" legend={false} />
-                    <div className={styles.progressCopy}>
-                      <p className={styles.progressKicker}>
-                        UPLOAD IN PROGRESS
-                      </p>
-                      <h3>Your call is on its way.</h3>
-                      <p>
-                        We’re uploading your recording and checking its format
-                        and duration. Keep this tab open until the upload
-                        finishes.
-                      </p>
-                    </div>
-                    <div
-                      className={styles.progressRail}
-                      aria-label="Upload and analysis stages"
-                    >
-                      <div data-state="running">
-                        <span aria-hidden="true">1</span>
-                        <p>
-                          Upload + recording check
-                          <small>In progress</small>
-                        </p>
-                      </div>
-                      <div data-state="not-started">
-                        <span aria-hidden="true">2</span>
-                        <p>
-                          Transcript
-                          <small>Starts after the check</small>
-                        </p>
-                      </div>
-                      <div data-state="not-started">
-                        <span aria-hidden="true">3</span>
-                        <p>
-                          Coaching report
-                          <small>Shown when ready</small>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  // One screen from the first byte (owner, 11 Oct 16:00): the
+                  // analysis panel shows the call being sent, then carries on.
+                  <AcquisitionProcessingPanel
+                    upload={{ fraction: null }}
+                    localEnvelope={fileWave}
+                    stageRows={[]}
+                    statusText="Sending your call"
+                    fileName={displayFileName ?? undefined}
+                    fileMeta={
+                      displayFileBytes !== null
+                        ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
+                        : undefined
+                    }
+                  />
                 ) : deletionOnlyId && !displayFileSelected && !submission ? (
                   <>
                     <span className="studio-upload-icon">
@@ -2924,7 +2976,7 @@ export function AcquisitionStudio({
                   className="visually-hidden"
                   id="acquisition-file"
                   type="file"
-                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
                   aria-label="Choose sales call audio"
                   disabled={
                     !policy ||
@@ -3222,6 +3274,7 @@ export function AcquisitionStudio({
                 {submission && !report && showProgress && (
                   <AcquisitionProcessingPanel
                     submissionId={submission.id}
+                    localEnvelope={fileWave}
                     progress={progress}
                     waitingForApproval={waitingForApproval}
                     accepted={plan?.accepted ?? false}
@@ -3405,6 +3458,9 @@ export function AcquisitionStudio({
               <section
                 className={`studio-report panel ${styles.report}`}
                 aria-label="Sales call report"
+                data-reveal={
+                  submission && watchedId === submission.id ? "" : undefined
+                }
                 data-lx-surface={resolvedTheme === "dark" ? undefined : "light"}
               >
                 <ReportHeader
@@ -3498,7 +3554,7 @@ export function AcquisitionStudio({
                   label="Explore your sales report"
                   onSelectEvidence={seek}
                   onSelectContextualPlayback={seekWithContext}
-                  structure={report.preview ? "custom" : "pillars"}
+                  structure="pillars"
                   prospectControls={
                     submission && !embedded ? (
                       <ProspectLinkControl
@@ -3721,6 +3777,7 @@ export function AcquisitionStudio({
         homeHref={homeHref}
         mobileFit
         allowance={allowance}
+        pageName={reportReady ? "Report" : undefined}
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission

@@ -113,6 +113,26 @@ class Strength(Model):
     evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
 
 
+ObjectionKind = Literal[
+    "price_concern",
+    "affordability_gap",
+    "time_constraint",
+    "stall",
+    "competitor_or_status_quo",
+    "decision_maker_absent",
+    "trust_concern",
+    "other",
+]
+
+
+class ObjectionSeen(Model):
+    """A buyer objection from the report's call map: its fixed kind and how the
+    seller handled it. Never its words or who raised it."""
+
+    kind: ObjectionKind
+    handling: Literal["answered", "deflected", "ignored", "question_back"]
+
+
 class CallHistory(Model):
     submission_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -120,6 +140,9 @@ class CallHistory(Model):
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
     strength: Strength | None = None
+    objections: tuple[ObjectionSeen, ...] = Field(default=(), max_length=6)
+    # The report has a call map (v7), so an empty objection list means none.
+    has_call_map: bool = False
 
     @model_validator(mode="after")
     def bound_evidence(self) -> "CallHistory":
@@ -136,7 +159,7 @@ class CallHistory(Model):
 
 
 class RootCause(Model):
-    hypothesis: str = "We do not yet have enough evidence to say why this happens."
+    hypothesis: str = "We don't have enough evidence yet to say why this happens."
     gap_type: GapType = "uncertain"
     confidence: Literal["high", "medium", "low", "uncertain"] = "uncertain"
     alternatives: tuple[str, ...] = ()
@@ -163,8 +186,9 @@ class Mastery(Model):
     confidence: str = "uncertain"
     historical_achievement: MasteryState | None = None
     explanation: str = (
-        "Your reports contain skill observations, but do not yet record comparable "
-        "opportunities and successful execution. A call count cannot establish mastery."
+        "Mastery means doing the skill well in real moments, more than once. Your reports "
+        "don't count those moments yet, so no mastery level is shown. More calls are not "
+        "the same as mastery."
     )
 
 
@@ -263,8 +287,9 @@ class ClipSuggestion(Model):
     kind: Literal["audio", "video"]
     placeholder: Literal[True] = True
     voice: Literal["neutral"] = "neutral"
-    # Locked clips carry no playable source: the stream refuses them.
-    access: Literal["full", "locked"] = "full"
+    # Locked clips carry no playable source: the stream refuses them. A
+    # preview streams only its separate cut, which ends at preview_end_ms.
+    access: Literal["full", "preview", "locked"] = "full"
     entitlement_policy: Literal[
         "AUT-1678-open-access", "AUT-1678-demo-one-free-topic-per-skill"
     ] = "AUT-1678-open-access"
@@ -275,11 +300,19 @@ class ClipSuggestion(Model):
     transcript_excerpt: str
     slides: tuple[Slide, ...]
     offer: ClipOffer | None = None
+    preview_end_ms: int | None = Field(default=None, strict=True)
 
     @model_validator(mode="after")
     def ordered_clip(self) -> "ClipSuggestion":
         if self.end_ms <= self.start_ms:
             raise ValueError("Coaching clips need ordered source timestamps.")
+        if (self.access == "preview") != (self.preview_end_ms is not None) or (
+            self.preview_end_ms is not None
+            and not self.start_ms < self.preview_end_ms < self.end_ms
+        ):
+            raise ValueError("A preview needs its own end inside the clip, and only a preview.")
+        if self.access == "preview" and self.offer is None:
+            raise ValueError("A preview must lead to the full coaching.")
         if (self.access == "full") != (self.entitlement_policy == "AUT-1678-open-access"):
             raise ValueError("Only the open Coaching policy grants a full clip.")
         if self.access == "locked" and self.offer is None:
@@ -309,6 +342,10 @@ class CallSummary(Model):
     state: Literal["ready", "pending", "unavailable"]
     # The call's own suggested focus; never a diagnosis across calls.
     focus_label: str | None = Field(default=None, max_length=256)
+    # Whether that focus skill has a suggestion in another comparable call too
+    # (the Report's "may be part of a recurring pattern" line). None when it
+    # cannot be said: no assessed skill, or no comparable evaluator version.
+    recurring: bool | None = None
 
 
 class CoachingView(Model):
@@ -334,7 +371,7 @@ class CoachingView(Model):
     mission: Mission | None
     mastery: Mastery = Mastery()
     regression: Regression = Regression(
-        state="unknown", action="More comparable behavior evidence is needed to assess regression."
+        state="unknown", action="We need more calls on this skill to tell whether it is slipping."
     )
     lesson: TextLesson | None
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
@@ -347,4 +384,11 @@ class CoachingView(Model):
     development_path: Path
     reflection_question: str | None
     feedback_available: Literal[False] = False
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
+    # Whose coaching this is when it is not the viewer's own (a fictional rep).
+    person_name: str | None = Field(default=None, max_length=120)
+    # How many fictional AC Sandbox reps this viewer imported; their coaching
+    # is on Team. A count only; this view stays the viewer's own.
+    sandbox_reps: int = Field(default=0, ge=0)
     limitations: tuple[str, ...]

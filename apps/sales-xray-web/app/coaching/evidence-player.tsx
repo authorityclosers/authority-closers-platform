@@ -2,8 +2,9 @@
 
 import { Pause, Play, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
+import { ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
@@ -11,17 +12,69 @@ import styles from "./coaching.module.css";
 
 export { timeLabel } from "./coaching-format";
 
+/** "15 s" or "1 min 5 s": how long the cut from the call is. */
+export function clipLength(ms: number) {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  const rest = seconds % 60;
+  return rest
+    ? `${Math.floor(seconds / 60)} min ${rest} s`
+    : `${seconds / 60} min`;
+}
+
+/** Plays a moment in the Report's own player, where the call is already open. */
+export type PlayInReport = (evidence: Evidence, title: string) => void;
+
+/** The play pill when the Report's player plays the moment. */
+function ReportPlay({
+  evidence,
+  span,
+  onPlay,
+}: {
+  evidence: Evidence;
+  span: string;
+  onPlay: PlayInReport;
+}) {
+  return (
+    <ClipPlayState startMs={evidence.start_ms} endMs={evidence.end_ms}>
+      {(playing) => (
+        <button
+          type="button"
+          className={styles.time}
+          data-state={playing ? "playing" : "idle"}
+          aria-pressed={playing}
+          aria-label={`${playing ? "Pause" : "Play"} moment ${span}`}
+          onClick={() => onPlay(evidence, "Coaching for this call")}
+        >
+          {playing ? (
+            <Pause size={13} aria-hidden="true" />
+          ) : (
+            <Play size={13} aria-hidden="true" />
+          )}
+          {timeLabel(evidence.start_ms)}
+        </button>
+      )}
+    </ClipPlayState>
+  );
+}
+
 /** One playable moment from the learner's own call, as a compact row. */
 export function EvidencePlayer({
   evidence,
   showCall = true,
   extra = false,
+  fictional = false,
+  onPlay,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
   showCall?: boolean;
+  /** A fictional AC Sandbox call: text with estimated timing, no audio. */
+  fictional?: boolean;
   /** Folded on one-column screens until the learner asks for all moments. */
   extra?: boolean;
+  /** Inside a Report: play in its player instead of a separate audio. */
+  onPlay?: PlayInReport;
 }) {
   const identity = useId();
   const audio = useRef<HTMLAudioElement>(null);
@@ -29,9 +82,12 @@ export function EvidencePlayer({
     "idle",
   );
   const [attempt, setAttempt] = useState(0);
+  // Where playback is inside this clip of the call, 0–1.
+  const [progress, setProgress] = useState(0);
   const active = useRef(false);
   const source = `/v1/conversation/acquisition/submissions/${evidence.submission_id}/source`;
   const span = `${timeLabel(evidence.start_ms)}–${timeLabel(evidence.end_ms)}`;
+  const length = Math.max(1, evidence.end_ms - evidence.start_ms);
   useEffect(() => {
     const stopOther = (event: Event) => {
       if ((event as CustomEvent<string>).detail === identity) return;
@@ -44,6 +100,7 @@ export function EvidencePlayer({
   }, [identity]);
   const start = (player: HTMLAudioElement) => {
     player.currentTime = evidence.start_ms / 1000;
+    setProgress(0);
     void player
       .play()
       .then(() => {
@@ -75,13 +132,22 @@ export function EvidencePlayer({
     state === "playing" ? Pause : state === "failed" ? RefreshCw : Play;
   return (
     <li className={styles.moment} data-extra={extra ? "" : undefined}>
-      {evidence.playable ? (
+      {evidence.playable && onPlay ? (
+        <ReportPlay evidence={evidence} span={span} onPlay={onPlay} />
+      ) : evidence.playable ? (
         <button
           type="button"
           className={styles.time}
           onClick={play}
           disabled={state === "loading"}
           data-state={state}
+          style={
+            state === "playing"
+              ? ({
+                  "--clip": `${Math.round(progress * 100)}%`,
+                } as CSSProperties)
+              : undefined
+          }
           aria-label={
             state === "playing"
               ? `Pause moment ${span}`
@@ -110,10 +176,17 @@ export function EvidencePlayer({
               <span>{callDate(evidence.created_at)}</span>
             </>
           ) : null}
-          <span>{span}</span>
+          <span>
+            {span}
+            {evidence.playable ? ` · ${clipLength(length)} clip` : ""}
+          </span>
           {state === "loading" ? <span>Loading audio…</span> : null}
           {!evidence.playable ? (
-            <span>Audio alignment is uncertain; read the quote.</span>
+            <span>
+              {fictional
+                ? "Fictional call text; no audio."
+                : "Audio alignment is uncertain; read the quote."}
+            </span>
           ) : null}
         </span>
         {state === "failed" ? (
@@ -133,11 +206,10 @@ export function EvidencePlayer({
             if (audio.current && active.current) start(audio.current);
           }}
           onTimeUpdate={() => {
-            if (
-              audio.current &&
-              audio.current.currentTime >= evidence.end_ms / 1000 &&
-              active.current
-            ) {
+            if (!audio.current || !active.current) return;
+            const at = audio.current.currentTime * 1000 - evidence.start_ms;
+            setProgress(Math.min(1, Math.max(0, at / length)));
+            if (audio.current.currentTime >= evidence.end_ms / 1000) {
               audio.current.pause();
               active.current = false;
               setState("idle");
@@ -162,14 +234,29 @@ export function MomentList({
   evidence,
   showCall = true,
   label = "Moments from your calls",
+  heading,
+  fictional = false,
+  onPlay,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
   label?: string;
+  /** A visible label line above the list, with the moment count. */
+  heading?: string;
+  fictional?: boolean;
+  onPlay?: PlayInReport;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <>
+      {heading ? (
+        <p className={styles.listHead}>
+          {heading}
+          <span>
+            {evidence.length} moment{evidence.length === 1 ? "" : "s"}
+          </span>
+        </p>
+      ) : null}
       <ul
         className={styles.moments}
         aria-label={label}
@@ -181,6 +268,8 @@ export function MomentList({
             evidence={moment}
             showCall={showCall}
             extra={index >= 1}
+            fictional={fictional}
+            onPlay={onPlay}
           />
         ))}
       </ul>

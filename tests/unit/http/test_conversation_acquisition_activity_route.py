@@ -14,6 +14,7 @@ from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequir
 from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.kernel.authz import ActorContext
 from tests.unit.http.test_conversation_learner_acquisition import (
+    ORGANISATION_TENANT,
     PERSON_ID,
     PUBLIC_TENANT,
     SESSION_ID,
@@ -28,7 +29,7 @@ from tests.unit.http.test_conversation_learner_acquisition import (
 @pytest.mark.parametrize("host", ["salesxray", "learner"])
 @pytest.mark.parametrize("organisation", [False, True])
 async def test_activity_route_and_account_guards(tmp_path, monkeypatch, host, organisation):
-    selected = uuid4() if organisation else PUBLIC_TENANT
+    selected = ORGANISATION_TENANT if organisation else PUBLIC_TENANT
     actor = ActorContext(PERSON_ID, SESSION_ID, selected)
     signed_in = True
     read_count = 0

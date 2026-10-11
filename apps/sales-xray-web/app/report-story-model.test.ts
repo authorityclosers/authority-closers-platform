@@ -154,7 +154,7 @@ describe("honest gaps", () => {
       sparse.missing[4].length,
     );
     expect(sparse.deal.nextEvent).toBeNull();
-    expect(sparse.missing[5]).toContain("Next event date");
+    expect(sparse.missing[5]).toContain("Next event");
   });
 
   it("opens a report with no overview or story at all", () => {
@@ -181,6 +181,26 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     roles: { seller: "speaker_0", prospect: "speaker_1" },
   });
 
+  it("marks lines that are someone's own words, so they read as speech", () => {
+    expect(model.flow.change?.before.quoted).toBe(true);
+    expect(model.flow.change?.after.quoted).toBe(true);
+    const miss = model.moments.find((m) => m.kind === "Important Miss");
+    expect(miss?.movedToward?.quoted).toBe(true);
+    // The spec example's before/after are summaries, not quotes.
+    const amit = reportStoryModel(amitReport, amitTranscript);
+    expect(amit.flow.change?.before.quoted).toBeUndefined();
+  });
+
+  it("shows one summary when the final assessment only restates it", () => {
+    expect(report.overview?.final_assessment.assessment).toBeTruthy();
+    expect(model.picture.summary?.text).toBe(report.summary);
+    expect(model.picture.assessment).toBeNull();
+    // The spec example's second paragraph adds to the first, so it stays.
+    expect(
+      reportStoryModel(amitReport, amitTranscript).picture.assessment,
+    ).toBeTruthy();
+  });
+
   it("fills the Big Picture from the overview it already has", () => {
     expect(model.picture.outcome).toMatchObject({
       status: "Follow-up Set",
@@ -195,7 +215,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
 
   it("says plainly what the older format lacks", () => {
     expect(model.flow.phases).toBeNull();
-    expect(model.missing[1]).toContain("Conversation stages");
+    expect(model.missing[1]).toContain("Conversation timeline");
     expect(model.deal.quality).toBeNull();
     expect(model.missing[5]).toContain("Commitment quality");
     expect(model.skills.every((skill) => skill.state === "Observed")).toBe(
@@ -219,5 +239,59 @@ describe("never breaks on a malformed older report", () => {
     expect(model.worked[0].what.sources).toEqual([]);
     expect(model.skills).toHaveLength(8);
     expect(model.missing[0]).toContain("Strongest part");
+  });
+});
+
+describe("Sandbox-style findings and prices (G's findings, 11 Oct)", () => {
+  it("shows a title that only repeats its sentence as the sentence, once", () => {
+    const what = amitReport.strengths[0].explanation;
+    const report: SalesReport = {
+      ...amitReport,
+      strengths: [
+        { ...amitReport.strengths[0], title: what.slice(0, 30) },
+        ...amitReport.strengths.slice(1),
+      ],
+    };
+    const model = reportStoryModel(report, amitTranscript);
+    expect(model.worked[0]).toMatchObject({
+      sentence: true,
+      title: what.replace(/\.$/, ""),
+    });
+    // Real headlines are untouched.
+    expect(model.worked[1].sentence).toBeUndefined();
+  });
+
+  const withLines = (lines: Record<string, string>): Transcript =>
+    ({
+      ...amitTranscript,
+      segments: amitTranscript.segments.map((segment) =>
+        lines[segment.id] ? { ...segment, text: lines[segment.id] } : segment,
+      ),
+    }) as Transcript;
+
+  it("takes the price from the seller's words and the reply from the prospect", () => {
+    const transcript = withLines({
+      a27: "What is the price? Our budget is about one lakh.",
+      a28: "The price is two lakh rupees for the full twelve weeks.",
+    });
+    const report = { ...amitReport };
+    const model = reportStoryModel(report, transcript, {
+      roles: AMIT_SPEAKERS,
+    });
+    const price = model.moments.find((m) => m.kind === "Price Moment");
+    expect(price?.priceStated?.text).toContain("two lakh");
+    expect(price?.prospectResponse?.text).toContain(
+      "discuss this with my partner",
+    );
+  });
+
+  it("never shows the prospect's own budget as the price stated", () => {
+    const transcript = withLines({
+      a27: "Our budget is about one lakh, what does this cost?",
+    });
+    const model = reportStoryModel(amitReport, transcript, {
+      roles: AMIT_SPEAKERS,
+    });
+    expect(model.moments.some((m) => m.kind === "Price Moment")).toBe(false);
   });
 });

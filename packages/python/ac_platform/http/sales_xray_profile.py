@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     WORKSPACE_UNAVAILABLE_MESSAGE,
-    sales_xray_served_tenant_ids,
+    sales_xray_workspace_served,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.identity.google_profile import read_google_profile_photo
@@ -85,21 +85,22 @@ def install_sales_xray_profile_http(
 ) -> None:
     router = APIRouter(prefix="/v1/me/sales-xray-profile", tags=["sales-xray-profile"])
     # Personal or an approved organisation; the operations tenant never qualifies.
-    served = sales_xray_served_tenant_ids(settings, intake)
     actor_dependency = Depends(require_actor, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
     read_actor_dependency = Depends(read_require_actor, scope="function")
 
-    def require_profile_surface(request: Request, actor: ActorContext) -> None:
+    async def require_profile_surface(request: Request, auth: AuthenticatedTransaction) -> None:
         allowed_hosts = {settings.public_app_url.host}
         if settings.sales_xray_app_url is not None:
             allowed_hosts.add(settings.sales_xray_app_url.host)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile route not found.")
-        if actor.tenant_id not in served:
+        if not await sales_xray_workspace_served(
+            auth.database, settings, auth.resolved.actor.tenant_id
+        ):
             raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
 
-    def require_eligibility_surface(request: Request, actor: ActorContext) -> None:
+    async def require_eligibility_surface(request: Request, auth: AuthenticatedTransaction) -> None:
         allowed_hosts = {
             settings.public_app_url.host,
             settings.api_url.host,
@@ -110,7 +111,9 @@ def install_sales_xray_profile_http(
             allowed_hosts.add(settings.sales_xray_app_url.host)
         if request.url.hostname not in allowed_hosts or request.query_params:
             raise HTTPException(404, "Profile eligibility route not found.")
-        if actor.tenant_id not in served:
+        if not await sales_xray_workspace_served(
+            auth.database, settings, auth.resolved.actor.tenant_id
+        ):
             raise HTTPException(403, WORKSPACE_UNAVAILABLE_MESSAGE)
 
     def headers(response: Response) -> None:
@@ -165,7 +168,7 @@ def install_sales_xray_profile_http(
         auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
     ) -> dict[str, object]:
         headers(response)
-        require_profile_surface(request, auth.resolved.actor)
+        await require_profile_surface(request, auth)
         try:
             value = await get_sales_xray_profile(
                 auth.database,
@@ -181,7 +184,7 @@ def install_sales_xray_profile_http(
         auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
     ) -> Response:
         actor = auth.resolved.actor
-        require_profile_surface(request, actor)
+        await require_profile_surface(request, auth)
         photo = await read_google_profile_photo(auth.database, actor.person_id)
         if photo is None:
             raise HTTPException(
@@ -205,7 +208,7 @@ def install_sales_xray_profile_http(
     ) -> dict[str, object]:
         headers(response)
         actor = auth.resolved.actor
-        require_profile_surface(request, actor)
+        await require_profile_surface(request, auth)
         require_safe_origin(request, settings)
         tenant_id = actor.tenant_id or settings.public_learner_tenant_id
         if tenant_id is None:
@@ -235,7 +238,7 @@ def install_sales_xray_profile_http(
         auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
     ) -> Response:
         headers(response)
-        require_eligibility_surface(request, auth.resolved.actor)
+        await require_eligibility_surface(request, auth)
         try:
             await require_sales_xray_profile_complete(
                 auth.database,

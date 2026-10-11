@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from ac_platform.application.settings import Settings
-from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_tenant_ids
+from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_served_tenant_ids
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.kernel.errors import DomainError
@@ -50,7 +50,7 @@ def install_sales_xray_workspaces_http(
     ) -> SalesXrayWorkspacesResponse:
         if request.query_params:
             raise DomainError("Workspaces are resolved only for the authenticated person.")
-        enabled = sales_xray_tenant_ids(settings, intake)
+        enabled = await sales_xray_served_tenant_ids(settings, intake, auth.database)
         public, operations = settings.public_learner_tenant_id, settings.operations_tenant_id
         choices = [
             SalesXrayWorkspaceResponse(

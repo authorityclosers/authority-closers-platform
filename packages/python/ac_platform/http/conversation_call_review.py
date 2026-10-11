@@ -8,11 +8,13 @@ source with the reviewer route's byte-range and bounded-memory rules.
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
@@ -72,18 +74,26 @@ def install_call_review_routes(
     require_actor: RequireActor,
     recording_tenant_ids: tuple[UUID, ...],
     storage: PrivateLocalRecordingStorage | None,
+    recording_tenant_resolver: Callable[[AsyncSession], Awaitable[tuple[UUID, ...]]] | None = None,
 ) -> None:
     dependency = Depends(require_actor, scope="function")
     # Keep the fresh recording and permission locks until streaming ends.
     streaming_dependency = Depends(require_actor, scope="request")
 
-    def service(auth: AuthenticatedTransaction) -> AdminCallReview:
+    async def tenant_scope(auth: AuthenticatedTransaction) -> tuple[UUID, ...]:
+        return (
+            recording_tenant_ids
+            if recording_tenant_resolver is None
+            else await recording_tenant_resolver(auth.database)
+        )
+
+    async def service(auth: AuthenticatedTransaction) -> AdminCallReview:
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Call review is not configured.")
         return AdminCallReview(
             ConversationApplication(auth.database),
             settings.operations_tenant_id,
-            recording_tenant_ids=recording_tenant_ids,
+            recording_tenant_ids=await tenant_scope(auth),
         )
 
     def scope(request: Request, response: Response, allowed: set[str] | None = None) -> None:
@@ -122,7 +132,7 @@ def install_call_review_routes(
         if review is not None and review not in REVIEW_STATES:
             raise HTTPException(422, "Use a known review state.")
         try:
-            return await service(auth).queue(
+            return await (await service(auth)).queue(
                 auth.resolved.actor,
                 organisation=organisation,
                 rep=rep,
@@ -155,7 +165,7 @@ def install_call_review_routes(
             return await AdminAnalysisHealth(
                 ConversationApplication(auth.database),
                 settings.operations_tenant_id,
-                recording_tenant_ids=recording_tenant_ids,
+                recording_tenant_ids=await tenant_scope(auth),
             ).summary(auth.resolved.actor, days=days)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
@@ -176,7 +186,7 @@ def install_call_review_routes(
             return await AdminUsage(
                 ConversationApplication(auth.database),
                 settings.operations_tenant_id,
-                recording_tenant_ids=recording_tenant_ids,
+                recording_tenant_ids=await tenant_scope(auth),
             ).summary(auth.resolved.actor, days=days)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
@@ -191,7 +201,7 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            await service(auth)._admit(auth.resolved.actor)
+            await (await service(auth))._admit(auth.resolved.actor)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
         return await latest_notes(auth.database)
@@ -214,7 +224,7 @@ def install_call_review_routes(
 
         scope(request, response, {"business", "language", "outcome", "q", "offset", "limit"})
         try:
-            await service(auth)._admit(auth.resolved.actor)
+            await (await service(auth))._admit(auth.resolved.actor)
             return await join_thread(
                 lambda: synthetic.index(
                     business=business,
@@ -239,18 +249,18 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            await service(auth)._admit(auth.resolved.actor)
+            await (await service(auth))._admit(auth.resolved.actor)
             return await join_thread(lambda: synthetic.call(call_id))
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
-    def labels(auth: AuthenticatedTransaction) -> ReviewLabels:
+    async def labels(auth: AuthenticatedTransaction) -> ReviewLabels:
         if settings.operations_tenant_id is None:
             raise HTTPException(503, "Call review is not configured.")
         return ReviewLabels(
             ConversationApplication(auth.database),
             settings.operations_tenant_id,
-            recording_tenant_ids=recording_tenant_ids,
+            recording_tenant_ids=await tenant_scope(auth),
         )
 
     @router.get("/calls/{recording_id}/labels")
@@ -264,7 +274,7 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            return await labels(auth).read(auth.resolved.actor, recording_id)
+            return await (await labels(auth)).read(auth.resolved.actor, recording_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -282,7 +292,9 @@ def install_call_review_routes(
         scope(request, response)
         require_safe_origin(request, settings)
         try:
-            return await labels(auth).add(auth.resolved.actor, recording_id, intent, key=key)
+            return await (await labels(auth)).add(
+                auth.resolved.actor, recording_id, intent, key=key
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -296,7 +308,7 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            return await labels(auth).gold(auth.resolved.actor)
+            return await (await labels(auth)).gold(auth.resolved.actor)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -311,7 +323,7 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            return await service(auth).call(auth.resolved.actor, recording_id)
+            return await (await service(auth)).call(auth.resolved.actor, recording_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -326,7 +338,7 @@ def install_call_review_routes(
 
         scope(request, response)
         try:
-            return await service(auth).bundle(auth.resolved.actor, run_id)
+            return await (await service(auth)).bundle(auth.resolved.actor, run_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -343,7 +355,7 @@ def install_call_review_routes(
         if storage is None:
             raise HTTPException(503, "Private conversation storage is not configured.")
         try:
-            recording = await service(auth).playback(auth.resolved.actor, run_id)
+            recording = await (await service(auth)).playback(auth.resolved.actor, run_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
         try:

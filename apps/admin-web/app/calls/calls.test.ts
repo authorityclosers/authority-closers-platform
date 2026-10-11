@@ -12,7 +12,8 @@ import {
 } from "./call-data";
 import { filterQuery, queueApiPath, queueFilters } from "./queue-query";
 import { startAt, wordDiff } from "./review-logic";
-import { reportPillars, REPORT_PILLARS } from "./report-pillars";
+import { REPORT_PILLARS } from "./report-pillars";
+import { reportPillars } from "./report-story";
 import {
   compareReports,
   keyAction,
@@ -246,28 +247,99 @@ describe("call review data", () => {
 });
 
 describe("six pillars", () => {
-  it("presents the report in the spec's order and keeps gaps as gaps", () => {
+  it("tells the rep's story in the spec's order, gaps listed once per pillar", () => {
     const report = normalizeBundle({ report: rawReport(), story: null }).report;
-    const pillars = reportPillars(report, 60_000);
+    const pillars = reportPillars(report, { durationMs: 60_000 });
     expect(pillars.map((pillar) => pillar.label)).toEqual(
       REPORT_PILLARS.map((pillar) => pillar.label),
     );
     const picture = pillars[0]!.entries;
-    expect(picture[0]).toMatchObject({ label: "Call outcome", gap: true });
-    expect(
-      picture.find((entry) => entry.label === "Possible influence"),
-    ).toMatchObject({ hypothesis: true });
+    expect(picture[0]).toMatchObject({
+      label: "Call outcome",
+      text: "Follow-up Set",
+      note: "As heard on the call",
+    });
+    expect(picture.map((entry) => entry.label)).toEqual([
+      "Call outcome",
+      "Summary",
+      "Assessment",
+      "What most affected this call",
+      "Strongest part",
+      "Biggest concern",
+      "Next step",
+    ]);
+    expect(picture.find((e) => e.label === "Next step")?.text).toBe(
+      "Prospect asked for a demo",
+    );
+    expect(pillars[1]!.entries).toEqual([
+      {
+        label: "Not in this report",
+        text: "Conversation stages · Key change",
+        evidence: [],
+        gap: true,
+      },
+    ]);
+    const worked = pillars[2]!.entries;
+    expect(worked.map((entry) => entry.label)).toEqual([
+      "What worked · Warm opening",
+      "Why it helped",
+      "What didn't · Price came too early",
+      "What it affected",
+    ]);
+    expect(worked[1]).toMatchObject({ hypothesis: true });
+    // The separate call observation is the better play link.
+    expect(worked[2]!.evidence[0]?.segmentId).toBe("s2");
     const skills = pillars[4]!.entries;
     expect(skills).toHaveLength(8);
     expect(
       skills.find((entry) => entry.label.startsWith("Qualification"))?.label,
     ).toBe("Qualification · Needs Attention");
     expect(skills.filter((entry) => entry.gap)).toHaveLength(7);
+    expect(pillars[5]!.entries.at(-2)).toMatchObject({
+      label: "Coaching mission for the next call",
+      text: "Delay price",
+    });
   });
 
-  it("reads outcome and timeline from the story projection", () => {
-    const report = normalizeBundle({
-      report: rawReport(),
+  it("never reads Won from the analysis; stages, measures and moments come from the call", () => {
+    const bundle = normalizeBundle({
+      report: rawReport({
+        missed_opportunities: [finding("Budget signal missed", "s4")],
+        overview: {
+          ...rawReport().overview,
+          outcome: {
+            kind: "closed",
+            text: "They paid",
+            evidence: [quote("s3")],
+          },
+          missed_details: [
+            {
+              finding_index: 0,
+              prospect_signal: {
+                text: "Asked about EMI",
+                evidence: [quote("s4", 20_000)],
+              },
+              closer_response: {
+                text: "Moved to features",
+                evidence: [quote("s5", 22_000)],
+              },
+              follow_up: "Ask what monthly amount works",
+              potential_impact: "May have lost urgency",
+            },
+          ],
+          prospect_interpretations: [
+            {
+              source: { text: "Hesitated", evidence: [quote("s6", 30_000)] },
+              possible_concern: "May worry about cost",
+              interpretation_kind: "inference",
+            },
+          ],
+          business_impact: {
+            status: "insufficient_data",
+            missing_inputs: ["Deal size"],
+          },
+        },
+      }),
       story: {
         phases: [
           { name: "opening", start_ms: 0 },
@@ -275,7 +347,7 @@ describe("six pillars", () => {
         ],
         outcome: {
           kind: "won",
-          next_step_rung: "none",
+          next_step_rung: "vague",
           next_step_when: null,
           evidence: [quote("s9")],
         },
@@ -284,16 +356,85 @@ describe("six pillars", () => {
         prospect_commitments: [],
         seller_commitments: [],
       },
-    }).report;
-    const pillars = reportPillars(report, 60_000);
+      transcript: {
+        revision: "t1",
+        segments: [
+          {
+            id: "p1",
+            speaker_id: "B",
+            start_ms: 40_000,
+            end_ms: 41_000,
+            text: "कितने का पड़ेगा?",
+          },
+        ],
+      },
+      metrics: {
+        time_used_ms: 60_000,
+        speakers: {
+          A: {
+            talk_ms: 40_000,
+            talk_share: 0.6,
+            questions: 4,
+            cut_ins: 1,
+            longest_monologue_ms: 65_000,
+          },
+          B: {
+            talk_ms: 20_000,
+            talk_share: 0.4,
+            questions: 2,
+            cut_ins: 0,
+            longest_monologue_ms: 5_000,
+          },
+        },
+        cut_ins: [{ segment_id: "p1" }],
+        price_moments: [{ segment_id: "p1", at_ms: 40_000 }],
+      },
+    });
+    const pillars = reportPillars(bundle.report, {
+      segments: bundle.transcript.segments,
+      metrics: bundle.metrics,
+      durationMs: 60_000,
+    });
     expect(pillars[0]!.entries[0]).toMatchObject({
       label: "Call outcome",
-      text: "Won",
+      text: "Outcome not recorded",
+      note: "Only a person records won or lost",
+      gap: true,
     });
     expect(pillars[1]!.timeline).toEqual([
       { label: "Opening", startMs: 0, endMs: 30_000 },
       { label: "Offer discussion", startMs: 30_000, endMs: 60_000 },
     ]);
+    expect(pillars[1]!.metrics).toEqual([
+      { label: "Call length", value: "01:00" },
+      { label: "Talk share", value: "60 : 40", note: "Rep : Prospect" },
+      { label: "Questions asked", value: "4 : 2", note: "Rep : Prospect" },
+      { label: "Longest seller turn", value: "01:05" },
+      { label: "Talk-overs", value: "1" },
+    ]);
+    const moments = pillars[3]!.entries;
+    expect(moments.map((entry) => entry.label)).toContain(
+      "Important Miss · Budget signal missed",
+    );
+    expect(
+      moments.find((entry) => entry.label.startsWith("Important Miss")),
+    ).toMatchObject({
+      hypothesis: true,
+      note: "The rep moved toward: Moved to features · Could explore: Ask what monthly amount works",
+    });
+    expect(
+      moments.find((entry) => entry.label.startsWith("Price Moment"))
+        ?.evidence[0],
+    ).toMatchObject({ segmentId: "p1", quote: "कितने का पड़ेगा?" });
+    const deal = pillars[5]!.entries;
+    expect(deal.find((e) => e.label === "Possible blocker")).toMatchObject({
+      text: "May worry about cost",
+      hypothesis: true,
+    });
+    expect(deal.find((e) => e.label === "Commitment")?.text).toBe("Soft");
+    expect(
+      deal.find((e) => e.label === "Still needs to become clear")?.text,
+    ).toBe("Deal size");
   });
 });
 

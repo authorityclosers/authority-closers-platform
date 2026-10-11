@@ -97,15 +97,108 @@ describe("Coaching story", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(host.textContent).toContain("This call link is invalid.");
   });
+  it("points an AC Sandbox importer with no own calls to the fictional team", () => {
+    const empty = {
+      ...fictionalCoaching,
+      state: "not_enough_evidence" as const,
+      analysed_calls: 0,
+      focus: null,
+      mission: null,
+      practice: null,
+      lesson: null,
+      evidence: [],
+      calls: [],
+      sandbox_reps: 60,
+    };
+    const html = renderToStaticMarkup(<CoachingStory coaching={empty} />);
+    expect(html).toContain("See 60 fictional reps’ coaching");
+    expect(html).toContain('href="/coaching?view=team"');
+    expect(html).toContain("Your own coaching follows your own calls");
+    const plain = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} />,
+    );
+    expect(plain).not.toContain("fictional reps");
+    // Sharing can always be stopped, focus or not.
+    expect(plain).toContain("Who sees your coaching");
+    // Another rep's empty view speaks about them, with no action of the viewer's.
+    const theirs = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} readOnly />,
+    );
+    expect(theirs).toContain("What They Should Work On Now");
+    expect(theirs).not.toContain("Analyse a call");
+    expect(theirs).not.toContain("Who sees your coaching");
+  });
+  it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{ ...fictionalCallCoaching, sandbox: true }}
+      />,
+    );
+    expect(html).toContain("Fictional AC Sandbox");
+    expect(html).toContain("Back to team coaching");
+    expect(html).not.toContain("/analysis/calls/");
+    const withRep = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{
+          ...fictionalCallCoaching,
+          sandbox: true,
+          rep_person_id: "00000000-0000-4000-8000-0000000000aa",
+          rep_name: "Rohan Kendrekar",
+        }}
+      />,
+    );
+    expect(withRep).toContain("Rohan Kendrekar’s coaching across calls");
+    expect(withRep).toContain(
+      "/coaching?person=00000000-0000-4000-8000-0000000000aa",
+    );
+  });
+  it("opens a fictional rep's coaching under their name, read-only", async () => {
+    const person = "00000000-0000-4000-8000-0000000000aa";
+    mocks.access = {
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "00000000-0000-4000-8000-000000000003",
+      },
+      workspaces: [],
+      retry: () => {},
+    } as unknown as WorkspaceAccessValue;
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <CoachingPage
+          sharedPersonId={person}
+          initialResult={{
+            data: {
+              ...fictionalCoaching,
+              person_id: person,
+              session_id: null,
+              sandbox: true,
+              person_name: "Rohan Kendrekar",
+            },
+            error: null,
+          }}
+        />,
+      ),
+    );
+    expect(host.querySelector("h1")?.textContent).toBe("Rohan Kendrekar");
+    expect(host.textContent).toContain("Fictional AC Sandbox rep");
+    expect(host.textContent).toContain("Back to team");
+    expect(host.textContent).not.toContain("Saving your agreement");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("renders a single call's four pillars with no invented pattern or mastery gate", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory coaching={fictionalCallCoaching} />,
     );
-    expect(html).toContain("One focus for this call");
-    expect(html).toContain("Why this is the focus for this call");
+    expect(html).toContain("What You Should Work On Now");
+    expect(html).toContain("What Happened on This Call");
     expect(html).toContain("Here’s What Better Looks Like");
     expect(html).toContain("Try This on Your Next Call");
-    expect(html.match(/Active mission/g)).toHaveLength(1);
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(html).not.toContain("Not Enough Evidence");
     expect(html).not.toContain("Compare one more evidence moment");
     expect(html).not.toContain("<audio");
@@ -160,18 +253,27 @@ describe("Coaching story", () => {
       expect(position).toBeGreaterThan(previous);
       previous = position;
     }
-    expect(html.match(/Active mission/g)).toHaveLength(1);
-    expect(html).toContain("Unknown / Uncertain");
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
+    expect(html).toContain("Not clear yet");
     expect(html).toContain("Not Enough Evidence");
+    // Regression said honestly; no trend arrow without a known trend.
+    expect(html).toContain("Not enough calls on this skill to tell yet");
+    expect(html).not.toContain("Improving ↑");
     expect(html).not.toContain("autoplay");
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
     expect(html).toContain("कामाला");
-    // No dead controls: feedback buttons appear only once saving works.
-    expect(html).not.toContain("Not completely");
-    expect(html).toContain(
-      "Saving your agreement, disagreement and reflection comes with sharing.",
+    // Spec 12.6: agree / not completely, after the evidence; sharing below.
+    expect(html.indexOf("Not completely")).toBeGreaterThan(
+      html.indexOf("Where We Go From Here"),
     );
+    expect(html).toContain("Who sees your coaching");
+    // A fictional or shared rep's view is read-only: nothing to save.
+    const readOnly = renderToStaticMarkup(
+      <CoachingStory coaching={fictionalCoaching} readOnly />,
+    );
+    expect(readOnly).not.toContain("Not completely");
+    expect(readOnly).not.toContain("Who sees your coaching");
   });
   it("teaches in the spec's order and keeps the text short beside a clip", () => {
     const position = (html: string, text: string) => {
@@ -245,7 +347,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain("Use your strength");
-    expect(html).toContain("One call is not an established strength.");
+    expect(html).toContain("One call doesn’t make it a proven strength yet.");
     expect(html.lastIndexOf(moment.call_label)).toBeGreaterThan(
       html.indexOf("Use your strength"),
     );
@@ -286,7 +388,7 @@ describe("Coaching story", () => {
     expect(list.parentElement!.hasAttribute("data-expanded")).toBe(true);
     expect(host.textContent).not.toContain("Show all 5 calls");
   });
-  it("shows what comparable calls said since the mission, never success", () => {
+  it("shows what this skill's calls said since the mission, never success", () => {
     const html = renderToStaticMarkup(
       <CoachingStory
         coaching={{
@@ -309,7 +411,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain(
-      "Since your mission started: 1 of 1 comparable call had evidence for this skill and no suggestion. That is not proof of change yet.",
+      "Since your mission started: 1 of 1 call used this skill with nothing to fix. Not proof of change yet.",
     );
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");
@@ -336,7 +438,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain("Your report brought you here for Qualification");
-    expect(html.match(/Active mission/g)).toHaveLength(1);
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(fictionalCoaching.mission).toEqual(before);
     for (const input of [
       "unknown",

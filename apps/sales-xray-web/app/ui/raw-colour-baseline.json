@@ -11,13 +11,13 @@
   "prospects/prospects.module.css": 2,
   "provider-review/provider-review.module.css": 19,
   "recording-measurements.module.css": 17,
-  "report-document.module.css": 8,
+  "report-document.module.css": 0,
   "report-entities.module.css": 2,
   "report-factors.module.css": 2,
   "review-dialog.module.css": 33,
   "review-fixture/report/synthetic-report-preview.module.css": 20,
   "sales-xray-fixture-preview.module.css": 9,
   "source-waveform.module.css": 4,
-  "styles.css": 144,
+  "styles.css": 140,
   "transcript-reader.module.css": 3
 }

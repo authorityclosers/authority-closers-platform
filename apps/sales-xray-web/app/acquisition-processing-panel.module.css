@@ -93,55 +93,6 @@
   }
 }
 
-/* ---------- Track ---------- */
-
-.track {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  margin-top: -6px;
-}
-
-.track span {
-  position: relative;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--lx-sunken);
-}
-
-.track span[data-state="done"] {
-  background: var(--lx-teal);
-}
-
-.track span[data-state="attention"] {
-  background: var(--lx-warning);
-}
-
-/* The current step: a soft band moving through it, not a fill level. */
-.track span[data-state="active"] {
-  background: var(--lx-teal-soft);
-}
-
-.track span[data-state="active"]::after {
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  border-radius: 3px;
-  background: var(--lx-teal);
-  content: "";
-  animation: track-move 1.8s ease-in-out infinite;
-}
-
-@keyframes track-move {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(250%);
-  }
-}
-
 /* Working: one soft pulse, the only motion on the screen. */
 .signal > i {
   width: 10px;
@@ -350,6 +301,14 @@
   padding-block: 0;
 }
 
+/* One teal accent (the studio's global button is the legacy cobalt). */
+.actions :global(.primary-button) {
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-sm);
+}
+
 .actions :global(.text-button) {
   color: var(--sx-muted);
 }
@@ -554,10 +513,10 @@
   .eq i {
     animation: none;
   }
+}
 
-  /* The current step reads as half done, still and distinct. */
-  .track span[data-state="active"]::after {
-    width: 50%;
-    animation: none;
-  }
+/* The chosen file's wave arrives here from its card (a view transition in
+   the studio), then carries on through the steps. */
+.panel[data-phase="sending"] > [role="img"] {
+  view-transition-name: sx-call-wave;
 }

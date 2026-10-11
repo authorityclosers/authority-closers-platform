@@ -4,7 +4,8 @@ import { ArrowRight, ChevronRight, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Badge, kitStyles, List, Panel, Row } from "../ui/kit";
+import { StoryCard } from "../report-visuals/visuals";
+import { kitStyles, List, Panel, Row } from "../ui/kit";
 import type {
   CallSummary,
   Coaching,
@@ -12,26 +13,37 @@ import type {
   ProgressPoint,
 } from "./coaching-client";
 import {
+  ABOUT,
+  CALLS,
+  COACHING_PILLARS,
+  CONFIDENCE_COPY,
+  FOCUS,
+  MASTERY_COPY,
+  NEXT,
+  PATH,
+  POINT_COPY,
+  PROGRESS,
+  REGRESSION_COPY,
+  THEIR_FOCUS,
+  TREND_COPY,
+  TREND_ARROW,
+  WHY,
+  gapCopy,
+} from "./coaching-copy";
+import {
   callDate,
+  dipakTake,
   FocusHero,
-  gapLabel,
   LessonPanel,
   MissionPanel,
+  Pillar,
 } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
+import { FocusFeedback, SharePanel } from "./sharing-ui";
+import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import styles from "./coaching.module.css";
 
-const masteryLabel: Record<MasteryState, string> = {
-  not_enough_evidence: "Not Enough Evidence",
-  emerging: "Emerging",
-  developing: "Developing",
-  consistent: "Consistent",
-  strong: "Strong",
-  mastered: "Mastered",
-  regression_detected: "Regression Detected",
-  re_stabilizing: "Re-stabilizing",
-};
 const JOURNEY: MasteryState[] = [
   "emerging",
   "developing",
@@ -40,15 +52,13 @@ const JOURNEY: MasteryState[] = [
   "mastered",
 ];
 
-/** Mirrors the final grid, so nothing moves when the data arrives. */
+/** "Developing ↑"; nothing while there is not enough evidence to say. */
+function statusText(mastery: Coaching["mastery"]) {
+  if (mastery.state === "not_enough_evidence") return null;
+  return `${MASTERY_COPY[mastery.state]}${TREND_ARROW[mastery.trend] ?? ""}`;
+}
 
-const POINT: Record<ProgressPoint["state"], string> = {
-  suggested: "Suggested again",
-  no_suggestion: "Evidence, no suggestion",
-  not_covered: "Not covered",
-};
-
-/** Comparable calls, oldest first. Reports say what they saw, never success. */
+/** This skill's calls, oldest first. Reports say what they saw, never success. */
 function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   if (!points?.length) return null;
   const after = points.filter((point) => point.after_mission);
@@ -56,34 +66,35 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   const firstAfter = points.findIndex((point) => point.after_mission);
   return (
     <div className={styles.progress}>
-      <ol
-        className={styles.timeline}
-        aria-label="Comparable calls, oldest first"
-      >
+      <span className={styles.cardLabel} aria-hidden="true">
+        {PROGRESS.callsLabel}
+        <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
+      </span>
+      <ol className={styles.timeline} aria-label={PROGRESS.calls}>
         {points.map((point, index) => (
           <li
             key={point.submission_id}
             data-state={point.state}
             data-mission-start={index === firstAfter ? "" : undefined}
-            title={`${callDate(point.created_at)} · ${POINT[point.state]}`}
+            title={`${callDate(point.created_at)} · ${POINT_COPY[point.state]}`}
           >
             <span className={styles.srOnly}>
-              {callDate(point.created_at)}: {POINT[point.state]}
+              {callDate(point.created_at)}: {POINT_COPY[point.state]}
             </span>
           </li>
         ))}
       </ol>
       <p className={styles.legend} aria-hidden="true">
-        {(Object.keys(POINT) as ProgressPoint["state"][]).map((state) => (
+        {(Object.keys(POINT_COPY) as ProgressPoint["state"][]).map((state) => (
           <span key={state} data-state={state}>
-            {POINT[state]}
+            {POINT_COPY[state]}
           </span>
         ))}
       </p>
       <p>
         {after.length
-          ? `Since your mission started: ${quiet.length} of ${after.length} comparable call${after.length === 1 ? "" : "s"} had evidence for this skill and no suggestion. That is not proof of change yet.`
-          : "No comparable call since your mission started. Your next call is the first check."}
+          ? PROGRESS.sinceMission(quiet.length, after.length)
+          : PROGRESS.noCallSince}
       </p>
     </div>
   );
@@ -98,12 +109,12 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const [expanded, setExpanded] = useState(false);
   if (!calls?.length) return null;
   return (
-    <Panel title="Coaching for each call" sub={`${calls.length} recent`}>
+    <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
       <div
         className={styles.callList}
         data-expanded={expanded ? "" : undefined}
       >
-        <List label="Your recent calls">
+        <List label={CALLS.label}>
           {calls.map((call) => (
             <Row
               key={call.submission_id}
@@ -117,10 +128,10 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
               meta={[
                 callDate(call.created_at),
                 call.state === "pending"
-                  ? "Analysing…"
+                  ? CALLS.analysing
                   : call.state === "unavailable"
-                    ? "No usable report"
-                    : (call.focus_label ?? "One practice for your next call"),
+                    ? CALLS.unavailable
+                    : (call.focus_label ?? CALLS.fallback),
               ]}
               end={
                 call.state === "ready" ? (
@@ -138,24 +149,61 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
           data-many={calls.length > 8 ? "" : undefined}
           onClick={() => setExpanded(true)}
         >
-          Show all {calls.length} calls
+          {CALLS.showAll(calls.length)}
         </button>
       ) : null}
     </Panel>
   );
 }
 
-function StartCoaching({ coaching }: { coaching: Coaching }) {
+function StartCoaching({
+  coaching,
+  readOnly = false,
+  sharing,
+}: {
+  coaching: Coaching;
+  /** Another rep's view: say "their", offer no action that is the viewer's. */
+  readOnly?: boolean;
+  sharing?: SharingView;
+}) {
+  if (readOnly)
+    return (
+      <div className={styles.conversation}>
+        <Pillar
+          id="coaching-focus"
+          copy={COACHING_PILLARS.focus}
+          label={THEIR_FOCUS}
+        >
+          <StoryCard emphasis>
+            <p className={styles.chips}>
+              <span className={styles.chip} data-tone="neutral">
+                {FOCUS.theirNotYet}
+              </span>
+            </p>
+            <p className={styles.focusTitle}>
+              {coaching.analysed_calls
+                ? "Their calls don’t show one focus yet"
+                : "No analysed calls yet"}
+            </p>
+            <p className={styles.lead}>
+              {coaching.analysed_calls
+                ? "Each analysed call below has its own focus and next-call mission."
+                : "Their coaching starts with their first analysed call."}
+            </p>
+          </StoryCard>
+        </Pillar>
+        <CallsPanel calls={coaching.calls} />
+      </div>
+    );
   return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <section className={styles.hero} aria-labelledby="coaching-focus">
-          <div className={styles.eyebrow}>
-            <h2 id="coaching-focus" className={styles.label}>
-              What You Should Work On Now
-            </h2>
-            <Badge>Still learning your pattern</Badge>
-          </div>
+    <div className={styles.conversation}>
+      <Pillar id="coaching-focus" copy={COACHING_PILLARS.focus}>
+        <StoryCard emphasis>
+          <p className={styles.chips}>
+            <span className={styles.chip} data-tone="neutral">
+              {FOCUS.notYet}
+            </span>
+          </p>
           <p className={styles.focusTitle}>
             {coaching.analysed_calls
               ? "Start with one call’s coaching"
@@ -163,8 +211,8 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
           </p>
           <p className={styles.lead}>
             {coaching.analysed_calls
-              ? "Your calls do not yet show one skill to work on across calls. Each analysed call below already has its own focus and next-call mission."
-              : "Coaching follows your own analysed calls. Your first report brings one focus and one mission for your next call."}
+              ? "Your calls don’t show one skill to work on across calls yet. Each analysed call below already has its own focus and next-call mission."
+              : "Coaching follows your own calls. Your first report brings one focus and one mission for your next call."}
           </p>
           {coaching.pending_calls > 0 ? (
             <p className={styles.note}>
@@ -174,17 +222,39 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
             </p>
           ) : null}
           <div className={styles.actions}>
+            {coaching.sandbox_reps ? (
+              <Link
+                className={kitStyles.button}
+                data-variant="primary"
+                href="/coaching?view=team"
+              >
+                See {coaching.sandbox_reps} fictional reps’ coaching{" "}
+                <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            ) : null}
             <Link
               className={kitStyles.button}
-              data-variant={coaching.analysed_calls ? undefined : "primary"}
+              data-variant={
+                coaching.analysed_calls || coaching.sandbox_reps
+                  ? undefined
+                  : "primary"
+              }
               href="/analysis/new"
             >
               Analyse a call <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
-        </section>
-        <CallsPanel calls={coaching.calls} />
-      </div>
+          {coaching.sandbox_reps ? (
+            <p className={styles.note}>
+              This is AC Sandbox: Team shows the coaching of the fictional reps
+              you imported. Your own coaching follows your own calls.
+            </p>
+          ) : null}
+        </StoryCard>
+      </Pillar>
+      <CallsPanel calls={coaching.calls} />
+      {/* Sharing can always be stopped, focus or not. */}
+      <SharePanel initial={sharing} />
     </div>
   );
 }
@@ -192,176 +262,235 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
 export function CoachingStory({
   coaching,
   requestedFocus,
+  readOnly = false,
+  sharing,
 }: {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
+  /** A known sharing state (design review); otherwise the panel reads it. */
+  sharing?: SharingView;
+  /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
+  readOnly?: boolean;
 }) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
-    return <StartCoaching coaching={coaching} />;
+    return (
+      <StartCoaching
+        coaching={coaching}
+        readOnly={readOnly}
+        sharing={sharing}
+      />
+    );
   const pattern = coaching.pattern;
   const recurring = focus.status === "active";
-  const step = JOURNEY.indexOf(mastery.state);
+  const status = statusText(mastery);
   const path = coaching.development_path;
-  // One conversation in spec order (1–6); on wide screens the mission (4)
-  // stays beside the story instead of a stack of side panels (spec 3, 9).
+  const gap = coaching.root_cause.gap_type;
+  const confidence = CONFIDENCE_COPY[coaching.root_cause.confidence];
+  // One conversation, read top to bottom in Dipak's order (spec 3, 7, 9),
+  // each pillar headed the way the Report heads its six parts.
   return (
     <div className={styles.conversation}>
-      <FocusHero
-        heading="What You Should Work On Now"
-        label={focus.label}
-        badges={[
-          recurring
-            ? { text: "Active focus", tone: "accent" }
-            : { text: "Provisional focus" },
-          ...(pattern.relevant_call_count > 1
-            ? [
-                {
-                  text: `In ${pattern.attention_call_count} of ${pattern.relevant_call_count} comparable calls`,
-                },
-              ]
-            : []),
-          ...(mastery.state !== "not_enough_evidence"
-            ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
-            : []),
-        ]}
-        explanation={focus.explanation}
-        why={focus.why_it_matters}
-        reason={focus.selected_reason}
-        mission={mission.behavior}
-        missionAnchor="mission"
+      <Pillar
+        id="coaching-focus"
+        copy={COACHING_PILLARS.focus}
+        label={readOnly ? THEIR_FOCUS : undefined}
       >
-        {requestedFocus && requestedFocus !== focus.skill_id ? (
-          <p className={styles.note}>
-            Your report brought you here for{" "}
-            {requestedSkillLabel(requestedFocus)}. Your current next-call
-            mission stays active.
-          </p>
-        ) : null}
-      </FocusHero>
-      <Panel
-        title="Why This Keeps Happening"
-        sub={`${evidence.length} moment${evidence.length === 1 ? "" : "s"}`}
-      >
-        <div className={styles.body}>
-          <p>{pattern.summary}</p>
-          <p className={styles.hypothesis}>
-            <span className={styles.eyebrow}>
-              Likely reason, a working hypothesis
-              <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
-            </span>
-            {coaching.root_cause.hypothesis}
-          </p>
+        <FocusHero
+          label={focus.label}
+          chips={[
+            recurring
+              ? { text: FOCUS.active, tone: "accent" }
+              : { text: FOCUS.provisional },
+            ...(status ? [{ text: status, tone: "good" as const }] : []),
+            ...(coaching.sandbox ? [{ text: FOCUS.sandbox }] : []),
+          ]}
+          explanation={focus.explanation}
+          why={focus.why_it_matters}
+          reason={focus.selected_reason}
+          mission={mission.behavior}
+          missionAnchor="mission"
+          take={dipakTake(coaching.media_clips)}
+        >
+          {requestedFocus && requestedFocus !== focus.skill_id ? (
+            <p className={styles.note}>
+              Your report brought you here for{" "}
+              {requestedSkillLabel(requestedFocus)}. Your current next-call
+              mission stays active.
+            </p>
+          ) : null}
+        </FocusHero>
+      </Pillar>
+      <Pillar id="coaching-why" copy={COACHING_PILLARS.why}>
+        <StoryCard>
+          <dl className={styles.diagnosis}>
+            <div>
+              <dt>{WHY.pattern}</dt>
+              <dd>{pattern.summary}</dd>
+            </div>
+            <div>
+              <dt>{WHY.likelyReason}</dt>
+              <dd>
+                {coaching.root_cause.hypothesis}
+                {coaching.root_cause.learner_context ? (
+                  <span className={styles.learnerContext}>
+                    {readOnly ? WHY.theirContext : WHY.yourContext}: “
+                    {coaching.root_cause.learner_context}”
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+            <div>
+              <dt>{WHY.gap}</dt>
+              <dd>
+                <strong>{gapCopy(gap).name}</strong>
+                {gap !== "uncertain" ? ` · ${gapCopy(gap).line}` : ""}
+              </dd>
+            </div>
+            {confidence ? (
+              <div>
+                <dt>{WHY.confidence}</dt>
+                <dd>{confidence}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </StoryCard>
+        <div className={styles.card} data-flush="">
+          <MomentList
+            evidence={evidence}
+            heading={WHY.evidence}
+            fictional={coaching.sandbox}
+          />
         </div>
-        <MomentList evidence={evidence} />
-      </Panel>
+      </Pillar>
       <LessonPanel
+        copy={COACHING_PILLARS.better}
         lesson={lesson}
         clips={coaching.media_clips}
         fallbackObservation={focus.explanation}
         strength={coaching.strength}
         acrossCalls
       />
-      <aside className={styles.conversationRail} aria-label="Your next call">
-        <MissionPanel
-          id="mission"
-          mission={mission}
-          practice={practice}
-          since={callDate(mission.active_since)}
-          foot="It stays until real calls show the change."
-        />
-      </aside>
-      <Panel title="See How You’re Improving">
-        <div className={styles.body}>
-          <span className={styles.eyebrow}>
-            Mastery
-            <Badge
-              tone={
-                mastery.state === "not_enough_evidence" ? "neutral" : "good"
-              }
-            >
-              {masteryLabel[mastery.state]}
-            </Badge>
-            <ol className={styles.stepper} aria-label="Mastery journey">
-              {JOURNEY.map((state, index) => (
-                <li
-                  key={state}
-                  title={masteryLabel[state]}
-                  data-on={step >= index ? "" : undefined}
-                  aria-current={mastery.state === state ? "step" : undefined}
-                >
-                  <span className={styles.srOnly}>{masteryLabel[state]}</span>
-                </li>
-              ))}
-            </ol>
-          </span>
+      <MissionPanel
+        id="mission"
+        copy={COACHING_PILLARS.next}
+        mission={mission}
+        practice={practice}
+        since={callDate(mission.active_since)}
+        foot={NEXT.stays}
+      />
+      <Pillar id="coaching-progress" copy={COACHING_PILLARS.progress}>
+        <StoryCard>
+          <dl className={styles.diagnosis}>
+            <div>
+              <dt>{PROGRESS.status}</dt>
+              <dd>
+                <strong>{status ?? MASTERY_COPY.not_enough_evidence}</strong>
+              </dd>
+            </div>
+            {mastery.relevant_count !== null &&
+            mastery.correct_count !== null ? (
+              <div>
+                <dt>{PROGRESS.recent}</dt>
+                <dd>
+                  {PROGRESS.correct(
+                    mastery.correct_count,
+                    mastery.relevant_count,
+                  )}
+                </dd>
+              </div>
+            ) : null}
+            {mastery.baseline ? (
+              <div>
+                <dt>{PROGRESS.previous}</dt>
+                <dd>{mastery.baseline}</dd>
+              </div>
+            ) : null}
+            {TREND_COPY[mastery.trend] ? (
+              <div>
+                <dt>{PROGRESS.trend}</dt>
+                <dd>{TREND_COPY[mastery.trend]}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>{PROGRESS.regression}</dt>
+              <dd>
+                {REGRESSION_COPY[coaching.regression.state] ??
+                  REGRESSION_COPY.unknown}
+              </dd>
+            </div>
+          </dl>
+          <ol className={styles.stepper} aria-label={PROGRESS.journey}>
+            {JOURNEY.map((state, index) => (
+              <li
+                key={state}
+                title={MASTERY_COPY[state]}
+                data-on={
+                  JOURNEY.indexOf(mastery.state) >= index ? "" : undefined
+                }
+                aria-current={mastery.state === state ? "step" : undefined}
+              >
+                <span>{MASTERY_COPY[state]}</span>
+              </li>
+            ))}
+          </ol>
           <ProgressStrip points={coaching.progress} />
-          {mastery.relevant_count !== null ? (
-            <p>
-              {mastery.correct_count} successful executions in{" "}
-              {mastery.relevant_count} relevant opportunities.
-            </p>
-          ) : null}
           <details className={styles.more}>
-            <summary>How progress is measured</summary>
+            <summary>{PROGRESS.how}</summary>
             <div className={styles.moreBody}>
               <p>{mastery.explanation}</p>
               <p>{coaching.regression.action}</p>
-              {mastery.baseline ? (
-                <p>Previous baseline: {mastery.baseline}</p>
-              ) : null}
               {mastery.historical_achievement ? (
                 <p>
-                  Previous achievement:{" "}
-                  {masteryLabel[mastery.historical_achievement]}
+                  {PROGRESS.achieved}:{" "}
+                  {MASTERY_COPY[mastery.historical_achievement]}
                 </p>
               ) : null}
-              <p className={styles.note}>
-                Watching a lesson is participation. Improvement needs evidence
-                from real opportunities.
-              </p>
+              <p className={styles.note}>{PROGRESS.watching}</p>
             </div>
           </details>
-        </div>
-      </Panel>
-      <Panel title="Where We Go From Here">
-        <div className={styles.body}>
+        </StoryCard>
+      </Pillar>
+      <Pillar id="coaching-path" copy={COACHING_PILLARS.path}>
+        <StoryCard>
           <ol className={styles.route} aria-label="Your development path">
             <li data-now="">
-              <span>Now</span>
+              <span>{PATH.now}</span>
               {path.current ?? focus.label}
             </li>
             <li>
-              <span>Likely next</span>
-              {path.likely_next ?? "Your next calls decide"}
+              <span>{PATH.next}</span>
+              {path.likely_next ?? PATH.nextFallback}
             </li>
             <li>
-              <span>Later</span>
-              {path.later ?? "Your future calls will guide this"}
+              <span>{PATH.later}</span>
+              {path.later ?? PATH.laterFallback}
             </li>
           </ol>
           {path.maintain ? (
-            <p className={styles.note}>Keep strong: {path.maintain}</p>
+            <p className={styles.note}>
+              {PATH.maintain}: {path.maintain}
+            </p>
           ) : null}
-          {coaching.reflection_question ? (
-            <p className={styles.reflection}>{coaching.reflection_question}</p>
-          ) : null}
-        </div>
-      </Panel>
-      <div className={styles.late}>
-        <CallsPanel calls={coaching.calls} />
-      </div>
-      <details className={`${styles.more} ${styles.late}`}>
-        <summary>About this coaching</summary>
+          <p className={styles.note}>{PATH.dynamic}</p>
+          {readOnly ? null : (
+            <FocusFeedback
+              focusSkillId={focus.skill_id}
+              originSubmissionId={mission.origin_submission_id}
+              question={coaching.reflection_question}
+            />
+          )}
+        </StoryCard>
+      </Pillar>
+      {readOnly ? null : <SharePanel initial={sharing} />}
+      <CallsPanel calls={coaching.calls} />
+      <details className={styles.more}>
+        <summary>{ABOUT}</summary>
         <ul className={styles.takeaways}>
           <li>{path.explanation}</li>
           {coaching.limitations.map((limitation) => (
             <li key={limitation}>{limitation}</li>
           ))}
-          <li>
-            Saving your agreement, disagreement and reflection comes with
-            sharing.
-          </li>
         </ul>
       </details>
     </div>

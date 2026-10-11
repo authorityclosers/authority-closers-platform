@@ -39,6 +39,22 @@ export const SKILLS = [
   { id: "communication_tonality", short: "Tone" },
 ] as const;
 
+export const VIEWS = [
+  { key: "overview", label: "Overview" },
+  { key: "people", label: "People" },
+  { key: "calls", label: "Calls" },
+] as const;
+export type View = (typeof VIEWS)[number]["key"];
+
+/** The view from the address (?view=people|calls); Overview by default. */
+export function viewFrom(
+  params: Readonly<Record<string, string | string[] | undefined>>,
+): View {
+  const value = params.view;
+  const text = Array.isArray(value) ? value[0] : value;
+  return VIEWS.find((item) => item.key === text)?.key ?? "overview";
+}
+
 export type Filters = {
   range: RangeKey;
   person: string | null;
@@ -348,10 +364,10 @@ export function parseCallPage(body: unknown): CallPage {
 export function filtersFrom(
   params: Readonly<Record<string, string | string[] | undefined>>,
 ): Filters {
-  const one = (name: string) => {
+  const one = (name: string, limit = 160) => {
     const value = params[name];
     const text = Array.isArray(value) ? value[0] : value;
-    return text && text.length <= 160 ? text : null;
+    return text && text.length <= limit ? text : null;
   };
   const range = one("range");
   const outcome = one("outcome");
@@ -364,7 +380,7 @@ export function filtersFrom(
     outcome: OUTCOMES.some((item) => item.key === outcome)
       ? (outcome as OutcomeKey)
       : null,
-    language: one("language"),
+    language: one("language", 32),
   };
 }
 
@@ -381,6 +397,10 @@ export function queryOf(filters: Filters, extra: Record<string, string> = {}) {
   const text = query.toString();
   return text ? `?${text}` : "";
 }
+
+/** The page's address query: the filters, plus the view when not Overview. */
+export const addressQuery = (filters: Filters, view: View) =>
+  queryOf(filters, view === "overview" ? {} : { view });
 
 export const activeFilterCount = (filters: Filters) =>
   [filters.person, filters.team, filters.outcome, filters.language].filter(

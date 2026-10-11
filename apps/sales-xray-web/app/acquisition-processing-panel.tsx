@@ -30,6 +30,9 @@ import {
   type StepState,
 } from "./processing-steps";
 import { useWorkspaceAccess } from "./workspace-access";
+import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import type { WaveformEnvelope } from "./source-waveform";
+import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-processing-panel.module.css";
 
 export type AcquisitionProcessingStageRow = {
@@ -62,6 +65,18 @@ type Props = {
   };
   /** Local review only: render static synthetic stages without live-call claims. */
   staticPreview?: boolean;
+  /**
+   * While the file is still being sent (before the call exists): how much
+   * has arrived (0-1). The same panel then carries on into the analysis, so
+   * the journey is one screen from the first byte to the report.
+   */
+  upload?: { fraction: number | null } | null;
+  /**
+   * The file's own wave, measured in this browser before it was sent: drawn
+   * until the server's measurement arrives, so the call's shape carries on
+   * from the chosen file through sending and the steps.
+   */
+  localEnvelope?: WaveformEnvelope | null;
   children?: ReactNode;
 };
 
@@ -212,6 +227,8 @@ export function AcquisitionProcessingPanel({
   startedAt,
   deleteConfirm,
   staticPreview = false,
+  upload = null,
+  localEnvelope = null,
   children,
 }: Props) {
   const access = useWorkspaceAccess();
@@ -232,12 +249,14 @@ export function AcquisitionProcessingPanel({
     ) ||
     ["held", "failed"].includes(live.plan?.state ?? "");
   const hasReport = Boolean(progress?.has_report || live.plan?.reportReady);
-  const states = projectSteps({
+  const analysed = projectSteps({
     plan: live.plan,
     rows: stageRows,
     attention: needsAttention,
     hasReport,
   });
+  // While the file is still being sent, no analysis step has begun.
+  const states = upload ? analysed.map((): StepState => "waiting") : analysed;
   const notStarted = waitingForApproval && !accepted && !live.plan?.stage;
   const working =
     !staticPreview && !needsAttention && !hasReport && !notStarted;
@@ -271,15 +290,22 @@ export function AcquisitionProcessingPanel({
     return () => clearTimeout(timer);
   }, [hasReport, staticPreview]);
 
+  const measured = useMeasuredWave(
+    staticPreview || upload ? undefined : submissionId,
+    progress?.current_stage ?? live.plan?.stage ?? null,
+  );
+  const envelope = measured ?? (staticPreview ? null : localEnvelope);
   const phase = staticPreview
     ? "example"
-    : needsAttention
-      ? "attention"
-      : hasReport
-        ? "done"
-        : notStarted
-          ? "ready"
-          : "working";
+    : upload
+      ? "sending"
+      : needsAttention
+        ? "attention"
+        : hasReport
+          ? "done"
+          : notStarted
+            ? "ready"
+            : "working";
   const headline =
     phase === "example"
       ? "Example processing state"
@@ -291,7 +317,9 @@ export function AcquisitionProcessingPanel({
           ? "Your report is ready"
           : phase === "ready"
             ? "Ready to start"
-            : "Analysing your call";
+            : phase === "sending"
+              ? "Sending your call"
+              : "Analysing your call";
   const subline =
     phase === "example"
       ? "Paused interface example. No call was uploaded or analysed."
@@ -301,9 +329,14 @@ export function AcquisitionProcessingPanel({
           ? "Opening it now."
           : phase === "ready"
             ? "Your recording is saved. Start analysis to generate your report."
-            : refreshProblem || offline
-              ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
-              : `Usually about 2–4 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
+            : phase === "sending"
+              ? upload?.fraction != null
+                ? `${Math.round(upload.fraction * 100)}% sent · keep this tab open until it's sent`
+                : "Keep this tab open until it's sent"
+              : refreshProblem || offline
+                ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
+                : // Measured on staging, 11 Oct: 105-197 s from upload to report.
+                  `Usually 2–3 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
   const signedIn = access?.authenticated === true;
   // Recovery and start actions stay in view; the rest wait in the ⋯ menu.
   const actionsInline = phase === "attention" || phase === "ready";
@@ -323,7 +356,19 @@ export function AcquisitionProcessingPanel({
         <strong title={fileName || undefined}>
           {fileName || (staticPreview ? "Example audio" : "Your recording")}
         </strong>
-        {fileMeta && <small>{fileMeta}</small>}
+        {fileMeta || envelope ? (
+          <small>
+            {[
+              fileMeta,
+              // The server's measurement, as soon as it has one.
+              envelope
+                ? formatClock(envelope.duration_ms).replace(/^0(?=\d:)/, "")
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
+        ) : null}
         {!staticPreview && !actionsInline && children ? (
           <details className={styles.more}>
             <summary aria-label="More actions" title="More actions">
@@ -353,7 +398,7 @@ export function AcquisitionProcessingPanel({
             <AlertTriangle size={16} strokeWidth={2.2} />
           ) : phase === "done" ? (
             <Check size={16} strokeWidth={2.6} />
-          ) : phase === "working" ? (
+          ) : phase === "working" || phase === "sending" ? (
             <span className={styles.eq}>
               <i />
               <i />
@@ -391,13 +436,29 @@ export function AcquisitionProcessingPanel({
         </div>
       </div>
 
-      {/* Where the analysis is, at a glance: done steps filled, the
-          current one moving. No percentage the server doesn't give. */}
-      <div className={styles.track} aria-hidden="true">
-        {PROCESSING_STEPS.map((step, index) => (
-          <span key={step.id} data-state={states[index]} />
-        ))}
-      </div>
+      {/* The call itself: teal up to the finished steps, the current
+          step's stretch listening; no percentage the server doesn't give. */}
+      <AnalysisWave
+        envelope={envelope}
+        arrived={upload?.fraction ?? undefined}
+        played={
+          phase === "done"
+            ? 1
+            : states.filter((state) => state === "done").length /
+              PROCESSING_STEPS.length
+        }
+        state={
+          phase === "sending"
+            ? "arriving"
+            : phase === "working"
+              ? "working"
+              : phase === "attention"
+                ? "attention"
+                : phase === "done"
+                  ? "done"
+                  : "still"
+        }
+      />
 
       <ol className={styles.steps} aria-label="Processing stages">
         {PROCESSING_STEPS.map((step, index) => {

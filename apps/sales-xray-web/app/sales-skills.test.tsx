@@ -86,12 +86,10 @@ it("moves between skills by click, arrow keys and next/previous, and plays exact
   await render(items, onSelectEvidence);
   expect(container.textContent).not.toMatch(/\d+\s+of\s+\d+\s+skills/);
   expect(container.querySelector('[role="img"]')).toBeNull();
-  expect(container.textContent).toContain("Evidence found 1");
+  expect(container.textContent).toContain("Observed 1");
   await act(async () => tabs()[1].click());
   expect(panel().querySelector("h3")?.textContent).toBe(items[1].label);
-  expect(panel().textContent).toContain(
-    "Evidence found · 2 clips from the call",
-  );
+  expect(panel().textContent).toContain("Observed · 2 clips from the call");
   expect(panel().textContent).toContain(excerpt.quote);
   const play = panel().querySelector<HTMLButtonElement>(
     'button[aria-label^="Play source moment"]',
@@ -105,7 +103,7 @@ it("moves between skills by click, arrow keys and next/previous, and plays exact
     ),
   );
   expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
-  expect(panel().textContent).toContain("Mixed evidence");
+  expect(panel().textContent).toContain("Mixed signals");
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>('button[aria-label="Previous skill"]')!

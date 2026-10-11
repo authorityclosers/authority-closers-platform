@@ -35,7 +35,7 @@ function button(label: string) {
 
 it("exposes the production Prospect cards and preserves their fictional source selection across report views", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
-  await act(async () => button("Details").click());
+  await act(async () => button("Details view").click());
   await act(async () => button("Prospect").click());
   const panel = container.querySelector(
     '[data-report-mode-section="prospect"]',
@@ -79,7 +79,7 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   withoutCallNumbers.querySelector("[data-call-map-fixture]")?.remove();
   expect(withoutCallNumbers.textContent).not.toMatch(/\b\d+\s*%/);
 
-  await act(async () => button("Details").click());
+  await act(async () => button("Details view").click());
   await act(async () => button("Sales skills").click());
   const skills = container.querySelector('[data-report-mode-section="skills"]');
   expect(skills?.hasAttribute("hidden")).toBe(false);
@@ -105,7 +105,7 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
 
 it("adds a parsed call-map fixture and resolves every source control to its own dialogue", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
-  await act(async () => button("Details").click());
+  await act(async () => button("Details view").click());
   await act(async () => button("Call-map fixture").click());
   const panel = container.querySelector(
     '[data-report-mode-section="call-map-fixture"]',
@@ -182,7 +182,7 @@ it("adds a parsed call-map fixture and resolves every source control to its own 
 
 it("keeps the no-next-action outcome explicit in the production next-call plan and selects its source", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
-  await act(async () => button("Details").click());
+  await act(async () => button("Details view").click());
   await act(async () => button("Next-call plan").click());
   const outcome = container.querySelector('[aria-label="Call outcome"]');
   expect(outcome?.textContent).toContain(

@@ -6,6 +6,7 @@ import {
   AudioLines,
   BookOpen,
   ChartNoAxesColumnIncreasing,
+  Ellipsis,
   FileText,
   Flag,
   Lightbulb,
@@ -29,6 +30,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { VIEWS as VIEWS_COPY } from "./report-copy";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -581,7 +583,10 @@ export function ReportModes({
   prospectControls?: ReactNode;
 }) {
   const storyPanels =
-    documentData?.report && !documentData.report.preview
+    // A guest preview gets the Report too when the caller asks for pillars;
+    // its locked items show as "more after you sign in".
+    documentData?.report &&
+    (!documentData.report.preview || structure === "pillars")
       ? reportScreenPanels(
           documentData,
           onSelectEvidence,
@@ -589,10 +594,13 @@ export function ReportModes({
           prospectControls,
           {
             callId: boundCallId ?? null,
-            onOpenCoaching: () =>
-              window.dispatchEvent(
-                new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
-              ),
+            // Guests have no Coaching view, so no button that does nothing.
+            onOpenCoaching: documentData.report.preview
+              ? undefined
+              : () =>
+                  window.dispatchEvent(
+                    new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
+                  ),
           },
         )
       : [];
@@ -824,6 +832,28 @@ export function ReportModes({
           current = panel.id;
       }
       if (!foundHeading) return;
+      // At the very end the last chapters cannot reach the reading line:
+      // the last one whose heading is on screen is the one being read.
+      const atEnd = scroller
+        ? scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 4
+        : false;
+      if (atEnd && scroller && scroller.scrollTop > 0) {
+        const bottom =
+          scroller === document.scrollingElement ||
+          scroller === document.documentElement
+            ? window.innerHeight
+            : scroller.getBoundingClientRect().bottom;
+        const visible = activePanels.filter((panel) => {
+          const top = document
+            .getElementById(`${id}-heading-${panel.id}`)
+            ?.getBoundingClientRect().top;
+          return top !== undefined && top >= scrollportTop && top < bottom - 48;
+        });
+        // A chapter the reader jumped to stays lit while it is on screen.
+        if (visible.some((panel) => panel.id === selected)) current = selected;
+        else if (visible.length) current = visible[visible.length - 1].id;
+      }
       setReadingSection((previous) =>
         previous === current ? previous : current,
       );
@@ -1082,6 +1112,66 @@ export function ReportModes({
 
   if (!activePanels.length) return null;
 
+  // The Report and its Coaching are the two views people use; Document and
+  // Details wait behind "More views" (the current one stays in the row).
+  type ViewChoice = readonly [View, string, string, LucideIcon];
+  const primaryViews: ViewChoice[] = storyPanels.length
+    ? [
+        ["story", VIEWS_COPY.report.text, VIEWS_COPY.report.hint, FileText],
+        ...(coachingPanels.length
+          ? [
+              [
+                "coaching",
+                VIEWS_COPY.coaching.text,
+                VIEWS_COPY.coaching.hint,
+                Lightbulb,
+              ] as const,
+            ]
+          : []),
+        ...(view === "tabs"
+          ? [
+              [
+                "tabs",
+                VIEWS_COPY.details.text,
+                VIEWS_COPY.details.hint,
+                PanelsTopLeft,
+              ] as const,
+            ]
+          : view === "document"
+            ? [
+                [
+                  "document",
+                  VIEWS_COPY.document.text,
+                  VIEWS_COPY.document.hint,
+                  BookOpen,
+                ] as const,
+              ]
+            : []),
+      ]
+    : [
+        ["reading", "Reading view", "Reading view", BookOpen],
+        ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
+        ["document", "Document view", "Document view", FileText],
+      ];
+  const moreViews: ViewChoice[] = storyPanels.length
+    ? (
+        [
+          [
+            "document",
+            VIEWS_COPY.document.menu,
+            VIEWS_COPY.document.hint,
+            BookOpen,
+          ],
+          [
+            "tabs",
+            VIEWS_COPY.details.menu,
+            VIEWS_COPY.details.hint,
+            PanelsTopLeft,
+          ],
+        ] as const
+      ).filter(([value]) => value !== view)
+    : [];
+
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
@@ -1181,24 +1271,13 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
-        {(storyPanels.length
-          ? ([
-              ["story", "Report", "Report view", FileText],
-              ...(coachingPanels.length
-                ? ([
-                    ["coaching", "Coaching", "Coaching view", Lightbulb],
-                  ] as const)
-                : []),
-              ["tabs", "Details", "Details view", PanelsTopLeft],
-              ["document", "Document", "Document view", BookOpen],
-            ] as const)
-          : ([
-              ["reading", "Reading view", "Reading view", BookOpen],
-              ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
-              ["document", "Document view", "Document view", FileText],
-            ] as const)
-        ).map(([value, text, hint, Icon]) => (
+      <div
+        className={styles.toolbar}
+        role="group"
+        aria-label={`${label} view`}
+        data-labelled={storyPanels.length ? "" : undefined}
+      >
+        {primaryViews.map(([value, text, hint, Icon]) => (
           <button
             key={value}
             type="button"
@@ -1211,6 +1290,41 @@ export function ReportModes({
             <span className={styles.toolbarLabel}>{text}</span>
           </button>
         ))}
+        {moreViews.length ? (
+          <details
+            className={styles.moreViews}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.preventDefault();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }}
+          >
+            <summary aria-label={VIEWS_COPY.more} title={VIEWS_COPY.more}>
+              <Ellipsis aria-hidden="true" />
+            </summary>
+            <div className={styles.moreViewsMenu}>
+              {moreViews.map(([value, text, hint, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  title={hint}
+                  aria-label={hint}
+                  aria-pressed={false}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    changeView(value);
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
@@ -1252,6 +1366,8 @@ export function ReportModes({
               id={id}
               textSize={textSize}
               section={selected}
+              callId={boundCallId ?? null}
+              onSelect={onSelectEvidence}
             />
           )}
         </ReportReadingProvider>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded checks for a clean, locally available PR commit, without installs."""
+"""Run bounded checks on an exported local commit while the workbench stays live."""
 
 from __future__ import annotations
 
@@ -9,22 +9,49 @@ import hashlib
 import json
 import math
 import os
+import re
 import resource
 import shutil
 import signal
 import subprocess
+import sys
+import tempfile
+import threading
 import time
+import xml.etree.ElementTree as element_tree
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci import committed_snapshot as SNAPSHOT  # noqa: E402
 
 SCHEMA = "ac.ci.fast-check/1"
 PYTHON_ROOTS = ("packages/python", "tests", "scripts")
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
 FORMAT_SUFFIXES = SOURCE_SUFFIXES | {".css", ".json", ".md", ".mdx", ".yaml", ".yml"}
+CI_INPUT_TESTS = {
+    ".github/workflows/application.yml": (
+        "tests/infra/test_recovery_ci_gates.py",
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+    ),
+    ".github/workflows/control-plane.yml": ("tests/infra/test_recovery_ci_gates.py",),
+    "scripts/ci/python-test-exclusions.txt": (
+        "tests/infra/test_recovery_ci_gates.py",
+        "tests/unit/ci/test_python_test_shard.py",
+    ),
+    "scripts/ci/python-test-durations.json": (
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+        "tests/unit/ci/test_refresh_python_durations.py",
+    ),
+}
 
 
 class FastCheckError(RuntimeError):
@@ -37,6 +64,7 @@ class Check:
     argv: tuple[str, ...]
     cwd: Path
     scope: tuple[str, ...]
+    source_root: Path | None = None
 
 
 def git(root: Path, *args: str) -> str:
@@ -74,7 +102,8 @@ def changed_files(root: Path, base: str, commit: str) -> tuple[str, ...]:
     values = git(root, "diff", "--name-only", "-z", base + "..." + commit, "--").split("\0")
     paths = tuple(sorted({value for value in values if value}))
     for path in paths:
-        safe_path(root, path)
+        if Path(path).is_absolute() or ".." in Path(path).parts:
+            raise FastCheckError("Changed file identity is not relative to the checkout")
     return paths
 
 
@@ -267,16 +296,21 @@ def plan(
     checks = []
     python = root / ".venv/bin/python"
     pyfiles = tuple(path for path in changed if path.endswith(".py") and (root / path).is_file())
+    tests, graph_errors = affected_tests(root, changed)
+    ci_tests = {test for path in changed for test in CI_INPUT_TESTS.get(path, ())}
+    for test in sorted(ci_tests):
+        if not safe_path(root, test).is_file():
+            raise FastCheckError("A required CI input regression is unavailable")
+    selected, omitted = capped_tests((*tests, *ci_tests), changed, test_cap)
+    if (pyfiles or selected) and not python.is_file():
+        raise FastCheckError("The locked Python environment is unavailable; installs are forbidden")
     if pyfiles:
-        if not python.is_file():
-            raise FastCheckError(
-                "The locked Python environment is unavailable; installs are forbidden"
-            )
         checks.append(
             Check("ruff", (str(python), "-m", "ruff", "check", "--", *pyfiles), root, pyfiles)
         )
-        modules = tuple(path for path in pyfiles if not path.startswith("tests/"))
-        if modules:
+        # Match the hosted static gate; infrastructure scripts and migrations
+        # are linted/tested here but are not in CI's mypy contract.
+        if (root / "packages/python").is_dir():
             checks.append(
                 Check(
                     "mypy",
@@ -285,15 +319,12 @@ def plan(
                         "-m",
                         "mypy",
                         "--incremental",
-                        "--follow-imports=silent",
-                        *modules,
+                        "packages/python",
                     ),
                     root,
-                    modules,
+                    ("packages/python",),
                 )
             )
-    tests, graph_errors = affected_tests(root, changed)
-    selected, omitted = capped_tests(tests, changed, test_cap)
     if selected:
         checks.append(
             Check(
@@ -489,6 +520,18 @@ def plan(
             if Path(path).suffix in SOURCE_SUFFIXES
             and not any(path in check.scope for check in checks)
         ],
+        "unmapped_ci_inputs": [
+            path
+            for path in changed
+            if (
+                path.startswith(".github/workflows/")
+                or (
+                    path.startswith("scripts/ci/")
+                    and Path(path).suffix not in {".py", *SOURCE_SUFFIXES}
+                )
+            )
+            and path not in CI_INPUT_TESTS
+        ],
     }
     return tuple(checks), metadata
 
@@ -557,7 +600,186 @@ def stop_process(process: subprocess.Popen[bytes], owned: dict[int, int]) -> Non
         signal_owned(owned, signal.SIGKILL)
 
 
+def pytest_summary(path: Path) -> dict[str, int]:
+    """Read only execution counts; never retain test messages or captured output."""
+    try:
+        root = element_tree.parse(path).getroot()  # noqa: S314 - pytest's own disposable XML receipt
+    except (OSError, element_tree.ParseError):
+        raise FastCheckError("Pytest did not produce valid test evidence") from None
+    cases = tuple(root.iter("testcase"))
+    if root.tag not in {"testsuite", "testsuites"} or not cases:
+        raise FastCheckError("Pytest did not produce valid test evidence")
+    counts = dict.fromkeys(("passed", "skipped", "failed", "errors"), 0)
+    for case in cases:
+        if case.find("error") is not None:
+            counts["errors"] += 1
+        elif case.find("failure") is not None:
+            counts["failed"] += 1
+        elif case.find("skipped") is not None:
+            counts["skipped"] += 1
+        else:
+            counts["passed"] += 1
+    return counts
+
+
+def vitest_summary(path: Path) -> tuple[dict[str, int], bool]:
+    """Read only the installed JSON reporter's counts and success flag."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        raise FastCheckError("Vitest did not produce valid test evidence") from None
+    fields = {
+        "passed": "numPassedTests",
+        "skipped": "numPendingTests",
+        "todo": "numTodoTests",
+        "failed": "numFailedTests",
+        "failed_suites": "numFailedTestSuites",
+    }
+    if not isinstance(document, dict):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    values = {key: document.get(field) for key, field in fields.items()}
+    total = document.get("numTotalTests")
+    success = document.get("success")
+    if (
+        any(type(value) is not int or value < 0 for value in (*values.values(), total))
+        or type(success) is not bool
+    ):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    counts = {key: int(document[field]) for key, field in fields.items()}
+    if total != sum(counts[key] for key in ("passed", "skipped", "todo", "failed")):
+        raise FastCheckError("Vitest did not produce valid test evidence")
+    return counts, success
+
+
+def run_vitest_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="ac-fast-vitest-", dir="/tmp") as directory:
+        report = Path(directory) / "results.json"
+        separator = check.argv.index("--") if "--" in check.argv else len(check.argv)
+        argv = (
+            *check.argv[:separator],
+            "--reporter=json",
+            f"--outputFile={report}",
+            *check.argv[separator:],
+        )
+        result = _run_check(replace(check, argv=argv), seconds, cpu_remaining)
+        if result["status"] not in {"passed", "failed"}:
+            return result
+        try:
+            counts, success = vitest_summary(report)
+        except FastCheckError as error:
+            result.update({"status": "failed", "reason": str(error)})
+            return result
+        result["vitest_summary"] = counts
+        if not success or counts["failed"] or counts["failed_suites"]:
+            result["status"] = "failed"
+            document = json.loads(report.read_text(encoding="utf-8"))
+            details = result.setdefault("diagnostics", [])
+            suites = document.get("testResults", [])
+            for suite in suites if isinstance(suites, list) else []:
+                if not isinstance(suite, dict) or suite.get("status") != "failed":
+                    continue
+                name = suite.get("name")
+                if isinstance(name, str) and (path := diagnostic_path(check, name)):
+                    detail = f"{path}: Vitest suite failed"
+                    if detail not in details and len(details) < 40:
+                        details.append(detail)
+            result["diagnostics_policy"] = (
+                "First 40 recognized locations/codes; runtime payload suppressed"
+            )
+        elif result["status"] == "passed":
+            if not any(counts.values()) and check.name.startswith("vitest:"):
+                result.update({"status": "failed", "reason": "No selected Vitest tests collected"})
+            elif not counts["passed"] or counts["skipped"] or counts["todo"]:
+                result["status"] = "partial"
+        return result
+
+
 def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
+    if check.name.startswith(("vitest:", "vitest-related:")):
+        return run_vitest_check(check, seconds, cpu_remaining)
+    if check.name != "pytest":
+        return _run_check(check, seconds, cpu_remaining)
+    # Keep raw JUnit outside the source and remove it on every outcome. Only
+    # sanitized counts enter the durable receipt. Insert before pytest's --.
+    with tempfile.TemporaryDirectory(prefix="ac-fast-pytest-", dir="/tmp") as directory:
+        report = Path(directory) / "results.xml"
+        separator = check.argv.index("--") if "--" in check.argv else len(check.argv)
+        argv = (*check.argv[:separator], f"--junitxml={report}", *check.argv[separator:])
+        result = _run_check(replace(check, argv=argv), seconds, cpu_remaining)
+        if result["status"] not in {"passed", "failed"}:
+            return result
+        try:
+            counts = pytest_summary(report)
+        except FastCheckError as error:
+            result.update({"status": "failed", "reason": str(error)})
+            return result
+        result["pytest_summary"] = counts
+        if counts["failed"] or counts["errors"]:
+            result["status"] = "failed"
+        elif result["status"] == "passed" and counts["skipped"]:
+            result["status"] = "partial"
+        return result
+
+
+def diagnostic_path(check: Check, value: str) -> str | None:
+    """Accept committed file identities, never arbitrary strings from tool output."""
+    root = check.source_root or check.cwd
+    path = Path(value)
+    candidate = path if path.is_absolute() else check.cwd / path
+    try:
+        relative = candidate.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_./@()\[\]-]+", relative) or not candidate.is_file():
+        return None
+    return relative
+
+
+def failure_diagnostics(check: Check, output: str) -> list[str]:
+    """Keep up to 40 locations/codes; suppress payloads, quotes and runtime output."""
+    lines: list[str] = []
+    current: str | None = None
+    rule: str | None = None
+    for raw in output.splitlines():
+        line = re.sub(r"\x1b\[[0-9;]*m", "", raw).strip()
+        detail: str | None = None
+        if check.name == "mypy":
+            match = re.fullmatch(r"(.+?):(\d+)(?::(\d+))?: error: .*\[([a-z-]+)\]", line)
+            if match and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}: mypy error [{match[4]}]"
+        elif check.name.startswith("tsc:"):
+            match = re.match(r"(.+?)\((\d+),(\d+)\): error (TS\d+):", line)
+            if match and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}:{match[3]}: TypeScript error {match[4]}"
+        elif check.name.startswith("prettier:"):
+            if line.startswith("[warn] ") and (path := diagnostic_path(check, line[7:])):
+                detail = f"{path}: formatting differs"
+        elif check.name == "ruff":
+            code = re.match(r"([A-Z]+\d+)\b", line)
+            if code:
+                rule = code[1]
+            match = re.match(r"(?:--> )?(.+?):(\d+):(\d+):?", line)
+            if match and rule and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}:{match[3]}: Ruff error {rule}"
+                rule = None
+        elif check.name.startswith(("eslint:", "eslint-shared:")):
+            if path := diagnostic_path(check, line):
+                current = path
+            match = re.fullmatch(r"(\d+):(\d+)\s+(error|warning)\s+.*\s+([A-Za-z0-9_@/-]+)", line)
+            if current and match:
+                detail = f"{current}:{match[1]}:{match[2]}: ESLint {match[3]} {match[4]}"
+        elif check.name == "pytest":
+            match = re.match(r"(FAILED|ERROR) (.+?\.py)::(test_[A-Za-z0-9_]+)(?:\[|\s|$)", line)
+            if match and (path := diagnostic_path(check, match[2])):
+                detail = f"{path}::{match[3]}: {match[1].lower()}"
+        if detail and detail not in lines:
+            lines.append(detail)
+            if len(lines) == 40:
+                break
+    return lines
+
+
+def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
     environment = {
         **os.environ,
         "UV_OFFLINE": "1",
@@ -569,6 +791,19 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "true",
         "AC_EMAIL_PROVIDER": "fake",
     }
+    if check.source_root is not None:
+        environment.update(
+            {
+                "PYTHONPATH": os.pathsep.join(
+                    (str(check.source_root / "packages/python"), str(check.source_root))
+                ),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "VIRTUAL_ENV": str(check.source_root / ".venv"),
+                "NODE_PATH": str(check.source_root / "node_modules/.pnpm/node_modules"),
+                "NODE_OPTIONS": "--require=" + str(check.source_root / ".ac-fast-node-source.cjs"),
+                "XDG_CACHE_HOME": str(check.source_root / ".ac-fast-cache"),
+            }
+        )
     if check.name == "pytest" and not environment.get("AC_TEST_DATABASE_URL"):
         return {
             "name": check.name,
@@ -589,17 +824,29 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
 
     def limit_cpu() -> None:
         limit = max(1, math.ceil(cpu_remaining))
-        resource.setrlimit(resource.RLIMIT_CPU, (limit, limit + 1))
+        inherited = resource.getrlimit(resource.RLIMIT_CPU)[1]
+        hard = limit + 1 if inherited == resource.RLIM_INFINITY else min(limit + 1, inherited)
+        resource.setrlimit(resource.RLIMIT_CPU, (min(limit, hard), hard))
 
     process = subprocess.Popen(  # noqa: S603 - selected local tool argument arrays, no shell
         command,
         cwd=check.cwd,
         env=environment,
         start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         preexec_fn=limit_cpu,
     )
+    captured = bytearray()
+
+    def drain_output() -> None:
+        assert process.stdout is not None
+        while chunk := process.stdout.read(8192):
+            # Drain beyond the bound so verbose failures cannot block the child.
+            captured.extend(chunk[: max(0, 262144 - len(captured))])
+
+    reader = threading.Thread(target=drain_output, daemon=True)
+    reader.start()
     owned: dict[int, int] = {}
     while True:
         family = process_family(process.pid)
@@ -620,7 +867,8 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
     # A successful tool can still leave a server or browser descendant behind.
     # Reclaim observed children on every exit, with the same PID/start-time guard.
     signal_owned(owned, signal.SIGKILL)
-    return {
+    reader.join(timeout=2)
+    result: dict[str, Any] = {
         "name": check.name,
         "status": status,
         "returncode": returncode,
@@ -628,12 +876,20 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
         "cpu_seconds": round(cpu_seconds() - cpu_start, 3),
         "scope": list(check.scope),
     }
+    if status != "passed":
+        result["diagnostics"] = failure_diagnostics(
+            check, captured.decode("utf-8", errors="replace")
+        )
+        result["diagnostics_policy"] = (
+            "First 40 recognized locations/codes; runtime payload suppressed"
+        )
+    return result
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
-    parser.add_argument("--commit", required=True)
+    parser.add_argument("--commit", default="HEAD", help="Local commit to check (default: HEAD)")
     parser.add_argument("--base", default="origin/main")
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--test-file-cap", type=int, default=12)
@@ -651,6 +907,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "schema": SCHEMA,
         "started_at": datetime.now(UTC).isoformat(),
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "snapshot_runner_sha256": hashlib.sha256(Path(SNAPSHOT.__file__).read_bytes()).hexdigest(),
         "checks": [],
     }
     try:
@@ -660,56 +917,71 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FastCheckError("Wall and CPU budgets must be positive")
         commit = commit_sha(root, args.commit)
         receipt["commit"] = commit
-        if commit_sha(root, "HEAD") != commit:
-            raise FastCheckError("Check out the requested commit before running the fast check")
-        if git(root, "status", "--porcelain", "--untracked-files=normal").strip():
-            raise FastCheckError("The requested commit needs a clean checkout")
         base = git(root, "merge-base", commit_sha(root, args.base), commit).strip()
         changed = changed_files(root, base, commit)
-        receipt.update({"base": base, "changed_files": list(changed)})
-        checks, metadata = plan(root, changed, args.test_file_cap)
-        receipt.update(metadata)
-        receipt["planned_checks"] = [
-            {
-                "name": check.name,
-                "argv": list(check.argv),
-                "cwd": str(check.cwd),
-                "scope": list(check.scope),
-            }
-            for check in checks
-        ]
-        for check in checks:
-            if args.plan:
-                receipt["checks"].append(
-                    {"name": check.name, "status": "planned", "scope": list(check.scope)}
+        receipt.update(
+            {"base": base, "changed_files": list(changed), "source_mode": "committed-snapshot"}
+        )
+        with SNAPSHOT.committed_snapshot(root, commit) as snapshot:
+            receipt["source_sha256"] = snapshot.sha256
+            checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
+            checks = tuple(replace(check, source_root=snapshot.root) for check in checks)
+            metadata["omitted_generated_frontend_types"] = [
+                check.cwd.relative_to(snapshot.root).as_posix()
+                for check in checks
+                if check.name.startswith("tsc:")
+                and (check.cwd / "next-env.d.ts").is_file()
+                and ".next/" in (check.cwd / "next-env.d.ts").read_text()
+            ]
+            receipt.update(metadata)
+            receipt["planned_checks"] = [
+                {
+                    "name": check.name,
+                    "argv": list(check.argv),
+                    "cwd": str(check.cwd),
+                    "scope": list(check.scope),
+                }
+                for check in checks
+            ]
+            for check in checks:
+                if args.plan:
+                    receipt["checks"].append(
+                        {"name": check.name, "status": "planned", "scope": list(check.scope)}
+                    )
+                    continue
+                wall_remaining = args.wall_seconds - (time.monotonic() - started)
+                cpu_remaining = args.cpu_seconds - (cpu_seconds() - cpu_start)
+                if min(wall_remaining, cpu_remaining) <= 0:
+                    receipt["checks"].append({"name": check.name, "status": "budget_exhausted"})
+                    continue
+                receipt["checks"].append(run_check(check, wall_remaining, cpu_remaining))
+            statuses = {result["status"] for result in receipt["checks"]}
+            if (
+                not snapshot.unchanged()
+                or hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+                != receipt["runner_sha256"]
+                or hashlib.sha256(Path(SNAPSHOT.__file__).read_bytes()).hexdigest()
+                != receipt["snapshot_runner_sha256"]
+            ):
+                raise FastCheckError(
+                    "Exported source or runner changed during the checks; the receipt is unusable"
                 )
-                continue
-            wall_remaining = args.wall_seconds - (time.monotonic() - started)
-            cpu_remaining = args.cpu_seconds - (cpu_seconds() - cpu_start)
-            if min(wall_remaining, cpu_remaining) <= 0:
-                receipt["checks"].append({"name": check.name, "status": "budget_exhausted"})
-                continue
-            receipt["checks"].append(run_check(check, wall_remaining, cpu_remaining))
-        statuses = {result["status"] for result in receipt["checks"]}
-        if (
-            commit_sha(root, "HEAD") != commit
-            or git(root, "status", "--porcelain", "--untracked-files=normal").strip()
-            or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != receipt["runner_sha256"]
-        ):
-            raise FastCheckError("Source changed during the checks; the receipt is unusable")
-        if statuses - {"passed", "planned"}:
-            receipt["status"] = "failed"
-        elif (
-            metadata["omitted_pytest"]
-            or metadata["import_graph_errors"]
-            or metadata["deleted_files"]
-            or metadata["unmapped_python_sources"]
-            or metadata["unmapped_frontend_sources"]
-        ):
-            receipt["status"] = "partial"
-        else:
-            receipt["status"] = "planned" if args.plan else "passed"
-    except FastCheckError as error:
+            if statuses - {"passed", "planned", "partial"}:
+                receipt["status"] = "failed"
+            elif (
+                "partial" in statuses
+                or metadata["omitted_pytest"]
+                or metadata["import_graph_errors"]
+                or metadata["deleted_files"]
+                or metadata["unmapped_python_sources"]
+                or metadata["unmapped_frontend_sources"]
+                or metadata["unmapped_ci_inputs"]
+                or metadata["omitted_generated_frontend_types"]
+            ):
+                receipt["status"] = "partial"
+            else:
+                receipt["status"] = "planned" if args.plan else "passed"
+    except (FastCheckError, SNAPSHOT.SnapshotError) as error:
         receipt.update({"status": "unavailable", "reason": str(error)})
     except (OSError, subprocess.SubprocessError) as error:
         receipt.update(
@@ -728,11 +1000,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"ac-ci/fast {receipt['status']} | {len(receipt.get('changed_files', []))} changed files | "
         f"{receipt['wall_seconds']:.1f}s wall / {receipt['cpu_seconds']:.1f}s process CPU"
     )
+    if receipt.get("reason"):
+        print(f"  reason: {receipt['reason']}")
     for result in receipt["checks"]:
         print(f"  {result['status']:16} {result['name']}")
+    skipped = sum(
+        result.get("pytest_summary", {}).get("skipped", 0) for result in receipt["checks"]
+    )
+    if skipped:
+        print(f"  coverage: {skipped} selected pytest cases skipped")
+    vitest_counts = [
+        result["vitest_summary"] for result in receipt["checks"] if "vitest_summary" in result
+    ]
+    pending = sum(counts["skipped"] + counts["todo"] for counts in vitest_counts)
+    if pending:
+        print(f"  coverage: {pending} selected Vitest cases skipped or todo")
+    empty = sum(not any(counts.values()) for counts in vitest_counts)
+    if empty:
+        print(f"  coverage: {empty} Vitest checks collected no tests")
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"
+        )
+    if receipt.get("unmapped_ci_inputs"):
+        print(
+            f"  coverage: {len(receipt['unmapped_ci_inputs'])} CI inputs "
+            "deferred to required GitHub CI"
         )
     print(f"  receipt: {args.receipt}")
     return 0 if receipt["status"] in {"passed", "planned", "partial"} else 1

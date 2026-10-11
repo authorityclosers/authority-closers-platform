@@ -12,12 +12,13 @@ import { SectionBoundary } from "../../ui/section-boundary";
 import { useWorkspaceAccess } from "../../workspace-access";
 import {
   changeRole,
+  notLive,
   OrgApiError,
   readActivityDays,
   readMembers,
+  readPersonActivity,
   removeMember,
   revokeInvite,
-  type OrgActivity,
 } from "../organisation-api";
 import { isTestEmail } from "../organisation-view";
 import {
@@ -27,10 +28,12 @@ import {
 } from "../team-patterns";
 import {
   findMember,
+  fromOrganisation,
+  fromPersonWeeks,
   PERSON_DAYS,
-  personActivity,
+  PERSON_WEEKS,
   skillMatrix,
-  weeklyTotals,
+  type PersonSummary,
 } from "./person-data";
 import {
   CoachingPanel,
@@ -85,8 +88,18 @@ function useRead<T>(read: (signal: AbortSignal) => Promise<T>, on: boolean) {
   return [state, retry] as const;
 }
 
-const readTwelveWeeks = (signal: AbortSignal) =>
-  readActivityDays(PERSON_DAYS, signal);
+/** The person's own read; on a server without it, the organisation's. */
+async function readPersonSummary(
+  id: string,
+  signal: AbortSignal,
+): Promise<PersonSummary> {
+  try {
+    return fromPersonWeeks(await readPersonActivity(id, PERSON_WEEKS, signal));
+  } catch (error) {
+    if (!notLive(error)) throw error;
+    return fromOrganisation(await readActivityDays(PERSON_DAYS, signal), id);
+  }
+}
 
 /** One person in the organisation: who they are, their calls and reports. */
 export function PersonView({ id }: { id: string }) {
@@ -151,7 +164,15 @@ function PersonPage({
   const router = useRouter();
   const dates = useDisplayDates();
   const [members, retryMembers] = useRead(readMembers, true);
-  const [activity, retryActivity] = useRead(readTwelveWeeks, true);
+  const readSummary = useCallback(
+    (signal: AbortSignal) => readPersonSummary(id, signal),
+    [id],
+  );
+  // Members see their own activity only; owners and admins see everyone's.
+  const [activity, retryActivity] = useRead(
+    readSummary,
+    viewerRole !== "member" || id === viewerId,
+  );
   const [busy, setBusy] = useState(false);
 
   const failed = members.status === "error" || activity.status === "error";
@@ -272,7 +293,7 @@ function PersonPage({
         </p>
       ) : activity.status === "ready" && personId ? (
         <PersonActivityView
-          activity={activity.value}
+          summary={activity.value}
           personId={personId}
           isYou={isYou}
           firstName={
@@ -287,22 +308,18 @@ function PersonPage({
 }
 
 function PersonActivityView({
-  activity,
+  summary,
   personId,
   isYou,
   firstName,
 }: {
-  activity: OrgActivity;
+  summary: PersonSummary;
   personId: string;
   isYou: boolean;
   firstName: string;
 }) {
   const dates = useDisplayDates();
-  const data = useMemo(
-    () => personActivity(activity, personId),
-    [activity, personId],
-  );
-  const weeks = useMemo(() => weeklyTotals(data.listed), [data]);
+  const { data, weeks } = summary;
   const reportIds = useMemo(
     () =>
       data.listed

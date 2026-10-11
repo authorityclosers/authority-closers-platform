@@ -22,7 +22,7 @@
       "label": "Explain value before trading price",
       "explanation": "You offered 10% off before the buyer asked about price or the scope was clear. The buyer’s real question was whether the service fits.",
       "why_it_matters": "An unapproved early discount makes price the topic and leaves finance with a number it cannot rely on.",
-      "selected_reason": "Selected from this call’s report. Your across-call mission stays unchanged.",
+      "selected_reason": "This call’s report suggested it. Your mission across calls doesn’t change.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "provisional",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
@@ -228,7 +228,7 @@
       "label": "Explain value before trading price",
       "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
       "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
-      "selected_reason": "5 of 7 comparable calls include a coaching suggestion for this. This does not prove the same behaviour each time.",
+      "selected_reason": "Your reports flagged it in 5 of your last 7 calls that checked this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
@@ -236,7 +236,7 @@
     "pattern": {
       "relevant_call_count": 7,
       "attention_call_count": 5,
-      "summary": "Five of your last seven comparable calls include this suggestion. Replay the moments to compare the situations."
+      "summary": "It came up on 4 different calls, not just one. Replay the moments below and compare what happened each time."
     },
     "root_cause": {
       "hypothesis": "You may treat any hesitation as a price objection and reach for a discount to keep momentum.",
@@ -571,7 +571,7 @@
     "entitlement": "coaching",
     "entitlement_policy": "AUT-1678-open-access",
     "scope": "anonymous",
-    "named_rep_details": false,
+    "named_rep_details": true,
     "analysed_calls": 40,
     "rep_count": 6,
     "pending_calls": 2,
@@ -605,9 +605,30 @@
       }
     ],
     "limitations": [
-      "Counts describe report suggestions, not proven recurring mistakes or mastery.",
+      "Counts are report suggestions, not proof of a repeated mistake or of mastery.",
       "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
       "Synthetic sandbox team (synthetic-v1)."
+    ],
+    "reps_basis": "shared",
+    "reps": [
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b001",
+        "name": "Kunal Kulkarni",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Certainty & Objection Intelligence",
+        "calls": 9,
+        "latest_call_at": "2026-09-07T10:00:00+05:30",
+        "shared_at": "2026-09-08T09:30:00+05:30"
+      },
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b002",
+        "name": "Meera Joshi",
+        "skill_id": "qualification",
+        "focus_label": "Qualification",
+        "calls": 6,
+        "latest_call_at": "2026-09-05T15:00:00+05:30",
+        "shared_at": "2026-09-01T12:00:00+05:30"
+      }
     ]
   }
 }

@@ -114,6 +114,11 @@ export type LightboxShellProps = {
   mobileFit?: boolean;
   welcome?: boolean;
   heroStage?: "welcome" | "ready" | "processing" | "attention";
+  /**
+   * Names the page in the top bar when the content knows better than the
+   * route, e.g. "Report" while a call's report is open.
+   */
+  pageName?: string;
   /** Kept for API compatibility; the shell shows no greeting banner. */
   displayName?: string | null;
   /** Label the explicit local review fixture without implying a real job. */
@@ -151,7 +156,9 @@ function pageHeading(
 function resolvePageTitle(
   active: LightboxShellProps["active"],
   heading: PageHeading | null,
+  pageName?: string,
 ): string | null {
+  if (pageName) return pageName;
   if (active === "dashboard") return "Dashboard";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
@@ -198,6 +205,7 @@ function LightboxShellFrame({
   mobileFit = false,
   welcome = false,
   heroStage,
+  pageName,
   previewHero = false,
   allowance = null,
   displayName = null,
@@ -323,7 +331,7 @@ function LightboxShellFrame({
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
   const pathname = usePathname();
   const place = shellActiveFor(pathname, active);
-  const pageTitle = resolvePageTitle(place, heading);
+  const pageTitle = resolvePageTitle(place, heading, pageName);
   const phoneTab = phoneTabFor(pathname, active);
 
   const toggleCollapsed = () => {

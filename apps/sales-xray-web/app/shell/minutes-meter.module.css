@@ -78,6 +78,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* "left" in a quieter weight, with its own gap, so it never runs into the
+   amount ("42 minleft" at phone width). */
+.unit {
+  margin-left: 3px;
+  color: var(--lx-muted);
+  font-weight: 500;
+}
+
 .track {
   position: relative;
   height: 6px;

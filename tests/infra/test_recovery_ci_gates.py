@@ -205,9 +205,32 @@ def test_sales_xray_static_preview_is_built_before_application_validation() -> N
     assert frontend["steps"].index(install) < frontend["steps"].index(preview)
 
     python_tests = _workflow_job("application.yml", "validate-python-tests")
-    shard_preview = _required_step(python_tests, "PRE-VALIDATION: Build Sales Xray static preview")
-    shard_install = _required_step(python_tests, "Install locked dependencies")
-    assert python_tests["steps"].index(shard_install) < python_tests["steps"].index(shard_preview)
+    assert not any("static preview" in step.get("name", "") for step in python_tests["steps"])
+    gate = _workflow_job("application.yml", "validate-python-gates")
+    gate_preview = _required_step(gate, "PRE-VALIDATION: Build Sales Xray static preview")
+    static_browser = _required_step(gate, "Prove Sales Xray static export browser journeys")
+    gate_install = _required_step(gate, "Install locked dependencies")
+    assert gate_preview["env"] == preview["env"]
+    assert shlex.split(gate_preview["run"]) == shlex.split(preview["run"])
+    assert gate["steps"].index(gate_install) < gate["steps"].index(gate_preview)
+    assert gate["steps"].index(gate_preview) < gate["steps"].index(static_browser)
+    expected = {
+        "tests/e2e/test_sales_xray_standalone_browser.py",
+        "tests/e2e/test_sales_xray_report_browser.py",
+    }
+    assert set(shlex.split(static_browser["run"])) & expected == expected
+    assert "if" not in static_browser and not static_browser.get("continue-on-error", False)
+    receipt = next(
+        step
+        for step in gate["steps"]
+        if step.get("name") == "Retain hosted activation test receipt"
+    )
+    assert gate["steps"].index(static_browser) < gate["steps"].index(receipt)
+    assert receipt["if"] == "always()"
+    assert receipt["with"]["path"].splitlines() == [
+        "${{ runner.temp }}/hosted-activation-root.xml",
+        "${{ runner.temp }}/sales-xray-static-browser.xml",
+    ]
 
 
 def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> None:

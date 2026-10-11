@@ -32,18 +32,22 @@ from uuid import UUID
 from sqlalchemy import (
     Integer,
     String,
+    Text,
     case,
     cast,
     delete,
     func,
     literal,
+    or_,
     select,
     text,
 )
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement, Select
 
 from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.insight_models import (
     OUTCOMES,
     SKILL_ORDER,
@@ -53,6 +57,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationProcessingPlan,
     ConversationReportDraft,
 )
+from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.speaker_map_models import (
     ConversationSpeakerMapRevision,
 )
@@ -147,6 +152,8 @@ class InsightFilters:
     team: str | None = None
     outcome: str | None = None
     language: str | None = None
+    # True for an explicit from/to window, which is never moved.
+    fixed: bool = False
 
     @classmethod
     def window(
@@ -156,15 +163,50 @@ class InsightFilters:
         span: str | None = None,
         start: datetime | None = None,
         end: datetime | None = None,
-        **narrow: str | None,
+        person: str | None = None,
+        team: str | None = None,
+        outcome: str | None = None,
+        language: str | None = None,
     ) -> InsightFilters:
         until = end or now
-        if start is not None:
-            return cls(since=start, until=until, **narrow)
-        if span == "all":
-            return cls(since=None, until=until, **narrow)
+        fixed = start is not None or end is not None
+        if span == "all" and not fixed:
+            since = None
+        elif start is not None:
+            since = start
+        else:
+            since = until - timedelta(days=RANGES.get(span or "90d", 90))
         return cls(
-            since=until - timedelta(days=RANGES.get(span or "90d", 90)), until=until, **narrow
+            since=since,
+            until=until,
+            person=person,
+            team=team,
+            outcome=outcome,
+            language=language,
+            fixed=fixed,
+        )
+
+    def to_the_hour(self) -> InsightFilters:
+        """The same window ending at the next whole hour (same length).
+
+        For relative windows over authored history only: every record is in
+        the past, so the window still holds every record up to now, and
+        repeated reads within the hour share one cache entry. An explicit
+        from/to window is returned as it is.
+        """
+        if self.fixed:
+            return self
+        end = self.until.replace(minute=0, second=0, microsecond=0)
+        if end < self.until:
+            end += timedelta(hours=1)
+        shift = end - self.until
+        return InsightFilters(
+            since=None if self.since is None else self.since + shift,
+            until=end,
+            person=self.person,
+            team=self.team,
+            outcome=self.outcome,
+            language=self.language,
         )
 
     def previous(self) -> InsightFilters | None:
@@ -299,12 +341,16 @@ class OrganisationInsights:
         *,
         scope_ids: Select[Any] | None = None,
         scope_rows: Select[Any] | None = None,
+        recordings: bool = False,
     ) -> None:
         # scope_ids selects the in-scope submission ids as text; scope_rows
         # selects (submission_id, owner_person_id, created_at, seconds,
         # recording_id) for refresh. Both come from the live library scope.
         self.database, self.tenant_id = database, tenant_id
         self.scope_ids, self.scope_rows = scope_ids, scope_rows
+        # Admin opens a real call in the review console by its recording; the
+        # Sales Xray answer never carries internal recording ids.
+        self.recordings = recordings
         self._source: str | None = None
 
     async def source(self) -> str:
@@ -324,30 +370,19 @@ class OrganisationInsights:
     # --- refresh ---------------------------------------------------------------
 
     async def pending(self) -> int:
-        """Calls not yet in the projection (an estimate for synthetic history)."""
+        """Calls not yet (or no longer) matching the projection."""
         if await self.source() == "synthetic":
-            if not self._postgres:
-                return 0
-            record = ConversationSyntheticRecord
-            keys = (
-                select(record.synthetic_key)
-                .where(
-                    record.tenant_id == self.tenant_id,
-                    record.kind.in_(("call_summary", "call")),
-                )
-                .distinct()
-                .subquery()
-            )
-            available = await self.database.scalar(select(func.count()).select_from(keys)) or 0
-            projected = await self.database.scalar(
-                select(func.count()).where(
-                    ConversationInsightCall.tenant_id == self.tenant_id,
-                    ConversationInsightCall.source == "synthetic",
-                )
-            )
-            return max(0, available - (projected or 0))
-        todo, stale = await self._call_work()
-        return len(todo) + len(stale)
+            return await self._synthetic_pending()
+        candidates = self._call_candidates()
+        if candidates is None:
+            return 0
+        todo = await self.database.scalar(
+            select(func.count()).select_from(self._call_todo(candidates).subquery())
+        )
+        stale = await self.database.scalar(
+            select(func.count()).where(*self._call_stale(candidates))
+        )
+        return int(todo or 0) + int(stale or 0)
 
     async def refresh(self, *, now: datetime) -> dict[str, int]:
         if await self.source() == "synthetic":
@@ -356,72 +391,139 @@ class OrganisationInsights:
             projected = await self._refresh_calls(now)
         return {"projected": projected, "pending": await self.pending()}
 
-    async def _call_work(self) -> tuple[list[tuple[Any, ...]], list[str]]:
+    def _call_candidates(self) -> Any:
+        """Every call the library shows with a report, its report and speaker map.
+
+        The report is the one the call's report page shows: a recovered report
+        of the recording's current generation first, else its newest draft.
+        One SQL statement over the library scope; nothing is sized to the
+        organisation in Python.
+        """
         if self.scope_rows is None:
-            return [], []
-        rows = list((await self.database.execute(self.scope_rows)).all())
-        recordings = [row[4] for row in rows]
-        latest: dict[UUID, tuple[datetime, UUID]] = {}
-        if recordings:
-            for recording_id, draft_id, created_at in await self.database.execute(
-                select(
-                    ConversationReportDraft.recording_id,
-                    ConversationReportDraft.id,
-                    ConversationReportDraft.created_at,
-                ).where(
-                    ConversationReportDraft.tenant_id == self.tenant_id,
-                    ConversationReportDraft.recording_id.in_(recordings),
-                    ConversationReportDraft.erased_at.is_(None),
-                    ConversationReportDraft.payload.is_not(None),
-                )
-            ):
-                if recording_id not in latest or (created_at, draft_id) > latest[recording_id]:
-                    latest[recording_id] = (created_at, draft_id)
-        existing: dict[str, str] = {
-            key: ref
-            for key, ref in await self.database.execute(
-                select(ConversationInsightCall.call_key, ConversationInsightCall.source_ref).where(
-                    ConversationInsightCall.tenant_id == self.tenant_id,
-                    ConversationInsightCall.source == "call",
-                )
+            return None
+        scope = self.scope_rows.subquery()
+        draft, recovered = ConversationReportDraft, ConversationRetainedC5Version
+        draft_id = (
+            select(draft.id)
+            .where(
+                draft.tenant_id == self.tenant_id,
+                draft.recording_id == scope.c.recording_id,
+                draft.person_id == scope.c.recording_person_id,
+                draft.erased_at.is_(None),
+                draft.payload.is_not(None),
             )
-        }
-        todo = []
-        live = set()
-        for row in rows:
-            key = str(row[0])
-            draft = latest.get(row[4])
-            if draft is None:
-                continue
-            live.add(key)
-            if existing.get(key) != str(draft[1]):
-                todo.append((*row, draft[1]))
-        stale = [key for key in existing if key not in live]
-        return todo, stale
+            .order_by(draft.created_at.desc(), draft.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        recovered_id = (
+            select(recovered.id)
+            .where(
+                recovered.tenant_id == self.tenant_id,
+                recovered.recording_id == scope.c.recording_id,
+                recovered.person_id == scope.c.recording_person_id,
+                recovered.generation == scope.c.generation,
+                recovered.erased_at.is_(None),
+                recovered.payload.is_not(None),
+            )
+            .order_by(recovered.created_at.desc(), recovered.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        # A rep's later seller choice changes talk share without a new report,
+        # so a projected row follows the report and the latest speaker map.
+        map_revision = (
+            select(func.max(ConversationSpeakerMapRevision.revision))
+            .where(
+                ConversationSpeakerMapRevision.tenant_id == self.tenant_id,
+                ConversationSpeakerMapRevision.submission_id == scope.c.submission_id,
+            )
+            .scalar_subquery()
+        )
+        inner = select(
+            scope.c.submission_id,
+            scope.c.owner,
+            scope.c.created_at,
+            scope.c.seconds,
+            scope.c.recording_id,
+            cast(scope.c.submission_id, String).label("call_key"),
+            draft_id.label("draft_id"),
+            recovered_id.label("recovered_id"),
+            map_revision.label("map_revision"),
+        ).subquery()
+        ref = (
+            case(
+                (
+                    inner.c.recovered_id.is_not(None),
+                    literal("r") + cast(inner.c.recovered_id, String),
+                ),
+                else_=literal("d") + cast(inner.c.draft_id, String),
+            )
+            + literal(":")
+            + cast(func.coalesce(inner.c.map_revision, 0), String)
+        )
+        return (
+            select(*inner.c, ref.label("ref"))
+            .where(or_(inner.c.draft_id.is_not(None), inner.c.recovered_id.is_not(None)))
+            .subquery()
+        )
+
+    def _call_todo(self, candidates: Any) -> Select[Any]:
+        row = ConversationInsightCall
+        return select(candidates).where(
+            ~select(row.call_key)
+            .where(
+                row.tenant_id == self.tenant_id,
+                row.source == "call",
+                row.call_key == candidates.c.call_key,
+                row.source_ref == candidates.c.ref,
+            )
+            .exists()
+        )
+
+    def _call_stale(self, candidates: Any) -> list[ColumnElement[bool]]:
+        """Projected rows whose call left the library (revoked, expired, erased)."""
+        row = ConversationInsightCall
+        return [
+            row.tenant_id == self.tenant_id,
+            row.source == "call",
+            row.call_key.not_in(select(candidates.c.call_key)),
+        ]
 
     async def _refresh_calls(self, now: datetime) -> int:
-        todo, stale = await self._call_work()
-        if stale:
-            # A call left the library (revoked, expired or erased): drop its row.
-            await self.database.execute(
-                delete(ConversationInsightCall).where(
-                    ConversationInsightCall.tenant_id == self.tenant_id,
-                    ConversationInsightCall.source == "call",
-                    ConversationInsightCall.call_key.in_(stale),
+        candidates = self._call_candidates()
+        if candidates is None:
+            return 0
+        await self.database.execute(
+            delete(ConversationInsightCall).where(*self._call_stale(candidates))
+        )
+        batch = list(
+            (
+                await self.database.execute(
+                    self._call_todo(candidates).order_by(candidates.c.call_key).limit(CALL_BATCH)
                 )
-            )
-        batch = todo[:CALL_BATCH]
+            ).all()
+        )
         if not batch:
             return 0
-        submissions = [row[0] for row in batch]
-        drafts = {
-            draft.id: draft
-            for draft in await self.database.scalars(
-                select(ConversationReportDraft).where(
-                    ConversationReportDraft.id.in_([row[5] for row in batch])
+        submissions = [item.submission_id for item in batch]
+        payloads: dict[UUID, Any] = {}
+        drafts = [item.draft_id for item in batch if item.recovered_id is None]
+        if drafts:
+            for identifier, payload in await self.database.execute(
+                select(ConversationReportDraft.id, ConversationReportDraft.payload).where(
+                    ConversationReportDraft.id.in_(drafts)
                 )
-            )
-        }
+            ):
+                payloads[identifier] = payload
+        recovered = [item.recovered_id for item in batch if item.recovered_id is not None]
+        if recovered:
+            for identifier, payload in await self.database.execute(
+                select(
+                    ConversationRetainedC5Version.id, ConversationRetainedC5Version.payload
+                ).where(ConversationRetainedC5Version.id.in_(recovered))
+            ):
+                payloads[identifier] = payload
         metrics: dict[UUID, Any] = {}
         # Ordered oldest first, so the newest summary and map win.
         for submission_id, summary in await self.database.execute(
@@ -452,42 +554,92 @@ class OrganisationInsights:
             select(ConversationProcessingPlan.recording_id, ConversationProcessingPlan.manifest)
             .where(
                 ConversationProcessingPlan.tenant_id == self.tenant_id,
-                ConversationProcessingPlan.recording_id.in_([row[4] for row in batch]),
+                ConversationProcessingPlan.recording_id.in_([item.recording_id for item in batch]),
                 ConversationProcessingPlan.erased_at.is_(None),
             )
             .order_by(ConversationProcessingPlan.created_at, ConversationProcessingPlan.id)
         ):
             languages[recording_id] = report_language(manifest)
-        for submission_id, owner, created_at, seconds, recording_id, draft_id in batch:
-            draft = drafts.get(draft_id)
-            report = draft.payload if draft is not None else None
+        values = []
+        for item in batch:
+            report = payloads.get(item.recovered_id or item.draft_id)
             if not isinstance(report, Mapping):
                 continue
-            await self.database.merge(
-                ConversationInsightCall(
-                    tenant_id=self.tenant_id,
-                    source="call",
-                    call_key=str(submission_id),
-                    source_ref=str(draft_id),
-                    person_key=None if owner is None else str(owner),
-                    team_key=None,
-                    occurred_at=created_at,
-                    duration_ms=None if seconds is None else int(seconds) * 1000,
-                    language=languages.get(recording_id),
-                    outcome=report_outcome(report),
-                    talk_share=seller_talk_share(
-                        metrics.get(submission_id), speakers.get(submission_id)
+            values.append(
+                {
+                    "tenant_id": self.tenant_id,
+                    "source": "call",
+                    "call_key": item.call_key,
+                    "source_ref": item.ref,
+                    "person_key": None if item.owner is None else str(item.owner),
+                    "team_key": None,
+                    "occurred_at": item.created_at,
+                    "duration_ms": None if item.seconds is None else int(item.seconds) * 1000,
+                    "language": languages.get(item.recording_id),
+                    "outcome": report_outcome(report),
+                    "talk_share": seller_talk_share(
+                        metrics.get(item.submission_id), speakers.get(item.submission_id)
                     ),
-                    skills=skill_states(report.get("dimensions")),
-                    objection=objection_kinds(report),
-                    focus=None,
-                    deal_value=None,
-                    coaching_done=None,
-                    projected_at=now,
+                    "skills": skill_states(report.get("dimensions")),
+                    "objection": objection_kinds(report),
+                    "focus": None,
+                    "deal_value": None,
+                    "coaching_done": None,
+                    "projected_at": now,
+                }
+            )
+        if values:
+            # An upsert: two viewers refreshing at once both succeed.
+            statement = postgresql_insert(ConversationInsightCall).values(values)
+            await self.database.execute(
+                statement.on_conflict_do_update(
+                    index_elements=["tenant_id", "source", "call_key"],
+                    set_={
+                        name: getattr(statement.excluded, name)
+                        for name in values[0]
+                        if name not in {"tenant_id", "source", "call_key"}
+                    },
                 )
             )
-        await self.database.flush()
         return len(batch)
+
+    async def _synthetic_pending(self) -> int:
+        """Authored calls not yet projected, or imported again since the last refresh."""
+        if not self._postgres:
+            return 0
+        record = ConversationSyntheticRecord
+        clean = func.strpos(cast(record.payload, Text), "\\u0000") == 0
+        keys = (
+            select(record.synthetic_key)
+            .where(
+                record.tenant_id == self.tenant_id,
+                record.kind.in_(("call_summary", "call")),
+                clean,
+            )
+            .distinct()
+            .subquery()
+        )
+        available = await self.database.scalar(select(func.count()).select_from(keys)) or 0
+        projected, last = (
+            await self.database.execute(
+                select(func.count(), func.max(ConversationInsightCall.projected_at)).where(
+                    ConversationInsightCall.tenant_id == self.tenant_id,
+                    ConversationInsightCall.source == "synthetic",
+                )
+            )
+        ).one()
+        missing = max(0, available - int(projected or 0))
+        if missing or last is None:
+            return missing
+        newer = await self.database.scalar(
+            select(func.count()).where(
+                record.tenant_id == self.tenant_id,
+                record.kind.in_(("call_summary", "call")),
+                record.imported_at > last,
+                clean,
+            )
+        )
+        return int(newer or 0)
 
     async def _refresh_synthetic(self, now: datetime) -> int:
         """Project authored call summaries (and summary-less full calls) in SQL."""
@@ -505,6 +657,7 @@ class OrganisationInsights:
                 CASE WHEN jsonb_typeof(p->'report'->'your_skills_on_this_call') = 'array'
                 THEN p->'report'->'your_skills_on_this_call' ELSE '[]'::jsonb END) s
             WHERE s->>'skill_id' ~ '^skill-[1-8]$'
+            HAVING count(DISTINCT s->>'skill_id') = 8
         )"""
         outcome = """CASE {value}
             WHEN 'Won' THEN 'won' WHEN 'Meeting Booked' THEN 'booked'
@@ -530,26 +683,29 @@ class OrganisationInsights:
                 focus = excluded.focus, deal_value = excluded.deal_value,
                 coaching_done = excluded.coaching_done, projected_at = excluded.projected_at
         """
-        people = """people AS (
+        # A JSON string holding \u0000 can't become jsonb; such an authored
+        # record is skipped instead of failing every batch after it.
+        clean = "strpos(payload::text, '\\u0000') = 0"
+        people = f"""people AS (
             SELECT DISTINCT ON (synthetic_key) synthetic_key AS rep,
                 left(payload::jsonb->'fields'->>'team_id', 160) AS team
             FROM conversation_synthetic_records
-            WHERE tenant_id = :tenant AND kind = 'people'
+            WHERE tenant_id = :tenant AND kind = 'people' AND {clean}
             ORDER BY synthetic_key, revision DESC
-        )"""
+        )"""  # noqa: S608 - constant fragments only; values are bound parameters
         # Built only from the constant fragments above; every value is a bound parameter.
         summaries = f"""
             WITH {people},
             latest AS (
                 SELECT DISTINCT ON (synthetic_key) synthetic_key, revision
                 FROM conversation_synthetic_records
-                WHERE tenant_id = :tenant AND kind = 'call_summary'
+                WHERE tenant_id = :tenant AND kind = 'call_summary' AND {clean}
                 ORDER BY synthetic_key, revision DESC
             ),
             bundles AS (
                 SELECT synthetic_key, max(revision) AS revision
                 FROM conversation_synthetic_records
-                WHERE tenant_id = :tenant AND kind = 'call'
+                WHERE tenant_id = :tenant AND kind = 'call' AND {clean}
                 GROUP BY synthetic_key
             ),
             todo AS (
@@ -602,7 +758,7 @@ class OrganisationInsights:
             latest AS (
                 SELECT DISTINCT ON (synthetic_key) synthetic_key, revision
                 FROM conversation_synthetic_records c
-                WHERE tenant_id = :tenant AND kind = 'call'
+                WHERE tenant_id = :tenant AND kind = 'call' AND {clean}
                   AND NOT EXISTS (
                     SELECT 1 FROM conversation_synthetic_records s
                     WHERE s.tenant_id = :tenant AND s.kind = 'call_summary'
@@ -752,6 +908,7 @@ class OrganisationInsights:
         source = await self.source()
         if source != "synthetic":
             return {**await self._overview(filters, now=now), "pending": await self.pending()}
+        filters = filters.to_the_hour()
         count, projected = (
             await self.database.execute(
                 select(func.count(), func.max(ConversationInsightCall.projected_at)).where(
@@ -1048,10 +1205,12 @@ class OrganisationInsights:
             .order_by(*order, row.call_key)
             .limit(5)
         )
-        return [
-            self._call_row(key, person, at, outcome, skills, duration, names=names)
-            for key, person, at, outcome, skills, duration in rows
-        ]
+        return await self._with_recordings(
+            [
+                self._call_row(key, person, at, outcome, skills, duration, names=names)
+                for key, person, at, outcome, skills, duration in rows
+            ]
+        )
 
     def _call_row(
         self,
@@ -1116,34 +1275,66 @@ class OrganisationInsights:
             "total": total,
             "offset": offset,
             "next_offset": offset + len(rows) if offset + len(rows) < total else None,
-            "items": [
-                self._call_row(
-                    key,
-                    person,
-                    at,
-                    outcome,
-                    skills,
-                    duration,
-                    names=names,
-                    language=language,
-                    talk_share=talk,
-                    objections=[] if not objection else objection.split("|"),
-                    deal_value=value,
-                )
-                for (
-                    key,
-                    person,
-                    at,
-                    outcome,
-                    skills,
-                    duration,
-                    language,
-                    talk,
-                    objection,
-                    value,
-                ) in rows
-            ],
+            "items": await self._with_recordings(
+                [
+                    self._call_row(
+                        key,
+                        person,
+                        at,
+                        outcome,
+                        skills,
+                        duration,
+                        names=names,
+                        language=language,
+                        talk_share=talk,
+                        objections=[] if not objection else objection.split("|"),
+                        deal_value=value,
+                    )
+                    for (
+                        key,
+                        person,
+                        at,
+                        outcome,
+                        skills,
+                        duration,
+                        language,
+                        talk,
+                        objection,
+                        value,
+                    ) in rows
+                ]
+            ),
         }
+
+    async def _with_recordings(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Each real call's recording, so Admin can open it in the review console."""
+        if not self.recordings:
+            return items
+        if await self.source() != "call" or not items:
+            for item in items:
+                item["recording_id"] = None
+            return items
+        submissions = []
+        for item in items:
+            try:
+                submissions.append(UUID(item["key"]))
+            except ValueError:
+                continue
+        recordings = {
+            str(submission): str(recording)
+            for submission, recording in await self.database.execute(
+                select(
+                    ConversationGuestSubmission.submission_id,
+                    ConversationGuestSubmission.recording_id,
+                ).where(
+                    ConversationGuestSubmission.tenant_id == self.tenant_id,
+                    ConversationGuestSubmission.submission_id.in_(submissions),
+                )
+            )
+        }
+        for item in items:
+            item["recording_id"] = recordings.get(item["key"])
+        return items
 
     # --- names and facets ------------------------------------------------------
 
@@ -1188,6 +1379,7 @@ class OrganisationInsights:
                     left(payload::jsonb->'fields'->>'title', 60)
                 FROM conversation_synthetic_records
                 WHERE tenant_id = :tenant AND kind = 'people'
+                  AND strpos(payload::text, '\\u0000') = 0
                 ORDER BY synthetic_key, revision DESC
                 """
             ),
@@ -1208,11 +1400,13 @@ class OrganisationInsights:
                     SELECT DISTINCT payload::jsonb->'fields'->>'team_id' AS team, business_id
                     FROM conversation_synthetic_records
                     WHERE tenant_id = :tenant AND kind = 'people'
+                  AND strpos(payload::text, '\\u0000') = 0
                 ), worlds AS (
                     SELECT DISTINCT ON (synthetic_key) synthetic_key,
                         left(payload::jsonb->>'name', 120) AS name
                     FROM conversation_synthetic_records
                     WHERE tenant_id = :tenant AND kind = 'world'
+                      AND strpos(payload::text, '\\u0000') = 0
                     ORDER BY synthetic_key, revision DESC
                 )
                 SELECT teams.team, coalesce(worlds.name, teams.business_id)
@@ -1272,6 +1466,29 @@ class OrganisationInsights:
         }
 
 
+async def erase_insights_for_recording(
+    database: AsyncSession, *, tenant_id: UUID, recording_id: UUID
+) -> int:
+    """Purge a call's projected row when the canonical recording erasure completes.
+
+    The row holds only codes and numbers derived from the call's report, but it
+    is still call-linked data: it goes with the call, in the same transaction,
+    without waiting for the next refresh.
+    """
+    submissions = select(cast(ConversationGuestSubmission.submission_id, String)).where(
+        ConversationGuestSubmission.tenant_id == tenant_id,
+        ConversationGuestSubmission.recording_id == recording_id,
+    )
+    result = await database.execute(
+        delete(ConversationInsightCall).where(
+            ConversationInsightCall.tenant_id == tenant_id,
+            ConversationInsightCall.source == "call",
+            ConversationInsightCall.call_key.in_(submissions),
+        )
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 def scope_columns(scope: Select[Any]) -> tuple[Select[Any], Select[Any]]:
     """The two selects OrganisationInsights needs from a library scope query."""
     from ac_platform.conversation_intelligence.acquisition_models import (
@@ -1285,11 +1502,13 @@ def scope_columns(scope: Select[Any]) -> tuple[Select[Any], Select[Any]]:
     owner = func.coalesce(Usage.person_id, Claim.person_id)
     ids = scope.with_only_columns(cast(Usage.submission_id, String), maintain_column_froms=True)
     rows = scope.with_only_columns(
-        Usage.submission_id,
-        owner,
-        Usage.created_at,
-        cast(Usage.reserved_seconds, Integer),
-        Recording.id,
+        Usage.submission_id.label("submission_id"),
+        owner.label("owner"),
+        Usage.created_at.label("created_at"),
+        cast(Usage.reserved_seconds, Integer).label("seconds"),
+        Recording.id.label("recording_id"),
+        Recording.person_id.label("recording_person_id"),
+        Recording.generation.label("generation"),
         maintain_column_froms=True,
     )
     return ids, rows
@@ -1297,6 +1516,7 @@ def scope_columns(scope: Select[Any]) -> tuple[Select[Any], Select[Any]]:
 
 __all__ = [
     "InsightFilters",
+    "erase_insights_for_recording",
     "OrganisationInsights",
     "objection_kinds",
     "report_language",

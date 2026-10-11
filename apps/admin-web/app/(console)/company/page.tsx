@@ -1,6 +1,6 @@
 import { BarChart3 } from "lucide-react";
 
-import { CompanyView } from "@/app/company/company-view";
+import { CompanyView, VIEWS } from "@/app/company/company-view";
 import {
   INSIGHTS_PATH,
   filtersFrom,
@@ -82,6 +82,7 @@ export default async function CompanyPage({
       calls={calls?.ok ? calls.data : null}
       callsError={calls && !calls.ok ? calls.error : null}
       offset={offset}
+      view={VIEWS.find((item) => item.key === params.view)?.key ?? "overview"}
     />
   );
 }

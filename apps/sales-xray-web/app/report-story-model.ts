@@ -5,6 +5,17 @@ import type {
   SalesReport,
   Transcript,
 } from "./report-contract";
+import {
+  BIG_PICTURE,
+  CALL_FLOW,
+  DEAL,
+  METRIC_LABELS,
+  MOMENTS,
+  PILLAR_COPY,
+  STAGE_LABELS,
+  WORKED_DIDNT,
+} from "./report-copy";
+import type { PillarNote, ReportPillars } from "./report-pillars-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 
 /**
@@ -19,6 +30,8 @@ export type Line = {
   sources: ReportEvidence[];
   /** The analysis offers this as a possibility, not an established fact. */
   inferred?: boolean;
+  /** Someone's own words: the text is (nearly all of) one of its quotes. */
+  quoted?: boolean;
 };
 
 export const OUTCOME_STATUSES = [
@@ -51,11 +64,14 @@ export type SkillState =
 export type MomentKind =
   | "Strong Moment"
   | "Turning Point"
+  | "Buying Signal"
   | "Important Miss"
   | "Objection"
   | "Price Moment"
   | "Decision Moment"
+  | "Trust Moment"
   | "Commitment"
+  | "Risk"
   | "Worth Replaying";
 
 export type Moment = {
@@ -67,9 +83,20 @@ export type Moment = {
   /** Important Miss only: what the seller did instead, and the open question. */
   movedToward?: Line;
   couldExplore?: string;
+  /** Price Moment only: the words that named the price, and what came back. */
+  priceStated?: Line;
+  prospectResponse?: Line;
 };
 
-export type Item = { title: string; what: Line; why: Line | null };
+export type Item = {
+  title: string;
+  what: Line;
+  why: Line | null;
+  /** The title is the whole sentence; `what` only repeats it (not shown). */
+  sentence?: boolean;
+  /** What Didn't only: the possible areas left open (spec 3.2). */
+  areas?: string[];
+};
 
 export type SkillRow = {
   id: string;
@@ -102,6 +129,9 @@ export type StoryModel = {
       turn: Line;
       after: Line;
       effect: string | null;
+      /** Stage names either side of the switch, when the analysis gives them. */
+      beforeLabel?: string | null;
+      afterLabel?: string | null;
     } | null;
   };
   worked: Item[];
@@ -114,6 +144,29 @@ export type StoryModel = {
     unclear: string[];
     concerns: Line[];
     findings: Item[];
+    /** Spec 5, Deep Analysis: the four groups, each only with what we have. */
+    discovery: {
+      clear: string[];
+      unclear: string[];
+      openingMissed: Line | null;
+    };
+    decision: {
+      price: Line | null;
+      response: Line | null;
+      likely: Line[];
+      /** What the decision answer may mean, when the analysis lists it. */
+      likelyStatus?: string[];
+    };
+    communication: {
+      longest: string | null;
+      observation: Line | null;
+      listening?: string | null;
+    };
+    presentation?: {
+      relevant: string[];
+      lessRelevant: string | null;
+      valueConnection: string | null;
+    };
   };
   deal: {
     outcome: Outcome;
@@ -129,6 +182,13 @@ export type StoryModel = {
   };
   /** Per pillar, what this report does not establish (shown as one line). */
   missing: [string[], string[], string[], string[], string[], string[]];
+  /** The optional end strip (spec): short values, each from the report. */
+  end: {
+    strongest: string | null;
+    issue: string | null;
+    moment: Moment | null;
+    nextEvent: string | null;
+  };
 };
 
 const SKILL_SHORT: Record<string, string> = {
@@ -150,24 +210,111 @@ const CALL_STATE: Record<string, SkillState> = {
   not_applicable: "Not Applicable",
 };
 
-const PHASE_LABELS = {
-  opening: "Opening",
-  discovery: "Discovery",
-  pitch: "Offer discussion",
-  objection: "Concerns",
-  close: "Decision discussion",
-} as const;
-
 const MOMENT_PRIORITY: MomentKind[] = [
   "Turning Point",
   "Important Miss",
+  "Buying Signal",
   "Strong Moment",
   "Commitment",
   "Decision Moment",
   "Objection",
   "Price Moment",
+  "Trust Moment",
+  "Risk",
   "Worth Replaying",
 ];
+
+const normal = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[\s\p{P}]+/gu, " ")
+    .trim();
+
+/** A line whose text is one of its own quotes says so, so it reads as speech. */
+function sourced(text: string, sources: ReportEvidence[]): Line {
+  const said = normal(text);
+  const quoted = sources.some((source) => {
+    const quote = normal(source.quote);
+    return (
+      quote === said ||
+      (said.length > 12 && quote.includes(said)) ||
+      (quote.length > 12 &&
+        said.includes(quote) &&
+        quote.length >= said.length * 0.8)
+    );
+  });
+  return quoted ? { text, sources, quoted } : { text, sources };
+}
+
+/**
+ * A card title that only repeats the start of its sentence (the same words,
+ * or the sentence cut mid-word) becomes the sentence itself, shown once.
+ * Same rule as the Document view (G, `sentenceAsTitle`).
+ */
+function asSentence(item: Item): Item {
+  const head = item.title.trim().replace(/[\s.…]+$/u, "");
+  const body = item.what.text.trim();
+  if (!head || !body.startsWith(head)) return item;
+  const rest = body.slice(head.length).replace(/^[\s.]+$/u, "");
+  const cut = /^[\p{L}\p{N}]/u.test(rest) || head.length >= 40;
+  return !rest || cut
+    ? { ...item, title: body.replace(/(?<!\.)\.$/u, ""), sentence: true }
+    : item;
+}
+
+const words = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[\s\p{P}]+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+/**
+ * True when a second paragraph only restates the first: the same text, one
+ * inside the other, or the same opening ("You conducted …" twice). The Big
+ * Picture then shows one summary, as the spec asks.
+ */
+function repeats(
+  first: string | null | undefined,
+  second: string | null | undefined,
+) {
+  if (!first?.trim() || !second?.trim()) return false;
+  const a = words(first);
+  const b = words(second);
+  const joinedA = a.join(" ");
+  const joinedB = b.join(" ");
+  if (joinedA.includes(joinedB) || joinedB.includes(joinedA)) return true;
+  return a.length > 2 && b.length > 2 && a[0] === b[0] && a[1] === b[1];
+}
+
+/** A line that stands alone starts with a capital ("next Tuesday" → "Next Tuesday"). */
+const upperFirst = (text: string) =>
+  text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : text;
+
+/** A spec heading in sentence case, for the one-line gaps. */
+const sentence = (heading: string) =>
+  heading.charAt(0) + heading.slice(1).toLowerCase();
+
+/** Names of the parts a report can leave out, as the gap line says them. */
+const GAP = {
+  outcome: BIG_PICTURE.outcome.label,
+  summary: BIG_PICTURE.summary.label,
+  influence: BIG_PICTURE.influence.label,
+  strongest: BIG_PICTURE.strongest.label,
+  concern: BIG_PICTURE.concern.label,
+  nextStep: BIG_PICTURE.nextStep.label,
+  stages: sentence(CALL_FLOW.timeline.heading),
+  change: CALL_FLOW.change.label,
+  worked: WORKED_DIDNT.worked.label,
+  didnt: WORKED_DIDNT.didnt.label,
+  moments: PILLAR_COPY.missed.short,
+  blocker: DEAL.blocker.label,
+  prospectCommitment: sentence(DEAL.prospectCommitment.heading),
+  sellerCommitment: sentence(DEAL.sellerCommitment.heading),
+  nextEvent: DEAL.nextEvent.label,
+  quality: DEAL.quality.label,
+};
 
 const clean = (value: string | null | undefined) => {
   const text = value?.trim();
@@ -186,7 +333,8 @@ const line = (
 };
 
 export function formatDuration(ms: number) {
-  const total = Math.max(0, Math.round(ms / 1000));
+  // Whole seconds, as the header and player count them (never rounded up).
+  const total = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
@@ -285,24 +433,27 @@ function metricsFor(
       : ids.slice(0, 2);
   const names =
     roles?.seller && roles.prospect && ordered[0] === roles.seller
-      ? "You : Prospect"
+      ? METRIC_LABELS.youProspect
       : ordered.length === 2
-        ? "Speaker 1 : Speaker 2"
+        ? METRIC_LABELS.speakers
         : null;
   const metrics: Metric[] = [
-    { label: "Call length", value: formatDuration(transcript.duration_ms) },
+    {
+      label: METRIC_LABELS.callLength,
+      value: formatDuration(transcript.duration_ms),
+    },
   ];
   if (ordered.length === 2 && names) {
     const shares = ordered.map((id) =>
       Math.round((measured.speakers[id].talk_share ?? 0) * 100),
     );
     metrics.push({
-      label: "Talk share",
+      label: METRIC_LABELS.talkShare,
       value: `${shares[0]} : ${shares[1]}`,
       note: names,
     });
     metrics.push({
-      label: "Questions asked",
+      label: METRIC_LABELS.questions,
       value: `${measured.speakers[ordered[0]].questions} : ${measured.speakers[ordered[1]].questions}`,
       note: names,
     });
@@ -318,11 +469,13 @@ function metricsFor(
       );
   if (longest > 0)
     metrics.push({
-      label: seller ? "Longest seller turn" : "Longest turn",
+      label: seller
+        ? METRIC_LABELS.longestSellerTurn
+        : METRIC_LABELS.longestTurn,
       value: formatDuration(longest),
     });
   metrics.push({
-    label: "Talk-overs",
+    label: METRIC_LABELS.talkOvers,
     value: String(measured.cut_ins.length),
   });
   return metrics;
@@ -332,7 +485,7 @@ function phasesFor(report: SalesReport, durationMs: number | undefined) {
   const phases = report.story?.phases;
   if (!phases?.length || !durationMs) return null;
   return phases.map((phase, index) => ({
-    label: PHASE_LABELS[phase.name],
+    label: STAGE_LABELS[phase.name],
     start_ms: phase.start_ms,
     end_ms: phases[index + 1]?.start_ms ?? durationMs,
   }));
@@ -341,6 +494,7 @@ function phasesFor(report: SalesReport, durationMs: number | undefined) {
 function momentsFor(
   report: SalesReport,
   transcript: Transcript | undefined,
+  roles?: { seller?: string | null; prospect?: string | null },
 ): Moment[] {
   const overview = report.overview;
   const moments: Moment[] = [];
@@ -355,7 +509,7 @@ function momentsFor(
   if (change?.change.evidence[0])
     add({
       kind: "Turning Point",
-      title: "The conversation changed here",
+      title: MOMENTS.titleTurn,
       source: change.change.evidence[0],
       why: line(change.possible_effect, [], true),
     });
@@ -368,9 +522,12 @@ function momentsFor(
       title: finding.title,
       source,
       why: line(missed.potential_impact, [], true),
-      movedToward:
-        line(missed.closer_response.text, missed.closer_response.evidence) ??
-        undefined,
+      movedToward: clean(missed.closer_response.text)
+        ? sourced(
+            missed.closer_response.text.trim(),
+            missed.closer_response.evidence,
+          )
+        : undefined,
       couldExplore: clean(missed.follow_up) ?? undefined,
     });
   }
@@ -408,8 +565,8 @@ function momentsFor(
       title:
         outcome?.kind === "follow_up" ||
         report.story?.outcome.kind === "follow_up"
-          ? "A next step was agreed"
-          : "How the call ended",
+          ? MOMENTS.titleNextStep
+          : MOMENTS.titleEnding,
       source: closing,
       why: line(outcome?.text ?? report.story?.next_step?.text, []),
     });
@@ -418,34 +575,71 @@ function momentsFor(
       transcript.segments,
       transcript.duration_ms,
     );
-    const price = measured.price_moments[0];
-    const segment = price
-      ? transcript.segments.find((item) => item.id === price.segment_id)
-      : null;
-    if (segment)
+    const price = priceExchange(transcript, measured.price_moments, roles);
+    if (price)
       add({
         kind: "Price Moment",
-        title: "Price or money came up",
-        source: {
-          segment_id: segment.id,
-          quote: segment.text,
-          start_ms: segment.start_ms,
-          end_ms: segment.end_ms,
-        },
+        title: MOMENTS.titlePrice,
+        source: price.stated.sources[0],
         why: null,
+        priceStated: price.stated,
+        prospectResponse: price.response ?? undefined,
       });
   }
+  // "Watch this again" clips are Coaching material; only the ones to repeat
+  // are moments of this call (Dipak's labels have no "Worth Replaying").
   for (const item of overview?.rewatch ?? []) {
     const source = item.evidence[0];
-    if (source)
+    if (source && item.purpose === "repeat")
       add({
-        kind: item.purpose === "repeat" ? "Strong Moment" : "Worth Replaying",
+        kind: "Strong Moment",
         title: item.text,
         source,
         why: null,
       });
   }
   return moments;
+}
+
+/** The words that named a price, and the next thing someone else said. */
+function priceExchange(
+  transcript: Transcript,
+  moments: { segment_id: string }[],
+  roles?: { seller?: string | null; prospect?: string | null },
+): { stated: Line; response: Line | null } | null {
+  const lines = moments
+    .map((moment) =>
+      transcript.segments.findIndex((s) => s.id === moment.segment_id),
+    )
+    .filter((index) => index >= 0);
+  // With known roles a price is what the seller states; a figure only the
+  // prospect names is their budget, not a price, so it is not shown as one.
+  const seller = roles?.seller ?? null;
+  const prospect = roles?.prospect ?? null;
+  const at =
+    seller && prospect
+      ? lines.find((index) => transcript.segments[index].speaker_id === seller)
+      : lines[0];
+  const segment = at === undefined ? undefined : transcript.segments[at];
+  if (at === undefined || !segment) return null;
+  const evidence = (s: Transcript["segments"][number]): ReportEvidence => ({
+    segment_id: s.id,
+    quote: s.text,
+    start_ms: s.start_ms,
+    end_ms: s.end_ms,
+  });
+  const reply = transcript.segments
+    .slice(at + 1, at + 4)
+    .find(
+      (s) =>
+        s.speaker_id &&
+        s.speaker_id !== segment.speaker_id &&
+        (!prospect || s.speaker_id === prospect),
+    );
+  return {
+    stated: { text: segment.text, sources: [evidence(segment)] },
+    response: reply ? { text: reply.text, sources: [evidence(reply)] } : null,
+  };
 }
 
 function topMoments(moments: Moment[], limit = 5) {
@@ -558,7 +752,9 @@ export function reportStoryModel(
   const picture = {
     outcome,
     summary: line(report.summary, report.summary_evidence),
-    assessment: clean(overview?.final_assessment.assessment),
+    assessment: repeats(report.summary, overview?.final_assessment.assessment)
+      ? null
+      : clean(overview?.final_assessment.assessment),
     influence: line(overview?.diagnosis?.text, overview?.diagnosis?.evidence),
     strongest,
     concern,
@@ -571,9 +767,9 @@ export function reportStoryModel(
     phases: phasesFor(report, transcript?.duration_ms),
     change: change
       ? {
-          before: { text: change.before.text, sources: change.before.evidence },
-          turn: { text: change.change.text, sources: change.change.evidence },
-          after: { text: change.after.text, sources: change.after.evidence },
+          before: sourced(change.before.text, change.before.evidence),
+          turn: sourced(change.change.text, change.change.evidence),
+          after: sourced(change.after.text, change.after.evidence),
           effect: clean(change.possible_effect),
         }
       : null,
@@ -601,7 +797,7 @@ export function reportStoryModel(
       : item;
   });
 
-  const moments = momentsFor(report, transcript);
+  const moments = momentsFor(report, transcript, options.roles);
 
   const skills = REPORT_SKILLS.map(([id, label]): SkillRow => {
     const dimension = report.dimensions.find((d) => d.dimension_id === id);
@@ -624,12 +820,40 @@ export function reportStoryModel(
       inferred: true,
     }),
   );
+  const priceMoment = moments.find((m) => m.kind === "Price Moment");
+  const firstMiss = overview?.missed_details[0];
+  const communication = report.dimensions.find(
+    (d) => d.dimension_id === "communication_tonality",
+  );
+  const longestMetric = flow.metrics.find((m) => /^Longest/.test(m.label));
   const deeper = {
     unclear,
     concerns,
     findings: [...report.objection_analysis, ...report.closing_analysis].map(
       (finding) => findingItem(finding, null, false),
     ),
+    discovery: {
+      clear: [] as string[],
+      unclear,
+      openingMissed: firstMiss
+        ? line(
+            firstMiss.prospect_signal.text,
+            firstMiss.prospect_signal.evidence,
+          )
+        : null,
+    },
+    decision: {
+      price: priceMoment?.priceStated ?? null,
+      response: priceMoment?.prospectResponse ?? null,
+      likely: concerns,
+    },
+    communication: {
+      longest: longestMetric?.value ?? null,
+      observation:
+        communication && skillState(communication)
+          ? line(communication.observation, communication.evidence)
+          : null,
+    },
   };
 
   const rung = story?.outcome.next_step_rung;
@@ -648,7 +872,7 @@ export function reportStoryModel(
     nextEvent:
       story?.outcome.next_step_when && story.outcome.evidence.length
         ? {
-            text: story.outcome.next_step_when,
+            text: upperFirst(story.outcome.next_step_when),
             sources: story.outcome.evidence,
           }
         : null,
@@ -667,41 +891,274 @@ export function reportStoryModel(
 
   const missing: StoryModel["missing"] = [
     [
-      !outcome.status && "Call outcome",
-      !picture.summary && "Summary",
-      !picture.influence && "What most affected this call",
-      !strongest && "Strongest part",
-      !concern && "Biggest concern",
-      !nextStep && "Next agreed step",
+      !outcome.status && GAP.outcome,
+      !picture.summary && GAP.summary,
+      !picture.influence && GAP.influence,
+      !strongest && GAP.strongest,
+      !concern && GAP.concern,
+      !nextStep && GAP.nextStep,
     ].filter((v): v is string => Boolean(v)),
-    [
-      !flow.phases && "Conversation stages",
-      !flow.change && "Key change",
-    ].filter((v): v is string => Boolean(v)),
-    [!worked.length && "What worked", !didnt.length && "What didn't"].filter(
+    [!flow.phases && GAP.stages, !flow.change && GAP.change].filter(
       (v): v is string => Boolean(v),
     ),
-    moments.length ? [] : ["Moments"],
+    [!worked.length && GAP.worked, !didnt.length && GAP.didnt].filter(
+      (v): v is string => Boolean(v),
+    ),
+    moments.length ? [] : [GAP.moments],
     skills.filter((s) => !s.state).map((s) => s.short),
     [
-      !deal.blocker && "Current blocker",
-      !deal.prospectCommitments.length && "Prospect commitment",
-      !deal.sellerCommitments.length && "Seller commitment",
-      !deal.nextEvent && "Next event date",
-      !deal.quality && "Commitment quality",
+      !deal.blocker && GAP.blocker,
+      !deal.prospectCommitments.length && GAP.prospectCommitment,
+      !deal.sellerCommitments.length && GAP.sellerCommitment,
+      !deal.nextEvent && GAP.nextEvent,
+      !deal.quality && GAP.quality,
     ].filter((v): v is string => Boolean(v)),
   ];
 
+  const top = topMoments(moments);
+  const end = {
+    strongest: worked[0]?.title ?? null,
+    issue: didnt[0]?.title ?? null,
+    moment: top.find((m) => m.kind === "Turning Point") ?? top[0] ?? null,
+    nextEvent: deal.nextEvent?.text ?? null,
+  };
+
+  const model: StoryModel = {
+    picture,
+    flow,
+    worked: worked.map(asSentence),
+    didnt: didnt.map(asSentence),
+    moments,
+    topMoments: top,
+    skills,
+    deeper,
+    deal,
+    missing,
+    end,
+  };
+  return report.pillars
+    ? withPillars(
+        model,
+        report.pillars,
+        transcript?.duration_ms,
+        options.recorded,
+      )
+    : model;
+}
+
+const note = (value: PillarNote | null | undefined, inferred = false) =>
+  value ? line(value.text, value.evidence, inferred) : null;
+
+/**
+ * The analysis' own pillar words (report-pillars/1) replace what the Report
+ * would otherwise derive, part by part; anything it leaves out keeps the
+ * derived value, so older and newer reports read the same way.
+ */
+function withPillars(
+  base: StoryModel,
+  p: ReportPillars,
+  durationMs: number | undefined,
+  recorded: { status: OutcomeStatus; note?: string | null } | null | undefined,
+): StoryModel {
+  const outcome: Outcome =
+    !recorded && p.outcome
+      ? {
+          status: p.outcome.status,
+          origin: "call",
+          detail:
+            line(p.outcome.line, p.outcome.evidence) ??
+            base.picture.outcome.detail,
+        }
+      : base.picture.outcome;
+  const nextStep = note(p.next_step) ?? base.picture.nextStep;
+  const picture = {
+    ...base.picture,
+    outcome,
+    summary: p.summary
+      ? { text: p.summary, sources: [] }
+      : base.picture.summary,
+    // The supplied summary is already the three to five sentences.
+    assessment: p.summary ? null : base.picture.assessment,
+    influence: note(p.biggest_influence) ?? base.picture.influence,
+    strongest: note(p.strongest_part) ?? base.picture.strongest,
+    concern: note(p.biggest_concern) ?? base.picture.concern,
+    nextStep,
+  };
+
+  const phases =
+    p.timeline && durationMs
+      ? p.timeline
+          .filter((stage) => stage.start_ms < durationMs)
+          .map((stage, index, all) => ({
+            label: stage.label,
+            start_ms: stage.start_ms,
+            end_ms: all[index + 1]?.start_ms ?? durationMs,
+          }))
+      : null;
+  const change = p.key_change
+    ? {
+        before: { text: p.key_change.before.text, sources: [] },
+        turn: { text: p.key_change.text, sources: p.key_change.evidence },
+        after: { text: p.key_change.after.text, sources: [] },
+        effect: null,
+        beforeLabel: p.key_change.before.label,
+        afterLabel: p.key_change.after.label,
+      }
+    : base.flow.change;
+  const flow = {
+    ...base.flow,
+    phases: phases?.length ? phases : base.flow.phases,
+    change,
+  };
+
+  const worked = p.worked?.length
+    ? p.worked.map((item) =>
+        asSentence({
+          title: item.title,
+          what: { text: item.what, sources: item.evidence.slice(0, 1) },
+          why: line(item.why_it_helped, []),
+        }),
+      )
+    : base.worked;
+  const didnt = p.didnt?.length
+    ? p.didnt.map((item) =>
+        asSentence({
+          title: item.title,
+          what: { text: item.what, sources: item.evidence.slice(0, 1) },
+          why: line(item.what_it_affected, []),
+          areas: item.possible_areas,
+        }),
+      )
+    : base.didnt;
+
+  let moments = base.moments;
+  let top = base.topMoments;
+  let keyMoment = base.end.moment;
+  if (p.moments?.length) {
+    // Supplied in order of importance: the first five are the key moments.
+    moments = p.moments.map((item, index) => ({
+      key: `pillar-${index}-${evidenceKey(item.evidence[0])}`,
+      kind: item.kind,
+      title: item.title,
+      source: item.evidence[0],
+      why: line(item.why, []),
+      movedToward: line(item.moved_toward, []) ?? undefined,
+      couldExplore: item.what_was_missed ?? undefined,
+      priceStated: note(item.price_stated) ?? undefined,
+      prospectResponse: note(item.prospect_response) ?? undefined,
+    }));
+    top = moments
+      .slice(0, 5)
+      .sort((a, b) => a.source.start_ms - b.source.start_ms);
+    keyMoment =
+      p.most_important_moment !== undefined
+        ? moments[p.most_important_moment]
+        : (top.find((m) => m.kind === "Turning Point") ?? moments[0]);
+  }
+
+  const d = p.deeper;
+  const deeper = d
+    ? {
+        ...base.deeper,
+        discovery: {
+          clear: d.became_clear,
+          unclear: d.still_unclear.length
+            ? d.still_unclear
+            : base.deeper.discovery.unclear,
+          openingMissed:
+            note(d.opening_missed) ?? base.deeper.discovery.openingMissed,
+        },
+        decision: {
+          price: note(d.price) ?? base.deeper.decision.price,
+          response: note(d.prospect_response) ?? base.deeper.decision.response,
+          likely: base.deeper.decision.likely,
+          likelyStatus: d.likely_status,
+        },
+        communication: {
+          ...base.deeper.communication,
+          listening: d.listening,
+          observation:
+            note(d.communication_note) ?? base.deeper.communication.observation,
+        },
+        presentation:
+          d.relevant.length || d.less_relevant || d.value_connection
+            ? {
+                relevant: d.relevant,
+                lessRelevant: d.less_relevant,
+                valueConnection: d.value_connection,
+              }
+            : undefined,
+      }
+    : base.deeper;
+
+  const pd = p.deal;
+  const nextEvent = pd?.next_event
+    ? {
+        text: upperFirst(pd.next_event.when ?? pd.next_event.text),
+        sources: pd.next_event.evidence,
+      }
+    : p.next_step?.when
+      ? { text: upperFirst(p.next_step.when), sources: p.next_step.evidence }
+      : base.deal.nextEvent;
+  const deal = {
+    ...base.deal,
+    outcome,
+    position: note(pd?.position) ?? base.deal.position,
+    blocker: pd?.blocker
+      ? note(pd.blocker, pd.blocker.basis === "inferred")
+      : base.deal.blocker,
+    prospectCommitments: pd?.prospect_commitments.length
+      ? pd.prospect_commitments.map((item) => note(item)!)
+      : base.deal.prospectCommitments,
+    sellerCommitments: pd?.seller_commitments.length
+      ? pd.seller_commitments.map((item) => note(item)!)
+      : base.deal.sellerCommitments,
+    nextEvent,
+    quality: pd?.commitment_quality ?? base.deal.quality,
+    unclear: pd?.still_unclear.length ? pd.still_unclear : base.deal.unclear,
+    action: pd?.deal_action ?? base.deal.action,
+    coachingMission: pd?.coaching_mission ?? base.deal.coachingMission,
+  };
+
+  const missing = base.missing.map((list) => [
+    ...list,
+  ]) as StoryModel["missing"];
+  const drop = (index: number, name: string, has: unknown) => {
+    if (has) missing[index] = missing[index].filter((item) => item !== name);
+  };
+  drop(0, GAP.outcome, outcome.status);
+  drop(0, GAP.summary, picture.summary);
+  drop(0, GAP.influence, picture.influence);
+  drop(0, GAP.strongest, picture.strongest);
+  drop(0, GAP.concern, picture.concern);
+  drop(0, GAP.nextStep, picture.nextStep);
+  drop(1, GAP.stages, flow.phases);
+  drop(1, GAP.change, flow.change);
+  drop(2, GAP.worked, worked.length);
+  drop(2, GAP.didnt, didnt.length);
+  drop(3, GAP.moments, moments.length);
+  drop(5, GAP.blocker, deal.blocker);
+  drop(5, GAP.prospectCommitment, deal.prospectCommitments.length);
+  drop(5, GAP.sellerCommitment, deal.sellerCommitments.length);
+  drop(5, GAP.nextEvent, deal.nextEvent);
+  drop(5, GAP.quality, deal.quality);
+
   return {
+    ...base,
     picture,
     flow,
     worked,
     didnt,
     moments,
-    topMoments: topMoments(moments),
-    skills,
+    topMoments: top,
     deeper,
     deal,
     missing,
+    end: {
+      strongest: p.strongest_part?.short ?? worked[0]?.title ?? null,
+      issue: p.biggest_concern?.short ?? didnt[0]?.title ?? null,
+      moment: keyMoment,
+      nextEvent: nextEvent?.text ?? null,
+    },
   };
 }

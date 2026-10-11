@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 
 import ac_platform.http.conversation_insights as routes
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence import sales_xray_tenants
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
@@ -72,6 +73,12 @@ async def admin_client(
         return Insights(tenant_id)
 
     monkeypatch.setattr(ConversationProviderAdmin, "admit", admit)
+
+    # The live registry (AUT-1694) serves Personal and the organisation.
+    async def active(settings: Any, database: Any) -> set[UUID]:
+        return {PERSONAL, ORGANISATION}
+
+    monkeypatch.setattr(sales_xray_tenants, "sales_xray_active_tenant_ids", active, raising=False)
     monkeypatch.setattr(routes, "insight_organisations", listed)
     monkeypatch.setattr(routes, "tenant_insights", insights)
     storage = PrivateLocalRecordingStorage(tmp_path / "storage")
@@ -140,3 +147,30 @@ async def test_company_view_is_admin_host_only(admin_client) -> None:
         "/v1/admin/conversation/insights", headers={"host": "salesxray.example.test"}
     )
     assert response.status_code in {403, 404}
+
+
+async def test_admin_scope_follows_the_live_registry(admin_client, monkeypatch) -> None:
+    """With the live registry (AUT-1694), Admin lists what it serves on each request."""
+    client, seen = admin_client
+    later = uuid4()
+    live = {PERSONAL, ORGANISATION}
+
+    async def active(settings: Any, database: Any) -> set[UUID]:
+        return set(live)
+
+    monkeypatch.setattr(sales_xray_tenants, "sales_xray_active_tenant_ids", active, raising=False)
+    await client.get("/v1/admin/conversation/insights")
+    assert seen["served"] == {PERSONAL, ORGANISATION}
+    live.add(later)
+    await client.get("/v1/admin/conversation/insights")
+    assert seen["served"] == {PERSONAL, ORGANISATION, later}
+
+
+async def test_without_the_live_registry_admin_uses_the_composed_set(
+    admin_client, monkeypatch
+) -> None:
+    monkeypatch.delattr(sales_xray_tenants, "sales_xray_active_tenant_ids", raising=False)
+    client, seen = admin_client
+    assert (await client.get("/v1/admin/conversation/insights")).status_code == 200
+    # Personal plus the intake's approved organisation; never operations.
+    assert seen["served"] == {PERSONAL, ORGANISATION}

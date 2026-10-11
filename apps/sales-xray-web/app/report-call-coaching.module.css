@@ -1,3 +1,7 @@
+/* This call's coaching inside the Report. Both the ready state and the
+   report-focus fallback are the Coaching page's own pillars
+   (coaching.module.css + Strike A's primitives); these rules dress only the
+   frame, the link row and the short notes. */
 .coaching {
   display: grid;
   gap: 16px;
@@ -6,82 +10,31 @@
   font: 400 14px/1.6 var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
-.coaching p,
-.coaching h3,
-.coaching h4,
-.coaching blockquote {
+.coaching > p {
   margin: 0;
 }
-.coaching figure {
+.context {
   margin: 0;
-}
-.coaching section {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--lx-line-soft);
-}
-.coaching h3,
-.coaching h4,
-.label {
-  font-size: 14px;
-  font-weight: 600;
-}
-.focus {
-  font-weight: 600;
-}
-.context,
-.coaching small {
   color: var(--lx-muted);
   font-size: 12px;
 }
-.sources,
-.practice,
-.lesson {
-  display: grid;
-  gap: 8px;
-}
-.lesson {
-  padding-top: 8px;
-}
-.coaching summary,
-.coaching button {
-  min-height: 32px;
-  cursor: pointer;
-}
 .coaching > button {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 12px;
   color: var(--lx-teal);
   background: var(--lx-surface);
   border: 1px solid var(--lx-line-soft);
   border-radius: 8px;
-}
-.sources button {
-  min-height: 32px;
+  cursor: pointer;
 }
 .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.links a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  color: var(--lx-teal);
-  text-underline-offset: 3px;
+  gap: 8px;
 }
 @media (max-width: 600px) {
-  .links a {
+  .coaching > button {
     min-height: 44px;
-  }
-  .sources button {
-    min-height: 44px;
-  }
-  .coaching summary,
-  .coaching button {
-    min-height: 44px;
-  }
-  .coaching button {
-    min-width: 44px;
   }
 }

@@ -36,7 +36,7 @@ from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.organisations.usage import organisation_pool
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_billing_ledger_postgresql import Operations, bootstrap_operations, source
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
@@ -61,6 +61,16 @@ async def fixtures(engine):
     first = await seed(engine, role="member")
     second = await seed(engine, tenant_id=first.tenant_id, role="member")
     operations = await seed(engine, role="owner")
+    # Request admission reads the registry, independently of the intake policy.
+    async with AsyncSession(engine) as db, db.begin():
+        db.add(
+            Organisation(
+                tenant_id=first.tenant_id,
+                created_by_person_id=first.person_id,
+                creation_command_id=uuid4(),
+                domain_verification_token="fictional-org-pool-" + uuid4().hex,
+            )
+        )
     return first, second, operations
 
 

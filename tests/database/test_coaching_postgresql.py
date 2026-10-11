@@ -271,6 +271,8 @@ def test_coaching_own_report_withholding_and_revocation(
                 assert [row["submission_id"] for row in data["calls"]] == [str(call)]
                 assert data["calls"][0]["state"] == "ready"
                 assert data["calls"][0]["focus_label"] == data["focus"]["label"]
+                # One call: its focus cannot recur yet (the Report shows no pattern line).
+                assert data["calls"][0]["recurring"] in {False, None}
                 async with setup.sessions() as db, db.begin():
                     await SensitiveSegmentsStore(db).mark(
                         setup.state.actor,

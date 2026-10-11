@@ -47,6 +47,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
     actor_columns,
     same_actor,
 )
+from ac_platform.tenancy.models import Organisation, Tenant
 
 if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
@@ -68,6 +69,7 @@ class IntakePolicy:
     retention_ref: str
     retention_days: int = 7
     acoustic_recipe: str = AUDIOATLAS_RECIPE
+    registered_organisations: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -78,6 +80,7 @@ class IntakePolicy:
             or type(self.retention_days) is not int
             or not 1 <= self.retention_days <= MAX_RETENTION_DAYS
             or self.acoustic_recipe not in AUDIOATLAS_RECIPES
+            or type(self.registered_organisations) is not bool
         ):
             raise ValueError("An exact internal workspace and bounded retention are required.")
         require_text(self.authorization_ref, "intake authorization")
@@ -125,7 +128,19 @@ class ConversationIntake:
     async def admit(self, actor: ConversationActor) -> None:
         await self.application.admit(actor)
         if actor.tenant_id not in self.policy.tenant_ids:
-            raise ConversationDenied("Analysis has not been enabled for this workspace.")
+            organisation = (
+                await self.database.scalar(
+                    select(Organisation.tenant_id)
+                    .join(Tenant, Tenant.id == Organisation.tenant_id)
+                    .where(Organisation.tenant_id == actor.tenant_id, Tenant.status == "active")
+                )
+                if self.policy.registered_organisations
+                and self.authority is not None
+                and actor.tenant_id != self.authority.operations_tenant_id
+                else None
+            )
+            if organisation is None:
+                raise ConversationDenied("Analysis has not been enabled for this workspace.")
         if self.authority is not None:
             bundle = await self.authority.admit(self.application, actor)
             if (

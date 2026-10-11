@@ -94,11 +94,23 @@ const callReads = (id: string) => [
   `${ACQUISITION}/submissions/${id}/report`,
 ];
 
+/**
+ * A person's profile: the directory and that person's twelve weeks
+ * (person-data.ts PERSON_WEEKS; the test keeps them equal).
+ */
+const PERSON_PAGE = /^\/organisation\/people\/([0-9a-f-]{36})$/i;
+const PERSON_READS = [...SESSION, "/v1/organisation/members"];
+const personReads = (id: string) => [
+  `/v1/organisation/members/${id}/activity?weeks=12`,
+];
+
 /** The early reads for an address (trailing slash ignored), or none. */
 export function earlyReadsFor(pathname: string): readonly string[] {
   const route = pathname.replace(/\/$/, "") || "/";
   const call = CALL_PAGE.exec(route)?.[1];
   if (call) return [...CALL_READS, ...callReads(call.toLowerCase())];
+  const person = PERSON_PAGE.exec(route)?.[1];
+  if (person) return [...PERSON_READS, ...personReads(person.toLowerCase())];
   return EARLY_READS[route] ?? [];
 }
 
@@ -135,9 +147,11 @@ export function earlyReadsScript(): string {
   const table = JSON.stringify(EARLY_READS);
   const call = JSON.stringify(CALL_PAGE.source);
   const callReadsJson = JSON.stringify(CALL_READS);
+  const person = JSON.stringify(PERSON_PAGE.source);
+  const personReadsJson = JSON.stringify(PERSON_READS);
   const acquisition = JSON.stringify(ACQUISITION);
   const key = JSON.stringify(EARLY_CONVERSATION_KEY);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}})}catch(e){}})();`;
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),p,l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):(p=new RegExp(${person},"i").exec(r))?${personReadsJson}.concat(["/v1/organisation/members/"+p[1].toLowerCase()+"/activity?weeks=12"]):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {

@@ -166,7 +166,7 @@ def test_v7_uses_frozen_names_free_roles_without_changing_source_or_legacy(provi
     )
     assert legacy.input_sha256 != task.input_sha256
     assert pack == load_qualitative_pack_for_revision("coaching-v6")
-    assert frozenset({"coaching-v7"}) == reports.SPEAKER_ROLE_PROMPT_REVISIONS
+    assert frozenset({"coaching-v7", "coaching-v8"}) == reports.SPEAKER_ROLE_PROMPT_REVISIONS
 
 
 def test_v7_prompt_contains_honest_report_and_owner_amendments():

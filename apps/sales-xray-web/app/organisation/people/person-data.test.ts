@@ -120,8 +120,8 @@ it("lays each skill against the calls, oldest first, with gaps where a report is
     { callId: "new", status: null },
   ]);
   expect(rows[1].cells.map((cell) => skillStatus(cell.status).label)).toEqual([
-    "Need more evidence",
-    "Evidence found",
+    "Not Enough Evidence",
+    "Observed",
   ]);
   expect(skillStatus(null).label).toBe("Not in this report");
 });

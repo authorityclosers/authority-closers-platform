@@ -49,8 +49,14 @@ SUFFIX = (
 BOUNDARY = r"(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))"
 CUES = {
     "introduced_own_company": (
-        r"\b(?:(?:this is|my name is|i am|myself).*?\bfrom|from our company|"
-        r"from authority closers|our team)\b|हमारी कंपनी|मैं team से"
+        r"\b(?:this is|i am|i'm|myself)\s+(?-i:[A-Z])[\w'’\-]*"
+        r"(?:\s+[\w'’\-]+){0,3}\s+from\b|"
+        r"\bmy name is\s+[\w'’\-]+(?:\s+[\w'’\-]+){0,3}\s+from\b|मैं team से|"
+        r"\b[A-Za-z][A-Za-z'’\-]*(?:\s+[A-Za-z][A-Za-z'’\-]*){0,3}"
+        r"\s+(?:here|speaking)\s+from\b|"
+        r"(?:मैं|मी)\s+[^.!?।]{1,60},\s*[^.!?।]{1,100}\s+(?:से|मधून)(?=[\s।,.!?]|$)|"
+        r"[\w'’\-]+(?:\s+[\w'’\-]+){0,3}\s+बोलत(?:ोय|ेय),\s*"
+        r"[^.!?।]{1,100}\s+मधून(?=[\s।,.!?]|$)"
     ),
     "stated_call_purpose": (
         r"\b(?:calling about|calling to|reason for (?:my|this) call)\b|कॉल का कारण"
@@ -212,7 +218,19 @@ def predict_speaker_map(
         for cue, pattern in CUES.items():
             if len(cues[voice]) < 5 and re.search(pattern, segment["text"], re.I):
                 cues[voice].append({"cue": cue, **_evidence(segment)})
-    seller = _leader({key: len(value) for key, value in cues.items() if key in voices}, 1)
+    introductions = [
+        key for key in voices if any(cue["cue"] == "introduced_own_company" for cue in cues[key])
+    ]
+    # A buyer may ask discovery/price questions repeatedly. Repetition cannot
+    # outweigh the other voice's explicit self-introduction. Two introductions
+    # are ambiguous; neither establishes which business is selling.
+    seller = (
+        introductions[0]
+        if len(introductions) == 1
+        else None
+        if introductions
+        else _leader({key: len(value) for key, value in cues.items() if key in voices}, 1)
+    )
     for number, key in enumerate(ids, 1):
         role = "you" if key == you else "salesperson" if key == seller else None
         if role is None and seller and len(voices) == 2 and key in voices:

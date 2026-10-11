@@ -1,6 +1,13 @@
-import { act } from "react";
+import { act, useContext, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+
+const { signIn } = vi.hoisted(() => ({ signIn: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: signIn, replace: vi.fn(), prefetch: vi.fn() }),
+}));
+import { LinkedProspectContext } from "./prospect-link-control";
+import { BIG_PICTURE } from "./report-copy";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
 import {
@@ -72,7 +79,7 @@ it("tells the call as six pillars in the spec's order, without profile or coachi
   expect(picture).toContain("Strongest part");
   expect(picture).toContain("Biggest concern");
   expect(picture).toContain("Next step");
-  expect(picture).not.toContain("Not in this report");
+  expect(picture).not.toContain("This report doesn't cover");
 });
 
 it("plays the exact quoted moment from any pillar", async () => {
@@ -112,27 +119,124 @@ it("keeps moments to five, then shows all on request", async () => {
   expect(moments.querySelectorAll("ol > li").length).toBeGreaterThan(5);
   expect(moments.textContent).toContain("Important Miss");
   expect(moments.textContent).toContain("You moved toward");
+  expect(moments.textContent).toContain("What was missed");
 });
 
 it("ends where the deal stands, with links to the prospect and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const deal = pillar(host, "facts");
-  expect(deal.textContent).toContain("Commitment: Clear");
+  expect(deal.textContent).toContain("Commitment quality");
+  expect(deal.textContent).toContain("Clear");
   expect(deal.textContent).toContain("Friday · 4:00 PM");
   expect(deal.textContent).toContain("Still needs to become clear");
   expect(deal.querySelector('a[href="/prospects"]')).not.toBeNull();
-  expect(deal.textContent).toContain("Coaching for this call");
+  expect(deal.textContent).toContain("View Prospect Information");
+  expect(deal.textContent).toContain("View Personalized Coaching");
+  // The end strip names the next event, not just "Agreed".
+  expect(
+    deal.querySelector('dl[aria-label="Report summary"]')?.textContent,
+  ).toContain("Friday · 4:00 PM");
 });
 
 it("opens a sparse older report with honest, one-line gaps", async () => {
   const { host } = await mount(syntheticReport);
   const picture = pillar(host, "overview");
-  expect(picture.textContent).toContain("Outcome not recorded");
-  expect(picture.textContent).toContain("Only a person records won or lost");
-  expect(picture.textContent).toContain("Not in this report:");
+  expect(picture.textContent).toContain(BIG_PICTURE.outcomeNotSet);
+  expect(picture.textContent).toContain(BIG_PICTURE.outcomeOnlyPerson);
+  expect(picture.textContent).toContain("This report doesn't cover:");
   expect(
     pillar(host, "skills").querySelectorAll("details > summary").length,
   ).toBeGreaterThanOrEqual(8);
   // Never invents a strength or a next event to fill the page.
-  expect(pillar(host, "facts").textContent).toContain("Next event date");
+  expect(pillar(host, "facts").textContent).toContain("Next event");
+});
+
+function LinkedTo({ id }: { id: string }) {
+  const report = useContext(LinkedProspectContext);
+  useEffect(() => report?.(id), [report, id]);
+  return <span>Linked prospect</span>;
+}
+
+it("opens this call's own prospect from the end of the Report", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        structure="pillars"
+        initialView="story"
+        panels={[]}
+        prospectControls={<LinkedTo id="prospect-7" />}
+        documentData={{ report: amitReport, transcript: amitTranscript }}
+      />,
+    ),
+  );
+  cleanup = () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+  const deal = pillar(host, "facts");
+  expect(
+    deal.querySelector('a[href="/prospects/prospect-7"]')?.textContent,
+  ).toContain("View Prospect Information");
+});
+
+it("gives a guest the same six pillars, with locked items counted and a sign-in link", async () => {
+  const counts = (hidden: number) => ({
+    visible_count: 1,
+    total_count: 1 + hidden,
+    hidden_count: hidden,
+  });
+  const preview = {
+    version: "guest-findings-v1" as const,
+    sections: {
+      strengths: counts(2),
+      improvements: counts(1),
+      missed_opportunities: counts(1),
+      objection_analysis: counts(0),
+      closing_analysis: counts(0),
+      golden_moments: counts(1),
+      prospect_interpretations: counts(0),
+      rewatch: counts(0),
+      ethics_notes: counts(0),
+    },
+  };
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  cleanup = () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+  await act(async () =>
+    root.render(
+      <ReportModes
+        structure="pillars"
+        panels={[]}
+        documentData={{
+          report: { ...amitReport, preview },
+          transcript: amitTranscript,
+        }}
+      />,
+    ),
+  );
+  expect(
+    host.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("story");
+  const worked = pillar(host, "moments").textContent;
+  expect(worked).toContain("2 more strengths are saved for your account.");
+  expect(worked).toContain("1 more issue is saved for your account.");
+  expect(pillar(host, "missed").textContent).toContain(
+    "2 more moments are saved for your account.",
+  );
+  // One way on for a guest: sign in. No Coaching or prospect buttons.
+  const deal = pillar(host, "facts");
+  const signInButton = [...deal.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Sign in to see the full report"),
+  );
+  await act(async () => signInButton!.click());
+  expect(signIn).toHaveBeenCalledWith("/login");
+  expect(deal.textContent).not.toContain("View Personalized Coaching");
+  expect(deal.textContent).not.toContain("View Prospect Information");
 });

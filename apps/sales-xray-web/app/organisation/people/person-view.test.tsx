@@ -219,7 +219,7 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
   const marks = [...host.querySelectorAll('tbody [role="img"]')].map((mark) =>
     mark.getAttribute("aria-label"),
   );
-  expect(marks).toEqual(["Partly seen", "Evidence found"]);
+  expect(marks).toEqual(["Partly seen", "Observed"]);
   // Their calls link to each report.
   expect(
     [...host.querySelectorAll(`a[href="/analysis/calls/${callA}"]`)].map(
@@ -303,5 +303,33 @@ it("raises one corner card with Try again when a read fails, never a crash", asy
       tone: "error",
       action: expect.objectContaining({ label: "Try again" }),
     }),
+  );
+});
+
+it("uses the person's own weekly read where the server has it: exact totals, newest calls listed", async () => {
+  const org = routes["/v1/organisation/activity?days=84"].body as {
+    calls: unknown[];
+  };
+  routes[`/v1/organisation/members/${ashaId}/activity?weeks=12`] = {
+    status: 200,
+    body: {
+      person_id: ashaId,
+      weeks: Array.from({ length: 12 }, (_, index) => ({
+        start: ago(84 - index * 7),
+        calls: index === 11 ? 4 : 5,
+        recorded_minutes: 60,
+        reports_ready: 5,
+      })),
+      totals: { calls: 64, recorded_minutes: 720, reports_ready: 60 },
+      calls: org.calls,
+    },
+  };
+  await show(ashaId);
+  const tiles = host.querySelector('[aria-label="Last 12 weeks"]');
+  expect(tiles?.textContent).toContain("Calls64");
+  expect(tiles?.textContent).toContain("Minutes recorded720");
+  expect(host.textContent).toContain("Showing the newest 2 of 64 calls.");
+  expect(calls.some((item) => item.url.includes("/activity?days="))).toBe(
+    false,
   );
 });

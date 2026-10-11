@@ -30,6 +30,13 @@ from ac_platform.conversation_intelligence.call_map import (
 )
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+from ac_platform.conversation_intelligence.dipak_report import (
+    COACHING_PROMPT_V8_INSTRUCTION,
+    COACHING_PROMPT_V8_MARKER,
+    ReportPillars,
+    legacy_pillars_payload,
+    normalize_pillars,
+)
 from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, prepare_gemini_body
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
@@ -54,7 +61,7 @@ from ac_platform.conversation_intelligence.report_overview import (
 )
 from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
 
-SPEAKER_ROLE_PROMPT_REVISIONS: frozenset[str] = frozenset({"coaching-v7"})
+SPEAKER_ROLE_PROMPT_REVISIONS: frozenset[str] = frozenset({"coaching-v7", "coaching-v8"})
 
 REPORT_PROFILE_PATH = Path(__file__).with_name("profiles") / "dipak_report_v1.json"
 GROQ_MODEL = "openai/gpt-oss-120b"
@@ -95,6 +102,7 @@ COACHING_PROMPT_V4: Literal["coaching-v4"] = "coaching-v4"
 COACHING_PROMPT_V5: Literal["coaching-v5"] = "coaching-v5"
 COACHING_PROMPT_V6: Literal["coaching-v6"] = "coaching-v6"
 COACHING_PROMPT_V7: Literal["coaching-v7"] = "coaching-v7"
+COACHING_PROMPT_V8: Literal["coaching-v8"] = "coaching-v8"
 CoachingPromptRevision = Literal[
     "coaching-v1",
     "coaching-v2",
@@ -103,6 +111,7 @@ CoachingPromptRevision = Literal[
     "coaching-v5",
     "coaching-v6",
     "coaching-v7",
+    "coaching-v8",
 ]
 COACHING_PROMPT_V7_MARKER = "COACHING_MAP: honest-call-map-v7."
 COACHING_PROMPT_V7_INSTRUCTION = (
@@ -553,6 +562,7 @@ class ReportDraft(_StrictModel):
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
     overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
     call_map: CallMap | None = Field(default=None, exclude_if=lambda value: value is None)
+    pillars: ReportPillars | None = Field(default=None, exclude_if=lambda value: value is None)
     sensitive_segments: list[SensitiveSegment] | None = Field(
         default=None, max_length=12, exclude_if=lambda value: value is None
     )
@@ -1413,10 +1423,15 @@ def _normalise_dimensions(
         isinstance(item, Mapping) and _LEGACY_DIMENSION_MARKERS.intersection(item)
         for item in raw_items
     ):
-        if coaching_prompt_revision in {COACHING_PROMPT_V5, COACHING_PROMPT_V6, COACHING_PROMPT_V7}:
+        if coaching_prompt_revision in {
+            COACHING_PROMPT_V5,
+            COACHING_PROMPT_V6,
+            COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
+        }:
             code = (
                 "report_payload_invalid"
-                if coaching_prompt_revision == COACHING_PROMPT_V7
+                if coaching_prompt_revision in {COACHING_PROMPT_V7, COACHING_PROMPT_V8}
                 else "report_v6_dimensions_invalid"
                 if coaching_prompt_revision == COACHING_PROMPT_V6
                 else "report_v5_dimensions_invalid"
@@ -1426,15 +1441,18 @@ def _normalise_dimensions(
             raw_items, profile=profile, transcript=transcript, salvaged=salvaged
         )
     supplied: dict[str, dict[str, Any]] = {}
-    v7 = coaching_prompt_revision == COACHING_PROMPT_V7
+    v7 = coaching_prompt_revision in {COACHING_PROMPT_V7, COACHING_PROMPT_V8}
     evidence_required = coaching_prompt_revision in {
         COACHING_PROMPT_V5,
         COACHING_PROMPT_V6,
         COACHING_PROMPT_V7,
+        COACHING_PROMPT_V8,
     }
     for item in raw_items:
         if not isinstance(item, Mapping):
             raise ReportError("report_dimension_invalid")
+        if coaching_prompt_revision == COACHING_PROMPT_V8 and "call_state" not in item:
+            raise ReportError("report_payload_invalid")
         dimension_id = item.get("dimension_id")
         if not isinstance(dimension_id, str) or dimension_id not in by_id:
             raise ReportError("report_dimension_unsupported")
@@ -1836,7 +1854,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/10"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/11"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2447,6 +2465,44 @@ def build_report_groq_prompt(
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
+    if coaching_prompt_revision == COACHING_PROMPT_V8:
+        from ac_platform.conversation_intelligence.coaching_schema import (
+            coaching_v7_bounds_instruction,
+        )
+
+        prompt = build_report_groq_prompt(
+            transcript,
+            fact_packets,
+            profile=profile,
+            max_completion_tokens=max_completion_tokens,
+            model=model,
+            detailed_overview=detailed_overview,
+            provider=provider,
+            coaching_prompt_revision=COACHING_PROMPT_V7,
+            report_language=report_language,
+            qualitative_pack_sha256=qualitative_pack_sha256,
+            speaker_roles=speaker_roles,
+        )
+        prior = prompt["messages"][0]["content"]
+        prompt["messages"][0]["content"] = (
+            COACHING_PROMPT_V8_MARKER
+            + " "
+            + OVERVIEW_MARKER
+            + COACHING_CONTEXT_INSTRUCTION
+            + COACHING_PROMPT_V8_INSTRUCTION
+            + load_qualitative_pack_for_revision(COACHING_PROMPT_V8).compile()
+            + report_language_instruction(report_language)
+            + coaching_v7_bounds_instruction(COACHING_PROMPT_V8)
+            + "\nProfile:\n"
+            + prior.rsplit("Profile:\n", 1)[1]
+        )
+        if provider == "gemini":
+            try:
+                prepare_gemini_body(prompt, task="coaching")
+            except GeminiTaskError as exc:
+                raise ReportError(str(exc)) from None
+        return prompt
+
     if coaching_prompt_revision == COACHING_PROMPT_V7:
         from ac_platform.conversation_intelligence.call_map import SIGNALS_PATH
         from ac_platform.conversation_intelligence.coaching_schema import (
@@ -2897,8 +2953,44 @@ def parse_report_draft(
     if not isinstance(payload, Mapping):
         raise ReportError("report_payload_invalid")
     v7 = coaching_prompt_revision == COACHING_PROMPT_V7
+    v8 = coaching_prompt_revision == COACHING_PROMPT_V8
+    canonical_pillars = canonical_read and not v8 and payload.get("pillars") is not None
+    if (
+        v8
+        and not canonical_read
+        and set(payload)
+        != {
+            "pillars",
+            "dimensions",
+            "summary_evidence",
+            "sensitive_segments",
+            "review_status",
+        }
+    ):
+        raise ReportError("report_payload_invalid")
+    if v8 or canonical_pillars:
+        try:
+            pillars = normalize_pillars(
+                payload.get("pillars"),
+                transcript=validated_transcript,
+                speaker_roles=speaker_roles,
+                canonical_read=canonical_read,
+                normalize_evidence=lambda item: _normalise_c5_evidence(item, validated_transcript),
+            )
+        except (ValueError, KeyError, TypeError):
+            raise ReportError("report_payload_invalid") from None
+    if v8:
+        retained_extras = payload.get("provider_extras") if canonical_read else None
+        payload = legacy_pillars_payload(pillars, payload)
+        if retained_extras is not None:
+            payload["provider_extras"] = retained_extras
+        if speaker_label_leaks(_prose_texts(payload)):
+            raise ReportError("report_speaker_label_leak")
+        refs = payload.get("summary_evidence")
+        if not isinstance(refs, list) or not 1 <= len(refs) <= 3:
+            raise ReportError("report_payload_invalid")
     sensitive_drops = 0
-    if v7:
+    if v7 or v8:
         payload = dict(payload)
         payload["sensitive_segments"], sensitive_drops = _v7_sensitive_segments(
             payload.get("sensitive_segments", []), validated_transcript
@@ -2910,7 +3002,13 @@ def parse_report_draft(
     for field in _CONTENT_FIELDS:
         if field not in payload:
             raise ReportError("report_payload_missing_field")
-    consumed_provider_keys: set[str] = set()
+    consumed_provider_keys: set[str] = (
+        {"pillars", "sensitive_segments", "summary_evidence", "verdict_evidence"} if v8 else set()
+    )
+    if canonical_pillars:
+        consumed_provider_keys.add("pillars")
+        if speaker_label_leaks(_prose_texts(pillars.model_dump(mode="json"))):
+            raise ReportError("report_speaker_label_leak")
     overview_payload = payload.get("overview")
     # Older Gemini responses emitted the detailed overview keys beside the
     # report findings instead of under ``overview``.  Keep that response
@@ -2966,10 +3064,16 @@ def parse_report_draft(
     truncated: dict[str, int] = {}
     payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript, salvaged)
     payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
+    if v8 and sensitive_drops:
+        compatibility_extras["sensitive_segments_dropped"] = sensitive_drops
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
     normalized = dict(payload)
-    if v7:
+    if canonical_pillars:
+        # Canonical presentation additions keep the original legacy C5 content
+        # and dimension rules. Only their own native evidence is normalized.
+        normalized["pillars"] = pillars.model_dump(mode="json")
+    if v7 or v8:
         for field in ("summary_evidence", "verdict_evidence"):
             normalized[field] = [
                 _normalise_c5_evidence(item, validated_transcript) for item in payload[field]
@@ -3057,10 +3161,17 @@ def parse_report_draft(
     # The provider object starts as a convenient working copy above. Strip
     # every non-canonical root key before strict model validation; those keys
     # are available under the bounded, explicitly named extras field instead.
+    extensions = (
+        {"call_map", "sensitive_segments", "summary_evidence", "verdict_evidence"}
+        if v7
+        else {"pillars", "sensitive_segments", "summary_evidence", "verdict_evidence"}
+        if v8
+        else set()
+    )
+    if canonical_pillars:
+        extensions.add("pillars")
     for key in tuple(normalized):
-        if key not in _CANONICAL_REPORT_ROOT_FIELDS and not (
-            v7 and key in {"call_map", "sensitive_segments", "summary_evidence", "verdict_evidence"}
-        ):
+        if key not in _CANONICAL_REPORT_ROOT_FIELDS and key not in extensions:
             normalized.pop(key, None)
     if provider_extras:
         normalized["provider_extras"] = provider_extras
@@ -3125,6 +3236,8 @@ __all__ = [
     "COACHING_PROMPT_V6_MARKER",
     "COACHING_PROMPT_V7",
     "COACHING_PROMPT_V7_MARKER",
+    "COACHING_PROMPT_V8",
+    "COACHING_PROMPT_V8_MARKER",
     "CoachingPromptRevision",
     "DEFAULT_INPUT_CHARS",
     "AggregateFactPacket",

@@ -53,6 +53,12 @@ const secondReportSummary =
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => null,
+}));
 vi.mock("./upload-check", () => ({
   UploadCheck: ({ onToken }: { onToken: (token: string) => void }) => (
     <button onClick={() => onToken("synthetic-one-use-challenge")}>
@@ -303,10 +309,27 @@ async function saveDeferredSource() {
   await settleAll();
 }
 
+/** Reduced motion: the report shows at once, without the reveal's beat. */
+function stubMotion(reduce: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    (query: string) =>
+      ({
+        matches: reduce && query.includes("prefers-reduced-motion"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
 beforeEach(() => {
   navigateToAccount.mockReset();
   replaceToLogin.mockReset();
   vi.useFakeTimers();
+  stubMotion(true);
   calls = [];
   existing = false;
   workspaceUnauthorized = false;
@@ -632,19 +655,19 @@ it("shows real account recent calls on home and opens the selected saved report"
   const preview = container.querySelector(".calls-library-preview");
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
-  // The library length is the reserved estimate: always "About".
-  expect(preview?.textContent).toContain("About 01:01");
-  expect(
-    preview
-      ?.querySelector(".calls-library-duration")
-      ?.getAttribute("aria-label"),
-  ).toBe("Estimated length: About 01:01");
+  // The Dashboard's rows: the length the server measured, as a clock.
+  expect(preview?.textContent).toContain("1:01");
+  expect(preview?.textContent).not.toMatch(/About|Estimated|PRIVATE/);
   expect(
     preview?.querySelector('a[href="/analysis/calls"]')?.textContent,
   ).toContain("View all calls");
   expect(container.querySelectorAll("main")).toHaveLength(1);
   await act(async () =>
-    preview?.querySelector<HTMLButtonElement>(".calls-library-item")?.click(),
+    preview
+      ?.querySelector<HTMLAnchorElement>(
+        `a[href="/analysis/calls/${secondSubmissionId}"]`,
+      )
+      ?.click(),
   );
   expect(navigateToAccount).toHaveBeenCalledWith(
     `/analysis/calls/${secondSubmissionId}`,
@@ -1086,6 +1109,31 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
       ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
+});
+
+it("holds 'Your report is ready' for a beat, then the report rises in where the panel was", async () => {
+  stubMotion(false);
+  await mountWithAccountAccess();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await flush();
+  const panel = container.querySelector('[aria-label="Analysis progress"]');
+  expect(panel?.querySelector("h2")?.textContent).toBe("Your report is ready");
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Analysis progress"]'),
+  ).toBeNull();
+  const report = container.querySelector('[aria-label="Sales call report"]');
+  expect(report).not.toBeNull();
+  expect(report?.hasAttribute("data-reveal")).toBe(true);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
@@ -1863,7 +1911,7 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.querySelector('[role="status"] h2')?.textContent).toBe(
     "Analysing your call",
   );
-  expect(container.textContent).toContain("Usually about 2–4 minutes");
+  expect(container.textContent).toContain("Usually 2–3 minutes");
   expect(
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
@@ -3204,6 +3252,8 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       '[aria-label="Sales Xray navigation"] [aria-current="page"]',
     )?.textContent,
   ).toBe("Calls");
+  // The bar names the page: a report, not "New analysis" or "Calls".
+  expect(container.querySelector("header b")?.textContent).toBe("Report");
   const savedAudio = container.querySelector(
     '[aria-label="Call audio player"] audio',
   );
