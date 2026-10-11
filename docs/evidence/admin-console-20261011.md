@@ -11,7 +11,8 @@ Round 1 merged as #441; this note covers round 2 (#445).
   one screen per call with player, transcript, report, six pillars, Coaching,
   metrics and runs; failed steps listed per call with the existing admin job
   retry (only for steps that never reached a provider); "Y" copies a link to
-  the current moment (`?at=`), which opens paused on that line.
+  the current moment (`?at=`), which opens paused on that line; compared runs
+  mark the words that changed; a click anywhere on a queue row opens the call.
 - **Analysis health**: per prompt version and Report model (analyses,
   finished, running, failed and retried steps, typical Report step time,
   estimated cost per minute; operational only, never quality), each version
