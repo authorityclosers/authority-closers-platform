@@ -406,3 +406,12 @@ details[open] > summary .chevron {
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
 }
+
+/* Holds the outcome control's place while the call's outcome is read. */
+.outcomeSkeleton {
+  display: block;
+  width: min(100%, 420px);
+  height: 32px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}

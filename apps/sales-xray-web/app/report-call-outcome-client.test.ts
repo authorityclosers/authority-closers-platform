@@ -89,7 +89,14 @@ it("keeps an unrecorded read distinct from an unavailable route and No decision"
     status: "ready",
     data: { revision: 0, value: null, can_edit: false },
   });
+  // Only the server's not_call_owner code is quiet; anything else is unavailable.
+  respond({ detail: "not_call_owner" }, 403);
+  expect(await readCallOutcome(binding)).toEqual({ status: "not_owner" });
+  respond({ detail: "A current AC workspace is required." }, 403);
+  expect((await readCallOutcome(binding)).status).toBe("unavailable");
   respond(null, 404);
+  expect((await readCallOutcome(binding)).status).toBe("unavailable");
+  respond(null, 503);
   expect(await readCallOutcome(binding)).toEqual({
     status: "unavailable",
     message: "Call outcome is unavailable. Try again.",

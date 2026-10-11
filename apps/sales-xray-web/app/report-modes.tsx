@@ -31,6 +31,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { VIEWS as VIEWS_COPY } from "./report-copy";
+import { CallOutcomeProvider } from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -1340,68 +1341,76 @@ export function ReportModes({
   );
 
   return (
-    <div
-      ref={workspaceRef}
-      className={styles.workspace}
-      data-report-modes
-      data-report-structure={structure}
-      data-lx-surface={
-        lightSurface || view === "document" ? "light" : undefined
+    <CallOutcomeProvider
+      callId={
+        documentData?.report && !documentData.report.preview && !fixture
+          ? boundCallId
+          : null
       }
-      data-view={view}
-      data-report-section={currentSection}
-      data-text-size={textSize}
-      data-report-print={printView || undefined}
     >
-      {slot ? createPortal(navigation, slot) : navigation}
-      <div className={styles.layout}>
-        <ReportReadingProvider
-          reading={view === "reading"}
-          inline
-          navigate={navigateToReport}
-        >
-          {/* Coaching is one focused page: the header's call map waits here, hidden. */}
-          {view === "coaching" ? <div data-report-map-slot hidden /> : null}
-          <div data-reading-panels hidden={view === "document"}>
-            {renderReportPanels(
-              view === "document" ? `${id}-source` : id,
-              panelsForView(panels, view === "document" ? "tabs" : view),
-              view === "document" ? "tabs" : view,
-              selected,
+      <div
+        ref={workspaceRef}
+        className={styles.workspace}
+        data-report-modes
+        data-report-structure={structure}
+        data-lx-surface={
+          lightSurface || view === "document" ? "light" : undefined
+        }
+        data-view={view}
+        data-report-section={currentSection}
+        data-text-size={textSize}
+        data-report-print={printView || undefined}
+      >
+        {slot ? createPortal(navigation, slot) : navigation}
+        <div className={styles.layout}>
+          <ReportReadingProvider
+            reading={view === "reading"}
+            inline
+            navigate={navigateToReport}
+          >
+            {/* Coaching is one focused page: the header's call map waits here, hidden. */}
+            {view === "coaching" ? <div data-report-map-slot hidden /> : null}
+            <div data-reading-panels hidden={view === "document"}>
+              {renderReportPanels(
+                view === "document" ? `${id}-source` : id,
+                panelsForView(panels, view === "document" ? "tabs" : view),
+                view === "document" ? "tabs" : view,
+                selected,
+              )}
+            </div>
+            {view === "document" && (
+              <ReportDocument
+                data={documentData}
+                id={id}
+                textSize={textSize}
+                section={selected}
+                callId={boundCallId ?? null}
+                onSelect={onSelectEvidence}
+              />
             )}
-          </div>
-          {view === "document" && (
-            <ReportDocument
-              data={documentData}
-              id={id}
-              textSize={textSize}
-              section={selected}
-              callId={boundCallId ?? null}
-              onSelect={onSelectEvidence}
-            />
-          )}
-        </ReportReadingProvider>
-      </div>
-      {returnPoint && (
-        <div className={styles.returnBar} data-report-return>
-          <button
-            type="button"
-            className={styles.returnButton}
-            onClick={returnToOrigin}
-          >
-            <Undo2 aria-hidden="true" />
-            Back to {returnPoint.label}
-          </button>
-          <button
-            type="button"
-            className={styles.returnDismiss}
-            aria-label="Dismiss return shortcut"
-            onClick={() => setReturnPoint(null)}
-          >
-            <X aria-hidden="true" />
-          </button>
+          </ReportReadingProvider>
         </div>
-      )}
-    </div>
+        {returnPoint && (
+          <div className={styles.returnBar} data-report-return>
+            <button
+              type="button"
+              className={styles.returnButton}
+              onClick={returnToOrigin}
+            >
+              <Undo2 aria-hidden="true" />
+              Back to {returnPoint.label}
+            </button>
+            <button
+              type="button"
+              className={styles.returnDismiss}
+              aria-label="Dismiss return shortcut"
+              onClick={() => setReturnPoint(null)}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </div>
+    </CallOutcomeProvider>
   );
 }
