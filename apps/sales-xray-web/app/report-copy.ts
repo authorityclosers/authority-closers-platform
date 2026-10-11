@@ -535,6 +535,8 @@ export const MEASURE = {
     "Went quiet: under 10% of the talking for 3 minutes. Came back: a later minute reaches 25%.",
   ],
   longest: "Longest turns",
+  /** Screen readers: "Play 17:41: Arjun, long turn". */
+  longestTurn: "long turn",
 };
 
 /** A speaker the call hasn't named yet: "Speaker 2". */

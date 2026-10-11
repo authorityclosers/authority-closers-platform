@@ -12,7 +12,14 @@ import {
 } from "./call-metrics";
 import { formatClock } from "./lightbox/time";
 import type { Transcript } from "./report-contract";
-import { MEASURE, speakerN, talkShareChart, wentQuiet } from "./report-copy";
+import {
+  MEASURE,
+  playAt,
+  playLabel,
+  speakerN,
+  talkShareChart,
+  wentQuiet,
+} from "./report-copy";
 import styles from "./overview-call-visuals.module.css";
 
 function smooth(points: Array<[number, number]>): string {
@@ -57,10 +64,12 @@ function PlayControl({
   startMs,
   onSeek,
   label,
+  ariaLabel,
 }: {
   startMs: number | null;
   onSeek: (ms: number) => void;
   label?: string;
+  ariaLabel?: string;
 }) {
   if (startMs === null) return null;
   return (
@@ -69,9 +78,10 @@ function PlayControl({
       className={styles.playButton}
       onClick={() => onSeek(startMs)}
       aria-label={
-        label
+        ariaLabel ??
+        (label
           ? `Play ${label} at ${formatClock(startMs)}`
-          : `Play from ${formatClock(startMs)}`
+          : `Play from ${formatClock(startMs)}`)
       }
     >
       <Play size={11} aria-hidden="true" />
@@ -336,7 +346,12 @@ export function OverviewCallVisuals({
                         <PlayControl
                           startMs={m.start_ms}
                           onSeek={onSeek}
-                          label={`Play ${formatClock(m.start_ms)}`}
+                          label={playAt(formatClock(m.start_ms))}
+                          ariaLabel={playLabel(
+                            false,
+                            formatClock(m.start_ms),
+                            `${name(m.speaker_id)}, ${MEASURE.longestTurn}`,
+                          )}
                         />
                       </div>
                     );

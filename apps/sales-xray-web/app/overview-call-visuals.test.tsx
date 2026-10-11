@@ -89,9 +89,11 @@ it("measures every speaker without roles, omits AI cards and seeks the longest t
   expect(host.textContent).not.toMatch(
     /assign roles|Verdict|score|grade|percent.good/i,
   );
-  const longest = [...host.querySelectorAll("button")].find((b) =>
-    b.getAttribute("aria-label")?.endsWith("at 00:01"),
+  const longest = [...host.querySelectorAll("button")].find(
+    (b) => b.getAttribute("aria-label") === "Play 00:01: Alex, long turn",
   )!;
+  // Time first, as every play chip in the Report.
+  expect(longest.textContent).toBe("00:01 · Play");
   await act(async () => longest.click());
   expect(seek).toHaveBeenCalledExactlyOnceWith(1_000);
 });
