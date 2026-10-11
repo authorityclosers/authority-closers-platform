@@ -19,6 +19,13 @@ vi.mock("./calls-insights", () => ({
   }),
 }));
 
+// The Dashboard's summary (Calls' totals while more pages remain) stays out
+// of the paging fetch sequence these tests script; one test sets it.
+const totals = vi.hoisted(() => ({ value: null as unknown }));
+vi.mock("./dashboard/dashboard-data", async (original) => ({
+  ...(await original<typeof import("./dashboard/dashboard-data")>()),
+  readCallSummary: vi.fn(async () => totals.value),
+}));
 import { CallsLibrary } from "./calls-library";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
@@ -498,4 +505,21 @@ it("points an organisation owner with no calls of their own to Personal", async 
   } finally {
     window.removeEventListener("sales-xray:select-workspace", onSwitch);
   }
+});
+
+it("shows a busy organisation's real totals while only its first page is loaded", async () => {
+  totals.value = { total: 64, processing: 3, completed: 58, needsAttention: 1 };
+  fetchMock.mockResolvedValueOnce(
+    ok(page([row(ids[0]), row(ids[1], repB)], cursor)),
+  );
+  await mount();
+  await act(async () => {});
+  expect(host.querySelector(".calls-library-summary")?.textContent).toContain(
+    "64 saved calls",
+  );
+  const strip = host.querySelector('[aria-label="Calls at a glance"]');
+  expect(strip?.textContent).toContain("Calls64");
+  expect(strip?.textContent).toContain("Reports ready58");
+  expect(strip?.textContent).toContain("3 in progress · 1 needs attention");
+  totals.value = null;
 });

@@ -39,6 +39,7 @@ import {
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import { readCallSummary, type CallSummary } from "./dashboard/dashboard-data";
 import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
@@ -338,6 +339,31 @@ function CallsLibraryContent({
   const [nextCursor, setNextCursor] = useState<string | null>(
     seed?.nextCursor ?? null,
   );
+  // Every call's count (the Dashboard's summary), for the figures when the
+  // list holds only its first pages: a busy organisation reads its real
+  // totals, not "20+".
+  const [summary, setSummary] = useState<{
+    key: string;
+    value: CallSummary;
+  } | null>(null);
+  const summaryKey = `${identityKey}:${submissions[0]?.id ?? ""}`;
+  const wantsSummary =
+    insights && !preview && access?.authenticated === true && !!nextCursor;
+  useEffect(() => {
+    if (!wantsSummary) return;
+    const controller = new AbortController();
+    readCallSummary(controller.signal)
+      .then((value) => {
+        if (value && !controller.signal.aborted)
+          setSummary({ key: summaryKey, value });
+      })
+      .catch(() => {
+        // The loaded rows still give honest "N+" figures.
+      });
+    return () => controller.abort();
+  }, [wantsSummary, summaryKey]);
+  const totals =
+    nextCursor && summary?.key === summaryKey ? summary.value : null;
   const [loading, setLoading] = useState(
     !seed && access?.authenticated === true,
   );
@@ -1327,18 +1353,28 @@ function CallsLibraryContent({
   }
   const activeDays = days.filter((count) => count > 0).length;
   const busiestDay = Math.max(1, ...days);
+  const oldestLoaded = submissions.at(-1);
+  const loadedWeek =
+    !nextCursor ||
+    (oldestLoaded !== undefined &&
+      (daysAgo(oldestLoaded.createdAt, dates) ?? 0) >= 7);
   const stats = workspace
     ? {
-        calls: `${submissions.length}${nextCursor ? "+" : ""}`,
-        // Today and the six days before it (the spark's last seven bars).
-        thisWeek: days.slice(-7).reduce((sum, count) => sum + count, 0),
+        calls: totals
+          ? String(totals.total)
+          : `${submissions.length}${nextCursor ? "+" : ""}`,
+        // Today and the six days before it (the spark's last seven bars);
+        // "+" while the loaded rows don't reach back a week.
+        thisWeek: `${days.slice(-7).reduce((sum, count) => sum + count, 0)}${loadedWeek ? "" : "+"}`,
         time: time.calls ? hoursLabel(time.ms) : null,
       }
     : null;
+  const active = totals ? totals.processing : counts.active;
+  const attention = totals ? totals.needsAttention : counts.attention;
   const waiting = [
-    counts.active ? `${counts.active} in progress` : "",
-    counts.attention
-      ? `${counts.attention} ${counts.attention === 1 ? "needs" : "need"} attention`
+    active ? `${active} in progress` : "",
+    attention
+      ? `${attention} ${attention === 1 ? "needs" : "need"} attention`
       : "",
   ].filter(Boolean);
   const renderRows = () => {
@@ -1384,7 +1420,9 @@ function CallsLibraryContent({
           <p className="calls-library-summary">
             {access?.authenticated === true && submissions.length > 0 ? (
               <>
-                {`${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"}`}
+                {totals
+                  ? `${totals.total} saved ${totals.total === 1 ? "call" : "calls"}`
+                  : `${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"}`}
                 <span className={styles.privacy}>
                   {" "}
                   {/* Owners and admins see the team's calls, not just theirs. */}
@@ -1520,7 +1558,7 @@ function CallsLibraryContent({
               <div className={styles.kpi} id="metric-reports-ready">
                 <dt>Reports ready</dt>
                 <dd>
-                  <b>{counts.ready}</b>
+                  <b>{totals ? totals.completed : counts.ready}</b>
                 </dd>
                 <dd className={styles.kpiContext}>
                   {waiting.length
