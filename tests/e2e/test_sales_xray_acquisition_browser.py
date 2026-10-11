@@ -948,11 +948,20 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(picture).to_contain_text("Chose another program.", timeout=20000)
 
                     def outcome_block(text: str, start: str, end: str) -> str:
-                        """The words of one numbered part, e.g. 1.1 up to 1.2."""
+                        """The words of one numbered part, e.g. 1.1 up to 1.2.
+
+                        A part with nothing to say is left out (6.2 appears only when
+                        the prospect stated a position), so the block then ends at the
+                        next numbered part that is shown.
+                        """
                         flat = re.sub(r"\s+", " ", text)
                         begin = flat.find(start)
                         assert begin >= 0, start
                         stop = flat.find(end, begin + len(start))
+                        if stop < 0:
+                            following = re.search(r" \d\.\d+ [A-Z]", flat[begin + len(start) :])
+                            assert following is not None, end
+                            stop = begin + len(start) + following.start()
                         assert stop > begin, end
                         return flat[begin:stop]
 
