@@ -233,14 +233,22 @@ def migration_harness() -> Iterator[_MigrationHarness]:
 def _seed_populated_0027(engine: Engine) -> None:
     tenant_a, tenant_b = uuid4(), uuid4()
     person_a, person_b = uuid4(), uuid4()
+    persons = Table("persons", MetaData(), autoload_with=engine)
+    assert "username" not in persons.c
     with Session(engine) as database:
         database.add_all(
             [
                 Tenant(id=tenant_a, slug=f"rehearsal-a-{tenant_a.hex}", name="Rehearsal A"),
                 Tenant(id=tenant_b, slug=f"rehearsal-b-{tenant_b.hex}", name="Rehearsal B"),
-                Person(id=person_a, email=f"rehearsal-a-{person_a.hex}@example.test"),
-                Person(id=person_b, email=f"rehearsal-b-{person_b.hex}@example.test"),
             ]
+        )
+        # Preserve the real pre-username schema; current Person must not emit future columns.
+        database.execute(
+            persons.insert(),
+            [
+                {"id": person_a, "email": f"rehearsal-a-{person_a.hex}@example.test"},
+                {"id": person_b, "email": f"rehearsal-b-{person_b.hex}@example.test"},
+            ],
         )
         database.flush()
         database.add_all(

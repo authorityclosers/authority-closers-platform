@@ -6,9 +6,10 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import MetaData, Table, create_engine, func, select, text
+from sqlalchemy import MetaData, Table, create_engine, event, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, load_only
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.audit.models import AuditEvent
@@ -19,6 +20,7 @@ from ac_platform.catalog.services import (
     CatalogService,
     SqlAlchemyCatalogStore,
 )
+from ac_platform.identity.models import Person
 from tests.integration.test_catalog_publication_migration_postgresql import _run_migration
 from tests.integration.test_media_delivery_renewal_postgresql import (
     _postgres_url,
@@ -27,6 +29,20 @@ from tests.integration.test_media_delivery_renewal_postgresql import (
     postgres_harness,  # noqa: F401 - fresh schema only
 )
 from tests.integration.test_studio_draft_authoring_postgresql import append, seed
+
+
+class _HistoricalPersonSession(Session):
+    """0022/0023 proof reads the identity fields that existed at those revisions."""
+
+
+@event.listens_for(_HistoricalPersonSession, "do_orm_execute")
+def _historical_person_projection(execution):
+    if execution.is_select and any(
+        description.get("expr") is Person for description in execution.statement.column_descriptions
+    ):
+        execution.statement = execution.statement.options(
+            load_only(Person.id, Person.status, Person.email_verified_at)
+        )
 
 
 async def published_fixture(sessions, *, historical_session_table: Table | None = None):
@@ -255,7 +271,9 @@ def test_populated_0022_upgrade_preserves_receipts_and_admits_only_new_operation
 
         async def before_upgrade():
             engine = create_async_engine(schema_url, hide_parameters=True)
-            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            sessions = async_sessionmaker(
+                engine, expire_on_commit=False, sync_session_class=_HistoricalPersonSession
+            )
             try:
                 async with sessions() as database:
                     assert await database.scalar(
@@ -301,7 +319,9 @@ def test_populated_0022_upgrade_preserves_receipts_and_admits_only_new_operation
 
         async def after_upgrade():
             engine = create_async_engine(schema_url, hide_parameters=True)
-            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            sessions = async_sessionmaker(
+                engine, expire_on_commit=False, sync_session_class=_HistoricalPersonSession
+            )
             try:
                 async with sessions() as database, database.begin():
                     assert await database.scalar(
