@@ -275,6 +275,7 @@ it("draws the page's own skeleton while access is checked", async () => {
   for (const [path, label] of [
     ["/organisation", "Loading organisation"],
     ["/dashboard", "Loading your dashboard"],
+    ["/coaching", "Loading Coaching"],
   ] as const) {
     pathname = path;
     const pending = deferred<Response>();
