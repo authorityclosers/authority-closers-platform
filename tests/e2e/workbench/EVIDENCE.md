@@ -17,9 +17,25 @@ opt-in dev test saves each choice, fully reloads and checks Report/Document/Word
 then reads the API's saved value and revision. It needs B's existing approved
 private dev session reference and an owned fictional finished-call route; it
 is **NOT EXECUTED** without them. Ordinary live journeys and staging smoke stay
-read-only. The full file collects 20 cases, with 12 in the staging selection.
+read-only. Fixture formatting now has four independent cases alongside the full
+Report journey's unchanged thirteen checks. The full file collects 24 cases,
+with 12 read-only cases in the staging selection.
 The prior completed Report/Coaching coverage below does not certify this new
 acceptance. Fixture format agreement and canonical persistence remain separate.
+
+The first new outcome wave starts 18:17:51 UTC at `12676745` and ends 143 before
+phone cases/final runner receipt. Desktop/light stops at first skill expansion
+during three refresh notices; cause is unconfirmed. Desktop/dark completes the
+original thirteen steps and shows person-recorded Won in Big Picture and Deal.
+Its next check fails because QA's broad Deal text locator matches both the
+status badge and end strip; the locator is corrected to the actual badge.
+Inspected screenshots are readable; runtime/server/visual errors and outcome
+API requests are zero. New four-choice/Document/Word agreement is **INCOMPLETE**,
+not PASS. Captures: `shots/2026-10-11-workbench-call-outcomes/`. No owned browser
+job remains. B's `25ddd60f` adds Lost save/full-reload/Report/Document/Word to the
+compiled disposable acquisition browser test; its required current compiled
+Next/disposable backend has not run here. Pending release CI is not execution
+evidence or a shared-dev persistence verdict.
 
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).

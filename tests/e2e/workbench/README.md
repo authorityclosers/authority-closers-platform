@@ -21,7 +21,7 @@ The eight skill rows follow Dipak's order. "Explore deeper analysis" starts
 collapsed; the populated example opens all four groups and captures each one.
 Live calls are checked only for deeper groups actually supplied by their report.
 
-The fictional Report also checks Won, Lost with a required reason, Follow-up Set
+The separate fictional formatting journey checks Won, Lost with a required reason, Follow-up Set
 with a required date, Decision Pending (the no-decision choice), and optional
 deal value. It checks human attribution, Deal status, Document and the Word
 file's 1.1 Call Outcome. Fixture outcome API requests are blocked and counted;
@@ -35,7 +35,8 @@ fictional finished call owned by that account. They save through the real contro
 fully reload each choice, check Report/Document/Word and read the saved API value
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
-path they skip. The full file therefore collects 20 cases.
+path they skip. These eight optional cases plus the original sixteen collect
+24 cases. The original Report journey retains its full thirteen steps.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
@@ -62,7 +63,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default

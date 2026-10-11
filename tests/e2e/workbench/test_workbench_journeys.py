@@ -465,6 +465,7 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Add why it was lost.")
             expect(badge).to_have_text("Won")
+            journey.snapshot("outcome-lost-required")
             editor.get_by_label("Why was it lost?", exact=True).fill(reason)
             editor.get_by_role("button", name="Save", exact=True).click()
         elif key == "follow-up":
@@ -472,6 +473,7 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Pick a follow-up date.")
             expect(badge).to_have_text("Lost")
+            journey.snapshot("outcome-follow-up-required")
             editor.get_by_label("Follow-up date", exact=True).fill("2026-11-11")
             editor.get_by_role("button", name="Save", exact=True).click()
         expect(editor).to_have_attribute("aria-busy", "false")
@@ -490,9 +492,9 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
             expect(editor).to_contain_text("2026-11-11")
         journey.snapshot(f"outcome-{key}")
         nav.get_by_role("link", name="Where the Deal Stands", exact=True).click()
-        expect(
-            page.locator('[data-report-pillar="facts"]').get_by_text(status, exact=True)
-        ).to_be_visible()
+        deal_badge = page.locator('[data-report-pillar="facts"] span[data-size] > span[data-tone]')
+        expect(deal_badge).to_be_visible()
+        expect(deal_badge).to_have_text(status)
         _switch_report_view(page, "Document view")
         outcome = _document_preview(page).locator('[data-report-mode-section="overview"]')
         expect(outcome.get_by_text(status, exact=True)).to_be_visible()
@@ -647,12 +649,19 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
-        if journey.fixture:
-            _outcome_controls_and_documents(journey)
-            journey.outcome_persistence = {
-                "scope": "fixture_format_agreement",
-                "canonical_reload_verified": False,
-            }
+
+
+def test_fixture_outcome_formats(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Separate format acceptance from the full Report and canonical persistence."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Fictional formatting does not certify a live report")
+    with _journey(browser, viewport, "outcome-format") as journey:
+        journey.open("/review-fixture/report/story")
+        _outcome_controls_and_documents(journey)
+        journey.outcome_persistence = {
+            "scope": "fixture_format_agreement",
+            "canonical_reload_verified": False,
+        }
 
 
 def test_fictional_outcome_persistence(browser: Browser, viewport: tuple[int, str]) -> None:
