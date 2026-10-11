@@ -29,7 +29,11 @@ function myCoaching(identity: CoachingIdentity): Promise<Coaching | null> {
         ? coaching
         : null,
     )
-    .catch(() => null);
+    .catch(() => {
+      // A failed read is not kept: the next Report asks again.
+      if (reads.get(key)?.read === read) reads.delete(key);
+      return null;
+    });
   reads.clear(); // Only the current account's read is ever kept.
   reads.set(key, { at: Date.now(), read });
   return read;
@@ -41,11 +45,13 @@ export async function recurringIssue(
   signal?: AbortSignal,
 ): Promise<RecurringIssue | null> {
   if (signal?.aborted) return null;
+  let leave = () => {};
   const abandoned = new Promise<null>((resolve) => {
-    if (signal?.aborted) resolve(null);
-    signal?.addEventListener("abort", () => resolve(null), { once: true });
+    leave = () => resolve(null);
+    signal?.addEventListener("abort", leave, { once: true });
   });
   const coaching = await Promise.race([myCoaching(identity), abandoned]);
+  signal?.removeEventListener("abort", leave);
   if (!coaching || signal?.aborted) return null;
   const call = coaching.calls?.find((row) => row.submission_id === callId);
   if (call?.recurring == null) return null;

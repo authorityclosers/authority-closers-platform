@@ -36,10 +36,33 @@ import {
   type CallCoaching,
 } from "./report-call-coaching-client";
 
+/**
+ * A v8 report has no overview: its own coaching mission, linked to one
+ * "What Didn't" issue (`coaching_mission_for`), is the proposed focus, as on
+ * the server (report_adapter.with_pillars_overview). No link, no proposal.
+ */
+function pillarsFocus(report: SalesReport) {
+  const deal = report.pillars?.deal as
+    | { coaching_mission?: string | null; coaching_mission_for?: unknown }
+    | undefined;
+  const index = deal?.coaching_mission_for;
+  return deal?.coaching_mission &&
+    typeof index === "number" &&
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index < report.improvements.length
+    ? {
+        improvement_index: index,
+        behavior: deal.coaching_mission,
+        target: null,
+      }
+    : undefined;
+}
+
 /** A retained finding supplies a suggestion, never a new diagnosis or score. */
 export function callCoachingFocus(report: SalesReport) {
   if (report.preview) return null;
-  const proposed = report.overview?.next_call_focus;
+  const proposed = report.overview?.next_call_focus ?? pillarsFocus(report);
   const proposedFinding = proposed
     ? report.improvements[proposed.improvement_index]
     : undefined;

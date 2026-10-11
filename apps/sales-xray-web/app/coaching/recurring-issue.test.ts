@@ -77,3 +77,31 @@ it("never answers for another account and stops quietly on failure or abort", as
     href: "/coaching",
   });
 });
+
+it("a caller leaving early never cancels the read for the others, and a failure is retried", async () => {
+  let release: (response: Response) => void = () => {};
+  const fetch = vi.fn(
+    () => new Promise<Response>((resolve) => (release = resolve)),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const controller = new AbortController();
+  const leaving = recurringIssue(A, me, controller.signal);
+  const staying = recurringIssue(B, me);
+  controller.abort();
+  expect(await leaving).toBeNull();
+  release(coaching());
+  expect(await staying).toEqual({ recurring: false, href: "/coaching" });
+  expect(fetch).toHaveBeenCalledOnce();
+  resetRecurringIssue();
+  const failing = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("no", { status: 503 }))
+    .mockResolvedValueOnce(coaching());
+  vi.stubGlobal("fetch", failing);
+  expect(await recurringIssue(A, me)).toBeNull();
+  expect(await recurringIssue(A, me)).toEqual({
+    recurring: true,
+    href: "/coaching",
+  });
+  expect(failing).toHaveBeenCalledTimes(2);
+});
