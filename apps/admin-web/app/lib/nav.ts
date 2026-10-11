@@ -123,7 +123,7 @@ export const NAVIGATION: readonly NavGroup[] = [
     items: [
       {
         href: "/company",
-        label: "Company view",
+        label: "Company",
         icon: "company",
         need: { kind: "salesXray" },
         phone: true,

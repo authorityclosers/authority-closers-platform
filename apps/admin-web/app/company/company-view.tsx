@@ -429,7 +429,7 @@ export function CompanyView({
               const trend = change(person.needsAttentionChange);
               return (
                 <tr key={person.key ?? person.name}>
-                  <th scope="row">
+                  <th scope="row" className={styles.nowrap}>
                     {person.key ? (
                       <Link href={address({ person: person.key })}>
                         {person.name}
@@ -438,7 +438,9 @@ export function CompanyView({
                       person.name
                     )}
                   </th>
-                  {data.teams.length ? <td>{person.team ?? "—"}</td> : null}
+                  {data.teams.length ? (
+                    <td className={styles.nowrap}>{person.team ?? "—"}</td>
+                  ) : null}
                   <td data-num="">{count(person.calls)}</td>
                   <td data-num="">
                     {percent(

@@ -369,7 +369,25 @@
   }
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controls > [role="group"],
+  .controls > select:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .controls > [role="group"] {
+    overflow-x: auto;
+  }
+
   .select {
     max-width: none;
     width: 100%;
