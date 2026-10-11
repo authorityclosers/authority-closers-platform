@@ -68,7 +68,7 @@ describe("Evidence playback", () => {
     await act(async () => buttons[1].click());
     expect(first.pause).toHaveBeenCalledOnce();
   });
-  it("folds moments after the first two until the learner asks for all", async () => {
+  it("folds moments after the first until the learner asks for all", async () => {
     const four = [0, 1, 2, 3].map((index) => ({
       ...evidence,
       segment_id: `segment-${index}`,
@@ -78,7 +78,7 @@ describe("Evidence playback", () => {
     await act(async () => root.render(<MomentList evidence={four} />));
     const list = host.querySelector("ul")!;
     expect(list.querySelectorAll("li")).toHaveLength(4);
-    expect(list.querySelectorAll("li[data-extra]")).toHaveLength(2);
+    expect(list.querySelectorAll("li[data-extra]")).toHaveLength(3);
     expect(list.hasAttribute("data-expanded")).toBe(false);
     const more = [...host.querySelectorAll("button")].find(
       (b) => b.textContent === "Show all 4 moments",
@@ -87,9 +87,11 @@ describe("Evidence playback", () => {
     expect(list.hasAttribute("data-expanded")).toBe(true);
     expect(host.textContent).not.toContain("Show all 4 moments");
   });
-  it("needs no fold for two moments", async () => {
+  it("needs no fold for one moment", async () => {
     await act(async () =>
-      root.render(<MomentList evidence={fictionalCoaching.evidence} />),
+      root.render(
+        <MomentList evidence={fictionalCoaching.evidence.slice(0, 1)} />,
+      ),
     );
     expect(host.textContent).not.toContain("Show all");
   });

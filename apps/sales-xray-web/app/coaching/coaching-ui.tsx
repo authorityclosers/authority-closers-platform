@@ -72,7 +72,11 @@ export function FocusHero({
 
 type Lesson = Omit<TextLesson, "own_call"> & { own_call: Evidence | null };
 
-/** Pillar 3: a Dipak clip when one is reviewed, always a usable text lesson. */
+/**
+ * Pillar 3 in the spec's order: idea, framework, your call against a better
+ * direction, then Dipak's reviewed clip. With a clip the text stays a short
+ * summary; without one it is the complete lesson. Never an empty state.
+ */
 export function LessonPanel({
   lesson,
   clips,
@@ -82,13 +86,23 @@ export function LessonPanel({
   clips?: CoachingClip[];
   fallbackObservation: string;
 }) {
+  const media = Boolean(clips?.length);
+  const wording = lesson.example_wording.length ? (
+    <div>
+      <span className={styles.label}>Optional wording, in your own style</span>
+      <ul className={styles.wording}>
+        {lesson.example_wording.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
   return (
     <Panel
       title="Here’s What Better Looks Like"
-      sub={clips?.length ? "Dipak’s coaching" : "Text lesson"}
+      sub={media ? "Dipak’s coaching" : "Text lesson"}
     >
       <div className={styles.body}>
-        <CoachingMedia clips={clips} />
         <h3 className={styles.lessonTitle}>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
         {lesson.framework.length ? (
@@ -113,21 +127,12 @@ export function LessonPanel({
             <p>{lesson.better_direction}</p>
           </div>
         </div>
-        {lesson.example_wording.length ? (
-          <div>
-            <span className={styles.label}>
-              Optional wording, in your own style
-            </span>
-            <ul className={styles.wording}>
-              {lesson.example_wording.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <CoachingMedia clips={clips} />
+        {media ? null : wording}
         <details className={styles.more}>
           <summary>Read the full lesson</summary>
           <div className={styles.moreBody}>
+            {media ? wording : null}
             <p>
               <span className={styles.label}>Why this matters</span>
               {lesson.why_it_matters}

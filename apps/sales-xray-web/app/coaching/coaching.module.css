@@ -60,7 +60,8 @@
 
   /* The rail already shows the mission beside the focus. */
   .hero .nextCall,
-  .root .moreMoments {
+  .root .moreMoments,
+  .root .moreCalls {
     display: none;
   }
 }
@@ -76,7 +77,7 @@
 }
 
 /* One column: pillars keep their order, the call list goes last, and only
-   the first two moments show until asked (spec 9, mobile). */
+   the first moment and three newest calls show until asked (spec 9, 12.7). */
 @container (max-width: 899.98px) {
   .main,
   .rail {
@@ -87,7 +88,8 @@
     order: 1;
   }
 
-  .moments:not([data-expanded]) > [data-extra] {
+  .moments:not([data-expanded]) > [data-extra],
+  .callList:not([data-expanded]) li:nth-child(n + 4) {
     display: none;
   }
 }
@@ -293,9 +295,14 @@
   cursor: default;
 }
 
-.moreMoments {
+.moreMoments,
+.moreCalls {
   justify-self: start;
   margin: 0 14px 12px;
+}
+
+.moreCalls {
+  margin-top: 8px;
 }
 
 .status {

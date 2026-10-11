@@ -147,38 +147,56 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   );
 }
 
-/** Every analysed call has its own coaching, even before a pattern exists. */
+/**
+ * Every analysed call has its own coaching, even before a pattern exists.
+ * One-column screens open with the three newest calls (spec 12.7).
+ */
 function CallsPanel({ calls }: { calls?: CallSummary[] }) {
+  const [expanded, setExpanded] = useState(false);
   if (!calls?.length) return null;
   return (
     <Panel title="Coaching for each call" sub={`${calls.length} recent`}>
-      <List label="Your recent calls">
-        {calls.map((call) => (
-          <Row
-            key={call.submission_id}
-            icon={<PhoneCall size={15} aria-hidden="true" />}
-            title={call.call_label}
-            href={
-              call.state === "ready"
-                ? `/coaching?call=${call.submission_id}`
-                : `/analysis/calls/${call.submission_id}`
-            }
-            meta={[
-              callDate(call.created_at),
-              call.state === "pending"
-                ? "Analysing…"
-                : call.state === "unavailable"
-                  ? "No usable report"
-                  : (call.focus_label ?? "One practice for your next call"),
-            ]}
-            end={
-              call.state === "ready" ? (
-                <ChevronRight size={15} aria-hidden="true" />
-              ) : null
-            }
-          />
-        ))}
-      </List>
+      <div
+        className={styles.callList}
+        data-expanded={expanded ? "" : undefined}
+      >
+        <List label="Your recent calls">
+          {calls.map((call) => (
+            <Row
+              key={call.submission_id}
+              icon={<PhoneCall size={15} aria-hidden="true" />}
+              title={call.call_label}
+              href={
+                call.state === "ready"
+                  ? `/coaching?call=${call.submission_id}`
+                  : `/analysis/calls/${call.submission_id}`
+              }
+              meta={[
+                callDate(call.created_at),
+                call.state === "pending"
+                  ? "Analysing…"
+                  : call.state === "unavailable"
+                    ? "No usable report"
+                    : (call.focus_label ?? "One practice for your next call"),
+              ]}
+              end={
+                call.state === "ready" ? (
+                  <ChevronRight size={15} aria-hidden="true" />
+                ) : null
+              }
+            />
+          ))}
+        </List>
+      </div>
+      {calls.length > 3 && !expanded ? (
+        <button
+          type="button"
+          className={`${kitStyles.button} ${styles.moreCalls}`}
+          onClick={() => setExpanded(true)}
+        >
+          Show all {calls.length} calls
+        </button>
+      ) : null}
     </Panel>
   );
 }
