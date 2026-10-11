@@ -277,6 +277,18 @@ function formatSeconds(seconds: number) {
   return remainder ? `${minutes} min ${remainder} sec` : `${minutes} min`;
 }
 
+/** Grant time in India time; the raw value when it isn't a parseable date. */
+function formatGrantTime(value: string | null) {
+  if (!value) return "Timestamp unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(date);
+}
+
 export function MinuteAccountAdminPanel() {
   const adminSession = useAdminSession();
   const actor =
@@ -978,7 +990,7 @@ export function MinuteAccountAdminPanel() {
                   <li key={grant.grant_id}>
                     <div>
                       <strong>{formatSeconds(grant.seconds)}</strong>
-                      <span>{grant.created_at ?? "Timestamp unavailable"}</span>
+                      <span>{formatGrantTime(grant.created_at)}</span>
                     </div>
                     <p>{grant.reason || "No reason supplied"}</p>
                     {grant.audit_sequence != null ? (

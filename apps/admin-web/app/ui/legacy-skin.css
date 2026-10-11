@@ -1,0 +1,67 @@
+/*
+ * The shared classes older admin screens still use (operations-web styles.css),
+ * drawn like the kit inside the console until each screen is rebuilt on it:
+ * 32 px controls (44 px on phones), 12-15 px text, one teal accent. Scoped to
+ * the console's main area, so sign-in and the reviewer portal are untouched.
+ */
+#admin-content .button {
+  gap: 6px;
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border-radius: var(--sx-radius-sm);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+#admin-content .button-secondary {
+  border-color: var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+#admin-content .button-secondary:not(:disabled):hover {
+  border-color: var(--sx-line-strong);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+#admin-content .panel {
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: none;
+}
+
+#admin-content .panel h2 {
+  font: var(--sx-text-panel);
+}
+
+#admin-content :is(.kicker, .section-eyebrow) {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#admin-content .field :is(input, select, textarea) {
+  min-height: var(--sx-control-h);
+  border-color: var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  font-size: var(--sx-text-sm);
+}
+
+#admin-content .field textarea {
+  min-height: 80px;
+}
+
+@media (max-width: 760px) {
+  #admin-content .button,
+  #admin-content .field :is(input, select) {
+    min-height: 44px;
+  }
+
+  #admin-content .field :is(input, select, textarea) {
+    font-size: 16px;
+  }
+}

@@ -311,3 +311,32 @@ async def test_analysis_health_route_bounds_the_window(admin_client, monkeypatch
     assert set(seen["scope"]) == {PERSONAL, ORGANISATION}
     for params in ({"days": "0"}, {"days": "31"}, {"days": "7", "other": "1"}):
         assert (await client.get("/v1/admin/conversation/health", params=params)).status_code == 422
+
+
+async def test_usage_route_bounds_the_window(admin_client, monkeypatch) -> None:
+    from ac_platform.conversation_intelligence.admin_usage import AdminUsage
+
+    client, _database = admin_client
+    seen: dict[str, Any] = {}
+
+    async def summary(service, actor, *, days):
+        seen.update(days=days, scope=service.tenant_ids)
+        return {"events": 0}
+
+    monkeypatch.setattr(AdminUsage, "summary", summary)
+    assert (
+        await client.get("/v1/admin/conversation/usage", params={"days": "90"})
+    ).status_code == 200
+    assert seen["days"] == 90 and set(seen["scope"]) == {PERSONAL, ORGANISATION}
+    for params in ({"days": "0"}, {"days": "91"}, {"q": "x"}):
+        assert (await client.get("/v1/admin/conversation/usage", params=params)).status_code == 422
+
+
+async def test_product_updates_route_is_read_only_and_admitted(admin_client) -> None:
+    client, _database = admin_client
+    response = await client.get("/v1/admin/conversation/product-updates")
+    assert response.status_code == 200 and response.json() == {"notes": []}
+    assert (
+        await client.get("/v1/admin/conversation/product-updates", params={"x": "1"})
+    ).status_code == 422
+    assert (await client.post("/v1/admin/conversation/product-updates", json={})).status_code == 405

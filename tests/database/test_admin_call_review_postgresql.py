@@ -78,6 +78,8 @@ def test_queue_call_and_bundle_show_one_analysed_call(review_case: ReviewCase) -
             assert call["status"] == "ready"
             reported = [entry for entry in call["runs"] if entry["report_id"]]
             assert [entry["id"] for entry in reported] == [str(case.report_run_id)]
+            # The analysed call has no dead-lettered step to retry.
+            assert call["failed_jobs"] == []
 
             bundle = await service.bundle(case.admin_actor, case.report_run_id)
             assert bundle["run_id"] == str(case.report_run_id)
@@ -154,10 +156,16 @@ def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) ->
                 "succeeded",
                 "dead_letter",
             }
-            assert len(health["daily"]) == 30
+            # A rolling 30-day window touches 31 calendar dates (the first in part).
+            assert len(health["daily"]) == 31
             assert health["durations"]["runs"]["count"] >= 1
             assert health["cost"]["basis"] == "admin_pricing_estimate_not_settlement"
             for item in health["failed"]:
                 assert " " not in item["code"]
+            # Versions come only from steps linked to a processing plan; the fixture
+            # analyses through direct quotes, so only the invariants are checked here.
+            assert isinstance(health["versions"], list)
+            for row in health["versions"]:
+                assert row["completed"] + row["running"] + row["held"] <= row["analyses"]
 
     run(exercise())

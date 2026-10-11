@@ -4,7 +4,10 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ReviewInvitationPanel } from "./review-invitation-panel";
-import { createReviewInvitation } from "./review-invitation-api";
+import {
+  createReviewInvitation,
+  revokeReviewInvitation,
+} from "./review-invitation-api";
 
 vi.mock("./review-invitation-api", () => ({
   createReviewInvitation: vi.fn(),
@@ -181,5 +184,58 @@ it("preserves a draft when the selected analysis arrives after initial loading",
     ).toBe(runId);
   } finally {
     await act(async () => root.unmount());
+  }
+});
+
+it("reports a failed revoke from an invitation's own row, outside the closed by-ID section", async () => {
+  const send = vi.mocked(createReviewInvitation);
+  const revoke = vi.mocked(revokeReviewInvitation);
+  send.mockImplementation(async (intent) => ({
+    id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "22222222-2222-4222-8222-222222222222",
+    run_id: intent.runId,
+    invited_email: intent.invitedEmail,
+    allowed_lenses: [...intent.allowedLenses],
+    created_at_epoch: Math.floor(Date.now() / 1000),
+    expires_at_epoch: intent.expiresAtEpoch,
+    state: "pending",
+    assignment_id: null,
+    created_by_person_id: "55555555-5555-4555-8555-555555555555",
+    schema: "ac.sales-xray.review-invitation/1",
+  }));
+  revoke.mockRejectedValue(new Error("This invitation was already accepted."));
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <ReviewInvitationPanel initialRunId={runId} invitationsAvailable />,
+      ),
+    );
+    await act(async () =>
+      value(
+        container.querySelector<HTMLInputElement>("#invitation-email")!,
+        "reviewer@example.test",
+      ),
+    );
+    const button = (text: string) =>
+      [...container.querySelectorAll("button")].find(
+        (item) => item.textContent === text || item.textContent?.includes(text),
+      )!;
+    await act(async () => button("Send invitation").click());
+    await act(async () => button("Revoke").click());
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector("details:not([class*='tech'])"),
+    ).toBeTruthy();
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("already accepted");
+    // The message isn't hidden inside the collapsed "by ID" section.
+    expect(alert?.closest("details")).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.clearAllMocks();
   }
 });

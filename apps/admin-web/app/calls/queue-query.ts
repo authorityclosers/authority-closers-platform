@@ -11,6 +11,7 @@ export type QueueFilters = {
   rep?: string;
   language?: string;
   provider?: string;
+  prompt?: string;
   since?: string;
   until?: string;
   cursor?: string;
@@ -19,6 +20,7 @@ export type QueueFilters = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const PROVIDER = /^[A-Za-z0-9._:-]{1,64}$/;
+const PROMPT = /^[A-Za-z0-9._:+-]{1,128}$/;
 const CURSOR = /^[A-Za-z0-9_-]{1,64}$/;
 const LANGUAGES = new Set(["en", "hi-Deva+en", "mr-Deva+en"]);
 
@@ -39,6 +41,8 @@ export function queueFilters(params: Params): QueueFilters {
   if (language && LANGUAGES.has(language)) filters.language = language;
   const provider = one(params.provider);
   if (provider && PROVIDER.test(provider)) filters.provider = provider;
+  const prompt = one(params.prompt);
+  if (prompt && PROMPT.test(prompt)) filters.prompt = prompt;
   for (const key of ["since", "until"] as const) {
     const value = one(params[key]);
     if (value && DAY.test(value) && !Number.isNaN(Date.parse(value)))
@@ -61,6 +65,7 @@ export function filterQuery(
     "rep",
     "language",
     "provider",
+    "prompt",
     "since",
     "until",
     "cursor",

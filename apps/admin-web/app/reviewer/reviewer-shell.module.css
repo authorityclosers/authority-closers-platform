@@ -1,168 +1,177 @@
+/* Reviewer workspace frame, drawn like the Admin console's top bar. Tokens only. */
+
 .shell {
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
+  min-height: 100dvh;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
 }
 
 .header {
-  min-height: 4.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.9rem clamp(1rem, 4vw, 4rem);
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  gap: 12px;
+  min-height: var(--sx-topbar-h);
+  box-sizing: border-box;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-surface);
 }
 
 .brand,
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 8px;
+  min-width: 0;
 }
 
 .brand {
-  min-width: 0;
+  color: inherit;
+  text-decoration: none;
 }
+
+.brand:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .brand > span:last-child {
   display: grid;
-  gap: 0.14rem;
+  min-width: 0;
 }
+
 .brand strong {
-  font-size: 0.92rem;
-  letter-spacing: -0.02em;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
 }
+
 .brand small {
-  color: var(--muted);
-  font-size: 0.65rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
+
 .brandMark {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  flex: none;
+  width: 28px;
+  height: 28px;
   place-items: center;
-  border-radius: 0.55rem;
-  background: var(--signal);
-  color: var(--signal-ink);
-  font:
-    700 0.66rem/1 var(--font-mono),
-    monospace;
-  letter-spacing: -0.08em;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
 }
+
 .headerActions {
   justify-content: end;
 }
+
 .sessionPill {
   max-width: min(34vw, 18rem);
   overflow: hidden;
-  color: var(--muted);
-  font:
-    500 0.66rem/1.2 var(--font-mono),
-    monospace;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sessionPill[data-status="ready"] {
-  color: var(--info);
-}
+
 .sessionPill[data-status="error"] {
-  color: var(--danger);
+  color: var(--sx-bad);
 }
-.signOut {
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  padding: 0.5rem 0.75rem;
-  background: transparent;
-  color: var(--text);
+
+.signOut,
+.boundaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
   cursor: pointer;
-  font-size: 0.73rem;
-  font-weight: 700;
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
 }
-.signOut:hover {
-  border-color: var(--signal);
-  color: var(--signal);
+
+.signOut:hover,
+.boundaryButton:hover {
+  background: var(--sx-sunken);
 }
+
+.signOut:focus-visible,
+.boundaryButton:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
 .signOut:disabled {
   cursor: wait;
   opacity: 0.65;
 }
+
 .signOutError {
   max-width: min(40vw, 20rem);
-  color: var(--danger);
-  font-size: 0.7rem;
-  line-height: 1.35;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
 }
 
+/* Access checks on an assignment page: one small card, centred. */
 .boundary {
-  min-height: calc(100vh - 4.5rem);
   display: grid;
-  place-items: center;
-  padding: clamp(2rem, 8vw, 6rem) 1rem;
+  place-items: start center;
+  padding: 48px 16px;
 }
+
 .boundaryCard {
-  width: min(100%, 32rem);
   display: grid;
-  gap: 0.9rem;
-  padding: clamp(1.4rem, 5vw, 2.5rem);
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  gap: 8px;
+  width: min(100%, 28rem);
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
+
 .boundaryEyebrow {
-  color: var(--quiet);
-  font:
-    700 0.65rem/1.3 var(--font-mono),
-    monospace;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
 }
+
 .boundaryCard h1 {
   margin: 0;
-  font-size: clamp(1.8rem, 6vw, 2.8rem);
-  letter-spacing: -0.06em;
-  line-height: 1;
+  font: var(--sx-text-panel);
 }
+
 .boundaryCard p {
   margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
+
 .boundaryButton {
-  display: inline-flex;
   width: fit-content;
-  min-height: 2.7rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 0.55rem;
-  padding: 0.65rem 0.85rem;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 750;
-  text-decoration: none;
-}
-.boundaryButton:hover {
-  border-color: var(--signal);
-  color: var(--signal);
 }
 
 @media (max-width: 520px) {
   .header {
-    align-items: flex-start;
-    flex-direction: column;
-    padding-block: 0.8rem;
+    padding: 0 12px;
   }
-  .headerActions {
-    width: 100%;
-    justify-content: space-between;
-  }
+
+  .brand small,
   .sessionPill {
-    max-width: 65vw;
+    display: none;
   }
 }

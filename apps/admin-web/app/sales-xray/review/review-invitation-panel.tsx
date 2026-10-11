@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { CheckCircle2, CircleAlert, Mail, XCircle } from "lucide-react";
 
+import { Badge, Button, Field, Panel, kitStyles } from "../../ui/kit";
+
 import {
   newReviewIdempotencyKey,
   reviewLenses,
@@ -13,7 +15,7 @@ import {
   createReviewInvitation as sendReviewInvitation,
   revokeReviewInvitation as revokeInvitation,
 } from "./review-invitation-api";
-import styles from "./review-invitation-panel.module.css";
+import styles from "./reviewers.module.css";
 
 const lensLabels: Record<ReviewMode, string> = {
   sales: "Sales expert",
@@ -180,25 +182,33 @@ export function ReviewInvitationPanel({
   const createDisabled = busy || !invitationsAvailable;
   const revoking = revokeMutation.status === "submitting";
   return (
-    <section className={styles.panel} aria-labelledby="review-invitation-title">
-      <div className={styles.heading}>
-        <span className={styles.eyebrow}>Grow your review team</span>
-        <h2 id="review-invitation-title">Invite a reviewer</h2>
-        <p>
-          Choose a saved analysis, add their email, and select what you would
-          like them to review.
+    <Panel title="Invite a reviewer">
+      <form
+        className={styles.body}
+        aria-label="Invite a reviewer"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <p className={kitStyles.muted}>
+          Choose a saved analysis, add their email, and pick what you&rsquo;d
+          like them to review. They get a link to their own reviewer sign-in.
         </p>
-      </div>
-      <div className={styles.form}>
-        <label>
-          <span>Analysis to review</span>
-          <input
-            id="invitation-run-id"
-            list="review-known-runs"
-            value={runId}
-            onChange={(event) => setRunId(event.target.value)}
-            disabled={createDisabled}
-          />
+        <div className={styles.form}>
+          <Field
+            label="Analysis to review"
+            hint="Pick a recent run, use “Use for review” below, or paste a run ID."
+          >
+            <input
+              id="invitation-run-id"
+              list="review-known-runs"
+              value={runId}
+              onChange={(event) => setRunId(event.target.value)}
+              disabled={createDisabled}
+            />
+          </Field>
           <datalist id="review-known-runs">
             {[...new Map(runs.map((run) => [run.run_id, run])).values()].map(
               (run) => (
@@ -209,23 +219,18 @@ export function ReviewInvitationPanel({
               ),
             )}
           </datalist>
-          <small>
-            Choose a recent run or paste the run ID from a saved analysis.
-          </small>
-        </label>
-        <label>
-          <span>Invited email</span>
-          <input
-            id="invitation-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={createDisabled}
-          />
-        </label>
-        <fieldset>
-          <legend>Review perspectives</legend>
-          <div className={styles.lenses}>
+          <Field label="Invited email">
+            <input
+              id="invitation-email"
+              type="email"
+              autoComplete="off"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={createDisabled}
+            />
+          </Field>
+          <fieldset className={styles.lenses}>
+            <legend>Review perspectives</legend>
             {reviewLenses.map((lens) => (
               <label key={lens}>
                 <input
@@ -240,126 +245,130 @@ export function ReviewInvitationPanel({
                   }
                   disabled={createDisabled}
                 />
-                <span>{lensLabels[lens]}</span>
+                {lensLabels[lens]}
               </label>
             ))}
-          </div>
-        </fieldset>
-        <label>
-          <span>
-            Access expires <small>Your local time · within 30 days</small>
-          </span>
-          <input
-            type="datetime-local"
-            id="invitation-expiry"
-            value={expiry}
-            onChange={(event) => setExpiry(event.target.value)}
-            disabled={createDisabled}
-          />
-        </label>
-        <button
-          className="button button-primary"
-          type="button"
-          onClick={submit}
-          disabled={createDisabled}
-        >
-          <Mail size={15} aria-hidden="true" />
-          {!invitationsAvailable
-            ? "Reviewer access unavailable"
-            : busy
-              ? "Sending invitation…"
-              : "Send invitation"}
-        </button>
-      </div>
-      {mutation.status === "success" ? (
-        <div className={styles.success} role="status">
-          <CheckCircle2 size={17} aria-hidden="true" />
-          <span>
-            <strong>Invitation queued for delivery.</strong> The review link
-            will be emailed to{" "}
-            <strong>{mutation.invitation.invited_email}</strong>.
+          </fieldset>
+          <Field label="Access expires" hint="Your local time · within 30 days">
+            <input
+              type="datetime-local"
+              id="invitation-expiry"
+              value={expiry}
+              onChange={(event) => setExpiry(event.target.value)}
+              disabled={createDisabled}
+            />
+          </Field>
+          <span className={styles.actions}>
+            <Button type="submit" variant="primary" disabled={createDisabled}>
+              <Mail size={14} aria-hidden="true" />
+              {!invitationsAvailable
+                ? "Reviewer access unavailable"
+                : busy
+                  ? "Sending invitation…"
+                  : "Send invitation"}
+            </Button>
           </span>
         </div>
-      ) : null}
-      {mutation.status === "error" ? (
-        <div className={styles.error} role="alert">
-          <CircleAlert size={17} aria-hidden="true" />
-          <span>{mutation.message}</span>
-          {mutation.retryable ? (
-            <button type="button" onClick={submit}>
-              Retry same request
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      <details className={styles.known}>
-        <summary>Revoke an earlier invitation by ID</summary>
-        <label>
-          <span>
-            Revoke a known invitation{" "}
-            <small>paste the server invitation ID</small>
-          </span>
-          <input
-            value={knownId}
-            onChange={(event) => setKnownId(event.target.value)}
-            disabled={revoking}
-          />
-        </label>
-        <button
-          className="button button-secondary"
-          type="button"
-          onClick={() => revoke(knownId.trim())}
-          disabled={revoking || !validUuid(knownId.trim())}
-        >
-          <XCircle size={15} aria-hidden="true" />
-          {revoking ? "Revoking…" : "Revoke known invitation"}
-        </button>
-      </details>
-      {revokeMutation.status === "error" ? (
-        <p className={styles.errorText} role="alert">
-          {revokeMutation.message}
-        </p>
-      ) : null}
-      {revokeMutation.status === "success" ? (
-        <p className={styles.success} role="status">
-          Invitation revoked. Its link can no longer grant review access.
-        </p>
-      ) : null}
-      {items.length > 0 ? (
-        <div className={styles.receipts} aria-label="Invitation receipts">
-          <h3>Invitations from this visit</h3>
-          {items.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>{item.invited_email}</strong>
+        {mutation.status === "success" ? (
+          <p className={styles.note} data-tone="good" role="status">
+            <CheckCircle2 size={14} aria-hidden="true" />
+            <span>
+              <strong>Invitation queued for delivery.</strong> The review link
+              will be emailed to{" "}
+              <strong>{mutation.invitation.invited_email}</strong>.
+            </span>
+          </p>
+        ) : null}
+        {mutation.status === "error" ? (
+          <p className={styles.note} data-tone="warn" role="alert">
+            <CircleAlert size={14} aria-hidden="true" />
+            <span>{mutation.message}</span>
+            {mutation.retryable ? (
+              <Button onClick={submit}>Retry same request</Button>
+            ) : null}
+          </p>
+        ) : null}
+        {items.length > 0 ? (
+          <div className={styles.receipts} aria-label="Invitation receipts">
+            <h3>Invitations from this visit</h3>
+            {items.map((item) => (
+              <div className={styles.receipt} key={item.id}>
                 <span>
-                  {stateLabel(item.state)} ·{" "}
-                  {item.allowed_lenses
-                    .map((lens) => lensLabels[lens])
-                    .join(", ")}
+                  <strong>{item.invited_email}</strong>
+                  <small>
+                    {item.allowed_lenses
+                      .map((lens) => lensLabels[lens])
+                      .join(", ")}
+                  </small>
                 </span>
+                <Badge tone={item.state === "pending" ? "accent" : "neutral"}>
+                  {stateLabel(item.state)}
+                </Badge>
+                <details className={styles.tech}>
+                  <summary>Invitation details</summary>
+                  <code>{item.id}</code>
+                </details>
+                {item.state === "pending" ? (
+                  <Button
+                    variant="ghost"
+                    onClick={() => revoke(item.id)}
+                    disabled={revoking}
+                  >
+                    Revoke
+                  </Button>
+                ) : null}
               </div>
-              <details>
-                <summary>Invitation details</summary>
-                <code>{item.id}</code>
-              </details>
-              {item.state === "pending" ? (
-                <button
-                  type="button"
-                  onClick={() => revoke(item.id)}
-                  disabled={revoking}
-                >
-                  Revoke
-                </button>
-              ) : null}
-            </article>
-          ))}
+            ))}
+          </div>
+        ) : (
+          <small className={kitStyles.muted}>
+            Invitations you send during this visit will appear here.
+          </small>
+        )}
+      </form>
+      <details className={styles.advanced}>
+        <summary>Revoke an earlier invitation by ID</summary>
+        <div className={styles.body}>
+          <Field
+            label="Revoke a known invitation"
+            hint="Paste the server invitation ID"
+          >
+            <input
+              value={knownId}
+              onChange={(event) => setKnownId(event.target.value)}
+              disabled={revoking}
+            />
+          </Field>
+          <span className={styles.actions}>
+            <Button
+              onClick={() => revoke(knownId.trim())}
+              disabled={revoking || !validUuid(knownId.trim())}
+            >
+              <XCircle size={14} aria-hidden="true" />
+              {revoking ? "Revoking…" : "Revoke known invitation"}
+            </Button>
+          </span>
         </div>
-      ) : (
-        <p className={styles.empty}>
-          Invitations you send during this visit will appear here.
-        </p>
-      )}
-    </section>
+      </details>
+      {/* Outside the collapsed section: a revoke from a receipt row reports here too. */}
+      {revokeMutation.status === "error" ||
+      revokeMutation.status === "success" ? (
+        <div className={styles.body}>
+          {revokeMutation.status === "error" ? (
+            <p className={styles.note} data-tone="warn" role="alert">
+              <CircleAlert size={14} aria-hidden="true" />
+              <span>{revokeMutation.message}</span>
+            </p>
+          ) : (
+            <p className={styles.note} data-tone="good" role="status">
+              <CheckCircle2 size={14} aria-hidden="true" />
+              <span>
+                Invitation revoked. Its link can no longer grant review access.
+              </span>
+            </p>
+          )}
+        </div>
+      ) : null}
+    </Panel>
   );
 }

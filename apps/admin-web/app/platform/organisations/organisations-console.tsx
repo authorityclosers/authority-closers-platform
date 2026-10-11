@@ -27,12 +27,13 @@ import {
   Panel,
   Skeleton,
   Table,
+  Unavailable,
   kitStyles,
 } from "../../ui/kit";
 import styles from "./organisations.module.css";
+import { istStamp } from "../../lib/time";
 
-const date = (value: string | null) =>
-  value ? new Date(value).toLocaleString() : "—";
+const date = (value: string | null) => istStamp(value);
 
 export function OrganisationsConsole() {
   const [identity, setIdentity] = useState<PlatformIdentity | null>(null);
@@ -116,9 +117,7 @@ export function OrganisationsConsole() {
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className={styles.alert}>
-          {error}
-        </p>
+        <Unavailable title="The organisation directory" reason={error} />
       ) : null}
       {notice ? (
         <p role="status" className={styles.notice}>

@@ -34,6 +34,7 @@ const EMPTY_FACETS = {
   reps: [],
   languages: [],
   providers: [],
+  prompts: [],
 };
 
 export default async function CallsPage({

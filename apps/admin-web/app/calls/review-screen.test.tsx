@@ -8,7 +8,7 @@ import { ReviewScreen } from "./review-screen";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -83,6 +83,13 @@ const bundle = normalizeBundle({
       { start_ms: 5000, level: 1 },
     ],
   },
+  metrics: {
+    time_used_ms: 6000,
+    speakers: {
+      A: { talk_ms: 4000, talk_share: 0.67, questions: 1, cut_ins: 0 },
+      B: { talk_ms: 2000, talk_share: 0.33, questions: 1, cut_ins: 0 },
+    },
+  },
 });
 
 let host: HTMLDivElement;
@@ -105,11 +112,12 @@ afterEach(async () => {
   host.remove();
 });
 
-async function render() {
+async function render(shown = call, startMs: number | null = null) {
   await act(async () =>
     root.render(
       <ReviewScreen
-        call={call}
+        startMs={startMs}
+        call={shown}
         bundle={bundle}
         compare={null}
         compareBundle={null}
@@ -189,4 +197,152 @@ it("never acts on keys typed into a field", async () => {
     );
   });
   expect(host.textContent).not.toContain("The Big Picture");
+});
+
+it("finds lines in the transcript and counts them", async () => {
+  await render();
+  const find = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Find in transcript"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(find, "कितने");
+    find.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(
+    host.querySelector('[data-segment="s1"]')?.hasAttribute("hidden"),
+  ).toBe(true);
+  expect(
+    host.querySelector('[data-segment="s2"]')?.hasAttribute("hidden"),
+  ).toBe(false);
+  expect(host.textContent).toContain("1 line");
+});
+
+it("points to a failed step and offers the admin retry only where it is safe", async () => {
+  await render({
+    ...call,
+    failedJobs: [
+      {
+        jobId: "job-1",
+        stage: "C5",
+        recordingId: "rec-1",
+        attempts: 3,
+        code: "provider_timeout",
+        failedAt: "2026-10-11T03:00:00Z",
+        retryable: true,
+      },
+      {
+        jobId: "job-2",
+        stage: "C2",
+        recordingId: "rec-1",
+        attempts: 1,
+        code: "withheld",
+        failedAt: null,
+        retryable: false,
+      },
+    ],
+  });
+  const chip = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "2 failed steps",
+  );
+  expect(chip).toBeTruthy();
+  await act(async () => chip!.click());
+  const failed = host.querySelector('[aria-label="Failed steps"]');
+  expect(failed?.textContent).toContain("Report");
+  expect(failed?.textContent).toContain("provider_timeout");
+  expect(failed?.textContent).toContain("reached a provider");
+  // Only the step that never reached a provider gets a Retry button.
+  expect(
+    [...failed!.querySelectorAll("button")].map((item) => item.textContent),
+  ).toEqual(["Retry"]);
+  // Re-running a finished call stays an unbuilt, disabled command.
+  const rerun = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Re-run",
+  );
+  expect(rerun?.disabled).toBe(true);
+});
+
+it("shows no failed-step chip when nothing failed", async () => {
+  await render();
+  expect(host.textContent).not.toContain("failed step");
+});
+
+it("opens a shared link at its moment, paused, with that line marked", async () => {
+  await render(call, 4500);
+  expect(
+    host.querySelector('[data-segment="s2"]')?.hasAttribute("data-focused"),
+  ).toBe(true);
+  expect(host.textContent).toContain("0:04");
+  expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+});
+
+it("copies a link to this moment with Y, without the personal queue filters", async () => {
+  const writeText = vi.fn<(text: string) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+  await render(call, 4500);
+  await key("y");
+  expect(writeText).toHaveBeenCalledTimes(1);
+  const url = new URL(writeText.mock.calls[0]![0]);
+  expect(url.pathname).toBe("/calls/rec-1");
+  expect(url.searchParams.get("at")).toBe("4500");
+  expect(url.searchParams.get("run")).toBe("run-1");
+  expect(url.searchParams.has("back")).toBe(false);
+  expect(host.querySelector('[role="status"]')?.textContent).toBe(
+    "Link to 0:04 copied",
+  );
+});
+
+it("shows talk share as one bar, named by role, with the numbers beside it", async () => {
+  await render();
+  await key("m");
+  expect(
+    host
+      .querySelector('[role="img"][aria-label^="Talk share"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Talk share: Rep 67%, Prospect 33%");
+});
+
+it("compares two runs word by word and can show only what changed", async () => {
+  const older = normalizeBundle({
+    run_id: "run-0",
+    report: {
+      summary: "Opened coldly; no dated next step.",
+      verdict: "Follow-up without a date.",
+    },
+    transcript: { segments: [] },
+  });
+  await act(async () =>
+    root.render(
+      <ReviewScreen
+        call={call}
+        bundle={bundle}
+        compare="run-0"
+        compareBundle={older}
+        back=""
+        neighbours={{ previous: null, next: null }}
+      />,
+    ),
+  );
+  const table = host.querySelector('[aria-label="Run comparison"]')!;
+  expect(
+    [...table.querySelectorAll("mark")].map((mark) => mark.textContent),
+  ).toEqual(["warmly; ", "coldly; "]);
+  expect(host.textContent).toMatch(/\d+ of \d+ fields changed/);
+  const rowsBefore = table.querySelectorAll("tbody tr").length;
+  const only = [...host.querySelectorAll("label")]
+    .find((label) => label.textContent?.includes("Only changed fields"))!
+    .querySelector("input")!;
+  await act(async () => only.click());
+  const rowsAfter = table.querySelectorAll("tbody tr");
+  expect(rowsAfter.length).toBeLessThan(rowsBefore);
+  expect([...rowsAfter].every((row) => row.hasAttribute("data-changed"))).toBe(
+    true,
+  );
 });

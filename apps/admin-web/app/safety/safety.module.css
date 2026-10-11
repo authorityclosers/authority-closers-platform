@@ -1,0 +1,59 @@
+/* Safety: withhold and release passages. Tokens only. */
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline input,
+.lookup input {
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.lookup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lookup input {
+  flex: 1 1 320px;
+}
+
+.mono {
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+}
+
+@media (max-width: 760px) {
+  .inline input,
+  .lookup input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

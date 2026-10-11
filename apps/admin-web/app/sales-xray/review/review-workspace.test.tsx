@@ -268,7 +268,9 @@ describe("Admin review assignment workspace", () => {
     });
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>("form button.button-primary")!
+        .querySelector<HTMLButtonElement>(
+          "form[data-form='assign'] button[type='submit']",
+        )!
         .click();
       await Promise.resolve();
       await Promise.resolve();
@@ -332,7 +334,9 @@ describe("Admin review assignment workspace", () => {
     });
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>("form button.button-primary")!
+        .querySelector<HTMLButtonElement>(
+          "form[data-form='assign'] button[type='submit']",
+        )!
         .click();
       await Promise.resolve();
       await Promise.resolve();

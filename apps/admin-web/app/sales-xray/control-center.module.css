@@ -1,168 +1,78 @@
+/* Providers & costs overview: only what the kit doesn't draw. Tokens only. */
+
 .page {
   display: grid;
-  gap: 22px;
-  max-width: 1120px;
+  gap: var(--sx-gap);
 }
 
-.summaryGrid,
-.capabilityGrid {
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.lead > span {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.summaryCard,
-.capabilityCard,
-.statusPanel,
-.gapPanel {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.summaryCard span,
-.eyebrow,
-.statusLabel {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.summaryCard strong {
-  font-size: 1.18rem;
-}
-
-.summaryCard small,
-.capabilityCard p,
-.statusPanel p,
-.gapPanel p,
-.gapPanel li {
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.capabilityGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.capabilityCard {
-  align-content: start;
-  min-height: 156px;
-}
-
-.capabilityCard h2,
-.statusPanel h2,
-.gapPanel h2 {
-  margin: 0;
-  font-size: 1.02rem;
-}
-
-.capabilityCard p,
-.statusPanel p,
-.gapPanel p {
-  margin: 0;
-}
-
-.capabilityCard a,
-.gapPanel a {
-  width: fit-content;
-  color: var(--signal);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.capabilityCard a:hover,
-.capabilityCard a:focus-visible,
-.gapPanel a:hover,
-.gapPanel a:focus-visible {
-  text-decoration: underline;
-}
-
-.statusPanel {
-  grid-template-columns: 1fr auto;
-  align-items: start;
-  border-color: color-mix(in srgb, var(--signal) 36%, var(--line));
-  background: var(--accent-soft);
-}
-
-.statusPanel > :first-child {
+  gap: 2px;
   min-width: 0;
 }
 
-.statusValue {
-  padding: 5px 7px;
-  border: 1px solid var(--info);
-  color: var(--info);
-  font-family: var(--font-mono), monospace;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
+.lead strong {
+  font-size: var(--sx-text-md);
+  font-weight: 600;
 }
 
-.gapPanel ul {
+.lead small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+  gap: var(--sx-gap);
+  align-items: start;
+}
+
+.facts {
   display: grid;
   gap: 8px;
   margin: 0;
-  padding-left: 18px;
+  padding: 14px 16px 14px 32px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
 }
 
-.error,
-.forbidden,
-.loading {
+.state {
   display: grid;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
+  justify-items: start;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
 
-.error,
-.forbidden {
-  border-color: var(--danger);
-}
-
-.error h2,
-.forbidden h2,
-.loading h2,
-.error p,
-.forbidden p,
-.loading p {
+.state h2 {
   margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
 }
 
-.error p,
-.forbidden p,
-.loading p {
-  color: var(--muted);
+.state p {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
-.buttonRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 5px;
-}
-
-@media (max-width: 920px) {
-  .summaryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 620px) {
-  .summaryGrid,
-  .capabilityGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .statusPanel {
-    grid-template-columns: 1fr;
+@media (max-width: 1000px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
