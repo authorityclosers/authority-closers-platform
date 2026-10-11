@@ -86,6 +86,8 @@ const TABBED_DEFAULT_QUERY = "(min-width: 1100px)";
 /** Wide screens host the report navigation in the shell's top bar. */
 const TOOLBAR_QUERY = "(min-width: 1280px)";
 const CHANGE = "ac:report-mode-change";
+/** A pillar asks for another view (event, so render never reads refs). */
+const OPEN_VIEW = "ac:report-open-view";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
@@ -455,7 +457,28 @@ function renderReportPanels(
           hidden={view === "tabs" && selected !== panel.id}
           tabIndex={view === "tabs" ? 0 : -1}
         >
-          {view === "story" || view === "coaching" ? (
+          {view === "story" ? (
+            <>
+              <header className={styles.pillarHead}>
+                <span className={styles.pillarNumber} aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div>
+                  <h2
+                    id={`${id}-heading-${panel.id}`}
+                    tabIndex={-1}
+                    className={styles.pillarTitle}
+                  >
+                    {panel.label}
+                  </h2>
+                  {panel.summary ? (
+                    <p className={styles.pillarSubtitle}>{panel.summary}</p>
+                  ) : null}
+                </div>
+              </header>
+              {panel.content}
+            </>
+          ) : view === "coaching" ? (
             <OperationalPanel
               title={
                 <span id={`${id}-heading-${panel.id}`} tabIndex={-1}>
@@ -550,6 +573,13 @@ export function ReportModes({
           onSelectEvidence,
           onSelectContextualPlayback,
           prospectControls,
+          {
+            callId: boundCallId ?? null,
+            onOpenCoaching: () =>
+              window.dispatchEvent(
+                new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
+              ),
+          },
         )
       : [];
   const coachingPanels: ReportPanel[] =
@@ -569,34 +599,9 @@ export function ReportModes({
           },
         ]
       : [];
-  // Keep the owner's existing report; new call-level detail expands within it.
-  const enrichedPanels = suppliedPanels.map((panel) => {
-    const additions =
-      panel.id === "overview"
-        ? [0, 1]
-        : panel.id === "skills"
-          ? [4]
-          : panel.id === "next-call-plan"
-            ? [5]
-            : [];
-    return {
-      ...panel,
-      content: (
-        <>
-          {panel.content}
-          {additions.map((index) => {
-            const extra = storyPanels[index];
-            return extra ? (
-              <details key={extra.id} className={styles.supplement}>
-                <summary>{extra.label}</summary>
-                {extra.content}
-              </details>
-            ) : null;
-          })}
-        </>
-      ),
-    };
-  });
+  // The six-pillar Report replaces the old supplements; Details keeps the
+  // original sections (transcript, raw data) unchanged.
+  const enrichedPanels = suppliedPanels;
   const id = useId();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const navRowRef = useRef<HTMLDivElement | null>(null);
@@ -617,17 +622,8 @@ export function ReportModes({
     savedTextSizeSnapshot,
     serverTextSizeSnapshot,
   );
-  const [localTextSize, setLocalTextSize] = useState<TextSize | null>(null);
-  const textSize = localTextSize ?? savedTextSize;
-  const changeTextSize = (nextSize: TextSize) => {
-    setLocalTextSize(nextSize);
-    try {
-      localStorage.setItem(TEXT_SIZE_KEY, nextSize);
-      window.dispatchEvent(new Event(TEXT_SIZE_CHANGE));
-    } catch {
-      // Private browsing can deny storage; sizing still works in this view.
-    }
-  };
+  // A size chosen earlier still applies; browser zoom replaces the old control.
+  const textSize = savedTextSize;
 
   // Server render and hydration read "reading"; a desktop viewport then
   // prefers Tabbed unless the URL or the reader already chose a view.
@@ -639,7 +635,7 @@ export function ReportModes({
   const access = useWorkspaceAccess();
   const preferenceKey =
     access?.authenticated && access.context
-      ? `ac:report-view:${access.context.tenantId}:${access.context.personId}`
+      ? `ac:report-view2:${access.context.tenantId}:${access.context.personId}`
       : null;
   const savedView = useSyncExternalStore(
     subscribe,
@@ -656,7 +652,9 @@ export function ReportModes({
     () => null,
   );
   const preferredView: View =
-    initialView ?? savedView ?? (desktop ? "tabs" : "reading");
+    initialView ??
+    savedView ??
+    (storyPanels.length ? "story" : desktop ? "tabs" : "reading");
   const slot = useSyncExternalStore(
     subscribeToolbar,
     toolbarSlot,
@@ -868,8 +866,6 @@ export function ReportModes({
     return () => observer.disconnect();
   }, [currentSection, view, slot]);
 
-  if (!activePanels.length) return null;
-
   /** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
   function arriveAt(destination: HTMLElement | null | undefined) {
     if (!destination) return;
@@ -1045,6 +1041,18 @@ export function ReportModes({
     }
   }
 
+  // A pillar's "Coaching for this call" asks for the Coaching view.
+  useEffect(() => {
+    const open = (event: Event) => {
+      const next = (event as CustomEvent<unknown>).detail;
+      if (VIEWS.includes(next as View)) changeView(next as View);
+    };
+    window.addEventListener(OPEN_VIEW, open);
+    return () => window.removeEventListener(OPEN_VIEW, open);
+  });
+
+  if (!activePanels.length) return null;
+
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
@@ -1145,84 +1153,44 @@ export function ReportModes({
         </nav>
       )}
       <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
-        <button
-          type="button"
-          title="Reading view"
-          aria-pressed={view === "reading"}
-          onClick={() => changeView("reading")}
-        >
-          <BookOpen aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Reading view</span>
-        </button>
-        <button
-          type="button"
-          title="Tabbed view"
-          aria-pressed={view === "tabs"}
-          onClick={() => changeView("tabs")}
-        >
-          <PanelsTopLeft aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Tabbed view</span>
-        </button>
-        <button
-          type="button"
-          title="Document view"
-          aria-pressed={view === "document"}
-          onClick={() => changeView("document")}
-        >
-          <FileText aria-hidden="true" />
-          <span className={styles.toolbarLabel}>Document view</span>
-        </button>
-        {storyPanels.length > 0 && (
+        {(storyPanels.length
+          ? ([
+              ["story", "Report", "The six-part Report", FileText],
+              ...(coachingPanels.length
+                ? ([
+                    [
+                      "coaching",
+                      "Coaching",
+                      "Coaching for this call",
+                      Lightbulb,
+                    ],
+                  ] as const)
+                : []),
+              [
+                "tabs",
+                "Details",
+                "Every section, transcript and raw data",
+                PanelsTopLeft,
+              ],
+              ["document", "Print", "Printable document", BookOpen],
+            ] as const)
+          : ([
+              ["reading", "Reading view", "Reading view", BookOpen],
+              ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
+              ["document", "Document view", "Document view", FileText],
+            ] as const)
+        ).map(([value, text, hint, Icon]) => (
           <button
+            key={value}
             type="button"
-            title="Story view"
-            aria-pressed={view === "story"}
-            onClick={() => changeView("story")}
+            title={hint}
+            aria-pressed={view === value}
+            onClick={() => changeView(value)}
           >
-            <BookOpen aria-hidden="true" />
-            <span className={styles.toolbarLabel}>Story</span>
+            <Icon aria-hidden="true" />
+            <span className={styles.toolbarLabel}>{text}</span>
           </button>
-        )}
-        {coachingPanels.length > 0 && (
-          <button
-            type="button"
-            title="Coaching view"
-            aria-pressed={view === "coaching"}
-            onClick={() => changeView("coaching")}
-          >
-            <Lightbulb aria-hidden="true" />
-            <span className={styles.toolbarLabel}>Coaching</span>
-          </button>
-        )}
-      </div>
-      <div className={styles.textSizeGroup} role="group" aria-label="Text size">
-        <button
-          type="button"
-          title="Default text size (100%)"
-          aria-label="Text size 100%"
-          aria-pressed={textSize === "100"}
-          onClick={() => changeTextSize("100")}
-        >
-          A−
-        </button>
-        <button
-          type="button"
-          title="Medium text size (112.5%)"
-          aria-label="Text size 112.5%"
-          aria-pressed={textSize === "112.5"}
-          onClick={() => changeTextSize("112.5")}
-        >
-          A
-        </button>
-        <button
-          type="button"
-          title="Large text size (125%)"
-          aria-label="Text size 125%"
-          aria-pressed={textSize === "125"}
-          onClick={() => changeTextSize("125")}
-        >
-          A+
-        </button>
+        ))}
       </div>
     </div>
   );
