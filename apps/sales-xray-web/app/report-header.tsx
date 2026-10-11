@@ -25,6 +25,7 @@ import { callTitle, type CallLabel } from "./call-label";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-studio.module.css";
+import pinned from "./report-header.module.css";
 
 export type ReportHeaderProps = {
   /** Measured recording duration from the saved transcript. */
@@ -176,18 +177,6 @@ export function ReportHeader({
       document.removeEventListener("focusin", dismissOutside);
     };
   }, []);
-
-  // Without the folding map, the pinned row still needs its solid backdrop
-  // once the Report scrolls beneath it.
-  useEffect(() => {
-    const header = bar.current;
-    if (hasCompact || !header) return;
-    const scroller = scrollParent(header);
-    if (!scroller) return;
-    const update = () => setCompact(scroller.scrollTop > 4);
-    scroller.addEventListener("scroll", update, { passive: true });
-    return () => scroller.removeEventListener("scroll", update);
-  }, [hasCompact]);
 
   // The full waveform folds into the pinned row pixel for pixel. The moment
   // its top meets the row, it hands over to the compact copy (drawn bar for
@@ -355,7 +344,7 @@ export function ReportHeader({
     <>
       <div
         ref={bar}
-        className={styles.reportHeader}
+        className={`${styles.reportHeader} ${pinned.pinned}`}
         data-report-sticky
         data-compact={compact ? "true" : undefined}
       >
