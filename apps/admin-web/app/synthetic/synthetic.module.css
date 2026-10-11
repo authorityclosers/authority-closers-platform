@@ -21,6 +21,9 @@
 
 .lines {
   display: grid;
+  /* Rows fit their text: with a max height, auto rows would shrink to each
+     line's 40 px minimum and the text would overlap the next line. */
+  grid-auto-rows: max-content;
   gap: 2px;
   max-height: 72dvh;
   margin: 0;
@@ -84,6 +87,8 @@
 .tree dd {
   min-width: 0;
   margin: 0;
+  /* Long ids and hashes in the answer key wrap instead of running out. */
+  overflow-wrap: anywhere;
 }
 
 .tree .tree > div {
