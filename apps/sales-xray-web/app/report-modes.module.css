@@ -1383,3 +1383,14 @@
     display: inline;
   }
 }
+
+/* Narrow phones: the view words are enough, so the row never runs off the
+   screen (Report · Coaching · Document · …). */
+@media (max-width: 480px) {
+  .toolbar[data-labelled] > button {
+    padding: 0 12px;
+  }
+  .toolbar[data-labelled] > button > svg {
+    display: none;
+  }
+}
