@@ -140,7 +140,8 @@ function XrayScene() {
 // server (AUT-157): Google returns to staging, which cannot see the dev start.
 const DEV_HOST = "salesxray-dev.authorityclosers.com";
 const noHostSubscription = () => () => {};
-const readGoogleBlocked = () => window.location.hostname === DEV_HOST;
+// 11 Oct: dev now has its own sign-in back end (dev-live API, dev Google OAuth client), so Google works on dev too.
+const readGoogleBlocked = () => false && window.location.hostname === DEV_HOST;
 
 function GoogleMark() {
   // Google's own four-colour "G", as its sign-in branding requires.
@@ -1211,9 +1212,32 @@ export function AccountAuth({
               </button>
             )}
             <p className={styles.footnote}>
-              {selectedFile
-                ? "Your recording stays here while you sign in."
-                : "The same account works across Authority Closers."}
+              <svg className={styles.footnoteIcon} viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M8 1.5 2.5 4v3.6c0 3.2 2.3 5.9 5.5 6.9 3.2-1 5.5-3.7 5.5-6.9V4L8 1.5Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="m5.6 8 1.7 1.7 3.2-3.4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>
+                {selectedFile ? (
+                  "Your recording stays here while you sign in."
+                ) : (
+                  <>
+                    One account for <strong>every Authority Closers app</strong>
+                  </>
+                )}
+              </span>
             </p>
           </div>
         </div>
