@@ -271,6 +271,23 @@ export const PATH = {
   dynamic: "This path changes when new calls change the priority.",
 } as const;
 
+/**
+ * Spec pillar 6, "What stopped you here?": the learner's possible answers.
+ * One tap keeps the answer as their context beside the likely reason.
+ */
+export const REFLECTION = {
+  answers: [
+    "I didn’t know what to ask",
+    "I noticed it later",
+    "I forgot in the moment",
+    "I worried it would feel like an interrogation",
+    "I thought I already understood enough",
+    "I moved on on purpose",
+  ],
+  hint: "Tap the closest answer. Only you see it unless you share your coaching.",
+  saved: "Saved as your context. It shows with the likely reason.",
+} as const;
+
 export const CALLS = {
   title: "Coaching for each call",
   recent: (count: number) => `${count} recent`,

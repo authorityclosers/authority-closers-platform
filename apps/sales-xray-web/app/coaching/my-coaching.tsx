@@ -458,13 +458,11 @@ export function CoachingStory({
             </p>
           ) : null}
           <p className={styles.note}>{PATH.dynamic}</p>
-          {coaching.reflection_question ? (
-            <p className={styles.reflection}>{coaching.reflection_question}</p>
-          ) : null}
           {readOnly ? null : (
             <FocusFeedback
               focusSkillId={focus.skill_id}
               originSubmissionId={mission.origin_submission_id}
+              question={coaching.reflection_question}
             />
           )}
         </StoryCard>

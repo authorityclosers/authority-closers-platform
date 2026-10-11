@@ -1,7 +1,7 @@
 "use client";
 
 import { Lock, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, kitStyles, Panel, Skeleton } from "../ui/kit";
 import {
   changeSharing,
@@ -10,6 +10,7 @@ import {
   sendFeedback,
   type SharingView,
 } from "./sharing-client";
+import { REFLECTION } from "./coaching-copy";
 import styles from "./coaching.module.css";
 
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
@@ -206,12 +207,80 @@ function AddContext({
   );
 }
 
-export function FocusFeedback({
+/**
+ * One reflection question with Dipak's possible answers (spec pillar 6). A
+ * tap keeps that answer as the learner's context; the newest one shows with
+ * the likely reason. A retry after a failure repeats the same command.
+ */
+function Reflection({
+  question,
   focusSkillId,
   originSubmissionId,
 }: {
+  question: string;
   focusSkillId: string;
   originSubmissionId: string;
+}) {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const failed = useRef<{ answer: string; command: string } | null>(null);
+  const pick = async (answer: string) => {
+    const command =
+      failed.current?.answer === answer
+        ? failed.current.command
+        : crypto.randomUUID();
+    setSaving(answer);
+    setError(null);
+    const result = await sendContext({
+      command_id: command,
+      focus_skill_id: focusSkillId,
+      mission_origin_submission_id: originSubmissionId,
+      context: answer,
+    });
+    setSaving(null);
+    if (result.error) {
+      failed.current = { answer, command };
+      setError(result.error);
+    } else {
+      failed.current = null;
+      setChosen(answer);
+    }
+  };
+  return (
+    <div className={styles.reflection}>
+      <p className={styles.reflectionQuestion}>{question}</p>
+      <div className={styles.answers} role="group" aria-label={question}>
+        {REFLECTION.answers.map((answer) => (
+          <button
+            key={answer}
+            type="button"
+            className={styles.answer}
+            aria-pressed={chosen === answer}
+            disabled={saving !== null}
+            onClick={() => void pick(answer)}
+          >
+            {answer}
+          </button>
+        ))}
+      </div>
+      <p role="status" className={styles.note}>
+        {error ??
+          (saving ? "Saving…" : chosen ? REFLECTION.saved : REFLECTION.hint)}
+      </p>
+    </div>
+  );
+}
+
+export function FocusFeedback({
+  focusSkillId,
+  originSubmissionId,
+  question,
+}: {
+  focusSkillId: string;
+  originSubmissionId: string;
+  /** The one reflection question, answered with a tap (spec pillar 6). */
+  question?: string | null;
 }) {
   const [state, setState] = useState<
     "idle" | "saving" | "agree" | "not_completely"
@@ -240,6 +309,13 @@ export function FocusFeedback({
   const done = state === "agree" || state === "not_completely";
   return (
     <>
+      {question ? (
+        <Reflection
+          question={question}
+          focusSkillId={focusSkillId}
+          originSubmissionId={originSubmissionId}
+        />
+      ) : null}
       <div className={styles.actions} role="group" aria-label="Your view">
         <Button
           onClick={() => void send("agree")}

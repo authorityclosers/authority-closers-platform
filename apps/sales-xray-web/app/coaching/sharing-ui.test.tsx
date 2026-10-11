@@ -123,6 +123,51 @@ describe("Focus feedback", () => {
     expect(host.textContent).toContain("Recorded.");
     expect(button("Not completely").disabled).toBe(true);
   });
+  it("answers the reflection question with one tap, kept as context", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+          question="What made you respond that way in this moment?"
+        />,
+      ),
+    );
+    expect(host.textContent).toContain(
+      "What made you respond that way in this moment?",
+    );
+    await act(async () => button("I noticed it later").click());
+    await flush();
+    const first = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(fetch.mock.calls[0][0]).toBe("/v1/me/coaching/context");
+    expect(first).toMatchObject({
+      context: "I noticed it later",
+      focus_skill_id: "problem_impact_desire",
+    });
+    expect(button("I noticed it later").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    // A retry of the same answer repeats its command; it then shows chosen.
+    await act(async () => button("I noticed it later").click());
+    await flush();
+    const retry = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(retry.command_id).toBe(first.command_id);
+    expect(button("I noticed it later").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(host.textContent).toContain("Saved as your context.");
+    // A different answer is a new note, never a repeat of the first.
+    await act(async () => button("I forgot in the moment").click());
+    await flush();
+    const other = JSON.parse(fetch.mock.calls[2][1].body);
+    expect(other.command_id).not.toBe(first.command_id);
+    expect(other.context).toBe("I forgot in the moment");
+  });
   it("keeps the learner's own context, trimmed, and shows it back", async () => {
     const fetch = vi
       .fn()
