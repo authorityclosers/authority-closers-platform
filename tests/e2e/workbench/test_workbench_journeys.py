@@ -206,6 +206,7 @@ class Journey:
     observations: list[dict[str, object]] = field(default_factory=list)
     main_navigations: int = 0
     live_refreshes: int = 0
+    refresh_events: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def fixture(self) -> bool:
@@ -379,8 +380,18 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             journey.main_navigations += 1
 
     def console(message: ConsoleMessage) -> None:
-        if "[Fast Refresh]" in message.text:
+        if message.text.startswith("[Fast Refresh]"):
             journey.live_refreshes += 1
+            phase = (
+                "rebuilding"
+                if "rebuilding" in message.text
+                else "done"
+                if "done" in message.text
+                else "other"
+            )
+            journey.refresh_events.append(
+                {"phase": phase, "at_ms": int(datetime.now(UTC).timestamp() * 1000)}
+            )
 
     page.on("framenavigated", navigation)
     page.on("console", console)
@@ -429,6 +440,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "failure": failure,
             "main_navigations": journey.main_navigations,
             "live_refreshes": journey.live_refreshes,
+            "refresh_events": journey.refresh_events,
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
@@ -865,6 +877,7 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
                       control: label === 'My coaching' ? 'personal'
                         : label === 'This call' ? 'call' : 'other',
                       x: event.clientX, y: event.clientY,
+                      at_ms: Date.now(),
                       pressed: button?.getAttribute('aria-pressed') === 'true'
                     };
                   }, {capture: true, once: true});

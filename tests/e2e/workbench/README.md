@@ -86,6 +86,8 @@ Use a fresh output directory for each readback to preserve earlier evidence.
 Navigation and Fast Refresh counts help identify live-edit interruptions;
 console messages are never retained. Recheck an interrupted case before treating
 it as a persistent product defect or claiming a complete PASS.
+Refresh receipts retain only a fixed phase (rebuilding/done/other) and timestamp;
+the single Coaching click has a comparable timestamp. No console text is saved.
 Failure receipts retain exception type and the journey's check/line, without
 exception text, so an interrupted batch still has a useful failure location.
 Coaching verifies that My coaching is selected after its single click before
