@@ -61,3 +61,43 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
+
+/* A date filter with its visible label ("From" / "To") inside the control. */
+.dateFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.dateFilter:focus-within {
+  border-color: var(--sx-accent);
+}
+
+.dateFilter input {
+  min-width: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .dateFilter {
+    flex: 1 1 140px;
+  }
+
+  .dateFilter input {
+    flex: 1;
+    font-size: 16px;
+  }
+}

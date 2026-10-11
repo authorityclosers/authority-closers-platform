@@ -10,6 +10,7 @@ import { useTransition } from "react";
 
 import { kitStyles, Toolbar } from "../ui/kit";
 import { languageLabel, type Queue } from "./call-data";
+import styles from "./calls.module.css";
 import { filterQuery, type QueueFilters as Filters } from "./queue-query";
 
 export function QueueFilters({
@@ -65,20 +66,26 @@ export function QueueFilters({
         languageLabel(value),
       )}
       {select("provider", "Provider", facets.providers)}
-      <input
-        type="date"
-        aria-label="Uploaded from"
-        title="Uploaded from"
-        value={filters.since ?? ""}
-        onChange={(event) => set("since", event.target.value)}
-      />
-      <input
-        type="date"
-        aria-label="Uploaded until"
-        title="Uploaded until"
-        value={filters.until ?? ""}
-        onChange={(event) => set("until", event.target.value)}
-      />
+      <label className={styles.dateFilter}>
+        <span>From</span>
+        <input
+          type="date"
+          aria-label="Uploaded from"
+          value={filters.since ?? ""}
+          max={filters.until || undefined}
+          onChange={(event) => set("since", event.target.value)}
+        />
+      </label>
+      <label className={styles.dateFilter}>
+        <span>To</span>
+        <input
+          type="date"
+          aria-label="Uploaded until"
+          value={filters.until ?? ""}
+          min={filters.since || undefined}
+          onChange={(event) => set("until", event.target.value)}
+        />
+      </label>
       {active ? (
         <button
           type="button"
