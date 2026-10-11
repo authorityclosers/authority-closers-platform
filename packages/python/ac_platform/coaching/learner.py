@@ -9,9 +9,11 @@ from collections import defaultdict
 from uuid import UUID
 
 from ac_platform.coaching.contracts import (
+    THEIR_MASTERY,
     CallHistory,
     CoachingView,
     Focus,
+    Mastery,
     Moment,
     Path,
     Pattern,
@@ -140,6 +142,7 @@ def build_learner(
         unavailable_calls=unavailable_calls,
         history_limited=history_limited,
         limitations=tuple(limitations),
+        **({"mastery": Mastery(explanation=THEIR_MASTERY)} if their else {}),
     )
     if selected is None or origin is None:
         return CoachingView(

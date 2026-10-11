@@ -340,6 +340,16 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
     assert view.practice and view.practice.exercise.startswith("Rewrite what was said")
     assert view.mission and view.mission.context == "The next time a buyer gives this opening."
     assert view.mastery.explanation == "One call can’t show progress over time."
+    # Without the dataset's own line, the progress note is about "them" too.
+    del coaching["progress"]["reason"]
+    unexplained = rep_view(
+        (indexed(bundle),),
+        bundle,
+        {},
+        person_id=rep_uuid(TENANT, "syn-fixture-R1"),
+        tenant_id=TENANT,
+    )
+    assert "Their reports don't count" in unexplained.mastery.explanation
     # A line the dataset wrote for this call alone stays word for word.
     one = sandbox_bundle()
     one["coaching"]["diagnosis"]["pattern"] = "The rep skipped the signer twice."

@@ -39,7 +39,12 @@ import {
   MissionPanel,
   Pillar,
 } from "./coaching-ui";
-import { TheirCoaching, useTheirCoaching } from "./coaching-voice";
+import {
+  CallsOpenReports,
+  TheirCoaching,
+  useCallHref,
+  useTheirCoaching,
+} from "./coaching-voice";
 import { MomentList } from "./evidence-player";
 import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
@@ -120,6 +125,7 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
 function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const [expanded, setExpanded] = useState(false);
   const they = useTheirCoaching();
+  const callHref = useCallHref();
   if (!calls?.length) return null;
   return (
     <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
@@ -135,7 +141,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
               title={call.call_label}
               href={
                 call.state === "ready"
-                  ? `/coaching?call=${call.submission_id}`
+                  ? callHref(call.submission_id)
                   : `/analysis/calls/${call.submission_id}`
               }
               meta={[
@@ -285,7 +291,11 @@ type StoryProps = {
 export function CoachingStory(props: StoryProps) {
   return (
     <TheirCoaching.Provider value={props.readOnly ?? false}>
-      <Story {...props} />
+      <CallsOpenReports.Provider
+        value={Boolean(props.readOnly) && !props.coaching.sandbox}
+      >
+        <Story {...props} />
+      </CallsOpenReports.Provider>
     </TheirCoaching.Provider>
   );
 }
@@ -333,7 +343,7 @@ function Story({
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
         >
-          {requestedFocus && requestedFocus !== focus.skill_id ? (
+          {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
               Your report brought you here for{" "}
               {requestedSkillLabel(requestedFocus)}. Your current next-call

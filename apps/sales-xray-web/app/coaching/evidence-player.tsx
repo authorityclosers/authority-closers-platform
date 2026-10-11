@@ -8,6 +8,8 @@ import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
+import { THEIR, WHY } from "./coaching-copy";
+import { useCallHref, useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 export { timeLabel } from "./coaching-format";
@@ -103,6 +105,7 @@ export function EvidencePlayer({
   context?: ContextPlay | null;
 }) {
   const identity = useId();
+  const callHref = useCallHref();
   const audio = useRef<HTMLAudioElement>(null);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "failed">(
     "idle",
@@ -198,7 +201,7 @@ export function EvidencePlayer({
         <span className={styles.momentMeta}>
           {showCall ? (
             <>
-              <Link href={`/coaching?call=${evidence.submission_id}`}>
+              <Link href={callHref(evidence.submission_id)}>
                 {evidence.call_label}
               </Link>
               <span>{callDate(evidence.created_at)}</span>
@@ -262,7 +265,7 @@ export function EvidencePlayer({
 export function MomentList({
   evidence,
   showCall = true,
-  label = "Moments from your calls",
+  label,
   heading,
   fictional = false,
   onPlay,
@@ -278,6 +281,7 @@ export function MomentList({
   contextFor?: (evidence: Evidence) => ContextPlay | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const they = useTheirCoaching();
   return (
     <>
       {heading ? (
@@ -290,7 +294,7 @@ export function MomentList({
       ) : null}
       <ul
         className={styles.moments}
-        aria-label={label}
+        aria-label={label ?? (they ? THEIR.moments : WHY.moments)}
         data-expanded={expanded ? "" : undefined}
       >
         {evidence.map((moment, index) => (

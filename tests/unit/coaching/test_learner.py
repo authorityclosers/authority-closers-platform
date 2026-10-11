@@ -290,12 +290,14 @@ def test_an_admins_read_of_shared_coaching_talks_about_the_rep() -> None:
     assert theirs.development_path.explanation.startswith("Their next focus depends on their")
     assert all(" your " not in f" {line} " for line in theirs.limitations)
     assert "This is Sales Xray's reading of their calls." in theirs.limitations[0]
+    assert "Their reports don't count" in theirs.mastery.explanation
     # The rep's own exercise and question stay addressed to the rep.
     assert theirs.reflection_question == "What stopped you here?"
     # The same history read by the rep is unchanged.
     mine = view(*history)
     assert mine.focus.selected_reason == "It came up in 3 of your last 3 calls on this skill."
     assert mine.limitations[0].startswith("This is Sales Xray's reading of your calls.")
+    assert "Your reports don't count" in mine.mastery.explanation
     assert mine.mission == theirs.mission and mine.evidence == theirs.evidence
     empty = build_learner((), person_id=PERSON, tenant_id=TENANT, their=True)
     assert empty.pattern.summary == "Their calls don't show one skill to work on yet."

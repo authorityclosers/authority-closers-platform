@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.coaching.call import CallCoachingView
 from ac_platform.coaching.contracts import (
+    THEIR_MASTERY,
     CallSummary,
     CoachingView,
     Focus,
@@ -645,7 +646,8 @@ def rep_view(
                 else None
             ),
             confidence=parts.root_cause.confidence,
-            explanation=_plain(progress.get("reason")) or Mastery().explanation,
+            # Read by the person who imported this fictional rep: "their".
+            explanation=_plain(progress.get("reason")) or THEIR_MASTERY,
         ),
         lesson=parts.lesson,
         progress=tuple(

@@ -164,6 +164,35 @@ describe("Coaching story", () => {
       "Your call ·",
     ])
       expect(theirs).not.toContain(words);
+    expect(theirs).toContain('aria-label="Moments from their calls"');
+    expect(theirs).not.toContain("Your report brought you here");
+    const calls = [
+      {
+        submission_id: "00000000-0000-4000-8000-0000000000c2",
+        call_label: "Fictional call",
+        created_at: "2026-09-02T10:00:00Z",
+        state: "ready" as const,
+        focus_label: "Explain value first",
+      },
+    ];
+    // A shared real rep's calls open their reports (a call's own coaching is
+    // only ever the rep's); a fictional rep's calls open its Coaching.
+    const shared = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...fictionalCoaching, calls }} readOnly />,
+    );
+    expect(shared).toContain(
+      'href="/analysis/calls/00000000-0000-4000-8000-0000000000c2"',
+    );
+    expect(shared).not.toContain("/coaching?call=");
+    const fictional = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{ ...fictionalCoaching, calls, sandbox: true }}
+        readOnly
+      />,
+    );
+    expect(fictional).toContain(
+      'href="/coaching?call=00000000-0000-4000-8000-0000000000c2"',
+    );
     const mine = renderToStaticMarkup(
       <CoachingStory coaching={{ ...fictionalCoaching, progress }} />,
     );
@@ -171,6 +200,7 @@ describe("Coaching story", () => {
     expect(mine).toContain("From your calls");
     expect(mine).toContain("Since your mission started");
     expect(mine).not.toContain("Their next-call mission");
+    expect(mine).toContain('aria-label="Moments from your calls"');
   });
   it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
     const html = renderToStaticMarkup(

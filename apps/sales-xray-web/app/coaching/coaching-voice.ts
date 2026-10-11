@@ -9,3 +9,15 @@ import { createContext, useContext } from "react";
 export const TheirCoaching = createContext(false);
 
 export const useTheirCoaching = () => useContext(TheirCoaching);
+
+/**
+ * True on a real rep's shared coaching: a call opens its report (owners and
+ * admins can open it), because a call's own coaching is only ever the rep's.
+ */
+export const CallsOpenReports = createContext(false);
+
+export function useCallHref() {
+  const reports = useContext(CallsOpenReports);
+  return (callId: string) =>
+    reports ? `/analysis/calls/${callId}` : `/coaching?call=${callId}`;
+}

@@ -139,6 +139,7 @@ export const WHY = {
   gap: "Gap",
   confidence: "Confidence",
   evidence: "From your calls",
+  moments: "Moments from your calls",
   callEvidence: "From this call",
   yourContext: "Your context",
   theirContext: "Their context",
@@ -418,6 +419,7 @@ const THEIR_GAP_LINES: Record<string, string> = {
 export const THEIR = {
   onNextCall: "On their next call",
   evidence: "From their calls",
+  moments: "Moments from their calls",
   call: "Their call",
   callAt: (clock: string) => `Their call · ${clock}`,
   strength: "Their strength",
