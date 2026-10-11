@@ -17,6 +17,9 @@ sections in Dipak's order, reload/Document/valid DOCX/return, independent Docume
 and call/personal/team/sandbox Coaching. The current More views menu is opened
 before selecting Document; older direct view controls also work. A sign-in or
 empty dashboard is a failure.
+The eight skill rows follow Dipak's order. "Explore deeper analysis" starts
+collapsed; the populated example opens all four groups and captures each one.
+Live calls are checked only for deeper groups actually supplied by their report.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.

@@ -43,6 +43,22 @@ COACHING_SECTIONS = (
     "See How You’re Improving",
     "Where We Go From Here",
 )
+SKILL_ROWS = (
+    "Human Connection & Trust",
+    "Discovery",
+    "Qualification",
+    "Problem / Impact / Desire",
+    "Presentation & Value",
+    "Objection Intelligence",
+    "Closing",
+    "Communication",
+)
+DEEPER_GROUPS = (
+    "Discovery & Qualification",
+    "Presentation & Value",
+    "Objection / Price / Decision",
+    "Communication",
+)
 REPORT_BLOCKS = {
     "overview": ("What most affected this call", "Strongest part", "Biggest concern", "Next step"),
     "coaching": ("Talk share", "Questions asked", "Talk-overs", "Before", "The switch", "After"),
@@ -383,14 +399,34 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
                 # Dipak specifies eight skills; deeper analysis stays collapsed.
                 skill_rows = pillar.locator("li > details")
                 expect(skill_rows).to_have_count(8)
+                for index, name in enumerate(SKILL_ROWS):
+                    expect(skill_rows.nth(index).locator("summary")).to_contain_text(name)
                 skill_rows.first.locator("summary").click()
                 expect(skill_rows.first).to_have_attribute("open", "")
+                expect(skill_rows.first).to_contain_text("Observation")
             if section == "missed":
                 expand = pillar.locator('button[aria-expanded="false"]')
                 if expand.count():
                     expand.click()
                     expect(pillar.locator('button[aria-expanded="true"]')).to_have_count(1)
             journey.snapshot(section)
+            if section == "skills":
+                deeper = pillar.locator("details").filter(
+                    has=page.get_by_text("Explore deeper analysis", exact=True)
+                )
+                if journey.fixture:
+                    expect(deeper).to_have_count(1)
+                if deeper.count():
+                    expect(deeper).not_to_have_attribute("open", "")
+                    deeper.locator("summary").click()
+                    groups = deeper.get_by_role("heading", level=4)
+                    if journey.fixture:
+                        expect(groups).to_have_count(4)
+                        assert groups.all_text_contents() == list(DEEPER_GROUPS)
+                    for index in range(groups.count()):
+                        groups.nth(index).scroll_into_view_if_needed()
+                        expect(groups.nth(index)).to_be_visible()
+                        journey.snapshot(f"skills-deeper-{index + 1}")
         # Sharing/reloading preserves the chosen section instead of resetting it.
         page.reload(wait_until="domcontentloaded")
         expect(page).to_have_url(re.compile(r"[?&]section=facts(?:&|$)"))
