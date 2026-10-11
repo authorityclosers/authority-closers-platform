@@ -34,6 +34,10 @@
   column-gap: 16px;
   padding: 0 14px 0 16px;
   color: var(--lx-ink);
+  /* Its own size and face, so the rows read the same on New analysis
+     (inside the studio's scope) as on the Dashboard. */
+  font-family: var(--lx-font-ui);
+  font-size: 13px;
   text-decoration: none;
 }
 
