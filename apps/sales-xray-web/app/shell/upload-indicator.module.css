@@ -24,8 +24,8 @@
   flex: none;
   place-items: center;
   border-radius: var(--lx-radius-sm);
-  background: var(--lx-info-soft);
-  color: var(--lx-info);
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
 }
 
 .live {
