@@ -301,25 +301,27 @@
   white-space: nowrap;
 }
 
-.spark {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  width: 92px;
-  height: 26px;
+/* The tile's sparkline (kit Spark) or share bar (kit Meter), at the row's end. */
+.kpiAccessory {
+  display: inline-flex;
+  flex: none;
+  margin-bottom: 4px;
 }
 
-.spark i {
-  flex: 1;
-  min-width: 0;
-  border-radius: 1px;
-  background: var(--lx-teal);
-  opacity: 0.85;
+.kpiShare {
+  display: block;
+  width: 72px;
+  margin-bottom: 5px;
 }
 
-.spark i[data-empty] {
-  background: var(--lx-line-strong);
-  opacity: 1;
+@media (max-width: 720px) {
+  .kpiAccessory :global(span[role="img"]) {
+    width: 48px;
+  }
+
+  .kpiShare {
+    width: 48px;
+  }
 }
 
 /* ---------- Calls table ---------- */
@@ -695,11 +697,16 @@
   font-size: 12px;
 }
 
+/* A name takes two lines rather than being cut ("Neha Kulka…" at 1440). */
 .nameText {
+  display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .personBar {

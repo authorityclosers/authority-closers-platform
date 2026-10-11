@@ -3,6 +3,8 @@
  * a label is shown as saved only after a confirmed server response.
  */
 
+import type { DisplayDates } from "./display-dates";
+
 export const MAX_CALL_LABEL_LENGTH = 120;
 
 export type CallLabel = Readonly<{
@@ -85,10 +87,13 @@ export function validateCallLabel(
  * "Sales call · 10 Oct 2026". Screens show it muted, so it never reads as a
  * name someone chose.
  */
-export function unnamedCallName(createdAt: string) {
+export function unnamedCallName(createdAt: string, dates?: DisplayDates) {
   const when = new Date(createdAt);
   if (Number.isNaN(when.getTime())) return "Sales call";
-  const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+  const date = new Intl.DateTimeFormat(dates?.locale, {
+    dateStyle: "medium",
+    timeZone: dates?.timeZone,
+  });
   return `Sales call · ${date.format(when)}`;
 }
 

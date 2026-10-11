@@ -600,6 +600,8 @@ it("keeps the status, sort and search in the address across a reload", async () 
     "",
     "/analysis/calls?status=attention&sort=longest",
   );
+  // The router's view of the address (the server sees the same).
+  address.search = new URLSearchParams("status=attention&sort=longest");
   try {
     const held = { ...row(thirdId), state: "held" };
     fetchMock.mockResolvedValueOnce(

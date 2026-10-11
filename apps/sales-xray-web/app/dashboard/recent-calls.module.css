@@ -164,9 +164,10 @@
 
 /* ---------- Loading rows ---------- */
 
+/* Content-box: the divider adds its pixel outside, as on the loaded rows. */
 .skeletonRow {
   display: grid;
-  box-sizing: border-box;
+  box-sizing: content-box;
   height: 44px;
   grid-template-columns: minmax(0, 1fr) 156px;
   align-items: center;

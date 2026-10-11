@@ -6,41 +6,32 @@ import { themeInitScript } from "./lightbox/theme";
 
 afterEach(() => vi.unstubAllEnvs());
 
-it("marks the standalone document, starts light and runs the theme script first", () => {
+// The layout is async: where the server can read the API it reads the session
+// first. Without an API origin (here) it reads nothing.
+async function markup() {
+  vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "");
+  return renderToStaticMarkup(await Layout({ children: <p>Workspace</p> }));
+}
+
+it("marks the standalone document, starts light and runs the theme script first", async () => {
   vi.stubEnv("NODE_ENV", "development");
-  const markup = renderToStaticMarkup(
-    <Layout>
-      <p>Workspace</p>
-    </Layout>,
-  );
-  expect(markup).toMatch(
-    /^<html lang="en" data-lx-root="" data-theme="light">/,
-  );
-  expect(markup).toContain(
+  const html = await markup();
+  expect(html).toMatch(/^<html lang="en" data-lx-root="" data-theme="light">/);
+  expect(html).toContain(
     `<body class="sales-xray-document"><script id="sales-xray-theme-init">${themeInitScript()}</script>`,
   );
-  expect(markup).toContain("<p>Workspace</p>");
+  expect(html).toContain("<p>Workspace</p>");
 });
 
-it("keeps production light, with no theme script, until the theme is released", () => {
+it("keeps production light, with no theme script, until the theme is released", async () => {
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "");
-  const production = renderToStaticMarkup(
-    <Layout>
-      <p>Workspace</p>
-    </Layout>,
-  );
+  const production = await markup();
   expect(production).toContain('data-theme="light"');
   expect(production).not.toContain("sales-xray-theme-init");
 
   vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "1");
-  expect(
-    renderToStaticMarkup(
-      <Layout>
-        <p>Workspace</p>
-      </Layout>,
-    ),
-  ).toContain('<script id="sales-xray-theme-init">');
+  expect(await markup()).toContain('<script id="sales-xray-theme-init">');
 });
 
 it("draws under phone notches and keeps zoom allowed (native-wrapper ready)", async () => {
