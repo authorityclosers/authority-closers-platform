@@ -405,6 +405,12 @@ describe("report document model", () => {
         expect(part.items.length).toBeGreaterThan(0);
     expect(doc.sections.some((s) => s.gaps.length > 0)).toBe(true);
     expect(doc.title).toBe("Sales call");
+    // Said once: "Outcome not set" and eight "Not covered" rows, not again as gaps.
+    expect(doc.sections[0].parts[0].items[0]).toMatchObject({
+      status: "Outcome not set",
+    });
+    expect(doc.sections[0].gaps).not.toContain("Call outcome");
+    expect(doc.sections[4].gaps).toEqual([]);
   });
 
   it("never prints internal words or empty values", () => {

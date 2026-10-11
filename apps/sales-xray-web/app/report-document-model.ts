@@ -353,7 +353,8 @@ export function reportDocumentModel(
           : null,
       ]),
     ],
-    model.missing[0],
+    // 1.1 always prints a status ("Outcome not set"), so the gap line never repeats it.
+    model.missing[0].filter((name) => name !== BIG_PICTURE.outcome.label),
   );
 
   /* 2. How the Call Played Out */
@@ -669,7 +670,8 @@ export function reportDocumentModel(
         ? { heading: SKILLS.deeperTitle, items: deeperItems }
         : null,
     ],
-    model.missing[4],
+    // Every skill has its own row ("Not covered"), so no gap line repeats the names.
+    [],
   );
 
   /* 6. Where the Deal Stands */
