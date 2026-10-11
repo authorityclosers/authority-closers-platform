@@ -791,9 +791,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     report_view = page.get_by_role("button", name="Report view", exact=True)
                     details_view = page.get_by_role("button", name="Details view", exact=True)
+                    more_views = page.locator('summary[aria-label="More views"]')
                     # Intended default: a bound report URL without view= opens
                     # on the six-part Report, whatever the viewport width.
+                    # Details and Document wait behind "More views".
                     await expect(report_view).to_have_attribute("aria-pressed", "true")
+                    await more_views.click()
                     await expect(details_view).to_have_attribute("aria-pressed", "false")
                     report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
@@ -897,6 +900,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     details_view = library_page.get_by_role(
                         "button", name="Details view", exact=True
                     )
+                    await library_page.locator('summary[aria-label="More views"]').click()
                     await details_view.click()
                     await expect(details_view).to_have_attribute("aria-pressed", "true")
                     await library_page.get_by_role("tab", name="Moments", exact=True).click()
