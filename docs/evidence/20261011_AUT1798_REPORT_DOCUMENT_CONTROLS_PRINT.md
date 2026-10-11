@@ -48,3 +48,29 @@ clip buttons use the larger hit areas; paper shows times without Play controls.
 
 Browser evidence here uses the fictional fixture. E owns authenticated deployed
 readback with existing QA sessions. The coordinator owns versioning and shipping.
+
+
+## QA retained phone/light print capture, 23:34 UTC follow-up
+
+E's 23:29:54–23:31:27 run passes all 12 automated cases, including four
+full-shell print checks. QA inspected all A4 captures and confirms the old
+shell-control shapes are gone. Its 793×1122 phone/light PNG raises a separate
+right-edge clipping question; actual PDF clipping and the cause are unproved.
+
+G inspected the exact saved PNG and read the exact retained PDF locally:
+`1694/shots/2026-10-11-workbench-coaching-font-quote-readback/document-print-390-light.pdf`,
+SHA-256 `eb84a508b316e59906e14c6b8cce5369864e2573ec5c7ec955374eb623345c83`.
+A bounded standard-library PDF stream/ToUnicode text read found 11 pages
+and the complete "Friday at 4:00 PM." text. Text presence alone does not
+prove pixel bounds or absence of clipping.
+
+No PDF rasterizer is installed in the system or repository venv. The existing
+full Chromium native viewer cannot launch because `libcups.so.2` is missing;
+its finite process exited before rendering. No package was installed, new
+app visit made for this classification, or substitute PDF generated. Retained
+text-only receipt: `1798/shots/2026-10-11/document-print-pdf-2337/text-only-receipt.json`.
+
+The capture cause and actual PDF pixel bounds remain **unproved**. E's already
+scheduled 23:44:55 wave owns original mobile visual-viewport/sheet geometry.
+No speculative print CSS change or new broad browser wave by G. The earlier
+print repair's source/automated/inspected evidence remains separately scoped.

@@ -69,7 +69,36 @@ reader checks. This initial typecheck failure is retained, not a claimed pass.
 | `review-fixture/document/document-preview.test.tsx` | `3b404d418ce0f63d97c6838a31d638e81e08f4dc80d1a23a9d0cc7163b0bce2f` | `7c7c051a969bd12b52939bd78e1d06a039935e5d9d30ac3fa296d1c4c09b8f42` |
 | `report-docx.test.ts` | existing test retained | `a76bd77b33bb2b17741236eaf54f1c702a430448af7ab4bae731b6684caeaadb` |
 
-All app paths are relative to `apps/sales-xray-web/app/`. Shared-dev readback
-is pending the post-commit warm-up; the bounded fixture harness is
-`1798/harness/document-fictional-source-proof.mjs`. This is fictional builder
-evidence, not production or an authenticated persistence result.
+All app paths are relative to `apps/sales-xray-web/app/`.
+
+## Shared-dev and downloaded Word proof
+
+After committing `57fd8db7` and waiting for shared-dev warm-up, the bounded
+standalone fixture harness ran through ordinary `ac-heavy` admission:
+`1798/harness/document-fictional-source-proof.mjs`.
+
+23:35:07–23:35:27 UTC: **4/4 PASS**, 1440/390 in light/dark. Source HEAD
+stayed `57fd8db71b67c5f7eb6bc258b3b8e1d6509234d5`; all four owned file
+hashes stayed unchanged. Each visit returned HTTP 200, six section headings,
+agreement between 1.3/6.2/6.9, both retained unknowns, and **Outcome not set**.
+No other-call follow-up wording, page errors, sideways overflow, API writes
+or outcome requests occurred. Browser and contexts exited normally.
+
+Downloaded **4/4 valid Word files**: ZIP checksums and every OOXML part parse,
+six section bookmarks, same buyer boundary/action/unknowns/unset outcome,
+and no stale follow-up claim or quote. Downloads and the complete receipt
+are retained in `1798/shots/2026-10-11/document-fictional-source-2334/`.
+Receipt SHA-256:
+`dd8639b42be5c823b8d67422d5a5f0a79c97e41d177d5bdcb5185af66218b2a2`.
+
+All eight overview/deal screenshots were inspected. Their initial poses
+did not show the changed 1.3/6.9 lines, so a narrow two-case screenshot
+follow-up at 23:40:30–23:40:36 captured those lines at 1440 dark / 390 light.
+All four added images were inspected; no source change or new export/test
+matrix. Fixture source hash stayed unchanged, no page errors, finite caller
+exited normally. Follow-up receipt in `changed-lines/`, SHA-256:
+`90f4b6ff17fc9f6c6d97b1509dd0c9bbdf25b8c778789c8965985558ef8c191f`.
+
+This is fictional builder evidence, not production or an authenticated
+persistence result. QA's separate phone/light print-capture question uses
+its retained Amit PDF and remains separate from this repaired fixture.
