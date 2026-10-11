@@ -390,7 +390,7 @@ export function SkillHeatmap({
 }) {
   return (
     <div
-      className={styles.heatScroll}
+      className={styles.scrollHeat}
       tabIndex={0}
       role="region"
       aria-label={label}

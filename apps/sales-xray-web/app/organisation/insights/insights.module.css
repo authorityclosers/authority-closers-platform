@@ -103,6 +103,28 @@
   text-underline-offset: 2px;
 }
 
+.profileLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-muted);
+  vertical-align: middle;
+}
+
+.profileLink:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-accent);
+}
+
+.profileLink:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 1px;
+}
+
 .linkish:focus-visible {
   border-radius: 2px;
   outline: 2px solid var(--sx-focus-ring);
@@ -563,12 +585,12 @@ button.barRow:focus-visible {
 
 /* ---------- Heatmap ---------- */
 
-.heatScroll {
+.scrollHeat {
   min-width: 0;
   overflow-x: auto;
 }
 
-.heatScroll:focus-visible {
+.scrollHeat:focus-visible {
   outline: 2px solid var(--sx-focus-ring);
   outline-offset: -2px;
 }

@@ -65,6 +65,7 @@ it("renders a seeded sandbox page whole, labelled synthetic, without reading", a
   expect(text).toContain("not an official score");
   // Synthetic calls have no report page: nothing links to one.
   expect(host.querySelector('a[href^="/analysis/calls/"]')).toBeNull();
+  expect(host.querySelector('a[href^="/organisation/people/"]')).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
   expect(host.querySelector('select[aria-label="Team"]')).not.toBeNull();
 });
@@ -122,6 +123,8 @@ it("reads in the browser when the server could not, and links real calls", async
   expect(host.textContent).toContain("Skills most often needing work");
   expect(host.querySelector('a[href^="/analysis/calls/"]')).not.toBeNull();
   expect(host.querySelector('select[aria-label="Team"]')).toBeNull();
+  // Real members open their profile from the people table.
+  expect(host.querySelector('a[href^="/organisation/people/"]')).not.toBeNull();
 });
 
 it("tells a member the view is for owners and admins", async () => {

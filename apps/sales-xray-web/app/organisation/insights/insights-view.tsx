@@ -7,7 +7,7 @@
  * skills are moving. One read brings every aggregate (the server sums them),
  * so the page arrives whole; filters live in the address.
  */
-import { BarChart3, Lock, RotateCw, X } from "lucide-react";
+import { ArrowUpRight, BarChart3, Lock, RotateCw, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -675,6 +675,7 @@ function Sections({
           teams={data.teams}
           onPerson={(key) => go({ person: key })}
           onTeam={(key) => go({ team: key })}
+          profiles={!data.synthetic}
         />
       </Panel>
 
@@ -829,16 +830,34 @@ function changeText(change: number | null) {
       : `${size} worse`;
 }
 
+/** A person's profile page (Organisation → people), for real members only. */
+function ProfileLink({ group }: { group: Group }) {
+  if (!group.key) return null;
+  return (
+    <Link
+      href={`/organisation/people/${encodeURIComponent(group.key)}`}
+      className={styles.profileLink}
+      aria-label={`Open ${group.name}’s profile`}
+      title="Open profile"
+    >
+      <ArrowUpRight size={13} aria-hidden="true" />
+    </Link>
+  );
+}
+
 function PeopleTable({
   groups,
   teams,
   onPerson,
   onTeam,
+  profiles,
 }: {
   groups: Group[];
   teams: Group[];
   onPerson: (key: string) => void;
   onTeam: (key: string) => void;
+  /** Real organisations: each name also opens the person's profile. */
+  profiles: boolean;
 }) {
   const teamKey = (name: string | null) =>
     teams.find((team) => team.name === name)?.key ?? null;
@@ -849,13 +868,16 @@ function PeopleTable({
       cards={rows.map((group) => (
         <Card key={group.key ?? group.name}>
           <div className={styles.cardHead}>
-            <button
-              type="button"
-              className={styles.linkish}
-              onClick={() => group.key && onPerson(group.key)}
-            >
-              {group.name}
-            </button>
+            <span>
+              <button
+                type="button"
+                className={styles.linkish}
+                onClick={() => group.key && onPerson(group.key)}
+              >
+                {group.name}
+              </button>
+              {profiles ? <ProfileLink group={group} /> : null}
+            </span>
             <span>{count(group.calls)} calls</span>
           </div>
           <div className={styles.cardMeta}>
@@ -894,6 +916,7 @@ function PeopleTable({
               >
                 {group.name}
               </button>
+              {profiles ? <ProfileLink group={group} /> : null}
             </td>
             {teams.length ? (
               <td>
