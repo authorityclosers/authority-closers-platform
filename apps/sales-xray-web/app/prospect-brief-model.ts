@@ -509,3 +509,19 @@ export function prospectBrief(
     })),
   };
 }
+
+/** One scannable library row: who, their main problem, and what's next. */
+export function prospectRow(prospect: ProspectSummary) {
+  const fields = prospect.profile_fields ?? {};
+  const text = (key: ProfileKey) => {
+    const field = fields[key];
+    return field?.state === "known" ? profileValueText(field.value) : null;
+  };
+  return {
+    subtitle:
+      [text("role"), text("business")].filter(Boolean).join(" · ") || null,
+    problem: text("main_pain"),
+    nextStep: text("next_step") ?? prospect.next_step ?? null,
+    detected: prospect.origin === "detected" && !prospect.confirmed_at,
+  };
+}

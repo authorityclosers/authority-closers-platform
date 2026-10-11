@@ -379,10 +379,32 @@ describe("ProspectsListView", () => {
     expect(host.textContent).toContain("AC");
   });
 
-  it("shows hover summary card with UUID identity and metadata on mouse enter", async () => {
+  it("shows one scannable row per prospect: who, main problem, stage, next step and last call, never an ID", async () => {
     vi.spyOn(prospectsClient, "fetchProspectsList").mockResolvedValueOnce({
       schema: "ac.sales-xray.prospects/1",
-      prospects: [mockProspectSummary],
+      prospects: [
+        {
+          ...mockProspectSummary,
+          origin: "detected",
+          confirmed_at: null,
+          profile_fields: {
+            role: {
+              state: "known",
+              value: { kind: "text", text: "Founder" },
+              basis: "person",
+              locked: true,
+              set_at: "2026-10-11T00:00:00Z",
+            },
+            main_pain: {
+              state: "known",
+              value: { kind: "text", text: "Sales depend on the founder" },
+              basis: "person",
+              locked: true,
+              set_at: "2026-10-11T00:00:00Z",
+            },
+          },
+        },
+      ],
       total: 1,
       stage_filters: [],
       next_offset: null,
@@ -396,22 +418,18 @@ describe("ProspectsListView", () => {
       );
     });
 
-    const hoverBtn = host.querySelector<HTMLButtonElement>(
-      `button[aria-label="Hover summary for ${mockProspectSummary.name}"]`,
+    const row = host.querySelector<HTMLAnchorElement>(
+      `[data-testid="prospect-row-${mockProspectSummary.prospect_id}"]`,
+    )!;
+    expect(row.getAttribute("href")).toBe(
+      `/prospects/${mockProspectSummary.prospect_id}`,
     );
-    expect(hoverBtn).not.toBeNull();
-
-    await act(async () => {
-      hoverBtn!.focus();
-    });
-
-    const hoverCard = host.querySelector(
-      `[data-testid="hover-card-${mockProspectSummary.prospect_id}"]`,
-    );
-    expect(hoverCard).not.toBeNull();
-    expect(hoverCard?.textContent).toContain(mockProspectSummary.prospect_id);
-    expect(hoverCard?.textContent).toContain("2");
-    expect(hoverCard?.textContent).toContain("None recorded");
+    expect(row.textContent).toContain("Founder");
+    expect(row.textContent).toContain("Detected");
+    expect(row.textContent).toContain("Sales depend on the founder");
+    expect(row.textContent).toContain("No next step");
+    expect(row.textContent).toContain("2 visible calls");
+    expect(row.textContent).not.toContain(mockProspectSummary.prospect_id);
   });
 
   it("handles missing stage filter toggle", async () => {
