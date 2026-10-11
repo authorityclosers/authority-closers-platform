@@ -175,8 +175,9 @@ function BriefFactRow({
           {fact.fact}
         </small>
         {fact.basis === "person" ? (
-          <small className={styles.lock} title="A person set this; it wins">
-            <LockKeyhole size={12} aria-hidden="true" /> Set by a person
+          <small className={styles.lock} title="Set by a person; it wins">
+            <LockKeyhole size={12} aria-hidden="true" />
+            <span className={styles.srOnly}>Set by a person</span>
           </small>
         ) : null}
       </dt>
