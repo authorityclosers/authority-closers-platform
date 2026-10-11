@@ -22,6 +22,8 @@ collapsed; the populated example opens all four groups and captures each one.
 Live calls are checked only for deeper groups actually supplied by their report.
 The independent Document journey checks six actual sections in order and
 captures each section's content at both widths/themes, alongside its top sheet.
+Rendered Document links/buttons must meet the 32 px desktop / 44 px phone floor.
+Print-specific compact text is outside this screen-control check.
 
 Coaching also reads all six fictional rep pillars with their own labels. Its
 progress accessibility snapshot must contain one summary of the forty calls
@@ -50,7 +52,10 @@ fully reload each choice, check Report/Document/Word and read the saved API valu
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. These eight optional cases plus the original sixteen collect
-24 cases. The original Report journey retains its full thirteen steps.
+28 cases. The original Report journey retains its full thirteen steps.
+The additional dev-only long-quote journey verifies the exact fictional
+1,232-character source once, its original time span, one expand/collapse click,
+32/44 px reachable disclosure targets and no eager media in both widths/themes.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
@@ -77,8 +82,18 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
+
+The coordinator-approved local deployed transport is opt-in:
+`WB_LOCAL_TRANSPORT=http://127.0.0.1:8080`, with live mode and the original
+staging or production HTTPS `WB_BASE_URL`. It preserves that browser origin,
+Host and existing cookie scope in memory, fetches through foundation :8080,
+and leaves redirects to Chromium. Other origins/ports and fixture mode refuse.
+Non-read methods abort before reaching the app and fail the read-only journey.
+Receipts label the local transport; this does not establish public Cloudflare
+access. It cannot replace an admitted, populated Report/Team context. Do not
+run populated smoke against a rejected session or an empty/unpermitted context.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.

@@ -1,5 +1,55 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Current continuation — 23:15 UTC
+
+Coaching cue-spacing readback **4/4 PASS**, 22:54:33–22:55:30 UTC, recorded
+HEAD 9cdcdb2b at both boundaries with moving dirty product files explicitly
+retained. All twenty observations per pair pass; the original single personal
+click selects My coaching/view=me. Runtime/server/font/overflow/outcome API
+errors are zero. Inspected both phone themes: the cue label and instruction
+now have a readable gap. This clears the earlier cue-spacing visual finding.
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-cue-spacing-readback/receipt.json`.
+
+Canonical compiled outcome execution is now independently accepted for
+fa846dc run38176600054/job114582801007/artifact11716152809: the named acquisition
+case passed, and its matched exact-source unconditional Lost PUT200/full reload/
+Report/Document/Word assertions bind that result. The sanitized artifact omits
+the dedicated outcome marker; no marker or raw payload is fabricated. This is
+disposable synthetic HTTP/PostgreSQL proof, not shared-dev or deployed-session
+persistence. Independent acceptance:
+`/home/acdev/strikes/1694/workbench-release-ci-canonical-outcome-acceptance-fa846dc.json`.
+I's four-run attestation is in `docs/evidence/20261011_AUT1355_RELEASE_OUTCOME_RECEIPTS.md`.
+Root1855 Coaching acceptance remains separate.
+
+Coordinator cleared the old native/staging release hold: staging and production
+web/API plus canaries were pinned to fa846dc; v0.41.0 promotion remains operator
+owned. Hosted populated smoke is **NOT RUN** because the approved staging jar
+returns tenant_context_denied403, while production has no readable submissions
+and Team403. The exact gap was independently returned to coordinator; no new
+session/access/workspace selection or application write was attempted.
+Discovery: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-hosted-discovery/verified-route-receipt.json`.
+
+Opt-in hosted foundation :8080 transport preserves original HTTPS browser
+origins and cookie scope. Independent bounded proof passed at 23:06:49–23:06:52:
+five invalid configurations refused, four inert mutating-method callbacks
+aborted before fetch, both original hosted health reads200 with fa846dc,
+staging identity403/production200. No populated smoke or public Cloudflare
+acceptance is inferred. Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-hosted-transport-final/receipt.json`.
+Its tested journey digest is retained; later quote-only additions do not change
+the transport implementation.
+
+New checks are prepared, **runtime acceptance pending**: Document rendered
+links/buttons meet 32 px desktop/44 px phone after G8dc4d07d; dev-only long-quote
+source is exact once, preserves 2:10–3:37, expands/refolds with one click each,
+keeps reachable disclosure targets and starts no media. Next finite shared-dev
+wave covers eight Report/Document and four quote cases after the fifteen-minute
+boundary and coordinator's 23:08 admission window. No full print or signed-in
+acceptance is claimed.
+
+Historical receipts below preserve original verdicts; pending statements in
+those dated entries are superseded only by the current continuation above.
+
 Latest targeted shared-dev journeys **10/10 PASS, zero errors/skips**.
 Actual browser execution was 22:39:16–22:40:20 UTC (63.550 s), recorded runner
 source `f5d042b4` → `67e74ea2`; the queued runner started at 22:11:56 UTC.

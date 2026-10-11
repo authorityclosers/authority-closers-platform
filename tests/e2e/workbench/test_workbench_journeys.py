@@ -161,6 +161,25 @@ def _restore_cookie_jar(context: BrowserContext, path: Path) -> None:
     )
 
 
+def _local_transport(origin: str) -> str | None:
+    transport = os.environ.get("WB_LOCAL_TRANSPORT")
+    if not transport:
+        return None
+    allowed = {
+        "https://salesxray-staging.authorityclosers.com",
+        "https://salesxray.authorityclosers.com",
+    }
+    if (
+        os.environ.get("WB_MODE") != "live"
+        or origin.rstrip("/") not in allowed
+        or transport.rstrip("/") != "http://127.0.0.1:8080"
+    ):
+        pytest.fail(
+            "Local transport requires an approved hosted HTTPS origin and :8080", pytrace=False
+        )
+    return transport.rstrip("/")
+
+
 @pytest.fixture(scope="session")
 def browser() -> Iterator[Browser]:
     origin = os.environ.get("WB_BASE_URL")
@@ -176,6 +195,7 @@ def browser() -> Iterator[Browser]:
         os.environ.get(key) for key in ("WB_STORAGE_STATE", "WB_REPORT_PATH")
     ):
         pytest.fail("Live acceptance requires WB_STORAGE_STATE and WB_REPORT_PATH")
+    _local_transport(origin)
     with sync_playwright() as playwright:
         instance = playwright.chromium.launch()
         try:
@@ -207,6 +227,8 @@ class Journey:
     main_navigations: int = 0
     live_refreshes: int = 0
     refresh_events: list[dict[str, object]] = field(default_factory=list)
+    local_transport: str | None = None
+    blocked_mutations: list[str] = field(default_factory=list)
 
     @property
     def fixture(self) -> bool:
@@ -281,6 +303,7 @@ class Journey:
         assert not self.server_errors, f"HTTP server errors: {self.server_errors}"
         assert not self.visual_errors, f"Visual acceptance: {self.visual_errors}"
         assert not self.fixture_outcome_requests, "Fictional outcome attempted a live API request"
+        assert not self.blocked_mutations, "Read-only hosted smoke attempted a mutating request"
         assert (
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
@@ -314,6 +337,28 @@ class Journey:
         assert metrics["checked"] > 0, "No rendered total text was checked"
         assert not metrics["clipped"], "Team totals cut off rendered text"
 
+    def document_controls(self) -> None:
+        minimum = 44 if self.width == 390 else 32
+        sizes = (
+            self.page.locator("[data-document-export]")
+            .locator("a[href],button")
+            .evaluate_all(
+                """els => els.filter(el => el.checkVisibility({checkOpacity: true,
+                checkVisibilityCSS: true})).map(el => {
+              const r = el.getBoundingClientRect();
+              return {tag: el.tagName, width: r.width, height: r.height};
+            })"""
+            )
+        )
+        small = [item for item in sizes if min(item["width"], item["height"]) < minimum - 0.01]
+        self.observations[-1]["document_controls"] = {
+            "checked": len(sizes),
+            "minimum": minimum,
+            "undersized": small,
+        }
+        assert sizes, "No rendered Document controls were checked"
+        assert not small, f"Document controls are below {minimum}px"
+
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""
         link = self.page.get_by_role("link", name="See the mission", exact=True)
@@ -343,6 +388,44 @@ class Journey:
         self.snapshot(step)
 
 
+def _install_local_transport(journey: Journey, origin: str) -> None:
+    transport = _local_transport(origin)
+    if transport is None:
+        return
+    journey.local_transport = transport
+    host = urlsplit(origin).netloc
+
+    def read(route: Route) -> None:
+        request = route.request
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            journey.blocked_mutations.append(request.method)
+            route.abort("blockedbyclient")
+            return
+        target = urlsplit(request.url)
+        suffix = target.path + ("?" + target.query if target.query else "")
+        # Preserve the original browser URL, TLS cookie scope and headers in memory.
+        # Disable redirects here; Chromium handles them at the original origin.
+        try:
+            response = route.fetch(
+                url=transport + suffix,
+                headers={**request.all_headers(), "host": host},
+                max_redirects=0,
+                timeout=30_000,
+            )
+        except Exception as error:
+            # Fetch exceptions can quote request headers. Never let those into logs.
+            journey.runtime_errors.append(type(error).__name__)
+            route.fulfill(
+                status=502,
+                content_type="application/json",
+                body='{"detail":"The local hosted read is unavailable."}',
+            )
+            return
+        route.fulfill(response=response)
+
+    journey.page.route(origin.rstrip("/") + "/**", read)
+
+
 @contextmanager
 def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator[Journey]:
     width, theme = viewport
@@ -358,12 +441,14 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         color_scheme=theme,
         reduced_motion="reduce",
         storage_state=None if cookie_jar else os.environ.get("WB_STORAGE_STATE") or None,
+        service_workers="block" if os.environ.get("WB_LOCAL_TRANSPORT") else "allow",
         accept_downloads=True,
     )
     context.add_init_script(f"localStorage.setItem('sales-xray:theme', {json.dumps(theme)});")
     page = context.new_page()
     page.set_default_timeout(15_000)
     journey = Journey(page, context, name, width, theme, directory)
+    _install_local_transport(journey, os.environ["WB_BASE_URL"])
     if journey.fixture:
 
         def block_fixture_outcome(route: Route) -> None:
@@ -441,6 +526,8 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "main_navigations": journey.main_navigations,
             "live_refreshes": journey.live_refreshes,
             "refresh_events": journey.refresh_events,
+            "local_transport": journey.local_transport,
+            "blocked_mutations": journey.blocked_mutations,
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
@@ -738,6 +825,7 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
             preview.locator('section[data-document-section="skills"]').get_by_role("rowheader")
         ).to_have_text(list(SKILL_ROWS))
         journey.snapshot("document")
+        journey.document_controls()
         # A section deep link can land below the document's export controls.
         page.locator("[data-document-export]").evaluate(
             "element => element.scrollIntoView({block: 'start'})"
@@ -827,6 +915,7 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(preview.locator("[data-report-mode-section]")).to_have_count(6)
         expect(_document_download(journey.page)).to_be_visible()
         journey.snapshot("ready")
+        journey.document_controls()
         sections = preview.locator("section[data-document-section]")
         expect(sections).to_have_count(6)
         assert sections.evaluate_all(
@@ -958,3 +1047,77 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             assert spoken.count(summary) == 1, "Rep progress needs one spoken summary"
             assert spoken.count("- listitem") <= 6, "Progress announces a row per call"
             expect(progress.get_by_text("Needed work", exact=True)).to_be_visible()
+
+
+def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]) -> None:
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Long-quote reproduction is dev fixture coverage only")
+    source = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/long-quote.json"
+        ).read_text()
+    )
+    evidence = source["call"]["evidence"][0]
+    quote = evidence["quote"]
+    assert source["synthetic"] is True
+    assert len(quote) == 1232
+    assert (evidence["start_ms"], evidence["end_ms"]) == (130930, 217313)
+    with _journey(browser, viewport, "coaching-quote") as journey:
+        media_requests: list[str] = []
+        page = journey.page
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append("media") if request.resource_type == "media" else None
+            ),
+        )
+        journey.open("/review-fixture/coaching?data=sandbox&example=long-quote")
+        words = page.locator("blockquote").filter(has_text=quote)
+        expect(words).to_have_count(1)
+        expect(words).to_have_text(quote)
+        control = page.get_by_role("button", name="Read full quote", exact=True)
+        expect(control).to_have_count(1)
+        expect(control).to_have_attribute("aria-controls", words.get_attribute("id"))
+        folded_height = words.bounding_box()["height"]
+        for state, opened in (("folded", False), ("expanded", True), ("refolded", False)):
+            if opened:
+                control.click()
+                control = page.get_by_role("button", name="Show less", exact=True)
+            elif state == "refolded":
+                control.click()
+                control = page.get_by_role("button", name="Read full quote", exact=True)
+            expect(control).to_have_attribute("aria-expanded", str(opened).lower())
+            assert words.evaluate("el => el.hasAttribute('data-folded')") is not opened
+            expect(words).to_have_text(quote)
+            expect(words.locator("..")).to_contain_text("2:10–3:37")
+            assert (
+                page.locator("main").evaluate(
+                    "(el, quote) => el.textContent.split(quote).length - 1", quote
+                )
+                == 1
+            ), "The source quote is repeated as an observation"
+            if opened:
+                assert words.bounding_box()["height"] > folded_height
+            control.scroll_into_view_if_needed()
+            expect(control).to_be_in_viewport(ratio=1)
+            bounds = control.bounding_box()
+            minimum = 44 if journey.width == 390 else 32
+            assert min(bounds["width"], bounds["height"]) >= minimum - 0.01
+            assert control.evaluate(
+                """el => {const r = el.getBoundingClientRect();
+                return el.contains(document.elementFromPoint(
+                  r.x + r.width / 2, r.y + r.height / 2));}"""
+            ), "Quote disclosure is covered by another control"
+            journey.snapshot(state)
+            journey.observations[-1]["quote_control"] = {
+                "width": bounds["width"],
+                "height": bounds["height"],
+                "minimum": minimum,
+                "source_characters": len(quote),
+                "start_ms": evidence["start_ms"],
+                "end_ms": evidence["end_ms"],
+                "expanded": opened,
+            }
+            assert page.locator("audio,video").count() == 0
+            assert not media_requests, "Reading the quote started a media request"
