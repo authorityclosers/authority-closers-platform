@@ -12,12 +12,18 @@ import {
 import styles from "./coaching.module.css";
 
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
-export function SharePanel() {
-  const [view, setView] = useState<SharingView | null>(null);
+export function SharePanel({
+  initial = null,
+}: {
+  /** A known state (design review); skips the read. */
+  initial?: SharingView | null;
+} = {}) {
+  const [view, setView] = useState<SharingView | null>(initial);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    if (initial && attempt === 0) return;
     const controller = new AbortController();
     void readSharing(controller.signal).then((result) => {
       if (controller.signal.aborted) return;
@@ -25,7 +31,7 @@ export function SharePanel() {
       setError(result.error);
     });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, initial]);
   const toggle = async () => {
     if (!view) return;
     setSaving(true);

@@ -68,7 +68,16 @@ export function CoachingFixture() {
       />
       {view === "call" && call ? <CallCoachingStory coaching={call} /> : null}
       {view === "me" ? (
-        <CoachingStory coaching={me} readOnly={data === "sandbox"} />
+        <CoachingStory
+          coaching={me}
+          readOnly={data === "sandbox"}
+          sharing={{
+            available: true,
+            shared: false,
+            revision: 0,
+            reaches: [{ name: "Priya Shah", why: "admin" }],
+          }}
+        />
       ) : null}
       {view === "team" && team ? <TeamCoachingStory coaching={team} /> : null}
     </div>

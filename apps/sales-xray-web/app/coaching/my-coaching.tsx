@@ -20,6 +20,7 @@ import {
 } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
 import { FocusFeedback, SharePanel } from "./sharing-ui";
+import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import styles from "./coaching.module.css";
 
@@ -214,9 +215,12 @@ export function CoachingStory({
   coaching,
   requestedFocus,
   readOnly = false,
+  sharing,
 }: {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
+  /** A known sharing state (design review); otherwise the panel reads it. */
+  sharing?: SharingView;
   /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
   readOnly?: boolean;
 }) {
@@ -379,7 +383,7 @@ export function CoachingStory({
           )}
         </div>
       </Panel>
-      {readOnly ? null : <SharePanel />}
+      {readOnly ? null : <SharePanel initial={sharing} />}
       <div className={styles.late}>
         <CallsPanel calls={coaching.calls} />
       </div>
