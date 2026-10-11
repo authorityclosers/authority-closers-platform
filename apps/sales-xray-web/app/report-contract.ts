@@ -745,6 +745,7 @@ export function parseAcquisitionReport(
   report: SalesReport;
   runId: string;
   claimed: boolean;
+  reportRevision?: string;
   recovery?: RecoveryMetadata;
   label: CallLabel | null;
 } {
@@ -766,6 +767,7 @@ export function parseAcquisitionReport(
       // Locally composed prior-call citations are reserved for their own UI;
       // this parser ignores them and validates the current call as before.
       "previous_call_context",
+      "report_revision",
     ],
     "report_envelope",
   );
@@ -785,6 +787,12 @@ export function parseAcquisitionReport(
   )
     throw new ReportContractError("report_envelope_binding");
   const runId = identifier(envelope.run_id, "report_run");
+  const reportRevision =
+    envelope.report_revision === undefined
+      ? undefined
+      : text(envelope.report_revision, "report_envelope_revision", 64);
+  if (reportRevision !== undefined && !SHA256.test(reportRevision))
+    throw new ReportContractError("report_envelope_revision_invalid");
   const recovery =
     envelope.recovery === undefined
       ? undefined
@@ -855,9 +863,14 @@ export function parseAcquisitionReport(
       throw new ReportContractError("report_preview_account_invalid");
     report.preview = parsePreview(projection.preview, report);
   }
-  return recovery === undefined
-    ? { claimed, report, runId, label }
-    : { claimed, report, runId, recovery, label };
+  return {
+    claimed,
+    report,
+    runId,
+    label,
+    ...(recovery === undefined ? {} : { recovery }),
+    ...(reportRevision === undefined ? {} : { reportRevision }),
+  };
 }
 
 export function parseJobResponse(

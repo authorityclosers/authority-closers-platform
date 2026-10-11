@@ -33,7 +33,13 @@ export type ProfileEvidence = {
   end_ms: number;
 };
 export type ProfileField =
-  | { state: "unknown"; reason: "not_asked" | "not_mentioned" }
+  | {
+      state: "unknown";
+      reason: "not_asked" | "not_mentioned";
+      basis?: "person";
+      locked?: true;
+      set_at?: string;
+    }
   | {
       state: "known";
       value: ProfileValue;
@@ -174,7 +180,21 @@ export function parseProfileFields(input: unknown): ProfileFields {
     const field = record(raw);
     if (field.state === "unknown") {
       check(field.reason === "not_asked" || field.reason === "not_mentioned");
-      result[key] = { state: "unknown", reason: field.reason };
+      const parsed: Extract<ProfileField, { state: "unknown" }> = {
+        state: "unknown",
+        reason: field.reason,
+      };
+      if (
+        ["basis", "locked", "set_at"].some((key) => field[key] !== undefined)
+      ) {
+        check(field.basis === "person" && field.locked === true);
+        const timestamp = text(field.set_at, 80);
+        check(Number.isFinite(Date.parse(timestamp)));
+        parsed.basis = "person";
+        parsed.locked = true;
+        parsed.set_at = timestamp;
+      }
+      result[key] = parsed;
       continue;
     }
     check(

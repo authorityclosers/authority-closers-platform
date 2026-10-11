@@ -6,11 +6,13 @@ import {
 } from "./coaching/coaching-client";
 import type { Transcript } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
+import { parseClips, type CoachingClip } from "./coaching/media-contract";
 
 export type CallCoachingBinding = {
   callId: string;
   personId: string;
   tenantId: string;
+  sessionId?: string;
   sourceSha256: string;
   transcriptRevision: string;
   recordingId?: string;
@@ -21,6 +23,7 @@ export type CallCoaching = {
   schema: "ac.sales-xray.call-coaching/1";
   person_id: string;
   tenant_id: string;
+  session_id?: string | null;
   submission_id: string;
   recording_id: string;
   source_sha256: string;
@@ -46,6 +49,7 @@ export type CallCoaching = {
   lesson: (Omit<TextLesson, "own_call"> & { own_call: Evidence | null }) | null;
   practice: { exercise: string; success_condition: string } | null;
   mission: Mission | null;
+  media_clips?: CoachingClip[];
   limitations: string[];
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -99,6 +103,7 @@ export function parseCallCoaching(
     row.entitlement_policy !== "AUT-1678-open-access" ||
     row.person_id !== binding.personId ||
     row.tenant_id !== binding.tenantId ||
+    (binding.sessionId !== undefined && row.session_id !== binding.sessionId) ||
     row.submission_id !== binding.callId ||
     row.source_sha256 !== binding.sourceSha256 ||
     row.transcript_revision !== binding.transcriptRevision ||
@@ -112,6 +117,7 @@ export function parseCallCoaching(
     ![binding.callId, binding.personId, binding.tenantId].every((id) =>
       UUID.test(id),
     ) ||
+    (binding.sessionId !== undefined && !UUID.test(binding.sessionId)) ||
     row.recommended_media !== null ||
     !["ready", "unavailable"].includes(text(row.state)) ||
     ![
@@ -206,7 +212,10 @@ export function parseCallCoaching(
     if (lesson.next_call_connection !== mission.behavior) invalid();
     if (row.basis === "skill_evidence" && !row.evidence.length) invalid();
   }
-  return row as CallCoaching;
+  return {
+    ...row,
+    media_clips: row.state === "ready" ? parseClips(row.media_clips) : [],
+  } as CallCoaching;
 }
 
 /** One own-call GET. It cannot load another person's coaching or start a job. */

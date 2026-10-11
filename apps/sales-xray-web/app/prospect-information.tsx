@@ -78,7 +78,7 @@ function Field({
           text || "Unknown"
         )}
       </dd>
-      {known?.locked && (
+      {field?.locked && (
         <small className={styles.lock}>
           <LockKeyhole size={12} aria-hidden="true" /> Person edit · locked
         </small>
@@ -126,6 +126,9 @@ function Field({
     </div>
   );
 }
+
+/** Shared presentation only; callers supply authorised, entity-specific facts. */
+export { Field as ProfileFact };
 
 /** Six buyer-focused sections. No opportunity/qualification state is inferred. */
 export function ProspectInformation({
