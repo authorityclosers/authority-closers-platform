@@ -1,8 +1,12 @@
+/* Nothing in the app scrolls sideways (owner, 11 Oct): content that is too
+   wide is clipped at the window edge, and the page matrix fails any element
+   that reaches past it, so a clip never hides a layout bug for long. */
 .shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   min-height: 100vh;
   min-height: 100dvh;
+  overflow-x: clip;
   background: var(--lx-paper);
   color: var(--lx-ink);
   font: var(--lx-text-body);
@@ -881,9 +885,11 @@
   overflow: hidden;
 }
 
+/* The studio column scrolls, not the page: it keeps the gutter instead. */
 .shell[data-mobile-fit="true"] .main {
   min-height: 0;
   overflow: hidden;
+  scrollbar-gutter: auto;
 }
 
 .shell[data-mobile-fit="true"] .main > :global(.xray-app) {
@@ -895,8 +901,10 @@
   box-sizing: border-box;
   height: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 /* ---------- Bottom navigation ---------- */
@@ -1139,11 +1147,15 @@
     height: 100dvh;
     overflow: hidden;
   }
+  /* Pages scroll down only; the gutter is kept, so a scrollbar appearing
+     (a page taller than the window) never narrows the page sideways. */
   .main {
     min-height: 0;
     padding-bottom: 24px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 }
 

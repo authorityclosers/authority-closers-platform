@@ -27,6 +27,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { useChipsOwnRow } from "./calls-chip-row";
+
 import { AcquisitionShell } from "./acquisition-shell";
 import { useUploadSession, useUploadSnapshot } from "./hooks/upload-session";
 import {
@@ -381,6 +383,7 @@ function CallsLibraryContent({
   // One clock reading per page load keeps render pure (react-hooks/purity).
   const [loadedAt] = useState(() => Date.now());
   const searchInput = useRef<HTMLInputElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seenSubmissionIds = useRef(new Set<string>());
   const firstPageSubmissionIds = useRef(new Set<string>());
@@ -861,6 +864,11 @@ function CallsLibraryContent({
       a.name.localeCompare(b.name) || a.personId.localeCompare(b.personId),
   );
   const showReps = !preview && repOptions.length > 0;
+  // The chips take their own row when they don't fit beside the controls.
+  const chipsOwnRow = useChipsOwnRow(
+    toolbarRef,
+    `${counts.ready}:${counts.active}:${counts.attention}:${counts.idle}:${showReps}`,
+  );
   // A rep from the address or an earlier list filters only while the loaded
   // calls include them; otherwise the list shows everyone's calls.
   const activeRep =
@@ -1673,8 +1681,12 @@ function CallsLibraryContent({
                 </button>
               </div>
             )}
-            <div className={styles.toolbar}>
-              <label className={styles.search}>
+            <div
+              ref={toolbarRef}
+              className={styles.toolbar}
+              data-chips-row={chipsOwnRow ? "" : undefined}
+            >
+              <label className={styles.search} data-shrinks="">
                 <Search size={15} aria-hidden="true" />
                 <input
                   ref={searchInput}
@@ -1703,6 +1715,7 @@ function CallsLibraryContent({
                 className={`${styles.filters} calls-library-filters`}
                 role="group"
                 aria-label="Filter loaded calls by status"
+                data-chips=""
               >
                 {FILTERS.map((option) => {
                   const count =

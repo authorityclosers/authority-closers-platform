@@ -420,6 +420,23 @@
   display: none;
 }
 
+/* Too many chips for one row (measured, calls-chip-row.ts): search, rep and
+   sort stay on top and the chips get the full width below, never clipped. */
+.toolbar[data-chips-row] {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.toolbar[data-chips-row] .search {
+  margin-right: auto;
+}
+
+.toolbar[data-chips-row] .filters {
+  order: 1;
+  flex: 1 1 100%;
+  margin-right: 0;
+}
+
 .filters button {
   display: inline-flex;
   flex: none;
