@@ -292,6 +292,11 @@ it("keeps two rewatch purposes bound to their own displayed and played clips", a
   )!;
   expect(f1Row.textContent).toContain("Must listen");
   expect(f2Row.textContent).toContain("Worth a listen");
+  // The row names its kind; the listen flag is a chip, said once.
+  const f1Kind = f1Row.querySelector<HTMLElement>(
+    "button[aria-expanded] span",
+  )!;
+  expect(f1Kind.textContent).toBe("Did wellMust listen");
   await act(async () =>
     f1Row
       .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
