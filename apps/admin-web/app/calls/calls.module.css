@@ -11,6 +11,16 @@
   color: var(--sx-accent);
 }
 
+/* A whole queue row opens its call (see QueueKeys); J/K focus lights it. */
+.callRow {
+  cursor: pointer;
+}
+
+.callRow:hover > *,
+.callRow:has(.rowLink:focus-visible) > * {
+  background: color-mix(in oklab, var(--sx-sunken) 70%, transparent);
+}
+
 .rowLink:focus-visible,
 .cardLink:focus-visible {
   outline: 2px solid var(--sx-accent);

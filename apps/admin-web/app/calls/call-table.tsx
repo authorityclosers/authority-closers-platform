@@ -71,7 +71,7 @@ export function CallTable({
       </thead>
       <tbody>
         {items.map((item) => (
-          <tr key={item.recordingId}>
+          <tr key={item.recordingId} className={styles.callRow}>
             <th scope="row">
               <Link
                 href={href(item, back)}
