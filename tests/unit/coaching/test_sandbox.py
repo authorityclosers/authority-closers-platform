@@ -330,6 +330,16 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
     coaching["diagnosis"]["root_cause_hypothesis"] = (
         "The seller appears to confuse a friendly ending with a commitment."
     )
+    behaviour = (
+        "Before ending the next open opportunity, agree an owner, action and date or record that "
+        "no action was agreed."
+    )
+    coaching["action"]["mission"]["behaviour"] = behaviour
+    lesson = coaching["teaching"]["text_lesson"]
+    lesson.update(
+        title="Agree an observable next step", quick_idea=behaviour, better_direction=behaviour
+    )
+    call = indexed(bundle)
     view = rep_view(
         (indexed(bundle),),
         bundle,
@@ -355,6 +365,19 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
     assert view.mission and view.mission.context == "The next time a buyer gives this opening."
     agreed = "The buyer agrees to a next step with a date, or clearly says no."
     assert view.mission.done_when == agreed and view.practice.success_condition == agreed
+    clear_step = "Agree a clear next step"
+    assert (
+        call.focus_label == view.focus.label == view.lesson.title == view.mission.cue == clear_step
+    )
+    clear_mission = (
+        "Before the call ends, agree who does what by when, or note that nothing was agreed."
+    )
+    assert (
+        view.mission.behavior
+        == view.lesson.quick_idea
+        == view.lesson.better_direction
+        == clear_mission
+    )
     assert view.root_cause.hypothesis == "Taking a friendly goodbye as a yes."
     assert view.mastery.explanation == "One call can’t show progress over time."
     # Without the dataset's own line, the progress note is about "them" too.
@@ -367,6 +390,22 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
         tenant_id=TENANT,
     )
     assert "Their reports don't count" in unexplained.mastery.explanation
+    # A done-well call gives no new cause for earlier misses; the rep view
+    # identifies the newest call instead of implying a cross-call finding.
+    coaching["diagnosis"]["root_cause_hypothesis"] = (
+        "The relevant behaviour is observed here; this call alone does not establish a "
+        "longitudinal pattern or a causal effect of coaching."
+    )
+    one_call = call_view(call, bundle, person_id=VIEWER, tenant_id=TENANT)
+    across_calls = rep_view(
+        (call,), bundle, {}, person_id=rep_uuid(TENANT, "syn-fixture-R1"), tenant_id=TENANT
+    )
+    assert one_call.root_cause.hypothesis == (
+        "Done well on this call. One call can’t show a pattern, or that coaching caused it."
+    )
+    assert across_calls.root_cause.hypothesis == (
+        "Done well on their newest call. One call can’t show a pattern, or that coaching caused it."
+    )
     # A line the dataset wrote for this call alone stays word for word.
     one = sandbox_bundle()
     one["coaching"]["diagnosis"]["pattern"] = "The rep skipped the signer twice."

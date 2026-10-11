@@ -25,7 +25,7 @@
       "selected_reason": "This call’s report suggested it. Your mission across calls doesn’t change.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "provisional",
-      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "verdict": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "evidence": [
       {
@@ -78,7 +78,7 @@
     },
     "lesson": {
       "title": "Explain value before you trade on price",
-      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "quick_idea": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "framework": ["Concern", "Value", "Scope", "Approved trade"],
       "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
       "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
@@ -109,7 +109,7 @@
         "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
         "playable": true
       },
-      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "next_call_connection": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "practice": {
       "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
@@ -119,7 +119,7 @@
     },
     "mission": {
       "skill_id": "certainty_objection_intelligence",
-      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "behavior": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
       "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
@@ -232,7 +232,7 @@
       "selected_reason": "It needed work in 4 of your last 6 calls on this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
-      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "verdict": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "pattern": {
       "relevant_call_count": 6,
@@ -310,7 +310,7 @@
     },
     "mission": {
       "skill_id": "certainty_objection_intelligence",
-      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "behavior": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
       "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
@@ -334,7 +334,7 @@
     },
     "lesson": {
       "title": "Explain value before you trade on price",
-      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "quick_idea": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return.",
       "framework": ["Concern", "Value", "Scope", "Approved trade"],
       "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
       "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
@@ -365,7 +365,7 @@
         "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
         "playable": true
       },
-      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+      "next_call_connection": "Before offering a discount, find out the real worry. Give only what’s approved, and only for something in return."
     },
     "media_clips": [
       {
