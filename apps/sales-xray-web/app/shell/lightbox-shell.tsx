@@ -75,6 +75,7 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
+import { dropEarlyReads } from "../early-reads";
 import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
 import {
@@ -537,6 +538,8 @@ function LightboxShellFrame({
       if (next) window.location.assign(next);
       return Boolean(next);
     }
+    // Nothing read for the old workspace may answer a read for the new one.
+    dropEarlyReads();
     try {
       const res = await fetch("/v1/context", {
         method: "POST",

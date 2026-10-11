@@ -20,6 +20,7 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
+import { dropEarlyReads, earlyFetch } from "./early-reads";
 import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
@@ -165,7 +166,11 @@ async function readWorkspaceChoices(
   signal: AbortSignal,
   standalone: boolean,
 ): Promise<WorkspaceChoices | null> {
-  const response = await fetch("/v1/me/workspaces", {
+  // Both reads at once (no waterfall); the directory's answer is used only
+  // once the identity read has confirmed the session.
+  const directoryRead = standalone ? readSalesXrayWorkspaces(signal) : null;
+  directoryRead?.catch(() => {});
+  const response = await earlyFetch("/v1/me/workspaces", {
     method: "GET",
     credentials: "same-origin",
     cache: "no-store",
@@ -178,15 +183,17 @@ async function readWorkspaceChoices(
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
   // Academy embeds retain their existing identity/chooser contract.
-  if (!standalone) return choices;
+  if (!directoryRead) return choices;
   // The legacy endpoint confirms session identity only. Sales Xray choices
   // and selection come exclusively from its own directory.
-  const directory = await readSalesXrayWorkspaces(signal);
+  const directory = await directoryRead;
   const personal = directory.workspaces.find(
     (item) => item.kind === "personal",
   );
   let selected = directory.selected_tenant_id;
   if (selected === null && personal) {
+    // Reads started before a workspace was chosen must not be used.
+    dropEarlyReads();
     await selectWorkspace(personal.tenant_id, signal);
     selected = personal.tenant_id;
   }

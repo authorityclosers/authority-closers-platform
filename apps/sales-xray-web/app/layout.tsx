@@ -9,6 +9,7 @@ import "./styles.css";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
+import { earlyReadsScript } from "./early-reads";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
@@ -53,6 +54,12 @@ export default function Layout({
             dangerouslySetInnerHTML={{ __html: themeInitScript() }}
           />
         ) : null}
+        {/* Starts this page's reads while the HTML is still arriving, so the
+            app finds its data ready instead of asking after it starts. */}
+        <script
+          id="sales-xray-early-reads"
+          dangerouslySetInnerHTML={{ __html: earlyReadsScript() }}
+        />
         <ThemeProvider controlEnabled={themeControl}>
           {/* The root layout persists across client navigation, so a live
               upload is owned here rather than by the page that started it. */}
