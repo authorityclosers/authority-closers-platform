@@ -19,7 +19,7 @@ from ac_platform.coaching.library import CoachingLibrary
 from ac_platform.coaching.sandbox import SandboxCoaching
 from ac_platform.coaching.team import TeamCoachingView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
-from ac_platform.conversation_intelligence.application import ConversationDenied, ConversationError
+from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
@@ -127,7 +127,8 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
             return None
         try:
             await SyntheticImports(library.ownership).admit(actor)
-        except ConversationDenied:
+        except ConversationError:
+            # Not an owner/admin (or not admitted right now): the normal reads.
             return None
         return sandbox
 
