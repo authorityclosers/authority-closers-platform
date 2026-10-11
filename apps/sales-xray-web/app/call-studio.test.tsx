@@ -787,7 +787,7 @@ describe("CallStudio", () => {
     const factors = container.querySelector('[aria-label="Sales factors"]');
     expect(factors?.querySelectorAll("details")).toHaveLength(8);
     expect(factors?.textContent).toContain("Dimension 1");
-    expect(factors?.textContent).toContain("Not assessed");
+    expect(factors?.textContent).toContain("Not covered");
     expect(factors?.textContent).toContain(
       "There is not enough evidence for a client-side conclusion.",
     );
