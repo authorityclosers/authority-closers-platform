@@ -166,10 +166,8 @@ async function readWorkspaceChoices(
   signal: AbortSignal,
   standalone: boolean,
 ): Promise<WorkspaceChoices | null> {
-  // Both reads at once (no waterfall); the directory's answer is used only
-  // once the identity read has confirmed the session.
-  const directoryRead = standalone ? readSalesXrayWorkspaces(signal) : null;
-  directoryRead?.catch(() => {});
+  // On a full load both reads were started by the page's early reads, so
+  // reading them in turn costs no extra round trip.
   const response = await earlyFetch("/v1/me/workspaces", {
     method: "GET",
     credentials: "same-origin",
@@ -183,10 +181,10 @@ async function readWorkspaceChoices(
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
   // Academy embeds retain their existing identity/chooser contract.
-  if (!directoryRead) return choices;
+  if (!standalone) return choices;
   // The legacy endpoint confirms session identity only. Sales Xray choices
   // and selection come exclusively from its own directory.
-  const directory = await directoryRead;
+  const directory = await readSalesXrayWorkspaces(signal);
   const personal = directory.workspaces.find(
     (item) => item.kind === "personal",
   );
