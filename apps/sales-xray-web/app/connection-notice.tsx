@@ -4,6 +4,7 @@ import { CloudOff, RefreshCw } from "lucide-react";
 import { useEffect, type CSSProperties } from "react";
 
 import styles from "./connection-notice.module.css";
+import { track } from "./telemetry";
 
 /** Seconds before the next automatic try: 5, 10, 20, then every 30. */
 export function retryDelay(failures: number): number {
@@ -27,6 +28,13 @@ export function ConnectionNotice({
   onRetry: () => void;
 }) {
   const seconds = retryDelay(failures);
+  // Analytics only: the card was shown (once per showing, no message text).
+  useEffect(() => {
+    track("sx.error_shown", {
+      surface: "connection_card",
+      code: "read_failed",
+    });
+  }, []);
   useEffect(() => {
     const timer = window.setTimeout(onRetry, seconds * 1000);
     return () => window.clearTimeout(timer);

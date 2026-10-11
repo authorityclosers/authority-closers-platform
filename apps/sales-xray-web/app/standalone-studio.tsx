@@ -21,6 +21,7 @@ import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
 import { dropEarlyReads, earlyFetch } from "./early-reads";
+import { telemetry } from "./telemetry";
 import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
@@ -495,6 +496,14 @@ function StandaloneStudioView({
     openProfileGate(selected.intentId);
     return false;
   };
+  // Telemetry events carry the signed-in session; the server checks it.
+  const telemetrySession =
+    view.kind === "ready" && view.choices.selected_tenant_id
+      ? view.choices.session_id
+      : null;
+  useEffect(() => {
+    telemetry.setSession(telemetrySession);
+  }, [telemetrySession]);
   useEffect(() => {
     if (view.kind !== "ready" || !view.choices.selected_tenant_id) return;
     pending?.bindContext({
