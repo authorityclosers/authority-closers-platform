@@ -1382,7 +1382,9 @@
   }
 
   .meta {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
   }
 
   .snippet,
