@@ -25,11 +25,11 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
     objections: "Questions and concerns",
     closing: "Next step",
     verdict: "Final takeaway",
-    empty: "No supported finding was produced for this section.",
+    empty: "Nothing here we can point to on this call.",
     details: "Report details",
     detailNote:
-      "This draft uses evidence from the authorized recording. Speaker labels remain unverified.",
-    another: "Analyze another call",
+      "Sales Xray's reading of this call. Who is speaking is worked out automatically and can be wrong.",
+    another: "Analyse another call",
   },
   hi: {
     heading: "आपकी बिक्री कॉल की रिपोर्ट",
