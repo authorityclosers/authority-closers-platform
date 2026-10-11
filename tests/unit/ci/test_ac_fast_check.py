@@ -668,9 +668,130 @@ def repository(tmp_path: Path) -> Path:
     git(tmp_path, "config", "user.name", "Synthetic Fast Check")
     git(tmp_path, "config", "user.email", "fast-check@example.invalid")
     write(tmp_path, "README.md", "synthetic fixture\n")
+    workflow = ".github/workflows/sales-xray-native-image.yml"
+    write(tmp_path, workflow, (Path(FAST.__file__).resolve().parents[2] / workflow).read_text())
     git(tmp_path, "add", "README.md")
+    git(tmp_path, "add", workflow)
     git(tmp_path, "commit", "-m", "fixture base")
     return tmp_path
+
+
+@pytest.mark.parametrize("native_change", [False, True])
+def test_native_input_receipt_uses_committed_workflow_and_prints_staging_prerequisite(
+    repository: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    native_change: bool,
+) -> None:
+    workflow = ".github/workflows/sales-xray-native-image.yml"
+    # Use a new exact path so a copied/hardcoded production input list cannot pass.
+    write(repository, workflow, "on:\n  push:\n    paths:\n      - native-fixture.txt\n")
+    git(repository, "add", workflow)
+    git(repository, "commit", "-m", "synthetic native input list")
+    changed = "native-fixture.txt" if native_change else "unrelated-fixture.txt"
+    write(repository, changed, "synthetic input\n")
+    git(repository, "add", changed)
+    git(repository, "commit", "-m", "synthetic input change")
+    # Active builders' edits must not alter the checked commit's prerequisites.
+    write(repository, workflow, "on:\n  push:\n    paths:\n      - unrelated-fixture.txt\n")
+    receipt = tmp_path.parent / (tmp_path.name + "-native-inputs.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "passed"
+    assert data["native_inputs_changed"] == ([changed] if native_change else [])
+    assert data["changed_files"] == [changed]
+    output = capsys.readouterr().out
+    assert output.splitlines().count("needs Root prepare-native before staging") == int(
+        native_change
+    )
+    assert "unrelated-fixture.txt" in (repository / workflow).read_text()
+
+
+def test_native_inputs_match_every_workflow_path_and_nested_directory_without_lookalikes() -> None:
+    root = Path(FAST.__file__).resolve().parents[2]
+    workflow = yaml.safe_load((root / FAST.NATIVE_IMAGE_WORKFLOW).read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    exact = [path for path in triggers["push"]["paths"] if not path.endswith("/**")]
+    nested = ["native/audioatlas/fixture.txt", "native/audioatlas/deep/nested/fixture.txt"]
+    unrelated = [
+        "apps/sales-xray-web/app/report.tsx",
+        "native/audioatlas-lookalike/fixture.txt",
+        "packages/python/ac_platform/conversation_intelligence/signals.py.bak",
+    ]
+    assert FAST.native_inputs_changed(root, [*exact, *nested, *unrelated, *exact]) == tuple(
+        sorted([*exact, *nested])
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        None,
+        "on: [fixture-private-output\n",
+        "on: {}\n",
+        "on:\n  push:\n    paths: fixture-private-output\n",
+        "on:\n  push:\n    paths: []\n",
+        "on:\n  push:\n    paths:\n      - '*.py'\n",
+        "on:\n  push:\n    paths:\n      - ../outside\n",
+    ],
+)
+def test_missing_or_unreadable_native_workflow_cannot_suppress_prerequisites(
+    tmp_path: Path, content: str | None
+) -> None:
+    if content is not None:
+        write(tmp_path, FAST.NATIVE_IMAGE_WORKFLOW, content)
+    with pytest.raises(FAST.FastCheckError) as error:
+        FAST.native_inputs_changed(tmp_path, ("fixture.txt",))
+    assert "fixture-private-output" not in str(error.value)
+
+
+@pytest.mark.parametrize("rename", [False, True])
+def test_removed_or_renamed_native_input_still_requires_preparation(
+    repository: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    rename: bool,
+) -> None:
+    write(repository, ".dockerignore", "synthetic ignored path\n")
+    git(repository, "add", ".dockerignore")
+    git(repository, "commit", "-m", "synthetic native source")
+    (repository / ".dockerignore").unlink()
+    if rename:
+        write(repository, "renamed-fixture.txt", "synthetic ignored path\n")
+    git(repository, "add", "-A")
+    git(repository, "commit", "-m", "remove or rename synthetic native source")
+    receipt = tmp_path.parent / (tmp_path.name + "-removed-native.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["native_inputs_changed"] == [".dockerignore"]
+    if rename:
+        assert data["changed_files"] == ["renamed-fixture.txt"]
+    assert (
+        capsys.readouterr().out.splitlines().count("needs Root prepare-native before staging") == 1
+    )
+
+
+def test_native_prerequisite_is_kept_when_check_planning_is_unavailable(
+    repository: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    changed = "packages/python/ac_platform/conversation_intelligence/signals.py"
+    write(repository, changed, "VALUE = 1\n")
+    git(repository, "add", changed)
+    git(repository, "commit", "-m", "synthetic native Python input")
+    receipt = tmp_path.parent / (tmp_path.name + "-unavailable-native.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 1
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "unavailable"
+    assert data["native_inputs_changed"] == [changed]
+    assert (
+        capsys.readouterr().out.splitlines().count("needs Root prepare-native before staging") == 1
+    )
 
 
 def test_noop_receipt_attests_exact_clean_commit(repository: Path, tmp_path: Path) -> None:
