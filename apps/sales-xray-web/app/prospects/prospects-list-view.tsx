@@ -11,6 +11,7 @@ import { fetchProspectsList, type ProspectSummary } from "../prospects-client";
 import styles from "./prospects.module.css";
 import informationStyles from "../prospect-information.module.css";
 import { PageSkeleton } from "../shell/page-skeleton";
+import { ProspectsAccessState } from "./prospects-access-state";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Not available";
@@ -137,6 +138,23 @@ export function ProspectsListView() {
   const visibleProspects = current && !visibleError ? prospects : [];
   const showLoading = authenticated && (loading || (!current && !visibleError));
 
+  if (!authenticated)
+    return (
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        loading={
+          !access ||
+          access.authenticated === null ||
+          access.status === "loading"
+        }
+        active="prospects"
+      >
+        <div className={styles.root}>
+          <ProspectsAccessState access={access} />
+        </div>
+      </AcquisitionShell>
+    );
+
   return (
     <AcquisitionShell
       authenticated={authenticated}
@@ -220,10 +238,6 @@ export function ProspectsListView() {
             <div aria-busy="true" aria-label="Loading prospects">
               <PageSkeleton variant="list" />
             </div>
-          ) : !authenticated ? (
-            <p className={styles.emptyText}>
-              Choose your signed-in workspace to see prospects.
-            </p>
           ) : visibleError ? (
             <p className={styles.emptyText}>
               Prospects are unavailable. Try again.

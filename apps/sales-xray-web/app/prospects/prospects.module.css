@@ -364,6 +364,16 @@
   cursor: pointer;
 }
 
+.accessAction {
+  margin-top: var(--lx-space-3);
+  text-decoration: none;
+}
+
+.accessAction:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+
 .loadMoreContainer {
   margin-top: var(--lx-space-4);
   text-align: center;

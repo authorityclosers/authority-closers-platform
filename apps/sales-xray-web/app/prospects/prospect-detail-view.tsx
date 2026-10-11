@@ -26,6 +26,7 @@ import styles from "./prospects.module.css";
 import { ProspectInformation } from "../prospect-information";
 import { PageSkeleton } from "../shell/page-skeleton";
 import informationStyles from "../prospect-information.module.css";
+import { ProspectsAccessState } from "./prospects-access-state";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Never";
@@ -153,6 +154,23 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const showLoading =
     authenticated &&
     (loading || (loadedContext !== contextKey && !visibleError));
+
+  if (!authenticated)
+    return (
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        loading={
+          !access ||
+          access.authenticated === null ||
+          access.status === "loading"
+        }
+        active="prospects"
+      >
+        <div className={styles.root}>
+          <ProspectsAccessState access={access} />
+        </div>
+      </AcquisitionShell>
+    );
 
   return (
     <AcquisitionShell

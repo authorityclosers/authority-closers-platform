@@ -120,6 +120,160 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe.each(["list", "profile"] as const)("Prospects %s access", (page) => {
+  const render = (access: WorkspaceAccessValue | null) =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        {page === "list" ? (
+          <ProspectsListView />
+        ) : (
+          <ProspectDetailView prospectId={mockProspectSummary.prospect_id} />
+        )}
+      </WorkspaceAccessContext.Provider>,
+    );
+
+  it("offers sign-in without reading private data and uses the workspace account action", async () => {
+    const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+    const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+    const requestAccountSignIn = vi.fn();
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+        requestAccountSignIn,
+      }),
+    );
+    expect(host.textContent).toContain("Sign in to see your prospects");
+    const link = host.querySelector<HTMLAnchorElement>('a[href="/login"]')!;
+    expect(link.textContent).toBe("Sign in");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => link.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(requestAccountSignIn).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
+    expect(detail).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Search prospects"]')).toBeNull();
+  });
+
+  it("keeps a direct login destination when no workspace sign-in action exists", async () => {
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+      }),
+    );
+    expect(host.querySelector('a[href="/login"]')?.textContent).toBe("Sign in");
+  });
+
+  it.each(["unknown", "loading", "selecting"] as const)(
+    "shows a skeleton during %s access without claiming the visitor is signed out",
+    async (state) => {
+      const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+      const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+      await act(async () =>
+        render(
+          state === "unknown"
+            ? null
+            : {
+                status: state,
+                authenticated: state === "loading" ? null : true,
+                context: null,
+                retry: vi.fn(),
+              },
+        ),
+      );
+      expect(
+        host.querySelector(
+          '[aria-label="Checking prospect access"][aria-busy="true"]',
+        ),
+      ).not.toBeNull();
+      expect(host.textContent).not.toContain("Sign in");
+      expect(host.textContent).not.toContain("unavailable");
+      expect(list).not.toHaveBeenCalled();
+      expect(detail).not.toHaveBeenCalled();
+      await act(async () =>
+        render({
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: vi.fn(),
+        }),
+      );
+      expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+      expect(host.textContent).toContain("Sign in to see your prospects");
+    },
+  );
+
+  it("offers workspace retry on a service failure without showing login or private data", async () => {
+    const retry = vi.fn();
+    const list = vi.spyOn(prospectsClient, "fetchProspectsList");
+    const detail = vi.spyOn(prospectsClient, "fetchProspectDetail");
+    await act(async () =>
+      render({
+        status: "unavailable",
+        authenticated: true,
+        context: null,
+        retry,
+      }),
+    );
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "Workspace access is unavailable.",
+    );
+    expect(host.textContent).not.toContain("Sign in");
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="alert"] button')!.click(),
+    );
+    expect(retry).toHaveBeenCalledOnce();
+    expect(list).not.toHaveBeenCalled();
+    expect(detail).not.toHaveBeenCalled();
+  });
+
+  it("hides a loaded customer immediately on sign-out and cancels its scoped reads", async () => {
+    const list = vi
+      .spyOn(prospectsClient, "fetchProspectsList")
+      .mockResolvedValue({
+        schema: "ac.sales-xray.prospects/1",
+        prospects: [mockProspectSummary],
+        total: 1,
+        stage_filters: [],
+        next_offset: null,
+      });
+    const detail = vi
+      .spyOn(prospectsClient, "fetchProspectDetail")
+      .mockResolvedValue({
+        schema: "ac.sales-xray.prospects/1",
+        prospect: mockProspectSummary,
+        calls: [mockCall],
+        next_offset: null,
+        promises: [],
+        next_steps: [],
+        buyer_intent_history: [],
+      });
+    await act(async () => render(mockAccess));
+    expect(host.textContent).toContain(mockProspectSummary.name);
+    const calls = page === "list" ? list.mock.calls : detail.mock.calls;
+    const signal = calls[0][0]!.signal;
+    await act(async () =>
+      render({
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: vi.fn(),
+      }),
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(host.textContent).not.toContain(mockProspectSummary.name);
+    expect(host.textContent).not.toContain(mockCall.display_name);
+    expect(host.textContent).toContain("Sign in to see your prospects");
+    expect(list.mock.calls.length + detail.mock.calls.length).toBe(1);
+  });
+});
+
 describe("ProspectsListView", () => {
   it("renders empty state when no prospects exist", async () => {
     vi.spyOn(prospectsClient, "fetchProspectsList").mockResolvedValueOnce({
