@@ -1063,14 +1063,35 @@ class OfflineConversationWorker:
             # A fenced/started job is intentionally left to its existing
             # recovery path; this branch never refunds or rewrites run state.
             return True
-        except Exception:
+        except Exception as error:
             # No provider/media exception text enters shared operational logs.
             # A failed local attempt is not a no-charge receipt: leave any
             # dispatched reservation held for explicit reconciliation.
             async with self.sessions() as db, db.begin():
-                await self._job(db, work)
+                job = await self._job(db, work)
+                if job.tenant_id is None:
+                    raise ConversationConflict("The local job has no workspace binding.") from None
                 await JobRepository(db).fail(
                     work.job_id, work.lease_token, "conversation_local_phase_failed"
+                )
+                from ac_platform.audit.service import AuditRepository
+                from ac_platform.conversation_intelligence.local_failure import local_failure_code
+
+                await AuditRepository(db).append(
+                    tenant_id=job.tenant_id,
+                    actor_person_id=None,
+                    actor_type="system",
+                    action="conversation.local_failure_observed",
+                    resource_type="job",
+                    resource_id=job.id,
+                    payload={
+                        "schema": "ac.sales-xray.local-failure/1",
+                        "phase": "local_inspection" if work.kind == LOCAL_JOB else "erasure",
+                        "failure_code": local_failure_code(error),
+                        "attempt_count": job.attempt_count,
+                        "recovery_generation": work.recovery_generation,
+                    },
+                    now=datetime.now(UTC),
                 )
             raise RuntimeError(
                 "The local conversation job failed; see its durable state."
