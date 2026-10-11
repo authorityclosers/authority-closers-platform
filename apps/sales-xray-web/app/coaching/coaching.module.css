@@ -1013,6 +1013,15 @@
   content: "";
 }
 
+/* The timeline's mission bar, named in the legend. */
+.legend [data-mark="mission"]::before {
+  width: 2px;
+  height: 12px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--sx-ink-2);
+}
+
 /* Dipak's mastery journey: Emerging → … → Mastered, the current step bold.
    Each step is at least as wide as its name, so names show whole. */
 .stepper {

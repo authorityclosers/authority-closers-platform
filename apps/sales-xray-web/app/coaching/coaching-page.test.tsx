@@ -559,7 +559,26 @@ describe("Coaching story", () => {
       "Since your mission started: 1 of 1 call on this skill needed no fix. Too early to call it a change.",
     );
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
+    // The legend names the bar, and only when the bar is drawn.
+    expect(html.match(/Mission started</g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");
+    const before = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          progress: [
+            {
+              submission_id: fictionalCoaching.evidence[0].submission_id,
+              created_at: "2026-10-09T10:00:00Z",
+              state: "suggested",
+              after_mission: false,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(before).not.toContain("data-mission-start");
+    expect(before).not.toContain("Mission started<");
   });
   it("leaves the loading frame once access settles: ready reads once, signed out asks to sign in", async () => {
     const loading = {

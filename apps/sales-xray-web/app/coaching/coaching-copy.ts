@@ -315,6 +315,8 @@ export const PROGRESS = {
   calls: "Your calls on this skill, oldest first",
   callsLabel: "Your calls on this skill",
   oldestFirst: "oldest first",
+  /** The legend's name for the thin bar before the first call since then. */
+  missionStart: "Mission started",
   /** One sentence for screen readers instead of a row per dot. */
   summary: (needed: number, used: number, missing: number) =>
     [

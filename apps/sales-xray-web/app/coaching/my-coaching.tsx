@@ -110,6 +110,9 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
             {POINT_COPY[state]}
           </span>
         ))}
+        {firstAfter >= 0 ? (
+          <span data-mark="mission">{PROGRESS.missionStart}</span>
+        ) : null}
       </p>
       <p>
         {after.length
