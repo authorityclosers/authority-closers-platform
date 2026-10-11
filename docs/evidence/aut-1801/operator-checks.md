@@ -104,3 +104,12 @@ canary coaching shape, failed/missing timestamps, immutable staging review
 bindings and QA HTTP failure cases without external calls. Web checks cover
 the touched upload suites, lint, typecheck and production-build screenshots.
 No full local test suite or live replay was run by this operator.
+
+Results: combined focused HTTP/recovery/ledger/smoke/canary/timing/quality
+checks passed 59 tests; the additional whole-batch rollback check passed.
+The final speaker/map/service suites passed 83 tests, and the final
+smoke/canary/quality suites passed 45. After the pinned native executable was
+built, phone media, signals, canary atomicity and fixture checks passed all
+75 without skips. Ruff formatting/lint and strict mypy passed for changed
+Python sources. The frontend CI formatting failure was reproduced and fixed
+in the four already touched upload files; no rendered behavior changed.

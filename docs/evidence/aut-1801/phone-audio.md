@@ -15,9 +15,17 @@ audio. Focused media tests passed (56 passes; 16 numerical native tests
 skipped in that initial unit invocation). Both phone-format PostgreSQL HTTP
 cases passed with the native executable built inside the test fixture.
 They exercise real hosted upload preflight and local processing, with no
-provider calls. The three touched web suites passed: 149 tests.
+provider calls. The three touched web suites passed: 149 tests; the final
+file-stage rerun passed all 11 tests.
 
-ESLint, TypeScript and a production `next build` passed. The temporary
+After building the pinned native executable locally through the heavy slot,
+the phone media, signal, canary atomicity and known-fixture checks passed all
+75 tests without skips. Initial canary atomicity failures disappeared with
+the required executable present; no production code or shared test fixture
+was weakened to make them pass.
+
+ESLint, TypeScript, the final focused Prettier check and a production
+`next build` passed. The temporary
 `next start` browser check uses local fictional sandbox responses and an
 actual selected AMR fixture. It checks phone/desktop widths, light/dark
 theme, visible selection, no page errors and no horizontal overflow.
