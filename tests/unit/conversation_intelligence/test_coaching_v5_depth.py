@@ -270,7 +270,8 @@ def test_v5_prompt_rejects_a_v4_pack_hash_and_unknown_revision_pack() -> None:
             qualitative_pack_sha256=v4_pack.sha256,
         )
     with pytest.raises(ValueError, match="qualitative_pack_revision_unknown"):
-        load_qualitative_pack_for_revision("coaching-v8")
+        # V8 now loads the offline candidate pack; unknown revisions still fail closed.
+        load_qualitative_pack_for_revision("coaching-v999")
 
 
 def test_historical_prompt_bytes_match_the_pinned_1ee_revision() -> None:
