@@ -1,6 +1,44 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Current 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
+Latest targeted shared-dev journeys **10/10 PASS, zero errors/skips**.
+Actual browser execution was 22:39:16–22:40:20 UTC (63.550 s), recorded runner
+source `f5d042b4` → `67e74ea2`; the queued runner started at 22:11:56 UTC.
+Report desktop/dark completes all thirteen observations, Document and Word;
+the earlier Document switch miss did not recur. Independent Document and
+Coaching pass all four 1440/390 light/dark pairs, and phone/dark completes the
+remaining outcome-format case. The previous partial wave's six passing cases
+remain separate, with their earlier source/time boundaries.
+
+All Team and Sandbox total captures check twelve rendered labels/values/notes
+with zero clipping. Latest-call context fits fully in view; twenty Coaching
+observations per pair retain all personal/rep pillars, one spoken forty-call
+summary and the original single My coaching click/pressed/view audit. Runtime,
+server, font, overflow and fixture outcome API errors are zero. Inspected both
+phone themes and both desktop Team contexts, desktop/dark Report Document,
+phone/dark Document skills and rep mission.
+
+One minor visual finding remains with D: the phone/dark rep mission pill's
+“Pre-call cue” touches “Diagnose before prescribing”. Exact screenshot and
+request are in D's INBOX. Automated acceptance therefore retains this finding.
+
+The combined runner's raw receipt remains FAIL because its separate blank-page
+negative control timed out; no fixture failure is concealed. An isolated
+network-free repeat PASS at 22:41:52–22:41:55 UTC rejects the historical long
+note (206 px inside 120 px) and accepts the short note. Its test digest exactly
+matches both browser-run boundaries. The original timeout, interrupted
+launcher 143 and Report switch failure remain on disk. All owned jobs exited.
+
+Current reviewed acceptance: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-continuation/acceptance-receipt.json`.
+Raw JUnit/browser receipt remains adjacent; the control repeat is in
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-clipping-guard-repeat/`.
+This is mutable dev fixture coverage across separate runs. Canonical browser
+reload/compiled CI receipt and authenticated staging QA remain unverified.
+Operator notes now report staging/production v0.40.0 data-load readbacks;
+exact current served core/web + canary and retained approved QA Report/Team
+context have not been supplied to this tester. No staging/production action
+was performed by QA. Next dev wave after 22:54:17 UTC only for new relevant work.
+
+Earlier 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
 pytest completion, cause unconfirmed; no owned descendants remain. Six cases
 pass and desktop/dark Report → Document fails after fourteen recorded refresh
 events. The screenshot stays in Report/Deal after the original single click;
@@ -9,9 +47,9 @@ pass. Three outcome-format pairs pass; the other cases have no completed receipt
 
 The network-free clipping negative control rejects the long historical note
 (206 px inside 120 px) and accepts "60 people". Stronger shared-dev Team
-acceptance remains pending. Ten targeted cases (eight unfinished Document/Coaching
-pairs, unfinished phone/dark format and failed desktop/dark Report) are scheduled
-no earlier than 20:30:26 UTC. The launcher now has its own retained process session;
+acceptance remains pending. The subsequent ten targeted cases covered eight unfinished Document/Coaching
+pairs, unfinished phone/dark format and failed desktop/dark Report. Its planned
+20:30:26 UTC earliest start was delayed in the shared slot. The launcher now has its own retained process session;
 no retry/force/test relaxation, product mutation, deployment or session creation.
 `ff8bda19` safely adds refresh phase/timestamps and the comparable original
 Coaching click timestamp. Ruff check/format, HTTP import, no-server 24 skips and
@@ -19,13 +57,13 @@ owned diff checks pass. Historical green coverage below is not this new wave.
 
 Partial receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-readback/interrupted-receipt.json`.
 
-New Team clipping guard is prepared after D's `4130bb91` phone repair.
+Historical preparation: Team clipping guard followed D's `4130bb91` phone repair.
 It checks all rendered total labels/values/notes and captures the full relocated
 latest-call context. Ruff check/format, required HTTP import, no-server collection
 (24 skips) and owned diff checks pass. Browser execution of this stronger guard
 is pending the next allowed wave, no earlier than 20:15:12 UTC.
 
-Latest bounded dev coverage: **PASS across two runs**. Report, Document, Word
+Previous bounded dev coverage: **PASS across two runs**. Report, Document, Word
 and outcome formats pass twelve cases at `2be67628` → `b24a23ec`
 (19:45:10–19:49:04 UTC). The newer Coaching repeat passes all four screen/theme
 pairs at `82e7a86d` → `a38bda24` (20:00:11–20:00:39 UTC), nineteen observations
