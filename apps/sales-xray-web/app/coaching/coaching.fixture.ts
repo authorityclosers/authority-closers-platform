@@ -193,6 +193,8 @@ export const fictionalClip: CoachingClip = {
   entitlement_policy: "AUT-1678-open-access",
   start_ms: 1000,
   end_ms: 5000,
+  preview_end_ms: null,
+  offer: null,
   reason: "This fictional reviewed cut shows one consequence question.",
   takeaways: ["Check the buyer’s consequence."],
   transcript_excerpt: "समस्या का असर क्या है?",

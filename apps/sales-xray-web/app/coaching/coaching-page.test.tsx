@@ -100,7 +100,8 @@ describe("Coaching story", () => {
     expect(html).toContain("One focus for this call");
     expect(html).toContain("Why this is the focus for this call");
     expect(html).toContain("Here’s What Better Looks Like");
-    expect(html).toContain("Your next-call mission");
+    expect(html).toContain("Try This on Your Next Call");
+    expect(html.match(/Active mission/g)).toHaveLength(1);
     expect(html).not.toContain("Not Enough Evidence");
     expect(html).not.toContain("Compare one more evidence moment");
     expect(html).not.toContain("<audio");

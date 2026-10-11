@@ -11,10 +11,12 @@ describe("anonymous Team coaching", () => {
     const html = renderToStaticMarkup(
       <TeamCoachingStory coaching={fictionalTeamCoaching} />,
     );
-    expect(html).toContain("3 retained analysed calls");
-    expect(html).toContain("2 calls have a source-linked report suggestion");
+    expect(html).toContain("Analysed calls");
+    expect(html).toContain("2 of 3 calls");
+    expect(html).toContain("67%");
     expect(html).toContain("Private by default");
-    expect(html).toContain("revocable share");
+    expect(html).toContain("Named coaching appears when a rep shares it");
+    expect(html).toContain("stop sharing at any time");
     expect(html).not.toContain("/analysis/calls/");
     expect(html).not.toContain("Play evidence");
     expect(html).not.toContain("<audio");

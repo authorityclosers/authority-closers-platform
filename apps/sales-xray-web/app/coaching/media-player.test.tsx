@@ -94,4 +94,78 @@ describe("reviewed placeholder clips", () => {
     expect(button("Pause")).toBeUndefined();
     expect(audio.pause).toHaveBeenCalled();
   });
+  it("stops a preview where the server said and opens the full-coaching offer", async () => {
+    const [clip] = parseClips([
+      {
+        ...fictionalClip,
+        access: "preview",
+        entitlement_policy: "future-preview-plan",
+        preview_end_ms: 3000,
+        offer: {
+          full_coaching_href: "/plans",
+          academy: {
+            href: "https://learn.authorityclosers.com/courses/impact",
+            label: "Impact before solution",
+          },
+        },
+      },
+    ]);
+    expect(clip.preview_end_ms).toBe(3000);
+    await act(async () => root.render(<CoachingMedia clips={[clip]} />));
+    expect(host.textContent).toContain("Free preview · 0:02");
+    expect(host.textContent).not.toContain("Get the full coaching");
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    audio.currentTime = 3;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.pause).toHaveBeenCalled();
+    expect(host.textContent).toContain("That’s the free preview");
+    const links = [...host.querySelectorAll<HTMLAnchorElement>("a")];
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "/plans",
+      "https://learn.authorityclosers.com/courses/impact",
+    ]);
+    expect(button("Preview finished").disabled).toBe(true);
+  });
+  it("shows a locked clip's offer without loading audio or its transcript", async () => {
+    const [clip] = parseClips([
+      {
+        ...fictionalClip,
+        access: "locked",
+        entitlement_policy: "future-preview-plan",
+        offer: {
+          full_coaching_href: "https://pay.example.test/checkout",
+          academy: { href: "https://evil.example.test/", label: "Course" },
+        },
+      },
+    ]);
+    await act(async () => root.render(<CoachingMedia clips={[clip]} />));
+    expect(host.textContent).toContain("Part of Dipak’s full coaching");
+    expect(host.textContent).not.toContain(fictionalClip.transcript_excerpt);
+    // Unsafe destinations fall back to the app's own offer; no foreign link.
+    expect(
+      [...host.querySelectorAll<HTMLAnchorElement>("a")].map((a) =>
+        a.getAttribute("href"),
+      ),
+    ).toEqual(["/plans"]);
+    await act(async () => button("Locked coaching clip").click());
+    expect(host.querySelector("audio")).toBeNull();
+  });
+  it("never accepts a full clip outside the open Coaching policy or a bad preview", () => {
+    expect(
+      parseClips([{ ...fictionalClip, entitlement_policy: "paid-plan" }]),
+    ).toEqual([]);
+    for (const preview_end_ms of [undefined, 1000, 5000, 9000, 2.5])
+      expect(
+        parseClips([
+          {
+            ...fictionalClip,
+            access: "preview",
+            entitlement_policy: "plan",
+            preview_end_ms,
+          },
+        ]),
+      ).toEqual([]);
+  });
 });

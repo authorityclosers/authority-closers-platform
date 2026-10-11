@@ -55,6 +55,14 @@ export type TextLesson = {
   own_call: Evidence;
   next_call_connection: string;
 };
+/** One of the learner's own calls, linking to that call's coaching. */
+export type CallSummary = {
+  submission_id: string;
+  call_label: string;
+  created_at: string;
+  state: "ready" | "pending" | "unavailable";
+  focus_label: string | null;
+};
 export type Coaching = {
   schema: "ac.sales-xray.coaching/1";
   person_id: string;
@@ -104,6 +112,7 @@ export type Coaching = {
   regression: { state: string; action: string };
   lesson: TextLesson | null;
   media_clips?: CoachingClip[];
+  calls?: CallSummary[];
   development_path: {
     current: string | null;
     likely_next: string | null;
@@ -278,7 +287,45 @@ export function parseCoaching(value: unknown): Coaching {
   // Catalogue access/review is pending. Never expose an unparsed media URL.
   if (item.recommended_media !== null || item.other_format !== null)
     return invalid();
-  return { ...item, media_clips: parseClips(item.media_clips) } as Coaching;
+  return {
+    ...item,
+    media_clips: parseClips(item.media_clips),
+    calls: parseCallSummaries(item.calls),
+  } as Coaching;
+}
+
+/** Optional list: a malformed row is dropped, never fatal to the page. */
+export function parseCallSummaries(value: unknown): CallSummary[] {
+  if (!Array.isArray(value)) return [];
+  const rows: CallSummary[] = [];
+  const seen = new Set<string>();
+  for (const raw of value.slice(0, 40)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    const id = typeof row.submission_id === "string" ? row.submission_id : "";
+    if (
+      !UUID_RE.test(id) ||
+      seen.has(id) ||
+      typeof row.call_label !== "string" ||
+      !row.call_label.trim() ||
+      typeof row.created_at !== "string" ||
+      !Number.isFinite(Date.parse(row.created_at)) ||
+      !["ready", "pending", "unavailable"].includes(String(row.state))
+    )
+      continue;
+    seen.add(id);
+    rows.push({
+      submission_id: id,
+      call_label: row.call_label,
+      created_at: row.created_at,
+      state: row.state as CallSummary["state"],
+      focus_label:
+        typeof row.focus_label === "string" && row.focus_label.trim()
+          ? row.focus_label
+          : null,
+    });
+  }
+  return rows;
 }
 
 export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
