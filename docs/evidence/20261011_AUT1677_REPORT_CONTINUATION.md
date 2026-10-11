@@ -55,8 +55,8 @@ All paths below are under
 | `continuation-map-palette/receipt.json` | 4/4, 1440/390 px, both themes, 23:08:36–23:09:08 UTC | `67992169` → `67992169` | `509eea75bed42fb6efd7f7d6af24a31726892523e6f6cdd09beb22de3f866abe` |
 
 Both finite launchers exited 0. Every case has zero page errors, zero horizontal
-overflow and zero outcome API requests. Ordinary shell API reads are recorded
-and are not represented as zero requests. Fast Refresh events and mutable Git
+overflow and zero outcome API requests. Shell API traffic is counted separately
+and is not represented as zero requests. Fast Refresh events and mutable Git
 boundaries remain in the receipts.
 
 The functional matrix repeats the actual single interaction after a Deal
@@ -101,6 +101,52 @@ owns release/version/staging/production operations.
 
 Dev preview: `http://127.0.0.1:3026/review-fixture/report/story`.
 Current Report continuation: **verified on dev; not shipped by this builder**.
-The remaining copy consolidation is the existing three guest prompts, requested
-from the copy owner in 1798 INBOX at 23:14 UTC; rendered wording and sign-in
-behaviour are to remain unchanged.
+
+## Guest-copy follow-up
+
+G supplied the exact existing guest prompts in `defe554c`, with
+[copy-module evidence](20261011_AUT1798_REPORT_GUEST_COPY.md).
+`4e847e7c` makes the owned `report-sections/shared.tsx` import/re-export that
+`GUEST` object and removes its duplicate declaration. The old and new object
+declarations match byte-for-byte, including count, singular/plural agreement
+and both account/sign-in labels. Existing callers keep the same export.
+
+Incremental Sales Xray TypeScript, cached touched-file ESLint and owned-path
+whitespace checks pass. The existing pillar-screen suite passes 8/8, including
+hidden counts, singular/plural prompts, the original sign-in action and absence
+of guest Coaching/Prospect buttons. The opt-in retained-report check passes 1/1:
+13 saved reports, 13 account and 13 guest projections, 156 rendered pillars,
+26 valid Word files, zero failures and zero provider calls. Three missing
+baseline reports remain reported as missing. These are model/rendered reader
+checks and do not claim a signed-out deployed persistence journey.
+
+Actual Vitest JSON: `/home/acdev/strikes/1677/guest-copy-validation-20261011.json`.
+Source/check pins: `/home/acdev/strikes/1677/guest-copy-source-pins-20261011.json`.
+No new test assertions replace the original guest acceptance.
+
+After the ordinary post-commit warm-up, the populated account-shell smoke
+passes **4/4**, 1440/390 px in both themes, 23:23:03–23:23:15 UTC. All four
+cases have zero page errors, sideways overflow and outcome requests. Existing
+shell API traffic is eight requests per case, retained without a zero-traffic
+claim. Phone Report/Coaching controls remain 44 px with a 6 px gap. All four
+saved screenshots were visually inspected; the finite launcher exited 0.
+
+Receipt/screenshots:
+`/home/acdev/strikes/1677/shots/2026-10-11/guest-copy-shared/`.
+`receipt.json` SHA-256:
+`ec75bdbb1b6e71125fe161cefa54c10b3e59518ea51616a3e112e60e49233afd`.
+Sampled source HEAD stayed `84b2c876` during the smoke; `source-pins.json`
+records unchanged owned copy/reader bytes and all four screenshot hashes.
+The smoke exercises the account shell. Guest hidden-count/sign-in agreement
+comes from the separate original rendered test and offline projections above.
+
+| Input | SHA-256 |
+| --- | --- |
+| Actual focused Vitest JSON | `c1b12fa5924a37ef6d49044fafe1fae43f1e8f902a92aa7bcc1231dd17eb9675` |
+| G's committed `report-copy.ts` | `549ab86125297423c59a2053c61012bc170ea9db42571205205cd5060d817f63` |
+| B's committed `report-sections/shared.tsx` | `befb261c50f0b6012c46e16c197c7a3e0a0f1eb09409bc9f0c1855e4b9e90b41` |
+
+All owned implementation files are committed, and no unblocked source item
+remains in this Report continuation. Independent deployed persistence,
+future v8 admission and release/production completion keep their existing
+owners; this evidence closes no such criterion.
