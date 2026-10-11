@@ -496,7 +496,7 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
         expect(deal_badge).to_be_visible()
         expect(deal_badge).to_have_text(status)
         _switch_report_view(page, "Document view")
-        outcome = _document_preview(page).locator('[data-report-mode-section="overview"]')
+        outcome = _document_preview(page).locator('[data-document-section="overview"]')
         expect(outcome.get_by_text(status, exact=True)).to_be_visible()
         expect(outcome).to_contain_text("Set by your team")
         if detail:
@@ -524,7 +524,7 @@ def _recorded_outcome_reload(journey: Journey) -> None:
     _switch_report_view(page, "Document view")
     expect(
         _document_preview(page)
-        .locator('[data-report-mode-section="overview"]')
+        .locator('[data-document-section="overview"]')
         .get_by_text("Won", exact=True)
     ).to_be_visible()
     _word_call_outcome(page, "Won", None)

@@ -43,6 +43,18 @@ guardian forwards cancellation/caller death and has no time limit itself. The
 next bounded run uses the recommended background launch through the same heavy
 slot. Earlier host-cleanup requests are superseded; no host change is requested.
 
+The 18:33:00–18:33:59 UTC fixture repeat finishes normally (exit 1, no 143),
+source `f1826087` → `1b1cbf8b`. All four cases show human Won in Big Picture and
+Deal, then fail at QA's Document selector: `data-report-mode-section=overview`
+marks the sheet header, while the actual section is
+`data-document-section=overview`. Both format and optional canonical helpers
+are corrected to the actual section. Inspected desktop/light Document shows
+Won with human attribution in 6.1; this is a test locator defect, not a missing
+product outcome. No runtime/server/visual errors or outcome API requests.
+Phone/dark has two refresh notices, the other pairs zero. Full four-choice
+format agreement remains **UNVERIFIED** until the corrected repeat completes.
+Receipt: `shots/2026-10-11-workbench-outcome-format-repeat/receipt.json`.
+
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
 The five HTTP/PostgreSQL modules pass **20 focused cases** after fixture repairs;
