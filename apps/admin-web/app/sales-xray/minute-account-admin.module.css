@@ -1,10 +1,13 @@
+/* Minutes on the console look (AUT-1798). Tokens only; class names
+   unchanged so the grant flow's logic and tests stay as they were. */
+
 .panel {
   display: grid;
-  gap: 18px;
-  max-width: 1120px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
 
 .header,
@@ -15,16 +18,13 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
 .header h2,
 .subheading h3 {
-  margin: 4px 0 0;
-}
-
-.header h2 {
-  font-size: 15px;
+  margin: 2px 0 0;
+  font: var(--sx-text-panel);
 }
 
 .header p,
@@ -33,193 +33,206 @@
 .success p,
 .error p,
 .warningBox p {
-  margin: 5px 0 0;
-  color: var(--muted);
-  line-height: 1.55;
+  margin: 4px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+}
+
+.notice p,
+.success p,
+.error p,
+.warningBox p {
+  margin: 0;
+  color: var(--sx-ink-2);
 }
 
 .eyebrow {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
+
+/* ---------- Lookup ---------- */
 
 .lookup {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   align-items: end;
-  gap: 10px 14px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-}
-
-.lookup button {
-  min-height: 44px;
+  gap: 8px 12px;
 }
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  color: var(--text);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
 }
 
 .field input,
 .field textarea {
   width: 100%;
-  min-height: 44px;
-  padding: 9px 10px;
-  border: 1px solid var(--line-strong);
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
-  background: var(--input);
-  color: var(--text);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
   font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 400;
 }
 
 .field textarea {
-  min-height: 92px;
+  min-height: 80px;
+  padding: 8px 10px;
   resize: vertical;
 }
 
 .field input:focus,
 .field textarea:focus {
-  border-color: var(--focus);
+  border-color: var(--sx-accent);
+  outline: 2px solid var(--sx-accent-soft);
+  outline-offset: 0;
 }
 
 .field input:disabled,
 .field textarea:disabled {
   cursor: not-allowed;
-  opacity: 0.75;
+  opacity: 0.7;
 }
 
 .helper {
   grid-column: 1 / -1;
   margin: 0;
-  color: var(--quiet);
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
+
+/* ---------- Notes: small, never red banners ---------- */
 
 .notice,
 .success,
 .error,
 .warningBox {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 13px 15px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel-raised);
-}
-
-.notice {
-  border-color: color-mix(in srgb, var(--signal) 36%, var(--line));
-  background: var(--accent-soft);
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+  font-size: var(--sx-text-sm);
 }
 
 .success {
-  border-color: var(--info);
+  border-color: color-mix(in oklab, var(--sx-good) 35%, var(--sx-line));
+  background: color-mix(in oklab, var(--sx-good) 8%, var(--sx-surface));
 }
 
 .error,
 .warningBox {
-  border-color: var(--danger);
+  border-color: color-mix(in oklab, var(--sx-warn) 35%, var(--sx-line));
+  background: color-mix(in oklab, var(--sx-warn) 8%, var(--sx-surface));
 }
 
-.error p,
-.warningBox p {
-  color: var(--text);
+.warning {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
 }
+
+/* ---------- Account ---------- */
 
 .account {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .subsection {
   display: grid;
-  gap: 15px;
-  padding: 17px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-}
-
-.subheading {
-  align-items: flex-start;
-}
-
-.subheading h3 {
-  font-size: 15px;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
 }
 
 .subheading p {
-  font-size: var(--sx-text-sm);
   overflow-wrap: anywhere;
 }
 
 .revision {
-  flex: 0 0 auto;
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
+  flex: none;
+  height: var(--sx-badge-h);
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: var(--sx-badge-h);
+  white-space: nowrap;
 }
 
 .balanceGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
 }
 
 .balanceCard {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 13px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  padding: 12px 14px;
+  border-left: 1px solid var(--sx-line);
+}
+
+.balanceCard:first-child {
+  border-left: 0;
 }
 
 .balanceCard > span {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .balanceCard strong {
-  font-size: 15px;
   overflow-wrap: anywhere;
+  font: var(--sx-text-kpi);
+  font-variant-numeric: tabular-nums;
 }
 
 .balanceCard small,
 .uploadBalance small,
 .history small {
-  color: var(--quiet);
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   line-height: 1.45;
 }
 
 .uploadBalance {
-  align-items: center;
   flex-wrap: wrap;
-  padding: 12px 13px;
-  border: 1px solid var(--line);
+  align-items: baseline;
+  justify-content: flex-start;
+  font-size: var(--sx-text-sm);
+}
+
+.uploadBalance strong {
+  font-weight: 600;
 }
 
 .uploadBalance span {
-  color: var(--text);
-  font-weight: 700;
+  color: var(--sx-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .uploadBalance small {
@@ -229,53 +242,55 @@
 .grantFields {
   display: grid;
   grid-template-columns: minmax(130px, 0.4fr) minmax(220px, 1fr);
-  gap: 13px;
+  align-items: start;
+  gap: 12px;
 }
 
 .actions {
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: wrap;
 }
 
-.actions button {
-  min-height: 44px;
-}
-
-.warning {
-  color: var(--danger);
-  font-size: var(--sx-text-xs);
-  line-height: 1.45;
-}
+/* ---------- History ---------- */
 
 .history {
   display: grid;
-  gap: 9px;
   margin: 0;
   padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
   list-style: none;
 }
 
 .history li {
   display: grid;
-  gap: 5px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
+  gap: 2px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.history li:first-child {
+  border-top: 0;
 }
 
 .history li > div {
   align-items: baseline;
 }
 
+.history li > div strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .history li > div span {
-  color: var(--quiet);
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   text-align: right;
 }
 
 .history p {
   margin: 0;
-  color: var(--muted);
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -283,22 +298,34 @@
 
 .empty {
   margin: 0;
-  padding: 13px;
-  border: 1px dashed var(--line-strong);
-  color: var(--muted);
+  padding: 12px 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
 @media (max-width: 760px) {
   .balanceGrid {
     grid-template-columns: 1fr;
   }
+
+  .balanceCard {
+    border-top: 1px solid var(--sx-line);
+    border-left: 0;
+  }
+
+  .balanceCard:first-child {
+    border-top: 0;
+  }
+
+  .field input,
+  .field textarea {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 560px) {
-  .panel {
-    padding: 14px;
-  }
-
   .lookup,
   .grantFields {
     grid-template-columns: 1fr;
@@ -313,6 +340,7 @@
   }
 
   .revision {
+    justify-self: start;
     order: -1;
   }
 
