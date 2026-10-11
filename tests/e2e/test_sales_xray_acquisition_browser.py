@@ -952,8 +952,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         flat = re.sub(r"\s+", " ", text)
                         begin = flat.find(start)
                         assert begin >= 0, start
-                        stop = flat.find(end, begin)
-                        return flat[begin : stop if stop > begin else None]
+                        stop = flat.find(end, begin + len(start))
+                        assert stop > begin, end
+                        return flat[begin:stop]
 
                     # 1.1 on screen: the person's status first, then who set it.
                     report_picture = re.sub(r"\s+", " ", await picture.inner_text())
