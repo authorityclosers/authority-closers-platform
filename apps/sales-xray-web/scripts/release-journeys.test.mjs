@@ -14,6 +14,7 @@ describe("release journeys (AUT-1663, owner 11 Oct 03:30 IST)", () => {
     expect(Object.keys(JOURNEYS)).toEqual([
       "sign-in",
       "calls",
+      "report",
       "new-analysis",
       "coaching",
       "settings",

@@ -16,6 +16,7 @@
 //   node apps/sales-xray-web/scripts/release-journeys.mjs \
 //     --origin http://127.0.0.1:3016 --out "$RUNNER_TEMP/journeys" \
 //     [--only sign-in,calls] [--repeat 50]
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +41,62 @@ export const VARIANTS = [
 const SNAG =
   /This screen hit a snag|Application error: a client-side exception/;
 const ACQ = "/v1/conversation/acquisition";
+
+/**
+ * A saved call with a ready report, built like tests/acquisition-fixture.ts
+ * from the invented Dipak overview (transcript + report): what the report
+ * preload reads for /analysis/calls/<id>.
+ */
+export const REPORT_CALL = "7b6443d3-9b2d-4f97-9e70-5e82e54f8738";
+function savedReport() {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL("../tests/fixtures/dipak-overview.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const recordingId = "fd4b05b1-bfc9-4d28-a379-f3d032faf7af";
+  const {
+    source_sha256,
+    transcript_revision,
+    source_label,
+    review_status,
+    report_sections: _sections,
+    ...content
+  } = fixture.report;
+  const base = `${ACQ}/submissions/${REPORT_CALL}`;
+  return {
+    [base]: {
+      submission_id: REPORT_CALL,
+      recording_id: recordingId,
+      source_sha256,
+      state: "report_ready",
+      local_state: "completed",
+      has_report: true,
+      automatic_progression: false,
+      stages: [],
+    },
+    [`${base}/transcript`]: fixture.transcript,
+    [`${base}/report`]: {
+      schema: "ac.sales-xray.report-envelope/2",
+      submission_id: REPORT_CALL,
+      recording_id: recordingId,
+      run_id: "02de89cf-8e5e-4bde-8eb6-c8fcd79ed4de",
+      source_sha256,
+      transcript_revision,
+      source_label,
+      report: {
+        schema: "ac.sales-xray.report-access/2",
+        access: "guest_preview",
+        review_status,
+        numeric_publication: false,
+        content: { ...content, next_action: content.improvements[0] },
+        sections: [],
+        unlock: null,
+      },
+    },
+  };
+}
 
 /** Who the page-matrix owner is (page-matrix-fixtures.mjs). */
 const OWNER_SCOPE = {
@@ -72,6 +129,7 @@ export function journeyApi({ signedIn = true, failing = [] } = {}) {
       retention_days: 30,
     },
     [`${ACQ}/availability`]: { paused: false },
+    ...savedReport(),
     // Coaching (Strike D): its own invented contract fixtures, for the
     // page-matrix owner in the page-matrix organisation.
     "/v1/me/coaching": { ...fictionalCoaching, ...OWNER_SCOPE },
@@ -132,9 +190,20 @@ async function settled(page) {
     .catch(() => {});
 }
 
-async function noSnag(page, step) {
+/** Run one step; a failure names the step. */
+async function step(name, body) {
+  try {
+    return await body();
+  } catch (error) {
+    throw new Error(
+      `${name}: ${String(error.message ?? error).split("\n")[0]}`,
+    );
+  }
+}
+
+async function noSnag(page, where) {
   const text = await page.locator("body").innerText({ timeout: 5_000 });
-  if (SNAG.test(text)) throw new Error(`${step}: the error screen showed`);
+  if (SNAG.test(text)) throw new Error(`${where}: the error screen showed`);
 }
 
 /** The journeys: each gets a fresh page signed in (or not) at one variant. */
@@ -205,6 +274,57 @@ export const JOURNEYS = {
     });
     await settled(page);
     await noSnag(page, "the call");
+  },
+
+  async report(page, { origin }) {
+    await page.goto(`${origin}/analysis/calls/${REPORT_CALL}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await settled(page);
+    await step("the report's Overview", () =>
+      page
+        .getByRole("heading", { name: "Overview" })
+        .waitFor({ timeout: 15_000 }),
+    );
+    await noSnag(page, "the saved report");
+    // The fixture has no prospect service: its corner card says so; close it
+    // so it does not cover the page on a phone.
+    const dismiss = page.getByRole("button", { name: "Dismiss" });
+    if (await dismiss.count()) await dismiss.first().click();
+    // The chart's three views (phones show "Stages" and "Talk share"; their
+    // names then read "StagesCall stages": matched by the shared word).
+    for (const view of [/stages/i, /Talk share/, /Who talked/]) {
+      await step(`the chart view ${view.source}`, () =>
+        page
+          .getByRole("group", { name: "What the map shows" })
+          .getByRole("button", { name: view })
+          .filter({ visible: true })
+          .first()
+          .click(),
+      );
+      await noSnag(page, `the report's ${view.source}`);
+    }
+    // A section of "Explore the call" (the report's own navigation then
+    // takes over; its full walk belongs with the report's owners, Strike B).
+    await step("the Moments section", () =>
+      page
+        .locator("main button", { hasText: /^Moments/ })
+        .first()
+        .click(),
+    );
+    await noSnag(page, "the report's Moments");
+    // The transcript reader opens and closes.
+    await step("the transcript reader", async () => {
+      await page
+        .getByRole("button", { name: "Open transcript reader" })
+        .click();
+      await page
+        .locator("dialog[open], [role='dialog']")
+        .first()
+        .waitFor({ timeout: 5_000 });
+    });
+    await page.keyboard.press("Escape");
+    await noSnag(page, "the transcript reader");
   },
 
   async "new-analysis"(page, { origin }) {
@@ -474,8 +594,13 @@ async function run({ browser, origin, output, only, times }) {
     try {
       await body(page);
       if (errors.length) problem = `page error: ${errors[0]}`;
+      // The report asks the prospect service to read the call (Strike B).
       const unexpected = api.state.writes.filter(
-        (write) => !write.startsWith("POST /v1/updates/seen"),
+        (write) =>
+          !write.startsWith("POST /v1/updates/seen") &&
+          !/^POST \/v1\/conversation\/prospects\/calls\/[0-9a-f-]+\/detect$/.test(
+            write,
+          ),
       );
       if (!problem && unexpected.length)
         problem = `unexpected writes: ${unexpected.slice(0, 3).join(", ")}`;
