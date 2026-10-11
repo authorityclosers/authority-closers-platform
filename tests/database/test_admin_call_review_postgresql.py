@@ -98,7 +98,9 @@ def test_queue_call_and_bundle_show_one_analysed_call(review_case: ReviewCase) -
         async with case.sessions() as database:
             audits = (
                 await database.scalars(
-                    select(AuditEvent).where(AuditEvent.action == "conversation.admin_call_review_view")
+                    select(AuditEvent).where(
+                        AuditEvent.action == "conversation.admin_call_review_view"
+                    )
                 )
             ).all()
             assert any(event.actor_person_id == case.admin_actor.person_id for event in audits)
