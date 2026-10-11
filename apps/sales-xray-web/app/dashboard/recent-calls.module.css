@@ -230,6 +230,21 @@
   .length {
     display: none;
   }
+
+  /* A phone row gives the name two lines instead of cutting it. */
+  .row {
+    height: auto;
+    min-height: var(--row);
+    padding-block: 6px;
+  }
+
+  .name {
+    display: -webkit-box;
+    line-height: 1.35;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

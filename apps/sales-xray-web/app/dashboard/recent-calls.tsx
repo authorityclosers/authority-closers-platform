@@ -131,6 +131,7 @@ export function RecentCallsList({
                 <span
                   className={styles.name}
                   data-untitled={name ? undefined : ""}
+                  title={name ?? undefined}
                 >
                   {name ?? unnamedCallName(call.createdAt)}
                 </span>
