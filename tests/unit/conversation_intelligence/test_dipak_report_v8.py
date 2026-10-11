@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.coaching_validation_gate import (
     coaching_revision_runtime_block,
 )
 from ac_platform.conversation_intelligence.dipak_report import (
+    COACHING_PROMPT_V8_INSTRUCTION,
     REPORT_SECTION_FIELDS,
     project_pillars,
 )
@@ -424,6 +425,18 @@ def test_prompt_is_one_sales_story_not_a_second_copy_of_old_sections(case):
 
 def test_candidate_keeps_existing_sval_gate():
     assert "AC-SVAL-01 Gate 2" in coaching_revision_runtime_block("coaching-v8")
+
+
+def test_plain_sales_voice_does_not_use_analyst_words_as_advice():
+    instruction = COACHING_PROMPT_V8_INSTRUCTION
+    assert "VOICE (Dipak's plain sales language)" in instruction
+    before, rest = instruction.split("Never use: ", 1)
+    banned, after = rest.split(". No praise adjectives", 1)
+    for word in banned.split(", "):
+        assert word not in before
+        assert word not in after
+    assert "no confirmed first name is supplied" in instruction
+    assert "preserve uncertainty the speaker expressed" in instruction
 
 
 @pytest.mark.asyncio
