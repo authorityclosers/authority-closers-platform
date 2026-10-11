@@ -40,6 +40,7 @@ jobs:
           uv run --frozen pytest
           tests/infra/test_migration_schema_gate.py
           tests/infra/test_postgres_schema_export.py
+          tests/infra/test_migration_schema_publication.py
       - name: Detect migration scope
         id: scope
         run: |
