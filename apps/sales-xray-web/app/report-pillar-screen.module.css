@@ -164,11 +164,26 @@
   margin-top: 20px;
   font-size: 14px;
 }
+.previewControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.previewControls button {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--lx-ink);
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 8px;
+  font: inherit;
+}
 .pillar :focus-visible {
   outline: 2px solid var(--lx-teal);
   outline-offset: 3px;
 }
 @media (max-width: 480px) {
+  .previewControls button,
   .sources summary,
   .destination,
   .skill summary {

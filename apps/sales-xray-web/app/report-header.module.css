@@ -1,0 +1,5 @@
+/* The pinned title row is solid, so the Report never shows through it.
+   At rest it matches the page, so nothing looks different. */
+.pinned {
+  background: var(--lx-paper);
+}

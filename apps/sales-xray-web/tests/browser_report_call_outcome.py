@@ -11,14 +11,26 @@ BASE = os.environ["SALES_XRAY_BASE_URL"].rstrip("/")
 OUT = Path(os.environ["SALES_XRAY_UX_EVIDENCE_DIR"])
 
 
+def check_corner_card(notice, width):
+    bounds = notice.bounding_box()
+    assert bounds and bounds["x"] >= 15 and bounds["x"] + bounds["width"] <= width - 15
+    assert notice.get_by_role("button", name="Reload", exact=True).evaluate(
+        "el => { const range = document.createRange(); range.selectNodeContents(el); "
+        "return range.getClientRects().length === 1; }"
+    )
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    errors, outside, proof = [], [], []
+    errors, outside, unexpected, proof = [], [], [], []
     with sync_playwright() as runtime:
         browser = runtime.chromium.launch(headless=True)
         for width, height in [(390, 844), (1440, 900)]:
             page = browser.new_page(
-                viewport={"width": width, "height": height}, reduced_motion="reduce"
+                viewport={"width": width, "height": height},
+                reduced_motion="reduce",
+                is_mobile=width == 390,
+                has_touch=width == 390,
             )
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -28,7 +40,9 @@ def main():
                     outside.append(address.netloc)
                     route.abort()
                 elif address.path.startswith("/v1/"):
-                    route.fulfill(status=401, json={"detail": "Fictional preview only."})
+                    # No outcome API is mounted or forwarded by this fictional fixture.
+                    unexpected.append({"path": address.path, "method": route.request.method})
+                    route.abort()
                 else:
                     route.continue_()
 
@@ -40,9 +54,26 @@ def main():
             editor.get_by_role("button", name="Save outcome").click()
             notice = editor.get_by_role("alert")
             expect(notice).to_contain_text("Add a reason for Lost")
-            editor.get_by_label("Reason for Lost").fill("Chose a different option.")
+            editor.get_by_label("Reason for Lost").fill("दूसरा विकल्प चुना।")
             editor.get_by_role("button", name="Save outcome").click()
-            expect(notice).to_contain_text("Your outcome wasn't saved")
+            expect(notice).to_contain_text("Your outcome couldn't be confirmed")
+            expect(editor.locator("strong + span")).to_have_text("Unconfirmed")
+            expect(editor.get_by_role("button", name="Won", exact=True)).to_be_disabled()
+            expect(editor.get_by_role("button", name="Follow-up", exact=True)).to_be_disabled()
+            expect(editor.get_by_label("Reason for Lost")).to_be_disabled()
+            expect(editor.get_by_label("Reason for Lost")).to_have_value("दूसरा विकल्प चुना।")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+            for theme in ["light", "dark"]:
+                page.locator("html").evaluate(
+                    "(el, theme) => el.setAttribute('data-theme', theme)", theme
+                )
+                check_corner_card(notice, width)
+                page.screenshot(path=str(OUT / f"outcome-lost-unconfirmed-{width}-{theme}.png"))
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                editor.get_by_role("button", name="Reload", exact=True).click()
+            assert navigation.value.status == 200
+            expect(editor.locator("strong + span")).to_have_text("Unrecorded")
+            expect(editor.get_by_role("button", name="Follow-up", exact=True)).to_be_enabled()
             editor.get_by_role("button", name="Follow-up", exact=True).click()
             date = editor.get_by_label("Follow-up date")
             expect(date).to_have_value("")
@@ -53,10 +84,14 @@ def main():
             expect(currency).to_have_value("")
             currency.fill("INR")
             editor.get_by_role("button", name="Save outcome").click()
-            expect(notice).to_contain_text("Your outcome wasn't saved")
-            expect(editor.locator("strong + span")).to_have_text("Unrecorded")
-            editor.get_by_role("button", name="Try again").click()
-            expect(notice).to_contain_text("Your outcome wasn't saved")
+            expect(notice).to_contain_text("Your outcome couldn't be confirmed")
+            expect(editor.locator("strong + span")).to_have_text("Unconfirmed")
+            expect(date).to_have_value("2026-10-12")
+            expect(editor.get_by_label("Deal amount")).to_have_value("123.0000")
+            expect(currency).to_have_value("INR")
+            expect(date).to_be_disabled()
+            expect(editor.get_by_role("button", name="Save outcome")).to_be_disabled()
+            expect(editor.get_by_role("button", name="Reload", exact=True)).to_be_enabled()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             if width == 390:
                 assert editor.locator("button, input").evaluate_all(
@@ -66,19 +101,26 @@ def main():
                 page.locator("html").evaluate(
                     "(el, theme) => el.setAttribute('data-theme', theme)", theme
                 )
-                page.screenshot(path=str(OUT / f"outcome-{width}-{theme}.png"))
+                check_corner_card(notice, width)
+                page.screenshot(
+                    path=str(OUT / f"outcome-follow-up-unconfirmed-{width}-{theme}.png")
+                )
             proof.append(
                 {
                     "width": width,
                     "human_reason_and_date": True,
                     "explicit_value": True,
-                    "honest_failed_retry": True,
+                    "unconfirmed_write_disabled": True,
+                    "explicit_reload_before_next_write": True,
+                    "filled_human_values_retained": True,
+                    "corner_insets_and_single_line_reload": True,
                 }
             )
             page.close()
         browser.close()
     assert not errors, errors
     assert not outside, outside
+    assert not unexpected, unexpected
     (OUT / "browser-proof.json").write_text(json.dumps(proof))
     print(json.dumps(proof))
 

@@ -72,6 +72,131 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it("resolves every populated legacy reference at the end of a long transcript without changing the report", () => {
+    const original = overviewFixture.transcript;
+    const expected = parseJobResponse(job(overviewFixture.report), {
+      sourceSha256: original.source_sha256,
+      durationMs: original.duration_ms,
+      transcript: parseTranscript(original, original.source_sha256),
+    });
+    const source = parseTranscript(
+      {
+        ...original,
+        segments: [
+          ...Array.from(
+            { length: 20000 - original.segments.length },
+            (_, i) => ({
+              id: `padding-${i}`,
+              speaker_id: null,
+              start_ms: 0,
+              end_ms: 1,
+              text: "Fictional padding only.",
+            }),
+          ),
+          ...original.segments,
+        ],
+      },
+      original.source_sha256,
+    );
+    expect(
+      parseJobResponse(job(overviewFixture.report), {
+        sourceSha256: source.source_sha256,
+        durationMs: source.duration_ms,
+        transcript: source,
+      }),
+    ).toEqual(expected);
+  });
+
+  it("rechecks source quotes on each read when segment IDs remain the same after withholding", () => {
+    const report = {
+      ...validReport(),
+      summary_evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    };
+    const original = parseTranscript(transcript, sourceSha256);
+    expect(
+      parseJobResponse(job(report), { ...binding, transcript: original })
+        .report,
+    ).toEqual(report);
+    const withheld = parseTranscript(
+      {
+        ...transcript,
+        segments: transcript.segments.map((s) => ({
+          ...s,
+          text: "[Withheld for privacy]",
+        })),
+      },
+      sourceSha256,
+    );
+    expect(() =>
+      parseJobResponse(job(report), { ...binding, transcript: withheld }),
+    ).toThrow("report_summary_evidence_0_quote_mismatch");
+    const safeReport = {
+      ...report,
+      summary_evidence: [
+        { ...report.summary_evidence[0], quote: "[Withheld for privacy]" },
+      ],
+    };
+    expect(
+      parseJobResponse(job(safeReport), { ...binding, transcript: withheld })
+        .report,
+    ).toEqual(safeReport);
+    expect(
+      parseJobResponse(job(report), { ...binding, transcript: original })
+        .report,
+    ).toEqual(report);
+  });
+
+  it.each(["summary_evidence", "verdict_evidence", "overview", "story"])(
+    "opens older reports with null %s as an honest absent optional field",
+    (field) => {
+      const parsed = parseJobResponse(
+        job({ ...validReport(), [field]: null }),
+        { ...binding, transcript: parseTranscript(transcript, sourceSha256) },
+      );
+      expect(parsed.report).toEqual(validReport());
+      expect(Object.hasOwn(parsed.report!, field)).toBe(false);
+    },
+  );
+
+  it("normalizes nullable dimension metadata without assigning a skill state", () => {
+    const report = validReport();
+    const parsed = parseJobResponse(
+      job({
+        ...report,
+        dimensions: report.dimensions.map((dimension) => ({
+          ...dimension,
+          evidence: null,
+          call_state: null,
+        })),
+      }),
+      binding,
+    );
+    expect(parsed.report).toEqual(report);
+    expect(
+      parsed.report?.dimensions.every((d) => !Object.hasOwn(d, "call_state")),
+    ).toBe(true);
+  });
+
+  it("still requires literal evidence for a positive call state beside null metadata", () => {
+    const report = validReport();
+    const dimensions = report.dimensions.map((dimension) => ({
+      ...dimension,
+      status: "observed",
+      evidence: null,
+      call_state: "strongly_demonstrated",
+    }));
+    expect(() =>
+      parseJobResponse(job({ ...report, dimensions }), binding),
+    ).toThrow("report_call_state_invalid");
+  });
+
   it.each(["summary_evidence", "verdict_evidence"] as const)(
     "accepts 1–3 source-bound %s refs and leaves legacy reports unchanged",
     (field) => {
@@ -100,7 +225,6 @@ describe("CallStudio report contract", () => {
       for (const refs of [
         [],
         Array(4).fill(evidence),
-        null,
         [{ ...evidence, start_ms: -1 }],
         [{ ...evidence, end_ms: binding.durationMs + 1 }],
         [{ ...evidence, segment_id: "missing" }],
@@ -141,6 +265,25 @@ describe("CallStudio report contract", () => {
     expect(() => parseJobResponse(job(report), source)).toThrow(
       "report_dimension_0_evidence_required",
     );
+  });
+
+  it("does not default required content or source pins alongside null optional metadata", () => {
+    const report = {
+      ...validReport(),
+      summary_evidence: null,
+      verdict_evidence: null,
+      story: null,
+    };
+    for (const field of [
+      "summary",
+      "verdict",
+      "source_sha256",
+      "transcript_revision",
+    ]) {
+      expect(() =>
+        parseJobResponse(job({ ...report, [field]: null }), binding),
+      ).toThrow(ReportContractError);
+    }
   });
 
   it("accepts a v7 conflicted dimension with cited transcript evidence", () => {

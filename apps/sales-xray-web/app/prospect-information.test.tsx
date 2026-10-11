@@ -42,12 +42,15 @@ it("shows the lock beside a human Unknown without showing the old value or a cal
         />,
       ),
     );
-    const fact = [
-      ...host.querySelectorAll('[data-prospect-section="1"] dt'),
-    ].find((item) => item.textContent?.startsWith("Company"))?.parentElement;
-    expect(fact?.getAttribute("data-fact-label")).toBe("Unknown");
-    expect(fact?.textContent).toContain("Person edit · locked");
-    expect(fact?.querySelector("blockquote, details")).toBeNull();
+    // A person's "Unknown" stays named, locked, and has no call source.
+    const locked = host.querySelector(
+      '[data-prospect-section="1"] [data-unknown-locked]',
+    );
+    expect(locked?.textContent).toContain("Company");
+    expect(
+      locked?.querySelector('[aria-label="Set to Unknown by a person"]'),
+    ).not.toBeNull();
+    expect(locked?.querySelector("blockquote, a")).toBeNull();
   } finally {
     await act(async () => root.unmount());
   }
@@ -67,15 +70,18 @@ it("prioritizes six sections, keeps missing qualification unknown and the person
         section.textContent!.includes(PROSPECT_SECTIONS[i][0]),
       ),
     ).toEqual(Array(6).fill(true));
-    expect(
-      host.querySelector('[data-prospect-section="2"]')?.hasAttribute("open"),
-    ).toBe(false);
     const company = host.querySelector('[data-fact-label="Contradiction"]');
-    expect(company?.querySelector("dd")?.textContent).toBe("Example company");
-    expect(company?.textContent).toContain("Person edit · locked");
-    expect(company?.textContent).toContain("Example company two.");
-    expect(host.textContent).toContain("Ability to investUnknown");
-    expect(host.textContent).toContain("Willingness to investUnknown");
+    expect(company?.querySelector("dd")?.textContent).toContain(
+      "Example company",
+    );
+    expect(company?.textContent).toContain("Set by a person");
+    expect(company?.textContent).toContain(
+      "A later call heard: Example company two",
+    );
+    // Missing qualification is named once, as Unknown, never guessed.
+    const qualification = host.querySelector('[data-prospect-section="3"]');
+    expect(qualification?.textContent).toContain("Willingness to invest");
+    expect(qualification?.textContent).toContain("Unknown");
     expect(
       host.querySelector(
         'a[href="/analysis/calls/33333333-3333-4333-8333-333333333333?section=transcript"]',
@@ -166,9 +172,8 @@ it("shows Changed only when the API supplies an earlier value and its source", a
       ),
     );
     const changed = host.querySelector('[data-fact-label="Changed"]');
-    expect(changed?.querySelector("dd")?.textContent).toBe("अदिती");
-    expect(changed?.textContent).toContain("Previously recorded");
-    expect(changed?.textContent).toContain("Earlier fictional name");
+    expect(changed?.querySelector("dd")?.textContent).toContain("अदिती");
+    expect(changed?.textContent).toContain("Earlier: Earlier fictional name");
   } finally {
     await act(async () => root.unmount());
   }

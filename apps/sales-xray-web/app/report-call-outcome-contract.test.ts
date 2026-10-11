@@ -23,6 +23,7 @@ it.each([
 it.each([
   null,
   {},
+  Object.create({ outcome: "won" }),
   { outcome: "unknown" },
   { outcome: "won", basis: "heard_in_call" },
   { outcome: "won", created_by: "another person" },
@@ -56,4 +57,17 @@ it.each([
   expect(() => parseHumanCallOutcome(value)).toThrow(
     "Enter a valid call outcome.",
   );
+});
+
+it("detaches exact deal value from the caller's mutable draft", () => {
+  const value = {
+    outcome: "won",
+    deal_value: { amount: "100.0000", currency_code: "INR" },
+  };
+  const parsed = parseHumanCallOutcome(value);
+  value.deal_value.amount = "1";
+  expect(parsed.deal_value).toEqual({
+    amount: "100.0000",
+    currency_code: "INR",
+  });
 });
