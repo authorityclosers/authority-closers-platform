@@ -135,3 +135,17 @@ it("draws the frame at once, before the client session check finishes", async ()
   expect(host.textContent).toContain("Dipak Example");
   expect(host.querySelectorAll("main")).toHaveLength(1);
 });
+
+it("names every icon-only control, including Go to on phones", async () => {
+  await render();
+  const unnamed = [...host.querySelectorAll("button")].filter(
+    (button) =>
+      !button.getAttribute("aria-label") && !button.textContent?.trim(),
+  );
+  expect(unnamed).toEqual([]);
+  expect(
+    host
+      .querySelector('button[aria-keyshortcuts="Control+K Meta+K"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Go to a section or call");
+});
