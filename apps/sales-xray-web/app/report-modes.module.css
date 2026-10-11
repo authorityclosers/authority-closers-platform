@@ -1374,14 +1374,28 @@
   }
 }
 
-/* Phones: the six pillars go by their short names, so more fit in a row. */
-@media (max-width: 640px) {
-  .workspace[data-view="story"] .contents .fullLabel {
-    display: none;
-  }
-  .workspace[data-view="story"] .contents .compactLabel {
-    display: inline;
-  }
+/* The six pillars go by their short names in the section row (Big Picture,
+   Call Flow, Worked / Didn't, Moments, Skills, Deal), so the row fits. */
+.workspace[data-view="story"] .contents .fullLabel {
+  display: none;
+}
+.workspace[data-view="story"] .contents .compactLabel {
+  display: inline;
+}
+/* A row that scrolls sideways (phones, tablets) fades at its edge, so a name
+   there reads as "more this way", not as a cut word. */
+.contents[data-overflow],
+.tabNavigation[data-overflow] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    var(--sx-ink) calc(100% - 32px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    var(--sx-ink) calc(100% - 32px),
+    transparent
+  );
 }
 
 /* Narrow phones: the view words are enough, so the row never runs off the

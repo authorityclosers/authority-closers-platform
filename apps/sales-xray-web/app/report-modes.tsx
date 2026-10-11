@@ -892,6 +892,12 @@ export function ReportModes({
     );
     if (!list) return;
     const place = () => {
+      // A row that scrolls sideways fades at its edge, so a name at the edge
+      // reads as "more this way", never as a cut word.
+      list.toggleAttribute(
+        "data-overflow",
+        list.scrollWidth > list.clientWidth + 1,
+      );
       const current = list.querySelector<HTMLElement>(
         '[aria-selected="true"], [aria-current="location"]',
       );
