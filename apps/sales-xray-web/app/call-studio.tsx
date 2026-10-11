@@ -1840,8 +1840,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                           </div>
                         ) : (
                           <p className="small-text">
-                            No source-linked moments were produced for this
-                            draft.
+                            This draft has no moments to replay.
                           </p>
                         )}
                         {momentStatus && (

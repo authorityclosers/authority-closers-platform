@@ -392,7 +392,7 @@ it("keeps saved rewatch evidence exact and offers explicitly labelled adjacent t
   );
 
   expect(container.textContent).toContain("Context before · Speaker 1");
-  expect(container.textContent).toContain("Saved evidence · Speaker 2");
+  expect(container.textContent).toContain("From the call · Speaker 2");
   expect(container.textContent).toContain("Context after · Speaker 1");
   expect(container.textContent).toContain(evidence.quote);
   expect(container.textContent).toContain("कल timing discuss करूया.");
@@ -599,17 +599,20 @@ it("presents the supplied priorities and one focus without generating scores, es
     container.querySelector('[data-review-point="12"]')?.textContent,
   ).toContain("no separately assessed drill");
   expect(container.textContent).toContain(
-    "Insufficient data for a reliable estimate.",
+    "Not enough from this call to estimate it.",
   );
   expect(container.textContent).toContain(
-    "A first breakpoint and its cause-and-effect sequence have not been established",
+    "This report doesn’t show where the call first turned, or why.",
+  );
+  expect(container.textContent).not.toMatch(
+    /supplied|inference|source-linked|established|breakpoint/i,
   );
   expect(container.textContent).not.toMatch(
     /XX|per 100|PASS|CONCERN|FAIL|\+\d+%|Overall Score/,
   );
   expect(
     container.querySelector('[data-review-point="13"]')?.textContent,
-  ).toContain("no trend or improvement claim is inferred");
+  ).toContain("this report says nothing about progress");
   for (const anchor of container.querySelectorAll<HTMLAnchorElement>("nav a")) {
     expect(document.getElementById(anchor.hash.slice(1))).not.toBeNull();
   }
@@ -647,8 +650,8 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
     expect(container.textContent).toContain(content);
   }
   expect(container.textContent).toContain(overview.ethics_notes[0].text);
-  expect(container.textContent).toContain("Possible concern · inference");
-  expect(container.textContent).toContain("Possible effect · inference");
+  expect(container.textContent).toContain("Possible concern · a guess");
+  expect(container.textContent).toContain("What it may have caused");
   expect(
     container.querySelector('[data-review-point="10"]')?.textContent,
   ).toContain("No clear skill takeaway");
@@ -864,7 +867,7 @@ it("shows the impact limitations for the third detailed priority too", async () 
   await render(value);
   const third = container.querySelector('[data-review-point="04"]');
   expect(third?.textContent).toContain(
-    "Insufficient data for a reliable estimate.",
+    "Not enough from this call to estimate it.",
   );
   expect(third?.textContent).toContain("Missing history for priority 3");
 });
@@ -1235,7 +1238,7 @@ it("gives every summary action a named destination that opens its review point",
     ["Read the final verdict", "14"],
     ["See why it works", "01"],
     ["See what happened", "02"],
-    ["See the outcome evidence", "14"],
+    ["See where this comes from", "14"],
     ["See the full focus", "11"],
   ]);
   await act(async () => actions[2].click());

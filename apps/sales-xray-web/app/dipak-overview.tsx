@@ -255,7 +255,7 @@ function BusinessImpact({ missing }: { missing: string }) {
   return (
     <div className={styles.impact}>
       <strong>Business impact</strong>
-      <p>Insufficient data for a reliable estimate.</p>
+      <p>Not enough from this call to estimate it.</p>
       <small>{missing}</small>
     </div>
   );
@@ -633,7 +633,7 @@ export function DipakOverview({
         <dl className={styles.metrics} aria-label="Call metrics">
           <div>
             <dt>Call length</dt>
-            <dd>{durationMs ? formatClock(durationMs) : "Not supplied"}</dd>
+            <dd>{durationMs ? formatClock(durationMs) : "Not known"}</dd>
           </div>
           <div>
             <dt>Replay clips</dt>
@@ -655,7 +655,7 @@ export function DipakOverview({
             </p>
             <div className={styles.rowBody}>
               <RowTitle className={styles.rowTitle}>
-                {strength?.title ?? "No strength supplied"}
+                {strength?.title ?? "No strength noted"}
               </RowTitle>
               <p>
                 {strength?.explanation ??
@@ -680,7 +680,7 @@ export function DipakOverview({
             </p>
             <div className={styles.rowBody}>
               <RowTitle className={styles.rowTitle}>
-                {primary?.title ?? "No change supplied"}
+                {primary?.title ?? "No change noted"}
               </RowTitle>
               <p>
                 {primaryDetail ? (
@@ -717,18 +717,18 @@ export function DipakOverview({
                 </span>
               )}
               <RowTitle className={styles.rowTitle}>
-                {detail?.outcome?.text ?? "No outcome supplied"}
+                {detail?.outcome?.text ?? "No outcome noted"}
               </RowTitle>
               <p>
                 {detail?.outcome
-                  ? "What the saved evidence shows—not a predicted result."
+                  ? "What the call shows, not a prediction."
                   : "This report has no separate outcome statement."}
               </p>
               {detail?.outcome && (
                 <div className={styles.rowActions}>
                   {detail.outcome.evidence[0] &&
                     listen(detail.outcome.evidence[0], "Observed outcome")}
-                  {reviewLink("14", "See the outcome evidence")}
+                  {reviewLink("14", "See where this comes from")}
                 </div>
               )}
             </div>
@@ -745,7 +745,7 @@ export function DipakOverview({
               <RowTitle className={styles.rowTitle}>
                 {detail?.next_call_focus?.behavior ??
                   primary?.title ??
-                  "No focus supplied"}
+                  "No focus noted"}
               </RowTitle>
               <p>
                 {detail?.practice?.instructions ??
@@ -792,9 +792,7 @@ export function DipakOverview({
                     </span>
                   </>
                 ) : (
-                  <span>
-                    No source-linked moment is available to replay yet.
-                  </span>
+                  <span>No moment to replay yet.</span>
                 )}
               </div>
               {sourceMoment && (
@@ -1060,7 +1058,7 @@ export function DipakOverview({
                       <p className={styles.empty}>
                         {report.preview?.sections.golden_moments.hidden_count
                           ? "More selected moments are available in your full report."
-                          : "No source-linked strength is available to replay yet."}
+                          : "No strength to replay yet."}
                       </p>
                     )}
                     {unlock("golden_moments")}
@@ -1122,7 +1120,7 @@ export function DipakOverview({
                             {sourceNote(item.source, "What was said")}
                             <div className={styles.inference}>
                               <p className={styles.label}>
-                                Possible concern · inference
+                                Possible concern · a guess
                               </p>
                               <p>{item.possible_concern}</p>
                             </div>
@@ -1131,9 +1129,8 @@ export function DipakOverview({
                       </>
                     ) : (
                       <p className={styles.empty}>
-                        No separate interpretation is recorded in this report.
-                        The transcript preserves what was said; an underlying
-                        concern needs supporting evidence.
+                        This report doesn’t guess at what they meant. Their
+                        exact words are in the transcript.
                       </p>
                     )}
                     {unlock("prospect_interpretations")}
@@ -1233,7 +1230,7 @@ export function DipakOverview({
                                         )}
                                         <blockquote>
                                           <strong>
-                                            Saved evidence ·{" "}
+                                            From the call ·{" "}
                                             {formatContextSpeakerLabel(
                                               transcript,
                                               contextualPlayback.evidence_speaker_id,
@@ -1319,8 +1316,7 @@ export function DipakOverview({
                         </div>
                       ) : (
                         <p className={styles.empty}>
-                          No source-linked moments were produced for this
-                          report.
+                          This report has no moments to replay.
                         </p>
                       )}
                       {unlock("rewatch")}
@@ -1348,14 +1344,14 @@ export function DipakOverview({
                           )}
                         </div>
                         <p className={`${styles.why} ${styles.inference}`}>
-                          <strong>Possible effect · inference:</strong>{" "}
+                          <strong>What it may have caused:</strong>{" "}
                           {detail.conversation_change.possible_effect}
                         </p>
                       </>
                     ) : (
                       <p className={styles.empty}>
-                        A first breakpoint and its cause-and-effect sequence
-                        have not been established in this report.
+                        This report doesn’t show where the call first turned, or
+                        why.
                       </p>
                     )}
                   </ReviewBlock>
@@ -1421,8 +1417,8 @@ export function DipakOverview({
                         <p className={styles.eyebrow}>Human review note</p>
                         <h3>Ethics observations</h3>
                         <p>
-                          Source-linked notes for a human reviewer; no verdict
-                          is assigned.
+                          Notes from the call for a coach to read. They don’t
+                          judge anyone.
                         </p>
                       </div>
                       {detail.ethics_notes.map((note, index) => (
@@ -1515,8 +1511,8 @@ export function DipakOverview({
 
                   <ReviewBlock number="13" title="Across-call pattern">
                     <p className={styles.empty}>
-                      Comparable multi-call history is not supplied for this
-                      report, so no trend or improvement claim is inferred.
+                      There aren’t enough earlier calls to compare, so this
+                      report says nothing about progress.
                     </p>
                   </ReviewBlock>
 
