@@ -338,7 +338,7 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
     )
     assert view.lesson and view.lesson.why_it_matters.startswith("The buyer needs a clear way")
     assert view.practice and view.practice.exercise.startswith("Rewrite what was said")
-    assert view.mission and view.mission.context == "The next time a buyer gives you this opening."
+    assert view.mission and view.mission.context == "The next time a buyer gives this opening."
     assert view.mastery.explanation == "One call can’t show progress over time."
     # A line the dataset wrote for this call alone stays word for word.
     one = sandbox_bundle()

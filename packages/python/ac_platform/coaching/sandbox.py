@@ -95,9 +95,9 @@ PLAIN = {
         "Rewrite what was said in the moment above, the better way. Then say it out loud once, "
         "with a pause."
     ),
-    "Next relevant buyer opening": "The next time a buyer gives you this opening.",
-    "Next relevant call with this buyer requirement": "Your next call where the buyer needs this.",
-    "Next relevant call in this selling context": "Your next call like this one.",
+    "Next relevant buyer opening": "The next time a buyer gives this opening.",
+    "Next relevant call with this buyer requirement": "The next call where the buyer needs this.",
+    "Next relevant call in this selling context": "The next call like this one.",
     "Per-call observation does not establish longitudinal mastery.": (
         "One call can’t show progress over time."
     ),

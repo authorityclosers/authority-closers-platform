@@ -706,7 +706,7 @@
     "mission": {
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
-      "context": "The next time a buyer gives you this opening.",
+      "context": "The next time a buyer gives this opening.",
       "done_when": "A specific example and its impact are established before the first product explanation.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
@@ -736,7 +736,7 @@
       "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "example_wording": [],
-      "when_to_use": "The next time a buyer gives you this opening.",
+      "when_to_use": "The next time a buyer gives this opening.",
       "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
@@ -1476,7 +1476,7 @@
       "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "example_wording": [],
-      "when_to_use": "The next time a buyer gives you this opening.",
+      "when_to_use": "The next time a buyer gives this opening.",
       "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
@@ -1507,7 +1507,7 @@
     "mission": {
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
-      "context": "The next time a buyer gives you this opening.",
+      "context": "The next time a buyer gives this opening.",
       "done_when": "A specific example and its impact are established before the first product explanation.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
