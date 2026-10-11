@@ -1433,3 +1433,14 @@
     padding: 0;
   }
 }
+
+/* The current section's name has one fixed slot (the longest short name,
+   "Worked / Didn't"), so the bar never slides sideways while reading. */
+.navRow[data-placement="toolbar"]
+  .contents
+  a[aria-current="location"]
+  .compactLabel {
+  display: inline-block;
+  min-width: 100px;
+  text-align: left;
+}
