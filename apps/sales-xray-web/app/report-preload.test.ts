@@ -27,7 +27,10 @@ const read = (objects: Record<string, unknown> = {}) =>
         ? transcript
         : envelope;
   });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 it.each(["matches", "changed"])(
   "opens the retained Report and checks the optional Coaching report pin when it %s",
@@ -122,6 +125,11 @@ it.each(["missing", "wrong person", "wrong source"])(
 );
 
 it("does not wait for a stalled optional Coaching service to open the Report", async () => {
+  // No clock advancement: the required saved Report must finish immediately,
+  // rather than awaiting the optional 1.5-second deadline.
+  vi.useFakeTimers();
+  const optionalDeadline = new AbortController();
+  vi.spyOn(AbortSignal, "timeout").mockReturnValue(optionalDeadline.signal);
   let coachingSignal: AbortSignal | undefined;
   const port: SavedReportRead = async (path, signal) => {
     if (path.includes("/me/coaching/")) {
@@ -140,7 +148,44 @@ it("does not wait for a stalled optional Coaching service to open the Report", a
   expect(view.state).toBe("ready");
   expect(coachingSignal?.aborted).toBe(true);
   if (view.state === "ready") expect(view.result.callCoaching).toBeUndefined();
+  expect(vi.getTimerCount()).toBe(0);
+  expect(optionalDeadline.signal.aborted).toBe(false);
 });
+
+it.each(["resolve", "reject"] as const)(
+  "cancels slow optional Coaching and ignores its late %s without changing the returned Report",
+  async (completion) => {
+    let complete: (value: unknown) => void = () => {};
+    let fail: (error: Error) => void = () => {};
+    let coachingSignal: AbortSignal | undefined;
+    const port: SavedReportRead = async (path, signal) => {
+      if (path.includes("/me/coaching/")) {
+        coachingSignal = signal;
+        return new Promise((resolve, reject) => {
+          complete = resolve;
+          fail = reject;
+        });
+      }
+      return read()(path);
+    };
+    const view = await preloadSavedReport(submissionId, port, undefined, {
+      coachingActor: {
+        personId: callCoachingBinding.personId,
+        tenantId: callCoachingBinding.tenantId,
+        sessionId: callCoachingBinding.sessionId,
+      },
+    });
+    expect(view.state).toBe("ready");
+    expect(coachingSignal?.aborted).toBe(true);
+    if (completion === "resolve") complete(fictionalCallCoaching());
+    else fail(new Error("Private optional service details"));
+    await Promise.resolve();
+    if (view.state === "ready") {
+      expect(view.result.callCoaching).toBeUndefined();
+      expect(view.result.report.source_sha256).toBe(transcript.source_sha256);
+    }
+  },
+);
 
 it("loads a finished saved call in one status read plus parallel source-verified reads", async () => {
   const pending: Array<() => void> = [];
