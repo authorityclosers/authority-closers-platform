@@ -169,3 +169,131 @@ def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) ->
                 assert row["completed"] + row["running"] + row["held"] <= row["analyses"]
 
     run(exercise())
+
+
+def test_review_labels_append_supersede_and_drive_review_state(review_case: ReviewCase) -> None:
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    from ac_platform.conversation_intelligence.review_label_models import ConversationReviewLabel
+    from ac_platform.conversation_intelligence.review_labels import LabelIntent, ReviewLabels
+
+    case = review_case
+    recording_id = case.prepared.recording_id
+
+    def service(database) -> ReviewLabels:
+        return ReviewLabels(
+            ConversationApplication(database, clock=lambda: case.prepared.state.now),
+            case.operations_tenant_id,
+            recording_tenant_ids=(case.prepared.state.tenant_id,),
+        )
+
+    wrong = LabelIntent(
+        kind="verdict",
+        run_id=case.report_run_id,
+        section="pillar:overview",
+        value={"verdict": "wrong"},
+    )
+
+    async def exercise() -> None:
+        async with case.sessions() as database, database.begin():
+            first = await service(database).add(case.admin_actor, recording_id, wrong, key="v-1")
+            replay = await service(database).add(case.admin_actor, recording_id, wrong, key="v-1")
+            assert replay["id"] == first["id"]
+            with pytest.raises(ConversationError):
+                await service(database).add(
+                    case.admin_actor,
+                    recording_id,
+                    LabelIntent(kind="note", value={"text": "different body, same key"}),
+                    key="v-1",
+                )
+        async with case.sessions() as database, database.begin():
+            read = await service(database).read(case.admin_actor, recording_id)
+            assert read["review_state"] == "disputed"
+            queue = await _service(database, case).queue(case.admin_actor, review="disputed")
+            assert str(recording_id) in {item["recording_id"] for item in queue["items"]}
+            fixed = await service(database).add(
+                case.admin_actor,
+                recording_id,
+                LabelIntent(
+                    kind="verdict",
+                    run_id=case.report_run_id,
+                    section="pillar:overview",
+                    value={"verdict": "correct"},
+                ),
+                key="v-2",
+            )
+            assert fixed["supersedes_id"] == first["id"]
+            await service(database).add(
+                case.admin_actor,
+                recording_id,
+                LabelIntent(kind="note", value={"text": "Outcome reads right; check the close."}),
+                key="n-1",
+            )
+            await service(database).add(
+                case.admin_actor,
+                recording_id,
+                LabelIntent(
+                    kind="gold",
+                    run_id=case.report_run_id,
+                    value={
+                        "focus": "closing_decision_management",
+                        "root_cause": "execution",
+                        "skill_states": {"qualification": "needs_attention"},
+                    },
+                ),
+                key="g-1",
+            )
+            await service(database).add(
+                case.admin_actor,
+                recording_id,
+                LabelIntent(kind="data_use", value={"use": "test"}),
+                key="d-1",
+            )
+        async with case.sessions() as database, database.begin():
+            read = await service(database).read(case.admin_actor, recording_id)
+            assert read["review_state"] == "needs_review"
+            assert len(read["history"]) == 5 and len(read["effective"]) == 4
+            gold = await service(database).gold(case.admin_actor)
+            assert [call["recording_id"] for call in gold["calls"]] == [str(recording_id)]
+            assert gold["calls"][0]["data_use"] == "test"
+            assert {"section": "pillar:overview", "correct": 1, "partly": 0, "wrong": 0} in gold[
+                "pillars"
+            ]
+            assert "Not an official score" in gold["note"]
+            await service(database).add(
+                case.admin_actor,
+                recording_id,
+                LabelIntent(kind="status", value={"state": "done"}),
+                key="s-1",
+            )
+        async with case.sessions() as database, database.begin():
+            assert (await service(database).read(case.admin_actor, recording_id))[
+                "review_state"
+            ] == "done"
+            audits = (
+                await database.scalars(
+                    select(AuditEvent).where(AuditEvent.action.like("conversation.review_label.%"))
+                )
+            ).all()
+            assert len(audits) == 6
+        async with case.sessions() as database:
+            with pytest.raises(DBAPIError):
+                async with database.begin():
+                    await database.execute(
+                        text("UPDATE conversation_review_labels SET section = 'pillar:facts'")
+                    )
+        async with case.sessions() as database:
+            count = len((await database.scalars(select(ConversationReviewLabel))).all())
+            assert count == 6
+        for actor in (case.source_actor, case.foreign_actor):
+            async with case.sessions() as database, database.begin():
+                with pytest.raises(ConversationDenied):
+                    await service(database).add(
+                        actor,
+                        recording_id,
+                        LabelIntent(kind="note", value={"text": "not allowed"}),
+                        key="x-1",
+                    )
+
+    run(exercise())

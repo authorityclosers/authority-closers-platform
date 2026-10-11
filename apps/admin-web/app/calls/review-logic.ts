@@ -27,6 +27,7 @@ export function waveformBars(
 }
 
 export type ReviewTab =
+  | "review"
   | "report"
   | "pillars"
   | "coaching"
@@ -81,6 +82,8 @@ export function keyAction(event: {
       return { kind: "tab", tab: "runs" };
     case "t":
       return { kind: "tab", tab: "transcript" };
+    case "v":
+      return { kind: "tab", tab: "review" };
     case "n":
       return { kind: "call", step: 1 };
     case "p":
@@ -114,7 +117,14 @@ export const SHORTCUTS: readonly [string, string][] = [
   ["Space / K", "Play or pause"],
   ["← / J · → / L", "Back or forward 5 s (Shift: 15 s)"],
   [", / .", "Slower or faster"],
-  ["R · S · C · M · U", "Report · Six pillars · Coaching · Metrics · Runs"],
+  [
+    "V · R · S · C · M · U",
+    "Review · Report · Six pillars · Coaching · Metrics · Runs",
+  ],
+  [
+    "↑ ↓ then 1 · 2 · 3",
+    "In Review: choose a section, then correct · partly · wrong",
+  ],
   ["T", "Transcript (phones)"],
   ["N / P", "Next or previous call in the queue"],
   ["Y", "Copy a link to this moment of the call"],

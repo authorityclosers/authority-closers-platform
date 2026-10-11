@@ -270,8 +270,12 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
-  expect(button("Reading view").getAttribute("aria-pressed")).toBe("true");
-  await click("Tabbed view");
+  // A finished call opens on the six-part Report; Details keeps every section.
+  const view = (title: string) =>
+    host.querySelector<HTMLButtonElement>(`button[title="${title}"]`)!;
+  expect(view("Report view").getAttribute("aria-pressed")).toBe("true");
+  await act(async () => view("Details view").click());
+  await flush();
   await click("Moments");
   expect(host.textContent).toContain("कल timing discuss करूया.");
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);

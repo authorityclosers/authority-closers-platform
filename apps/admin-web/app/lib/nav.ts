@@ -103,7 +103,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/gold",
-        soon: true,
         label: "Gold set",
         icon: "gold",
         need: { kind: "salesXray" },

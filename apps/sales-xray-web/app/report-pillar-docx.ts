@@ -1,6 +1,8 @@
 import { Bookmark, Document, Footer, Packer, Paragraph, TextRun } from "docx";
+import type { ReportEvidence } from "./report-contract";
 import type { ReportDocxInput } from "./report-docx";
-import { reportPillars } from "./report-pillars";
+import { REPORT_PILLARS } from "./report-pillars";
+import { reportStoryModel, type StoryModel } from "./report-story-model";
 
 const FONT = {
   ascii: "Calibri",
@@ -16,6 +18,167 @@ const clock = (ms: number) => {
     ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${tail}`
     : `${minutes}:${tail}`;
 };
+
+type Entry = {
+  label: string;
+  text: string;
+  evidence?: ReportEvidence[];
+  inferred?: boolean;
+};
+
+/** The same six-pillar story as the screen, as plain labelled entries. */
+function storyEntries(model: StoryModel): Entry[][] {
+  const { picture, flow, deal } = model;
+  const line = (
+    label: string,
+    value: {
+      text: string;
+      sources: ReportEvidence[];
+      inferred?: boolean;
+    } | null,
+  ): Entry[] =>
+    value
+      ? [
+          {
+            label,
+            text: value.text,
+            evidence: value.sources.slice(0, 1),
+            inferred: value.inferred,
+          },
+        ]
+      : [];
+  const status = picture.outcome.status
+    ? `${picture.outcome.status} · ${picture.outcome.origin === "person" ? "recorded by your team" : "as heard on the call"}`
+    : "Outcome not recorded · only a person records won or lost";
+  return [
+    [
+      { label: "Call outcome", text: status },
+      ...line("Summary", picture.summary),
+      ...(picture.assessment
+        ? [{ label: "In short", text: picture.assessment }]
+        : []),
+      ...line("What most affected this call", picture.influence),
+      ...line("Strongest part", picture.strongest),
+      ...line("Biggest concern", picture.concern),
+      ...line("Next step", picture.nextStep),
+    ],
+    [
+      ...(flow.metrics.length
+        ? [
+            {
+              label: "Call measurements · evidence, not a judgement",
+              text: flow.metrics
+                .map(
+                  (metric) =>
+                    `${metric.label} ${metric.value}${metric.note ? ` (${metric.note})` : ""}`,
+                )
+                .join(" · "),
+            },
+          ]
+        : []),
+      ...(flow.phases ?? []).map((phase) => ({
+        label: `${clock(phase.start_ms)}–${clock(phase.end_ms)}`,
+        text: phase.label,
+      })),
+      ...(flow.change
+        ? [
+            { label: "Before", text: flow.change.before.text },
+            {
+              label: "The switch",
+              text: flow.change.turn.text,
+              evidence: flow.change.turn.sources.slice(0, 1),
+            },
+            { label: "After", text: flow.change.after.text },
+            ...(flow.change.effect
+              ? [
+                  {
+                    label: "Possible effect",
+                    text: flow.change.effect,
+                    inferred: true,
+                  },
+                ]
+              : []),
+          ]
+        : []),
+    ],
+    [
+      ...model.worked.map((item) => ({
+        label: `What worked · ${item.title}`,
+        text: [
+          item.what.text,
+          item.why ? `Why it helped: ${item.why.text}` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        evidence: item.what.sources,
+      })),
+      ...model.didnt.map((item) => ({
+        label: `What didn't · ${item.title}`,
+        text: [
+          item.what.text,
+          item.why ? `What it affected: ${item.why.text}` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        evidence: item.what.sources,
+      })),
+    ],
+    [...model.moments]
+      .sort((a, b) => a.source.start_ms - b.source.start_ms)
+      .map((moment) => ({
+        label: `${moment.kind} · ${clock(moment.source.start_ms)} · ${moment.title}`,
+        text: [
+          moment.movedToward
+            ? `You moved toward: ${moment.movedToward.text}`
+            : "",
+          moment.couldExplore
+            ? `Could have explored: ${moment.couldExplore}`
+            : "",
+          moment.why ? `Why it mattered: ${moment.why.text}` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        evidence: [moment.source],
+      })),
+    model.skills.map((skill) => ({
+      label: `${skill.label} · ${skill.state ?? "Not established"}`,
+      text:
+        skill.observation ??
+        "This report does not establish a state for this skill.",
+      evidence: skill.sources.slice(0, 2),
+    })),
+    [
+      { label: "Current status", text: status },
+      ...line("Prospect's position", deal.position),
+      ...line("Possible blocker", deal.blocker),
+      ...deal.prospectCommitments.flatMap((item) =>
+        line("Prospect agreed to", item),
+      ),
+      ...deal.sellerCommitments.flatMap((item) => line("You agreed to", item)),
+      ...line("Next event", deal.nextEvent),
+      ...(deal.quality
+        ? [{ label: "Commitment quality", text: deal.quality }]
+        : []),
+      ...(deal.unclear.length
+        ? [
+            {
+              label: "Still needs to become clear",
+              text: deal.unclear.join(" · "),
+            },
+          ]
+        : []),
+      ...(deal.action
+        ? [
+            {
+              label: "Recommended next move",
+              text: deal.action,
+              inferred: true,
+            },
+          ]
+        : []),
+    ],
+  ];
+}
 
 /** Six call-level pillars; coaching and full prospect facts stay out. */
 export function buildPillarReportDocument(input: ReportDocxInput) {
@@ -46,10 +209,9 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
       spacing: { after: 160 },
     }),
   ];
-  reportPillars(
-    input.report,
-    input.durationMs ?? input.transcript?.duration_ms,
-  ).forEach((pillar, index) => {
+  const model = reportStoryModel(input.report, input.transcript ?? undefined);
+  const pillars = storyEntries(model);
+  REPORT_PILLARS.forEach((pillar, index) => {
     children.push(
       new Paragraph({
         children: [
@@ -68,73 +230,26 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
         keepNext: true,
       }),
     );
-    if (index === 1) {
-      const numbers = input.callRecord?.numbers;
-      if (numbers) {
-        children.push(
-          new Paragraph({
-            text: "Call measurements · evidence, not a performance judgement",
-            spacing: { after: 80 },
-          }),
-        );
-        numbers.speakers.forEach((speaker, voice) => {
-          const name =
-            input.speakerName?.(speaker.speaker_id) || `Speaker ${voice + 1}`;
-          children.push(
-            new Paragraph({
-              text: `${name} · Talk share ${Math.round(speaker.talk_share * 100)}% · Questions ${speaker.questions}`,
-              spacing: { after: 60 },
-            }),
-          );
-        });
-        if (numbers.speakers.length < 2)
-          children.push(
-            new Paragraph({
-              text: "Only one speaker is represented. A seller–prospect comparison is unavailable.",
-              spacing: { after: 80 },
-            }),
-          );
-      } else
-        children.push(
-          new Paragraph({
-            text: "Call measurements were not supplied for this report.",
-            spacing: { after: 80 },
-          }),
-        );
-    }
-    pillar.timeline?.forEach((phase) => {
-      children.push(
-        new Paragraph({
-          text: `${clock(phase.start_ms)}–${clock(phase.end_ms)} · ${phase.label}`,
-          spacing: { after: 60 },
-        }),
-      );
-    });
-    pillar.entries.forEach((entry) => {
+    for (const entry of pillars[index]) {
       children.push(
         new Paragraph({
           children: [
             new TextRun({ text: entry.label, bold: true }),
-            new TextRun({
-              text: entry.hypothesis
-                ? " · Interpretation"
-                : entry.gap
-                  ? " · Information gap"
-                  : "",
-            }),
+            new TextRun({ text: entry.inferred ? " · Interpretation" : "" }),
           ],
           spacing: { before: 100, after: 40 },
           keepNext: true,
         }),
       );
-      children.push(
-        new Paragraph({
-          text: entry.text,
-          spacing: { after: 60 },
-          keepLines: true,
-        }),
-      );
-      for (const evidence of entry.evidence)
+      if (entry.text)
+        children.push(
+          new Paragraph({
+            text: entry.text,
+            spacing: { after: 60 },
+            keepLines: true,
+          }),
+        );
+      for (const evidence of entry.evidence ?? [])
         children.push(
           new Paragraph({
             children: [
@@ -147,7 +262,14 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
             keepLines: true,
           }),
         );
-    });
+    }
+    if (model.missing[index].length)
+      children.push(
+        new Paragraph({
+          text: `Not in this report: ${model.missing[index].join(" · ")}`,
+          spacing: { before: 80, after: 60 },
+        }),
+      );
   });
   children.push(
     new Paragraph({

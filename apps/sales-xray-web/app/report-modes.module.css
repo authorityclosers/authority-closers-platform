@@ -1222,3 +1222,45 @@
     margin-left: 0;
   }
 }
+
+/* The six-pillar Report: one numbered chapter head per pillar, calm spacing. */
+.workspace[data-view="story"] .sections {
+  gap: 36px;
+}
+.workspace[data-view="story"] .section {
+  display: grid;
+  gap: 14px;
+  scroll-margin-top: var(--report-scroll-target-offset, 72px);
+}
+.pillarHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.pillarNumber {
+  display: inline-grid;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
+  color: var(--lx-teal);
+  font: 700 13px/1 var(--lx-font-ui);
+}
+.pillarTitle {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 650 20px/1.25 var(--lx-font-ui);
+}
+.pillarTitle:focus {
+  outline: none;
+}
+.pillarSubtitle {
+  margin: 2px 0 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+.workspace[data-view="story"] .toolbar > button {
+  min-width: 0;
+}

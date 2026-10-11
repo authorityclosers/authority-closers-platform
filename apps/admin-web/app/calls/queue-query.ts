@@ -4,8 +4,10 @@
  * params into the API query, dropping anything malformed. Pure.
  */
 import { CALL_STATUSES, type CallStatus } from "./call-data";
+import { REVIEW_STATES, type ReviewState } from "./labels-data";
 
 export type QueueFilters = {
+  review?: ReviewState;
   status?: CallStatus;
   organisation?: string;
   rep?: string;
@@ -30,6 +32,9 @@ const one = (value: string | string[] | undefined) =>
 
 export function queueFilters(params: Params): QueueFilters {
   const filters: QueueFilters = {};
+  const review = one(params.review);
+  if (REVIEW_STATES.includes(review as ReviewState))
+    filters.review = review as ReviewState;
   const status = one(params.status);
   if (CALL_STATUSES.includes(status as CallStatus))
     filters.status = status as CallStatus;
@@ -60,6 +65,7 @@ export function filterQuery(
 ): string {
   const query = new URLSearchParams();
   for (const key of [
+    "review",
     "status",
     "organisation",
     "rep",

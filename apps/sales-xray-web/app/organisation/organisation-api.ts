@@ -354,6 +354,15 @@ export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
   return parseActivity(await call("/activity?days=30", { signal }));
 }
 
+/** The activity over the last `days` (the server takes 1-90). */
+export async function readActivityDays(
+  days: number,
+  signal?: AbortSignal,
+): Promise<OrgActivity> {
+  const window = Math.min(90, Math.max(1, Math.round(days)));
+  return parseActivity(await call(`/activity?days=${window}`, { signal }));
+}
+
 /** The 30-day activity answer, tolerant of missing fields (see readActivity). */
 export function parseActivity(value: unknown): OrgActivity {
   const data = obj(value);

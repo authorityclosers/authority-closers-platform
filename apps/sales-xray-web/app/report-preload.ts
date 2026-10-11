@@ -92,18 +92,27 @@ export async function preloadSavedReport(
     const progress = parseProgress(payload, submission);
     if (!progress.has_report)
       return { state: "processing", submission, progress, result: null };
-    const [transcriptPayload, reportPayload, coachingPayload] =
-      await Promise.all([
-        get(`${path}/transcript`),
-        get(`${path}/report`),
-        options
-          ? get(
-              `/v1/me/coaching/calls/${callId}`,
-              true,
-              AbortSignal.any([signal, AbortSignal.timeout(1500)]),
-            ).catch(() => null)
-          : Promise.resolve(null),
-      ]);
+    const required = Promise.all([
+      get(`${path}/transcript`),
+      get(`${path}/report`),
+    ]);
+    let coachingPayload: unknown = null;
+    if (options) {
+      // Use an already-ready optional bootstrap; never delay the saved Report
+      // for Coaching. The finally block cancels a still-pending read. The
+      // Coaching view retains its authorised reader if no bootstrap is ready.
+      void get(
+        `/v1/me/coaching/calls/${callId}`,
+        true,
+        AbortSignal.any([signal, AbortSignal.timeout(1500)]),
+      ).then(
+        (payload) => {
+          coachingPayload = payload;
+        },
+        () => {},
+      );
+    }
+    const [transcriptPayload, reportPayload] = await required;
     const transcript = parseTranscript(transcriptPayload, submission.sha);
     const report = parseAcquisitionReport(
       reportPayload,

@@ -88,6 +88,10 @@ it("renders current-call API coaching and its exact source, not across-call stat
   await render(access, false, selected);
   expect(container.textContent).toContain("Fictional API focus");
   expect(container.querySelector('[data-state="ready"]')).not.toBeNull();
+  const callLink = container.querySelector<HTMLAnchorElement>(
+    `a[href="/coaching?call=${submissionId}"]`,
+  );
+  expect(callLink?.textContent).toBe("Open full coaching for this call");
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>("[data-call-coaching] button")!
@@ -104,6 +108,9 @@ it("uses a source-checked server bootstrap without another read", async () => {
   await render(access, true);
   expect(container.textContent).toContain("Fictional API focus");
   expect(fetcher).not.toHaveBeenCalled();
+  expect(
+    container.querySelector(`a[href="/coaching?call=${submissionId}"]`),
+  ).not.toBeNull();
 });
 it("renders reviewed examples from the call read without eager audio and keeps the lesson on media failure", async () => {
   const fetcher = vi.fn(

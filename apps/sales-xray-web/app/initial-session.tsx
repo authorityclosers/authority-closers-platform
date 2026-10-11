@@ -33,6 +33,8 @@ export const SERVER_RENDERED = new Set([
   "/dashboard",
   "/analysis/calls",
   "/organisation",
+  // Coaching reads its data on the server itself (coaching-server.ts).
+  "/coaching",
 ]);
 
 /**
