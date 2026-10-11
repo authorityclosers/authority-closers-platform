@@ -21,7 +21,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
 )
 from ac_platform.conversation_intelligence.application import DELETE_JOB, ConversationApplication
-from ac_platform.conversation_intelligence.call_metrics import stored_summary
+from ac_platform.conversation_intelligence.call_metrics import CALL_METRICS_RULES, stored_summary
 from ac_platform.conversation_intelligence.call_metrics_models import ConversationCallMetrics
 from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
 from ac_platform.conversation_intelligence.inference import ConversationInference, binding_for
@@ -53,6 +53,8 @@ def test_model_builds_on_sqlite_and_erased_summary_is_sql_null() -> None:
     table.create(engine)
     now = datetime.now(UTC)
     usage_id = uuid4()
+    historical_summary = stored_summary(SEGMENTS, 1000)
+    historical_summary["rules"] = "call-metrics/2"
     row = dict(
         usage_id=usage_id,
         tenant_id=uuid4(),
@@ -60,7 +62,7 @@ def test_model_builds_on_sqlite_and_erased_summary_is_sql_null() -> None:
         recording_id=uuid4(),
         report_draft_id=uuid4(),
         rules="call-metrics/2",
-        summary=stored_summary(SEGMENTS, 1000),
+        summary=historical_summary,
         summary_sha256="a" * 64,
         outcome_kind="follow_up",
         created_at=now,
@@ -68,6 +70,8 @@ def test_model_builds_on_sqlite_and_erased_summary_is_sql_null() -> None:
     try:
         with engine.begin() as connection:
             connection.execute(table.insert().values(**row))
+            assert connection.scalar(select(table.c.rules)) == "call-metrics/2"
+            assert connection.scalar(select(table.c.summary)) == historical_summary
         with pytest.raises(IntegrityError), engine.begin() as connection:
             connection.execute(table.insert().values(**row))
         with engine.begin() as connection:
@@ -290,7 +294,7 @@ def test_first_report_is_atomic_and_metrics_failure_does_not_fail_it(
                 if failure:
                     assert metrics is None
                 else:
-                    assert metrics is not None and metrics.rules == "call-metrics/2"
+                    assert metrics is not None and metrics.rules == CALL_METRICS_RULES
                     assert metrics.summary == stored_summary(SEGMENTS, 1000)
                     assert metrics.summary_sha256 == content_hash(metrics.summary)
                     assert metrics.outcome_kind == "follow_up"
@@ -412,6 +416,40 @@ def test_metrics_inherit_recording_retention_and_clear_on_erasure(
                 assert draft.payload is None and draft.erased_at == erase_time
                 settlement = await database.get(ConversationAcquisitionSettlement, usage_id)
                 assert settlement.kind == "completed"
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_later_report_retains_historical_v2_measurements(postgres_harness, monkeypatch) -> None:
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            source = await _source(engine)
+            historical_summary = stored_summary(SEGMENTS, 1000)
+            historical_summary["rules"] = "call-metrics/2"
+            historical_sha256 = content_hash(historical_summary)
+            async with AsyncSession(engine) as database, database.begin():
+                await _finish(database, source, monkeypatch)
+                metrics = await database.get(ConversationCallMetrics, source[2])
+                assert metrics is not None
+                metrics.rules = "call-metrics/2"
+                metrics.summary = historical_summary
+                metrics.summary_sha256 = historical_sha256
+                first_draft_id = metrics.report_draft_id
+                original_created_at = metrics.created_at
+            async with AsyncSession(engine) as database, database.begin():
+                await _finish(database, source, monkeypatch, outcome="closed")
+            async with AsyncSession(engine) as database:
+                metrics = await database.get(ConversationCallMetrics, source[2])
+                assert metrics is not None
+                assert metrics.rules == "call-metrics/2"
+                assert metrics.summary == historical_summary
+                assert metrics.summary_sha256 == historical_sha256
+                assert metrics.report_draft_id == first_draft_id
+                assert metrics.created_at == original_created_at
+                assert metrics.outcome_kind == "follow_up"
         finally:
             await engine.dispose()
 
