@@ -249,6 +249,17 @@ class ClipSuggestion(Model):
         return self
 
 
+class CallSummary(Model):
+    """One of the learner's own retained calls, linking to that call's coaching."""
+
+    submission_id: UUID
+    call_label: str = Field(min_length=1, max_length=256)
+    created_at: datetime
+    state: Literal["ready", "pending", "unavailable"]
+    # The call's own suggested focus; never a diagnosis across calls.
+    focus_label: str | None = Field(default=None, max_length=256)
+
+
 class CoachingView(Model):
     schema_id: Literal["ac.sales-xray.coaching/1"] = Field(
         default="ac.sales-xray.coaching/1", alias="schema"
@@ -278,6 +289,7 @@ class CoachingView(Model):
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: LearningAsset | None = None
     other_format: LearningAsset | None = None
+    calls: tuple[CallSummary, ...] = Field(default=(), max_length=40)
     development_path: Path
     reflection_question: str | None
     feedback_available: Literal[False] = False
