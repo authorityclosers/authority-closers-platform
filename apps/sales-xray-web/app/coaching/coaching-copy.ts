@@ -318,6 +318,19 @@ export const CALLS = {
 
 export const ABOUT = "About this coaching";
 
+/** The Report's fallback when this call's coaching can't be read. */
+export const RETAINED = {
+  keep: "Keep doing",
+  reason: "From this call’s report. One call is a suggestion, not a pattern.",
+  tryNext: "Try this next time",
+  carry: "Carry this into the next call",
+  suggested:
+    "Suggested wording or behaviour from the report, not a quote from the call.",
+  noCheck:
+    "This report didn’t give a success check. Decide what you’ll look for before your next call.",
+  none: "This report has no suggestion backed by a moment from the call. Choose a skill to work on below.",
+} as const;
+
 /** Team coaching for owners and admins: totals, objections, shared reps. */
 export const TEAM = {
   calls: "Analysed calls",
