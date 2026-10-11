@@ -396,6 +396,32 @@ describe("Coaching story", () => {
       position(textOnly, "Read the full lesson"),
     );
   });
+  it("says an authored lesson's mission once in the lesson, not as its idea too", () => {
+    // AC Sandbox's dataset gives one sentence as idea, better direction and mission.
+    const mission =
+      "Before describing the offer, ask for one recent example and one consequence of the problem.";
+    const lesson = {
+      ...fictionalCoaching.lesson!,
+      quick_idea: mission,
+      good_looks_like: `${mission.slice(0, -1)} `,
+      better_direction: mission,
+      next_call_connection: mission,
+    };
+    const html = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...fictionalCoaching, lesson }} />,
+    );
+    const start = html.indexOf('id="coaching-better"');
+    const pillar = html.slice(start, html.indexOf('id="mission"', start));
+    expect(start).toBeGreaterThan(-1);
+    // Better direction, then the full lesson's closing mission (spec 6.6).
+    expect(pillar.split(mission.slice(0, -1)).length - 1).toBe(2);
+    expect(pillar).not.toContain("What good looks like");
+    const distinct = renderToStaticMarkup(
+      <CoachingStory coaching={fictionalCoaching} />,
+    );
+    expect(distinct).toContain(fictionalCoaching.lesson!.quick_idea);
+    expect(distinct).toContain("What good looks like");
+  });
   it("offers this call's quoted strength last in the lesson, playable", () => {
     const moment = fictionalCallCoaching.evidence[0];
     const html = renderToStaticMarkup(

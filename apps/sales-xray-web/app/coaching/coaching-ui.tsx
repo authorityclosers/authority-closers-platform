@@ -162,6 +162,17 @@ export function FocusHero({
 
 type Lesson = Omit<TextLesson, "own_call"> & { own_call: Evidence | null };
 
+/** The same words, whatever the case, spacing or closing full stop. */
+function sameLine(line: string, other: string) {
+  const words = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[.!?…]+$/u, "");
+  return words(line) !== "" && words(line) === words(other);
+}
+
 /**
  * Pillar 3 in the spec's order: idea, framework, your call against a better
  * direction, then Dipak's reviewed clip. With a clip the text stays a short
@@ -191,6 +202,16 @@ export function LessonPanel({
   const media = Boolean(clips?.length);
   // One level below the pillar heading (h3 under an h2, h4 inside the Report).
   const Title = level === 3 ? "h4" : "h3";
+  // Authored lessons (every AC Sandbox call, the design review) give the
+  // mission as the idea and the better direction too: say each line once.
+  const idea = [lesson.better_direction, lesson.next_call_connection].some(
+    (line) => sameLine(lesson.quick_idea, line),
+  )
+    ? null
+    : lesson.quick_idea;
+  const good = sameLine(lesson.good_looks_like, lesson.better_direction)
+    ? null
+    : lesson.good_looks_like;
   const wording = lesson.example_wording.length ? (
     <div>
       <CardLabel>{BETTER.wording}</CardLabel>
@@ -205,7 +226,7 @@ export function LessonPanel({
     <Pillar id={id} copy={copy} level={level}>
       <StoryCard label={media ? BETTER.dipak : BETTER.textLesson} tone="accent">
         <Title className={styles.lessonTitle}>{lesson.title}</Title>
-        <p>{lesson.quick_idea}</p>
+        {idea ? <p>{idea}</p> : null}
         {lesson.framework.length ? (
           <div className={styles.framework}>
             <ol className={styles.steps} aria-label={BETTER.framework}>
@@ -281,10 +302,12 @@ export function LessonPanel({
             <CardLabel>{BETTER.whyMatters}</CardLabel>
             {lesson.why_it_matters}
           </p>
-          <p>
-            <CardLabel>{BETTER.good}</CardLabel>
-            {lesson.good_looks_like}
-          </p>
+          {good ? (
+            <p>
+              <CardLabel>{BETTER.good}</CardLabel>
+              {good}
+            </p>
+          ) : null}
           <p>
             <CardLabel>{BETTER.whenUse}</CardLabel>
             {lesson.when_to_use}
