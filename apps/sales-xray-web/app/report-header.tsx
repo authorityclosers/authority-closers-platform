@@ -474,7 +474,7 @@ export function ReportHeader({
               >
                 <Download size={16} aria-hidden="true" />
                 Download report
-                <small>.docx</small>
+                <small className={pinned.fileType}>.docx</small>
               </button>
               <button
                 type="button"

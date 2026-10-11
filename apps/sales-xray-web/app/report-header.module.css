@@ -26,3 +26,8 @@
     white-space: nowrap;
   }
 }
+
+/* The file type beside "Download report": small, never below 12 px. */
+.fileType {
+  font-size: var(--sx-text-xs, 12px);
+}
