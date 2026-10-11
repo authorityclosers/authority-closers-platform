@@ -173,6 +173,9 @@ export default async function CallReviewPage({
   const at = ids.indexOf(recordingId);
   return (
     <ReviewScreen
+      // A new call or run starts fresh: position, marked line and audio state
+      // never carry over from the call before (N / P reuse this page).
+      key={`${recordingId}:${run.id}`}
       call={call.data}
       bundle={bundle.data}
       compare={compareRun && compareRun.id !== run.id ? compareRun.id : null}

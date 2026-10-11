@@ -8,6 +8,7 @@ import { expect, it, vi } from "vitest";
 import type { ApiResult } from "@/app/lib/server-api";
 
 const UUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const mode = vi.hoisted(() => ({ ready: false }));
 
 vi.mock("@/app/lib/server-api", async (original) => {
   const actual = await original<typeof import("@/app/lib/server-api")>();
@@ -20,33 +21,41 @@ vi.mock("@/app/lib/server-api", async (original) => {
       ok: true,
       status: 200,
       data: normalize(
-        path.endsWith(`/calls/${UUID}`)
+        mode.ready && path.endsWith(`/calls/${UUID}`)
           ? {
               recording_id: UUID,
-              organisation: { id: "o1", name: "Synthetic Team" },
-              rep: { label: "Asha Synthetic" },
-              status: "failed",
-              runs: [
-                {
-                  id: "run-1",
-                  state: "failed",
-                  report_id: null,
-                  model: "pro",
-                  prompt_revision: "coaching-v5",
-                },
-              ],
-              failed_jobs: [
-                {
-                  job_id: "job-1",
-                  stage: "C2",
-                  attempts: 3,
-                  code: "provider_timeout",
-                  failed_at: "2026-10-11T03:00:00Z",
-                  retryable: true,
-                },
-              ],
+              status: "ready",
+              runs: [{ id: "run-1", state: "completed", report_id: "rep-1" }],
             }
-          : {},
+          : mode.ready && path.includes("/runs/run-1/review")
+            ? { run_id: "run-1", report: {}, transcript: { segments: [] } }
+            : path.endsWith(`/calls/${UUID}`)
+              ? {
+                  recording_id: UUID,
+                  organisation: { id: "o1", name: "Synthetic Team" },
+                  rep: { label: "Asha Synthetic" },
+                  status: "failed",
+                  runs: [
+                    {
+                      id: "run-1",
+                      state: "failed",
+                      report_id: null,
+                      model: "pro",
+                      prompt_revision: "coaching-v5",
+                    },
+                  ],
+                  failed_jobs: [
+                    {
+                      job_id: "job-1",
+                      stage: "C2",
+                      attempts: 3,
+                      code: "provider_timeout",
+                      failed_at: "2026-10-11T03:00:00Z",
+                      retryable: true,
+                    },
+                  ],
+                }
+              : {},
       ),
     }),
   };
@@ -76,4 +85,15 @@ it("shows a failed call's failed steps with Retry, and its runs", async () => {
   expect(markup).toContain(">Retry<");
   expect(markup).toContain("coaching-v5");
   expect(markup).not.toContain("Analysis health");
+});
+
+it("gives each call and run its own screen, so nothing carries over on N / P", async () => {
+  mode.ready = true;
+  const { default: CallReviewPage } = await import("./page");
+  const element = (await CallReviewPage({
+    params: Promise.resolve({ recordingId: UUID }),
+    searchParams: Promise.resolve({}),
+  })) as { key: string | null };
+  expect(element.key).toBe(`${UUID}:run-1`);
+  mode.ready = false;
 });
