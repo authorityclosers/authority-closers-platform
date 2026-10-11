@@ -140,6 +140,16 @@ export function PageSkeleton({
             <Bar w={104} h={40} r={10} className={styles.pushRight} />
             <Bar w={40} h={40} r={999} />
           </div>
+          {/* Phones: the Report / Coaching bar and the pillar tabs. */}
+          <div className={styles.reportModes}>
+            <Bar w={158} h={40} r={12} />
+            <Bar w={20} h={6} r={3} />
+          </div>
+          <div className={styles.reportTabs}>
+            <Bar w={92} h={14} />
+            <Bar w={92} h={14} />
+            <Bar w={92} h={14} />
+          </div>
           <div className={styles.pillarHead}>
             <Bar w={28} h={28} r={999} />
             <div className={styles.stack}>
