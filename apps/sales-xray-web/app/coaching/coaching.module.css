@@ -19,7 +19,8 @@
   overflow-wrap: anywhere;
 }
 
-.root :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure) {
+.root :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure),
+.conversation :is(h2, h3, h4, p, ul, ol, dl, dd, blockquote, figure) {
   margin: 0;
 }
 
