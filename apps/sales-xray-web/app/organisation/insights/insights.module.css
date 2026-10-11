@@ -540,7 +540,7 @@ button.barRow:focus-visible {
 
 .skillList li {
   display: grid;
-  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr) 92px;
+  grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   min-height: 32px;
@@ -570,17 +570,20 @@ button.barRow:focus-visible {
 }
 
 .skillValue {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 132px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  line-height: 1.2;
 }
 
 .skillValue small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 400;
+  white-space: nowrap;
 }
 
 /* ---------- Heatmap ---------- */
@@ -929,14 +932,7 @@ a.callTitle:hover {
   }
 
   .skillValue {
-    display: flex;
-    flex-direction: row-reverse;
-    align-items: baseline;
-    gap: 6px;
-  }
-
-  .skillValue small {
-    white-space: nowrap;
+    min-width: 0;
   }
 
   .skillList .split {
