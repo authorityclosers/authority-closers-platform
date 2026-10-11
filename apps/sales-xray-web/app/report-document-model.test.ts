@@ -12,6 +12,7 @@ import {
   amitReport,
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
+import { v8Report } from "./review-fixture/report/pillars/v8-report";
 import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
@@ -182,6 +183,46 @@ describe("report document model", () => {
     for (const section of doc.sections)
       for (const part of section.parts)
         expect(part.items.length).toBeGreaterThan(0);
+  });
+
+  it("a report whose analysis writes the six pillars (v8) fills the whole document", () => {
+    const { report, transcript } = v8Report();
+    const doc = reportDocumentModel(
+      { report, transcript, title: "Qivra Works · discovery call" },
+      {
+        roles: { seller: "speaker_0", prospect: "speaker_1" },
+        speakerName: (id) => ({ speaker_0: "Sela", speaker_1: "Daro" })[id],
+      },
+    );
+    expect(doc.sections).toHaveLength(6);
+    expect(doc.sections[0].gaps).toEqual([]);
+    const part = (prefix: string) =>
+      doc.sections
+        .flatMap((s) => s.parts)
+        .find((p) => p.heading?.startsWith(prefix));
+    // The analysis' own stage names, not Sales Xray's defaults.
+    expect(docItemText(part("2.2")!.items[0])).toContain("Work context");
+    // A line that stands alone starts with a capital, mid-sentence it doesn't.
+    expect(docItemText(part("6.6")!.items[0])).toBe("Next Tuesday");
+    expect(docItemText(part("6.7")!.items[0])).toBe(
+      "Clear because next Tuesday is agreed.",
+    );
+    expect(doc.summary?.type === "summary" && doc.summary.cells.at(-1)).toEqual(
+      { label: "Next Event", value: "Next Tuesday" },
+    );
+    // "What was missed" as Dipak sets it: the lead on its own line, then the open point.
+    const miss = items(doc).find(
+      (i) => i.type === "card" && i.kicker?.startsWith("Important Miss"),
+    );
+    const lines = miss?.type === "card" ? miss.items.map(docItemText) : [];
+    const lead = lines.indexOf("You could have first understood:");
+    expect(lead).toBeGreaterThan(lines.indexOf("What was missed"));
+    expect(lines[lead + 1]).toBe(
+      "The reason for the budget limit remained unclear.",
+    );
+    expect(textOf(doc)).not.toMatch(
+      /\b(undefined|null|NaN|\[object Object\]|inferred|insufficient_evidence|C5)\b/,
+    );
   });
 
   it("an older, sparse report still makes a whole document with honest gaps", () => {

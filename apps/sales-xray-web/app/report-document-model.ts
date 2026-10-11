@@ -186,6 +186,13 @@ const same = (a: string | null | undefined, b: string | null | undefined) => {
   return norm(a) !== "" && norm(a) === norm(b);
 };
 
+/** A line that stands alone starts with a capital ("next Tuesday" → "Next Tuesday"). */
+const upperFirst = (text: string) =>
+  text.replace(
+    /^(\P{L}*)(\p{Ll})/u,
+    (_, lead: string, letter: string) => `${lead}${letter.toUpperCase()}`,
+  );
+
 /** Blocks without the ones a report can't fill. */
 const keep = (list: (DocItem | null | undefined | false)[]): DocItem[] =>
   list.filter(present);
@@ -243,7 +250,7 @@ export function reportDocumentModel(
     line
       ? {
           type: "text",
-          text: line.text,
+          text: upperFirst(line.text),
           strong: options.strong,
           possible: line.inferred,
           clip: clip(options.last ? line.sources.at(-1) : line.sources[0]),
@@ -310,7 +317,7 @@ export function reportDocumentModel(
         deal.nextEvent && !picture.nextStep?.text.includes(deal.nextEvent.text)
           ? {
               type: "text",
-              text: followUpOn(deal.nextEvent.text),
+              text: followUpOn(upperFirst(deal.nextEvent.text)),
               strong: true,
             }
           : null,
@@ -470,11 +477,9 @@ export function reportDocumentModel(
         moment.couldExplore
           ? { type: "label", text: MOMENTS.whatMissed }
           : null,
+        moment.couldExplore ? { type: "text", text: MOMENTS.couldFirst } : null,
         moment.couldExplore
-          ? {
-              type: "text",
-              text: `${MOMENTS.couldFirst} ${moment.couldExplore}`,
-            }
+          ? { type: "text", text: upperFirst(moment.couldExplore) }
           : null,
         moment.why ? { type: "label", text: MOMENTS.whyMattered } : null,
         moment.why ? { type: "text", text: moment.why.text } : null,
@@ -707,9 +712,11 @@ export function reportDocumentModel(
       },
       {
         label: END_SUMMARY.nextEvent,
-        value:
-          end?.nextEvent ??
-          (picture.nextStep ? END_SUMMARY.agreedNoDate : null),
+        value: end?.nextEvent
+          ? upperFirst(end.nextEvent)
+          : picture.nextStep
+            ? END_SUMMARY.agreedNoDate
+            : null,
       },
     ] as Cell[]
   ).filter((cell): cell is { label: string; value: string } =>
