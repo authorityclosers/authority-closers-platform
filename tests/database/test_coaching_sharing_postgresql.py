@@ -148,6 +148,8 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 assert view.status_code == 200, view.text
                 assert view.json()["person_id"] == rep and view.json()["person_name"]
                 assert view.json()["mission"]["behavior"] == "Ask before presenting."
+                # The admin reads about the rep: "their calls", not "your calls".
+                assert "reading of their calls" in view.json()["limitations"][0]
 
                 # An ordinary teammate never reads it, shared or not.
                 as_(teammate_token)

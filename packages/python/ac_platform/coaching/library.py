@@ -283,6 +283,8 @@ class CoachingLibrary:
             pending_calls=pending,
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
+            # Only an owner/admin's read of a rep's shared coaching is about "them".
+            their=organisation,
         )
         return view.model_copy(update={"calls": tuple(reversed(summaries))})
 

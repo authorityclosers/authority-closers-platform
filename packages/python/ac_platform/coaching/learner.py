@@ -80,26 +80,32 @@ def build_learner(
     pending_calls: int = 0,
     unavailable_calls: int = 0,
     history_limited: bool = False,
+    their: bool = False,
 ) -> CoachingView:
     """One focus: the first skill to repeat as a call's focus, else the first mission.
 
     A source is counted once even if reuploaded/reanalysed. Version boundaries
     start a new comparison group; an unlinked report revision is not progress.
-    The read model replays history rather than mutating state on GET.
+    The read model replays history rather than mutating state on GET. `their`
+    words the sentences for an admin reading a rep's shared coaching; the
+    mission, practice and reflection stay addressed to the rep.
     """
+    your = "their" if their else "your"
+    you = "they" if their else "you"
     ordered = sorted(history, key=lambda call: (call.created_at, str(call.submission_id)))
     unique: dict[str, CallHistory] = {}
     for call in ordered:
         unique.setdefault(call.source_sha256, call)
     calls = list(unique.values())
     limitations = [
-        "This is Sales Xray's reading of your calls. It can change when you add context.",
-        "Your reports show where a skill came up. They don't prove why, "
-        "or that you have mastered it.",
-        "Your focus is worked out from your saved calls each time you open Coaching.",
+        f"This is Sales Xray's reading of {your} calls. It can change when {you} add context.",
+        f"{your.capitalize()} reports show where a skill came up. They don't prove why, "
+        f"or that {you} have mastered it.",
+        f"{your.capitalize()} focus is worked out from {your} saved calls "
+        + ("each time Coaching opens." if their else "each time you open Coaching."),
     ]
     if history_limited:
-        limitations.append("Only your 40 most recent calls are included.")
+        limitations.append(f"Only {your} 40 most recent calls are included.")
     groups: dict[tuple[str, str], list[SkillObservation]] = defaultdict(list)
     # Per comparable skill: (call position, row) where the report chose it as
     # that call's focus, oldest first.
@@ -140,13 +146,16 @@ def build_learner(
             **common,
             state="not_enough_evidence",
             focus=None,
-            pattern=Pattern(summary="Your calls don't show one skill to work on yet."),
+            pattern=Pattern(
+                summary=f"{your.capitalize()} calls don't show one skill to work on yet."
+            ),
             evidence=(),
             practice=None,
             mission=None,
             lesson=None,
             development_path=Path(
-                current=None, explanation="Your path starts after a few more calls."
+                current=None,
+                explanation=f"{your.capitalize()} path starts after a few more calls.",
             ),
             reflection_question=None,
         )
@@ -171,11 +180,11 @@ def build_learner(
         explanation=origin.improvement or origin.observation,
         why_it_matters=origin.why_it_matters or origin.observation,
         selected_reason=(
-            "Your call's report suggested this."
+            f"{your.capitalize()} call's report suggested this."
             if suggestion
-            else f"It came up in {count} of your last {total} calls on this skill."
+            else f"It came up in {count} of {your} last {total} calls on this skill."
             if recurring
-            else "One call suggested this. We're still learning your pattern."
+            else f"One call suggested this. We're still learning {your} pattern."
         ),
         selected_at=mission.active_since,
         status="active" if recurring else "provisional",
@@ -221,7 +230,7 @@ def build_learner(
             attention_call_count=count,
             summary=(
                 f"It came up on {count} different calls. "
-                "Replay the moments below and see what you did each time."
+                f"Replay the moments below and see what {you} did each time."
                 if recurring
                 else "So far this comes from one call. It isn't a pattern yet."
             ),
@@ -241,7 +250,8 @@ def build_learner(
             likely_next=candidates[0] if candidates else None,
             later=candidates[1] if len(candidates) > 1 else None,
             explanation=(
-                "Your next focus depends on your next calls. Your current mission stays until then."
+                f"{your.capitalize()} next focus depends on {your} next calls. "
+                f"{your.capitalize()} current mission stays until then."
             ),
         ),
         reflection_question="What stopped you here?",
