@@ -251,7 +251,9 @@ export function CoachingStory({
           clips={coaching.media_clips}
           fallbackObservation={focus.explanation}
         />
-        <CallsPanel calls={coaching.calls} />
+        <div className={styles.late}>
+          <CallsPanel calls={coaching.calls} />
+        </div>
       </div>
       <aside className={styles.rail} aria-label="Mission and progress">
         <MissionPanel
@@ -368,7 +370,7 @@ export function CoachingStory({
             </p>
           </div>
         </Panel>
-        <details className={styles.more}>
+        <details className={`${styles.more} ${styles.late}`}>
           <summary>Evidence scope and limitations</summary>
           <ul className={styles.takeaways}>
             {coaching.limitations.map((limitation) => (

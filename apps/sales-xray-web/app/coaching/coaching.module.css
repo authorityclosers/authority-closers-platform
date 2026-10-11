@@ -58,13 +58,36 @@
     grid-template-columns: minmax(0, 1fr) 336px;
   }
 
+  /* The rail already shows the mission beside the focus. */
+  .hero .nextCall,
+  .moreMoments {
+    display: none;
+  }
+}
+
+/* Only a short rail may stick; a tall one would hide its own end. */
+@container (min-width: 900px) {
+  @media (min-height: 800px) {
+    .rail[data-sticky] {
+      position: sticky;
+      top: 16px;
+    }
+  }
+}
+
+/* One column: pillars keep their order, the call list goes last, and only
+   the first two moments show until asked (spec 9, mobile). */
+@container (max-width: 899.98px) {
+  .main,
   .rail {
-    position: sticky;
-    top: 16px;
+    display: contents;
   }
 
-  /* The rail already shows the mission beside the focus. */
-  .nextCall {
+  .late {
+    order: 1;
+  }
+
+  .moments:not([data-expanded]) > [data-extra] {
     display: none;
   }
 }
@@ -268,6 +291,11 @@
 .time:disabled {
   color: var(--sx-muted);
   cursor: default;
+}
+
+.moreMoments {
+  justify-self: start;
+  margin: 0 14px 12px;
 }
 
 .status {
@@ -624,7 +652,7 @@
   flex: 1;
   height: 6px;
   border-radius: 999px;
-  background: var(--sx-sunken);
+  background: var(--sx-line);
 }
 
 .stepper li[data-on] {

@@ -1,0 +1,541 @@
+{
+  "synthetic": true,
+  "source": "synthetic-v1 sandbox (all records synthetic: true)",
+  "call": {
+    "schema": "ac.sales-xray.call-coaching/1",
+    "authority": "provisional",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "person_id": "5a0d0000-0000-4000-8000-000000000001",
+    "tenant_id": "5a0d0000-0000-4000-8000-000000000002",
+    "session_id": "5a0d0000-0000-4000-8000-000000000003",
+    "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+    "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "transcript_revision": "synthetic-v1",
+    "report_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "call_label": "ArthaPath · Kunal K. · Scope call",
+    "state": "ready",
+    "basis": "report_suggestion",
+    "focus": {
+      "skill_id": "certainty_objection_intelligence",
+      "label": "Explain value before trading price",
+      "explanation": "You offered 10% off before the buyer asked about price or the scope was clear. The buyer’s real question was whether the service fits.",
+      "why_it_matters": "An unapproved early discount makes price the topic and leaves finance with a number it cannot rely on.",
+      "selected_reason": "Selected from this call’s report. Your across-call mission stays unchanged.",
+      "selected_at": "2026-07-27T11:00:00+05:30",
+      "status": "provisional",
+      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+    },
+    "evidence": [
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L010",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 36,000 rupees. That would be 32,400 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 103072,
+        "end_ms": 118817,
+        "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
+        "playable": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L012",
+        "quote": "हो, पण हा फरक team ला स्पष्ट सांगावा लागेल.",
+        "start_ms": 132107,
+        "end_ms": 135937,
+        "observation": "The buyer asked for the difference to be made clear to their team; the call moved on to price.",
+        "playable": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L013",
+        "quote": "My concern is paying before the team knows whether the scope fits. What would we test first?",
+        "start_ms": 136487,
+        "end_ms": 143721,
+        "observation": "The real concern was scope fit, not price.",
+        "playable": true
+      }
+    ],
+    "root_cause": {
+      "hypothesis": "Not established from one call.",
+      "gap_type": "uncertain",
+      "confidence": "uncertain"
+    },
+    "lesson": {
+      "title": "Explain value before you trade on price",
+      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "framework": ["Concern", "Value", "Scope", "Approved trade"],
+      "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
+      "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
+      "better_direction": "Ask what the team needs to see to trust the scope, show that value, and keep the list price until a trade is on the table.",
+      "example_wording": [
+        "“Before we talk numbers, what would your team need to see to trust the scope?”",
+        "“If we can run one test case first, would that settle the fit question?”"
+      ],
+      "when_to_use": "When a buyer raises cost, scope or risk before a concession is approved.",
+      "when_not": "A pre-authorised fixed promotion can be stated accurately without manufacturing a negotiation.",
+      "checklist": [
+        "Concern named?",
+        "Value linked to the concern?",
+        "Any concession approved and traded?"
+      ],
+      "source": "Synthetic sandbox lesson (synthetic-v1); owner’s Coaching specification §6.6.",
+      "own_call": {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L010",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 36,000 rupees. That would be 32,400 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 103072,
+        "end_ms": 118817,
+        "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
+        "playable": true
+      },
+      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+    },
+    "practice": {
+      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "success_condition": "Your rewrite names the concern and the value before any number.",
+      "gap_type": "execution",
+      "estimated_minutes": 3
+    },
+    "mission": {
+      "skill_id": "certainty_objection_intelligence",
+      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "context": "When a buyer raises cost, scope or risk before any concession is approved.",
+      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "cue": "Concern first. Value next. Trade, never give.",
+      "active_since": "2026-07-27T11:00:00+05:30",
+      "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
+      "status": "active"
+    },
+    "media_clips": [
+      {
+        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "placeholder": true,
+        "voice": "neutral",
+        "kind": "audio",
+        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
+        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "slides": [
+          {
+            "segment_id": "hook",
+            "title": "Diagnose first",
+            "bullets": [
+              "Ask what is true before you answer.",
+              "A price objection is a symptom, not the diagnosis."
+            ]
+          }
+        ],
+        "topic_id": "syn-coach-audio-001",
+        "review_id": "5a0d0000-0000-4000-8000-000000000301",
+        "title": "Diagnose before you discount",
+        "access": "preview",
+        "entitlement_policy": "sandbox-preview-plan",
+        "start_ms": 0,
+        "end_ms": 171000,
+        "preview_end_ms": 3000,
+        "takeaways": [
+          "Treat “price is high” as a symptom.",
+          "Ask one question about the real concern before any number.",
+          "Name the concern, then show the value."
+        ],
+        "offer": {
+          "full_coaching_href": "/plans",
+          "academy": {
+            "href": "https://learn.authorityclosers.com/courses/diagnosis",
+            "label": "Diagnose before you discount"
+          }
+        }
+      },
+      {
+        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "placeholder": true,
+        "voice": "neutral",
+        "kind": "audio",
+        "reason": "A short follow-on for when the buyer does ask for a discount.",
+        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "slides": [
+          {
+            "segment_id": "hook",
+            "title": "Diagnose first",
+            "bullets": [
+              "Ask what is true before you answer.",
+              "A price objection is a symptom, not the diagnosis."
+            ]
+          }
+        ],
+        "topic_id": "syn-coach-audio-014",
+        "review_id": "5a0d0000-0000-4000-8000-000000000302",
+        "title": "Trade, never give: handling a discount request",
+        "access": "locked",
+        "entitlement_policy": "sandbox-preview-plan",
+        "start_ms": 0,
+        "end_ms": 204000,
+        "takeaways": ["Every concession buys a commitment."]
+      }
+    ],
+    "limitations": ["Synthetic sandbox call."],
+    "recommended_media": null
+  },
+  "me": {
+    "schema": "ac.sales-xray.coaching/1",
+    "person_id": "5a0d0000-0000-4000-8000-000000000001",
+    "tenant_id": "5a0d0000-0000-4000-8000-000000000002",
+    "session_id": "5a0d0000-0000-4000-8000-000000000003",
+    "authority": "provisional",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "state": "ready",
+    "analysed_calls": 7,
+    "pending_calls": 1,
+    "unavailable_calls": 0,
+    "history_limited": false,
+    "focus": {
+      "skill_id": "certainty_objection_intelligence",
+      "label": "Explain value before trading price",
+      "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
+      "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
+      "selected_reason": "5 of 7 comparable calls include a coaching suggestion for this. This does not prove the same behaviour each time.",
+      "selected_at": "2026-07-27T11:00:00+05:30",
+      "status": "active",
+      "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+    },
+    "pattern": {
+      "relevant_call_count": 7,
+      "attention_call_count": 5,
+      "summary": "Five of your last seven comparable calls include this suggestion. Replay the moments to compare the situations."
+    },
+    "root_cause": {
+      "hypothesis": "You may treat any hesitation as a price objection and reach for a discount to keep momentum.",
+      "gap_type": "judgment",
+      "confidence": "low"
+    },
+    "evidence": [
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L010",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 36,000 rupees. That would be 32,400 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 103072,
+        "end_ms": 118817,
+        "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
+        "playable": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000102",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000202",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-08-05T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Decision call",
+        "segment_id": "L011",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 36,000 rupees. That would be 32,400 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 109855,
+        "end_ms": 125600,
+        "observation": "The same 10% offer came before the scope was discussed.",
+        "playable": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000104",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000204",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-08-27T12:00:00+05:30",
+        "call_label": "ArthaPath · Chennai clinic · Pricing",
+        "segment_id": "L011",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 24,000 rupees. That would be 21,600 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 101770,
+        "end_ms": 117515,
+        "observation": "Again a discount came first, before the buyer’s concern about scope was heard.",
+        "playable": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L012",
+        "quote": "हो, पण हा फरक team ला स्पष्ट सांगावा लागेल.",
+        "start_ms": 132107,
+        "end_ms": 135937,
+        "observation": "The buyer asked for the difference to be made clear to their team; the call moved on to price.",
+        "playable": true
+      }
+    ],
+    "practice": {
+      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "success_condition": "Your rewrite names the concern and the value before any number.",
+      "gap_type": "execution",
+      "estimated_minutes": 3
+    },
+    "mission": {
+      "skill_id": "certainty_objection_intelligence",
+      "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "context": "When a buyer raises cost, scope or risk before any concession is approved.",
+      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "cue": "Concern first. Value next. Trade, never give.",
+      "active_since": "2026-07-27T11:00:00+05:30",
+      "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
+      "status": "active"
+    },
+    "mastery": {
+      "state": "not_enough_evidence",
+      "trend": "not_enough_evidence",
+      "relevant_count": null,
+      "correct_count": null,
+      "baseline": null,
+      "confidence": "uncertain",
+      "historical_achievement": null,
+      "explanation": "Your reports describe suggestions, not counted opportunities and successful executions, so we do not show a mastery level yet."
+    },
+    "regression": {
+      "state": "unknown",
+      "action": "More comparable behaviour evidence is needed to assess regression."
+    },
+    "lesson": {
+      "title": "Explain value before you trade on price",
+      "quick_idea": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
+      "framework": ["Concern", "Value", "Scope", "Approved trade"],
+      "why_it_matters": "An early, unapproved discount answers a question the buyer did not ask, and makes the price the topic instead of the fit.",
+      "good_looks_like": "You find the buyer’s real concern, connect the scope to it, and only then discuss a concession that is approved and traded for something.",
+      "better_direction": "Ask what the team needs to see to trust the scope, show that value, and keep the list price until a trade is on the table.",
+      "example_wording": [
+        "“Before we talk numbers, what would your team need to see to trust the scope?”",
+        "“If we can run one test case first, would that settle the fit question?”"
+      ],
+      "when_to_use": "When a buyer raises cost, scope or risk before a concession is approved.",
+      "when_not": "A pre-authorised fixed promotion can be stated accurately without manufacturing a negotiation.",
+      "checklist": [
+        "Concern named?",
+        "Value linked to the concern?",
+        "Any concession approved and traded?"
+      ],
+      "source": "Synthetic sandbox lesson (synthetic-v1); owner’s Coaching specification §6.6.",
+      "own_call": {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transcript_revision": "synthetic-v1",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "segment_id": "L010",
+        "quote": "Before we even discuss the scope, I can cut ten percent off the list price of 36,000 rupees. That would be 32,400 rupees. I have not obtained approval yet, but I am sure we can do it.",
+        "start_ms": 103072,
+        "end_ms": 118817,
+        "observation": "A 10% discount was offered before the buyer raised price or the scope was clear.",
+        "playable": true
+      },
+      "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
+    },
+    "media_clips": [
+      {
+        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "placeholder": true,
+        "voice": "neutral",
+        "kind": "audio",
+        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
+        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "slides": [
+          {
+            "segment_id": "hook",
+            "title": "Diagnose first",
+            "bullets": [
+              "Ask what is true before you answer.",
+              "A price objection is a symptom, not the diagnosis."
+            ]
+          }
+        ],
+        "topic_id": "syn-coach-audio-001",
+        "review_id": "5a0d0000-0000-4000-8000-000000000301",
+        "title": "Diagnose before you discount",
+        "access": "preview",
+        "entitlement_policy": "sandbox-preview-plan",
+        "start_ms": 0,
+        "end_ms": 171000,
+        "preview_end_ms": 3000,
+        "takeaways": [
+          "Treat “price is high” as a symptom.",
+          "Ask one question about the real concern before any number.",
+          "Name the concern, then show the value."
+        ],
+        "offer": {
+          "full_coaching_href": "/plans",
+          "academy": {
+            "href": "https://learn.authorityclosers.com/courses/diagnosis",
+            "label": "Diagnose before you discount"
+          }
+        }
+      },
+      {
+        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "placeholder": true,
+        "voice": "neutral",
+        "kind": "audio",
+        "reason": "A short follow-on for when the buyer does ask for a discount.",
+        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "slides": [
+          {
+            "segment_id": "hook",
+            "title": "Diagnose first",
+            "bullets": [
+              "Ask what is true before you answer.",
+              "A price objection is a symptom, not the diagnosis."
+            ]
+          }
+        ],
+        "topic_id": "syn-coach-audio-014",
+        "review_id": "5a0d0000-0000-4000-8000-000000000302",
+        "title": "Trade, never give: handling a discount request",
+        "access": "locked",
+        "entitlement_policy": "sandbox-preview-plan",
+        "start_ms": 0,
+        "end_ms": 204000,
+        "takeaways": ["Every concession buys a commitment."]
+      }
+    ],
+    "recommended_media": null,
+    "other_format": null,
+    "calls": [
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000150",
+        "call_label": "ArthaPath · Pune logistics · Discovery",
+        "created_at": "2026-09-09T06:00:00Z",
+        "state": "pending",
+        "focus_label": null
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000106",
+        "call_label": "ArthaPath · Chennai clinic · Close",
+        "created_at": "2026-09-07T12:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000105",
+        "call_label": "ArthaPath · Chennai clinic · Review",
+        "created_at": "2026-09-01T12:00:00+05:30",
+        "state": "ready",
+        "focus_label": null
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000104",
+        "call_label": "ArthaPath · Chennai clinic · Pricing",
+        "created_at": "2026-08-27T12:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000103",
+        "call_label": "ArthaPath · Chennai clinic · Demo",
+        "created_at": "2026-08-23T12:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000102",
+        "call_label": "ArthaPath · Kunal K. · Decision call",
+        "created_at": "2026-08-05T11:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000101",
+        "call_label": "ArthaPath · Kunal K. · Follow-up",
+        "created_at": "2026-07-31T11:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "call_label": "ArthaPath · Kunal K. · Scope call",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "state": "ready",
+        "focus_label": "Explain value before trading price"
+      }
+    ],
+    "development_path": {
+      "current": "Explain value before trading price",
+      "likely_next": "Discovery & Deep Understanding",
+      "maintain": "Human Connection & Trust",
+      "later": "Closing & Decision Management",
+      "explanation": "The next focus depends on future relevant evidence. Your current mission stays active."
+    },
+    "reflection_question": "What made a discount feel like the safest next step in that moment?",
+    "feedback_available": false,
+    "limitations": [
+      "Synthetic sandbox learner (synthetic-v1).",
+      "Skill observations do not prove mastery."
+    ]
+  },
+  "team": {
+    "schema": "ac.sales-xray.team-coaching/1",
+    "person_id": "5a0d0000-0000-4000-8000-000000000001",
+    "tenant_id": "5a0d0000-0000-4000-8000-000000000002",
+    "session_id": "5a0d0000-0000-4000-8000-000000000003",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "scope": "anonymous",
+    "named_rep_details": false,
+    "analysed_calls": 40,
+    "pending_calls": 2,
+    "unavailable_calls": 1,
+    "history_limited": true,
+    "suggestions": [
+      {
+        "skill_id": "certainty_objection_intelligence",
+        "label": "certainty_objection_intelligence",
+        "suggestion_calls": 19
+      },
+      {
+        "skill_id": "qualification",
+        "label": "qualification",
+        "suggestion_calls": 7
+      },
+      {
+        "skill_id": "closing_decision_management",
+        "label": "closing_decision_management",
+        "suggestion_calls": 7
+      },
+      {
+        "skill_id": "communication_tonality",
+        "label": "communication_tonality",
+        "suggestion_calls": 5
+      },
+      {
+        "skill_id": "discovery_deep_understanding",
+        "label": "discovery_deep_understanding",
+        "suggestion_calls": 1
+      }
+    ],
+    "limitations": [
+      "Counts describe report suggestions, not proven recurring mistakes or mastery.",
+      "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
+      "Synthetic sandbox team (synthetic-v1)."
+    ]
+  }
+}

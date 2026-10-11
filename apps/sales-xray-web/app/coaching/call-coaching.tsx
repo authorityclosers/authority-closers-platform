@@ -83,7 +83,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           fallbackObservation={focus.explanation}
         />
       </div>
-      <aside className={styles.rail} aria-label="Next call">
+      <aside className={styles.rail} aria-label="Next call" data-sticky>
         <MissionPanel
           id="call-mission"
           mission={mission}

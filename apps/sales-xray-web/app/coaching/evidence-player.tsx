@@ -4,6 +4,7 @@ import { Pause, Play, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
@@ -14,10 +15,13 @@ export { timeLabel } from "./coaching-format";
 export function EvidencePlayer({
   evidence,
   showCall = true,
+  extra = false,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
   showCall?: boolean;
+  /** Folded on one-column screens until the learner asks for all moments. */
+  extra?: boolean;
 }) {
   const identity = useId();
   const audio = useRef<HTMLAudioElement>(null);
@@ -70,7 +74,7 @@ export function EvidencePlayer({
   const Icon =
     state === "playing" ? Pause : state === "failed" ? RefreshCw : Play;
   return (
-    <li className={styles.moment}>
+    <li className={styles.moment} data-extra={extra ? "" : undefined}>
       {evidence.playable ? (
         <button
           type="button"
@@ -159,15 +163,32 @@ export function MomentList({
   showCall?: boolean;
   label?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <ul className={styles.moments} aria-label={label}>
-      {evidence.map((moment) => (
-        <EvidencePlayer
-          key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}
-          evidence={moment}
-          showCall={showCall}
-        />
-      ))}
-    </ul>
+    <>
+      <ul
+        className={styles.moments}
+        aria-label={label}
+        data-expanded={expanded ? "" : undefined}
+      >
+        {evidence.map((moment, index) => (
+          <EvidencePlayer
+            key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}
+            evidence={moment}
+            showCall={showCall}
+            extra={index >= 2}
+          />
+        ))}
+      </ul>
+      {evidence.length > 2 && !expanded ? (
+        <button
+          type="button"
+          className={`${kitStyles.button} ${styles.moreMoments}`}
+          onClick={() => setExpanded(true)}
+        >
+          Show all {evidence.length} moments
+        </button>
+      ) : null}
+    </>
   );
 }
