@@ -11,6 +11,30 @@ covers This call, all six personal pillars, Team, AC Sandbox and a named rep.
 The same journeys support coordinator-run staging smoke with existing product
 routes and a private approved session. They never create a session or account.
 
+Continuation at 15:54 UTC: a fresh 12-case dev batch started at `f35f2bf7`, with
+uncommitted Report/Document edits and live refreshes. Desktop/light Report passed
+all nine steps. Desktop/dark completed six pillars, then failed before Document
+capture during six refresh notices; its failure image is a blank dark viewport.
+The batch subsequently ended 143 before pytest's summary, its end-SHA line and
+the remaining ten cases. Runtime/server/visual error lists are empty in both
+receipts. This incomplete batch cannot replace the prior completed four-pair
+acceptance below or certify the newer dev changes. Exact capture and safe run
+log are in `2026-10-11-workbench-mission-readback/`. Report and backend owners
+received the observations; a bounded repeat is pending at the 15-minute interval.
+
+`3a47bf6a` adds real call/personal mission-link taps, center reachability and
+32 px desktop / 44 px phone target checks. Browser acceptance of these new checks
+is pending because the interrupted batch did not reach Coaching. Failure
+receipts now preserve exception type and the journey's check/line, excluding
+exception/customer text, even if pytest's batch summary is interrupted.
+
+Coordinator supplied existing private session references at 15:43 UTC; the
+session file is not Playwright storage-state JSON (format checked, no values
+printed). Populated staging smoke still needs a compatible approved session
+reference/format contract, retained Report route, existing Team-read permission
+and confirmed staging version. Coordinator's second staging attempt is running;
+QA has performed no staging writes, new sign-in/account/access grants or deploy.
+
 Latest completed checks:
 
 | Journey | Result | Evidence / remaining owner |

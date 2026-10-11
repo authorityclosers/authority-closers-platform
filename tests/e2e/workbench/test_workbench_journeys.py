@@ -280,10 +280,22 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         ),
     )
     passed = False
+    failure: dict[str, object] | None = None
     try:
         yield journey
         journey.settled()
         passed = True
+    except BaseException as error:
+        # Retain a safe failure location even if the host stops the batch before
+        # pytest's final summary. Exception text may contain customer content.
+        failure = {"type": type(error).__name__}
+        frame = error.__traceback__
+        while frame is not None:
+            if frame.tb_frame.f_code.co_filename == __file__:
+                failure["check"] = frame.tb_frame.f_code.co_name
+                failure["line"] = frame.tb_lineno
+            frame = frame.tb_next
+        raise
     finally:
         if not passed:
             with suppress(Exception):
@@ -299,6 +311,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "mode": "fixture" if journey.fixture else "live",
             "checked_at": datetime.now(UTC).isoformat(),
             "passed": passed,
+            "failure": failure,
             "main_navigations": journey.main_navigations,
             "live_refreshes": journey.live_refreshes,
             "runtime_errors": journey.runtime_errors,
