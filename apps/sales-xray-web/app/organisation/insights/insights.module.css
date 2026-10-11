@@ -220,23 +220,23 @@
   margin-left: 0;
 }
 
-[data-key="won"] {
+.page [data-key="won"] {
   background: var(--sx-accent);
 }
 
-[data-key="calls"] {
+.page [data-key="calls"] {
   background: color-mix(in oklab, var(--sx-accent) 32%, var(--sx-surface));
 }
 
-[data-key="observed"] {
+.page [data-key="observed"] {
   background: var(--sx-accent);
 }
 
-[data-key="attention"] {
+.page [data-key="attention"] {
   background: var(--sx-warn);
 }
 
-[data-key="unknown"] {
+.page [data-key="unknown"] {
   background: var(--sx-line-strong);
 }
 
@@ -653,16 +653,16 @@ button.barRow:focus-visible {
 
 /* ---------- People table ---------- */
 
-td[data-trend="better"] {
+.page td[data-trend="better"] {
   color: var(--sx-good);
 }
 
-td[data-trend="worse"],
-span[data-trend="worse"] {
+.page td[data-trend="worse"],
+.page span[data-trend="worse"] {
   color: var(--sx-warn);
 }
 
-span[data-trend="better"] {
+.page span[data-trend="better"] {
   color: var(--sx-good);
 }
 
