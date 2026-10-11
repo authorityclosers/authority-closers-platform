@@ -3744,6 +3744,7 @@ export function AcquisitionStudio({
         homeHref={homeHref}
         mobileFit
         allowance={allowance}
+        pageName={reportReady ? "Report" : undefined}
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission

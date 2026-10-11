@@ -3883,7 +3883,15 @@ a.overviewCard:hover {
 .app.app[data-stage="report"] .reportMenu button small {
   margin-left: auto;
   color: var(--lx-muted-2);
-  font-size: 11.5px;
+  font-size: 12px;
+}
+
+/* An open ⋯ menu paints over the sticky Report/Coaching bar. The header's
+   scroll blur makes it a layer of its own, so it needs a position for its
+   z-index to count (QA 14:43: the bar covered Download and Copy link). */
+.app.app[data-stage="report"] .reportHeader:has(.reportMore[open]) {
+  position: relative;
+  z-index: 40;
 }
 .app.app[data-stage="report"] .reportMenu button:hover:not(:disabled) {
   background: var(--lx-sunken);
