@@ -1126,6 +1126,9 @@ class ConversationProcessingPlans:
         # request key cannot manufacture another consent event or reservation.
         if row.state == "active":
             await self.advance(actor, row)
+            from ac_platform.conversation_intelligence.stage_handoff import notify_work
+
+            await notify_work(self.db)
         await ReportMinutes(self.db).release_plan(row)
         return self.view(row)
 

@@ -119,13 +119,14 @@ class _RecordingStorageFence:
     """Cross-process fence for all local conversation storage effects.
 
     The domain deletion worker and the local inspection worker use the same
-    private-root lock. A single global lock is intentional: the database row
-    lock is acquired only after this fence, so deletion cannot deadlock behind
-    an inspection phase that is waiting for its final database transaction.
+    private-root lock. Immutable processing work uses shared admission;
+    deletion/recovery uses exclusive admission and waits for every reader.
+    Both acquire this fence before database rows, preserving lock order.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self.path = root / _WORKER_LOCK_NAME
+        self.exclusive = exclusive
         self._handle: Any | None = None
         self._locked = False
 
@@ -165,7 +166,7 @@ class _RecordingStorageFence:
 
                 fcntl.flock(  # type: ignore[attr-defined,unused-ignore]
                     self._handle.fileno(),
-                    fcntl.LOCK_EX,  # type: ignore[attr-defined,unused-ignore]
+                    fcntl.LOCK_EX if self.exclusive else fcntl.LOCK_SH,
                 )
             self._locked = True
         except StorageError:
@@ -211,9 +212,9 @@ class _RecordingStorageFence:
 class _FencedExecutor:
     """Own a storage fence and all synchronous work until its thread is joined."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="conversation-worker")
-        self._fence = _RecordingStorageFence(root)
+        self._fence = _RecordingStorageFence(root, exclusive=exclusive)
         self._entered = False
 
     async def __aenter__(self) -> _FencedExecutor:
@@ -727,7 +728,7 @@ class OfflineConversationWorker:
             self._verify_object(key, sha, expected_bytes)
 
     async def _inspect_job(self, work: Work) -> None:
-        async with _FencedExecutor(self.storage.root) as fenced:
+        async with _FencedExecutor(self.storage.root, exclusive=False) as fenced:
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
                 recording, _, quoted, _ = await self._scope(db, job)

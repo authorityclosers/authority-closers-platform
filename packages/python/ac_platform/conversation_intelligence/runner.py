@@ -102,6 +102,7 @@ class ConversationWorkerRunner:
         idle_min: timedelta = timedelta(milliseconds=250),
         idle_max: timedelta = timedelta(seconds=5),
         recovery_backoff: timedelta = timedelta(seconds=10),
+        wakeups: tuple[asyncio.Event, asyncio.Event] | None = None,
     ) -> None:
         if (
             not isinstance(idle_min, timedelta)
@@ -126,6 +127,7 @@ class ConversationWorkerRunner:
         self.idle_min = idle_min
         self.idle_max = idle_max
         self.recovery_backoff = recovery_backoff
+        self.wakeups = wakeups
         self._admission = Lock()
 
     async def run(self, stop: asyncio.Event) -> ConversationWorkerRunnerSummary:
@@ -218,7 +220,7 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
         if not self._admission.acquire(blocking=False):
             raise RuntimeError("Conversation worker runner is already active")
         summary = ConversationWorkerRunnerSummary()
-        wake = asyncio.Event()
+        local_wake, wake = self.wakeups or (asyncio.Event(), asyncio.Event())
         halted = asyncio.Event()
 
         async def consume(*, local: bool) -> None:
@@ -226,10 +228,9 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
             idle = self.idle_min
             try:
                 while not stop.is_set() and not halted.is_set():
-                    if not local:
-                        # Clear before checking durable work: a completion
-                        # arriving during a scan must survive into the wait.
-                        wake.clear()
+                    # Clear before checking durable work: a completion
+                    # arriving during a scan must survive into the wait.
+                    (local_wake if local else wake).clear()
                     try:
                         if local:
                             retention = await self._owned_call(self.retention.step, "retention")
@@ -262,7 +263,7 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
                             # committed; the coordinator can now enqueue C2.
                             wake.set()
                         continue
-                    await self._wait_for_handoff(stop, halted, None if local else wake, idle)
+                    await self._wait_for_handoff(stop, halted, local_wake if local else wake, idle)
                     idle = min(idle * 2, self.idle_max)
             finally:
                 # Stop sibling admissions on an unexpected error. TaskGroup

@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.service_config import (
     load_service_config,
     verify_installed_release,
 )
+from ac_platform.conversation_intelligence.stage_handoff import committed_work_listener
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.conversation_intelligence.worker import HostedConversationWorker
 
@@ -148,10 +149,11 @@ async def run_service(
             environment=config.environment,
             native_runtime=native,
         )
-        runner = PipelinedConversationWorkerRunner(
-            reporting.retention, offline, reporting.plans, reporting.inference
-        )
-        return await runner.run(stop)
+        async with committed_work_listener(database_url) as wakeups:
+            runner = PipelinedConversationWorkerRunner(
+                reporting.retention, offline, reporting.plans, reporting.inference, wakeups=wakeups
+            )
+            return await runner.run(stop)
     finally:
         await engine.dispose()
 

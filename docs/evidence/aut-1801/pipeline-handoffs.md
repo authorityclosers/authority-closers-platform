@@ -41,9 +41,36 @@ snapshot. Deployment and a new source-bound timing export are needed for the
 after table. The 60-second p50 / 90-second p95 target is not yet verified.
 Local concurrency tests establish scheduling behavior, not provider latency.
 
-Remaining work: cross-process notification, partial retained transcript/fact
-projection, bounded independent C4 execution, the short-file failure diagnosis
-and truthful C2 operator reconciliation. C3 requires a complete validated C2
+Remaining work: bounded independent C4 execution, live timing verification and
+the exact short-file failure diagnosis. Companion changes add partial retained
+transcript/fact projection and truthful C2 operator reconciliation. C3 requires a complete validated C2
 checkpoint; C5 currently authorizes one whole-call response, and C6 validates that
 whole response. Streaming or splitting those paid inputs needs an explicit
 versioned prompt/profile and its existing Root activation path.
+
+## Cross-process handoff
+
+The hosted worker listens on one PostgreSQL connection for
+`ac_conversation_work_v1`. New local jobs, accepted processing plans and
+completed stages publish an empty notification in their existing transaction.
+Delivery occurs after commit, and wakes both consumers without sharing their
+clearable events. The listener performs an initial rescan after connection and
+reconnection. Durable periodic scans remain a recovery fallback if a hint is
+lost; notifications never advance state or authorize a provider send.
+
+The listener closes on shutdown, uses no new dependency or migration, and logs
+only a fixed unavailable code on connection failure. Database tests distinguish
+an uncommitted notification, a rolled-back notification and a committed one.
+
+The original root storage fence was another serialization point. Processing
+now takes a shared fence on Linux; deletion and retained-result recovery keep
+the default exclusive fence. All fences still precede database locks, and
+immutable run/object keys and durable job claims retain write ownership. The
+actual-fence test holds two processing readers at once and proves deletion
+waits for both. Windows retains conservative exclusive admission.
+
+Follow-up validation: 20 runner/service/PostgreSQL tests passed, including
+commit-versus-rollback notification delivery; the actual shared/exclusive fence
+test passed, and both database deletion/revocation race cases passed. Strict
+mypy passed for the listener and the worker modules; its URL input now accepts
+the existing SQLAlchemy URL object.
