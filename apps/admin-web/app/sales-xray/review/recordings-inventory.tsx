@@ -2,11 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleAlert, FileAudio, LoaderCircle, Search } from "lucide-react";
+import { CircleAlert, FileAudio, Search } from "lucide-react";
 
-import { SectionHeading } from "../../components/ops-primitives";
+import { Badge, Button, Empty, Panel, Skeleton, kitStyles } from "../../ui/kit";
 import { loadAdminRecordings, type AdminRecording } from "./recordings-api";
-import styles from "./review-workspace.module.css";
+import styles from "./reviewers.module.css";
 
 type InventoryState =
   | { status: "loading"; items: readonly AdminRecording[] }
@@ -109,26 +109,23 @@ function InventoryRow({
     recording.report.review_eligible &&
     recording.report.run_id;
   const canOpenReport = recording.report.available && recording.report.run_id;
+  const ready = recording.status === "completed" && recording.report.available;
   return (
-    <article className={styles.assignmentCard}>
-      <div className={styles.assignmentCardHeader}>
-        <div>
-          <span className={styles.eyebrow}>
-            {recording.owner.kind} recording
-          </span>
-          <h3>{recording.owner.label}</h3>
-          <p className={styles.panelIntro}>
-            Uploaded {formatDate(recording.uploaded_at)} ·{" "}
+    <li className={styles.recording}>
+      <span className={styles.recordingHead}>
+        <span>
+          <strong>{recording.owner.label}</strong>
+          <small>
+            {recording.owner.kind} recording · uploaded{" "}
+            {formatDate(recording.uploaded_at)} ·{" "}
             {formatBytes(recording.source.bytes)}
-          </p>
-        </div>
-        <span
-          className={`${styles.pill} ${recording.status === "completed" && recording.report.available ? styles.pillSuccess : styles.pillPending}`}
-        >
-          {recordingStatus(recording)}
+          </small>
         </span>
-      </div>
-      <dl className={styles.assignmentFacts}>
+        <Badge tone={ready ? "good" : "warn"}>
+          {recordingStatus(recording)}
+        </Badge>
+      </span>
+      <dl className={styles.facts}>
         <div>
           <dt>Duration</dt>
           <dd>{formatDuration(recording)}</dd>
@@ -136,6 +133,16 @@ function InventoryRow({
         <div>
           <dt>Latest run</dt>
           <dd>{latestRunStatus(recording)}</dd>
+        </div>
+        <div>
+          <dt>Report</dt>
+          <dd>
+            {recording.report.recovery
+              ? "Recovered draft · review blocked"
+              : recording.report.review_eligible
+                ? "Ready for review"
+                : "Not ready"}
+          </dd>
         </div>
         <div>
           <dt>Cost basis</dt>
@@ -153,7 +160,7 @@ function InventoryRow({
           <dt>Estimate</dt>
           <dd>{formatCost(recording.cost.estimate_paise)}</dd>
         </div>
-        <div>
+        <div data-wide="">
           <dt>Usage estimate</dt>
           <dd>
             {formatUsageEstimate(
@@ -172,19 +179,9 @@ function InventoryRow({
               : formatCost(recording.cost.actual_paise)}
           </dd>
         </div>
-        <div>
-          <dt>Report</dt>
-          <dd>
-            {recording.report.recovery
-              ? "Recovered draft · review blocked"
-              : recording.report.review_eligible
-                ? "Ready for review"
-                : "Not ready"}
-          </dd>
-        </div>
       </dl>
       {recording.latest_run?.provider_stages.length ? (
-        <div className={styles.panelIntro}>
+        <div className={styles.stages}>
           <strong>Provider usage observed</strong>
           {recording.latest_run.provider_stages.map((stage) => (
             <span key={stage.run_id}>
@@ -205,52 +202,52 @@ function InventoryRow({
           ))}
         </div>
       ) : null}
-      <div className={styles.assignmentActions}>
+      <span className={styles.actions}>
         {canOpenReport ? (
           <>
             <Link
-              className="button button-primary"
+              className={kitStyles.button}
+              data-variant="secondary"
               href={`/sales-xray/review/report/${encodeURIComponent(recording.report.run_id as string)}`}
             >
               Open report
             </Link>
             {canUseForReview ? (
-              <button
-                className="button button-secondary"
-                type="button"
+              <Button
+                variant="primary"
                 onClick={() => onSelectRun(recording.report.run_id as string)}
               >
                 Use for review / invite
-              </button>
+              </Button>
             ) : (
-              <span className={styles.panelIntro}>
+              <small className={kitStyles.muted}>
                 Recovered report is available for inspection; canonical review
                 remains blocked.
-              </span>
+              </small>
             )}
           </>
         ) : (
-          <span className={styles.panelIntro}>
+          <small className={kitStyles.muted}>
             Review and invite actions unlock after a verified report is saved.
-          </span>
+          </small>
         )}
-      </div>
-      <details className={styles.lineage}>
+      </span>
+      <details className={styles.tech}>
         <summary>Technical details</summary>
         <span>
-          <strong>Recording</strong> <code>{recording.id}</code>
+          Recording <code>{recording.id}</code>
         </span>
         <span>
-          <strong>Source</strong> <code>{recording.source.sha256}</code> ·{" "}
+          Source <code>{recording.source.sha256}</code> ·{" "}
           {recording.source.content_type}
         </span>
         {recording.latest_run ? (
           <span>
-            <strong>Run</strong> <code>{recording.latest_run.id}</code>
+            Run <code>{recording.latest_run.id}</code>
           </span>
         ) : null}
       </details>
-    </article>
+    </li>
   );
 }
 
@@ -324,65 +321,72 @@ export function RecordingsInventory({
 
   const isLoading = state.status === "loading";
   return (
-    <section className={styles.panel} aria-labelledby="recordings-title">
-      <SectionHeading
-        eyebrow="All authorized recordings"
-        id="recordings-title"
-        title="Call inventory"
-        body="Search every retained learner and guest recording. Provider receipts show observed usage; reservation ceilings, usage estimates, and settled actuals stay separate."
-      />
-      <form className={styles.searchRow} onSubmit={submitSearch}>
-        <label className={styles.searchField} htmlFor="recording-search">
-          <Search size={16} aria-hidden="true" />
-          <span className="sr-only">Search recordings</span>
-          <input
-            id="recording-search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Owner, source hash, type, or status"
-            maxLength={120}
-          />
+    <Panel
+      title="Saved analyses"
+      sub="Every retained learner and guest recording"
+      foot={
+        <span className={styles.foot}>
+          <span>
+            {appliedSearch
+              ? `Results for “${appliedSearch}”`
+              : "Newest recordings first"}
+            . Reserved, estimated and settled costs stay separate.
+          </span>
+          {nextCursor ? (
+            <Button
+              disabled={isLoading}
+              onClick={() => load(nextCursor, appliedSearch)}
+            >
+              Next page
+            </Button>
+          ) : null}
+        </span>
+      }
+    >
+      <form className={styles.search} onSubmit={submitSearch} role="search">
+        <label className={kitStyles.srOnly} htmlFor="recording-search">
+          Search recordings
         </label>
-        <button
-          className="button button-secondary"
-          type="submit"
-          disabled={isLoading}
-        >
+        <input
+          id="recording-search"
+          type="search"
+          className={kitStyles.inlineInput}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Owner, source hash, type, or status"
+          maxLength={120}
+        />
+        <Button type="submit" disabled={isLoading}>
+          <Search size={14} aria-hidden="true" />
           Search
-        </button>
+        </Button>
       </form>
       {state.status === "error" ? (
-        <div className={styles.inlineError} role="alert">
-          <CircleAlert size={16} aria-hidden="true" />
-          <span>{state.message}</span>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => load(cursor, appliedSearch)}
-          >
-            Retry
-          </button>
-        </div>
-      ) : null}
-      {isLoading && state.items.length === 0 ? (
-        <div className={styles.queueState} role="status">
-          <LoaderCircle size={26} className="spin" aria-hidden="true" />
-          <strong>Loading call inventory</strong>
-          <p>Checking the latest retained recordings and run receipts.</p>
-        </div>
-      ) : null}
-      {!isLoading && state.items.length === 0 ? (
-        <div className={styles.emptyState} role="status">
-          <FileAudio size={25} aria-hidden="true" />
-          <strong>No recordings match this search</strong>
-          <p>
-            Uploads appear here after the server records their authorized
-            admission.
+        <div className={styles.body}>
+          <p className={styles.note} role="alert">
+            <CircleAlert size={14} aria-hidden="true" />
+            <span>{state.message}</span>
+            <Button onClick={() => load(cursor, appliedSearch)}>Retry</Button>
           </p>
         </div>
       ) : null}
+      {isLoading && state.items.length === 0 ? (
+        <div className={styles.skeleton} role="status">
+          <span className={kitStyles.srOnly}>Loading call inventory</span>
+          {[0, 1, 2].map((row) => (
+            <Skeleton key={row} height={64} />
+          ))}
+        </div>
+      ) : null}
+      {state.status === "ready" && state.items.length === 0 ? (
+        <Empty
+          icon={FileAudio}
+          title="No recordings match this search"
+          text="Uploads appear here once the server records them."
+        />
+      ) : null}
       {state.items.length > 0 ? (
-        <div className={styles.queueList} aria-live="polite">
+        <ul className={styles.recordings} aria-live="polite">
           {state.items.map((recording) => (
             <InventoryRow
               key={recording.id}
@@ -390,25 +394,8 @@ export function RecordingsInventory({
               onSelectRun={onSelectRun}
             />
           ))}
-        </div>
+        </ul>
       ) : null}
-      <div className={styles.pagination}>
-        <span className={styles.panelIntro}>
-          {appliedSearch
-            ? `Results for “${appliedSearch}”`
-            : "Newest recordings first"}
-        </span>
-        {nextCursor ? (
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled={isLoading}
-            onClick={() => load(nextCursor, appliedSearch)}
-          >
-            Next page
-          </button>
-        ) : null}
-      </div>
-    </section>
+    </Panel>
   );
 }
