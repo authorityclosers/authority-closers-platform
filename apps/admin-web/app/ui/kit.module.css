@@ -533,12 +533,39 @@ a.tile:hover {
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--sx-row-h);
   box-sizing: border-box;
   padding: 8px 14px;
+}
+
+/* A row with a link opens from anywhere on it, not just its title text. */
+a.rowTitle::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.row:has(> .rowMain > a.rowTitle):hover {
+  background: color-mix(in oklab, var(--sx-sunken) 70%, transparent);
+}
+
+a.rowTitle:focus-visible {
+  outline: none;
+}
+
+a.rowTitle:focus-visible::after {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
+/* Controls at a row's end stay clickable above the stretched link. */
+.rowEnd :is(a, button, input, select, textarea, label) {
+  position: relative;
+  z-index: 1;
 }
 
 .row + .row {
