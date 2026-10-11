@@ -208,6 +208,34 @@ class Journey:
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
 
+    def follow_mission(self, anchor: str, step: str) -> None:
+        """Check the primary mission action as a real tap, without saving feedback."""
+        link = self.page.get_by_role("link", name="See the mission", exact=True)
+        link.scroll_into_view_if_needed()
+        expect(link).to_be_visible()
+        target = link.evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {width: r.width, height: r.height,
+                reachable: hit === el || el.contains(hit)};
+            }"""
+        )
+        # Keep dimensions in the receipt so a later stylesheet change is reviewable.
+        self.observations[-1]["mission_action"] = target
+        minimum = 44 if self.width == 390 else 32
+        assert min(target["width"], target["height"]) >= minimum - 0.01, (
+            f"{step}: mission tap target is below {minimum}px: {target}"
+        )
+        assert target["reachable"], f"{step}: mission action is covered"
+        expect(link).to_have_attribute("href", f"#{anchor}")
+        link.click()
+        expect(self.page).to_have_url(re.compile(r"#" + re.escape(anchor) + r"$"))
+        mission = self.page.locator(f"#{anchor}")
+        expect(mission.get_by_role("heading").first).to_be_in_viewport()
+        expect(mission).to_contain_text("Done when")
+        self.snapshot(step)
+
 
 @contextmanager
 def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator[Journey]:
@@ -417,6 +445,7 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             ).to_be_visible()
             expect(page.locator("#call-mission")).to_contain_text("Done when")
             journey.snapshot("call")
+            journey.follow_mission("call-mission", "call-mission")
             page.get_by_role("button", name="My coaching", exact=True).click()
         for index, label in enumerate(COACHING_SECTIONS):
             heading = _heading(page, label)
@@ -428,6 +457,7 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
         assert page.locator("audio[autoplay],video[autoplay]").count() == 0
         _heading(page, COACHING_SECTIONS[0]).scroll_into_view_if_needed()
         journey.snapshot("personal")
+        journey.follow_mission("mission", "personal-mission")
         # Read-only selection: do not send learner feedback, sharing or billing writes.
         if journey.fixture:
             page.get_by_role("button", name="Team", exact=True).click()
