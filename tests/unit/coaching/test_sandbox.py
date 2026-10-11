@@ -324,6 +324,12 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
         "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause."
     )
     coaching["progress"]["reason"] = "Per-call observation does not establish longitudinal mastery."
+    coaching["action"]["mission"]["done_when"] = (
+        "The buyer confirms an action and a dated event, or explicitly declines."
+    )
+    coaching["diagnosis"]["root_cause_hypothesis"] = (
+        "The seller appears to confuse a friendly ending with a commitment."
+    )
     view = rep_view(
         (indexed(bundle),),
         bundle,
@@ -347,6 +353,9 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
     assert view.lesson and view.lesson.why_it_matters.startswith("The buyer needs a clear way")
     assert view.practice and view.practice.exercise.startswith("Rewrite what was said")
     assert view.mission and view.mission.context == "The next time a buyer gives this opening."
+    agreed = "The buyer agrees to a next step with a date, or clearly says no."
+    assert view.mission.done_when == agreed and view.practice.success_condition == agreed
+    assert view.root_cause.hypothesis == "Taking a friendly goodbye as a yes."
     assert view.mastery.explanation == "One call can’t show progress over time."
     # Without the dataset's own line, the progress note is about "them" too.
     del coaching["progress"]["reason"]

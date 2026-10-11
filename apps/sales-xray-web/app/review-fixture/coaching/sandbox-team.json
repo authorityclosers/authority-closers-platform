@@ -631,7 +631,7 @@
       "exceptions": []
     },
     "root_cause": {
-      "hypothesis": "The seller appears to recognise a familiar problem and jump to a familiar product.",
+      "hypothesis": "Hearing a familiar problem and jumping to the familiar product.",
       "gap_type": "judgment",
       "confidence": "medium",
       "alternatives": [
@@ -699,7 +699,7 @@
     ],
     "practice": {
       "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
-      "success_condition": "A specific example and its impact are established before the first product explanation.",
+      "success_condition": "One real example and what it cost them, before any talk about the product.",
       "gap_type": "judgment",
       "estimated_minutes": 3
     },
@@ -707,7 +707,7 @@
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "context": "The next time a buyer gives this opening.",
-      "done_when": "A specific example and its impact are established before the first product explanation.",
+      "done_when": "One real example and what it cost them, before any talk about the product.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
       "origin_submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
@@ -1460,7 +1460,7 @@
       }
     ],
     "root_cause": {
-      "hypothesis": "The seller appears to recognise a familiar problem and jump to a familiar product.",
+      "hypothesis": "Hearing a familiar problem and jumping to the familiar product.",
       "gap_type": "judgment",
       "confidence": "medium",
       "alternatives": [
@@ -1500,7 +1500,7 @@
     },
     "practice": {
       "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
-      "success_condition": "A specific example and its impact are established before the first product explanation.",
+      "success_condition": "One real example and what it cost them, before any talk about the product.",
       "gap_type": "judgment",
       "estimated_minutes": 3
     },
@@ -1508,7 +1508,7 @@
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "context": "The next time a buyer gives this opening.",
-      "done_when": "A specific example and its impact are established before the first product explanation.",
+      "done_when": "One real example and what it cost them, before any talk about the product.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
       "origin_submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",

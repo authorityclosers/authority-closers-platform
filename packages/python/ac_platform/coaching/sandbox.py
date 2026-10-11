@@ -107,6 +107,44 @@ PLAIN = {
         "Counted in call order, only where the skill applied. One good call doesn’t mean it’s "
         "mastered."
     ),
+    # Mission "Done when" (also the practice's "Success:").
+    "The buyer confirms an action and a dated event, or explicitly declines.": (
+        "The buyer agrees to a next step with a date, or clearly says no."
+    ),
+    "A specific example and its impact are established before the first product explanation.": (
+        "One real example and what it cost them, before any talk about the product."
+    ),
+    "Keep the explanation to one point, then pause for an answer.": (
+        "One point, then a pause for the buyer’s answer."
+    ),
+    "The buyer names the concern and agrees to a specific check before another reassurance.": (
+        "The buyer names the worry and agrees to one way to check it, before any more reassurance."
+    ),
+    "No unsolicited discount; any concession has explicit approval and a reciprocal condition.": (
+        "No discount the buyer didn’t ask for. Anything given is approved and comes with "
+        "something back."
+    ),
+    "A named signing role and approval process are confirmed before asking for purchase.": (
+        "Who signs, and how approval works, are clear before asking for the sale."
+    ),
+    # "Likely reason", which the page already marks as a guess.
+    "The seller appears to confuse a friendly ending with a commitment.": (
+        "Taking a friendly goodbye as a yes."
+    ),
+    "The seller appears to recognise a familiar problem and jump to a familiar product.": (
+        "Hearing a familiar problem and jumping to the familiar product."
+    ),
+    "The seller appears to mistake a complete explanation for a useful explanation.": (
+        "Thinking a full explanation is a useful one."
+    ),
+    "The seller appears to hear risk as rejection and respond with reassurance.": (
+        "Hearing a worry as a no, and answering with reassurance."
+    ),
+    "The seller appears to treat uncertainty as a price problem before the buyer has raised "
+    "one.": "Treating doubt as a price problem before the buyer raised price.",
+    "The seller appears to equate a helpful contact with purchasing authority.": (
+        "Taking a helpful contact for the person who decides."
+    ),
 }
 # The newest call's per-call reason, as read on the rep's page across calls,
 # where "this call" would point at nothing.
@@ -402,7 +440,7 @@ def authored(
     practice_raw = _dict(action.get("practice"))
     skill = skill_for(current.get("skill_id"))
     label = _text(current.get("label"), 240)
-    behavior, done_when = _text(mission_raw.get("behaviour")), _text(mission_raw.get("done_when"))
+    behavior, done_when = _text(mission_raw.get("behaviour")), _plain(mission_raw.get("done_when"))
     if not skill or not label or not behavior or not done_when:
         return None
     gap = _gap(diagnosis.get("gap_type"))
@@ -445,7 +483,7 @@ def authored(
     return Authored(
         focus=focus,
         root_cause=RootCause(
-            hypothesis=_text(diagnosis.get("root_cause_hypothesis")) or RootCause().hypothesis,
+            hypothesis=_plain(diagnosis.get("root_cause_hypothesis")) or RootCause().hypothesis,
             gap_type=gap,
             confidence=(
                 _slug(diagnosis.get("confidence"))
