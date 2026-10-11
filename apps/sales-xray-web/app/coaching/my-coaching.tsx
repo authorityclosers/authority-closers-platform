@@ -19,6 +19,7 @@ import {
   MissionPanel,
 } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
+import { FocusFeedback, SharePanel } from "./sharing-ui";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import styles from "./coaching.module.css";
 
@@ -370,8 +371,15 @@ export function CoachingStory({
           {coaching.reflection_question ? (
             <p className={styles.reflection}>{coaching.reflection_question}</p>
           ) : null}
+          {readOnly ? null : (
+            <FocusFeedback
+              focusSkillId={focus.skill_id}
+              originSubmissionId={mission.origin_submission_id}
+            />
+          )}
         </div>
       </Panel>
+      {readOnly ? null : <SharePanel />}
       <div className={styles.late}>
         <CallsPanel calls={coaching.calls} />
       </div>
@@ -382,12 +390,6 @@ export function CoachingStory({
           {coaching.limitations.map((limitation) => (
             <li key={limitation}>{limitation}</li>
           ))}
-          {readOnly ? null : (
-            <li>
-              Saving your agreement, disagreement and reflection comes with
-              sharing.
-            </li>
-          )}
         </ul>
       </details>
     </div>

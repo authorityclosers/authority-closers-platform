@@ -329,7 +329,7 @@
     "limitations": [
       "Counts describe report suggestions, not proven recurring mistakes or mastery.",
       "No rep's focus, root cause, mission, identity or call evidence is disclosed.",
-      "Named coaching requires an explicit, revocable share; sharing is not active yet.",
+      "Reps are named only after they share their coaching; they can stop at any time.",
       "Assigned coach duties are pending. Current organisation owners/admins see aggregates."
     ],
     "named_rep_details": false,
@@ -347,6 +347,7 @@
     "person_id": "00000000-0000-0000-0000-000000000001",
     "rep_count": 1,
     "reps": [],
+    "reps_basis": "none",
     "sandbox": false,
     "schema": "ac.sales-xray.team-coaching/1",
     "scope": "anonymous",

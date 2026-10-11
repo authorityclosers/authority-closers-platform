@@ -13,6 +13,7 @@ from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
 from ac_platform.coaching.learner import build_learner
 from ac_platform.coaching.report_adapter import _text, from_report
+from ac_platform.coaching.sharing_store import rep_has_shared, shared_reps
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
     _account_library_query,
@@ -122,6 +123,8 @@ class CoachingLibrary:
                     history.append((owner, call))
             except (ConversationError, ValueError, KeyError):
                 unavailable += 1
+        # Named only after a rep shares (owner decision 2); read fresh.
+        shared = await shared_reps(self.database, actor=actor, tenant_id=self.ownership.tenant_id)
         return summarize_team(
             tuple(history),
             person_id=actor.person_id,
@@ -129,7 +132,22 @@ class CoachingLibrary:
             pending_calls=pending,
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
+            shared=tuple((rep.person_id, rep.name, rep.shared_at) for rep in shared),
         )
+
+    async def owns_call(self, actor: ActorContext, submission_id: UUID) -> bool:
+        """One of the actor's own retained calls in this workspace, right now."""
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+
+        return (
+            await self.database.scalar(
+                _account_library_query(actor, now).where(Usage.submission_id == submission_id)
+            )
+        ) is not None
 
     async def read(self, actor: ActorContext) -> CoachingView:
         now = await self.ownership.sessions._admit()
@@ -149,6 +167,57 @@ class CoachingLibrary:
                 .limit(HISTORY_LIMIT + 1)
             )
         ).all()
+        return await self._learner(actor, actor.person_id, rows, organisation=False)
+
+    async def read_shared(self, actor: ActorContext, rep_person_id: UUID) -> CoachingView:
+        """A rep's own Coaching, only while they share it with this owner/admin.
+
+        Private by default (owner decision 10 Oct): org role alone never reads
+        it. The share, the viewer's role and the rep's membership are all read
+        fresh; every report is re-authorized with existing organisation access.
+        """
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        tenant_id = self.ownership.tenant_id
+        if (
+            rep_person_id == actor.person_id
+            or not await self.ownership.organisation_call_reader(actor)
+            or not await rep_has_shared(
+                self.database, tenant_id=tenant_id, rep_person_id=rep_person_id
+            )
+        ):
+            raise ConversationNotFound("This coaching is not shared with you.")
+        has_report, state = _report_columns()
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationVisitorClaim as Claim,
+        )
+
+        rows = (
+            await self.database.execute(
+                _account_library_query(actor, now, every_owner=True)
+                .where(func.coalesce(Usage.person_id, Claim.person_id) == rep_person_id)
+                .add_columns(has_report, state)
+                .order_by(Usage.created_at.desc(), Usage.submission_id.desc())
+                .limit(HISTORY_LIMIT + 1)
+            )
+        ).all()
+        view = await self._learner(actor, rep_person_id, rows, organisation=True)
+        name = next(
+            (
+                rep.name
+                for rep in await shared_reps(self.database, actor=actor, tenant_id=tenant_id)
+                if rep.person_id == rep_person_id
+            ),
+            None,
+        )
+        return view.model_copy(update={"person_id": rep_person_id, "person_name": name})
+
+    async def _learner(
+        self, actor: ActorContext, person_id: UUID, rows: Any, *, organisation: bool
+    ) -> CoachingView:
         reports = AcquisitionReports(self.ownership)
         history: list[CallHistory] = []
         summaries: list[CallSummary] = []
@@ -187,6 +256,7 @@ class CoachingLibrary:
                     usage.submission_id,
                     actor=actor,
                     shared_identity_locks=True,
+                    allow_organisation_read=organisation,
                 )
                 UUID(envelope["recording_id"]), UUID(envelope["run_id"])
                 readable.append((usage, envelope))
@@ -224,7 +294,7 @@ class CoachingLibrary:
         summaries.sort(key=lambda row: (row.created_at, str(row.submission_id)))
         view = build_learner(
             tuple(history),
-            person_id=actor.person_id,
+            person_id=person_id,
             tenant_id=self.ownership.tenant_id,
             pending_calls=pending,
             unavailable_calls=unavailable,

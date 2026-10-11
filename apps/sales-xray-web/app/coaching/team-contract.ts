@@ -31,6 +31,8 @@ export type TeamRep = {
   focus_label: string | null;
   calls: number;
   latest_call_at: string | null;
+  /** When a real rep shared their coaching; absent for fictional reps. */
+  shared_at: string | null;
 };
 
 export type TeamCoaching = {
@@ -43,6 +45,8 @@ export type TeamCoaching = {
   named_rep_details: boolean;
   sandbox: boolean;
   reps: TeamRep[];
+  /** Why reps are named: fictional sandbox reps, or real reps who shared. */
+  reps_basis: "none" | "fictional" | "shared";
   analysed_calls: number;
   /** How many people the calls belong to; never who. Optional: older APIs. */
   rep_count: number;
@@ -61,21 +65,26 @@ export type TeamCoaching = {
 export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const data = raw as Record<string, unknown>;
-  // Names only for fictional AC Sandbox reps. A real team's totals that carry
-  // any rep detail are rejected whole, never shown.
-  const sandbox =
-    data.sandbox === true &&
-    data.scope === "sandbox" &&
-    data.named_rep_details === true;
+  // Names only for fictional AC Sandbox reps or real reps who shared. Any
+  // other rep detail rejects the whole view; it is never shown.
+  const sandbox = data.sandbox === true && data.scope === "sandbox";
+  const named = Array.isArray(data.reps) && data.reps.length > 0;
+  const basis =
+    named && sandbox && data.reps_basis === "fictional"
+      ? "fictional"
+      : named &&
+          !sandbox &&
+          data.scope === "anonymous" &&
+          data.reps_basis === "shared"
+        ? "shared"
+        : "none";
   if (
     data.schema !== "ac.sales-xray.team-coaching/1" ||
-    (!sandbox &&
-      (data.scope !== "anonymous" ||
-        data.named_rep_details !== false ||
-        data.sandbox === true ||
-        (Array.isArray(data.reps)
-          ? data.reps.length > 0
-          : data.reps != null))) ||
+    (data.scope !== "anonymous" && data.scope !== "sandbox") ||
+    (data.sandbox === true) !== (data.scope === "sandbox") ||
+    (named && (basis === "none" || data.named_rep_details !== true)) ||
+    (!named && data.named_rep_details === true) ||
+    (data.reps != null && !Array.isArray(data.reps)) ||
     data.entitlement !== "coaching" ||
     data.entitlement_policy !== "AUT-1678-open-access" ||
     !requestedCall(data.person_id) ||
@@ -124,9 +133,10 @@ export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
     tenant_id: data.tenant_id as string,
     session_id: data.session_id as string | null | undefined,
     scope: sandbox ? "sandbox" : "anonymous",
-    named_rep_details: sandbox,
+    named_rep_details: basis !== "none",
     sandbox,
-    reps: sandbox ? parseReps(data.reps) : [],
+    reps_basis: basis,
+    reps: basis === "none" ? [] : parseReps(data.reps, basis === "shared"),
     objections: parseObjections(data.objections, analysed),
     objection_calls: Math.min(count(data.objection_calls) ?? 0, analysed),
     analysed_calls: analysed,
@@ -150,7 +160,7 @@ export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
 }
 
 /** Malformed rows are dropped; the rest of the team view still shows. */
-function parseReps(value: unknown): TeamRep[] {
+function parseReps(value: unknown, shared: boolean): TeamRep[] {
   const reps: TeamRep[] = [];
   const seen = new Set<string>();
   for (const raw of Array.isArray(value) ? value.slice(0, 500) : []) {
@@ -158,7 +168,13 @@ function parseReps(value: unknown): TeamRep[] {
     const row = raw as Record<string, unknown>;
     const id = requestedCall(row.person_id);
     const name = typeof row.name === "string" ? row.name.trim() : "";
-    if (!id || !name || seen.has(id)) continue;
+    const sharedAt =
+      typeof row.shared_at === "string" &&
+      Number.isFinite(Date.parse(row.shared_at))
+        ? row.shared_at
+        : null;
+    // A real rep appears only with the date they shared.
+    if (!id || !name || seen.has(id) || (shared && !sharedAt)) continue;
     seen.add(id);
     reps.push({
       person_id: id,
@@ -177,6 +193,7 @@ function parseReps(value: unknown): TeamRep[] {
         Number.isFinite(Date.parse(row.latest_call_at))
           ? row.latest_call_at
           : null,
+      shared_at: shared ? sharedAt : null,
     });
   }
   return reps;

@@ -20,6 +20,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "companion_refresh_families",
         "companion_credentials",
         "persons",
+        "coaching_share_revisions",
+        "coaching_feedback",
         "password_credentials",
         "email_challenges",
         "email_login_codes",

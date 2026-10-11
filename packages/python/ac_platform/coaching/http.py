@@ -4,11 +4,13 @@ import asyncio
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import TypeVar
+from typing import Literal, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
+from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.coaching import placeholder
@@ -17,13 +19,20 @@ from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions, verified_narration
 from ac_platform.coaching.library import CoachingLibrary
 from ac_platform.coaching.sandbox import SandboxCoaching
-from ac_platform.coaching.team import TeamCoachingView
+from ac_platform.coaching.sharing_store import (
+    SharingView,
+    read_sharing,
+    record_feedback,
+    set_sharing,
+)
+from ac_platform.coaching.team import LABELS, TeamCoachingView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImports
+from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
 from ac_platform.http.routes import RouteContext
 from ac_platform.kernel.authz import ActorContext
@@ -33,6 +42,20 @@ from ac_platform.tenancy.models import Membership, Organisation
 CoachingRead = TypeVar("CoachingRead", CoachingView, CallCoachingView)
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+
+
+class ShareChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    shared: bool
+    expected_revision: int = Field(ge=0)
+
+
+class FeedbackChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    command_id: UUID
+    agreement: Literal["agree", "not_completely"]
+    focus_skill_id: str = Field(min_length=1, max_length=64)
+    mission_origin_submission_id: UUID
 
 
 def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -62,7 +85,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @asynccontextmanager
     async def account_library(
-        request: Request, response: Response
+        request: Request, response: Response, *, write: bool = False
     ) -> AsyncIterator[tuple[CoachingLibrary, ActorContext]]:
         response.headers.update(PRIVATE)
         settings = ctx.settings
@@ -75,8 +98,17 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(
                 422, "Coaching uses your signed-in account and workspace.", headers=PRIVATE
             )
+        if write:
+            try:
+                require_safe_origin(request, settings)
+            except DomainError:
+                raise HTTPException(
+                    403, "Use this Sales Xray page to continue.", headers=PRIVATE
+                ) from None
         try:
-            async with asynccontextmanager(read_actor)(request) as auth:
+            async with asynccontextmanager(ctx.require_actor if write else read_actor)(
+                request
+            ) as auth:
                 actor = auth.resolved.actor
                 tenant_id = actor.tenant_id
                 if tenant_id is None or tenant_id == settings.operations_tenant_id:
@@ -175,17 +207,106 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     async def person_coaching(
         person_id: UUID, request: Request, response: Response
     ) -> CoachingView:
-        # A fictional AC Sandbox rep's coaching for the person who imported it.
-        # Real reps' coaching opens here only after they share it (pending).
+        # A fictional AC Sandbox rep for the person who imported it, or a real
+        # rep who shares their coaching with this owner/admin. Private by
+        # default: an unshared rep looks the same as no rep.
         async with account_library(request, response) as (library, actor):
             sandbox = await sandbox_for(library, actor)
             view = await sandbox.read_rep(actor.person_id, person_id) if sandbox else None
             if view is None:
-                raise HTTPException(404, "This coaching is not shared with you.", headers=PRIVATE)
+                try:
+                    view = await library.read_shared(actor, person_id)
+                except ConversationError as error:
+                    raise HTTPException(
+                        404 if error.status in (403, 404) else error.status,
+                        "This coaching is not shared with you.",
+                        headers=PRIVATE,
+                    ) from None
             view = await with_media(view)
             return CoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )
+
+    async def json_body[T: BaseModel](request: Request, model: type[T]) -> T:
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise HTTPException(415, "Send this choice as JSON.", headers=PRIVATE)
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 1024:
+                        raise HTTPException(413, "This choice is too large.", headers=PRIVATE)
+                    raw.extend(block)
+            return model.model_validate_json(bytes(raw))
+        except ValidationError:
+            raise HTTPException(422, "Choose a valid option.", headers=PRIVATE) from None
+        except (TimeoutError, ClientDisconnect):
+            raise HTTPException(
+                408, "The request was interrupted. Try again.", headers=PRIVATE
+            ) from None
+
+    def request_id(request: Request) -> str | None:
+        value = getattr(request.state, "request_id", None)
+        return value if isinstance(value, str) else None
+
+    @router.get("/sharing", response_model=SharingView)
+    async def sharing(request: Request, response: Response) -> SharingView:
+        async with account_library(request, response) as (library, actor):
+            try:
+                return await read_sharing(
+                    library.database,
+                    tenant_id=library.ownership.tenant_id,
+                    person_id=actor.person_id,
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error), headers=PRIVATE) from None
+
+    @router.put("/sharing", response_model=SharingView)
+    async def change_sharing(request: Request, response: Response) -> SharingView:
+        async with account_library(request, response, write=True) as (library, actor):
+            choice = await json_body(request, ShareChoice)
+            try:
+                return await set_sharing(
+                    library.database,
+                    actor=actor,
+                    tenant_id=library.ownership.tenant_id,
+                    shared=choice.shared,
+                    expected_revision=choice.expected_revision,
+                    request_id=request_id(request),
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error), headers=PRIVATE) from None
+
+    @router.post("/feedback", status_code=204)
+    async def feedback(request: Request, response: Response) -> Response:
+        async with account_library(request, response, write=True) as (library, actor):
+            choice = await json_body(request, FeedbackChoice)
+            # Feedback attaches to a supported focus on one of the learner's
+            # own retained calls; it never changes a score or another person.
+            if choice.focus_skill_id not in LABELS or not await library.owns_call(
+                actor, choice.mission_origin_submission_id
+            ):
+                raise HTTPException(
+                    409, "Your focus changed. Reload Coaching and try again.", headers=PRIVATE
+                )
+            try:
+                await record_feedback(
+                    library.database,
+                    actor=actor,
+                    tenant_id=library.ownership.tenant_id,
+                    command_id=choice.command_id,
+                    agreement=choice.agreement,
+                    focus_skill_id=choice.focus_skill_id,
+                    mission_origin_submission_id=choice.mission_origin_submission_id,
+                    request_id=request_id(request),
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error), headers=PRIVATE) from None
+        return Response(status_code=204, headers=PRIVATE)
 
     @router.get("/media/{topic_id}/{revision}/{review_id}/source")
     async def media_source(

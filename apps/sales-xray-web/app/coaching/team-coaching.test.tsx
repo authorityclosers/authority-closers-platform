@@ -20,6 +20,7 @@ const sandboxTeam = {
   scope: "sandbox",
   named_rep_details: true,
   sandbox: true,
+  reps_basis: "fictional",
   suggestions: [
     {
       skill_id: "closing_decision_management",
@@ -138,6 +139,36 @@ describe("anonymous Team coaching", () => {
       reps: [{ name: "No id" }, sandboxTeam.reps[0], sandboxTeam.reps[0]],
     })!;
     expect(partial.reps.map((row) => row.name)).toEqual(["Closer 1"]);
+  });
+  it("names a real rep only after they share, with the date they shared", () => {
+    const shared = {
+      ...fictionalTeamCoaching,
+      named_rep_details: true,
+      reps_basis: "shared",
+      reps: [
+        {
+          ...rep(30, "Swati Kale", "qualification", 4),
+          focus_label: "Qualification",
+          shared_at: "2026-10-11T09:00:00Z",
+        },
+      ],
+    };
+    const team = parseTeamCoaching(shared)!;
+    expect(team.reps_basis).toBe("shared");
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("1 shared with you");
+    expect(html).toContain("Shared 11 Oct 2026");
+    expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
+    expect(html).not.toContain("fictional");
+    // A real rep without a share date never appears.
+    const unshared = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], shared_at: null }],
+    })!;
+    expect(unshared.reps).toEqual([]);
+    expect(
+      parseTeamCoaching({ ...shared, sandbox: true, scope: "sandbox" }),
+    ).toBeNull();
   });
   it("rejects names on a real team, however they are labelled", () => {
     for (const raw of [

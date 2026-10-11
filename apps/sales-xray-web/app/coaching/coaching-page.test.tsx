@@ -237,11 +237,17 @@ describe("Coaching story", () => {
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
     expect(html).toContain("कामाला");
-    // No dead controls: feedback buttons appear only once saving works.
-    expect(html).not.toContain("Not completely");
-    expect(html).toContain(
-      "Saving your agreement, disagreement and reflection comes with sharing.",
+    // Spec 12.6: agree / not completely, after the evidence; sharing below.
+    expect(html.indexOf("Not completely")).toBeGreaterThan(
+      html.indexOf("Where We Go From Here"),
     );
+    expect(html).toContain("Who sees your coaching");
+    // A fictional or shared rep's view is read-only: nothing to save.
+    const readOnly = renderToStaticMarkup(
+      <CoachingStory coaching={fictionalCoaching} readOnly />,
+    );
+    expect(readOnly).not.toContain("Not completely");
+    expect(readOnly).not.toContain("Who sees your coaching");
   });
   it("teaches in the spec's order and keeps the text short beside a clip", () => {
     const position = (html: string, text: string) => {

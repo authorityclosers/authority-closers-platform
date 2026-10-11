@@ -55,8 +55,8 @@ class TeamObjection(Model):
 
 
 class TeamRep(Model):
-    """A named rep row. Only fictional AC Sandbox reps today; real reps appear
-    here only after they share their coaching (owner decision 2)."""
+    """A named rep row: a fictional AC Sandbox rep, or a real rep who shared
+    their coaching with owners/admins (owner decision 2, revocable)."""
 
     person_id: UUID
     name: str = Field(min_length=1, max_length=120)
@@ -64,6 +64,7 @@ class TeamRep(Model):
     focus_label: str | None = Field(default=None, max_length=240)
     calls: int = Field(ge=0)
     latest_call_at: datetime | None = None
+    shared_at: datetime | None = None
 
 
 class TeamCoachingView(Model):
@@ -92,14 +93,21 @@ class TeamCoachingView(Model):
     objections: tuple[TeamObjection, ...] = ()
     objection_calls: int = Field(default=0, ge=0)
     reps: tuple[TeamRep, ...] = ()
+    # Why reps are named: fictional sandbox reps, or real reps who shared.
+    reps_basis: Literal["none", "fictional", "shared"] = "none"
     limitations: tuple[str, ...]
 
     @model_validator(mode="after")
-    def names_only_for_fictional_reps(self) -> "TeamCoachingView":
-        if (self.named_rep_details or self.reps) and not (
-            self.sandbox and self.scope == "sandbox" and self.named_rep_details
+    def names_only_for_fictional_or_shared_reps(self) -> "TeamCoachingView":
+        fictional = self.sandbox and self.scope == "sandbox"
+        if (
+            self.named_rep_details != bool(self.reps)
+            or (self.reps_basis == "none") != (not self.reps)
+            or (self.reps_basis == "fictional") != (fictional and bool(self.reps))
+            or (self.reps_basis == "shared" and (self.sandbox or self.scope != "anonymous"))
+            or (self.reps_basis == "shared" and any(rep.shared_at is None for rep in self.reps))
         ):
-            raise ValueError("Team totals name no real rep until sharing exists.")
+            raise ValueError("Team names only fictional reps or reps who shared.")
         return self
 
 
@@ -111,6 +119,7 @@ def summarize_team(
     pending_calls: int = 0,
     unavailable_calls: int = 0,
     history_limited: bool = False,
+    shared: tuple[tuple[UUID, str, datetime], ...] = (),
 ) -> TeamCoachingView:
     """Count source-bound recommendations, not mistakes, success rates or mastery.
 
@@ -129,6 +138,29 @@ def summarize_team(
                 for row in call.skills
                 if row.skill_id in LABELS and row.improvement and row.mission
             }
+        )
+    reps = []
+    for rep_id, name, shared_at in shared:
+        own = [call for (owner, _sha), call in unique.items() if owner == rep_id]
+        newest = max(own, key=lambda call: call.created_at, default=None)
+        skill = next(
+            (
+                row.skill_id
+                for row in (newest.skills if newest else ())
+                if row.skill_id in LABELS and row.improvement and row.mission
+            ),
+            None,
+        )
+        reps.append(
+            TeamRep(
+                person_id=rep_id,
+                name=name,
+                skill_id=skill,
+                focus_label=LABELS[skill] if skill else None,
+                calls=len(own),
+                latest_call_at=newest.created_at if newest else None,
+                shared_at=shared_at,
+            )
         )
     heard: Counter[str] = Counter()
     handled: Counter[str] = Counter()
@@ -153,6 +185,9 @@ def summarize_team(
         ),
         # Calls whose report has a call map (v7), so "none heard" is honest.
         objection_calls=sum(1 for call in unique.values() if call.has_call_map),
+        named_rep_details=bool(reps),
+        reps=tuple(reps),
+        reps_basis="shared" if reps else "none",
         analysed_calls=len(unique),
         rep_count=len({owner for owner, _source in unique}),
         pending_calls=pending_calls,
@@ -166,7 +201,7 @@ def summarize_team(
         limitations=(
             "Counts describe report suggestions, not proven recurring mistakes or mastery.",
             "No rep's focus, root cause, mission, identity or call evidence is disclosed.",
-            "Named coaching requires an explicit, revocable share; sharing is not active yet.",
+            "Reps are named only after they share their coaching; they can stop at any time.",
             "Assigned coach duties are pending. Current organisation owners/admins see aggregates.",
             *(
                 ("Only the most recent 40 retained team calls are included.",)

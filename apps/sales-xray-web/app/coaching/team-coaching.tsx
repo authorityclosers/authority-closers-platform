@@ -84,9 +84,12 @@ function ObjectionsPanel({ coaching }: { coaching: TeamCoaching }) {
 function RepList({
   reps,
   rows,
+  shared,
 }: {
   reps: TeamRep[];
   rows: TeamCoaching["suggestions"];
+  /** Real reps who shared their coaching, rather than fictional ones. */
+  shared: boolean;
 }) {
   const [area, setArea] = useState("all");
   const [all, setAll] = useState(false);
@@ -98,7 +101,11 @@ function RepList({
   return (
     <Panel
       title="Who needs help with what"
-      sub={`${reps.length} fictional ${reps.length === 1 ? "rep" : "reps"}`}
+      sub={
+        shared
+          ? `${reps.length} shared with you`
+          : `${reps.length} fictional ${reps.length === 1 ? "rep" : "reps"}`
+      }
     >
       {areas.length > 1 ? (
         <div className={styles.repFilter}>
@@ -134,7 +141,11 @@ function RepList({
             meta={[
               rep.focus_label,
               `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
-              rep.latest_call_at ? callDate(rep.latest_call_at) : null,
+              shared && rep.shared_at
+                ? `Shared ${callDate(rep.shared_at)}`
+                : rep.latest_call_at
+                  ? callDate(rep.latest_call_at)
+                  : null,
             ]}
             end={
               rep.skill_id ? (
@@ -260,8 +271,12 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           {coaching.objection_calls > 0 ? (
             <ObjectionsPanel coaching={coaching} />
           ) : null}
-          {coaching.sandbox && coaching.reps.length ? (
-            <RepList reps={coaching.reps} rows={rows} />
+          {coaching.reps.length ? (
+            <RepList
+              reps={coaching.reps}
+              rows={rows}
+              shared={coaching.reps_basis === "shared"}
+            />
           ) : (
             <Panel title="Who needs help with what" sub="Shared only">
               <Empty
@@ -298,12 +313,14 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
                   Owners and admins see these totals
                 </p>
                 <p>
-                  No rep’s name, calls, quotes, focus or mission appears here.
-                  Leadership and admins follow the same rule as everyone else.
+                  Totals never name a rep or show their calls, quotes, focus or
+                  mission. Leadership and admins follow the same rule as
+                  everyone else.
                 </p>
                 <p className={styles.note}>
-                  Sharing and assigned coaches are coming next. A coach will see
-                  only the reps assigned to them, and only what each rep shares.
+                  A rep can share their coaching with owners and admins in one
+                  tap, and stop at any time. Assigned coaches come next; a coach
+                  will see only their reps, and only what each rep shares.
                 </p>
               </div>
             </Panel>
