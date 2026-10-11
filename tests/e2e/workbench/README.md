@@ -40,6 +40,9 @@ routes; it never tries to enable development-only fixtures on staging.
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.
 Use a fresh output directory for each readback to preserve earlier evidence.
+Navigation and Fast Refresh counts help identify live-edit interruptions;
+console messages are never retained. Recheck an interrupted case before treating
+it as a persistent product defect or claiming a complete PASS.
 No traces or storage-state files are generated. Read the screenshots yourself;
 font floors, menu pointer reachability, root overflow, cleared loading state,
 browser exceptions and HTTP

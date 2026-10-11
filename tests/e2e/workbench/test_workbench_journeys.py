@@ -14,7 +14,16 @@ from urllib.parse import urlsplit
 from zipfile import ZipFile
 
 import pytest
-from playwright.sync_api import Browser, BrowserContext, Locator, Page, expect, sync_playwright
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    ConsoleMessage,
+    Frame,
+    Locator,
+    Page,
+    expect,
+    sync_playwright,
+)
 
 pytestmark = pytest.mark.e2e
 
@@ -120,6 +129,8 @@ class Journey:
     server_errors: list[str] = field(default_factory=list)
     visual_errors: list[str] = field(default_factory=list)
     observations: list[dict[str, object]] = field(default_factory=list)
+    main_navigations: int = 0
+    live_refreshes: int = 0
 
     @property
     def fixture(self) -> bool:
@@ -220,6 +231,18 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     journey = Journey(page, context, name, width, theme, directory)
     # No traces, request bodies, cookies or full error messages in receipts.
     page.on("pageerror", lambda error: journey.runtime_errors.append(error.name))
+
+    # Count live-edit interruptions without retaining console/customer text.
+    def navigation(frame: Frame) -> None:
+        if frame == page.main_frame:
+            journey.main_navigations += 1
+
+    def console(message: ConsoleMessage) -> None:
+        if "[Fast Refresh]" in message.text:
+            journey.live_refreshes += 1
+
+    page.on("framenavigated", navigation)
+    page.on("console", console)
     page.on(
         "response",
         lambda response: (
@@ -248,6 +271,8 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "mode": "fixture" if journey.fixture else "live",
             "checked_at": datetime.now(UTC).isoformat(),
             "passed": passed,
+            "main_navigations": journey.main_navigations,
+            "live_refreshes": journey.live_refreshes,
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
