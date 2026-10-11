@@ -339,6 +339,15 @@
   border-radius: var(--lx-radius-lg);
 }
 
+/* On a phone the frame stays thin, so the paper fills the width as in light. */
+@media (max-width: 720px) {
+  :root[data-theme="dark"]
+    [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
+    padding: var(--lx-space-2);
+    border-radius: var(--lx-radius-md);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --lx-dur-move: 120ms;
