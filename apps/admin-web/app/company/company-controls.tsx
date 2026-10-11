@@ -7,7 +7,7 @@
  */
 import { RotateCw } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Segmented } from "@/app/ui/kit-client";
 
@@ -161,10 +161,10 @@ export function PrepareCalls({
   const router = useRouter();
   const [left, setLeft] = useState(pending);
   const [failed, setFailed] = useState(false);
-  const running = useRef(false);
+  // Each run owns its loop; leaving the page (or another organisation, which
+  // remounts this by key) cancels it.
   useEffect(() => {
-    if (running.current || pending <= 0) return;
-    running.current = true;
+    if (pending <= 0) return;
     let cancelled = false;
     (async () => {
       let remaining = pending;
@@ -196,8 +196,6 @@ export function PrepareCalls({
         if (!cancelled) router.refresh();
       } catch {
         if (!cancelled) setFailed(true);
-      } finally {
-        running.current = false;
       }
     })();
     return () => {

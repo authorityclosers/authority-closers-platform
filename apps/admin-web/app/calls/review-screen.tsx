@@ -444,7 +444,7 @@ export function ReviewScreen({
               <CurrentReport report={bundle.report} onEvidence={playEvidence} />
             ) : tab === "pillars" ? (
               <Pillars
-                report={bundle.report}
+                bundle={bundle}
                 durationMs={durationMs}
                 onEvidence={playEvidence}
               />

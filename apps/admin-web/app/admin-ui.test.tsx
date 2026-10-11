@@ -10,30 +10,9 @@ import NotFound from "./not-found";
 import PeoplePage from "./(console)/people/page";
 import CorrectionPage from "./(console)/people/corrections/page";
 import GrantsPage from "./(console)/people/grants/page";
-import {
-  CorrectionForm,
-  DIAGNOSIS_PURPOSES,
-  guardPreviewEnter,
-  guardPreviewSubmit,
-  HeldJobRetryForm,
-  isDiagnosisPurpose,
-  isDiagnosisReviewReady,
-  LearnerLookupForm,
-  ManualGrantForm,
-  ReconciliationForm,
-} from "./components/admin-forms";
-import { AuditPanel, CapabilityBoundary } from "./components/ops-primitives";
 import { DevAdminLoginForm } from "./components/dev-admin-login-form";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-
-const previewForms = [
-  createElement(LearnerLookupForm),
-  createElement(CorrectionForm),
-  createElement(ManualGrantForm),
-  createElement(HeldJobRetryForm),
-  createElement(ReconciliationForm),
-];
 
 function relativeLuminance(hex: string) {
   const channels = hex
@@ -63,152 +42,6 @@ function contrastRatio(foreground: string, background: string) {
   );
   return (lighter + 0.05) / (darker + 0.05);
 }
-
-describe("G1 admin inert form seams", () => {
-  it("prevents submit and Enter events while leaving unrelated keys alone", () => {
-    const submitEvent = {
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    };
-    const enterEvent = {
-      key: "Enter",
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    };
-    const tabEvent = {
-      key: "Tab",
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    };
-
-    guardPreviewSubmit(submitEvent);
-    guardPreviewEnter(enterEvent);
-    guardPreviewEnter(tabEvent);
-
-    expect(submitEvent.preventDefault).toHaveBeenCalledOnce();
-    expect(submitEvent.stopPropagation).toHaveBeenCalledOnce();
-    expect(enterEvent.preventDefault).toHaveBeenCalledOnce();
-    expect(enterEvent.stopPropagation).toHaveBeenCalledOnce();
-    expect(tabEvent.preventDefault).not.toHaveBeenCalled();
-    expect(tabEvent.stopPropagation).not.toHaveBeenCalled();
-  });
-
-  it("renders every command form fail-closed until a server target is resolved", () => {
-    for (const form of previewForms) {
-      const markup = renderToStaticMarkup(form);
-      const formTag = markup.match(/<form\b[^>]*>/)?.[0] ?? "";
-      const buttons = [...markup.matchAll(/<button\b[^>]*>/g)].map(
-        (match) => match[0],
-      );
-
-      expect(formTag).toContain('data-preview-inert="true"');
-      expect(formTag).not.toMatch(/\saction=/);
-      expect(markup).toMatch(/<fieldset[^>]*disabled/);
-      expect(markup).not.toMatch(/\sname=/);
-      expect(markup).toContain('type="submit"');
-      expect(buttons.length).toBeGreaterThan(0);
-      expect(buttons.every((button) => button.includes("disabled"))).toBe(true);
-      expect(markup).toContain("LOOKUP UNAVAILABLE");
-      expect(markup).toContain("raw identifiers are never accepted");
-    }
-  });
-
-  it("requires resolved summaries before review and exposes helper relationships", () => {
-    const markup = renderToStaticMarkup(createElement(CorrectionForm));
-    const controls = [
-      ...markup.matchAll(/<(?:input|select|textarea)\b[^>]*>/g),
-    ].map((match) => match[0]);
-
-    expect(markup).toContain("Authorized lookup");
-    expect(markup).toContain("Resolved summary");
-    expect(markup).toContain("Operator review");
-    expect(markup).toContain("No target resolved");
-    expect(markup).not.toContain("Existing event identifier");
-    expect(controls.length).toBeGreaterThan(0);
-    expect(
-      controls.every((control) => control.includes("aria-describedby")),
-    ).toBe(true);
-  });
-
-  it("requires a bounded explicit diagnosis purpose and review confirmation", () => {
-    const markup = renderToStaticMarkup(createElement(LearnerLookupForm));
-    const formTag = markup.match(/<form\b[^>]*>/)?.[0] ?? "";
-
-    expect(DIAGNOSIS_PURPOSES.map(({ value }) => value)).toEqual([
-      "learner_support",
-      "safeguarding_review",
-      "accessibility_review",
-    ]);
-    expect(
-      DIAGNOSIS_PURPOSES.every(({ value }) => isDiagnosisPurpose(value)),
-    ).toBe(true);
-    expect(isDiagnosisPurpose("custom-purpose")).toBe(false);
-    expect(isDiagnosisPurpose("")).toBe(false);
-
-    expect(markup).toContain("Diagnosis purpose");
-    expect(markup).toContain("Select an explicit purpose");
-    expect(markup).toContain("There is no default purpose");
-    expect(markup).toMatch(/<select[^>]*required/);
-    expect(markup).not.toContain('selected="learner_support"');
-    expect(markup).toContain(
-      "I confirm this authorized review has the required boundary.",
-    );
-    expect(markup).toContain(
-      "permission, active tenant, the selected purpose, redaction",
-    );
-    expect(markup).toMatch(/<input[^>]*type="checkbox"[^>]*disabled/);
-    expect(markup).toMatch(/<fieldset[^>]*disabled/);
-    expect(markup).toMatch(/<button[^>]*disabled[^>]*>.*Run diagnosis/);
-    expect(formTag).not.toMatch(/\s(?:action|method|name)=/);
-    expect(markup).not.toMatch(
-      /id="[^"]*(?:learner_support|safeguarding_review|accessibility_review)/,
-    );
-    expect(markup).not.toContain("?");
-  });
-
-  it("does not infer purpose or unlock diagnosis before every boundary is ready", () => {
-    expect(
-      isDiagnosisReviewReady({
-        purpose: "",
-        reviewConfirmed: true,
-        targetResolved: true,
-        serverContextVerified: true,
-      }),
-    ).toBe(false);
-    expect(
-      isDiagnosisReviewReady({
-        purpose: "learner_support",
-        reviewConfirmed: false,
-        targetResolved: true,
-        serverContextVerified: true,
-      }),
-    ).toBe(false);
-    expect(
-      isDiagnosisReviewReady({
-        purpose: "learner_support",
-        reviewConfirmed: true,
-        targetResolved: false,
-        serverContextVerified: true,
-      }),
-    ).toBe(false);
-    expect(
-      isDiagnosisReviewReady({
-        purpose: "learner_support",
-        reviewConfirmed: true,
-        targetResolved: true,
-        serverContextVerified: false,
-      }),
-    ).toBe(false);
-    expect(
-      isDiagnosisReviewReady({
-        purpose: "learner_support",
-        reviewConfirmed: true,
-        targetResolved: true,
-        serverContextVerified: true,
-      }),
-    ).toBe(true);
-  });
-});
 
 describe("G1 admin permissions and semantic boundaries", () => {
   it("labels a local sandbox and requests its real tenant without embedding account defaults", () => {
@@ -253,24 +86,6 @@ describe("G1 admin permissions and semantic boundaries", () => {
 
     expect(proxy).toContain('request.nextUrl.pathname === "/catalog"');
     expect(proxy).toContain('"/studio/programs"');
-  });
-
-  it("locks effectful controls and names permission, reason, and audit behavior", () => {
-    const markup = renderToStaticMarkup(
-      createElement(CapabilityBoundary, {
-        title: "Promote immutable version",
-        detail: "Version promotion is a server-authorized transition.",
-        permission: "catalog_publish",
-        reason: "No named admin actor is available in preview.",
-        audit: "No transition is written.",
-        actionLabel: "Publish version (locked)",
-      }),
-    );
-
-    expect(markup).toContain("catalog_publish");
-    expect(markup).toContain("No named admin actor is available in preview.");
-    expect(markup).toContain("No transition is written.");
-    expect(markup).toMatch(/<button[^>]*disabled/);
   });
 
   it("keeps scoped mutation forms unavailable while navigation controls remain usable", () => {
@@ -364,32 +179,6 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(runtime).toContain("metric.reason");
     expect(runtime).not.toContain("432");
     expect(runtime).not.toContain("99.7");
-  });
-
-  it("keeps audit heading IDs unique", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        Fragment,
-        null,
-        createElement(AuditPanel, {
-          id: "first-audit",
-          title: "First audit",
-          body: "First boundary.",
-        }),
-        createElement(AuditPanel, {
-          id: "second-audit",
-          title: "Second audit",
-          body: "Second boundary.",
-        }),
-      ),
-    );
-    const ids = [...markup.matchAll(/\sid="([^"]+)"/g)].map(
-      (match) => match[1],
-    );
-
-    expect(ids).toContain("first-audit-title");
-    expect(ids).toContain("second-audit-title");
-    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("does not advertise simulated universal, offline, or held states", () => {

@@ -84,12 +84,31 @@ it("shows the organisation's calls combined, labelled synthetic", async () => {
     "How calls ended",
     "Skills across the calls",
     "Common mistakes",
-    "Strongest calls",
-    "Calls to review",
-    "Older 50",
     "never an official score",
   ])
     expect(html).toContain(text);
+  // People and Calls are their own views, as tabs that keep the filters.
+  expect(html).not.toContain("Strongest calls");
+  expect(html).toContain("view=people");
+  const calls = renderToStaticMarkup(
+    await CompanyPage({
+      searchParams: Promise.resolve({
+        range: "12m",
+        outcome: "won",
+        view: "calls",
+      }),
+    }),
+  );
+  for (const text of ["Strongest calls", "Calls to review", "Older 50"])
+    expect(calls).toContain(text);
+  expect(calls).toContain(
+    "range=12m&amp;outcome=won&amp;offset=50&amp;view=calls",
+  );
+  const people = renderToStaticMarkup(
+    await CompanyPage({ searchParams: Promise.resolve({ view: "people" }) }),
+  );
+  expect(people).toContain("People (and teams)");
+  expect(people).not.toContain("How calls ended");
 });
 
 it("keeps a failed read to a small card", async () => {

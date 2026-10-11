@@ -542,6 +542,45 @@
   color: var(--sx-muted);
 }
 
+.entryNote {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.pillarMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.pillarMetrics div {
+  min-width: 96px;
+  padding: 6px 8px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-paper-2);
+}
+
+.pillarMetrics dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.pillarMetrics dd {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pillarMetrics small {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
 .gap,
 .muted {
   color: var(--sx-muted);

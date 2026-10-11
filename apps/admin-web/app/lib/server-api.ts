@@ -25,6 +25,8 @@ const ADMIN_HOST_BY_API_HOST: Readonly<Record<string, string>> = {
 const SESSION_COOKIE_NAME = "__Host-ac_session";
 /** The development API's session cookie name (settings.session_cookie_name default). */
 const DEV_SESSION_COOKIE_NAME = "ac_session";
+/** The dev live API's own session cookie (AC_SESSION_COOKIE_NAME on :8101). */
+const DEV_LIVE_SESSION_COOKIE_NAME = "__Host-ac_live_session";
 const OPAQUE_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
 const SAFE_PATH = /^\/v1\/[A-Za-z0-9\-._~/%]*(\?[A-Za-z0-9\-._~%&=+,:]*)?$/;
 const READ_TIMEOUT_MS = 15_000;
@@ -75,7 +77,12 @@ export function devEdgeTransport(
     return {
       origin,
       adminHost: host,
-      cookieNames: [SESSION_COOKIE_NAME, DEV_SESSION_COOKIE_NAME],
+      // admin-dev's /v1/* goes to the dev live API, so its own sign-in wins.
+      cookieNames: [
+        DEV_LIVE_SESSION_COOKIE_NAME,
+        SESSION_COOKIE_NAME,
+        DEV_SESSION_COOKIE_NAME,
+      ],
     };
   } catch {
     return null;
