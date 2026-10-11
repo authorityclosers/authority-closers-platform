@@ -1005,9 +1005,22 @@
   white-space: nowrap;
 }
 
+/* Phones: names sit under their bars, the ends flush with the edges. */
 @media (max-width: 400px) {
   .stepper {
     gap: 2px;
+  }
+
+  .stepper li {
+    text-align: center;
+  }
+
+  .stepper li:first-child {
+    text-align: start;
+  }
+
+  .stepper li:last-child {
+    text-align: end;
   }
 }
 
