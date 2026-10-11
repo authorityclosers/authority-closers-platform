@@ -90,13 +90,13 @@ def test_canonical_pipeline_timings_and_erased_delivery(
                 assert result["plans"]["bound_saved_reports"] == 1
                 assert result["plans"]["acceptance_to_report_saved"]["n"] == 1
                 async with setup.sessions() as db, db.begin():
-                        await db.execute(
-                            update(ConversationReportDraft).values(
-                                payload=None,
-                                transcript=None,
-                                evidence_receipt=None,
-                                erased_at=datetime.now(UTC),
-                            )
+                    await db.execute(
+                        update(ConversationReportDraft).values(
+                            payload=None,
+                            transcript=None,
+                            evidence_receipt=None,
+                            erased_at=datetime.now(UTC),
+                        )
                     )
                 erased = await pipeline_timings.export_summary(connection, since=since)
                 assert erased["plans"]["bound_delivery_reports"] == 0
