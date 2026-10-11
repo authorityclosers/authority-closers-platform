@@ -571,7 +571,7 @@
     "entitlement": "coaching",
     "entitlement_policy": "AUT-1678-open-access",
     "scope": "anonymous",
-    "named_rep_details": false,
+    "named_rep_details": true,
     "analysed_calls": 40,
     "rep_count": 6,
     "pending_calls": 2,
@@ -608,6 +608,27 @@
       "Counts describe report suggestions, not proven recurring mistakes or mastery.",
       "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
       "Synthetic sandbox team (synthetic-v1)."
+    ],
+    "reps_basis": "shared",
+    "reps": [
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b001",
+        "name": "Kunal Kulkarni",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Certainty & Objection Intelligence",
+        "calls": 9,
+        "latest_call_at": "2026-09-07T10:00:00+05:30",
+        "shared_at": "2026-09-08T09:30:00+05:30"
+      },
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b002",
+        "name": "Meera Joshi",
+        "skill_id": "qualification",
+        "focus_label": "Qualification",
+        "calls": 6,
+        "latest_call_at": "2026-09-05T15:00:00+05:30",
+        "shared_at": "2026-09-01T12:00:00+05:30"
+      }
     ]
   }
 }

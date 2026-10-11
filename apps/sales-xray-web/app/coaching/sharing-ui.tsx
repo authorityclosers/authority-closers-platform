@@ -154,9 +154,6 @@ export function FocusFeedback({
         >
           Not completely
         </Button>
-        <Button disabled title="Coming soon">
-          Add context
-        </Button>
       </div>
       <p role="status" className={styles.note}>
         {done
