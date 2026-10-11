@@ -481,6 +481,7 @@
   z-index: 1;
   top: -8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   overflow-x: auto;
   margin: -8px -16px 0;
@@ -748,6 +749,11 @@
 @media (max-width: 760px) {
   .screen {
     padding: 10px var(--sx-gutter) 16px;
+  }
+
+  /* All six pillars show on wide screens; phones keep one scrolling line. */
+  .pillarNav {
+    flex-wrap: nowrap;
   }
 
   /* Unbuilt commands, the keyboard help and dead arrows are desktop-only. */
