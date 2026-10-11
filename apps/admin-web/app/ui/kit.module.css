@@ -162,14 +162,16 @@
   color: var(--sx-accent);
 }
 
+/* Tinted badges mix their text toward the ink so 12 px text keeps 4.5:1 on
+   any surface, in both themes (axe, 11 Oct). */
 .badge[data-tone="good"] {
   background: color-mix(in oklab, var(--sx-good) 12%, transparent);
-  color: var(--sx-good);
+  color: color-mix(in oklab, var(--sx-good) 78%, var(--sx-ink));
 }
 
 .badge[data-tone="warn"] {
   background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
-  color: var(--sx-warn);
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
 }
 
 .badge[data-tone="bad"] {
