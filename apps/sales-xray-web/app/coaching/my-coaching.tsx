@@ -24,7 +24,8 @@ import {
   POINT_COPY,
   PROGRESS,
   REGRESSION_COPY,
-  THEIR_FOCUS,
+  THEIR,
+  THEIR_PILLARS,
   TREND_COPY,
   TREND_ARROW,
   WHY,
@@ -38,6 +39,7 @@ import {
   MissionPanel,
   Pillar,
 } from "./coaching-ui";
+import { TheirCoaching, useTheirCoaching } from "./coaching-voice";
 import { MomentList } from "./evidence-player";
 import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
@@ -60,6 +62,7 @@ function statusText(mastery: Coaching["mastery"]) {
 
 /** This skill's calls, oldest first. Reports say what they saw, never success. */
 function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
+  const they = useTheirCoaching();
   if (!points?.length) return null;
   const after = points.filter((point) => point.after_mission);
   const quiet = after.filter((point) => point.state === "no_suggestion");
@@ -67,11 +70,14 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   return (
     <div className={styles.progress}>
       <span className={styles.cardLabel} aria-hidden="true">
-        {PROGRESS.callsLabel}
+        {they ? THEIR.callsLabel : PROGRESS.callsLabel}
         {" · "}
         <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
       </span>
-      <ol className={styles.timeline} aria-label={PROGRESS.calls}>
+      <ol
+        className={styles.timeline}
+        aria-label={they ? THEIR.calls : PROGRESS.calls}
+      >
         {points.map((point, index) => (
           <li
             key={point.submission_id}
@@ -94,8 +100,13 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
       </p>
       <p>
         {after.length
-          ? PROGRESS.sinceMission(quiet.length, after.length)
-          : PROGRESS.noCallSince}
+          ? (they ? THEIR.sinceMission : PROGRESS.sinceMission)(
+              quiet.length,
+              after.length,
+            )
+          : they
+            ? THEIR.noCallSince
+            : PROGRESS.noCallSince}
       </p>
     </div>
   );
@@ -108,6 +119,7 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
  */
 function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const [expanded, setExpanded] = useState(false);
+  const they = useTheirCoaching();
   if (!calls?.length) return null;
   return (
     <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
@@ -115,7 +127,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
         className={styles.callList}
         data-expanded={expanded ? "" : undefined}
       >
-        <List label={CALLS.label}>
+        <List label={they ? THEIR.recentCalls : CALLS.label}>
           {calls.map((call) => (
             <Row
               key={call.submission_id}
@@ -132,7 +144,8 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
                   ? CALLS.analysing
                   : call.state === "unavailable"
                     ? CALLS.unavailable
-                    : (call.focus_label ?? CALLS.fallback),
+                    : (call.focus_label ??
+                      (they ? THEIR.callFallback : CALLS.fallback)),
                 call.recurring ? CALLS.recurring : null,
               ]}
               end={
@@ -171,11 +184,7 @@ function StartCoaching({
   if (readOnly)
     return (
       <div className={styles.conversation}>
-        <Pillar
-          id="coaching-focus"
-          copy={COACHING_PILLARS.focus}
-          label={THEIR_FOCUS}
-        >
+        <Pillar id="coaching-focus" copy={THEIR_PILLARS.focus}>
           <StoryCard emphasis>
             <p className={styles.chips}>
               <span className={styles.chip} data-tone="neutral">
@@ -261,19 +270,32 @@ function StartCoaching({
   );
 }
 
-export function CoachingStory({
-  coaching,
-  requestedFocus,
-  readOnly = false,
-  sharing,
-}: {
+type StoryProps = {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
   /** A known sharing state (design review); otherwise the panel reads it. */
   sharing?: SharingView;
-  /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
+  /**
+   * Another rep's coaching (a fictional AC Sandbox rep, or a rep who shared
+   * theirs): nothing to save here, and every label says "their".
+   */
   readOnly?: boolean;
-}) {
+};
+
+export function CoachingStory(props: StoryProps) {
+  return (
+    <TheirCoaching.Provider value={props.readOnly ?? false}>
+      <Story {...props} />
+    </TheirCoaching.Provider>
+  );
+}
+
+function Story({
+  coaching,
+  requestedFocus,
+  readOnly = false,
+  sharing,
+}: StoryProps) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
     return (
@@ -289,15 +311,12 @@ export function CoachingStory({
   const path = coaching.development_path;
   const gap = coaching.root_cause.gap_type;
   const confidence = CONFIDENCE_COPY[coaching.root_cause.confidence];
+  const pillars = readOnly ? THEIR_PILLARS : COACHING_PILLARS;
   // One conversation, read top to bottom in Dipak's order (spec 3, 7, 9),
   // each pillar headed the way the Report heads its six parts.
   return (
     <div className={styles.conversation}>
-      <Pillar
-        id="coaching-focus"
-        copy={COACHING_PILLARS.focus}
-        label={readOnly ? THEIR_FOCUS : undefined}
-      >
+      <Pillar id="coaching-focus" copy={pillars.focus}>
         <FocusHero
           label={focus.label}
           chips={[
@@ -323,7 +342,7 @@ export function CoachingStory({
           ) : null}
         </FocusHero>
       </Pillar>
-      <Pillar id="coaching-why" copy={COACHING_PILLARS.why}>
+      <Pillar id="coaching-why" copy={pillars.why}>
         <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
@@ -346,7 +365,9 @@ export function CoachingStory({
               <dt>{WHY.gap}</dt>
               <dd>
                 <strong>{gapCopy(gap).name}</strong>
-                {gap !== "uncertain" ? ` · ${gapCopy(gap).line}` : ""}
+                {gap !== "uncertain"
+                  ? ` · ${readOnly ? THEIR.gapLine(gap) : gapCopy(gap).line}`
+                  : ""}
               </dd>
             </div>
             {confidence ? (
@@ -360,13 +381,13 @@ export function CoachingStory({
         <div className={styles.card} data-flush="">
           <MomentList
             evidence={evidence}
-            heading={WHY.evidence}
+            heading={readOnly ? THEIR.evidence : WHY.evidence}
             fictional={coaching.sandbox}
           />
         </div>
       </Pillar>
       <LessonPanel
-        copy={COACHING_PILLARS.better}
+        copy={pillars.better}
         lesson={lesson}
         clips={coaching.media_clips}
         fallbackObservation={focus.explanation}
@@ -375,13 +396,13 @@ export function CoachingStory({
       />
       <MissionPanel
         id="mission"
-        copy={COACHING_PILLARS.next}
+        copy={pillars.next}
         mission={mission}
         practice={practice}
         since={callDate(mission.active_since)}
         foot={NEXT.stays}
       />
-      <Pillar id="coaching-progress" copy={COACHING_PILLARS.progress}>
+      <Pillar id="coaching-progress" copy={pillars.progress}>
         <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
@@ -417,8 +438,10 @@ export function CoachingStory({
             <div>
               <dt>{PROGRESS.regression}</dt>
               <dd>
-                {REGRESSION_COPY[coaching.regression.state] ??
-                  REGRESSION_COPY.unknown}
+                {readOnly && coaching.regression.state === "severe"
+                  ? THEIR.severe
+                  : (REGRESSION_COPY[coaching.regression.state] ??
+                    REGRESSION_COPY.unknown)}
               </dd>
             </div>
           </dl>
@@ -453,20 +476,25 @@ export function CoachingStory({
           </details>
         </StoryCard>
       </Pillar>
-      <Pillar id="coaching-path" copy={COACHING_PILLARS.path}>
+      <Pillar id="coaching-path" copy={pillars.path}>
         <StoryCard>
-          <ol className={styles.route} aria-label="Your development path">
+          <ol
+            className={styles.route}
+            aria-label={readOnly ? THEIR.path : "Your development path"}
+          >
             <li data-now="">
               <span>{PATH.now}</span>
               {path.current ?? focus.label}
             </li>
             <li>
               <span>{PATH.next}</span>
-              {path.likely_next ?? PATH.nextFallback}
+              {path.likely_next ??
+                (readOnly ? THEIR.nextFallback : PATH.nextFallback)}
             </li>
             <li>
               <span>{PATH.later}</span>
-              {path.later ?? PATH.laterFallback}
+              {path.later ??
+                (readOnly ? THEIR.laterFallback : PATH.laterFallback)}
             </li>
           </ol>
           {path.maintain ? (

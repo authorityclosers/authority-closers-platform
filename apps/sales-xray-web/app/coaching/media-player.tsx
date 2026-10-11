@@ -15,8 +15,9 @@ import {
   FULL_COACHING_HREF,
   type CoachingClip,
 } from "./media-contract";
-import { MEDIA } from "./coaching-copy";
+import { MEDIA, THEIR } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
+import { useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 type ClipState =
@@ -135,6 +136,7 @@ function ClipCard({
   headingLevel?: 3 | 4;
 }) {
   const Title = headingLevel === 4 ? "h4" : "h3";
+  const they = useTheirCoaching();
   const identity = useId();
   const card = useRef<HTMLElement>(null);
   const player = useRef<HTMLAudioElement>(null);
@@ -284,7 +286,9 @@ function ClipCard({
             {recommended
               ? forCall
                 ? MEDIA.recommendedCall
-                : MEDIA.recommended
+                : they
+                  ? THEIR.recommended
+                  : MEDIA.recommended
               : MEDIA.other}
           </span>
           <Title>{clip.title}</Title>
@@ -392,7 +396,9 @@ function ClipCard({
               </div>
             ) : null}
             <p>{clip.transcript_excerpt}</p>
-            <p className={styles.note}>{MEDIA.narrationNote}</p>
+            <p className={styles.note}>
+              {they ? THEIR.narrationNote : MEDIA.narrationNote}
+            </p>
           </div>
         </details>
       )}

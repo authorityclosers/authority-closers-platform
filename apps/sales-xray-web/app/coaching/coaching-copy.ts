@@ -80,8 +80,32 @@ export const CALL_PILLARS: Record<
   next: COACHING_PILLARS.next,
 };
 
-/** Another rep's coaching (a manager or a shared view): "they", not "you". */
-export const THEIR_FOCUS = "What They Should Work On Now";
+/**
+ * Another rep's coaching (a fictional AC Sandbox rep, or a rep who shared
+ * theirs): the same pillars, said about "them" instead of "you".
+ */
+export const THEIR_PILLARS: Record<CoachingPillarId, CoachingPillarCopy> = {
+  focus: {
+    number: 1,
+    label: "What They Should Work On Now",
+    subtitle: "Their highest-priority improvement.",
+  },
+  why: COACHING_PILLARS.why,
+  better: {
+    ...COACHING_PILLARS.better,
+    subtitle:
+      "Learn the better approach using their own calls and Dipak’s coaching.",
+  },
+  next: { ...COACHING_PILLARS.next, label: "Try This on Their Next Call" },
+  progress: {
+    ...COACHING_PILLARS.progress,
+    label: "See How They’re Improving",
+  },
+  path: {
+    ...COACHING_PILLARS.path,
+    subtitle: "See the next stage of their development.",
+  },
+};
 
 export const FOCUS = {
   current: "Current focus",
@@ -340,6 +364,44 @@ export const CALLS = {
   fallback: "One practice for your next call",
   recurring: "Also on other calls",
   showAll: (count: number) => `Show all ${count} calls`,
+} as const;
+
+/** The labels on another rep's coaching that would otherwise say "you". */
+const THEIR_GAP_LINES: Record<string, string> = {
+  knowledge: "They need a clearer framework for what to explore here.",
+  judgment: "They usually see the opportunity after the call.",
+  execution: "They know what to ask but struggle to say it naturally.",
+  confidence: "They avoid the question because it feels uncomfortable.",
+  belief_buy_in:
+    "They understand the advice but don’t yet believe it helps the call.",
+};
+
+export const THEIR = {
+  onNextCall: "On their next call",
+  evidence: "From their calls",
+  call: "Their call",
+  callAt: (clock: string) => `Their call · ${clock}`,
+  strength: "Their strength",
+  strengthAcross:
+    "From their latest call. One call doesn’t prove a strength yet.",
+  strengthKeep: "Keep it while they practise the mission.",
+  mission: "Their next-call mission",
+  recommended: "Recommended for their current focus",
+  narrationNote:
+    "A stand-in voice reads Dipak’s words. Listening alone doesn’t finish their mission.",
+  calls: "Their calls on this skill, oldest first",
+  callsLabel: "Their calls on this skill",
+  sinceMission: (quiet: number, after: number) =>
+    `Since their mission started: ${quiet} of ${after} call${after === 1 ? "" : "s"} on this skill needed no fix. Too early to call it a change.`,
+  noCallSince:
+    "No call on this skill since their mission started. Their next call is the first check.",
+  severe: "Back as their main focus for now",
+  path: "Their development path",
+  nextFallback: "Their next calls decide",
+  laterFallback: "Their future calls will guide this",
+  recentCalls: "Their recent calls",
+  callFallback: "One practice for their next call",
+  gapLine: (gap: string) => THEIR_GAP_LINES[gap] ?? gapCopy(gap).line,
 } as const;
 
 export const ABOUT = "About this coaching";

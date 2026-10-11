@@ -128,6 +128,50 @@ describe("Coaching story", () => {
     expect(theirs).not.toContain("Analyse a call");
     expect(theirs).not.toContain("Who sees your coaching");
   });
+  it("says “their” across another rep's coaching and “your” on your own", () => {
+    const progress = [
+      {
+        submission_id: "00000000-0000-4000-8000-0000000000c1",
+        created_at: "2026-09-01T10:00:00Z",
+        state: "suggested" as const,
+        after_mission: true,
+      },
+    ];
+    const theirs = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...fictionalCoaching, progress }} readOnly />,
+    );
+    for (const words of [
+      "What They Should Work On Now",
+      "Their highest-priority improvement.",
+      "On their next call",
+      "From their calls",
+      "using their own calls",
+      "Try This on Their Next Call",
+      "Their next-call mission",
+      "See How They’re Improving",
+      "Their calls on this skill",
+      "Since their mission started",
+      "See the next stage of their development.",
+    ])
+      expect(theirs).toContain(words);
+    for (const words of [
+      "What You Should Work On Now",
+      "On your next call",
+      "From your calls",
+      "Your next-call mission",
+      "See How You’re Improving",
+      "Your calls on this skill",
+      "Your call ·",
+    ])
+      expect(theirs).not.toContain(words);
+    const mine = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...fictionalCoaching, progress }} />,
+    );
+    expect(mine).toContain("What You Should Work On Now");
+    expect(mine).toContain("From your calls");
+    expect(mine).toContain("Since your mission started");
+    expect(mine).not.toContain("Their next-call mission");
+  });
   it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory
