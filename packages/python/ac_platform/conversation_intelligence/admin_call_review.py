@@ -38,8 +38,10 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
     utc,
 )
+from ac_platform.conversation_intelligence.call_metrics import compute_call_metrics
 from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
+from ac_platform.conversation_intelligence.measurement_view import ConversationMeasurements
 from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationPlanStageAuthorization,
@@ -50,6 +52,7 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.report_store import ConversationReports
+from ac_platform.conversation_intelligence.report_story import report_story
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
@@ -522,6 +525,24 @@ class AdminCallReview:
             },
             now=now,
         )
+        try:
+            # The persisted C1 loudness envelope; older calls may not have one.
+            waveform: dict[str, Any] | None = await ConversationMeasurements(
+                self.application
+            ).waveform_from_recording(evidence.recording)
+        except ConversationError:
+            waveform = None
+        try:
+            # call-metrics/2, the rep's Report twin: numbers and segment ids only, no text.
+            duration = waveform.get("duration_ms") if waveform else None
+            metrics: dict[str, Any] | None = dict(
+                compute_call_metrics(
+                    list(transcript.get("segments") or []),
+                    duration if isinstance(duration, int) else None,
+                )
+            )
+        except (AttributeError, TypeError, ValueError, KeyError):
+            metrics = None
         plan = await withheld_plan_for(
             self.database,
             recording_id=evidence.recording.id,
@@ -534,7 +555,11 @@ class AdminCallReview:
                 "report_id": str(evidence.draft.id),
                 "retention_until": evidence.retention_until.isoformat(),
                 "report": report.model_dump(mode="json"),
+                # The same story projection the rep's Report reads (six pillars).
+                "story": report_story(report),
                 "transcript": transcript,
+                "waveform": waveform,
+                "metrics": metrics,
                 "audio_source_url": f"/v1/admin/conversation/runs/{evidence.run.id}/source",
             },
             plan,

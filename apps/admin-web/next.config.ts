@@ -31,7 +31,11 @@ const nextConfig: NextConfig = {
         destination: "/sales-xray/providers?tab=benchmark",
         permanent: false,
       },
-      { source: "/sales-xray/review", destination: "/calls", permanent: false },
+      {
+        source: "/sales-xray/review",
+        destination: "/reviewers",
+        permanent: false,
+      },
     ];
   },
 };

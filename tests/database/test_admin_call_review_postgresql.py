@@ -88,6 +88,9 @@ def test_queue_call_and_bundle_show_one_analysed_call(review_case: ReviewCase) -
             )
             assert isinstance(bundle["report"], dict) and bundle["report"]
             assert bundle["audio_source_url"].endswith(f"/runs/{case.report_run_id}/source")
+            assert set(bundle) >= {"story", "waveform", "metrics"}
+            if bundle["metrics"] is not None:
+                assert bundle["metrics"]["speakers"]
 
             source = await service.playback(case.admin_actor, case.report_run_id)
             assert source["id"] == recording_id and source["source_bytes"] > 0

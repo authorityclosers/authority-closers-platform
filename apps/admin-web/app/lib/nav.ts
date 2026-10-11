@@ -109,7 +109,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/reviewers",
-        soon: true,
         label: "Reviewers",
         icon: "reviewers",
         need: { kind: "salesXray" },
