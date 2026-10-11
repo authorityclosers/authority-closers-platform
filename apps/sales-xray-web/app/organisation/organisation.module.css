@@ -662,13 +662,28 @@
   list-style: none;
 }
 
-.people li {
+/* Each row opens the person's profile. */
+.personRow {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 48px 104px;
   align-items: center;
   gap: 10px;
   min-height: 48px;
   padding: 6px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personRow:hover {
+  background: var(--lx-paper-2);
+}
+
+.personRow:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--lx-radius-xs);
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
 }
 
 .people li + li {
@@ -929,6 +944,42 @@
 
 .memberRow:hover {
   background: var(--lx-paper-2);
+}
+
+/* The name opens the person's profile and stretches over the whole row;
+   the row's own controls stay above it. */
+.memberRow {
+  position: relative;
+}
+
+.memberLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.memberLink::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.memberLink:focus-visible {
+  outline: none;
+}
+
+.memberLink:focus-visible::after {
+  border-radius: var(--lx-radius-xs);
+  box-shadow: var(--lx-ring-focus);
+}
+
+.memberRow:hover .memberLink {
+  color: var(--lx-teal);
+}
+
+.memberRow .roleSelect,
+.memberRow .rowActions > * {
+  position: relative;
+  z-index: 1;
 }
 
 .memberRow[data-invited] .avatar {
@@ -1893,7 +1944,7 @@
     display: none;
   }
 
-  .people li {
+  .personRow {
     grid-template-columns: 24px minmax(0, 1fr) 40px auto;
   }
 

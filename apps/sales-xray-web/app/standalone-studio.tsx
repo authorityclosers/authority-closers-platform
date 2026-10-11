@@ -33,6 +33,7 @@ import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { CoachingSkeleton } from "./coaching/coaching-skeleton";
+import { PersonSkeleton } from "./organisation/people/person-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { ConnectionNotice } from "./connection-notice";
 import {
@@ -314,7 +315,7 @@ function StandaloneStudioView({
     path: string,
   ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
     if (path === "/dashboard") return "dashboard";
-    if (path === "/organisation" || path === "/organisation/invites")
+    if (path === "/organisation" || path.startsWith("/organisation/"))
       return "organisation";
     if (
       path === "/calls" ||
@@ -753,6 +754,8 @@ function StandaloneStudioView({
               <OrganisationPageSkeleton />
             ) : pathname === "/organisation/invites" ? (
               <InvitesSkeleton />
+            ) : pathname?.startsWith("/organisation/people/") ? (
+              <PersonSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
             ) : pathname === "/coaching" ? (
