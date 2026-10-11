@@ -318,12 +318,48 @@ export function AcquisitionProcessingPanel({
       data-paused={needsAttention}
       data-fixture={staticPreview}
     >
+      <div className={styles.file}>
+        <FileAudio2 size={16} strokeWidth={1.9} aria-hidden="true" />
+        <strong title={fileName || undefined}>
+          {fileName || (staticPreview ? "Example audio" : "Your recording")}
+        </strong>
+        {fileMeta && <small>{fileMeta}</small>}
+        {!staticPreview && !actionsInline && children ? (
+          <details className={styles.more}>
+            <summary aria-label="More actions" title="More actions">
+              <MoreHorizontal size={16} aria-hidden="true" />
+            </summary>
+            <div
+              className={styles.menu}
+              role="group"
+              aria-label="Call actions"
+              // Choosing an item closes the menu.
+              onClick={(event) => {
+                if ((event.target as Element).closest("button, a"))
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+              }}
+            >
+              {children}
+            </div>
+          </details>
+        ) : null}
+      </div>
+
       <div className={styles.head}>
         <span className={styles.signal} data-phase={phase} aria-hidden="true">
           {phase === "attention" ? (
             <AlertTriangle size={16} strokeWidth={2.2} />
           ) : phase === "done" ? (
             <Check size={16} strokeWidth={2.6} />
+          ) : phase === "working" ? (
+            <span className={styles.eq}>
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
           ) : (
             <i />
           )}
@@ -353,6 +389,14 @@ export function AcquisitionProcessingPanel({
             </>
           )}
         </div>
+      </div>
+
+      {/* Where the analysis is, at a glance: done steps filled, the
+          current one moving. No percentage the server doesn't give. */}
+      <div className={styles.track} aria-hidden="true">
+        {PROCESSING_STEPS.map((step, index) => (
+          <span key={step.id} data-state={states[index]} />
+        ))}
       </div>
 
       <ol className={styles.steps} aria-label="Processing stages">
@@ -429,35 +473,6 @@ export function AcquisitionProcessingPanel({
           </button>
         </div>
       ) : null}
-
-      <div className={styles.file}>
-        <FileAudio2 size={16} strokeWidth={1.9} aria-hidden="true" />
-        <strong title={fileName || undefined}>
-          {fileName || (staticPreview ? "Example audio" : "Your recording")}
-        </strong>
-        {fileMeta && <small>{fileMeta}</small>}
-        {!staticPreview && !actionsInline && children ? (
-          <details className={styles.more}>
-            <summary aria-label="More actions" title="More actions">
-              <MoreHorizontal size={16} aria-hidden="true" />
-            </summary>
-            <div
-              className={styles.menu}
-              role="group"
-              aria-label="Call actions"
-              // Choosing an item closes the menu.
-              onClick={(event) => {
-                if ((event.target as Element).closest("button, a"))
-                  event.currentTarget
-                    .closest("details")
-                    ?.removeAttribute("open");
-              }}
-            >
-              {children}
-            </div>
-          </details>
-        ) : null}
-      </div>
 
       {deleteConfirm && !staticPreview ? (
         <div className={styles.confirm} role="alert">
