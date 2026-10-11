@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack --hostname 127.0.0.1 --port 3016",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3016",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 --cache --cache-location node_modules/.cache/eslint/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
