@@ -352,3 +352,62 @@ def test_next_event_keeps_published_ordinal_spoken_date():
     source["transcript"]["lines"][1]["text"] = "I will send the review for 5th January at 10:00 am."
     report, _, _, _ = loader().adapted_report(SyntheticCallBundle.model_construct(**source))
     assert report["pillars"]["next_step"]["when"] == "5th January at 10:00 am"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "The buyer described a measurable operational consequence.",
+        "The buyer’s decision dependency or closure was missing.",
+        "Answered a specific scope question with an explicit example.",
+        "The buyer agreed to check the decision with the partner.",
+        "The buyer" + " " * 3 + "agreed to check the decision with the partner.",
+        "यह ग्राहक अपने साथी के साथ निर्णय पर चर्चा करने के लिए सहमत हुआ।",
+        "A" * 80,
+    ],
+)
+def test_short_titles_keep_complete_words_and_the_marker_inside_the_limit(value):
+    result = loader().short_title(value)
+    normalized = " ".join(value.split())
+    assert len(result) <= 48
+    if len(normalized) <= 48:
+        assert result == normalized
+    else:
+        assert result.endswith("…")
+        prefix = result[:-1]
+        assert normalized.startswith(prefix)
+        assert not prefix or normalized[len(prefix)] in " ,;:–-"
+
+
+def test_authored_finding_moment_and_highlight_titles_never_cut_a_word():
+    source = dated_bundle().model_dump(by_alias=True)
+    positive = source["report"]["what_worked_and_what_didnt"]["what_worked"][0]
+    positive["action"] = "Answered a specific scope question with an explicit example."
+    source["report"]["the_big_picture"]["strongest_part"] = deepcopy(positive)
+    source["report"]["moments_that_mattered"][0]["title"] = positive["action"]
+    concern = {
+        "what_happened": "The buyer’s decision dependency or closure was missing.",
+        "what_it_affected": "The next step remained unclear.",
+        "evidence": positive["evidence"],
+    }
+    source["report"]["what_worked_and_what_didnt"]["what_didnt"] = [concern]
+    before = deepcopy(source)
+    report, _, _, _ = loader().adapted_report(SyntheticCallBundle.model_construct(**source))
+    pillars = report["pillars"]
+    assert pillars["worked"][0]["title"] == "Answered a specific scope question with an…"
+    assert pillars["moments"][0]["title"] == pillars["worked"][0]["title"]
+    assert pillars["strongest_part"]["short"] == pillars["worked"][0]["title"]
+    assert pillars["didnt"][0]["title"] == "The buyer’s decision dependency or closure was…"
+    assert source == before
+
+
+@pytest.mark.parametrize("ending", ["", ".", "!", "?", "।"])
+def test_strongest_part_completes_authored_sentences_without_doubled_punctuation(ending):
+    source = dated_bundle().model_dump(by_alias=True)
+    source["report"]["the_big_picture"]["strongest_part"].update(
+        action="Asked for context.", why_it_helped="The buyer gave context" + ending
+    )
+    report, _, _, _ = loader().adapted_report(SyntheticCallBundle.model_construct(**source))
+    assert report["pillars"]["strongest_part"]["text"] == (
+        "Asked for context. The buyer gave context" + (ending or ".")
+    )

@@ -29,6 +29,11 @@ Every source and label says synthetic. The exact authored report, coaching,
 transcript and answer key remain preserved in sandbox records; the normal report
 adapter copies only authored findings and their quoted transcript evidence.
 
+Report finding, moment and highlight titles keep complete words within the
+48-character contract; an ellipsis marks shortened titles. The full authored
+finding remains alongside its title. Strongest Part joins the authored action
+and reason as complete sentences, preserving existing terminal punctuation.
+
 The optional `report-pillars/1` presentation carries the authored summary,
 highlights, call stages, supported moments and deal guidance alongside the
 unchanged legacy report and coaching findings. Every copied citation uses its

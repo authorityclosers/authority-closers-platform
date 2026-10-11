@@ -74,6 +74,24 @@ POLICY = "synthetic-dev-authored/1"
 EXPECTED_BUNDLES = 3360
 
 
+def short_title(value: Any, limit: int = 48) -> str:
+    """Keep complete authored words, with room for the truncation marker."""
+    value = " ".join(value.split()) if isinstance(value, str) else ""
+    if len(value) <= limit:
+        return value
+    prefix = value[: limit - 1]
+    if not value[limit - 1].isspace():
+        prefix = prefix.rsplit(" ", 1)[0] if " " in prefix else ""
+    return prefix.rstrip(" ,;:–-") + "…"
+
+
+def sentence(value: str) -> str:
+    value = value.strip()
+    if not value or value.rstrip("\"'”’»").endswith((".", "!", "?", "।", "…")):
+        return value
+    return value + "."
+
+
 def identifier(kind: str, key: str) -> UUID:
     return uuid5(NAMESPACE, f"{TARGET}:{kind}:{key}")
 
@@ -134,13 +152,24 @@ def authored_pillars(
         if not isinstance(value, dict) or not (cited := refs(value.get("evidence"))):
             return None
         label = value.get("action" if positive else "what_it_affected")
-        short = text(" ".join(text(label).split()[:8]), 48)
+        short = short_title(" ".join(label.split()[:8]) if isinstance(label, str) else "")
         observation = (
-            text(value.get("action")) + ". " + text(value.get("why_it_helped"))
+            " ".join(
+                part
+                for part in (
+                    sentence(text(value.get("action"))),
+                    sentence(text(value.get("why_it_helped"))),
+                )
+                if part
+            )
             if positive
             else text(value.get("what_happened"))
         )
-        return {"text": text(observation), "short": short, "evidence": cited} if short else None
+        return (
+            {"text": short_title(observation, 150), "short": short, "evidence": cited}
+            if short
+            else None
+        )
 
     def findings(rows: list, *, positive: bool) -> list[dict]:
         result = []
@@ -152,7 +181,7 @@ def authored_pillars(
             if what and effect:
                 result.append(
                     {
-                        "title": text(what, 48),
+                        "title": short_title(what),
                         "what": what,
                         "evidence": cited,
                         **(
@@ -203,7 +232,7 @@ def authored_pillars(
             if row["category"] == "Important Miss" and (not moved or not missed):
                 continue
             cited = refs(row.get("evidence"))
-            title, why = text(row.get("title"), 48), text(row.get("why_it_mattered"))
+            title, why = short_title(row.get("title")), text(row.get("why_it_mattered"))
             if cited and title and why:
                 moments.append(
                     {
