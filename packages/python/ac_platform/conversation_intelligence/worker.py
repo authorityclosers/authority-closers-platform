@@ -937,6 +937,9 @@ class OfflineConversationWorker:
                     )
                     run.completed_at = datetime.now(UTC)
                     await JobRepository(db).complete(work.job_id, work.lease_token)
+                    from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                    await make_plans_due(db, recording)
 
     async def _erase_job(self, work: Work) -> None:
         from ac_platform.conversation_intelligence.source_objects import release_source_object

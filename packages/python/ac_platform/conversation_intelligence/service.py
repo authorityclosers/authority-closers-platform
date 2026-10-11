@@ -25,8 +25,8 @@ from ac_platform.conversation_intelligence.reporting_runtime import (
     validate_bootstrap_approval,
 )
 from ac_platform.conversation_intelligence.runner import (
-    ConversationWorkerRunner,
     ConversationWorkerRunnerSummary,
+    PipelinedConversationWorkerRunner,
 )
 from ac_platform.conversation_intelligence.service_config import (
     WorkerServiceConfig,
@@ -110,7 +110,7 @@ def validate_bootstrap_configuration(config: WorkerServiceConfig) -> None:
 async def run_service(
     config: WorkerServiceConfig, stop: asyncio.Event
 ) -> ConversationWorkerRunnerSummary:
-    """Compose the four real database workers and run one serial consumer."""
+    """Compose bounded local and provider consumers with durable stage handoffs."""
     if config.bootstrap_only:
         validate_bootstrap_configuration(config)
         await stop.wait()
@@ -148,7 +148,7 @@ async def run_service(
             environment=config.environment,
             native_runtime=native,
         )
-        runner = ConversationWorkerRunner(
+        runner = PipelinedConversationWorkerRunner(
             reporting.retention, offline, reporting.plans, reporting.inference
         )
         return await runner.run(stop)

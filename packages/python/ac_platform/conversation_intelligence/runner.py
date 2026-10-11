@@ -204,6 +204,112 @@ class ConversationWorkerRunner:
             await asyncio.wait_for(stop.wait(), timeout=delay.total_seconds())
 
 
+class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
+    """One local worker and one provider worker, with committed-work handoffs.
+
+    Local decoding cannot occupy the provider consumer. Each consumer stays
+    serial, so this does not multiply provider sends or native CPU work. The
+    existing workers still own their claims, transactions and dispatch fences.
+    """
+
+    async def run(self, stop: asyncio.Event) -> ConversationWorkerRunnerSummary:
+        if not isinstance(stop, asyncio.Event):
+            raise TypeError("Conversation worker runner stop must be an asyncio.Event")
+        if not self._admission.acquire(blocking=False):
+            raise RuntimeError("Conversation worker runner is already active")
+        summary = ConversationWorkerRunnerSummary()
+        wake = asyncio.Event()
+        halted = asyncio.Event()
+
+        async def consume(*, local: bool) -> None:
+            nonlocal summary
+            idle = self.idle_min
+            try:
+                while not stop.is_set() and not halted.is_set():
+                    if not local:
+                        # Clear before checking durable work: a completion
+                        # arriving during a scan must survive into the wait.
+                        wake.clear()
+                    try:
+                        if local:
+                            retention = await self._owned_call(self.retention.step, "retention")
+                            offline = False
+                            if not stop.is_set() and not halted.is_set():
+                                offline = await self._owned_call(
+                                    self.offline_worker.run_once, "offline worker"
+                                )
+                            outcomes = (retention, offline, False, False)
+                        else:
+                            plan = await self._owned_call(
+                                self.plan_scheduler.step, "plan scheduler"
+                            )
+                            inference = False
+                            if not stop.is_set() and not halted.is_set():
+                                inference = await self._owned_call(
+                                    self.inference_worker.run_once, "inference worker"
+                                )
+                            outcomes = (False, False, plan, inference)
+                    except ReconciliationRequiredError:
+                        summary = summary.append_recovery_hold()
+                        await self._wait_for_stop(stop, self.recovery_backoff)
+                        idle = self.idle_min
+                        continue
+                    summary = summary.append(outcomes)
+                    if any(outcomes):
+                        idle = self.idle_min
+                        if local:
+                            # run_once returned only after its transaction
+                            # committed; the coordinator can now enqueue C2.
+                            wake.set()
+                        continue
+                    await self._wait_for_handoff(stop, halted, None if local else wake, idle)
+                    idle = min(idle * 2, self.idle_max)
+            finally:
+                # Stop sibling admissions on an unexpected error. TaskGroup
+                # cancels it; _owned_call drains the accepted child first.
+                halted.set()
+                wake.set()
+
+        try:
+            if stop.is_set():
+                return summary
+            # Retention/recovery admission runs before either consumer starts.
+            while not stop.is_set():
+                try:
+                    retention = await self._owned_call(self.retention.step, "retention")
+                except ReconciliationRequiredError:
+                    summary = summary.append_recovery_hold()
+                    await self._wait_for_stop(stop, self.recovery_backoff)
+                    continue
+                summary = summary.append((retention, False, False, False))
+                break
+            if stop.is_set():
+                return summary
+            async with asyncio.TaskGroup() as group:
+                group.create_task(consume(local=False), name="conversation-provider-consumer")
+                group.create_task(consume(local=True), name="conversation-local-consumer")
+            return summary
+        finally:
+            self._admission.release()
+
+    @staticmethod
+    async def _wait_for_handoff(
+        stop: asyncio.Event,
+        halted: asyncio.Event,
+        wake: asyncio.Event | None,
+        delay: timedelta,
+    ) -> None:
+        waits = [asyncio.create_task(event.wait()) for event in (stop, halted, wake) if event]
+        try:
+            await asyncio.wait(
+                waits, timeout=delay.total_seconds(), return_when=asyncio.FIRST_COMPLETED
+            )
+        finally:
+            for task in waits:
+                task.cancel()
+            await asyncio.gather(*waits, return_exceptions=True)
+
+
 __all__ = [
     "ConversationInferenceRunOnce",
     "ConversationOfflineRunOnce",
@@ -211,4 +317,5 @@ __all__ = [
     "ConversationRetentionStep",
     "ConversationWorkerRunner",
     "ConversationWorkerRunnerSummary",
+    "PipelinedConversationWorkerRunner",
 ]

@@ -1028,6 +1028,10 @@ class ConversationInferenceWorker:
                 )
                 save_accounts(minutes, budget, transition)
 
+                from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                await make_plans_due(db, scope.recording)
+
             # A crash here only loses acknowledgement, never the saved provider result.
             async with self.sessions() as db, db.begin():
                 await JobRepository(db).complete(work.job_id, work.lease_token)
