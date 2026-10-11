@@ -932,6 +932,10 @@
   font-weight: 600;
 }
 
+.quoteToggle {
+  justify-self: start;
+}
+
 /* ---------- Progress and path (pillars 5 and 6) ---------- */
 
 .progress {

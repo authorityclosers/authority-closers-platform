@@ -212,6 +212,11 @@ export function LessonPanel({
   const good = sameLine(lesson.good_looks_like, lesson.better_direction)
     ? null
     : lesson.good_looks_like;
+  const observation = lesson.own_call?.observation ?? fallbackObservation;
+  // Some retained synthetic lessons use the quote as their observation too.
+  // Its full, source-bound words remain in the moment above; say it once.
+  const repeatsQuote =
+    lesson.own_call && sameLine(observation, lesson.own_call.quote);
   const wording = lesson.example_wording.length ? (
     <div>
       <CardLabel>{BETTER.wording}</CardLabel>
@@ -249,7 +254,7 @@ export function LessonPanel({
                   ? THEIR.call
                   : BETTER.yourCall}
             </CardLabel>
-            <p>{lesson.own_call?.observation ?? fallbackObservation}</p>
+            <p>{repeatsQuote ? BETTER.momentAbove : observation}</p>
           </div>
           <div data-kind="better">
             <CardLabel>{BETTER.betterDirection}</CardLabel>

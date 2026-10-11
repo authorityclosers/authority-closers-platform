@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
 import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
+import reportStyles from "../report-kit.module.css";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
 import { MOMENT, THEIR, WHY } from "./coaching-copy";
@@ -111,6 +112,9 @@ export function EvidencePlayer({
     "idle",
   );
   const [attempt, setAttempt] = useState(0);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const longQuote = evidence.quote.length > 150;
+  const quoteId = `${identity}-quote`;
   // Where playback is inside this clip of the call, 0–1.
   const [progress, setProgress] = useState(0);
   const active = useRef(false);
@@ -196,8 +200,27 @@ export function EvidencePlayer({
         </span>
       )}
       <div className={styles.momentBody}>
-        <blockquote className={styles.quote}>{evidence.quote}</blockquote>
-        <p className={styles.momentNote}>{evidence.observation}</p>
+        <blockquote
+          id={quoteId}
+          className={`${reportStyles.quote} ${styles.quote}`}
+          data-folded={longQuote && !quoteOpen ? "" : undefined}
+        >
+          {evidence.quote}
+        </blockquote>
+        {longQuote ? (
+          <button
+            type="button"
+            className={`${kitStyles.button} ${styles.quoteToggle}`}
+            aria-controls={quoteId}
+            aria-expanded={quoteOpen}
+            onClick={() => setQuoteOpen((open) => !open)}
+          >
+            {quoteOpen ? MOMENT.lessQuote : MOMENT.fullQuote}
+          </button>
+        ) : null}
+        {evidence.observation.trim() !== evidence.quote.trim() ? (
+          <p className={styles.momentNote}>{evidence.observation}</p>
+        ) : null}
         <span className={styles.momentMeta}>
           {showCall ? (
             <>

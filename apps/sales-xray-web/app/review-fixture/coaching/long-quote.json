@@ -1,0 +1,129 @@
+{
+  "synthetic": true,
+  "sourceKey": "syn-advisory-J10-C-02",
+  "sourcePayloadSha256": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+  "retainedObservationRegression": true,
+  "call": {
+    "schema": "ac.sales-xray.call-coaching/1",
+    "person_id": "00000000-0000-4000-8000-00000000aa02",
+    "tenant_id": "00000000-0000-4000-8000-00000000aa01",
+    "session_id": null,
+    "submission_id": "91866610-57b5-5999-92af-321f9ab48440",
+    "recording_id": "a7179a57-6a46-5d42-b21e-0d602335afd6",
+    "source_sha256": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+    "transcript_revision": "synthetic:8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+    "report_revision": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+    "call_label": "Advisory · Viren Kovirakar · call 2",
+    "authority": "provisional",
+    "entitlement": "coaching",
+    "entitlement_policy": "AUT-1678-open-access",
+    "state": "ready",
+    "basis": "skill_evidence",
+    "focus": {
+      "skill_id": "communication_tonality",
+      "label": "Make room for the buyer",
+      "explanation": "It needed work in 4 of the last 4 calls on this skill.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "selected_reason": "It needed work on this call.",
+      "selected_at": "2026-08-24T14:00:00+05:30",
+      "status": "provisional",
+      "verdict": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer."
+    },
+    "evidence": [
+      {
+        "submission_id": "91866610-57b5-5999-92af-321f9ab48440",
+        "recording_id": "a7179a57-6a46-5d42-b21e-0d602335afd6",
+        "source_sha256": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "transcript_revision": "synthetic:8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "created_at": "2026-08-24T14:00:00+05:30",
+        "call_label": "Advisory · Viren Kovirakar · call 2",
+        "segment_id": "L014",
+        "quote": "Let me finish the full explanation first. With Business Cash-Flow Review, we begin with an introduction, then a detailed discussion of the delivery sequence. The included scope is cash-flow mapping, scenario review and a written operating plan. We also prepare a kickoff note, collect your requirements, arrange a working session, record the responsibilities, and review progress with the coordinator. There are several useful points I want to cover before you ask anything: preparation, communication, documentation, the delivery calendar, review expectations, escalation and handover. Each point helps the team understand the process. I know you have a question, but if I explain all the stages together it will save time later. We have a structured way of discussing the starting point, the work in progress, the first review, the next review and the final acceptance. The coordinator gets a summary, the manager sees open items, and everyone knows that a question can be raised. The next part is how we organise the first conversation and how we write the review note. Then I can explain the sequence once more from the buyer’s point of view, because there are a lot of details and I want you to hear them all before we move on.",
+        "start_ms": 130930,
+        "end_ms": 217313,
+        "observation": "Said by Mira Nivsekar, the seller.",
+        "playable": false
+      },
+      {
+        "submission_id": "91866610-57b5-5999-92af-321f9ab48440",
+        "recording_id": "a7179a57-6a46-5d42-b21e-0d602335afd6",
+        "source_sha256": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "transcript_revision": "synthetic:8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "created_at": "2026-08-24T14:00:00+05:30",
+        "call_label": "Advisory · Viren Kovirakar · call 2",
+        "segment_id": "L013",
+        "quote": "Hold on, I have one specific question before you explain the whole package.",
+        "start_ms": 124848,
+        "end_ms": 130380,
+        "observation": "Said by Viren Kovirakar, the buyer.",
+        "playable": false
+      }
+    ],
+    "root_cause": {
+      "hypothesis": "Thinking a full explanation is a useful one.",
+      "gap_type": "execution",
+      "confidence": "medium",
+      "alternatives": [
+        "Time pressure or missing context could also explain it."
+      ],
+      "learner_context": null
+    },
+    "lesson": {
+      "title": "Make room for the buyer",
+      "quick_idea": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer.",
+      "framework": ["Presentation", "Check understanding", "Listen"],
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "good_looks_like": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer.",
+      "better_direction": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer.",
+      "example_wording": [],
+      "when_to_use": "The next time a buyer gives this opening.",
+      "when_not": "Do not interrupt a buyer who has explicitly requested a detailed technical explanation.",
+      "checklist": [
+        "Keep the explanation to one point, then pause for an answer."
+      ],
+      "source": "Fictional AC Sandbox lesson, written with the calls",
+      "own_call": {
+        "submission_id": "91866610-57b5-5999-92af-321f9ab48440",
+        "recording_id": "a7179a57-6a46-5d42-b21e-0d602335afd6",
+        "source_sha256": "8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "transcript_revision": "synthetic:8d3210f654a5dcaa2ff36f4d12b034f1b129caa371a0a07091539bfbd8cd985b",
+        "created_at": "2026-08-24T14:00:00+05:30",
+        "call_label": "Advisory · Viren Kovirakar · call 2",
+        "segment_id": "L014",
+        "quote": "Let me finish the full explanation first. With Business Cash-Flow Review, we begin with an introduction, then a detailed discussion of the delivery sequence. The included scope is cash-flow mapping, scenario review and a written operating plan. We also prepare a kickoff note, collect your requirements, arrange a working session, record the responsibilities, and review progress with the coordinator. There are several useful points I want to cover before you ask anything: preparation, communication, documentation, the delivery calendar, review expectations, escalation and handover. Each point helps the team understand the process. I know you have a question, but if I explain all the stages together it will save time later. We have a structured way of discussing the starting point, the work in progress, the first review, the next review and the final acceptance. The coordinator gets a summary, the manager sees open items, and everyone knows that a question can be raised. The next part is how we organise the first conversation and how we write the review note. Then I can explain the sequence once more from the buyer’s point of view, because there are a lot of details and I want you to hear them all before we move on.",
+        "start_ms": 130930,
+        "end_ms": 217313,
+        "observation": "Let me finish the full explanation first. With Business Cash-Flow Review, we begin with an introduction, then a detailed discussion of the delivery sequence. The included scope is cash-flow mapping, scenario review and a written operating plan. We also prepare a kickoff note, collect your requirements, arrange a working session, record the responsibilities, and review progress with the coordinator. There are several useful points I want to cover before you ask anything: preparation, communication, documentation, the delivery calendar, review expectations, escalation and handover. Each point helps the team understand the process. I know you have a question, but if I explain all the stages together it will save time later. We have a structured way of discussing the starting point, the work in progress, the first review, the next review and the final acceptance. The coordinator gets a summary, the manager sees open items, and everyone knows that a question can be raised. The next part is how we organise the first conversation and how we write the review note. Then I can explain the sequence once more from the buyer’s point of view, because there are a lot of details and I want you to hear them all before we move on.",
+        "playable": false
+      },
+      "next_call_connection": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer."
+    },
+    "practice": {
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
+      "success_condition": "One point, then a pause for the buyer’s answer.",
+      "gap_type": "execution",
+      "estimated_minutes": 3
+    },
+    "mission": {
+      "skill_id": "communication_tonality",
+      "behavior": "After one relevant feature, ask the buyer what would change in their workflow and wait for the answer.",
+      "context": "The next time a buyer gives this opening.",
+      "done_when": "One point, then a pause for the buyer’s answer.",
+      "cue": "Make room for the buyer",
+      "active_since": "2026-08-02T13:00:00+05:30",
+      "origin_submission_id": "91866610-57b5-5999-92af-321f9ab48440",
+      "status": "active"
+    },
+    "media_clips": [],
+    "recommended_media": null,
+    "strength": null,
+    "other_suggestions": 0,
+    "sandbox": true,
+    "rep_person_id": "a81b2b62-af8e-5c62-b3fa-88dc5b4f1e2a",
+    "rep_name": "Mira Nivsekar",
+    "limitations": [
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
+      "Only the person who imported these sandbox calls sees their coaching."
+    ]
+  }
+}

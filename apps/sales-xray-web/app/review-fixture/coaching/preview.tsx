@@ -12,6 +12,7 @@ import { TeamCoachingStory } from "../../coaching/team-coaching";
 import styles from "../../coaching/coaching.module.css";
 import sandbox from "./sandbox.json";
 import acSandbox from "./sandbox-team.json";
+import longQuote from "./long-quote.json";
 
 type View = "call" | "me" | "team";
 type Data = "review" | "sandbox";
@@ -59,7 +60,12 @@ export function CoachingFixture() {
   const data: Data =
     chosenData ?? (query.get("data") === "sandbox" ? "sandbox" : "review");
   const set = data === "sandbox" ? acSandbox : sandbox;
-  const call = parseCallCoaching(set.call, set.call.submission_id);
+  // An opt-in, dev-only reproduction of the retained long-quote lesson.
+  const callPayload =
+    data === "sandbox" && query.get("example") === "long-quote"
+      ? longQuote.call
+      : set.call;
+  const call = parseCallCoaching(callPayload, callPayload.submission_id);
   const me = parseCoaching(data === "sandbox" ? acSandbox.rep : sandbox.me);
   const team = parseTeamCoaching(set.team);
   return (

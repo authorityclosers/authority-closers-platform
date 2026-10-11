@@ -216,6 +216,7 @@ export const BETTER = {
   yourCall: "Your call",
   yourCallAt: (clock: string) => `Your call · ${clock}`,
   betterDirection: "Better direction",
+  momentAbove: "Read the moment above.",
   wording: "Possible wording, in your own style",
   strength: "Use your strength",
   strengthAcross:
@@ -518,6 +519,8 @@ export const REPORT_COACHING = {
 
 /** A moment's play control (spec 5.5: every moment inspectable). */
 export const MOMENT = {
+  fullQuote: "Read full quote",
+  lessQuote: "Show less",
   withContext: "With context",
   pause: "Pause",
   playContext: "Play with context",
