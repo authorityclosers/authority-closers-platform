@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from html import unescape
 from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -22,6 +23,7 @@ from playwright.sync_api import (
     Frame,
     Locator,
     Page,
+    Route,
     expect,
     sync_playwright,
 )
@@ -190,6 +192,7 @@ class Journey:
     runtime_errors: list[str] = field(default_factory=list)
     server_errors: list[str] = field(default_factory=list)
     visual_errors: list[str] = field(default_factory=list)
+    fixture_outcome_requests: list[str] = field(default_factory=list)
     observations: list[dict[str, object]] = field(default_factory=list)
     main_navigations: int = 0
     live_refreshes: int = 0
@@ -266,6 +269,7 @@ class Journey:
         assert not self.runtime_errors, f"Browser exceptions: {self.runtime_errors}"
         assert not self.server_errors, f"HTTP server errors: {self.server_errors}"
         assert not self.visual_errors, f"Visual acceptance: {self.visual_errors}"
+        assert not self.fixture_outcome_requests, "Fictional outcome attempted a live API request"
         assert (
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
@@ -320,6 +324,13 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     page = context.new_page()
     page.set_default_timeout(15_000)
     journey = Journey(page, context, name, width, theme, directory)
+    if journey.fixture:
+
+        def block_fixture_outcome(route: Route) -> None:
+            journey.fixture_outcome_requests.append(route.request.method)
+            route.abort()
+
+        page.route("**/v1/conversation/prospects/calls/*/outcome", block_fixture_outcome)
     # No traces, request bodies, cookies or full error messages in receipts.
     page.on("pageerror", lambda error: journey.runtime_errors.append(error.name))
 
@@ -382,10 +393,123 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
+            "fixture_outcome_requests": journey.fixture_outcome_requests,
             "observations": journey.observations,
         }
         (directory / f"{name}-{width}-{theme}.json").write_text(json.dumps(receipt, indent=2))
         context.close()
+
+
+def _word_call_outcome(page: Page, status: str, detail: str | None) -> None:
+    page.locator("[data-document-export]").evaluate(
+        "element => element.scrollIntoView({block: 'start'})"
+    )
+    with page.expect_download() as downloaded:
+        _document_download(page).click()
+    download = downloaded.value
+    assert download.failure() is None, "Recorded-outcome Word download failed"
+    path = download.path()
+    assert path is not None
+    with ZipFile(path) as docx:
+        document = docx.read("word/document.xml").decode()
+    # Read generated OOXML text without an XML parser or entity resolution.
+    paragraphs = [
+        "".join(
+            unescape(text)
+            for text in re.findall(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", paragraph, re.DOTALL)
+        )
+        for paragraph in re.findall(r"<w:p(?:\s[^>]*)?>(.*?)</w:p>", document, re.DOTALL)
+    ]
+    start = next(
+        index
+        for index, text in enumerate(paragraphs)
+        if re.fullmatch(r"1\.1\s+Call Outcome", text, flags=re.IGNORECASE)
+    )
+    end = next(
+        index
+        for index in range(start + 1, len(paragraphs))
+        if re.match(r"1\.2\s", paragraphs[index])
+    )
+    outcome = "\n".join(paragraphs[start + 1 : end])
+    assert status in outcome, "Word Call Outcome does not reflect the person's choice"
+    assert "Set by your team" in outcome, "Word outcome loses its human attribution"
+    if detail:
+        assert detail in outcome, "Word Call Outcome omits the recorded reason/date"
+
+
+def _fixture_call_outcomes(journey: Journey) -> None:
+    """Only the labelled fictional Story; never mutate a live user's outcome."""
+    assert journey.fixture
+    page = journey.page
+    nav = page.locator("[data-report-sections]")
+    picture = page.locator('[data-report-pillar="overview"]')
+    badge = picture.locator('span[data-size="lg"] > span[data-tone]')
+    editor = picture.get_by_role("region", name=re.compile(r"^Call outcome$", re.IGNORECASE))
+    nav.get_by_role("link", name="The Big Picture", exact=True).click()
+    expect(editor).to_be_visible()
+    editor.get_by_role("button", name="Deal value", exact=True).click()
+    editor.get_by_label("Amount", exact=True).fill("25000")
+    editor.get_by_label("Currency", exact=True).fill("INR")
+    reason = "Fictional prospect chose another option."
+    choices = (
+        ("won", "Won", None),
+        ("lost", "Lost", reason),
+        ("follow-up", "Follow-up Set", "Wednesday, 11 Nov"),
+        ("no-decision", "Decision Pending", None),
+    )
+    for key, status, detail in choices:
+        editor.get_by_role("button", name=status, exact=True).click()
+        if key == "lost":
+            editor.get_by_role("button", name="Save", exact=True).click()
+            expect(editor.get_by_role("alert")).to_contain_text("Add why it was lost.")
+            expect(badge).to_have_text("Won")
+            editor.get_by_label("Why was it lost?", exact=True).fill(reason)
+            editor.get_by_role("button", name="Save", exact=True).click()
+        elif key == "follow-up":
+            editor.get_by_role("button", name="Save", exact=True).click()
+            expect(editor.get_by_role("alert")).to_contain_text("Pick a follow-up date.")
+            expect(badge).to_have_text("Lost")
+            editor.get_by_label("Follow-up date", exact=True).fill("2026-11-11")
+            editor.get_by_role("button", name="Save", exact=True).click()
+        expect(badge).to_have_text(status)
+        expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
+        expect(editor).to_contain_text("25000 INR")
+        if key == "lost":
+            expect(editor).to_contain_text(reason)
+        elif key == "follow-up":
+            expect(editor).to_contain_text("2026-11-11")
+        journey.snapshot(f"outcome-{key}")
+        nav.get_by_role("link", name="Where the Deal Stands", exact=True).click()
+        expect(
+            page.locator('[data-report-pillar="facts"]').get_by_text(status, exact=True)
+        ).to_be_visible()
+        _switch_report_view(page, "Document view")
+        outcome = _document_preview(page).locator('[data-report-mode-section="overview"]')
+        expect(outcome.get_by_text(status, exact=True)).to_be_visible()
+        expect(outcome).to_contain_text("Set by your team")
+        if detail:
+            expect(outcome).to_contain_text(detail)
+        outcome.get_by_text(status, exact=True).scroll_into_view_if_needed()
+        journey.snapshot(f"outcome-{key}-document")
+        _word_call_outcome(page, status, detail)
+        _switch_report_view(page, "Report view")
+        nav.get_by_role("link", name="The Big Picture", exact=True).click()
+    # The new owner acceptance requires reload durability. The fixture's
+    # declared memory-only limitation is reported honestly until B supplies
+    # supported fictional persistence; it never falls back to live writes.
+    editor.get_by_role("button", name="Won", exact=True).click()
+    expect(badge).to_have_text("Won")
+    page.reload(wait_until="domcontentloaded")
+    expect(badge).to_have_text("Won")
+    expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
+    journey.snapshot("outcome-reloaded")
+    _switch_report_view(page, "Document view")
+    expect(
+        _document_preview(page)
+        .locator('[data-report-mode-section="overview"]')
+        .get_by_text("Won", exact=True)
+    ).to_be_visible()
+    _word_call_outcome(page, "Won", None)
 
 
 def test_dashboard_to_report(browser: Browser, viewport: tuple[int, str]) -> None:
@@ -507,6 +631,8 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
+        if journey.fixture:
+            _fixture_call_outcomes(journey)
 
 
 def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:

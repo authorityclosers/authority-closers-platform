@@ -21,6 +21,14 @@ The eight skill rows follow Dipak's order. "Explore deeper analysis" starts
 collapsed; the populated example opens all four groups and captures each one.
 Live calls are checked only for deeper groups actually supplied by their report.
 
+The fictional Report also checks Won, Lost with a required reason, Follow-up Set
+with a required date, Decision Pending (the no-decision choice), and optional
+deal value. It checks human attribution, Deal status, Document and the Word
+file's 1.1 Call Outcome, then reload durability. Fictional outcome API requests
+are blocked and counted; the fixture must stay local to the test browser.
+Browser-local fixture persistence is distinct from real API/database evidence.
+Live-mode journeys read existing outcomes and never save one.
+
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
 Its four cases remain available for a later populated, approved-session run by

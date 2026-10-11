@@ -6,6 +6,17 @@ existing disposable PostgreSQL harness and bounded loopback browser backend.
 Only test/evidence files change. Heavy checks use `ac-heavy`; no provider request,
 live data change or shipping action is performed by QA.
 
+New 17:45 UTC owner/coordinator acceptance extends Report QA to human outcomes:
+all four choices, Lost reason / Follow-up date validation, optional value, human
+badge and Deal status, Document/Word 1.1 Call Outcome, then reload. The owned
+fixture-only journey is implemented; browser verification is pending. Fixture
+outcome API reads/writes are blocked and counted; live mode remains read-only.
+The current Story provider intentionally keeps choices in memory only; B has
+the exact request for supported labelled fictional reload persistence or an
+existing approved dev context with an owned fictional call. The prior completed
+Report/Coaching coverage below does not certify this new acceptance. Browser
+simulation and actual API/database persistence remain separate claims.
+
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
 The five HTTP/PostgreSQL modules pass **20 focused cases** after fixture repairs;
