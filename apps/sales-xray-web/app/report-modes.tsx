@@ -7,9 +7,13 @@ import {
   BookOpen,
   ChartNoAxesColumnIncreasing,
   FileText,
+  Flag,
   Lightbulb,
   PanelsTopLeft,
+  Route,
+  Scale,
   TableProperties,
+  Telescope,
   Undo2,
   UserRound,
   X,
@@ -102,8 +106,18 @@ const sectionIcons: Record<string, LucideIcon> = {
   "call-coaching": Lightbulb,
 };
 
-function SectionIcon({ id }: { id: string }) {
-  const Icon = sectionIcons[id] ?? FileText;
+/** The six Report pillars share ids with Word bookmarks, not old sections. */
+const pillarIcons: Record<string, LucideIcon> = {
+  overview: Telescope,
+  coaching: Route,
+  moments: Scale,
+  missed: AudioLines,
+  skills: ChartNoAxesColumnIncreasing,
+  facts: Flag,
+};
+
+function SectionIcon({ id, pillar = false }: { id: string; pillar?: boolean }) {
+  const Icon = (pillar ? pillarIcons[id] : sectionIcons[id]) ?? FileText;
   return <Icon className={styles.sectionIcon} aria-hidden="true" />;
 }
 
@@ -1143,7 +1157,7 @@ export function ReportModes({
                 navigate(panel.id, view, true);
               }}
             >
-              <SectionIcon id={panel.id} />
+              <SectionIcon id={panel.id} pillar={view === "story"} />
               <span className={styles.fullLabel}>{panel.label}</span>
               <span className={styles.compactLabel}>
                 {panel.compactLabel ?? panel.label}
