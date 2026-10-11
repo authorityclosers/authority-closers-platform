@@ -1,6 +1,7 @@
 """Dry-run adapter boundaries: exact published folders, stable identities and safe targets."""
 
 import gzip
+import hashlib
 import json
 from uuid import uuid4
 
@@ -16,10 +17,12 @@ from ac_platform.conversation_intelligence.synthetic_import_cli import (
 from ac_platform.conversation_intelligence.synthetic_import_contracts import SyntheticRecordInput
 from ac_platform.conversation_intelligence.synthetic_import_dataset import (
     OPERATIONS,
+    attachments,
     bundles,
     exact_file,
     record_batches,
 )
+from tests.unit.conversation_intelligence.test_synthetic_import_audio import media_bundle
 from tests.unit.conversation_intelligence.test_synthetic_import_contracts import bundle
 
 
@@ -168,6 +171,73 @@ def test_dry_run_rejects_repeated_identity_across_separate_request_batches(tmp_p
             stream.write(json.dumps(row) + "\n")
     with pytest.raises(ValueError, match="repeated"):
         validate_dataset(tmp_path)
+
+
+def test_verified_media_is_source_pinned_sent_in_bounded_transport_and_read_back(
+    tmp_path, monkeypatch
+):
+    dataset(tmp_path)
+    payload = b"fictional-mp3-transport"
+    data, manifest = media_bundle(payload)
+    call = data["metadata"]["call_id"]
+    folder = tmp_path / "import_ready" / call
+    for key in ("metadata", "transcript", "answer_key", "report", "coaching"):
+        (folder / f"{key}.json").write_text(json.dumps(data[key]))
+    (folder / "audio.mp3").write_bytes(payload)
+    timing = json.dumps(manifest["timing"]).encode()
+    (folder / "audio.timing.json").write_bytes(timing)
+    manifest["verification"]["timing_sha256"] = hashlib.sha256(timing).hexdigest()
+    (tmp_path / "validation").mkdir()
+    (tmp_path / "validation/audio_verification.json").write_text(
+        json.dumps({"synthetic": True, "calls": [manifest["verification"]]})
+    )
+    decoded = []
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.synthetic_import_dataset.verify_decode",
+        lambda path, **kwargs: decoded.append((path, kwargs)),
+    )
+    receipt = validate_dataset(tmp_path)
+    assert receipt["counts"]["audio"] == receipt["counts"]["audio_manifest"] == 1
+    assert len(decoded) == 1
+    real_client = httpx.Client
+    sent = []
+
+    def respond(request):
+        sent.append(request)
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "tenant_id": str(AC_SANDBOX),
+                    "records": [
+                        {"kind": kind, "count": count} for kind, count in receipt["counts"].items()
+                    ],
+                },
+            )
+        if request.method == "PUT":
+            assert request.content == payload
+            assert request.headers["content-length"] == str(len(payload))
+            assert "transfer-encoding" not in request.headers
+            return httpx.Response(201, json={"synthetic": True, "state": "done", "created": True})
+        return httpx.Response(201, json={"synthetic": True, "state": "done", "created": 1})
+
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(respond)),
+    )
+    result = apply_dataset(
+        tmp_path,
+        origin="http://127.0.0.1:1234",
+        tenant=AC_SANDBOX,
+        cookie="fictional-test-session",
+        receipt=receipt,
+    )
+    assert result["dataset_sha256"] == receipt["dataset_sha256"]
+    assert sum(request.method == "PUT" for request in sent) == 1
+    (folder / "audio.mp3").write_bytes(b"x" * len(payload))
+    with pytest.raises(ValueError):
+        list(attachments(tmp_path))
 
 
 def test_operator_does_not_claim_verification_when_authored_source_changes_after_dry_run(

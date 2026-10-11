@@ -18,6 +18,7 @@ import httpx
 
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.synthetic_import_dataset import (
+    attachments,
     bundles,
     master_records,
     record_batches,
@@ -59,6 +60,10 @@ def validate_dataset(root: Path) -> dict[str, Any]:
     for call in bundles(root):
         counts["call"] += 1
         fingerprint.update(content_hash(call.model_dump(by_alias=True)).encode())
+    for attachment in attachments(root):
+        counts["audio_manifest"] += 1
+        counts["audio"] += 1
+        fingerprint.update(content_hash(attachment.manifest.model_dump(by_alias=True)).encode())
     return {"synthetic": True, "counts": dict(counts), "dataset_sha256": fingerprint.hexdigest()}
 
 
@@ -107,6 +112,29 @@ def apply_dataset(
         for call in bundles(root):
             fingerprint.update(content_hash(call.model_dump(by_alias=True)).encode())
             send("/calls", call.model_dump(by_alias=True))
+        for attachment in attachments(root):
+            manifest = attachment.manifest.model_dump(by_alias=True)
+            fingerprint.update(content_hash(manifest).encode())
+            send(f"/calls/{attachment.manifest.call_id}/audio", manifest)
+            with attachment.path.open("rb") as source:
+                response = client.put(
+                    PREFIX + f"/calls/{attachment.manifest.call_id}/source",
+                    content=source,
+                    headers={
+                        "Content-Type": "audio/mpeg",
+                        "Content-Length": str(attachment.manifest.audio_bytes),
+                        "Idempotency-Key": "sandbox-audio:" + content_hash(manifest),
+                    },
+                )
+            if (
+                response.status_code != 201
+                or response.json().get("synthetic") is not True
+                or response.json().get("state") != "done"
+                or type(response.json().get("created")) is not bool
+            ):
+                raise ValueError("The verified sandbox audio was not retained. Rerun safely.")
+            counts["audio_created"] += int(response.json()["created"])
+            counts["audio_skipped"] += int(not response.json()["created"])
         if fingerprint.hexdigest() != receipt["dataset_sha256"]:
             raise ValueError("The authored dataset changed after its dry-run source pin.")
         response = client.get(PREFIX)

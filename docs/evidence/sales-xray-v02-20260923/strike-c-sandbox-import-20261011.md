@@ -18,7 +18,7 @@ minute accounts, provider tasks and payment state. Fake people and invoices neve
 create canonical identities or financial entries. Changed content supersedes a
 revision instead of replacing it; update/delete triggers preserve history.
 
-The full bundle preserves metadata, estimated transcript, six report pillars,
+The full bundle preserves metadata, authored transcript/timing, six report pillars,
 answer key and six coaching sections. Report/coaching sections must match the
 authored answer key exactly. Reports are delivered as `authored_report`, `done`,
 with no minute state or AI run. Read responses omit answer-key future truth;
@@ -40,9 +40,19 @@ authored content with a rolling SHA256 and rechecks it during apply.
 
 Each request has at most 128 records and stays below the existing 1 MiB middleware
 cap. Source hashes/revisions make restarts and repeats safe. Atomic conflicting
-batches roll back completely. Current bundles have `audio_file: null`: the export
-has no timing-verified audio. Text imports cannot claim playable audio. Verified
-audio requires the separate exact-media handoff; no external call is made here.
+batches roll back completely. Seven canonical MP3 attachments now pass the exact
+F media handoff. Their SHA256, complete local decode, duration, timing, speakers and
+text are independently checked. Forty-nine recordings attached to older wording
+are excluded. `silence_aligned` remains approximate; that provenance is preserved.
+
+Media manifests bind to the complete authored-call hash. The byte route uses the
+existing private recording/scratch store, upload cap, source preflight, storage
+fence and current session/profile checks. Native validation precedes delivery;
+raw client claims do not enable playback. A slow upload spools before the global
+storage fence. Immutable audio records retain the measured receipt; a process
+restart after file publication reuses only verified identical bytes. Read
+projections disable playable flags until delivery, preserving original stored
+history. No acquisition, provider task, AI run or customer minute is created.
 
 ## API for integration
 
@@ -55,6 +65,12 @@ Prefix: `/v1/conversation/acquisition/imports/sandbox`.
 - `GET /records/{kind}/after/{cursor}`: exact key pagination.
 - `GET /calls/{call_id}`: metadata, transcript and authored report.
 - `GET /calls/{call_id}/coaching`: private authored coaching.
+- `POST /calls/{call_id}/audio`: bounded `synthetic-call-audio/1` manifest.
+- `PUT /calls/{call_id}/source`: exact-size `audio/mpeg` bytes, Idempotency-Key.
+- `GET /calls/{call_id}/source`: current-session private playback with one byte range.
+
+Call reads add audio.state (`not_provided`, `awaiting_upload`, `ready`), playable
+and the private source URL only when retained. Every body/state remains synthetic.
 
 Kinds include world, business_history, people, companies, contacts, leads, deals,
 invoices, payments, calendar, people_events, rep_weeks, sales_events, skills,
@@ -72,10 +88,11 @@ active AC Sandbox target and owner, uses one transaction, reports before/after a
 audits each apply. It refuses all other environments. Retain the snapshot, dry-run,
 run ID and read-back on the issue. No operator run was performed here.
 
-Dry-run the corpus through `uv run python -m
+Dry-run the corpus through `ac-heavy uv run python -m
 ac_platform.conversation_intelligence.synthetic_import_cli --dataset
-/home/acdev/strikes/1676/sandbox-source-20261011-0111`. This private local authored
-copy has 16,945 files and excludes media/telemetry. Use the same frozen path for
+/home/acdev/strikes/1676/sandbox-source-20261011-0215`. This private read-only copy
+has 16,960 files, including seven verified MP3s and timing/verification receipts;
+telemetry and legacy audio are excluded. Use the same frozen path for
 dry-run, apply and replay; the live F export is still being updated.
 Apply requires explicit --apply, the exact
 staging origin and runtime-injected AC_SANDBOX_IMPORT_COOKIE. The CLI never reads
@@ -86,18 +103,26 @@ Only loopback and this staging target are accepted; production is refused.
 ## Validation receipt
 
 The complete frozen-copy offline dry-run passed with dataset SHA256
-`ae3f28af6b547d5726dd6f183461edb6a999d6d31cefbd58e1ed32a78510c2a8`.
-It validated 875,550 master/history records, 177,615 call summaries and 3,360 full
-bundles without opening a network session. Forty focused unit cases and four real
-PostgreSQL cases pass; fourteen registry/backup-parity cases also pass.
-The separate composed bulk report/delivery regression passes. Three
-cookie/PostgreSQL cases prove opt-in refusal,
-exact report preservation, no run/job/usage write, current-role denial, private
-coaching, replay after a fresh client, racing imports, immutable history and atomic
-superseding revisions. Metadata comparison against real migrations has no drift.
-The added operator test covers read-only preview, idempotent apply/audit and the
-environment guard. Unit proof covers schema/identity/media boundaries, filesystem
-escape, production refusal, request splitting and source-pin drift.
+`24373620f67b8656de9bd1dcbde59b35e5c2ee498367fa5fa5a757692af8c058`.
+It validated 875,550 master/history records, 177,615 call summaries, 3,360 complete
+bundles and seven audio manifests/files without opening an HTTP session.
+
+All five actual cookie/PostgreSQL sandbox cases pass together (21.14s): explicit
+opt-in, private report/coaching preservation, no run/job/usage creation, atomic
+conflicts, superseding revisions, racing imports, role revocation, migration
+metadata parity and the audited exact-target opt-in script. The new media case
+uses a real locally generated fictional tone, normal native preflight, atomic
+publication/restart/replay, private byte-range delivery and current-role denial.
+Stored authored content remains identical when read projections disable playback.
+Its local fixture reuses the existing test-only ac-heavy guardian bridge; the
+live ancestor is still verified and no runtime environment gate is weakened.
+
+Fifty-one focused schema/adapter/media unit cases pass (1.81s); 25 adapter/security
+boundary cases pass (13.19s, overlap with the preceding adapter cases). Eight-source
+mypy and changed-file Ruff pass. The earlier 14 registry/parity and composed normal
+bulk delivered-report proofs remain valid: the audio addition adds no table or
+ordinary charging path. Previous text-only source pins remain historical receipts
+in NOTES.md; the operator must use the newer frozen source above.
 
 Sensitive migration, intake authority and backup files require CTO/CEO review.
 PR #442 currently holds the shared migration slot and introduces another 0081
@@ -111,3 +136,9 @@ unpublished 3d6e89b introduces a read-only `synthetic_dataset.py` and same-named
 test. C's ingest adapter is renamed `synthetic_import_dataset.py` and its test
 `test_synthetic_import_dataset.py`; CLI references follow the new name. The
 adapter body and pinned dataset are unchanged, and no Admin file is edited.
+
+Final prior-head CI at 7ed697d passed every application check except one historical
+prospect assertion still expecting 0080 rather than 0082. Strike B already fixes
+that assertion with _migration_head() at #439 / 7995d9c; C does not edit its owned
+file. Reviewed main integration is required for final combined-tree CI. The
+shared migration-slot hold remains separate. No hosted sandbox data was loaded.

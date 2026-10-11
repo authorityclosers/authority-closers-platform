@@ -39,19 +39,21 @@ def authored_object(value: JsonValue, call_id: str) -> dict[str, JsonValue]:
     return value
 
 
-def no_unverified_playback(value: JsonValue, depth: int = 0) -> None:
+def no_unverified_playback(
+    value: JsonValue, depth: int = 0, *, verified_audio: bool = False
+) -> None:
     if depth > 32:
         raise ValueError("The synthetic bundle is too deeply nested.")
     if isinstance(value, dict):
-        if value.get("playable") is True:
+        if value.get("playable") is True and not verified_audio:
             raise ValueError(
                 "Text bundles cannot certify playable audio or precise media evidence."
             )
         for item in value.values():
-            no_unverified_playback(item, depth + 1)
+            no_unverified_playback(item, depth + 1, verified_audio=verified_audio)
     elif isinstance(value, list):
         for item in value:
-            no_unverified_playback(item, depth + 1)
+            no_unverified_playback(item, depth + 1, verified_audio=verified_audio)
 
 
 class SyntheticCallBundle(BaseModel):
@@ -105,8 +107,12 @@ class SyntheticCallBundle(BaseModel):
             raise ValueError("Provide the authored call date with its timezone.") from None
         if metadata.get("private_coaching") is not True:
             raise ValueError("Synthetic coaching remains private to its importer.")
-        if metadata.get("audio_file") is not None:
-            raise ValueError("Audio requires a separate verified-media handoff.")
+        verified_audio = metadata.get("audio_file") == "audio.mp3" and (
+            metadata.get("audio_status") == "verified"
+            and metadata.get("timing_source") in ("spool_exact", "silence_aligned")
+        )
+        if metadata.get("audio_file") is not None and not verified_audio:
+            raise ValueError("Audio requires the exact verified-media handoff.")
         duration = metadata.get("duration_ms")
         if type(duration) is not int or not 1 <= duration <= 3_600_000:
             raise ValueError(
@@ -114,7 +120,7 @@ class SyntheticCallBundle(BaseModel):
             )
         for component in (metadata, self.transcript, self.answer_key, self.report, self.coaching):
             authored_object(component, call_id)
-            no_unverified_playback(component)
+            no_unverified_playback(component, verified_audio=verified_audio)
         if not self.report.keys() >= PILLARS or not self.coaching.keys() >= COACHING:
             raise ValueError("Preserve all six authored report pillars and coaching sections.")
         for field, component, sections in (

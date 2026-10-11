@@ -33,6 +33,20 @@ from ac_platform.kernel.authz import ActorContext
 SANDBOX_NAMESPACE = UUID("3a70c7aa-8be1-4f16-8119-335f5203a9e4")
 
 
+def playback_projection(value: Any, *, available: bool) -> Any:
+    """Preserve stored authored history; retained media alone enables playback reads."""
+    if isinstance(value, dict):
+        return {
+            key: False
+            if key == "playable" and not available
+            else playback_projection(item, available=available)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [playback_projection(item, available=available) for item in value]
+    return value
+
+
 class SyntheticImports:
     def __init__(self, ownership: GuestOwnership) -> None:
         self.ownership = ownership
@@ -208,17 +222,40 @@ class SyntheticImports:
         )
         if row is None or (coaching and row.imported_by_person_id != actor.person_id):
             raise ConversationNotFound("This synthetic call is unavailable.")
+        audio = await self.database.get(
+            ConversationSyntheticRecord, (self.ownership.tenant_id, "audio", call_id, 1)
+        )
+        available = (
+            audio is not None and audio.payload.get("call_bundle_sha256") == row.payload_sha256
+        )
+        audio_state = {
+            "state": "ready"
+            if available
+            else "awaiting_upload"
+            if row.payload["metadata"].get("audio_file")
+            else "not_provided",
+            "playable": available,
+        }
+        if available:
+            audio_state["url"] = (
+                f"/v1/conversation/acquisition/imports/sandbox/calls/{call_id}/source"
+            )
         if coaching:
-            return {"synthetic": True, "private": True, "coaching": row.payload["coaching"]}
+            return {
+                "synthetic": True,
+                "private": True,
+                "coaching": playback_projection(row.payload["coaching"], available=available),
+            }
         return {
             "synthetic": True,
             "call_id": call_id,
             "state": "done",
             "processing": "authored_report",
             "minute_state": None,
-            "metadata": row.payload["metadata"],
-            "transcript": row.payload["transcript"],
-            "report": row.payload["report"],
+            "metadata": playback_projection(row.payload["metadata"], available=available),
+            "transcript": playback_projection(row.payload["transcript"], available=available),
+            "report": playback_projection(row.payload["report"], available=available),
+            "audio": audio_state,
             "payload_sha256": row.payload_sha256,
         }
 

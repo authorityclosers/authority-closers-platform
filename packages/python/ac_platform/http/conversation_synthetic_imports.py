@@ -18,7 +18,9 @@ from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImp
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 
 if TYPE_CHECKING:
+    from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
     from ac_platform.http.conversation_imports import _Guard
+    from ac_platform.http.conversation_intake import ConversationIntakeRuntime
     from ac_platform.http.conversation_submissions import _Owner
 
 
@@ -29,7 +31,21 @@ def install_synthetic_import_http(
     read_only_owner: Callable[[Request], AsyncIterator[_Owner]],
     guard: _Guard,
     fail: Callable[..., Any],
+    runtime: ConversationIntakeRuntime,
+    preflight: NativeUploadPreflight | None,
 ) -> None:
+    from ac_platform.http.conversation_synthetic_audio import install_synthetic_audio_http
+
+    install_synthetic_audio_http(
+        router,
+        runtime=runtime,
+        current_owner=current_owner,
+        read_only_owner=read_only_owner,
+        guard=guard,
+        fail=fail,
+        preflight=preflight,
+    )
+
     @router.post("/imports/sandbox/calls", status_code=201)
     async def import_call(
         bundle: SyntheticCallBundle,

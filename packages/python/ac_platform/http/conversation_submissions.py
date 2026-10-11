@@ -1311,6 +1311,8 @@ def install_submission_http(
             read_only_owner=read_only_owner,
             guard=guard,
             fail=fail,
+            runtime=runtime,
+            preflight=preflight,
         )
 
     install_import_http(
