@@ -341,6 +341,34 @@ def test_detected_person_lock_disagreement_source_and_history_guards(
                 locked = (await client.get(path)).json()["prospect"]["profile_fields"]["business"]
                 assert locked["value"] == value("Person Example") and locked["locked"]
                 assert locked["heard_differently"][0]["value"] == value("Heard Differently")
+                # A human Unknown is also an override, never an invitation for AI to refill it.
+                revision = (await client.get(path)).json()["prospect"]["revision"]
+                private(
+                    await client.put(
+                        path + "/fields",
+                        json={
+                            "expected_revision": revision,
+                            "fields": {"city": {"kind": "unknown", "reason": "not_asked"}},
+                        },
+                    ),
+                    200,
+                )
+                setup.clock[0] += timedelta(seconds=1)
+                async with setup.sessions() as db, db.begin():
+                    await store(setup, db).record_detected(
+                        setup.state.actor,
+                        identifier,
+                        submission_id=call,
+                        fields={"city": value("Later Heard City")},
+                        evidence={"city": ref},
+                        extractor_revision="prospect-profile/1",
+                    )
+                unknown = (await client.get(path)).json()["prospect"]["profile_fields"]["city"]
+                assert unknown["state"] == "unknown" and unknown["reason"] == "not_asked"
+                assert unknown["basis"] == "person" and unknown["locked"]
+                assert unknown["set_by"] == str(setup.state.actor.person_id)
+                assert unknown["set_at"]
+                assert not {"value", "evidence", "heard_differently", "changed_from"} & set(unknown)
                 for kwargs in (
                     {"fields": {"phone": value("private")}, "evidence": {"phone": ref}},
                     {
