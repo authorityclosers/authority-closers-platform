@@ -9,6 +9,7 @@ import {
   amitReport,
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
+import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 // Validate ZIP checksums and parse every OOXML part, rather than checking only a magic header.
@@ -115,6 +116,27 @@ describe("report Word file", () => {
     );
     expect(doc.text).toContain("Human Connection & TrustStrongly Demonstrated");
     expect(doc.text).not.toContain("This report doesn't cover this skill.");
+  });
+
+  it("quotes someone's own words in Before / After with who said them", async () => {
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          {
+            report: callB.report as unknown as SalesReport,
+            transcript: callB.transcript as unknown as Transcript,
+          },
+          {
+            roles: { seller: "speaker_0", prospect: "speaker_1" },
+            speakerName: (id) => (id === "speaker_0" ? "Sela" : "Daryl Pell"),
+          },
+        ),
+      ),
+    );
+    expect(doc.text).toContain(
+      "Before“We can start with a scheduled export and map the account key.",
+    );
+    expect(doc.text).toMatch(/before any live import\.”Sela/u);
   });
 
   it("refuses to build without a report", async () => {
