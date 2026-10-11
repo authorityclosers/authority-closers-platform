@@ -404,10 +404,12 @@
   min-width: 0;
 }
 
+/* In a narrow cell the second name drops below, still on the right. */
 .splitLabels {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
   color: var(--sx-muted);
   font: 400 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
 }
@@ -417,6 +419,10 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
+}
+
+.splitLabels > span:last-child:not(:first-child) {
+  margin-left: auto;
 }
 
 .splitLabels b {
