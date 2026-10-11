@@ -299,11 +299,11 @@ export function ProspectsListView() {
                       )}
                     </span>
                     <span className={styles.prospectStage}>
-                      <span
-                        className={`${styles.badge} ${prospect.stage ? "" : styles.badgeMissing}`}
-                      >
-                        {prospect.stage ?? "Missing stage"}
-                      </span>
+                      {prospect.stage ? (
+                        <span className={styles.badge}>{prospect.stage}</span>
+                      ) : (
+                        <span className={styles.muted}>No stage yet</span>
+                      )}
                     </span>
                     <span className={styles.prospectNext}>
                       {row.nextStep ?? (
