@@ -111,6 +111,83 @@ def test_private_stored_draft_with_pillars_keeps_its_canonical_hash(legacy):
     assert account["content"]["summary"] == payload["summary"]
 
 
+def test_synthetic_canonical_stock_notes_can_be_empty_without_changing_state_or_proof(legacy):
+    _, payload, transcript, draft, recording = legacy
+    transcript["synthetic"] = True
+    payload["pillars"]["moments"][1]["why"] = ""
+    for dimension in payload["dimensions"]:
+        dimension["observation"] = ""
+        dimension["call_state"] = "observed"
+    # Rebind a fictional authored publication before storage, never rewrite old hashes.
+    native = canonical(transcript).decode()
+    transcript["revision"] = hashlib.sha256(native.encode()).hexdigest()
+    draft.transcript = {"native_json": native, "normalized": transcript}
+    draft.evidence_receipt["transcription_response_sha256"] = transcript["revision"]
+    draft.transcript_sha256 = content_hash(draft.transcript)
+    draft.evidence_receipt_sha256 = content_hash(draft.evidence_receipt)
+    draft.payload = parse_report_draft(payload, transcript, canonical_read=True).model_dump(
+        mode="json"
+    )
+    draft.report_sha256 = content_hash(draft.payload)
+    checked, bound = ConversationReports._validated(draft, recording)
+    assert bound == transcript
+    assert content_hash(checked.model_dump(mode="json")) == draft.report_sha256
+    assert checked.pillars.moments[1].why == ""
+    assert all(
+        d.observation == "" and d.status == d.call_state == "observed" and d.evidence
+        for d in checked.dimensions
+    )
+    public = project_report(checked, access=ReportAccess.ACCOUNT)["content"]
+    assert public["pillars"]["moments"][1]["why"] == ""
+    assert all(
+        d["observation"] == "" and d["call_state"] == "observed" for d in public["dimensions"]
+    )
+    assert public["pillars"]["moments"][0]["why"] == payload["pillars"]["moments"][0]["why"]
+
+
+@pytest.mark.parametrize("field", ["why", "observation"])
+@pytest.mark.parametrize("synthetic", [False, True])
+def test_provider_admission_still_rejects_empty_notes(legacy, field, synthetic):
+    _, payload, transcript, _, _ = legacy
+    transcript["synthetic"] = synthetic
+    if field == "observation":
+        payload["dimensions"][0]["observation"] = ""
+        with pytest.raises(ReportError):
+            parse_report_draft(payload, transcript)
+    else:
+        candidate = case.__wrapped__()
+        candidate[0]["synthetic"] = synthetic
+        candidate[3]["pillars"]["moments"][1]["why"] = ""
+        with pytest.raises(ReportError):
+            parse(candidate)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "not_synthetic",
+        "non_synthetic_moment",
+        "miss_reason",
+        "uncited_skill",
+        "unobserved_skill",
+        "whitespace",
+    ],
+)
+def test_empty_canonical_notes_keep_source_and_evidence_requirements(legacy, invalid):
+    _, payload, transcript, _, _ = legacy
+    transcript["synthetic"] = invalid not in {"not_synthetic", "non_synthetic_moment"}
+    if invalid in {"miss_reason", "non_synthetic_moment"}:
+        payload["pillars"]["moments"][0 if invalid == "miss_reason" else 1]["why"] = ""
+    else:
+        payload["dimensions"][0]["observation"] = " " if invalid == "whitespace" else ""
+        if invalid == "uncited_skill":
+            payload["dimensions"][0]["evidence"] = []
+        elif invalid == "unobserved_skill":
+            payload["dimensions"][0]["status"] = "insufficient_evidence"
+    with pytest.raises(ReportError):
+        parse_report_draft(payload, transcript, canonical_read=True)
+
+
 @pytest.mark.parametrize("invalid", ["quote", "segment", "timing", "phase", "next_event"])
 def test_optional_pillars_still_require_native_evidence(legacy, invalid):
     _, payload, transcript, _, _ = legacy

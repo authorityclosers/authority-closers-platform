@@ -224,7 +224,10 @@ class PillarMoment(_Model):
     ]
     title: Short
     evidence: Refs
-    why: Text
+    # Canonical authored imports may omit a stock reason as an empty string.
+    # normalize_pillars binds that exception to synthetic legacy source only;
+    # the independent provider schema retains a nonempty reason.
+    why: Annotated[str, Field(max_length=150)]
     moved_toward: Text | None
     what_was_missed: Text | None
     price_stated: Short | None
@@ -328,6 +331,7 @@ def normalize_pillars(
     speaker_roles: Mapping[str, Any] | None,
     normalize_evidence: Callable[[Any], dict[str, Any]],
     canonical_read: bool,
+    canonical_synthetic: bool = False,
 ) -> ReportPillars:
     """Resolve every selector before accepting content; protect role/timing claims."""
 
@@ -372,6 +376,13 @@ def normalize_pillars(
         if step and step.when and not any(step.when in e.quote for e in step.evidence):
             raise ValueError("report_pillars_timing_invalid")
     for moment in pillars.moments:
+        if not moment.why.strip() and not (
+            canonical_read
+            and canonical_synthetic
+            and moment.why == ""
+            and moment.kind != "Important Miss"
+        ):
+            raise ValueError("report_pillars_reason_required")
         if moment.kind == "Important Miss":
             if not moment.moved_toward or not moment.what_was_missed:
                 raise ValueError("report_pillars_miss_invalid")
