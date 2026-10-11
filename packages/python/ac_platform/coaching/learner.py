@@ -41,6 +41,29 @@ def _moments(rows: list[SkillObservation]) -> tuple[Moment, ...]:
     return tuple(result)
 
 
+def recurring_focus(history: tuple[CallHistory, ...]) -> dict[UUID, bool | None]:
+    """Per call: does its own focus skill have a suggestion in another comparable call?
+
+    Only an assessed skill (basis skill_evidence) can recur; a report suggestion
+    without a linked skill is None. A source counted twice is one call.
+    """
+    calls = list({call.source_sha256: call for call in history}.values())
+    result: dict[UUID, bool | None] = {}
+    for call in history:
+        row = next((s for s in call.skills if s.mission), None)
+        if row is None or row.basis != "skill_evidence":
+            result[call.submission_id] = None
+            continue
+        flagged = sum(
+            1
+            for other in calls
+            if other.comparison_key == call.comparison_key
+            and any(s.skill_id == row.skill_id and s.improvement for s in other.skills)
+        )
+        result[call.submission_id] = flagged >= 2
+    return result
+
+
 def build_learner(
     history: tuple[CallHistory, ...],
     *,

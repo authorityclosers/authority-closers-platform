@@ -333,6 +333,10 @@ class CallSummary(Model):
     state: Literal["ready", "pending", "unavailable"]
     # The call's own suggested focus; never a diagnosis across calls.
     focus_label: str | None = Field(default=None, max_length=256)
+    # Whether that focus skill has a suggestion in another comparable call too
+    # (the Report's "may be part of a recurring pattern" line). None when it
+    # cannot be said: no assessed skill, or no comparable history.
+    recurring: bool | None = None
 
 
 class CoachingView(Model):

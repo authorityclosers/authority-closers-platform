@@ -62,6 +62,8 @@ export type CallSummary = {
   created_at: string;
   state: "ready" | "pending" | "unavailable";
   focus_label: string | null;
+  /** This call's focus skill also came up in another comparable call; null = can't say. */
+  recurring?: boolean | null;
 };
 /** What one comparable call's report said about the focus skill. */
 export type ProgressPoint = {
@@ -411,6 +413,7 @@ export function parseCallSummaries(value: unknown): CallSummary[] {
         typeof row.focus_label === "string" && row.focus_label.trim()
           ? row.focus_label
           : null,
+      recurring: typeof row.recurring === "boolean" ? row.recurring : null,
     });
   }
   return rows;

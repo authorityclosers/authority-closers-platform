@@ -13,7 +13,7 @@ from ac_platform.coaching.contracts import (
     SkillObservation,
     Strength,
 )
-from ac_platform.coaching.learner import build_learner
+from ac_platform.coaching.learner import build_learner, recurring_focus
 
 PERSON, TENANT = UUID(int=1), UUID(int=2)
 NOW = datetime(2026, 10, 10, tzinfo=UTC)
@@ -227,3 +227,29 @@ def test_a_strength_cannot_cross_into_another_calls_history() -> None:
     data["strength"] = strength.model_dump()
     with pytest.raises(ValidationError, match="cannot cross a source"):
         CallHistory.model_validate(data)
+
+
+def test_a_calls_focus_recurs_only_in_another_comparable_call_with_the_same_skill() -> None:
+    first, second = call(1), call(2)
+    other_skill = call(3, skill="qualification")
+    other_version = call(4, version="other-evaluator-v2")
+    flags = recurring_focus((first, second, other_skill, other_version))
+    assert flags[first.submission_id] is True and flags[second.submission_id] is True
+    # One call alone, or only in another evaluator version, is not a pattern.
+    assert flags[other_skill.submission_id] is False
+    assert flags[other_version.submission_id] is False
+    # A re-upload of the same source is one call, not a repeat.
+    again = call(5, source=f"{1:064x}")
+    assert recurring_focus((first, again))[first.submission_id] is False
+    # No assessed skill (a report suggestion) or no focus: unknown, not "no".
+    suggestion = call(6)
+    suggestion = suggestion.model_copy(
+        update={
+            "skills": tuple(
+                s.model_copy(update={"basis": "report_suggestion"}) for s in suggestion.skills
+            )
+        }
+    )
+    quiet = call(7, attention=False)
+    flags = recurring_focus((first, second, suggestion, quiet))
+    assert flags[suggestion.submission_id] is None and flags[quiet.submission_id] is None

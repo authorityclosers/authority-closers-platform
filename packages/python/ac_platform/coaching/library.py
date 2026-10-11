@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
-from ac_platform.coaching.learner import build_learner
+from ac_platform.coaching.learner import build_learner, recurring_focus
 from ac_platform.coaching.report_adapter import _text, from_report
 from ac_platform.coaching.sharing_store import member_name, rep_has_shared, shared_reps
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
@@ -285,6 +285,11 @@ class CoachingLibrary:
                 summary(usage, "unavailable")
         # Summaries were appended oldest first within each pass; show newest first.
         summaries.sort(key=lambda row: (row.created_at, str(row.submission_id)))
+        recurring = recurring_focus(tuple(history))
+        summaries = [
+            row.model_copy(update={"recurring": recurring.get(row.submission_id)})
+            for row in summaries
+        ]
         view = build_learner(
             tuple(history),
             person_id=person_id,
