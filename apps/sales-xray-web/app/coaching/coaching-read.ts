@@ -332,7 +332,7 @@ export async function readCoaching(
               : person && response.status === 404
                 ? "This coaching is not shared with you."
                 : response.status === 404 || response.status === 409
-                  ? "This call's coaching is unavailable. Open the call to check its analysis."
+                  ? "This call’s coaching isn’t ready. Open the call to see its report."
                   : "Coaching could not be loaded. Try again.",
       };
     if (!response.headers.get("content-type")?.includes("application/json"))
