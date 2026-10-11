@@ -8,6 +8,7 @@ import {
   earlyFetch,
   earlyReadsFor,
   earlyReadsScript,
+  SERVER_RENDERED_ROUTES,
 } from "./early-reads";
 
 type EarlyWindow = Window & { __sxEarly?: Record<string, unknown> };
@@ -82,6 +83,20 @@ it("starts the reads from the inline script with the browser's own session", asy
     });
   boot("/pricing");
   expect(network).toHaveBeenCalledTimes(6);
+});
+
+it("repeats none of the reads the server made for this document", () => {
+  const served = (path: string) => {
+    window.history.replaceState(null, "", path);
+    allowEarlyConversationReads(true);
+    new Function(earlyReadsScript(SERVER_RENDERED_ROUTES))();
+  };
+  served("/dashboard/");
+  served("/analysis/calls");
+  expect(network).not.toHaveBeenCalled();
+  // Other pages still start theirs.
+  served("/analysis/new");
+  expect(network).toHaveBeenCalledTimes(earlyReadsFor("/analysis/new").length);
 });
 
 it("reads every early answer at once, so no request stays open", async () => {

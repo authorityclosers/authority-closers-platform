@@ -9,7 +9,7 @@ import "./styles.css";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
-import { earlyReadsScript } from "./early-reads";
+import { earlyReadsScript, SERVER_RENDERED_ROUTES } from "./early-reads";
 import { sidebarInitScript } from "./shell/shell-store";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
@@ -70,10 +70,15 @@ export default async function Layout({
           dangerouslySetInnerHTML={{ __html: sidebarInitScript() }}
         />
         {/* Starts this page's reads while the HTML is still arriving, so the
-            app finds its data ready instead of asking after it starts. */}
+            app finds its data ready instead of asking after it starts
+            (not for pages whose reads the server made for this document). */}
         <script
           id="sales-xray-early-reads"
-          dangerouslySetInnerHTML={{ __html: earlyReadsScript() }}
+          dangerouslySetInnerHTML={{
+            __html: earlyReadsScript(
+              initialSession ? SERVER_RENDERED_ROUTES : [],
+            ),
+          }}
         />
         <ThemeProvider controlEnabled={themeControl}>
           {/* The root layout persists across client navigation, so a live
