@@ -269,7 +269,7 @@ it("pauses calmly: saved work, the reason and the recovery actions in view", asy
   );
   expect(stepState("C4")).toBe("attention");
   expect(stepStatus("C4")).toBe("Paused · needs attention");
-  expect(host.textContent).toContain("The completed transcript stays attached");
+  expect(host.textContent).toContain("The transcript is saved with this call");
   expect(host.querySelector("details")).toBeNull();
   expect(
     host.querySelector('[role="group"][aria-label="Call actions"]')

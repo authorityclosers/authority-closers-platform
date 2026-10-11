@@ -2742,7 +2742,7 @@ it("replaces delayed guidance with real paused recovery without restarting analy
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
   expect(container.textContent).toContain("Analysis paused");
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(
     calls.filter(({ init }) => init.method && init.method !== "GET"),
@@ -2761,10 +2761,10 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "This stage needs checking before analysis can continue",
   );
   expect(container.textContent).toContain(
-    "Some conversation analysis is saved with this call",
+    "Part of the analysis is saved with this call",
   );
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "Done",
@@ -2981,10 +2981,10 @@ it.each(["failed", "cancelled"])(
       container.querySelector('[data-phase][data-paused="true"]'),
     ).not.toBeNull();
     expect(container.textContent).toContain(
-      "A completed transcript has not been confirmed yet",
+      "The full transcript isn’t confirmed yet",
     );
     expect(container.textContent).not.toContain(
-      "The completed transcript stays attached",
+      "The transcript is saved with this call",
     );
   },
 );
@@ -3027,10 +3027,10 @@ it("keeps an uncertain transcription honest about missing completed work", async
     "Paused · needs attention",
   );
   expect(container.textContent).toContain(
-    "A completed transcript has not been confirmed yet",
+    "The full transcript isn’t confirmed yet",
   );
   expect(container.textContent).not.toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.textContent).not.toContain("Review and continue analysis");
   expect(

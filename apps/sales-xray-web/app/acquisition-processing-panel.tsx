@@ -513,11 +513,11 @@ export function AcquisitionProcessingPanel({
             <p>There’s no need to upload it again.</p>
             <p>
               {projection.savedTranscript
-                ? "The completed transcript stays attached to this call."
-                : "A completed transcript has not been confirmed yet."}
+                ? "The transcript is saved with this call."
+                : "The full transcript isn’t confirmed yet."}
             </p>
             {projection.savedEvidence && (
-              <p>Some conversation analysis is saved with this call.</p>
+              <p>Part of the analysis is saved with this call.</p>
             )}
           </div>
         </aside>
