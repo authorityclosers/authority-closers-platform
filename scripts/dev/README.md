@@ -11,7 +11,9 @@ loopback database named `ac_dev_live` is no longer served. The script requires
 query options. Credentials are injected at runtime through the existing dev
 environment; never pass them as arguments or copy them into a receipt.
 
-With that environment already injected:
+Run from the shared workbench
+`/home/acdev/src/dev-live/authority-closers-platform`, with that environment
+already injected by the named coordinator/root operator:
 
 ```sh
 python scripts/dev/load-sales-xray-sandbox.py \
@@ -42,3 +44,19 @@ Verify with a normal dev owner session: select AC Sandbox, open Calls and a
 populated report, then organisation members and team Coaching. The normal API
 library must show `report_ready` calls, `done` analysis and their representative owners.
 Hosted acceptance is complete only after these reads succeed on dev.
+
+The focused PostgreSQL acceptance test exercises normal library/report/progress
+reads, two concurrent imports, exact history replay, changed-content refusal,
+atomic rollback, the audit chain and zero-charge accounting. Run only these
+loader checks with the existing test database injection:
+
+```sh
+ac-heavy uv run pytest \
+  tests/unit/conversation_intelligence/test_dev_sandbox_loader.py \
+  tests/database/test_dev_sandbox_loader_postgresql.py -q -x --tb=short
+```
+
+The 3,360 full calls have authored transcripts and reports. The 177,615 historical
+summaries remain summaries and appear in Insights; they are not completed report
+records. The seven verified audio examples use the separate existing media import
+path. Loading authored text alone does not make playback available.

@@ -169,18 +169,53 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                     "revision": 1,
                     "occurred_at": source.occurred_at,
                     "payload": {
+                        "schema_version": "synthetic-sales-simulation/1",
                         "synthetic": True,
+                        "call_id": "syn-fixture-historical-call",
                         "rep_id": "syn-fixture-R1",
                         "duration_ms": 1000,
-                        "outcome": "Deferred",
+                        "report": deepcopy(source.report),
                     },
                 }
             )
             monkeypatch.setattr(module, "summaries", lambda _root: iter([summary]))
+            history_preview = await load(apply=False, include_history=True)
+            assert history_preview["summaries_validated"] == 1
+            async with AsyncSession(engine) as db:
+                assert (
+                    await db.scalar(
+                        select(func.count())
+                        .select_from(ConversationSyntheticRecord)
+                        .where(ConversationSyntheticRecord.kind == "call_summary")
+                    )
+                    == 0
+                )
             history = await load(include_history=True)
             assert history["summaries_created"] == 1 and history["calls_created"] == 0
             again = await load(include_history=True)
             assert again["summaries_skipped"] == 1
+            async with AsyncSession(engine) as db:
+                stored_summary = await db.scalar(
+                    select(ConversationSyntheticRecord).where(
+                        ConversationSyntheticRecord.kind == "call_summary"
+                    )
+                )
+                assert stored_summary.payload == summary.payload
+                assert await OrganisationInsights(db, module.TARGET).pending() == 0
+                assert (await verify_audit_chain(db, module.TARGET)).valid
+
+            changed_summary = deepcopy(summary.model_dump())
+            changed_summary["payload"]["report"]["the_big_picture"]["executive_summary"] = [
+                "Changed authored history"
+            ]
+            monkeypatch.setattr(
+                module,
+                "summaries",
+                lambda _root: iter([SyntheticRecordInput.model_validate(changed_summary)]),
+            )
+            with pytest.raises(ValueError, match="preserved synthetic revision changed"):
+                await load(include_history=True)
+            monkeypatch.setattr(module, "summaries", lambda _root: iter([summary]))
 
             changed = deepcopy(source.model_dump(by_alias=True))
             changed["coaching"]["action"]["new_authored_step"] = "Different preserved coaching"
