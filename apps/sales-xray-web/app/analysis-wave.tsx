@@ -9,6 +9,7 @@
  * listened, and never moves on a timer.
  */
 import { useEffect, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 
 import {
   parseWaveform,
@@ -69,6 +70,31 @@ export function useMeasuredWave(
 
 /** The chosen file's wave and the sending panel's: one moves into the other. */
 export const CALL_WAVE_TRANSITION = "sx-call-wave";
+
+/**
+ * Runs a state change as a view transition where the browser has them, so
+ * elements sharing a view-transition-name (the call's wave) move instead of
+ * jumping. Resolves once the new state is on screen; plain update otherwise.
+ */
+export async function withWaveMorph(update: () => void) {
+  const start = (
+    document as Document & {
+      startViewTransition?: (callback: () => void) => {
+        updateCallbackDone: Promise<void>;
+      };
+    }
+  ).startViewTransition;
+  if (
+    !start ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ) {
+    update();
+    return;
+  }
+  await start
+    .call(document, () => flushSync(update))
+    .updateCallbackDone.catch(() => update());
+}
 
 export type WaveState =
   | "idle"

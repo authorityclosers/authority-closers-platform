@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -92,6 +91,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { withWaveMorph } from "./analysis-wave";
 import { useFileWave } from "./analysis-wave-file";
 import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
@@ -170,31 +170,6 @@ const isStatusBlip = (error: unknown) =>
   (error instanceof DOMException && error.name === "TimeoutError") ||
   (error instanceof AcquisitionError &&
     (error.status >= 500 || error.status === 408 || error.status === 429));
-/**
- * Runs a state change as a view transition where the browser has them, so
- * elements sharing a view-transition-name (the call's wave) move instead of
- * jumping. Resolves once the new state is on screen; plain update otherwise.
- */
-async function withWaveMorph(update: () => void) {
-  const start = (
-    document as Document & {
-      startViewTransition?: (callback: () => void) => {
-        updateCallbackDone: Promise<void>;
-      };
-    }
-  ).startViewTransition;
-  if (
-    !start ||
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-  ) {
-    update();
-    return;
-  }
-  await start
-    .call(document, () => flushSync(update))
-    .updateCallbackDone.catch(() => update());
-}
-
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
