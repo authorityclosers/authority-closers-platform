@@ -394,3 +394,15 @@ details[open] > summary .chevron {
   box-shadow: var(--sx-focus-ring);
   border-radius: var(--sx-radius-sm);
 }
+
+/* The one pointer to long-term Coaching (spec: "may be part of a recurring
+   pattern → View Coaching"). */
+.recurring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}

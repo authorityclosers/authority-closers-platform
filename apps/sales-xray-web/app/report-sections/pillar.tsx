@@ -86,6 +86,7 @@ export function StoryPillar({
             model={model}
             onSelect={onSelect}
             preview={data.report?.preview}
+            callId={callId}
           />
         ) : index === 3 ? (
           <Moments
