@@ -15,7 +15,7 @@ import {
   FULL_COACHING_HREF,
   type CoachingClip,
 } from "./media-contract";
-import { MEDIA, THEIR } from "./coaching-copy";
+import { CLIP, MEDIA, THEIR } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import { useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
@@ -30,13 +30,13 @@ type ClipState =
   | "failed";
 
 const PLAY_LABEL: Record<ClipState, string> = {
-  idle: "Play coaching clip",
-  loading: "Loading clip…",
-  playing: "Pause",
-  paused: "Resume clip",
-  done: "Play again",
-  limit: "Preview finished",
-  failed: "Try clip again",
+  idle: CLIP.play,
+  loading: CLIP.loading,
+  playing: CLIP.pause,
+  paused: CLIP.resume,
+  done: CLIP.again,
+  limit: CLIP.limit,
+  failed: CLIP.retry,
 };
 
 /**
@@ -84,21 +84,14 @@ export function ClipOfferCard({
 }) {
   const offer = clip.offer;
   return (
-    <div className={styles.offer} role="group" aria-label="Full coaching">
+    <div className={styles.offer} role="group" aria-label={CLIP.offer}>
       <div className={styles.offerHead}>
         <span className={styles.offerIcon} aria-hidden="true">
           <Lock size={14} />
         </span>
         <div>
-          <strong>
-            {finished
-              ? "That’s the free preview"
-              : "Part of Dipak’s full coaching"}
-          </strong>
-          <p>
-            Hear the complete lesson and every clip for this skill with full
-            coaching.
-          </p>
+          <strong>{finished ? CLIP.previewDone : CLIP.partOfFull}</strong>
+          <p>{CLIP.offerText}</p>
         </div>
       </div>
       <div className={styles.actions}>
@@ -107,7 +100,7 @@ export function ClipOfferCard({
           className={kitStyles.button}
           data-variant="primary"
         >
-          Get the full coaching
+          {CLIP.getFull}
         </Link>
         {offer?.academy ? (
           <a
@@ -270,7 +263,7 @@ function ClipCard({
           disabled={state === "loading" || state === "limit"}
           data-locked={locked ? "" : undefined}
           aria-disabled={locked || undefined}
-          title={locked ? "Part of the full coaching" : PLAY_LABEL[state]}
+          title={locked ? CLIP.lockedTitle : PLAY_LABEL[state]}
         >
           {locked ? (
             <Lock size={16} aria-hidden="true" />
@@ -278,7 +271,7 @@ function ClipCard({
             <Icon size={16} aria-hidden="true" />
           )}
           <span className={styles.srOnly}>
-            {locked ? "Locked coaching clip" : PLAY_LABEL[state]}
+            {locked ? CLIP.locked : PLAY_LABEL[state]}
           </span>
         </button>
         <div className={styles.clipTitle}>
@@ -310,7 +303,7 @@ function ClipCard({
           <div
             className={styles.bar}
             role="progressbar"
-            aria-label="Clip progress"
+            aria-label={CLIP.progress}
             aria-valuemin={0}
             aria-valuemax={Math.round(length / 1000)}
             aria-valuenow={Math.round(position / 1000)}
@@ -321,7 +314,7 @@ function ClipCard({
             {preview ? (
               <b
                 style={{ left: `${(preview / length) * 100}%` }}
-                title="End of the free preview"
+                title={CLIP.previewEnd}
               />
             ) : null}
           </div>
@@ -329,9 +322,9 @@ function ClipCard({
             <span>{timeLabel(position)}</span>
             <span>
               {state === "loading"
-                ? "Loading…"
+                ? CLIP.loadingShort
                 : state === "playing"
-                  ? "Playing"
+                  ? CLIP.playing
                   : timeLabel(length)}
             </span>
           </div>
@@ -357,7 +350,7 @@ function ClipCard({
       ) : null}
       {state === "failed" ? (
         <p role="status" className={styles.status}>
-          Narration is unavailable. Try again, or read the clip below.
+          {CLIP.failed}
         </p>
       ) : null}
       {locked ? null : (
@@ -379,7 +372,7 @@ function ClipCard({
                     disabled={slide === 0}
                     onClick={() => setSlide((value) => value - 1)}
                   >
-                    Previous slide
+                    {CLIP.previousSlide}
                   </button>
                   <span>
                     {slide + 1} / {clip.slides.length}
@@ -390,7 +383,7 @@ function ClipCard({
                     disabled={slide === clip.slides.length - 1}
                     onClick={() => setSlide((value) => value + 1)}
                   >
-                    Next slide
+                    {CLIP.nextSlide}
                   </button>
                 </div>
               </div>
@@ -408,7 +401,7 @@ function ClipCard({
           ref={player}
           src={clipSource(clip)}
           preload="metadata"
-          aria-label="Placeholder coaching narration"
+          aria-label={CLIP.audio}
           onLoadedMetadata={() => {
             if (!player.current || !active.current) return;
             begin(player.current, clip.start_ms + resumeFrom.current);

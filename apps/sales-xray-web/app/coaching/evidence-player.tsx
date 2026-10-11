@@ -8,7 +8,7 @@ import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
-import { THEIR, WHY } from "./coaching-copy";
+import { MOMENT, THEIR, WHY } from "./coaching-copy";
 import { useCallHref, useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
@@ -44,10 +44,10 @@ function ContextButton({ context }: { context: ContextPlay }) {
           type="button"
           className={styles.withContext}
           aria-pressed={playing}
-          aria-label={`${playing ? "Pause context playback" : "Play with context"}, ${timeLabel(context.range.start_ms)}–${timeLabel(context.range.end_ms)}`}
+          aria-label={`${playing ? MOMENT.pauseContext : MOMENT.playContext}, ${timeLabel(context.range.start_ms)}–${timeLabel(context.range.end_ms)}`}
           onClick={context.play}
         >
-          {playing ? "Pause" : "With context"}
+          {playing ? MOMENT.pause : MOMENT.withContext}
         </button>
       )}
     </ClipPlayState>
@@ -72,7 +72,7 @@ function ReportPlay({
           className={styles.time}
           data-state={playing ? "playing" : "idle"}
           aria-pressed={playing}
-          aria-label={`${playing ? "Pause" : "Play"} moment ${span}`}
+          aria-label={playing ? MOMENT.pauseMoment(span) : MOMENT.play(span)}
           onClick={() => onPlay(evidence, "Coaching for this call")}
         >
           <ClipPlayIcon playing={playing} size={9} />
@@ -177,10 +177,10 @@ export function EvidencePlayer({
           }
           aria-label={
             state === "playing"
-              ? `Pause moment ${span}`
+              ? MOMENT.pauseMoment(span)
               : state === "failed"
-                ? `Try audio again ${span}`
-                : `Play moment ${span}`
+                ? MOMENT.retry(span)
+                : MOMENT.play(span)
           }
         >
           {state === "failed" ? (
@@ -191,7 +191,7 @@ export function EvidencePlayer({
           {timeLabel(evidence.start_ms)}
         </button>
       ) : (
-        <span className={styles.time} aria-label={`Moment at ${span}`}>
+        <span className={styles.time} aria-label={MOMENT.at(span)}>
           {timeLabel(evidence.start_ms)}
         </span>
       )}
@@ -211,19 +211,19 @@ export function EvidencePlayer({
             {span}
             {evidence.playable ? ` · ${clipLength(length)} clip` : ""}
           </span>
-          {state === "loading" ? <span>Loading audio…</span> : null}
+          {state === "loading" ? <span>{MOMENT.loading}</span> : null}
           {context && onPlay ? <ContextButton context={context} /> : null}
           {!evidence.playable ? (
             <span>
               {fictional
-                ? "Fictional call text; no audio."
+                ? MOMENT.fictional
                 : "We couldn’t match this to the audio. Read the quote."}
             </span>
           ) : null}
         </span>
         {state === "failed" ? (
           <p role="status" className={styles.status}>
-            Audio could not be played. Try audio again; the quote stays here.
+            {MOMENT.failed}
           </p>
         ) : null}
       </div>
@@ -233,7 +233,7 @@ export function EvidencePlayer({
           ref={audio}
           src={source}
           preload="metadata"
-          aria-label={`Moment from ${timeLabel(evidence.start_ms)}`}
+          aria-label={MOMENT.audio(timeLabel(evidence.start_ms))}
           onLoadedMetadata={() => {
             if (audio.current && active.current) start(audio.current);
           }}

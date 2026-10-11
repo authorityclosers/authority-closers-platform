@@ -24,6 +24,7 @@ import {
   POINT_COPY,
   PROGRESS,
   REGRESSION_COPY,
+  START,
   THEIR,
   THEIR_PILLARS,
   TREND_COPY,
@@ -203,13 +204,13 @@ function StartCoaching({
             </p>
             <p className={styles.focusTitle}>
               {coaching.analysed_calls
-                ? "Their calls don’t show one focus yet"
-                : "No analysed calls yet"}
+                ? START.theirNoFocus
+                : START.theirNoCalls}
             </p>
             <p className={styles.lead}>
               {coaching.analysed_calls
-                ? "Each analysed call below has its own focus and next-call mission."
-                : "Their coaching starts with their first analysed call."}
+                ? START.theirNoFocusText
+                : START.theirNoCallsText}
             </p>
           </StoryCard>
         </Pillar>
@@ -226,20 +227,14 @@ function StartCoaching({
             </span>
           </p>
           <p className={styles.focusTitle}>
-            {coaching.analysed_calls
-              ? "Start with one call’s coaching"
-              : "Analyse a call to start"}
+            {coaching.analysed_calls ? START.noFocus : START.noCalls}
           </p>
           <p className={styles.lead}>
-            {coaching.analysed_calls
-              ? "No one skill stands out across your calls yet. Each call below has its own focus and mission."
-              : "Coaching follows your own calls. Your first report brings one focus and one mission for your next call."}
+            {coaching.analysed_calls ? START.noFocusText : START.noCallsText}
           </p>
           {coaching.pending_calls > 0 ? (
             <p className={styles.note}>
-              {coaching.pending_calls} call
-              {coaching.pending_calls === 1 ? " is" : "s are"} still being
-              analysed.
+              {START.pending(coaching.pending_calls)}
             </p>
           ) : null}
           <div className={styles.actions}>
@@ -249,7 +244,7 @@ function StartCoaching({
                 data-variant="primary"
                 href="/coaching?view=team"
               >
-                See {coaching.sandbox_reps} fictional reps’ coaching{" "}
+                {START.sandboxReps(coaching.sandbox_reps)}{" "}
                 <ArrowRight size={14} aria-hidden="true" />
               </Link>
             ) : null}
@@ -262,14 +257,11 @@ function StartCoaching({
               }
               href="/analysis/new"
             >
-              Analyse a call <ArrowRight size={14} aria-hidden="true" />
+              {START.analyse} <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
           {coaching.sandbox_reps ? (
-            <p className={styles.note}>
-              This is AC Sandbox: Team shows the coaching of the fictional reps
-              you imported. Your own coaching follows your own calls.
-            </p>
+            <p className={styles.note}>{START.sandboxNote}</p>
           ) : null}
         </StoryCard>
       </Pillar>
@@ -494,7 +486,7 @@ function Story({
         <StoryCard>
           <ol
             className={styles.route}
-            aria-label={readOnly ? THEIR.path : "Your development path"}
+            aria-label={readOnly ? THEIR.path : START.path}
           >
             <li data-now="">
               <span>{PATH.now}</span>

@@ -459,6 +459,91 @@ export const THEIR = {
 
 export const ABOUT = "About this coaching";
 
+/** My coaching before a focus exists (no calls yet, or no pattern yet). */
+export const START = {
+  noFocus: "Start with one call’s coaching",
+  noCalls: "Analyse a call to start",
+  noFocusText:
+    "No one skill stands out across your calls yet. Each call below has its own focus and mission.",
+  noCallsText:
+    "Coaching follows your own calls. Your first report brings one focus and one mission for your next call.",
+  pending: (count: number) =>
+    `${count} call${count === 1 ? " is" : "s are"} still being analysed.`,
+  sandboxReps: (count: number) => `See ${count} fictional reps’ coaching`,
+  analyse: "Analyse a call",
+  sandboxNote:
+    "This is AC Sandbox: Team shows the coaching of the fictional reps you imported. Your own coaching follows your own calls.",
+  theirNoFocus: "Their calls don’t show one focus yet",
+  theirNoCalls: "No analysed calls yet",
+  theirNoFocusText:
+    "Each analysed call below has its own focus and next-call mission.",
+  theirNoCallsText: "Their coaching starts with their first analysed call.",
+  path: "Your development path",
+} as const;
+
+/** One call's coaching: its frame, empty state and links onward. */
+export const CALL = {
+  title: "Coaching for this call",
+  unavailable: "Unavailable",
+  backToTeam: "Back to team coaching",
+  backToReport: "Back to this call’s report",
+  notReady: "This call’s coaching isn’t ready",
+  notReadyText:
+    "Its moments are hidden or not ready yet. The report shows what’s there.",
+  openTeam: "Open team coaching",
+  openReport: "Open the report",
+  moments: "Moments from this call",
+  keepGoing: "Keep going",
+  moreSuggestions: (count: number) =>
+    `${count} more suggestion${count === 1 ? "" : "s"} there; Coaching keeps one focus`,
+  repAcross: (name: string | null) =>
+    `${name ?? "This rep"}’s coaching across calls`,
+  mineAcross: "My coaching across calls",
+} as const;
+
+/** A moment's play control (spec 5.5: every moment inspectable). */
+export const MOMENT = {
+  withContext: "With context",
+  pause: "Pause",
+  playContext: "Play with context",
+  pauseContext: "Pause context playback",
+  play: (span: string) => `Play moment ${span}`,
+  pauseMoment: (span: string) => `Pause moment ${span}`,
+  retry: (span: string) => `Try audio again ${span}`,
+  at: (time: string) => `Moment at ${time}`,
+  audio: (time: string) => `Moment from ${time}`,
+  loading: "Loading audio…",
+  fictional: "Fictional call text; no audio.",
+  failed: "Audio could not be played. Try audio again; the quote stays here.",
+} as const;
+
+/** Dipak's clip card controls and the full-coaching offer (spec 3.4, 11). */
+export const CLIP = {
+  play: "Play coaching clip",
+  loading: "Loading clip…",
+  pause: "Pause",
+  resume: "Resume clip",
+  again: "Play again",
+  limit: "Preview finished",
+  retry: "Try clip again",
+  lockedTitle: "Part of the full coaching",
+  locked: "Locked coaching clip",
+  progress: "Clip progress",
+  previewEnd: "End of the free preview",
+  loadingShort: "Loading…",
+  playing: "Playing",
+  failed: "Narration is unavailable. Try again, or read the clip below.",
+  previousSlide: "Previous slide",
+  nextSlide: "Next slide",
+  audio: "Placeholder coaching narration",
+  offer: "Full coaching",
+  previewDone: "That’s the free preview",
+  partOfFull: "Part of Dipak’s full coaching",
+  offerText:
+    "Hear the complete lesson and every clip for this skill with full coaching.",
+  getFull: "Get the full coaching",
+} as const;
+
 /** The Coaching page's own frame: titles, header lines and page states. */
 export const PAGE = {
   mine: "My coaching",
