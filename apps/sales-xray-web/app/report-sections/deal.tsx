@@ -22,7 +22,9 @@ import {
 import {
   Bullets,
   Field,
+  GUEST,
   Gap,
+  UnlockButton,
   LineText,
   Text,
   type People,
@@ -62,12 +64,15 @@ export function DealStands({
   onSelect,
   prospectControls,
   onOpenCoaching,
+  guest = false,
 }: {
   model: StoryModel;
   people: People;
   onSelect?: Select;
   prospectControls?: ReactNode;
   onOpenCoaching?: () => void;
+  /** A guest preview: one way on, to sign in. */
+  guest?: boolean;
 }) {
   const { deal } = model;
   const prospectName = people.prospect?.name.split(" ")[0] ?? null;
@@ -176,30 +181,43 @@ export function DealStands({
           </LinkedProspectContext.Provider>
         </section>
       ) : null}
-      <div className={styles.ctas}>
-        <Link
-          className={styles.cta}
-          href={
-            prospectId
-              ? `/prospects/${encodeURIComponent(prospectId)}`
-              : "/prospects"
-          }
-        >
-          {DEAL.viewProspect}
-          <ArrowRight size={14} aria-hidden="true" />
-        </Link>
-        {onOpenCoaching ? (
-          <button type="button" className={styles.cta} onClick={onOpenCoaching}>
-            {DEAL.viewCoaching}
+      {guest ? (
+        <div className={styles.ctas}>
+          <UnlockButton className={styles.cta}>
+            {GUEST.fullReport}
             <ArrowRight size={14} aria-hidden="true" />
-          </button>
-        ) : (
-          <Link className={styles.cta} href="/coaching">
-            {DEAL.viewCoaching}
+          </UnlockButton>
+        </div>
+      ) : (
+        <div className={styles.ctas}>
+          <Link
+            className={styles.cta}
+            href={
+              prospectId
+                ? `/prospects/${encodeURIComponent(prospectId)}`
+                : "/prospects"
+            }
+          >
+            {DEAL.viewProspect}
             <ArrowRight size={14} aria-hidden="true" />
           </Link>
-        )}
-      </div>
+          {onOpenCoaching ? (
+            <button
+              type="button"
+              className={styles.cta}
+              onClick={onOpenCoaching}
+            >
+              {DEAL.viewCoaching}
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          ) : (
+            <Link className={styles.cta} href="/coaching">
+              {DEAL.viewCoaching}
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

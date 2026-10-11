@@ -3,7 +3,15 @@
 import { WORKED_DIDNT } from "../report-copy";
 import type { Item, StoryModel } from "../report-story-model";
 import { PlayChip, StoryCard, ToneDot } from "../report-visuals/visuals";
-import { Bullets, Field, Gap, Text, type Select } from "./shared";
+import {
+  Bullets,
+  Field,
+  Gap,
+  Locked,
+  Text,
+  type Preview,
+  type Select,
+} from "./shared";
 import styles from "./sections.module.css";
 
 /** One card: what happened → evidence → why it helped / what it affected. */
@@ -50,9 +58,11 @@ function ItemRow({
 export function WorkedDidnt({
   model,
   onSelect,
+  preview,
 }: {
   model: StoryModel;
   onSelect?: Select;
+  preview?: Preview;
 }) {
   return (
     <div className={styles.stack}>
@@ -77,6 +87,11 @@ export function WorkedDidnt({
             ) : (
               <p className={styles.note}>{WORKED_DIDNT.noneWorked}</p>
             )}
+            <Locked
+              preview={preview}
+              sections={["strengths"]}
+              noun={["strength", "strengths"]}
+            />
           </StoryCard>
         </section>
         <section aria-label={WORKED_DIDNT.didnt.label}>
@@ -99,6 +114,11 @@ export function WorkedDidnt({
             ) : (
               <p className={styles.note}>{WORKED_DIDNT.noneDidnt}</p>
             )}
+            <Locked
+              preview={preview}
+              sections={["improvements"]}
+              noun={["issue", "issues"]}
+            />
           </StoryCard>
         </section>
       </div>

@@ -1,10 +1,16 @@
 "use client";
 
+import { LockKeyhole } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, type ReactNode } from "react";
 
 import { COMMON } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
-import type { ReportEvidence, Transcript } from "../report-contract";
+import type {
+  ReportEvidence,
+  SalesReport,
+  Transcript,
+} from "../report-contract";
 import { RichText } from "../report-entities";
 import { useReportPeople } from "../report-kit";
 import { reportStoryModel, type Line } from "../report-story-model";
@@ -66,6 +72,63 @@ export function Gap({ items }: { items: string[] }) {
   return (
     <p className={styles.gap}>
       <span>{COMMON.gapsLead}</span> {items.join(" · ")}
+    </p>
+  );
+}
+
+export type Preview = NonNullable<SalesReport["preview"]>;
+type PreviewSection = keyof Preview["sections"];
+
+/** Guest words until the copy module carries them (asked of G, 1798). */
+export const GUEST = {
+  more: (count: number, noun: [string, string]) =>
+    `${count} more ${count === 1 ? noun[0] : noun[1]} ${count === 1 ? "is" : "are"} saved for your account.`,
+  unlock: "Unlock with a free account",
+  fullReport: "Sign in to see the full report",
+};
+
+/** Sign-in that keeps this analysed call (the studio restores it after). */
+export function UnlockButton({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() => router.push("/login")}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A guest sees the visible part; the rest waits behind sign-in, by count. */
+export function Locked({
+  preview,
+  sections,
+  noun,
+}: {
+  preview?: Preview;
+  sections: PreviewSection[];
+  noun: [one: string, many: string];
+}) {
+  const hidden = preview
+    ? sections.reduce(
+        (sum, name) => sum + (preview.sections[name]?.hidden_count ?? 0),
+        0,
+      )
+    : 0;
+  if (!hidden) return null;
+  return (
+    <p className={styles.locked}>
+      <LockKeyhole size={13} aria-hidden="true" />
+      {GUEST.more(hidden, noun)}{" "}
+      <UnlockButton className={styles.unlock}>{GUEST.unlock}</UnlockButton>
     </p>
   );
 }

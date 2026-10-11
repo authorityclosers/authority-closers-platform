@@ -354,3 +354,30 @@ details[open] > summary .chevron {
     justify-content: center;
   }
 }
+
+/* A guest preview: how much more the full report holds. */
+.locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.unlock {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+.unlock:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-sm);
+}

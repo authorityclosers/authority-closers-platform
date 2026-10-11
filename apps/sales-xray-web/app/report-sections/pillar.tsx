@@ -82,9 +82,18 @@ export function StoryPillar({
             onSelect={onSelect}
           />
         ) : index === 2 ? (
-          <WorkedDidnt model={model} onSelect={onSelect} />
+          <WorkedDidnt
+            model={model}
+            onSelect={onSelect}
+            preview={data.report?.preview}
+          />
         ) : index === 3 ? (
-          <Moments model={model} people={people} onSelect={onSelect} />
+          <Moments
+            model={model}
+            people={people}
+            onSelect={onSelect}
+            preview={data.report?.preview}
+          />
         ) : index === 4 ? (
           <Skills model={model} onSelect={onSelect} />
         ) : (
@@ -94,6 +103,7 @@ export function StoryPillar({
             onSelect={onSelect}
             prospectControls={prospectControls}
             onOpenCoaching={onOpenCoaching}
+            guest={Boolean(data.report?.preview)}
           />
         )}
       </div>

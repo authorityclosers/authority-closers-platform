@@ -582,7 +582,10 @@ export function ReportModes({
   prospectControls?: ReactNode;
 }) {
   const storyPanels =
-    documentData?.report && !documentData.report.preview
+    // A guest preview gets the Report too when the caller asks for pillars;
+    // its locked items show as "more after you sign in".
+    documentData?.report &&
+    (!documentData.report.preview || structure === "pillars")
       ? reportScreenPanels(
           documentData,
           onSelectEvidence,
@@ -590,10 +593,13 @@ export function ReportModes({
           prospectControls,
           {
             callId: boundCallId ?? null,
-            onOpenCoaching: () =>
-              window.dispatchEvent(
-                new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
-              ),
+            // Guests have no Coaching view, so no button that does nothing.
+            onOpenCoaching: documentData.report.preview
+              ? undefined
+              : () =>
+                  window.dispatchEvent(
+                    new CustomEvent(OPEN_VIEW, { detail: "coaching" }),
+                  ),
           },
         )
       : [];

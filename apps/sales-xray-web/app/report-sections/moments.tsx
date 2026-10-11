@@ -14,9 +14,11 @@ import {
 import {
   Field,
   Gap,
+  Locked,
   Text,
   speakerOf,
   type People,
+  type Preview,
   type Select,
 } from "./shared";
 import styles from "./sections.module.css";
@@ -109,10 +111,12 @@ export function Moments({
   model,
   people,
   onSelect,
+  preview,
 }: {
   model: StoryModel;
   people: People;
   onSelect?: Select;
+  preview?: Preview;
 }) {
   const [all, setAll] = useState(false);
   const shown = all
@@ -151,6 +155,11 @@ export function Moments({
           />
         </button>
       ) : null}
+      <Locked
+        preview={preview}
+        sections={["golden_moments", "missed_opportunities", "rewatch"]}
+        noun={["moment", "moments"]}
+      />
       <Gap items={model.missing[3]} />
     </div>
   );
