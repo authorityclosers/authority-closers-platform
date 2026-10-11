@@ -35,6 +35,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationProcessingPlan,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.plan_facts import plan_facts
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.run_budget_alarm import overdue_processing_plans
 from ac_platform.kernel.authz import ActorContext
@@ -88,25 +89,12 @@ def _manifest(plan: ConversationProcessingPlan) -> dict[str, Any]:
 def _version(plan: ConversationProcessingPlan) -> tuple[str | None, str | None, str | None]:
     """(coaching prompt revision, Report provider, Report model) as the plan recorded them."""
 
-    manifest = _manifest(plan)
-    stages = manifest.get("stages")
-    report: dict[str, Any] = next(
-        (
-            item
-            for item in (stages if isinstance(stages, list) else [])
-            if isinstance(item, dict) and item.get("stage") == "C5"
-        ),
-        {},
-    )
+    facts = plan_facts(plan)
 
     def text(value: Any) -> str | None:
         return value if isinstance(value, str) and value else None
 
-    return (
-        text(manifest.get("coaching_prompt_revision")),
-        text(report.get("provider_id")),
-        text(report.get("model_id")),
-    )
+    return text(facts["prompt_revision"]), text(facts["provider"]), text(facts["model"])
 
 
 def version_rows(
@@ -118,6 +106,8 @@ def version_rows(
     """Analyses per prompt version and Report model: outcomes, Report time, cost per minute.
 
     Operational only (finished, failed, how long, how costly), never report quality.
+    Steps reach a version through their plan's quotes, so a failed audio check
+    (which runs before any plan step) counts only in the overall failed jobs.
     """
 
     groups: dict[tuple[str | None, str | None, str | None], dict[str, Any]] = {}
@@ -184,7 +174,8 @@ def version_rows(
                 "model": model,
                 "analyses": len(member),
                 "completed": sum(1 for plan in member if plan.state == "completed"),
-                "in_flight": sum(1 for plan in member if plan.state in {"active", "held"}),
+                "running": sum(1 for plan in member if plan.state == "active"),
+                "held": sum(1 for plan in member if plan.state == "held"),
                 "failed_steps": group["failed"],
                 "retried_steps": group["retried"],
                 "report_p50_ms": round(median(group["report_ms"])) if group["report_ms"] else None,

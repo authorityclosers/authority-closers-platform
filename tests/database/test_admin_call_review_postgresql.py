@@ -165,6 +165,6 @@ def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) ->
             # analyses through direct quotes, so only the invariants are checked here.
             assert isinstance(health["versions"], list)
             for row in health["versions"]:
-                assert row["completed"] + row["in_flight"] <= row["analyses"]
+                assert row["completed"] + row["running"] + row["held"] <= row["analyses"]
 
     run(exercise())

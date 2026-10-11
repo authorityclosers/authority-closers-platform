@@ -122,7 +122,8 @@ def test_version_rows_compare_prompt_versions_by_outcome_time_and_cost() -> None
         ("coaching-v4", "gemini-3.8-flash"),
     ]
     v5 = rows[0]
-    assert v5["analyses"] == 2 and v5["completed"] == 1 and v5["in_flight"] == 1
+    assert v5["analyses"] == 2 and v5["completed"] == 1 and v5["running"] == 1
+    assert v5["held"] == 0
     assert v5["failed_steps"] == 1 and v5["retried_steps"] == 1
     assert v5["report_p50_ms"] == 40_000
     # No receipts, so no cost is claimed.

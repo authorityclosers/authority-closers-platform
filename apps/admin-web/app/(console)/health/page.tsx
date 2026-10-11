@@ -252,7 +252,7 @@ export default async function HealthPage({
           <Panel
             title="By prompt version"
             tools={
-              <Why detail="Analyses in this window, grouped by coaching prompt and Report model. Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
+              <Why detail="Analyses in this window, grouped by coaching prompt and Report model. A failed audio check happens before any plan step, so it counts only under Failed jobs. Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
             }
           >
             {health.versions.length ? (
@@ -268,7 +268,9 @@ export default async function HealthPage({
                     </strong>
                     <span>
                       {row.analyses} analyses · {row.completed} finished ·{" "}
-                      {row.inFlight} running · {row.failedSteps} failed steps
+                      {row.running} running
+                      {row.held ? ` · ${row.held} held` : ""} ·{" "}
+                      {row.failedSteps} failed steps
                     </span>
                     <span>
                       Report step {span(row.reportP50)} · cost{" "}
@@ -333,7 +335,15 @@ export default async function HealthPage({
                       <td>{row.model ?? row.provider ?? "Not recorded"}</td>
                       <td data-num="">{row.analyses}</td>
                       <td data-num="">{row.completed}</td>
-                      <td data-num="">{row.inFlight}</td>
+                      <td data-num="">
+                        {row.running}
+                        {row.held ? (
+                          <small className={styles.aside}>
+                            {" "}
+                            · {row.held} held
+                          </small>
+                        ) : null}
+                      </td>
                       <td data-num="">
                         {row.failedSteps}
                         {row.retriedSteps ? (

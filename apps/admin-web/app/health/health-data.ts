@@ -47,7 +47,8 @@ export type Version = {
   model: string | null;
   analyses: number;
   completed: number;
-  inFlight: number;
+  running: number;
+  held: number;
   failedSteps: number;
   retriedSteps: number;
   reportP50: number | null;
@@ -201,7 +202,8 @@ export function normalizeHealth(raw: unknown): Health {
         model: read.optionalString(row.model),
         analyses: read.number(row.analyses),
         completed: read.number(row.completed),
-        inFlight: read.number(row.in_flight),
+        running: read.number(row.running),
+        held: read.number(row.held),
         failedSteps: read.number(row.failed_steps),
         retriedSteps: read.number(row.retried_steps),
         reportP50: read.optionalNumber(row.report_p50_ms),
