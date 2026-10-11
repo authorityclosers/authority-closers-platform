@@ -382,3 +382,60 @@ async def test_label_routes_need_an_idempotency_key_and_the_admin_origin(
     assert (
         await client.get("/v1/admin/conversation/calls", params={"review": "x"})
     ).status_code == 422
+
+
+async def test_company_view_routes_open_only_served_organisations(
+    admin_client, monkeypatch
+) -> None:
+    import ac_platform.http.conversation_call_review as routes
+
+    client, _database = admin_client
+    organisations = [
+        {"id": str(ORGANISATION), "name": "Fictional Org", "sandbox": False},
+        {"id": str(PERSONAL), "name": "Personal", "sandbox": False},
+    ]
+    seen: dict[str, Any] = {}
+
+    async def listed(database, tenant_ids):
+        seen["served"] = set(tenant_ids)
+        return organisations
+
+    class Insights:
+        def __init__(self, tenant_id: UUID) -> None:
+            self.tenant_id = tenant_id
+
+        async def overview(self, filters, *, now):
+            seen.update(tenant=self.tenant_id, filters=filters)
+            return {"totals": {"calls": 1}}
+
+        async def calls(self, filters, *, offset):
+            seen.update(offset=offset)
+            return {"items": []}
+
+        async def refresh(self, *, now):
+            return {"projected": 0, "pending": 0}
+
+    def insights(database, actor, tenant_id):
+        assert actor.tenant_id == OPS
+        return Insights(tenant_id)
+
+    monkeypatch.setattr(routes, "insight_organisations", listed)
+    monkeypatch.setattr(routes, "tenant_insights", insights)
+    path = "/v1/admin/conversation/insights"
+    first = await client.get(path)
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["organisation"]["id"] == str(ORGANISATION)
+    assert body["overview"] == {"totals": {"calls": 1}}
+    assert seen["tenant"] == ORGANISATION and seen["served"] == {PERSONAL, ORGANISATION}
+    chosen = await client.get(path, params={"organisation": str(PERSONAL), "range": "30d"})
+    assert chosen.status_code == 200 and seen["tenant"] == PERSONAL
+    assert (await client.get(path, params={"organisation": str(uuid4())})).status_code == 404
+    assert (await client.get(path, params={"days": "7"})).status_code == 422
+    calls = await client.get(
+        path + "/calls", params={"organisation": str(ORGANISATION), "offset": "50"}
+    )
+    assert calls.status_code == 200 and seen["offset"] == 50
+    refresh = path + "/refresh?organisation=" + str(ORGANISATION)
+    assert (await client.post(refresh)).status_code == 403
+    assert (await client.post(refresh, headers={"Origin": "https://admin.test"})).status_code == 200
