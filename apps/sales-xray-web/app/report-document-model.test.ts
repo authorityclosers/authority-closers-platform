@@ -12,6 +12,7 @@ import {
   amitReport,
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
+import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 const NAMES: Record<string, string> = {
@@ -156,6 +157,30 @@ describe("report document model", () => {
     ];
     expect(groups.length).toBeGreaterThan(0);
     expect(groups).toEqual(order.filter((g) => groups.includes(g)));
+  });
+
+  it("today's real pipeline output reads cleanly: no repeated switch quote", () => {
+    const doc = reportDocumentModel(
+      {
+        report: callB.report as unknown as SalesReport,
+        transcript: callB.transcript as unknown as Transcript,
+      },
+      { roles: { seller: "speaker_0", prospect: "speaker_1" } },
+    );
+    const change = doc.sections[1].parts.find((p) =>
+      p.heading?.startsWith("2.3"),
+    );
+    if (change) {
+      const quote = change.items.find((i) => i.type === "quote");
+      const texts = change.items
+        .filter((i) => i.type === "text")
+        .map((i) => docItemText(i));
+      if (quote?.type === "quote")
+        expect(texts).not.toContain(quote.clip.quote);
+    }
+    for (const section of doc.sections)
+      for (const part of section.parts)
+        expect(part.items.length).toBeGreaterThan(0);
   });
 
   it("an older, sparse report still makes a whole document with honest gaps", () => {

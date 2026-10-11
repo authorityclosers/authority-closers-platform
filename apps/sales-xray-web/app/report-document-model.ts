@@ -175,6 +175,16 @@ const STATE_TONE: Record<string, DocTone> = {
 const present = <T>(value: T | null | undefined | false): value is T =>
   Boolean(value);
 
+/** The same words, ignoring case, quotes and punctuation. */
+const same = (a: string | null | undefined, b: string | null | undefined) => {
+  const norm = (v: string | null | undefined) =>
+    (v ?? "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  return norm(a) !== "" && norm(a) === norm(b);
+};
+
 /** Blocks without the ones a report can't fill. */
 const keep = (list: (DocItem | null | undefined | false)[]): DocItem[] =>
   list.filter(present);
@@ -349,7 +359,10 @@ export function reportDocumentModel(
         ? partOf(CALL_FLOW.change, [
             { type: "text", text: changedAt(turnClip.at), strong: true },
             turnClip.quote ? { type: "quote", clip: turnClip } : null,
-            { type: "text", text: flow.change.turn.text },
+            // Some reports describe the switch with the quote itself.
+            same(flow.change.turn.text, turnClip.quote)
+              ? null
+              : { type: "text", text: flow.change.turn.text },
             { type: "play", clip: turnClip },
           ])
         : null,
