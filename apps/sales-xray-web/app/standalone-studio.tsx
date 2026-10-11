@@ -26,6 +26,7 @@ import {
   earlyFetch,
 } from "./early-reads";
 import { telemetry } from "./telemetry";
+import type { InitialSession } from "./server-reads";
 import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
@@ -42,6 +43,7 @@ import {
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
 import {
+  parseSalesXrayWorkspaces,
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
@@ -215,6 +217,27 @@ async function readWorkspaceChoices(
   };
 }
 
+/**
+ * The session the server read for this page (dev), in the same shape as the
+ * browser's own check; null unless it names a selected workspace.
+ */
+export function seededChoices(
+  initial: InitialSession | null | undefined,
+): WorkspaceChoices | null {
+  if (!initial) return null;
+  const identity = parseWorkspaceChoices(initial.identity);
+  const directory = parseSalesXrayWorkspaces(initial.directory);
+  if (!identity || !directory || directory.selected_tenant_id === null)
+    return null;
+  return {
+    person_id: identity.person_id,
+    session_id: identity.session_id,
+    ...directory,
+    salesXrayWorkspaces: directory.workspaces,
+    selected_tenant_id: directory.selected_tenant_id,
+  };
+}
+
 async function selectWorkspace(tenantId: string, signal: AbortSignal) {
   const response = await fetch("/v1/context", {
     method: "POST",
@@ -256,16 +279,20 @@ export function StandaloneStudio({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
+  initialSession = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
+  /** The server's read of the session (dev), for server-rendered pages. */
+  initialSession?: InitialSession | null;
 }) {
   return (
     <PendingAnalysisProvider>
       <StandaloneStudioView
         variant={variant}
         openingExistingCall={openingExistingCall}
+        initialSession={variant === "standalone" ? initialSession : null}
       >
         {children}
       </StandaloneStudioView>
@@ -277,10 +304,12 @@ function StandaloneStudioView({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
+  initialSession = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
+  initialSession?: InitialSession | null;
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
@@ -321,7 +350,12 @@ function StandaloneStudioView({
   const [attempt, setAttempt] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
-  const [view, setView] = useState<ViewState>({ kind: "loading" });
+  // A server-read session (dev) starts the page ready; the browser's check
+  // below still runs and confirms it, so the page never trusts it alone.
+  const [view, setView] = useState<ViewState>(() => {
+    const seeded = seededChoices(initialSession);
+    return seeded ? { kind: "ready", choices: seeded } : { kind: "loading" };
+  });
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
     string | null

@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { WorkspaceAccessContext } from "../workspace-access";
-import DashboardPage from "./page";
+import { DashboardView as DashboardPage } from "./dashboard-view";
 
 // Exercise the real dashboard reads without the shell's separate profile reads.
 vi.mock("../shell/lightbox-shell", () => ({
@@ -447,4 +447,97 @@ it("shows a rename made elsewhere in Recent calls at once", async () => {
     );
   });
   expect(list()?.textContent).toContain("New name");
+});
+
+it("arrives whole from the server's reads, without reading again", async () => {
+  const summary = { total: 9, processing: 1, completed: 7, needs_attention: 1 };
+  await act(async () => {
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: {
+            personId: "person-1",
+            sessionId: "session-1",
+            tenantId: "tenant-1",
+          },
+          retry: () => {},
+          requestAccountSignIn: signIn,
+        }}
+      >
+        <DashboardPage
+          initial={{
+            summary: { status: 200, body: summary },
+            activity: { status: 404, body: null },
+            allowance: {
+              status: 200,
+              body: {
+                allowance: {
+                  allowance_seconds: 6000,
+                  committed_seconds: 1800,
+                  available_seconds: 4200,
+                  unlimited: false,
+                },
+              },
+            },
+            recent: {
+              status: 200,
+              body: { submissions: [], next_cursor: null },
+            },
+          }}
+        />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+  // Shown at once (no skeleton) and nothing read again in the browser.
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
+    "7",
+  );
+  expect(host.textContent).toContain("70 min");
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("reads in the browser only what the server could not", async () => {
+  await act(async () => {
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: {
+            personId: "person-1",
+            sessionId: "session-1",
+            tenantId: "tenant-1",
+          },
+          retry: () => {},
+          requestAccountSignIn: signIn,
+        }}
+      >
+        <DashboardPage
+          initial={{
+            summary: {
+              status: 200,
+              body: {
+                total: 0,
+                processing: 0,
+                completed: 0,
+                needs_attention: 0,
+              },
+            },
+            activity: null,
+            allowance: { status: 401, body: null },
+            recent: {
+              status: 200,
+              body: { submissions: [], next_cursor: null },
+            },
+          }}
+        />
+      </WorkspaceAccessContext.Provider>,
+    );
+  });
+  expect(fetchMock.mock.calls.map(([path]) => path).sort()).toEqual(
+    [`${base}/activity`, `${base}/session`].sort(),
+  );
 });

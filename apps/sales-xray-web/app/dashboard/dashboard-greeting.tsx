@@ -5,11 +5,17 @@ import { useSyncExternalStore } from "react";
 import { useProfileFirstName } from "../profile-first-name";
 import styles from "./dashboard-greeting.module.css";
 
-// Capture the browser's local hour once. useSyncExternalStore keeps the server
-// and hydration snapshots alike ("Welcome back"), then shows the time of day.
+// The hour in India (the dashboard reads "India time"), the same on the
+// server and in the browser, so a page rendered on the server keeps its
+// greeting when the app starts (no "Welcome back" swapped for the hour).
+const IST_HOUR = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Asia/Kolkata",
+});
 const subscribeToGreetingHour = () => () => {};
-const readGreetingHour = () => new Date().getHours();
-const readServerGreetingHour = () => null;
+const readGreetingHour = () => Number(IST_HOUR.format(new Date()));
+const readServerGreetingHour = readGreetingHour;
 
 /** One steady greeting by time of day; it never rotates or moves the page. */
 export function greetingFor(hour: number | null): string {

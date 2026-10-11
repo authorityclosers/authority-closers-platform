@@ -14,6 +14,7 @@ import { sidebarInitScript } from "./shell/shell-store";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
+import { serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
 export const metadata: Metadata = {
   title: "Dipak’s Sales Xray · Authority Closers",
@@ -36,9 +37,12 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: dark)", color: "#060a14" },
   ],
 };
-export default function Layout({
+export default async function Layout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Where this server can read the API (dev), the session arrives with the
+  // page, so pages that render their data on the server show it at once.
+  const initialSession = await serverSession();
   const liveDataMode = process.env.AC_SALES_XRAY_DEV_LIVE_DATA === "true";
   const themeControl = themeControlEnabled({
     NODE_ENV: process.env.NODE_ENV,
@@ -69,7 +73,7 @@ export default function Layout({
           {/* The root layout persists across client navigation, so a live
               upload is owned here rather than by the page that started it. */}
           <UploadSessionProvider>
-            <AppSession>
+            <AppSession initialSession={initialSession}>
               {liveDataMode ? (
                 <LiveDataBanner>{children}</LiveDataBanner>
               ) : (

@@ -2,7 +2,11 @@
 
 import { AlertCircle, Plus } from "lucide-react";
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import {
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
 import { Delta, Meter, Spark } from "../ui/kit";
@@ -40,6 +44,7 @@ export const toState = <T,>(result: ReadResult<T>): ReadState<T> =>
     : { status: "error", forbidden: result.status === 403 };
 
 const LOADING = { status: "loading" } as const;
+const subscribeNothing = () => () => {};
 
 /**
  * Owners and admins of an organisation see team-wide counts (labels say so).
@@ -120,6 +125,11 @@ export function DashboardBody({
     activity !== null && activity.days.every((d) => d.analysed === 0);
   // The tile's sparkline: the last two weeks of the daily chart, today lit.
   const lastTwoWeeks = activity?.days.slice(-14).map((day) => day.analysed);
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
   const label = (teamText: string, ownText: string, width: string) =>
     team === null ? <Ph w={width} /> : team ? teamText : ownText;
 
@@ -319,7 +329,10 @@ export function DashboardBody({
               ) : null}
             </div>
             <div className={styles.surface} data-flush="">
-              {recentState.status === "loading" ? (
+              {/* Rows carry dates and names in the browser's own language
+                  and time zone, so a page rendered on the server (dev) draws
+                  them once the app starts, in the rows' own boxes. */}
+              {recentState.status === "loading" || !hydrated ? (
                 <RecentCallsSkeleton />
               ) : recentState.status === "error" ? (
                 <NotLoaded />
