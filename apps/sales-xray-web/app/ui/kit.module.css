@@ -57,17 +57,27 @@
   white-space: nowrap;
 }
 
+/* As in a row's meta: the dot sits in the gap before each item, so a wrapped
+   line never starts with "·" (its dot falls past the clipped left edge). */
 .context {
   display: flex;
   flex-wrap: wrap;
+  column-gap: 14px;
   margin: 0;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
 }
 
+.context > span {
+  position: relative;
+}
+
 .context > span + span::before {
-  margin: 0 6px;
+  position: absolute;
+  left: -7px;
   content: "·";
+  transform: translateX(-50%);
 }
 
 .actions {
@@ -587,8 +597,9 @@ a.rowTitle:hover {
 
 .rowMeta > span::before {
   position: absolute;
-  left: -10px;
+  left: -7px;
   content: "·";
+  transform: translateX(-50%);
 }
 
 .rowEnd > .meter {
