@@ -648,7 +648,9 @@ export function reportDocumentModel(
           {
             type: "skills",
             rows: model.skills.map((skill) => ({
-              name: skill.label,
+              // The Report rows' short names (Dipak's "Skill UI Design"
+              // list), so screen, page and Word file name each skill alike.
+              name: skill.short,
               state: skill.state ?? SKILLS.notCovered,
               tone: skill.state
                 ? (STATE_TONE[skill.state] ?? "neutral")

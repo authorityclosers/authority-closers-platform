@@ -116,6 +116,9 @@ describe("report Word file", () => {
     );
     expect(doc.text).toContain("Human Connection & TrustStrongly Demonstrated");
     expect(doc.text).not.toContain("This report doesn't cover this skill.");
+    // The Report rows' short names, never the long write-up titles.
+    expect(doc.text).toContain("Problem / Impact / Desire");
+    expect(doc.text).not.toContain("Problem, Impact & Desire Clarity");
   });
 
   it("quotes someone's own words in Before / After with who said them", async () => {

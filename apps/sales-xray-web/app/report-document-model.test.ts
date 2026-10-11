@@ -164,13 +164,13 @@ describe("report document model", () => {
     const skills = doc.sections[4].parts[0].items[0];
     expect(skills.type === "skills" && skills.rows.map((r) => r.name)).toEqual([
       "Human Connection & Trust",
-      "Discovery & Deep Understanding",
+      "Discovery",
       "Qualification",
-      "Problem, Impact & Desire Clarity",
-      "Solution Relevance & Presentation",
-      "Certainty & Objection Intelligence",
-      "Closing & Decision Management",
-      "Communication & Tonality",
+      "Problem / Impact / Desire",
+      "Presentation & Value",
+      "Objection Intelligence",
+      "Closing",
+      "Communication",
     ]);
     expect(doc.summary?.type === "summary" && doc.summary.cells[0].label).toBe(
       "Call Outcome",
@@ -204,8 +204,8 @@ describe("report document model", () => {
       expect(row(name).clips.length).toBeGreaterThan(0);
     }
     // A skill the report doesn't cover still says so.
-    expect(row("Closing & Decision Management").state).toBe("Not covered");
-    expect(row("Closing & Decision Management").observation).toBe(
+    expect(row("Closing").state).toBe("Not covered");
+    expect(row("Closing").observation).toBe(
       "This report doesn't cover this skill.",
     );
   });
