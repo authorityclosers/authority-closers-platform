@@ -60,17 +60,25 @@ function Today({
       {queue.ok ? (
         <>
           <Kpi
-            label="Reports ready"
-            value={queue.data.counts.ready}
+            label="New"
+            value={queue.data.reviewCounts.new}
             note={
-              queue.data.truncated ? "Among the newest 500 calls" : "All calls"
+              queue.data.truncated
+                ? "Among the newest 500 calls"
+                : "Not yet reviewed"
             }
-            href="/calls?status=ready"
+            href="/calls?review=new"
           />
           <Kpi
-            label="Analysing now"
-            value={queue.data.counts.analysing}
-            href="/calls?status=analysing"
+            label="Needs review"
+            value={queue.data.reviewCounts.needs_review}
+            href="/calls?review=needs_review"
+          />
+          <Kpi
+            label="Disputed"
+            value={queue.data.reviewCounts.disputed}
+            tone={queue.data.reviewCounts.disputed ? "warn" : "good"}
+            href="/calls?review=disputed"
           />
           <Kpi
             label="Failed calls"
@@ -88,12 +96,6 @@ function Today({
               health.data.byStage.find((row) => row.stage === "C5")?.counts
                 .succeeded ?? 0
             }
-            href="/health?days=1"
-          />
-          <Kpi
-            label="Failed jobs, last 24 h"
-            value={health.data.byStatus.dead_letter}
-            tone={health.data.byStatus.dead_letter ? "bad" : "good"}
             href="/health?days=1"
           />
           <Kpi

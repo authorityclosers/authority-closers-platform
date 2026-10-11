@@ -23,6 +23,7 @@ vi.mock("@/app/lib/server-api", async (original) => {
           status: 200,
           data: normalize({
             counts: { ready: 7, analysing: 2, failed: 1, uploaded: 0 },
+            review_counts: { new: 4, needs_review: 2, disputed: 1, done: 3 },
             window: { truncated: false },
           }),
         };
@@ -67,8 +68,9 @@ const markup = async () => {
 
 it("shows today's calls and health as tiles that open the right view", async () => {
   const html = await markup();
-  expect(html).toContain("Reports ready");
-  expect(html).toContain('href="/calls?status=ready"');
+  expect(html).toContain("Needs review");
+  expect(html).toContain('href="/calls?review=new"');
+  expect(html).toContain('href="/calls?review=disputed"');
   expect(html).toContain('href="/calls?status=failed"');
   expect(html).toContain("Reports, last 24 h");
   expect(html).toContain(">12<");
@@ -78,6 +80,6 @@ it("shows today's calls and health as tiles that open the right view", async () 
 it("keeps the call tiles when the health read fails", async () => {
   reads.health = false;
   const html = await markup();
-  expect(html).toContain("Reports ready");
+  expect(html).toContain("Needs review");
   expect(html).not.toContain("Reports, last 24 h");
 });

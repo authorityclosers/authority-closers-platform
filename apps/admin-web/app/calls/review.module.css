@@ -912,3 +912,178 @@
     overflow-x: auto;
   }
 }
+
+/* ---------- Review panel ---------- */
+
+.reviewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.reviewActions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.verdicts {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verdicts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: var(--sx-radius-sm);
+}
+
+.verdicts li[data-active] {
+  background: var(--sx-accent-soft);
+  box-shadow: inset 3px 0 0 var(--sx-accent);
+}
+
+.verdictLabel {
+  display: grid;
+  font-weight: 600;
+}
+
+.verdictLabel small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.verdictButtons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}
+
+.verdictButtons button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.verdictButtons button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+  color: var(--sx-ink);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="correct"] {
+  color: var(--sx-good);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="partly"] {
+  color: var(--sx-warn);
+}
+
+.verdictButtons button[aria-pressed="true"][data-verdict="wrong"] {
+  color: var(--sx-bad);
+}
+
+.verdictButtons button:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.noteForm {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.noteForm textarea,
+.goldGrid textarea,
+.goldGrid select,
+.metrics select {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.noteForm textarea,
+.goldGrid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.goldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.goldGrid > label[data-wide] {
+  grid-column: 1 / -1;
+}
+
+.history {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-xs);
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.history li > span:first-child {
+  color: var(--sx-muted);
+}
+
+.history li[data-superseded] {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+@media (max-width: 760px) {
+  .goldGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .verdictButtons button {
+    min-height: 40px;
+  }
+
+  .noteForm textarea,
+  .goldGrid textarea,
+  .goldGrid select,
+  .metrics select {
+    font-size: 16px;
+  }
+}

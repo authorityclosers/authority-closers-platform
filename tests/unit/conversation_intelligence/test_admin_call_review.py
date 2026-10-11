@@ -140,6 +140,11 @@ def _queue_service(monkeypatch: pytest.MonkeyPatch, recordings: list[Any]) -> Ad
         "_reports": reports,
     }.items():
         monkeypatch.setattr(AdminCallReview, name, value)
+
+    async def no_labels(_self: Any, ids: Any) -> dict[UUID, list[Any]]:
+        return {}
+
+    monkeypatch.setattr(module.ReviewLabels, "rows", no_labels)
     monkeypatch.setattr(
         module, "recording_is_canary", lambda: module.ConversationRecording.id.is_(None)
     )
@@ -182,6 +187,9 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
     everything = await service.queue(actor)
     assert everything["total"] == 4
     assert everything["counts"] == {"ready": 2, "analysing": 1, "failed": 1, "uploaded": 0}
+    assert everything["review_counts"] == {"new": 4, "needs_review": 0, "disputed": 0, "done": 0}
+    assert {item["review"] for item in everything["items"]} == {"new"}
+    assert (await service.queue(actor, review="done"))["items"] == []
     assert [entry["label"] for entry in everything["facets"]["organisations"]] == [
         "Team A",
         "Team B",
@@ -242,6 +250,8 @@ async def test_queue_refuses_unknown_filters_and_other_workspaces(
         await service.queue(actor, status="maybe")
     with pytest.raises(ConversationError):
         await service.queue(actor, language="fr")
+    with pytest.raises(ConversationError):
+        await service.queue(actor, review="maybe")
     with pytest.raises(ConversationError):
         await service.queue(actor, limit=500)
     with pytest.raises(ConversationError):
