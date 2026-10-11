@@ -8,7 +8,7 @@ source with the reviewer route's byte-range and bounded-memory rules.
 from __future__ import annotations
 
 import re
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -45,11 +45,6 @@ from ac_platform.http.auth import (
     RequireActor,
     require_admin_surface,
     require_safe_origin,
-)
-from ac_platform.http.conversation_insights import (
-    insight_filters,
-    insight_organisations,
-    tenant_insights,
 )
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
 from ac_platform.product_updates.admin_reading import latest_notes
@@ -246,124 +241,6 @@ def install_call_review_routes(
         try:
             await service(auth)._admit(auth.resolved.actor)
             return await join_thread(lambda: synthetic.call(call_id))
-        except ConversationError as error:
-            raise HTTPException(error.status, str(error)) from None
-
-    # ---------- Company view (AUT-1798): the owner's view of one organisation ----------
-
-    insight_params = frozenset({"organisation"})
-
-    async def insight_target(
-        auth: AuthenticatedTransaction, organisation: UUID | None
-    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        await service(auth)._admit(auth.resolved.actor)
-        organisations = await insight_organisations(auth.database, recording_tenant_ids)
-        if organisation is None:
-            return organisations, organisations[0] if organisations else None
-        chosen = next((item for item in organisations if item["id"] == str(organisation)), None)
-        if chosen is None:
-            raise HTTPException(404, "That organisation isn't served by Sales Xray.")
-        return organisations, chosen
-
-    @router.get("/insights")
-    async def company_view(
-        request: Request,
-        response: Response,
-        organisation: UUID | None = None,
-        span: Annotated[str | None, Query(alias="range", max_length=8)] = None,
-        start: Annotated[date | None, Query(alias="from")] = None,
-        end: Annotated[date | None, Query(alias="to")] = None,
-        person: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
-        team: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
-        outcome: Annotated[str | None, Query(max_length=16)] = None,
-        language: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
-        auth: AuthenticatedTransaction = dependency,
-    ) -> dict[str, Any]:
-        """One organisation's company view, as its owner sees it (read-only)."""
-
-        require_admin_surface(request, settings)
-        response.headers["Cache-Control"] = "private, no-store"
-        now = datetime.now(UTC)
-        filters = insight_filters(
-            request,
-            now=now,
-            span=span,
-            start=start,
-            end=end,
-            person=person,
-            team=team,
-            outcome=outcome,
-            language=language,
-            extra=insight_params,
-        )
-        try:
-            organisations, chosen = await insight_target(auth, organisation)
-            overview = (
-                None
-                if chosen is None
-                else await tenant_insights(
-                    auth.database, auth.resolved.actor, UUID(chosen["id"])
-                ).overview(filters, now=now)
-            )
-        except ConversationError as error:
-            raise HTTPException(error.status, str(error)) from None
-        return {"organisations": organisations, "organisation": chosen, "overview": overview}
-
-    @router.get("/insights/calls")
-    async def company_view_calls(
-        request: Request,
-        response: Response,
-        organisation: UUID,
-        span: Annotated[str | None, Query(alias="range", max_length=8)] = None,
-        start: Annotated[date | None, Query(alias="from")] = None,
-        end: Annotated[date | None, Query(alias="to")] = None,
-        person: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
-        team: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
-        outcome: Annotated[str | None, Query(max_length=16)] = None,
-        language: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
-        offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
-        auth: AuthenticatedTransaction = dependency,
-    ) -> dict[str, Any]:
-        """The calls behind one organisation's company view, newest first."""
-
-        require_admin_surface(request, settings)
-        response.headers["Cache-Control"] = "private, no-store"
-        filters = insight_filters(
-            request,
-            now=datetime.now(UTC),
-            span=span,
-            start=start,
-            end=end,
-            person=person,
-            team=team,
-            outcome=outcome,
-            language=language,
-            extra=insight_params,
-        )
-        try:
-            await insight_target(auth, organisation)
-            return await tenant_insights(auth.database, auth.resolved.actor, organisation).calls(
-                filters, offset=offset
-            )
-        except ConversationError as error:
-            raise HTTPException(error.status, str(error)) from None
-
-    @router.post("/insights/refresh")
-    async def company_view_refresh(
-        request: Request,
-        response: Response,
-        organisation: UUID,
-        auth: AuthenticatedTransaction = dependency,
-    ) -> dict[str, Any]:
-        """Bring one organisation's per-call projection up to date (one batch)."""
-
-        scope(request, response, {"organisation"})
-        require_safe_origin(request, settings)
-        try:
-            await insight_target(auth, organisation)
-            return await tenant_insights(auth.database, auth.resolved.actor, organisation).refresh(
-                now=datetime.now(UTC)
-            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 

@@ -1,4 +1,4 @@
-"""The company view's routes (AUT-1798): owners and admins only, on the Sales Xray host."""
+"""The company view's Sales Xray routes (AUT-1798): owners and admins only, on its host."""
 
 from dataclasses import replace
 from types import SimpleNamespace
@@ -10,9 +10,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
-from ac_platform.http.conversation_submissions import install_submission_http
+from ac_platform.http.conversation_insights import install_insights_routes
 from ac_platform.kernel.authz import ActorContext
 from tests.unit.http.test_conversation_learner_acquisition import (
     PERSON_ID,
@@ -20,7 +19,6 @@ from tests.unit.http.test_conversation_learner_acquisition import (
     SESSION_ID,
     _Database,
     _runtime,
-    _Service,
     _settings,
 )
 
@@ -51,11 +49,11 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
 
     require_actor.read_only = read_auth
 
-    async def reader(self, who):
-        assert who == actor and self.tenant_id == selected
+    async def reader(database, who, operations):
+        assert who == actor and operations == _settings().operations_tenant_id
         return state["reader"]
 
-    monkeypatch.setattr(GuestOwnership, "organisation_call_reader", reader)
+    monkeypatch.setattr("ac_platform.http.conversation_insights.organisation_reader", reader)
     insights = SimpleNamespace(
         overview=AsyncMock(return_value={"source": "call", "totals": {"calls": 3}}),
         calls=AsyncMock(return_value={"items": [], "total": 0}),
@@ -68,7 +66,6 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
         return insights
 
     monkeypatch.setattr("ac_platform.http.conversation_insights.library_insights", library)
-    monkeypatch.setattr(_Service, "clock", None, raising=False)
     app, runtime = FastAPI(), _runtime(tmp_path)
     runtime = replace(
         runtime,
@@ -77,14 +74,12 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
             policy=replace(runtime.intake.policy, tenant_ids=frozenset({PUBLIC_TENANT, selected})),
         ),
     )
-    install_submission_http(
+    install_insights_routes(
         app,
         settings=_settings(),
-        sessions=None,
         require_actor=require_actor,
-        factory=_Service,
-        runtime=runtime.intake,
-        preflight=runtime.preflight,
+        intake=runtime.intake,
+        acquisition_intake=runtime.intake,
     )
     origin = {"Origin": "https://salesxray.example.test"}
     async with httpx.AsyncClient(
@@ -128,6 +123,13 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
             denied = await client.request(method, PREFIX + path, headers=origin)
             assert denied.status_code == 403
             assert "owners and admins" in denied.json()["detail"]
+
+        # A workspace Sales Xray doesn't serve is refused before any read.
+        state["reader"] = True
+        served = actor
+        actor = ActorContext(PERSON_ID, SESSION_ID, uuid4())
+        assert (await client.get(PREFIX + "/insights")).status_code == 403
+        actor = served
 
         state["signed_in"] = False
         assert (await client.get(PREFIX + "/insights")).status_code == 401

@@ -1323,19 +1323,6 @@ def install_submission_http(
         fail=fail,
         policy_sha256=lambda: upload_policy(runtime.policy)["policy_sha256"],
     )
-    from ac_platform.http.conversation_insights import install_insights_http
-
-    # The owner's and manager's company view (AUT-1798).
-    install_insights_http(
-        router,
-        hostname=hostname,
-        guard=guard,
-        read_actor=read_require_actor,
-        write_actor=require_actor,
-        ownership=ownership,
-        workspace=workspace,
-        fail=fail,
-    )
     application.include_router(router)
 
     from ac_platform.http.conversation_prospects import install_prospect_http

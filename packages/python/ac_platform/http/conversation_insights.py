@@ -1,16 +1,21 @@
-"""The company view's routes (AUT-1798) for organisation owners and admins.
+"""The company view's routes (AUT-1798), mounted from the app composition.
 
-``GET /insights`` returns every aggregate of the company view in one answer
-(so the page arrives whole), ``GET /insights/calls`` pages through the calls
-behind it, and ``POST /insights/refresh`` brings the per-call projection up to
-date in one bounded batch. Every request re-checks, from the database, that
-the caller is an active owner or admin of the selected organisation; members
-get 403. Real calls are limited to the live library scope.
+Sales Xray (``/v1/conversation/acquisition/insights``): ``GET`` returns every
+aggregate of the company view in one answer (so the page arrives whole),
+``GET /calls`` pages through the calls behind it, and ``POST /refresh``
+brings the per-call projection up to date in one bounded batch. Every request
+re-checks, from the database, that the caller is an active owner or admin of
+the selected organisation (the same rule as the organisation's call reads);
+members get 403. Real calls are limited to the live library scope.
+
+Admin (``/v1/admin/conversation/insights``): the same view of any served
+organisation (or the synthetic sandbox) for the operations control accounts,
+admitted exactly like the call review console.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
@@ -18,11 +23,16 @@ from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from sqlalchemy import select
 
+from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_library import _account_library_query
-from ac_platform.conversation_intelligence.application import ConversationError
+from ac_platform.conversation_intelligence.admin_call_review import AdminCallReview
+from ac_platform.conversation_intelligence.application import (
+    ConversationApplication,
+    ConversationError,
+)
 from ac_platform.conversation_intelligence.insight_models import OUTCOMES
 from ac_platform.conversation_intelligence.org_insights import (
     RANGES,
@@ -30,22 +40,32 @@ from ac_platform.conversation_intelligence.org_insights import (
     OrganisationInsights,
     scope_columns,
 )
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
 )
+from ac_platform.http.auth import (
+    AuthenticatedTransaction,
+    RequireActor,
+    require_admin_surface,
+    require_safe_origin,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
-from ac_platform.tenancy.models import Tenant
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
-    from ac_platform.http.auth import AuthenticatedTransaction
+    from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 INDIA = ZoneInfo("Asia/Kolkata")
 PARAMS = {"range", "from", "to", "person", "team", "outcome", "language", "offset"}
 DENIED = "Only owners and admins of this organisation can see the company view."
+PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 
 
 def insight_filters(
@@ -124,28 +144,84 @@ async def insight_organisations(
     )
 
 
-def install_insights_http(
-    router: APIRouter,
+async def organisation_reader(database: AsyncSession, actor: ActorContext, operations: Any) -> bool:
+    """An active owner or admin of the selected organisation, read fresh.
+
+    The same rule as ``GuestOwnership.organisation_call_reader``: never the
+    operations tenant, a current membership row of an organisation, active,
+    not ended, role owner or admin.
+    """
+    if actor.tenant_id is None or actor.tenant_id == operations:
+        return False
+    member = await database.scalar(
+        select(Membership)
+        .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
+        .where(
+            Membership.tenant_id == actor.tenant_id,
+            Membership.person_id == actor.person_id,
+        )
+        .with_for_update(read=True)
+        .execution_options(populate_existing=True)
+    )
+    return (
+        member is not None
+        and member.status == "active"
+        and member.ended_at is None
+        and member.role in {"owner", "admin"}
+    )
+
+
+def install_insights_routes(
+    application: FastAPI,
     *,
-    hostname: str | None,
-    guard: Callable[..., str],
-    read_actor: Callable[[Request], AsyncIterator[AuthenticatedTransaction]],
-    write_actor: Callable[[Request], AsyncIterator[AuthenticatedTransaction]],
-    ownership: Callable[[AsyncSession, UUID], GuestOwnership],
-    workspace: Callable[[ActorContext], UUID],
-    fail: Callable[..., Any],
+    settings: Settings,
+    require_actor: RequireActor,
+    intake: ConversationIntakeRuntime | None,
+    acquisition_intake: ConversationIntakeRuntime | None,
 ) -> None:
-    """Mount on the Sales Xray acquisition router; account sessions only."""
+    """Mount the company view: Sales Xray for owners/admins, Admin for AC staff."""
+    if settings.sales_xray_app_url is not None and acquisition_intake is not None:
+        _install_sales_xray(
+            application,
+            settings=settings,
+            require_actor=require_actor,
+            served=sales_xray_served_tenant_ids(settings, acquisition_intake),
+        )
+    _install_admin(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        recording_tenant_ids=tuple(sorted(sales_xray_served_tenant_ids(settings, intake), key=str)),
+    )
+
+
+def _install_sales_xray(
+    application: FastAPI,
+    *,
+    settings: Settings,
+    require_actor: RequireActor,
+    served: frozenset[UUID],
+) -> None:
+    assert settings.sales_xray_app_url is not None
+    hostname = settings.sales_xray_app_url.host
+    read_actor = getattr(require_actor, "read_only", require_actor)
+    router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-insights"])
+
+    def fail(status: int, message: str) -> HTTPException:
+        return HTTPException(status, message, headers=PRIVATE)
 
     @asynccontextmanager
     async def admitted(
         request: Request, *, write: bool = False
     ) -> AsyncIterator[OrganisationInsights]:
         try:
-            async with asynccontextmanager(write_actor if write else read_actor)(request) as auth:
+            async with asynccontextmanager(require_actor if write else read_actor)(request) as auth:
                 actor = auth.resolved.actor
-                owner = ownership(auth.database, workspace(actor))
-                if not await owner.organisation_call_reader(actor):
+                if actor.tenant_id is None or actor.tenant_id not in served:
+                    raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
+                if not await organisation_reader(
+                    auth.database, actor, settings.operations_tenant_id
+                ):
                     raise fail(403, DENIED)
                 yield library_insights(auth.database, actor)
         except ConversationError as error:
@@ -153,11 +229,17 @@ def install_insights_http(
         except DomainError:
             raise fail(401, "Sign in to see your organisation's calls.") from None
 
-    def read_guard(request: Request, response: Response) -> None:
-        response.headers["Cache-Control"] = "private, no-store"
-        response.headers["Vary"] = "Cookie"
+    def guard(request: Request, response: Response, *, write: bool = False) -> None:
+        response.headers.update(PRIVATE)
         if request.url.hostname != hostname:
             raise fail(404, "Not found.")
+        if write:
+            if request.query_params:
+                raise fail(422, "This command takes no parameters.")
+            try:
+                require_safe_origin(request, settings, allow_missing_sales_xray_origin=True)
+            except DomainError:
+                raise fail(403, "Use this Sales Xray page to continue.") from None
 
     @router.get("/insights")
     async def insights(
@@ -172,7 +254,7 @@ def install_insights_http(
         language: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
     ) -> dict[str, Any]:
         """Every aggregate of the company view for one window, in one answer."""
-        read_guard(request, response)
+        guard(request, response)
         now = datetime.now(UTC)
         filters = insight_filters(
             request,
@@ -185,8 +267,8 @@ def install_insights_http(
             outcome=outcome,
             language=language,
         )
-        async with admitted(request) as insights:
-            return await insights.overview(filters, now=now)
+        async with admitted(request) as company:
+            return await company.overview(filters, now=now)
 
     @router.get("/insights/calls")
     async def insight_calls(
@@ -202,7 +284,7 @@ def install_insights_http(
         offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     ) -> dict[str, Any]:
         """The calls behind the company view, newest first, 50 at a time."""
-        read_guard(request, response)
+        guard(request, response)
         filters = insight_filters(
             request,
             now=datetime.now(UTC),
@@ -214,13 +296,149 @@ def install_insights_http(
             outcome=outcome,
             language=language,
         )
-        async with admitted(request) as insights:
-            return await insights.calls(filters, offset=offset)
+        async with admitted(request) as company:
+            return await company.calls(filters, offset=offset)
 
     @router.post("/insights/refresh")
     async def refresh_insights(request: Request, response: Response) -> dict[str, Any]:
         """Bring the per-call projection up to date, one bounded batch per request."""
-        if guard(request, response, write=True) != "sales":
-            raise fail(404, "Not found.")
-        async with admitted(request, write=True) as insights:
-            return await insights.refresh(now=datetime.now(UTC))
+        guard(request, response, write=True)
+        async with admitted(request, write=True) as company:
+            return await company.refresh(now=datetime.now(UTC))
+
+    application.include_router(router)
+
+
+def _install_admin(
+    application: FastAPI,
+    *,
+    settings: Settings,
+    require_actor: RequireActor,
+    recording_tenant_ids: tuple[UUID, ...],
+) -> None:
+    router = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-insights-admin"])
+    dependency = Depends(require_actor, scope="function")
+    params = frozenset({"organisation"})
+
+    def surface(request: Request, response: Response) -> None:
+        require_admin_surface(request, settings)
+        response.headers["Cache-Control"] = "private, no-store"
+
+    async def target(
+        auth: AuthenticatedTransaction, organisation: UUID | None
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        if settings.operations_tenant_id is None:
+            raise HTTPException(503, "Call review is not configured.")
+        await AdminCallReview(
+            ConversationApplication(auth.database),
+            settings.operations_tenant_id,
+            recording_tenant_ids=recording_tenant_ids,
+        )._admit(auth.resolved.actor)
+        organisations = await insight_organisations(auth.database, recording_tenant_ids)
+        if organisation is None:
+            return organisations, organisations[0] if organisations else None
+        chosen = next((item for item in organisations if item["id"] == str(organisation)), None)
+        if chosen is None:
+            raise HTTPException(404, "That organisation isn't served by Sales Xray.")
+        return organisations, chosen
+
+    @router.get("/insights")
+    async def company_view(
+        request: Request,
+        response: Response,
+        organisation: UUID | None = None,
+        span: Annotated[str | None, Query(alias="range", max_length=8)] = None,
+        start: Annotated[date | None, Query(alias="from")] = None,
+        end: Annotated[date | None, Query(alias="to")] = None,
+        person: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
+        team: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
+        outcome: Annotated[str | None, Query(max_length=16)] = None,
+        language: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """One organisation's company view, as its owner sees it (read-only)."""
+        surface(request, response)
+        now = datetime.now(UTC)
+        filters = insight_filters(
+            request,
+            now=now,
+            span=span,
+            start=start,
+            end=end,
+            person=person,
+            team=team,
+            outcome=outcome,
+            language=language,
+            extra=params,
+        )
+        try:
+            organisations, chosen = await target(auth, organisation)
+            overview = (
+                None
+                if chosen is None
+                else await tenant_insights(
+                    auth.database, auth.resolved.actor, UUID(chosen["id"])
+                ).overview(filters, now=now)
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+        return {"organisations": organisations, "organisation": chosen, "overview": overview}
+
+    @router.get("/insights/calls")
+    async def company_view_calls(
+        request: Request,
+        response: Response,
+        organisation: UUID,
+        span: Annotated[str | None, Query(alias="range", max_length=8)] = None,
+        start: Annotated[date | None, Query(alias="from")] = None,
+        end: Annotated[date | None, Query(alias="to")] = None,
+        person: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
+        team: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
+        outcome: Annotated[str | None, Query(max_length=16)] = None,
+        language: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
+        offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """The calls behind one organisation's company view, newest first."""
+        surface(request, response)
+        filters = insight_filters(
+            request,
+            now=datetime.now(UTC),
+            span=span,
+            start=start,
+            end=end,
+            person=person,
+            team=team,
+            outcome=outcome,
+            language=language,
+            extra=params,
+        )
+        try:
+            await target(auth, organisation)
+            return await tenant_insights(auth.database, auth.resolved.actor, organisation).calls(
+                filters, offset=offset
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/insights/refresh")
+    async def company_view_refresh(
+        request: Request,
+        response: Response,
+        organisation: UUID,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Bring one organisation's per-call projection up to date (one batch)."""
+        surface(request, response)
+        if set(request.query_params) - params:
+            raise HTTPException(422, "This command takes only the organisation.")
+        require_safe_origin(request, settings)
+        try:
+            await target(auth, organisation)
+            return await tenant_insights(auth.database, auth.resolved.actor, organisation).refresh(
+                now=datetime.now(UTC)
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    application.include_router(router)
