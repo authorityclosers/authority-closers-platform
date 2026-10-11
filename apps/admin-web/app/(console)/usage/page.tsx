@@ -15,7 +15,8 @@ import {
   Unavailable,
   Why,
 } from "@/app/ui/kit";
-import { eventLabel, normalizeUsage } from "@/app/usage/usage-data";
+import { eventLabel, journey, normalizeUsage } from "@/app/usage/usage-data";
+import usageStyles from "@/app/usage/usage.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function UsagePage({
           <Empty
             icon={BarChart3}
             title="Nothing has been recorded in this window"
-            text="Sales Xray is adding typed product events (telemetry/1: sign-in, uploads, report and pillar views, coaching, clips, missions, outcomes and errors shown). This page fills in as they arrive; it counts events and never reads call content."
+            text="Sales Xray's screens send typed product events (telemetry/1: sign-in, uploads, report and pillar views, Coaching, clips, missions, outcomes and errors shown), but the server stores them only once product analytics has a consent and retention policy. This page fills in from then on; it counts events and never reads call content."
           />
         </Panel>
       ) : null}
@@ -95,6 +96,27 @@ export default async function UsagePage({
               <span>{usage.daily.at(-1)?.day}</span>
             </div>
           </Panel>
+          {journey(usage).recorded ? (
+            <Panel
+              title="Journey"
+              sub="people at each step in this window"
+              tools={
+                <Why detail="People who sent each step's event in this window. Not a strict funnel: people can skip steps or have done earlier steps before the window." />
+              }
+            >
+              <ol className={usageStyles.journey} aria-label="Journey">
+                {journey(usage).steps.map((step) => (
+                  <li key={step.name}>
+                    <span>{step.label}</span>
+                    <span className={usageStyles.track} aria-hidden="true">
+                      <i style={{ width: `${step.share * 100}%` }} />
+                    </span>
+                    <strong>{step.people}</strong>
+                  </li>
+                ))}
+              </ol>
+            </Panel>
+          ) : null}
           <Panel
             title="Events"
             sub={`${usage.byEvent.length} kinds`}
