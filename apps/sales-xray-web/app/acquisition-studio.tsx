@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -169,6 +170,31 @@ const isStatusBlip = (error: unknown) =>
   (error instanceof DOMException && error.name === "TimeoutError") ||
   (error instanceof AcquisitionError &&
     (error.status >= 500 || error.status === 408 || error.status === 429));
+/**
+ * Runs a state change as a view transition where the browser has them, so
+ * elements sharing a view-transition-name (the call's wave) move instead of
+ * jumping. Resolves once the new state is on screen; plain update otherwise.
+ */
+async function withWaveMorph(update: () => void) {
+  const start = (
+    document as Document & {
+      startViewTransition?: (callback: () => void) => {
+        updateCallbackDone: Promise<void>;
+      };
+    }
+  ).startViewTransition;
+  if (
+    !start ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ) {
+    update();
+    return;
+  }
+  await start
+    .call(document, () => flushSync(update))
+    .updateCallbackDone.catch(() => update());
+}
+
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -1575,7 +1601,8 @@ export function AcquisitionStudio({
       if (inFlight.current) return;
       if (access) uploadStore.observeAccount(access);
       inFlight.current = true;
-      setBusy("Preparing private upload…");
+      // The chosen file's wave glides into the panel that sends it.
+      await withWaveMorph(() => setBusy("Preparing private upload…"));
       setError("");
       try {
         await uploadStore.run(uploadMeta, selected, send, start);

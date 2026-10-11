@@ -514,3 +514,9 @@
     animation: none;
   }
 }
+
+/* The chosen file's wave arrives here from its card (a view transition in
+   the studio), then carries on through the steps. */
+.panel[data-phase="sending"] > [role="img"] {
+  view-transition-name: sx-call-wave;
+}
