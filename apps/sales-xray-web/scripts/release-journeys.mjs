@@ -18,7 +18,7 @@
 //     [--only sign-in,calls] [--repeat 50]
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -51,19 +51,26 @@ export const REPORT_CALL = "7b6443d3-9b2d-4f97-9e70-5e82e54f8738";
 function savedReport() {
   const fixture = JSON.parse(
     readFileSync(
-      new URL("../tests/fixtures/dipak-overview.json", import.meta.url),
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../tests/fixtures/dipak-overview.json",
+      ),
       "utf8",
     ),
   );
   const recordingId = "fd4b05b1-bfc9-4d28-a379-f3d032faf7af";
-  const {
-    source_sha256,
-    transcript_revision,
-    source_label,
-    review_status,
-    report_sections: _sections,
-    ...content
-  } = fixture.report;
+  const { source_sha256, transcript_revision, source_label, review_status } =
+    fixture.report;
+  // The report's content without the envelope fields (as the studio tests do).
+  const content = { ...fixture.report };
+  for (const key of [
+    "source_sha256",
+    "transcript_revision",
+    "source_label",
+    "review_status",
+    "report_sections",
+  ])
+    delete content[key];
   const base = `${ACQ}/submissions/${REPORT_CALL}`;
   return {
     [base]: {
