@@ -64,8 +64,7 @@ export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
 import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { csvRows } from "./csv-export";
-import { Panel } from "./ui/kit";
-import { RecentCallsList } from "./dashboard/recent-calls";
+import { OperationalPanel } from "./ui/operational-panel";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -1034,6 +1033,10 @@ function CallsLibraryContent({
     );
   }
   // Bars compare each call's length with the longest loaded call.
+  const longestSeconds = Math.max(
+    0,
+    ...submissions.filter(hasRecordedLength).map((row) => row.durationSeconds),
+  );
   const selectedSubmission = selectedId
     ? submissions.find(
         (s) =>
@@ -1060,6 +1063,92 @@ function CallsLibraryContent({
             (s.id === "call-5" || s.id === "call-005")),
       )
     : null;
+  /*
+   * Home preview row (New analysis page): the legacy compact row, unchanged.
+   * Its "Estimated length" wording stays until Strike B's PR #420, which also
+   * changes acquisition-studio.test.tsx, has merged (single-track).
+   */
+  const previewRow = (submission: LibrarySubmission) => {
+    const known = hasRecordedLength(submission);
+    const tone = callTone(submission);
+    const isOpening = openingId === submission.id;
+    const isSelected =
+      submission.id === selectedId || selectedSubmission?.id === submission.id;
+    return (
+      <div
+        className="calls-library-row"
+        key={submission.id}
+        data-tone={tone}
+        data-selected={isSelected ? "true" : undefined}
+      >
+        <button
+          className="calls-library-item"
+          data-submission-id={submission.id}
+          data-tone={tone}
+          type="button"
+          disabled={opening}
+          aria-busy={isOpening || undefined}
+          onClick={() => openSubmission(submission)}
+        >
+          <span className="calls-library-icon" aria-hidden="true">
+            <AudioLines size={19} />
+          </span>
+          <span className="calls-library-copy">
+            <strong>{titleOf(submission)}</strong>
+            <small>
+              {submission.label?.displayName
+                ? `${formatCreatedDate(submission.createdAt, dates)} · ${formatCreatedTime(submission.createdAt, dates)}`
+                : formatCreatedTime(submission.createdAt, dates)}
+            </small>
+          </span>
+          <span
+            className="calls-library-duration"
+            aria-label={
+              known
+                ? `Estimated length: About ${formatDuration(submission.durationSeconds)}`
+                : "Length unavailable"
+            }
+            title={
+              known
+                ? "Estimated length, compared with the longest call in this list"
+                : undefined
+            }
+          >
+            <span className="calls-library-duration-track" aria-hidden="true">
+              {known && longestSeconds > 0 ? (
+                <span
+                  className="calls-library-duration-fill"
+                  style={{
+                    width: `${Math.max(4, (submission.durationSeconds / longestSeconds) * 100)}%`,
+                  }}
+                />
+              ) : null}
+            </span>
+            <span className="calls-library-duration-clock" aria-hidden="true">
+              {known
+                ? `About ${formatDuration(submission.durationSeconds)}`
+                : "—"}
+            </span>
+          </span>
+          <span className="calls-library-state" data-tone={tone}>
+            {tone === "active" ? (
+              <span className="calls-library-pulse" aria-hidden="true" />
+            ) : null}
+            {submissionState(submission)}
+          </span>
+          <span className="calls-library-open">
+            {isOpening ? "Opening…" : openLabel(submission)}{" "}
+            {isOpening ? (
+              <LoaderCircle className="spin" size={15} aria-hidden="true" />
+            ) : (
+              <ArrowRight size={15} aria-hidden="true" />
+            )}
+          </span>
+        </button>
+      </div>
+    );
+  };
+
   if (preview) {
     if (
       access?.authenticated !== true ||
@@ -1067,23 +1156,28 @@ function CallsLibraryContent({
       submissions.length === 0
     )
       return null;
-    // r17 S6: the Dashboard's recent-calls rows, in the page kit's panel.
     return (
-      <Panel
+      <OperationalPanel
+        id="calls-library-preview"
         title="Recent calls"
-        action={{ href: callsHref, label: "View all calls" }}
-        className="calls-library-preview"
+        headingLevel="h2"
+        sub={<p className="eyebrow">PRIVATE CALL LIBRARY</p>}
+        action={
+          <Link className="text-button" href={callsHref}>
+            View all calls
+          </Link>
+        }
+        className="calls-library-list-panel calls-library-preview"
       >
-        <RecentCallsList
-          calls={submissions.slice(0, 3)}
-          onOpen={openSubmission}
-        />
+        <div className="calls-library-items">
+          {submissions.slice(0, 3).map(previewRow)}
+        </div>
         {error ? (
           <div className="calls-library-inline-error" role="alert">
             {error}
           </div>
         ) : null}
-      </Panel>
+      </OperationalPanel>
     );
   }
 
