@@ -222,7 +222,9 @@ def test_the_dev_loaders_call_and_member_ids_open_the_same_authored_coaching() -
     assert [(m.quote, m.start_ms, m.end_ms, m.playable) for m in loaded.evidence] == [
         (m.quote, m.start_ms, m.end_ms, m.playable) for m in legacy.evidence
     ]
-    # Every id in the view is the loader's, so the web's identity checks hold.
+    # The call ids in the view are the loader's, so /coaching?call=<loader id> opens it.
+    # (The Report's own Coaching view also binds the recording and source hashes,
+    # which a sandbox view does not carry; it shows its report-focus fallback.)
     assert loaded.submission_id == canonical_call
     assert loaded.mission.origin_submission_id == canonical_call
     assert {m.submission_id for m in loaded.evidence} == {canonical_call}

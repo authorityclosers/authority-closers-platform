@@ -253,3 +253,15 @@ def test_a_calls_focus_recurs_only_in_another_comparable_call_with_the_same_skil
     quiet = call(7, attention=False)
     flags = recurring_focus((first, second, suggestion, quiet))
     assert flags[suggestion.submission_id] is None and flags[quiet.submission_id] is None
+
+
+def test_the_pattern_line_counts_every_flagged_call_not_only_the_four_moments() -> None:
+    result = view(*(call(index) for index in range(1, 7)))
+    assert len(result.evidence) == 4 and result.pattern.attention_call_count == 6
+    assert result.pattern.summary.startswith("It came up on 6 different calls")
+    assert "6 of your last 6 calls" in result.focus.selected_reason
+
+
+def test_a_call_without_a_comparable_evaluator_version_cannot_recur() -> None:
+    first, second = call(1, version="unlinked:a"), call(2, version="unlinked:a")
+    assert set(recurring_focus((first, second)).values()) == {None}

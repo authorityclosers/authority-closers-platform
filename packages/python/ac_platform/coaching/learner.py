@@ -45,13 +45,21 @@ def recurring_focus(history: tuple[CallHistory, ...]) -> dict[UUID, bool | None]
     """Per call: does its own focus skill have a suggestion in another comparable call?
 
     Only an assessed skill (basis skill_evidence) can recur; a report suggestion
-    without a linked skill is None. A source counted twice is one call.
+    without a linked skill, or a call with no comparable evaluator version, is
+    None. A source counted twice is one call: the first, as My coaching keeps it.
     """
-    calls = list({call.source_sha256: call for call in history}.values())
+    unique: dict[str, CallHistory] = {}
+    for call in sorted(history, key=lambda call: (call.created_at, str(call.submission_id))):
+        unique.setdefault(call.source_sha256, call)
+    calls = list(unique.values())
     result: dict[UUID, bool | None] = {}
     for call in history:
         row = next((s for s in call.skills if s.mission), None)
-        if row is None or row.basis != "skill_evidence":
+        if (
+            row is None
+            or row.basis != "skill_evidence"
+            or call.comparison_key.startswith("unlinked:")
+        ):
             result[call.submission_id] = None
             continue
         flagged = sum(
@@ -199,8 +207,8 @@ def build_learner(
             relevant_call_count=total,
             attention_call_count=count,
             summary=(
-                f"It came up on {len({m.submission_id for m in evidence})} different calls, "
-                "not just one. Replay the moments below and compare what happened each time."
+                f"It came up on {count} different calls, not just one. "
+                "Replay the moments below and compare what happened each time."
                 if recurring
                 else "So far this comes from one call. It isn't a pattern yet."
             ),

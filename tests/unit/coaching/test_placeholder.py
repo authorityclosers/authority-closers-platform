@@ -71,6 +71,12 @@ def test_a_locked_lesson_without_a_preview_cut_stays_locked_and_silent(tmp_path:
         placeholder.topics.cache_clear()
 
 
+def test_a_preview_is_only_offered_for_a_lesson_that_starts_at_the_cut() -> None:
+    locked = next(t for t in placeholder.topics() if t.previewable)
+    later = locked.model_copy(update={"start_ms": 1000})
+    assert not later.previewable
+
+
 def test_a_preview_needs_its_own_end_inside_the_clip_and_an_offer() -> None:
     preview = placeholder.clips_for("qualification")[1].model_dump()
     for change in (

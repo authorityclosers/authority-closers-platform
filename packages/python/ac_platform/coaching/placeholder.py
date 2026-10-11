@@ -76,8 +76,10 @@ class PlaceholderTopic(Model):
 
     @property
     def previewable(self) -> bool:
+        # The cut is always the file's first seconds, so the clip must start at 0.
         return (
             not self.free
+            and self.start_ms == 0
             and self.preview_ms is not None
             and self.preview_sha256 is not None
             and self.preview_bytes is not None

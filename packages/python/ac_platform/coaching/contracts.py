@@ -344,7 +344,7 @@ class CallSummary(Model):
     focus_label: str | None = Field(default=None, max_length=256)
     # Whether that focus skill has a suggestion in another comparable call too
     # (the Report's "may be part of a recurring pattern" line). None when it
-    # cannot be said: no assessed skill, or no comparable history.
+    # cannot be said: no assessed skill, or no comparable evaluator version.
     recurring: bool | None = None
 
 
