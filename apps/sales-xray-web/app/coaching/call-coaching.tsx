@@ -81,6 +81,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
           lesson={lesson}
           clips={coaching.media_clips}
           fallbackObservation={focus.explanation}
+          strength={coaching.strength}
         />
       </div>
       <aside className={styles.rail} aria-label="Next call" data-sticky>

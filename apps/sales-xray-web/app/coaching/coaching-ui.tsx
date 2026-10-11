@@ -4,7 +4,9 @@ import { ArrowDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge, Panel, type Tone } from "../ui/kit";
 import type { Coaching, Evidence, TextLesson } from "./coaching-client";
+import type { CallStrength } from "./coaching-read";
 import { timeLabel } from "./coaching-format";
+import { EvidencePlayer } from "./evidence-player";
 import { CoachingMedia } from "./media-player";
 import type { CoachingClip } from "./media-contract";
 import styles from "./coaching.module.css";
@@ -82,10 +84,12 @@ export function LessonPanel({
   lesson,
   clips,
   fallbackObservation,
+  strength,
 }: {
   lesson: Lesson;
   clips?: CoachingClip[];
   fallbackObservation: string;
+  strength?: CallStrength | null;
 }) {
   const media = Boolean(clips?.length);
   const wording = lesson.example_wording.length ? (
@@ -131,6 +135,28 @@ export function LessonPanel({
         </div>
         <CoachingMedia clips={clips} />
         {media ? null : wording}
+        {strength ? (
+          <section className={styles.strength} aria-label="Use your strength">
+            <span className={styles.label}>Use your strength</span>
+            <p className={styles.strengthTitle}>{strength.title}</p>
+            <ul
+              className={styles.moments}
+              aria-label="What worked on this call"
+            >
+              {strength.evidence.map((moment) => (
+                <EvidencePlayer
+                  key={`${moment.segment_id}:${moment.start_ms}`}
+                  evidence={moment}
+                  showCall={false}
+                />
+              ))}
+            </ul>
+            <p className={styles.note}>
+              You already did this on the call. Keep it while you practise the
+              mission.
+            </p>
+          </section>
+        ) : null}
         <details className={styles.more}>
           <summary>Read the full lesson</summary>
           <div className={styles.moreBody}>

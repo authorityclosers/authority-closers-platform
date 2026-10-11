@@ -16,6 +16,7 @@ from ac_platform.coaching.contracts import (
     Moment,
     Practice,
     RootCause,
+    Strength,
     TextLesson,
 )
 from ac_platform.coaching.lessons import lesson_for
@@ -50,6 +51,7 @@ class CallCoachingView(Model):
     mission: Mission | None
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: None = None
+    strength: Strength | None = None
     limitations: tuple[str, ...]
 
     @model_validator(mode="after")
@@ -57,6 +59,7 @@ class CallCoachingView(Model):
         moments = (
             *self.evidence,
             *([self.lesson.own_call] if self.lesson and self.lesson.own_call else []),
+            *(self.strength.evidence if self.strength else ()),
         )
         if any(
             moment.submission_id != self.submission_id
@@ -84,9 +87,34 @@ class CallCoachingView(Model):
             or self.practice
             or self.mission
             or self.media_clips
+            or self.strength
         ):
             raise ValueError("Unavailable coaching must not retain private evidence.")
         return self
+
+
+def _strength(
+    report: dict[str, Any],
+    envelope: dict[str, Any],
+    submission_id: UUID,
+    created_at: datetime,
+    focus_label: str,
+) -> Strength | None:
+    """The first retained, quoted strength that is not already the focus."""
+    findings = report.get("strengths")
+    for finding in findings if isinstance(findings, list) else ():
+        if not isinstance(finding, dict) or WITHHELD_MARKER in str(finding):
+            continue
+        title = _text(finding.get("title"), 240)
+        text = _text(finding.get("explanation"), 4000)
+        if not title or not text or title == focus_label:
+            continue
+        moments = _moments(
+            envelope, _refs(finding.get("evidence")), text, submission_id, created_at
+        )
+        if moments:
+            return Strength(title=title, explanation=text, evidence=moments[:2])
+    return None
 
 
 def build_call_coaching(
@@ -233,6 +261,7 @@ def build_call_coaching(
             success_condition=mission.done_when,
         ),
         mission=mission,
+        strength=_strength(report, envelope, submission_id, created_at, label),
         limitations=(
             "This coaching is specific to one call; "
             "it does not establish a recurring pattern or mastery.",

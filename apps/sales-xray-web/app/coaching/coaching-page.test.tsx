@@ -199,6 +199,31 @@ describe("Coaching story", () => {
       position(textOnly, "Read the full lesson"),
     );
   });
+  it("offers this call's quoted strength last in the lesson, playable", () => {
+    const moment = fictionalCallCoaching.evidence[0];
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{
+          ...fictionalCallCoaching,
+          strength: {
+            title: "Asked for a consequence",
+            explanation: "It made the problem specific.",
+            evidence: [{ ...moment, quote: "What happened because of it?" }],
+          },
+        }}
+      />,
+    );
+    const at = (text: string) => html.indexOf(text);
+    expect(at("Use your strength")).toBeGreaterThan(at("Better direction"));
+    expect(at("Use your strength")).toBeLessThan(at("Read the full lesson"));
+    expect(html).toContain("What happened because of it?");
+    expect(html).not.toContain("<audio");
+    expect(
+      renderToStaticMarkup(
+        <CallCoachingStory coaching={fictionalCallCoaching} />,
+      ),
+    ).not.toContain("Use your strength");
+  });
   it("opens with the three newest calls on one column until asked", async () => {
     const calls = Array.from({ length: 5 }, (_, index) => ({
       submission_id: `00000000-0000-0000-0000-00000000009${index}`,

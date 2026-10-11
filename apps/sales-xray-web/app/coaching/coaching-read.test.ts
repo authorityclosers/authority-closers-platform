@@ -37,6 +37,39 @@ describe("call-specific coaching read", () => {
     expect(parsed.lesson?.framework).toEqual([]);
     expect(parsed.lesson?.when_not).toContain("boundary");
   });
+  it("keeps a quoted strength and drops a malformed or foreign one alone", () => {
+    const moment = fictionalCallCoaching.evidence[0];
+    const strength = {
+      title: "Asked for a consequence",
+      explanation: "It made the problem specific.",
+      evidence: [moment],
+    };
+    const kept = parseCallCoaching(
+      { ...fictionalCallCoaching, strength },
+      callId,
+    )!;
+    expect(kept.strength?.title).toBe("Asked for a consequence");
+    expect(kept.strength?.evidence[0].submission_id).toBe(callId);
+    for (const bad of [
+      { ...strength, evidence: [] },
+      { ...strength, title: "" },
+      {
+        ...strength,
+        evidence: [{ ...moment, source_sha256: "b".repeat(64) }],
+      },
+      "not an object",
+    ]) {
+      const parsed = parseCallCoaching(
+        { ...fictionalCallCoaching, strength: bad },
+        callId,
+      );
+      expect(parsed?.focus?.label).toBe(fictionalCallCoaching.focus?.label);
+      expect(parsed?.strength).toBeNull();
+    }
+    expect(
+      parseCallCoaching(fictionalCallCoaching, callId)?.strength,
+    ).toBeNull();
+  });
   it("rejects crossed call/mission/lesson sources and unparsed media", () => {
     for (const raw of [
       {

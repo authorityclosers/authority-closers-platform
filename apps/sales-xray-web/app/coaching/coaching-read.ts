@@ -34,7 +34,14 @@ export type CallCoaching = {
   practice: Coaching["practice"];
   mission: Coaching["mission"];
   media_clips?: CoachingClip[];
+  /** A quoted "What worked" finding from this call's report (spec 3.6). */
+  strength?: CallStrength | null;
   limitations: string[];
+};
+export type CallStrength = {
+  title: string;
+  explanation: string;
+  evidence: Evidence[];
 };
 export type CoachingResult =
   | { data: Coaching | CallCoaching | TeamCoaching; error: null }
@@ -143,6 +150,23 @@ export function parseCallCoaching(
     return null;
   const ownCall = lesson.own_call == null ? null : ownEvidence(lesson.own_call);
   if (lesson.own_call != null && !ownCall) return null;
+  // Optional: a malformed or foreign strength is dropped, never the coaching.
+  const strengthItem = object(item.strength);
+  const strengthEvidence = (
+    Array.isArray(strengthItem.evidence) ? strengthItem.evidence : []
+  ).map(ownEvidence);
+  const strength =
+    item.state === "ready" &&
+    text(strengthItem.title) &&
+    text(strengthItem.explanation) &&
+    strengthEvidence.length &&
+    strengthEvidence.every(Boolean)
+      ? {
+          title: text(strengthItem.title),
+          explanation: text(strengthItem.explanation),
+          evidence: (strengthEvidence as Evidence[]).slice(0, 2),
+        }
+      : null;
   return {
     schema: "ac.sales-xray.call-coaching/1",
     person_id: item.person_id as string,
@@ -158,6 +182,7 @@ export function parseCallCoaching(
     basis: item.basis as CallCoaching["basis"],
     evidence,
     media_clips: item.state === "ready" ? parseClips(item.media_clips) : [],
+    strength,
     root_cause: {
       hypothesis: text(
         cause.hypothesis,

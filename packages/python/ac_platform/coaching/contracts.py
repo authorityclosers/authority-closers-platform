@@ -200,6 +200,17 @@ class Focus(Model):
     verdict: str
 
 
+class Strength(Model):
+    """A retained "What worked" finding from one call (spec 3.6), never a trait.
+
+    It needs its own quoted moments; an unquoted strength is not shown.
+    """
+
+    title: str = Field(min_length=1, max_length=240)
+    explanation: str = Field(min_length=1, max_length=4000)
+    evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
+
+
 class Path(Model):
     current: str | None
     likely_next: str | None = None
