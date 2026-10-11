@@ -55,12 +55,17 @@
 
 @container (min-width: 900px) {
   .layout {
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 336px;
   }
 
   .rail {
     position: sticky;
     top: 16px;
+  }
+
+  /* The rail already shows the mission beside the focus. */
+  .nextCall {
+    display: none;
   }
 }
 
@@ -652,6 +657,12 @@
 }
 
 /* ---------- Team ---------- */
+
+.story {
+  display: grid;
+  gap: var(--sx-gap);
+  min-width: 0;
+}
 
 .share {
   display: inline-flex;

@@ -261,11 +261,18 @@ export function CoachingStory({
           since={callDate(mission.active_since)}
           foot="The mission stays until real calls show the change. A lesson view or a new date does not complete it."
         />
-        <Panel
-          title="See How You’re Improving"
-          sub={masteryLabel[mastery.state]}
-        >
+        <Panel title="See How You’re Improving">
           <div className={styles.body}>
+            <span className={styles.eyebrow}>
+              Mastery
+              <Badge
+                tone={
+                  mastery.state === "not_enough_evidence" ? "neutral" : "good"
+                }
+              >
+                {masteryLabel[mastery.state]}
+              </Badge>
+            </span>
             <ol className={styles.stepper} aria-label="Mastery journey">
               {JOURNEY.map((state, index) => (
                 <li

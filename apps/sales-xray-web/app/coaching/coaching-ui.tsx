@@ -178,13 +178,11 @@ export function MissionPanel({
 }) {
   return (
     <div id={id} className={styles.section}>
-      <Panel
-        title="Try This on Your Next Call"
-        sub={since ? `Active since ${since}` : undefined}
-        foot={foot}
-      >
+      <Panel title="Try This on Your Next Call" foot={foot}>
         <div className={styles.mission}>
-          <span className={styles.eyebrow}>Active mission</span>
+          <span className={styles.eyebrow}>
+            Active mission{since ? ` · since ${since}` : ""}
+          </span>
           <p className={styles.missionBehavior}>{mission.behavior}</p>
           <dl className={styles.terms}>
             <div>
