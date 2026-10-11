@@ -638,19 +638,19 @@ it("shows real account recent calls on home and opens the selected saved report"
   const preview = container.querySelector(".calls-library-preview");
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
-  // The library length is the reserved estimate: always "About".
-  expect(preview?.textContent).toContain("About 01:01");
-  expect(
-    preview
-      ?.querySelector(".calls-library-duration")
-      ?.getAttribute("aria-label"),
-  ).toBe("Estimated length: About 01:01");
+  // The Dashboard's rows: the length the server measured, as a clock.
+  expect(preview?.textContent).toContain("1:01");
+  expect(preview?.textContent).not.toMatch(/About|Estimated|PRIVATE/);
   expect(
     preview?.querySelector('a[href="/analysis/calls"]')?.textContent,
   ).toContain("View all calls");
   expect(container.querySelectorAll("main")).toHaveLength(1);
   await act(async () =>
-    preview?.querySelector<HTMLButtonElement>(".calls-library-item")?.click(),
+    preview
+      ?.querySelector<HTMLAnchorElement>(
+        `a[href="/analysis/calls/${secondSubmissionId}"]`,
+      )
+      ?.click(),
   );
   expect(navigateToAccount).toHaveBeenCalledWith(
     `/analysis/calls/${secondSubmissionId}`,

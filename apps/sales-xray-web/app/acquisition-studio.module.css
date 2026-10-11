@@ -4419,3 +4419,22 @@ a.overviewCard:hover {
     transparent
   );
 }
+
+/* A report this page watched being made arrives where the progress panel
+   was, with one short rise (none with reduced motion). */
+.report[data-reveal] {
+  animation: report-reveal 420ms ease-out both;
+}
+
+@keyframes report-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report[data-reveal] {
+    animation: none;
+  }
+}

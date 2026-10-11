@@ -83,7 +83,6 @@ import {
   type Submission,
   type UploadPolicy,
 } from "./acquisition-client";
-import { XrayWave } from "./xray-wave";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
 import { CallMap, CallMapMini } from "./call-map";
@@ -333,6 +332,16 @@ export function AcquisitionStudio({
   const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  // The analysis this page watched: its report arrives with a short reveal
+  // where the progress panel was (one continuous screen, owner 11 Oct).
+  const [watchedId, setWatchedId] = useState<string | null>(null);
+  const watchingId =
+    submission && !result?.report && planView(plan, progress).showProgress
+      ? submission.id
+      : null;
+  useEffect(() => {
+    if (watchingId) setWatchedId(watchingId);
+  }, [watchingId]);
   // A new call or a finished report shows up in Recents straight away.
   const recentsCallId = submission?.id ?? null;
   const recentsRunId = result?.runId ?? null;
@@ -2647,7 +2656,9 @@ export function AcquisitionStudio({
                 )}
                 {/* The empty state already has its card heading; a step
                     header only earns its space once a call exists. */}
-                {reportReady || submission ? (
+                {/* While a call is analysed the panel says where it is; the
+                    step header returns with the report. */}
+                {reportReady ? (
                   <div
                     className={styles.stepHeader}
                     aria-label="Current analysis step"
@@ -2668,50 +2679,19 @@ export function AcquisitionStudio({
                   </div>
                 ) : null}
                 {busy && !submission ? (
-                  <div
-                    className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <XrayWave mode="scanning" legend={false} />
-                    <div className={styles.progressCopy}>
-                      <p className={styles.progressKicker}>
-                        UPLOAD IN PROGRESS
-                      </p>
-                      <h3>Your call is on its way.</h3>
-                      <p>
-                        We’re uploading your recording and checking its format
-                        and duration. Keep this tab open until the upload
-                        finishes.
-                      </p>
-                    </div>
-                    <div
-                      className={styles.progressRail}
-                      aria-label="Upload and analysis stages"
-                    >
-                      <div data-state="running">
-                        <span aria-hidden="true">1</span>
-                        <p>
-                          Upload + recording check
-                          <small>In progress</small>
-                        </p>
-                      </div>
-                      <div data-state="not-started">
-                        <span aria-hidden="true">2</span>
-                        <p>
-                          Transcript
-                          <small>Starts after the check</small>
-                        </p>
-                      </div>
-                      <div data-state="not-started">
-                        <span aria-hidden="true">3</span>
-                        <p>
-                          Coaching report
-                          <small>Shown when ready</small>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  // One screen from the first byte (owner, 11 Oct 16:00): the
+                  // analysis panel shows the call being sent, then carries on.
+                  <AcquisitionProcessingPanel
+                    upload={{ fraction: null }}
+                    stageRows={[]}
+                    statusText="Sending your call"
+                    fileName={displayFileName ?? undefined}
+                    fileMeta={
+                      displayFileBytes !== null
+                        ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
+                        : undefined
+                    }
+                  />
                 ) : deletionOnlyId && !displayFileSelected && !submission ? (
                   <>
                     <span className="studio-upload-icon">
@@ -3405,6 +3385,9 @@ export function AcquisitionStudio({
               <section
                 className={`studio-report panel ${styles.report}`}
                 aria-label="Sales call report"
+                data-reveal={
+                  submission && watchedId === submission.id ? "" : undefined
+                }
                 data-lx-surface={resolvedTheme === "dark" ? undefined : "light"}
               >
                 <ReportHeader
@@ -3498,7 +3481,7 @@ export function AcquisitionStudio({
                   label="Explore your sales report"
                   onSelectEvidence={seek}
                   onSelectContextualPlayback={seekWithContext}
-                  structure={report.preview ? "custom" : "pillars"}
+                  structure="pillars"
                   prospectControls={
                     submission && !embedded ? (
                       <ProspectLinkControl

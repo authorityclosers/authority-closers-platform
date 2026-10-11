@@ -116,6 +116,8 @@
 
 .wave[data-state="arriving"] i:not([data-pending]) {
   background: color-mix(in oklab, var(--lx-teal) 35%, var(--lx-line-strong));
+  animation: wave-listen 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -40ms);
 }
 
 @keyframes wave-listen {
@@ -141,6 +143,7 @@
   }
 
   .wave[data-state="working"] i[data-next],
+  .wave[data-state="arriving"] i,
   .wave .beam {
     animation: none;
   }

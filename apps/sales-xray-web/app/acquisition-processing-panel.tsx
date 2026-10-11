@@ -69,7 +69,7 @@ type Props = {
    * has arrived (0-1). The same panel then carries on into the analysis, so
    * the journey is one screen from the first byte to the report.
    */
-  upload?: { fraction: number } | null;
+  upload?: { fraction: number | null } | null;
   children?: ReactNode;
 };
 
@@ -321,7 +321,9 @@ export function AcquisitionProcessingPanel({
           : phase === "ready"
             ? "Your recording is saved. Start analysis to generate your report."
             : phase === "sending"
-              ? `${Math.round((upload?.fraction ?? 0) * 100)}% sent · keep this tab open until it's sent`
+              ? upload?.fraction != null
+                ? `${Math.round(upload.fraction * 100)}% sent · keep this tab open until it's sent`
+                : "Keep this tab open until it's sent"
               : refreshProblem || offline
                 ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
                 : // Measured on staging, 11 Oct: 105-197 s from upload to report.
@@ -429,7 +431,7 @@ export function AcquisitionProcessingPanel({
           step's stretch listening; no percentage the server doesn't give. */}
       <AnalysisWave
         envelope={envelope}
-        arrived={upload ? upload.fraction : 1}
+        arrived={upload?.fraction ?? 1}
         played={
           phase === "done"
             ? 1
