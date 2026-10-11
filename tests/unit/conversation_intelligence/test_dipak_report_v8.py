@@ -190,6 +190,7 @@ def case():
             "still_unclear": ["Does the colleague need to approve the purchase?"],
             "deal_action": "Send the sample before the agreed review.",
             "coaching_mission": "Explore the concern before offering another solution.",
+            "coaching_mission_for": 0,
         },
         "most_important_moment": 0,
     }
@@ -238,6 +239,7 @@ def test_wire_to_canonical_to_public_preserves_all_pillars_and_legacy_content(ca
     assert public["deeper"]["became_clear"] == ["Owners and next steps are often missed."]
     assert set(public["timeline"][0]) == {"label", "start_ms"}
     assert set(public["key_change"]["before"]) == {"label", "text"}
+    assert public["deal"]["coaching_mission_for"] == 0
     assert "pillars" not in draft.provider_extras
 
 
@@ -288,7 +290,10 @@ def test_prepared_adapter_selects_compact_schema_and_bound_roles(case, provider,
     )
     assert task.prompt_provenance.prompt_revision == "coaching-v8"
     assert transcript == before
-    assert "report-pillars/1" in json.dumps(task.as_provider_body())
+    body = json.dumps(task.as_provider_body())
+    assert "report-pillars/1" in body
+    assert "coaching_mission_for" in body
+    assert '"default":' not in body
 
 
 def test_actual_c5_response_uses_v8_parser(case):
@@ -329,6 +334,12 @@ def test_actual_c5_response_uses_v8_parser(case):
         "foreign_segment",
         "invented_quote",
         "unsupported_miss",
+        "miss_before_opening",
+        "seller_as_response",
+        "deeper_seller_as_response",
+        "mission_index",
+        "mission_without_issue",
+        "linked_mission_missing",
         "invented_phase_time",
         "duplicate_phase",
         "moment_index",
@@ -362,6 +373,18 @@ def test_unsupported_claims_fail_closed(case, invalid):
         p["next_step"]["evidence"] = [{"segment_id": "s8", "quote": "I bought it."}]
     elif invalid == "unsupported_miss":
         p["moments"][0]["evidence"] = refs("s6")
+    elif invalid == "miss_before_opening":
+        p["moments"][0]["evidence"] = refs("s5", "s6")
+    elif invalid == "seller_as_response":
+        p["moments"][0]["prospect_response"] = case[0]["segments"][6]["text"]
+    elif invalid == "deeper_seller_as_response":
+        p["deeper"]["prospect_response"]["evidence"] = refs("s7")
+    elif invalid == "mission_index":
+        p["deal"]["coaching_mission_for"] = 1
+    elif invalid == "mission_without_issue":
+        p["didnt"] = []
+    elif invalid == "linked_mission_missing":
+        p["deal"]["coaching_mission"] = None
     elif invalid == "invented_phase_time":
         p["timeline"][1]["start_ms"] += 1
     elif invalid == "duplicate_phase":
@@ -372,6 +395,38 @@ def test_unsupported_claims_fail_closed(case, invalid):
         p["outcome"]["status"] = "Won"
     with pytest.raises(ReportError):
         parse(case, payload)
+
+
+@pytest.mark.parametrize("overlap", [False, True])
+def test_miss_and_prospect_response_follow_source_roles_not_selector_order(case, overlap):
+    if overlap:
+        case[0]["segments"][6]["start_ms"] = 30000
+    payload = deepcopy(case[3])
+    moment = payload["pillars"]["moments"][0]
+    moment["evidence"] = refs("s7", "s6")
+    moment["prospect_response"] = case[0]["segments"][5]["text"]
+    draft = parse(case, payload)
+    assert draft.pillars.moments[0].prospect_response == case[0]["segments"][5]["text"]
+    assert parse(case, draft.model_dump(mode="json"), canonical_read=True) == draft
+
+
+def test_deeper_prospect_response_can_include_seller_context(case):
+    payload = deepcopy(case[3])
+    payload["pillars"]["deeper"]["prospect_response"]["evidence"] = refs("s5", "s6")
+    assert parse(case, payload).pillars.deeper.prospect_response is not None
+
+
+@pytest.mark.parametrize("link", ["absent", None])
+def test_existing_or_unlinked_mission_stays_readable(case, link):
+    payload = deepcopy(case[3])
+    if link == "absent":
+        payload["pillars"]["deal"].pop("coaching_mission_for")
+    else:
+        payload["pillars"]["deal"]["coaching_mission_for"] = link
+    draft = parse(case, payload)
+    assert draft.pillars.deal.coaching_mission_for is None
+    assert draft.pillars.deal.coaching_mission == payload["pillars"]["deal"]["coaching_mission"]
+    assert parse(case, draft.model_dump(mode="json"), canonical_read=True) == draft
 
 
 def test_output_inferred_roles_cannot_establish_commitments(case):

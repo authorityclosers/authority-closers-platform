@@ -7,6 +7,11 @@ Full document SHA256: `a464e69123f9a649f5f038e464d6086c6d52220b09e3e50eb24b44c67
 four deeper analysis groups. Prospect profile and longitudinal Coaching are
 separate products; this report returns one follow-up suggestion and one distinct
 skill-practice mission.
+`pillars.deal.coaching_mission_for` links that mission to the zero-based index of
+the `pillars.didnt` card it practises. It is null when no issue fits, and missing
+links in older candidate payloads default to null. A link requires a mission and
+an existing issue. Coaching uses the issue's own evidence and effect; it does not
+guess a match from the mission text.
 
 ## Model and saved output
 
@@ -21,6 +26,12 @@ each against the bound C2 source to the actual quote and native timing. Foreign
 IDs, invented quotes/dates/timing, invalid chronology and incomplete miss evidence
 are refused. Seller/prospect commitments use frozen speaker roles; absent roles
 require abstention. An implementation question is not a purchase commitment.
+An Important Miss must include seller speech after the prospect opening begins;
+seller speech that ended before it cannot establish a chance to respond. Native
+overlapping turns and selector order remain valid. A quoted prospect response
+must come from prospect-role evidence; deeper response notes must include that
+role's evidence, with optional seller context. These checks apply at new-output
+admission; existing canonical reads retain their saved-report behavior.
 Only people record Won/Lost. Suggestions are distinct from agreed next events.
 Skills are observations on this call, with evidence ceilings and no numeric score.
 

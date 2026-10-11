@@ -78,9 +78,12 @@ COACHING_PROMPT_V8_INSTRUCTION = (
     "choose 3-5 distinct useful replays when supported, fewer for short/sparse calls. "
     "Use listed kind labels, title, evidence and why. Important Miss requires a genuine "
     "prospect opening AND the seller's actual chance/response (cite both), moved_toward, "
-    "what_was_missed and why it mattered. No generic missing textbook question. "
+    "what_was_missed and why it mattered. Seller speech entirely before the prospect "
+    "opening is not a chance to respond to it. No generic missing textbook question. "
     "An implementation question is a possible Buying Signal, never a purchase commitment. "
     "price_stated and prospect_response, if present, are exact source phrases in evidence. "
+    "Each prospect_response cites the prospect's frozen-role speech; do not label seller "
+    "words as a prospect response. Missing roles: abstain from prospect_response. "
     "YOUR SKILLS ON THIS CALL: all eight domains with status, observation, evidence and "
     "call_state. strongly_demonstrated/observed/needs_attention require observed status and "
     "two distinct source segments. Missing opportunities are not_applicable, never a "
@@ -93,7 +96,8 @@ COACHING_PROMPT_V8_INSTRUCTION = (
     "No full Prospect "
     "profile or longitudinal Coaching here. WHERE THE DEAL STANDS: deal has position, "
     "blocker (basis said/inferred), prospect_commitments, seller_commitments, next_event, "
-    "commitment_quality, still_unclear questions, deal_action and coaching_mission. "
+    "commitment_quality, still_unclear questions, deal_action, coaching_mission and "
+    "coaching_mission_for. "
     "A partner discussion is not automatically a price objection, rejection or blocking "
     "partner. A stated possibility is not acceptance. Prospect commitments cite the "
     "prospect's own frozen-role segments; seller commitments cite seller segments. Assigned "
@@ -103,6 +107,8 @@ COACHING_PROMPT_V8_INSTRUCTION = (
     "and next_step when must occur literally in their cited segments; never invent a date, "
     "combine separate words or convert relative dates. deal_action is one suggested "
     "opportunity follow-up, separate from the one-line coaching_mission (skill practice). "
+    "coaching_mission_for is the zero-based index into didnt that this mission directly "
+    "practises; use null when no didnt item fits. A linked mission must be present. "
     "most_important_moment is an index into moments or null. Use only frozen "
     "source_context.speaker_roles, never output-inferred roles or browser state. Address "
     "the account holder as you only from is_account_holder; other seller is salesperson. "
@@ -237,6 +243,7 @@ class PillarDeal(_Model):
     still_unclear: list[Question] = Field(max_length=4)
     deal_action: Text | None
     coaching_mission: Text | None
+    coaching_mission_for: int | None = Field(default=None, ge=0, le=2)
 
 
 class PillarValueConnection(_Model):
@@ -290,6 +297,15 @@ class ReportPillars(_Model):
             self.moments
         ):
             raise ValueError("report_pillars_moment_invalid")
+        if (
+            self.deal
+            and self.deal.coaching_mission_for is not None
+            and (
+                self.deal.coaching_mission_for >= len(self.didnt)
+                or self.deal.coaching_mission is None
+            )
+        ):
+            raise ValueError("report_pillars_mission_invalid")
         if any(
             len(item.short.split()) > 8
             for item in (self.strongest_part, self.biggest_concern)
@@ -357,13 +373,47 @@ def normalize_pillars(
         if moment.kind == "Important Miss":
             if not moment.moved_toward or not moment.what_was_missed:
                 raise ValueError("report_pillars_miss_invalid")
-            if not canonical_read and {
-                roles.get(segments[e.segment_id]["speaker_id"]) for e in moment.evidence
-            } != {"seller", "prospect"}:
-                raise ValueError("report_pillars_miss_role_invalid")
+            if not canonical_read:
+                if {roles.get(segments[e.segment_id]["speaker_id"]) for e in moment.evidence} != {
+                    "seller",
+                    "prospect",
+                }:
+                    raise ValueError("report_pillars_miss_role_invalid")
+                opening_start = min(
+                    e.start_ms
+                    for e in moment.evidence
+                    if roles.get(segments[e.segment_id]["speaker_id"]) == "prospect"
+                )
+                response_end = max(
+                    e.end_ms
+                    for e in moment.evidence
+                    if roles.get(segments[e.segment_id]["speaker_id"]) == "seller"
+                )
+                if response_end <= opening_start:
+                    raise ValueError("report_pillars_miss_chronology_invalid")
         for quoted in (moment.price_stated, moment.prospect_response):
             if quoted and not any(quoted in ref.quote for ref in moment.evidence):
                 raise ValueError("report_pillars_quote_invalid")
+        if (
+            not canonical_read
+            and moment.prospect_response
+            and not any(
+                moment.prospect_response in e.quote
+                and roles.get(segments[e.segment_id]["speaker_id"]) == "prospect"
+                for e in moment.evidence
+            )
+        ):
+            raise ValueError("report_pillars_response_role_invalid")
+    if (
+        not canonical_read
+        and pillars.deeper
+        and pillars.deeper.prospect_response
+        and not any(
+            roles.get(segments[e.segment_id]["speaker_id"]) == "prospect"
+            for e in pillars.deeper.prospect_response.evidence
+        )
+    ):
+        raise ValueError("report_pillars_response_role_invalid")
     if pillars.deal:
         deal = pillars.deal
         if deal.commitment_quality != "Unclear" and deal.next_event is None:

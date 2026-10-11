@@ -70,7 +70,7 @@ def _coaching_v8_schema() -> dict[str, Any]:
             result = {
                 key: wire(child)
                 for key, child in value.items()
-                if key != "title" or not isinstance(child, str)
+                if key != "default" and (key != "title" or not isinstance(child, str))
             }
             if "$ref" in result:
                 name = result["$ref"].split("/")[-1]
