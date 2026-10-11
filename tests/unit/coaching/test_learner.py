@@ -82,7 +82,7 @@ def test_no_history_or_no_supported_mission_never_manufactures_a_focus() -> None
 def test_one_call_is_provisional_and_repeat_evidence_is_distinct() -> None:
     single = view(call(1))
     assert single.focus.status == "provisional"
-    assert "recurring pattern is not established" in single.pattern.summary
+    assert "isn't a pattern yet" in single.pattern.summary
     repeated = view(call(1), call(2), call(3))
     assert repeated.focus.status == "active"
     assert repeated.pattern.attention_call_count == 3
@@ -127,7 +127,7 @@ def test_path_is_derived_and_history_limit_is_honest() -> None:
         history_limited=True,
     )
     assert result.development_path.likely_next == "qualification"
-    assert any("40 retained" in line for line in result.limitations)
+    assert any("40 most recent calls" in line for line in result.limitations)
     assert result.feedback_available is False
 
 
@@ -147,11 +147,11 @@ def test_unclassified_report_suggestions_do_not_become_a_repeated_skill_pattern(
     result = view(*suggestions)
     assert result.state == "ready"
     assert result.focus.status == "provisional"
-    assert "assessed skill is not linked" in result.focus.selected_reason
+    assert result.focus.selected_reason == "Your call's report suggested this."
     assert result.pattern.relevant_call_count == 1
     assert result.mastery.trend == "not_enough_evidence"
     assert result.root_cause.gap_type == "uncertain"
-    assert any("assessed skill is not linked" in row for row in result.limitations)
+    assert any("not a skill check" in row for row in result.limitations)
 
 
 def test_progress_strip_reports_what_comparable_calls_said_never_success() -> None:

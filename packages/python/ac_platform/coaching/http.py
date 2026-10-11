@@ -14,7 +14,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.coaching import placeholder
-from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
+from ac_platform.coaching.call import NO_CLIP, CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions, verified_narration
 from ac_platform.coaching.library import CoachingLibrary
@@ -86,15 +86,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         )
         limitations = view.limitations
         if clips:
-            limitations = tuple(
-                item
-                for item in limitations
-                if item
-                != (
-                    "A relevant reviewed Dipak clip is not available yet; "
-                    "use the structured text lesson."
-                )
-            ) + ("This clip uses labelled neutral placeholder narration of Dipak's script.",)
+            limitations = tuple(item for item in limitations if item != NO_CLIP) + (
+                "Dipak's lesson is read by a stand-in voice for now. The words are his script.",
+            )
         return view.model_copy(update={"media_clips": clips, "limitations": limitations})
 
     @asynccontextmanager

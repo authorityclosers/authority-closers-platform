@@ -159,7 +159,7 @@ class CallHistory(Model):
 
 
 class RootCause(Model):
-    hypothesis: str = "We do not yet have enough evidence to say why this happens."
+    hypothesis: str = "We don't have enough evidence yet to say why this happens."
     gap_type: GapType = "uncertain"
     confidence: Literal["high", "medium", "low", "uncertain"] = "uncertain"
     alternatives: tuple[str, ...] = ()
@@ -186,8 +186,9 @@ class Mastery(Model):
     confidence: str = "uncertain"
     historical_achievement: MasteryState | None = None
     explanation: str = (
-        "Your reports contain skill observations, but do not yet record comparable "
-        "opportunities and successful execution. A call count cannot establish mastery."
+        "Mastery means doing the skill well in real moments, more than once. Your reports "
+        "don't count those moments yet, so no mastery level is shown. More calls are not "
+        "the same as mastery."
     )
 
 
@@ -357,7 +358,7 @@ class CoachingView(Model):
     mission: Mission | None
     mastery: Mastery = Mastery()
     regression: Regression = Regression(
-        state="unknown", action="More comparable behavior evidence is needed to assess regression."
+        state="unknown", action="We need more calls on this skill to tell whether it is slipping."
     )
     lesson: TextLesson | None
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)

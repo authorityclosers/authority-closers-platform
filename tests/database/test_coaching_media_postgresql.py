@@ -33,7 +33,7 @@ def test_reviewed_placeholder_clips_same_request_and_private_source(
         monkeypatch.setattr("ac_platform.coaching.http.read_topics", lambda: read_topics(root))
         monkeypatch.setattr("ac_platform.coaching.http.DATASET_ROOT", root)
         # Reviewed exports only here; the packaged placeholders have their own test.
-        monkeypatch.setattr("ac_platform.coaching.placeholder.clips_for", lambda _skill: ())
+        monkeypatch.setattr("ac_platform.coaching.placeholder.clips_for", lambda _skill, **_: ())
         setup = await _setup(postgres_harness, tmp_path)
         install(setup)
         try:

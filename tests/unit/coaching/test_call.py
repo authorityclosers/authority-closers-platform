@@ -45,7 +45,7 @@ def test_sparse_or_clean_report_never_creates_a_not_enough_evidence_dead_end(mis
     if missing == "all":
         assert view.basis == "general_practice" and view.evidence == ()
         assert view.lesson.own_call is None
-        assert "no assessed weakness" in view.focus.selected_reason
+        assert "doesn't mean this call showed a weakness" in view.focus.selected_reason
 
 
 def test_a_strength_can_supply_the_call_lesson_without_inventing_a_weakness() -> None:

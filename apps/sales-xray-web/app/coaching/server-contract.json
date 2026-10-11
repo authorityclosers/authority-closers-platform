@@ -25,7 +25,7 @@
       "explanation": "Explore one consequence.",
       "label": "Impact clarity",
       "selected_at": "2026-10-10T00:00:00Z",
-      "selected_reason": "Selected from this call's retained report. Your across-call mission stays unchanged.",
+      "selected_reason": "This call's report suggested it. Your mission across calls doesn't change.",
       "skill_id": "problem_impact_desire",
       "status": "provisional",
       "verdict": "Ask one impact question.",
@@ -34,22 +34,18 @@
     "lesson": {
       "better_direction": "Ask one impact question.",
       "checklist": [
-        "What has the prospect actually said?",
-        "Is the consequence clear, or still unknown?",
-        "What outcome do they want?",
-        "Would the next question add useful clarity?"
+        "Is the problem clear?",
+        "Is the impact clear?",
+        "Is the desired outcome clear?",
+        "Only then move to the solution."
       ],
       "example_wording": [
-        "What does that problem affect in your day-to-day work?",
-        "What would you want to change about that?"
+        "What usually goes wrong when that happens?",
+        "How much of your week goes into dealing with it?",
+        "What does this stop you from focusing on?"
       ],
-      "framework": [
-        "Problem",
-        "Impact",
-        "Desired outcome",
-        "Relevant solution"
-      ],
-      "good_looks_like": "Explore a real consequence in the prospect's own terms: time, effort, money, risk or another meaningful effect. Confirm the desired outcome. Preserve uncertainty rather than filling in an amount, motivation or commitment.",
+      "framework": ["Problem", "Impact", "Desired outcome", "Then solution"],
+      "good_looks_like": "Stay with the problem long enough to understand one or more real consequences: lost revenue, time, effort, slow growth, stress or risk. Use the prospect's own words. Don't fill in a number or a feeling they haven't given you.",
       "next_call_connection": "Ask one impact question.",
       "own_call": {
         "call_label": "Fictional sales call",
@@ -65,17 +61,17 @@
         "submission_id": "00000000-0000-0000-0000-00000000000a",
         "transcript_revision": "fictional-v1"
       },
-      "quick_idea": "A problem statement is a starting point. Understand what the problem is causing and what the prospect wants to change before choosing a solution. More questions are useful only when they create clarity.",
+      "quick_idea": "Good discovery is not about asking more questions. When a prospect tells you a problem, your job is not to prove at once that you can solve it. First understand what that problem is actually causing.",
       "source": "Owner's Sales Xray specification, 9 Oct 2026 \u00b7 Coaching \u00a73 and \u00a75.6",
-      "title": "Understand the impact before choosing a solution",
-      "when_not": "Do not keep digging after the point is clear, repeat a question already answered, manufacture pain, or continue after a genuine refusal. A call can return to discovery when new information appears; this is not a fixed sequence.",
-      "when_to_use": "Use this thinking guide when the prospect raises a meaningful problem and its consequences or desired outcome are still unclear. Check earlier answers first.",
-      "why_it_matters": "A recommendation is easier to understand when it connects to the prospect's actual situation. Use the evidence below to check what was already clear, what remained unanswered, and whether another question would have helped."
+      "title": "Understand the impact before you present the solution",
+      "when_not": "Don't keep asking impact questions once the consequence is clear and the prospect has given enough detail. Don't repeat a question they've answered or push after a clear no. The goal is clarity, not interrogation.",
+      "when_to_use": "When the prospect raises a real problem and what it costs them is still unclear. Check what they have already told you first.",
+      "why_it_matters": "The prospect already knows the problem. Until its cost is clear, your solution can feel useful but not necessary. Impact gives the buyer a reason to change, and it makes the value and price conversation easier later."
     },
     "limitations": [
-      "This coaching is specific to one call; it does not establish a recurring pattern or mastery.",
-      "The call suggestion stays linked to this report. It does not replace your across-call mission.",
-      "A relevant reviewed Dipak clip is not available yet; use the structured text lesson."
+      "This coaching is about one call. It doesn't show a pattern or mastery.",
+      "It stays with this report and doesn't replace your mission across calls.",
+      "When no Dipak lesson fits this focus, the written lesson stands in."
     ],
     "media_clips": [],
     "mission": {
@@ -105,7 +101,7 @@
       "alternatives": [],
       "confidence": "uncertain",
       "gap_type": "uncertain",
-      "hypothesis": "We do not yet have enough evidence to say why this happens.",
+      "hypothesis": "We don't have enough evidence yet to say why this happens.",
       "learner_context": null
     },
     "sandbox": false,
@@ -151,7 +147,7 @@
     ],
     "development_path": {
       "current": "Impact clarity",
-      "explanation": "The next focus depends on future relevant evidence. Your current mission stays active.",
+      "explanation": "Your next focus depends on your next calls. Your current mission stays until then.",
       "later": null,
       "likely_next": null,
       "maintain": null
@@ -179,7 +175,7 @@
       "explanation": "Explore one consequence.",
       "label": "Impact clarity",
       "selected_at": "2026-10-10T00:00:00Z",
-      "selected_reason": "One supported call suggestion; we are still learning your pattern.",
+      "selected_reason": "One call suggested this. We're still learning your pattern.",
       "skill_id": "problem_impact_desire",
       "status": "provisional",
       "verdict": "Ask one impact question.",
@@ -189,22 +185,18 @@
     "lesson": {
       "better_direction": "Ask one impact question.",
       "checklist": [
-        "What has the prospect actually said?",
-        "Is the consequence clear, or still unknown?",
-        "What outcome do they want?",
-        "Would the next question add useful clarity?"
+        "Is the problem clear?",
+        "Is the impact clear?",
+        "Is the desired outcome clear?",
+        "Only then move to the solution."
       ],
       "example_wording": [
-        "What does that problem affect in your day-to-day work?",
-        "What would you want to change about that?"
+        "What usually goes wrong when that happens?",
+        "How much of your week goes into dealing with it?",
+        "What does this stop you from focusing on?"
       ],
-      "framework": [
-        "Problem",
-        "Impact",
-        "Desired outcome",
-        "Relevant solution"
-      ],
-      "good_looks_like": "Explore a real consequence in the prospect's own terms: time, effort, money, risk or another meaningful effect. Confirm the desired outcome. Preserve uncertainty rather than filling in an amount, motivation or commitment.",
+      "framework": ["Problem", "Impact", "Desired outcome", "Then solution"],
+      "good_looks_like": "Stay with the problem long enough to understand one or more real consequences: lost revenue, time, effort, slow growth, stress or risk. Use the prospect's own words. Don't fill in a number or a feeling they haven't given you.",
       "next_call_connection": "Ask one impact question.",
       "own_call": {
         "call_label": "Fictional sales call",
@@ -220,23 +212,23 @@
         "submission_id": "00000000-0000-0000-0000-00000000000a",
         "transcript_revision": "fictional-v1"
       },
-      "quick_idea": "A problem statement is a starting point. Understand what the problem is causing and what the prospect wants to change before choosing a solution. More questions are useful only when they create clarity.",
+      "quick_idea": "Good discovery is not about asking more questions. When a prospect tells you a problem, your job is not to prove at once that you can solve it. First understand what that problem is actually causing.",
       "source": "Owner's Sales Xray specification, 9 Oct 2026 \u00b7 Coaching \u00a73 and \u00a75.6",
-      "title": "Understand the impact before choosing a solution",
-      "when_not": "Do not keep digging after the point is clear, repeat a question already answered, manufacture pain, or continue after a genuine refusal. A call can return to discovery when new information appears; this is not a fixed sequence.",
-      "when_to_use": "Use this thinking guide when the prospect raises a meaningful problem and its consequences or desired outcome are still unclear. Check earlier answers first.",
-      "why_it_matters": "A recommendation is easier to understand when it connects to the prospect's actual situation. Use the evidence below to check what was already clear, what remained unanswered, and whether another question would have helped."
+      "title": "Understand the impact before you present the solution",
+      "when_not": "Don't keep asking impact questions once the consequence is clear and the prospect has given enough detail. Don't repeat a question they've answered or push after a clear no. The goal is clarity, not interrogation.",
+      "when_to_use": "When the prospect raises a real problem and what it costs them is still unclear. Check what they have already told you first.",
+      "why_it_matters": "The prospect already knows the problem. Until its cost is clear, your solution can feel useful but not necessary. Impact gives the buyer a reason to change, and it makes the value and price conversation easier later."
     },
     "limitations": [
-      "Coaching is provisional and can be revised when you add context.",
-      "Skill observations do not identify the reason for a gap or prove mastery.",
-      "Focus is reconstructed from retained history; permanent state and feedback are pending."
+      "This is Sales Xray's reading of your calls. It can change when you add context.",
+      "Your reports show where a skill came up. They don't prove why, or that you have mastered it.",
+      "Your focus is worked out from your saved calls each time you open Coaching."
     ],
     "mastery": {
       "baseline": null,
       "confidence": "uncertain",
       "correct_count": null,
-      "explanation": "Your reports contain skill observations, but do not yet record comparable opportunities and successful execution. A call count cannot establish mastery.",
+      "explanation": "Mastery means doing the skill well in real moments, more than once. Your reports don't count those moments yet, so no mastery level is shown. More calls are not the same as mastery.",
       "historical_achievement": null,
       "relevant_count": null,
       "state": "not_enough_evidence",
@@ -261,7 +253,7 @@
       "occurrence_count": null,
       "relevant_call_count": 1,
       "relevant_opportunities": null,
-      "summary": "One call supports this suggestion. A recurring pattern is not established."
+      "summary": "So far this comes from one call. It isn't a pattern yet."
     },
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
@@ -281,9 +273,9 @@
       }
     ],
     "recommended_media": null,
-    "reflection_question": "What influenced your response in this moment?",
+    "reflection_question": "What made you respond that way in this moment?",
     "regression": {
-      "action": "More comparable behavior evidence is needed to assess regression.",
+      "action": "We need more calls on this skill to tell whether it is slipping.",
       "evidence": [],
       "state": "unknown"
     },
@@ -291,7 +283,7 @@
       "alternatives": [],
       "confidence": "uncertain",
       "gap_type": "uncertain",
-      "hypothesis": "We do not yet have enough evidence to say why this happens.",
+      "hypothesis": "We don't have enough evidence yet to say why this happens.",
       "learner_context": null
     },
     "sandbox": false,

@@ -62,12 +62,13 @@ def build_learner(
         unique.setdefault(call.source_sha256, call)
     calls = list(unique.values())
     limitations = [
-        "Coaching is provisional and can be revised when you add context.",
-        "Skill observations do not identify the reason for a gap or prove mastery.",
-        "Focus is reconstructed from retained history; permanent state and feedback are pending.",
+        "This is Sales Xray's reading of your calls. It can change when you add context.",
+        "Your reports show where a skill came up. They don't prove why, "
+        "or that you have mastered it.",
+        "Your focus is worked out from your saved calls each time you open Coaching.",
     ]
     if history_limited:
-        limitations.append("Only the most recent 40 retained calls are included.")
+        limitations.append("Only your 40 most recent calls are included.")
     groups: dict[tuple[str, str], list[SkillObservation]] = defaultdict(list)
     selected: tuple[str, str] | None = None
     origin: SkillObservation | None = None
@@ -94,15 +95,13 @@ def build_learner(
             **common,
             state="not_enough_evidence",
             focus=None,
-            pattern=Pattern(
-                summary="No supported skill-linked next-call mission is available yet."
-            ),
+            pattern=Pattern(summary="Your calls don't show one skill to work on yet."),
             evidence=(),
             practice=None,
             mission=None,
             lesson=None,
             development_path=Path(
-                current=None, explanation="Your path starts with more call evidence."
+                current=None, explanation="Your path starts after a few more calls."
             ),
             reflection_question=None,
         )
@@ -117,8 +116,8 @@ def build_learner(
     suggestion = origin.basis == "report_suggestion"
     if suggestion:
         limitations.append(
-            "This focus comes from a call report suggestion. Its assessed skill is not linked; "
-            "it is not a recurring weakness or skill-progress measurement."
+            "This focus comes from one report's suggestion, not a skill check. "
+            "It isn't a pattern and doesn't measure progress."
         )
         common["limitations"] = tuple(limitations)
     focus = Focus(
@@ -127,13 +126,12 @@ def build_learner(
         explanation=origin.improvement or origin.observation,
         why_it_matters=origin.why_it_matters or origin.observation,
         selected_reason=(
-            "A source-linked suggestion from one call. Its assessed skill is not linked yet."
+            "Your call's report suggested this."
             if suggestion
-            else f"{count} of {total} comparable calls with evidence for this skill "
-            "include a coaching "
-            "suggestion. This does not establish that the same behavior recurred."
+            else f"Your reports flagged it in {count} of your last {total} calls "
+            "that checked this skill."
             if recurring
-            else "One supported call suggestion; we are still learning your pattern."
+            else "One call suggested this. We're still learning your pattern."
         ),
         selected_at=mission.active_since,
         status="active" if recurring else "provisional",
@@ -178,10 +176,10 @@ def build_learner(
             relevant_call_count=total,
             attention_call_count=count,
             summary=(
-                f"This skill has coaching suggestions in {count} of {total} comparable calls. "
-                "Replay the evidence to compare the situations."
+                f"It came up on {len({m.submission_id for m in evidence})} different calls, "
+                "not just one. Replay the moments below and compare what happened each time."
                 if recurring
-                else "One call supports this suggestion. A recurring pattern is not established."
+                else "So far this comes from one call. It isn't a pattern yet."
             ),
         ),
         evidence=evidence,
@@ -189,7 +187,7 @@ def build_learner(
         mission=mission,
         practice=origin.practice
         or Practice(
-            exercise="Replay one moment. Say one alternative response in your own words.",
+            exercise="Replay one moment. Say a better response out loud, in your own words.",
             success_condition=mission.done_when,
         ),
         lesson=lesson_for(origin.skill_id, evidence[0], mission),
@@ -199,9 +197,8 @@ def build_learner(
             likely_next=candidates[0] if candidates else None,
             later=candidates[1] if len(candidates) > 1 else None,
             explanation=(
-                "The next focus depends on future relevant evidence. "
-                "Your current mission stays active."
+                "Your next focus depends on your next calls. Your current mission stays until then."
             ),
         ),
-        reflection_question="What influenced your response in this moment?",
+        reflection_question="What made you respond that way in this moment?",
     )
