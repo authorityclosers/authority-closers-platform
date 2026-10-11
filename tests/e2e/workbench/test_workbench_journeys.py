@@ -250,6 +250,7 @@ class Journey:
             """() => {
               const root = document.documentElement;
               const undersized = [];
+              let checked = 0;
               const scales = new WeakMap();
               function scale(el) {
                 if (!el) return 1;
@@ -261,7 +262,8 @@ class Journey:
                 scales.set(el, result);
                 return result;
               }
-              for (const el of document.querySelectorAll('main *, [data-report-modes] *')) {
+              for (const el of document.querySelectorAll(
+                  'main *, [data-report-modes] *, [data-coaching-pillar] *')) {
                 // Decorative initials accompany a separately rendered speaker name.
                 if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
                 // Closed details can retain layout bounds without painting their content.
@@ -278,6 +280,7 @@ class Journey:
                 const style = getComputedStyle(el);
                 if (r.width <= 1 || r.height <= 1 || r.bottom < 0 || r.top > innerHeight ||
                     style.visibility === 'hidden' || parseFloat(style.opacity) === 0) continue;
+                checked++;
                 const cssSize = parseFloat(style.fontSize);
                 const size = cssSize * scale(el);
                 if (size < 11.99) undersized.push({tag: el.tagName, size, cssSize,
@@ -285,11 +288,13 @@ class Journey:
                   width: r.width, height: r.height});
               }
               return {viewport: innerWidth, document: root.scrollWidth,
-                body: document.body.scrollWidth, undersized,
+                body: document.body.scrollWidth, checked, undersized,
                 busy: document.querySelectorAll('[aria-busy="true"]').length};
             }"""
         )
         self.observations.append({"step": step, "screenshot": str(path), **metrics})
+        if not metrics["checked"]:
+            self.visual_errors.append(f"{step}: no rendered text was audited; screenshot {path}")
         if max(metrics["document"], metrics["body"]) > self.width + 1:
             self.visual_errors.append(f"{step}: sideways overflow; screenshot {path}")
         if metrics["undersized"]:
@@ -1092,8 +1097,10 @@ def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]
             expect(words).to_have_text(quote)
             expect(words.locator("..")).to_contain_text("2:10–3:37")
             assert (
-                page.locator("main").evaluate(
-                    "(el, quote) => el.textContent.split(quote).length - 1", quote
+                page.locator("[data-coaching-pillar]").evaluate_all(
+                    """(els, quote) => els.map(el => el.textContent).join(' ')
+                      .split(quote).length - 1""",
+                    quote,
                 )
                 == 1
             ), "The source quote is repeated as an observation"

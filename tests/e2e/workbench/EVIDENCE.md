@@ -1,5 +1,31 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Current independent dev readback — 23:14:53–23:17:19 UTC
+
+**Report/Document8 PASS; quote4 FAIL in the new QA locator.** Source ffca886c
+→1864b5a9, stable journey digest4843dd5d2566350b767ab0d49c6c1acb2c6f682b4e9b56f60df7bc7b98a2e8bd.
+All thirteen Report observations and seven independent Document observations
+pass at1440/390 light/dark, including valid Word files. Actual Document controls:
+44 in the Report example and10 in the standalone fixture, each meets32/44px.
+No runtime/server/overflow/outcome API errors; one Document/light receipt has
+two timed refresh events. Inspected both widths/themes, intentional paper
+surface and plain sales commitments preserved.
+
+The four quote cases reached exact source text and folded span, then timed out
+on QA's absent `main` locator at line1095; no quote interaction was completed.
+This is a harness error, not a product defect or quote PASS. Original FAIL/JUnit/
+screenshots preserved. The corrected once-only check targets actual Coaching
+pillars. Font audit now includes those fixture pillars and stores a positive
+rendered-text count, preventing an absent wrapper from yielding an empty audit.
+Prior Coaching fixture receipts retain their interaction/geometry/visual evidence;
+their zero font-error counters did not establish automated fixture font coverage.
+New eight-case Coaching+quote acceptance is pending no earlier23:29:54UTC.
+
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-document-quote-readback/receipt.json`.
+G's d8358066 print receipt reports4/4; its retained A4 first-page capture was
+personally inspected, facts clear with no empty shell shapes. This remains
+attributed builder print evidence, separate from QA's own screen/Word checks.
+
 Current continuation — 23:15 UTC
 
 Coaching cue-spacing readback **4/4 PASS**, 22:54:33–22:55:30 UTC, recorded

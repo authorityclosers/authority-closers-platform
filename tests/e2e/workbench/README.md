@@ -29,6 +29,8 @@ Coaching also reads all six fictional rep pillars with their own labels. Its
 progress accessibility snapshot must contain one summary of the forty calls
 (40 needed work in this fictional rep's data), rather than announcing
 one list row per call. Every rep pillar gets a readability screenshot.
+The font audit includes actual Coaching pillars in the standalone fixture and
+requires a positive rendered-text count at every capture.
 Team totals also check that rendered text fits its clipping containers; DOM
 visibility alone cannot pass an ellipsised count or context line. The sandbox's
 latest-call footnote must fit fully in view and gets its own screenshot.
@@ -51,8 +53,8 @@ fictional finished call owned by that account. They save through the real contro
 fully reload each choice, check Report/Document/Word and read the saved API value
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
-path they skip. These eight optional cases plus the original sixteen collect
-28 cases. The original Report journey retains its full thirteen steps.
+path they skip. The original sixteen plus four format, four persistence and four quote cases
+collect 28 cases. The original Report journey retains its full thirteen steps.
 The additional dev-only long-quote journey verifies the exact fictional
 1,232-character source once, its original time span, one expand/collapse click,
 32/44 px reachable disclosure targets and no eager media in both widths/themes.
