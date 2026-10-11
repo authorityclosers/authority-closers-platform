@@ -119,13 +119,14 @@ class _RecordingStorageFence:
     """Cross-process fence for all local conversation storage effects.
 
     The domain deletion worker and the local inspection worker use the same
-    private-root lock. A single global lock is intentional: the database row
-    lock is acquired only after this fence, so deletion cannot deadlock behind
-    an inspection phase that is waiting for its final database transaction.
+    private-root lock. Immutable processing work uses shared admission;
+    deletion/recovery uses exclusive admission and waits for every reader.
+    Both acquire this fence before database rows, preserving lock order.
     """
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self.path = root / _WORKER_LOCK_NAME
+        self.exclusive = exclusive
         self._handle: Any | None = None
         self._locked = False
 
@@ -165,7 +166,7 @@ class _RecordingStorageFence:
 
                 fcntl.flock(  # type: ignore[attr-defined,unused-ignore]
                     self._handle.fileno(),
-                    fcntl.LOCK_EX,  # type: ignore[attr-defined,unused-ignore]
+                    fcntl.LOCK_EX if self.exclusive else fcntl.LOCK_SH,
                 )
             self._locked = True
         except StorageError:
@@ -211,9 +212,9 @@ class _RecordingStorageFence:
 class _FencedExecutor:
     """Own a storage fence and all synchronous work until its thread is joined."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, exclusive: bool = True) -> None:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="conversation-worker")
-        self._fence = _RecordingStorageFence(root)
+        self._fence = _RecordingStorageFence(root, exclusive=exclusive)
         self._entered = False
 
     async def __aenter__(self) -> _FencedExecutor:
@@ -727,7 +728,7 @@ class OfflineConversationWorker:
             self._verify_object(key, sha, expected_bytes)
 
     async def _inspect_job(self, work: Work) -> None:
-        async with _FencedExecutor(self.storage.root) as fenced:
+        async with _FencedExecutor(self.storage.root, exclusive=False) as fenced:
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
                 recording, _, quoted, _ = await self._scope(db, job)
@@ -937,6 +938,9 @@ class OfflineConversationWorker:
                     )
                     run.completed_at = datetime.now(UTC)
                     await JobRepository(db).complete(work.job_id, work.lease_token)
+                    from ac_platform.conversation_intelligence.stage_handoff import make_plans_due
+
+                    await make_plans_due(db, recording)
 
     async def _erase_job(self, work: Work) -> None:
         from ac_platform.conversation_intelligence.source_objects import release_source_object
@@ -1059,14 +1063,35 @@ class OfflineConversationWorker:
             # A fenced/started job is intentionally left to its existing
             # recovery path; this branch never refunds or rewrites run state.
             return True
-        except Exception:
+        except Exception as error:
             # No provider/media exception text enters shared operational logs.
             # A failed local attempt is not a no-charge receipt: leave any
             # dispatched reservation held for explicit reconciliation.
             async with self.sessions() as db, db.begin():
-                await self._job(db, work)
+                job = await self._job(db, work)
+                if job.tenant_id is None:
+                    raise ConversationConflict("The local job has no workspace binding.") from None
                 await JobRepository(db).fail(
                     work.job_id, work.lease_token, "conversation_local_phase_failed"
+                )
+                from ac_platform.audit.service import AuditRepository
+                from ac_platform.conversation_intelligence.local_failure import local_failure_code
+
+                await AuditRepository(db).append(
+                    tenant_id=job.tenant_id,
+                    actor_person_id=None,
+                    actor_type="system",
+                    action="conversation.local_failure_observed",
+                    resource_type="job",
+                    resource_id=job.id,
+                    payload={
+                        "schema": "ac.sales-xray.local-failure/1",
+                        "phase": "local_inspection" if work.kind == LOCAL_JOB else "erasure",
+                        "failure_code": local_failure_code(error),
+                        "attempt_count": job.attempt_count,
+                        "recovery_generation": work.recovery_generation,
+                    },
+                    now=datetime.now(UTC),
                 )
             raise RuntimeError(
                 "The local conversation job failed; see its durable state."

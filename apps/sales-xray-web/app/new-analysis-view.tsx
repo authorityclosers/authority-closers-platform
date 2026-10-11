@@ -178,7 +178,7 @@ export function NewAnalysisView({
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,.mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+            accept="audio/*,.mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
             style={{ display: "none" }}
             onChange={handleFileChange}
             disabled={disabled}
@@ -232,7 +232,8 @@ export function NewAnalysisView({
           </button>
 
           <p className={styles.formats}>
-            MP3, MPEG, WAV, M4A, OGG or FLAC &nbsp;·&nbsp; Up to 32MB / 60 min
+            MP3, WAV, M4A and common phone audio formats &nbsp;·&nbsp; Up to
+            32MB / 60 min
           </p>
         </div>
       </section>

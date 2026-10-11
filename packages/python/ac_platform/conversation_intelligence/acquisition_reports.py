@@ -659,8 +659,16 @@ class AcquisitionReports:
             report_finished_at=report_finished_at,
             local_retry=local_retry,
         )
+        from ac_platform.conversation_intelligence.partial_results import read_partial_results
+
+        partial = await read_partial_results(
+            self.database, recording, None if local_retry else plan, timeline_executions
+        )
+        if partial["transcript"] is not None:
+            partial = await self._withheld(recording, partial["transcript"]["revision"], partial)
         return {
             **stage_progress,
+            "partial_results": partial,
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
             "source_sha256": recording.source_sha256,

@@ -69,7 +69,7 @@ it("offers accessible local browse and only supplied file limits", async () => {
   await renderStage();
   expect(host.textContent).toContain("Drop your call recording here");
   expect(host.textContent).toContain(
-    "MP3, MPEG, WAV, M4A, OGG or FLAC · up to 32 MB · 60 min per call",
+    "MP3, WAV, M4A and common phone audio formats · up to 32 MB · 60 min per call",
   );
   expect(host.textContent).toContain("Choose a file");
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -80,6 +80,19 @@ it("offers accessible local browse and only supplied file limits", async () => {
   expect(click).toHaveBeenCalledOnce();
   expect(input.multiple).toBe(true);
 });
+
+it.each(["amr", "awb", "aac", "3ga", "webm", "opus"])(
+  "keeps a phone %s file selectable even without a browser MIME type",
+  async (extension) => {
+    const phone = new File(["fictional"], `Phone call.${extension}`);
+    await renderStage({ files: [phone], selectedFile: null });
+    const select = host.querySelector<HTMLButtonElement>("li button")!;
+    expect(select.disabled).toBe(false);
+    expect(host.textContent).not.toContain("Unsupported");
+    await act(async () => select.click());
+    expect(callbacks.onSelect).toHaveBeenCalledWith(phone);
+  },
+);
 
 it("shows local file facts and selects or removes one file without claiming a duration", async () => {
   await renderStage({ files: [first, second], selectedFile: first });

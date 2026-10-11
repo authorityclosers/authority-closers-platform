@@ -14,7 +14,8 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
-const SUPPORTED_AUDIO = /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i;
+const SUPPORTED_AUDIO =
+  /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
   files: readonly File[];
@@ -56,7 +57,7 @@ export function AcquisitionFileStage({
   const activeFile = files.find((file) => file === selectedFile) ?? null;
   const hasFiles = files.length > 0;
   const limits = [
-    "MP3, MPEG, WAV, M4A, OGG or FLAC",
+    "MP3, WAV, M4A and common phone audio formats",
     maxBytes !== undefined && maxBytes > 0
       ? `up to ${Math.floor(maxBytes / 1048576)} MB`
       : null,
@@ -186,7 +187,7 @@ export function AcquisitionFileStage({
           ref={input}
           className={styles.fileInput}
           type="file"
-          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
           multiple
           tabIndex={-1}
           aria-hidden="true"
@@ -200,7 +201,7 @@ export function AcquisitionFileStage({
           >
             <span>
               <FileAudio size={16} aria-hidden="true" />
-              MP3 · MPEG · WAV · M4A · OGG · FLAC
+              MP3, WAV, M4A and phone audio
             </span>
             {maxBytes !== undefined && maxBytes > 0 ? (
               <span>

@@ -98,7 +98,14 @@ async def require_retry_predecessor(
             or job.provider_receipt is not None
         ):
             raise ConversationConflict("The previous analysis still needs reconciliation.")
+        reconciled = False
         if job.dispatch_started_at is not None:
+            from ac_platform.conversation_intelligence.provider_reconciliation import (
+                has_reconciled_c2_outcome,
+            )
+
+            reconciled = await has_reconciled_c2_outcome(database, recording, task, job, now=now)
+        if job.dispatch_started_at is not None and not reconciled:
             observed = await database.scalar(
                 select(AuditEvent).where(
                     AuditEvent.tenant_id == recording.tenant_id,

@@ -688,6 +688,9 @@ class ConversationApplication:
         )
         await self.database.flush()
         await self._receipt(actor, key, "run", payload, identifier, now)
+        from ac_platform.conversation_intelligence.stage_handoff import notify_work
+
+        await notify_work(self.database)
         return await self._run_view(actor, identifier)
 
     async def _run_view(self, actor: ConversationActor, run_id: UUID) -> dict[str, Any]:
