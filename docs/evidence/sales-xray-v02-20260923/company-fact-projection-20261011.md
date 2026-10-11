@@ -21,3 +21,13 @@ strict module mypy and changed-file Ruff pass. All data is fictional. The
 Company schema, store and HTTP prototype remain private and unmounted while
 PRs #442 and #437 hold shared migration/registry/backup files. This receipt is
 not a deployed Company feature or production Report verification.
+
+The prepared C5 fallback reads only its explicit `company` fact as a literal
+name. It does not reinterpret person industry/team-size/city or narrative
+prose. A missing/old C5, unresolved speaker/quote, private purpose/name, stale
+source or conflicting company names yields no candidate. A private alternative
+does not resolve ambiguity. Repeated mentions remain one candidate payload;
+there is no identity lookup or merge, and other fields stay absent/Unknown.
+The seven new detection cases pass with adjacent candidate/projection cases
+(43 total), plus strict module mypy and Ruff. This helper invokes no provider
+and remains unmounted; canonical Company persistence is still private WIP.
