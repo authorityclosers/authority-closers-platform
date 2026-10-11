@@ -88,6 +88,11 @@
   background: var(--sx-surface);
 }
 
+/* Nothing inside a panel (forms, toolbars) can grow wider than the panel. */
+.panel > * {
+  min-width: 0;
+}
+
 .panelHead {
   display: flex;
   align-items: center;
@@ -101,15 +106,18 @@
 
 .panelTitle {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 0 8px;
   min-width: 0;
   margin: 0;
   color: var(--sx-ink);
   font: var(--sx-text-panel);
 }
 
+/* A long sub-line drops below the title instead of squeezing it. */
 .panelTitle small {
+  max-width: 100%;
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
@@ -989,6 +997,7 @@ a.rowTitle:hover {
 
   .toolbar > :is(select, input) {
     flex: 1 1 140px;
+    min-width: 0;
     font-size: 16px;
   }
 }
