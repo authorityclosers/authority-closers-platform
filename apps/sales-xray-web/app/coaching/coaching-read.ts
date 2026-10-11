@@ -296,7 +296,7 @@ export async function readCoaching(
   if (callId?.startsWith("person:") && person !== callId.slice(7))
     return {
       data: null,
-      error: "This link is invalid. Open Team coaching again.",
+      error: "This link doesn’t work. Open Team coaching again.",
     };
   if (
     callId !== null &&
@@ -306,7 +306,7 @@ export async function readCoaching(
   )
     return {
       data: null,
-      error: "This call link is invalid. Open the call's report again.",
+      error: "This link doesn’t work. Open the call’s report again.",
     };
   try {
     const readHeaders = new Headers(init.headers);
@@ -332,11 +332,11 @@ export async function readCoaching(
               : person && response.status === 404
                 ? "This coaching is not shared with you."
                 : response.status === 404 || response.status === 409
-                  ? "This call's coaching is unavailable. Open the call to check its analysis."
-                  : "Coaching could not be loaded. Try again.",
+                  ? "This call’s coaching isn’t ready. Open the call to see its report."
+                  : "Coaching didn’t load. Try again.",
       };
     if (!response.headers.get("content-type")?.includes("application/json"))
-      return { data: null, error: "Coaching could not be read. Try again." };
+      return { data: null, error: "Coaching didn’t load. Try again." };
     const raw: unknown = await response.json();
     const data =
       callId === "team"
@@ -348,8 +348,8 @@ export async function readCoaching(
             : parseCoaching(raw);
     return data
       ? { data, error: null }
-      : { data: null, error: "Coaching could not be read. Try again." };
+      : { data: null, error: "Coaching didn’t load. Try again." };
   } catch {
-    return { data: null, error: "Coaching could not be loaded. Try again." };
+    return { data: null, error: "Coaching didn’t load. Try again." };
   }
 }

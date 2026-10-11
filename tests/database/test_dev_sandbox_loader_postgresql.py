@@ -4,13 +4,19 @@ import asyncio
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
+from fastapi import FastAPI
+from pydantic import SecretStr
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from ac_platform.application.settings import Settings
 from ac_platform.audit.service import verify_audit_chain
+from ac_platform.coaching.http import install_coaching_http
 from ac_platform.coaching.report_adapter import from_report
 from ac_platform.coaching.sandbox import SandboxCoaching, call_uuid, rep_uuid
 from ac_platform.conversation_intelligence.acquisition_library import account_library
@@ -21,10 +27,13 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import ConversationReportDraft
 from ac_platform.conversation_intelligence.org_insights import OrganisationInsights
 from ac_platform.conversation_intelligence.run_budget_alarm import overdue_processing_plans
+from ac_platform.conversation_intelligence.speaker_map_models import ConversationSpeakerMapRevision
+from ac_platform.conversation_intelligence.speaker_map_service import read_speaker_map
 from ac_platform.conversation_intelligence.synthetic_import_contracts import (
     SyntheticCallBundle,
     SyntheticRecordInput,
@@ -32,9 +41,13 @@ from ac_platform.conversation_intelligence.synthetic_import_contracts import (
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSyntheticRecord,
 )
+from ac_platform.http.auth import install_identity_http
+from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import PasswordCredential, ProviderIdentity
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 from tests.unit.conversation_intelligence.test_dev_sandbox_loader import dated_bundle, loader
@@ -107,6 +120,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
 
             preview = await load(apply=False)
             assert preview["calls_created"] == 1 and preview["after_calls"] == 0
+            assert preview["speaker_maps_created"] == 1
             async with AsyncSession(engine) as db:
                 assert (
                     await db.scalar(select(func.count()).select_from(ConversationAcquisitionUsage))
@@ -116,6 +130,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
             assert sorted([first["calls_created"], second["calls_created"]]) == [0, 1]
             assert first["reports_with_pillars"] == second["reports_with_pillars"] == 1
             assert first["reports_without_pillars"] == second["reports_without_pillars"] == 0
+            assert sorted([first["speaker_maps_created"], second["speaker_maps_created"]]) == [0, 1]
             async with AsyncSession(engine) as db, db.begin():
                 ownership = GuestOwnership(
                     AcquisitionSessions(
@@ -160,6 +175,21 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert stored_report.payload["pillars"]["summary"] == "A fictional discovery call."
                 assert stored_report.payload["improvements"][0]["title"] == "Agree a date"
                 assert stored_report.payload["dimensions"][0]["call_state"] == "observed"
+                normalized = stored_report.transcript["normalized"]
+                mapping = await read_speaker_map(
+                    ownership, submission, actor=owner.actor, allow_organisation_read=True
+                )
+                assert mapping["status"] == "confirmed"
+                assert mapping["transcript_revision"] == report["transcript_revision"]
+                assert {s["speaker_id"]: s["role"] for s in mapping["speakers"]} == {
+                    "rep": "salesperson",
+                    "prospect": "prospect",
+                }
+                assert all(s["role_source"] == "confirmed" for s in mapping["speakers"])
+                seeded_map = await db.scalar(select(ConversationSpeakerMapRevision))
+                assert seeded_map.actor_person_id == owner.person_id
+                assert seeded_map.revision == 1
+                authored_choices = deepcopy(seeded_map.speakers)
                 coaching = from_report(
                     report,
                     submission_id=submission,
@@ -229,6 +259,65 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 insights = OrganisationInsights(db, module.TARGET)
                 assert await insights.pending() == 0
 
+            # The Report embeds Coaching only when every identity and citation
+            # matches its loaded report. Exercise the actual signed-in HTTP path.
+            origin = "https://salesxray.example.test"
+            settings = Settings(
+                _env_file=None,
+                environment="test",
+                public_app_url="https://learner.example.test",
+                admin_app_url="https://admin.example.test",
+                coach_app_url="https://coach.example.test",
+                api_url="https://api.example.test",
+                sales_xray_app_url=origin,
+                public_learner_tenant_id=uuid4(),
+                operations_tenant_id=uuid4(),
+                session_token_pepper=SecretStr("fictional-loader-session-hash-test-only"),
+            )
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            app = FastAPI()
+            register_problem_handlers(app)
+            require_actor = install_identity_http(app, settings=settings, sessions=sessions)
+            install_coaching_http(app, RouteContext(settings, require_actor, sessions))
+            token = await _session(SimpleNamespace(settings=settings, sessions=sessions), owner)
+            route = f"/v1/me/coaching/calls/{submission}"
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url=origin
+            ) as client:
+                assert (await client.get(route)).status_code == 401
+                client.cookies.set(settings.session_cookie_name, token)
+                response = await client.get(route)
+                assert response.status_code == 200
+                bound = response.json()
+                assert bound["state"] == "ready"
+                for key in ("recording_id", "source_sha256", "transcript_revision"):
+                    assert bound[key] == report[key]
+                assert bound["report_revision"] == content_hash(report["report"])
+                segments = {s["id"]: s for s in normalized["segments"]}
+                moments = [*bound["evidence"], bound["lesson"]["own_call"]]
+                assert moments
+                for moment in moments:
+                    assert moment["submission_id"] == str(submission)
+                    for key in ("recording_id", "source_sha256", "transcript_revision"):
+                        assert moment[key] == report[key]
+                    segment = segments[moment["segment_id"]]
+                    assert moment["quote"] in segment["text"]
+                    assert (
+                        segment["start_ms"]
+                        <= moment["start_ms"]
+                        < moment["end_ms"]
+                        <= segment["end_ms"]
+                    )
+                    assert moment["playable"] is False
+                other_token = await _session(
+                    SimpleNamespace(settings=settings, sessions=sessions),
+                    await seed(engine, tenant_id=module.TARGET, role="owner"),
+                )
+                client.cookies.set(settings.session_cookie_name, other_token)
+                denied = await client.get(route)
+                assert denied.status_code == 404
+                assert source.coaching["action"]["mission"]["behaviour"] not in denied.text
+
             summary = SyntheticRecordInput.model_validate(
                 {
                     "kind": "call_summary",
@@ -260,9 +349,42 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 )
             history = await load(include_history=True)
             assert history["summaries_created"] == 1 and history["calls_created"] == 0
+            assert history["speaker_maps_created"] == 0 and history["speaker_maps_preserved"] == 1
             again = await load(include_history=True)
             assert again["summaries_skipped"] == 1
+            # An existing later speaker choice always wins over a source replay.
+            async with AsyncSession(engine) as db, db.begin():
+                choices = deepcopy(authored_choices)
+                next(s for s in choices if s["speaker_id"] == "rep")["display_name"] = (
+                    "Reviewed synthetic representative"
+                )
+                db.add(
+                    ConversationSpeakerMapRevision(
+                        id=uuid4(),
+                        tenant_id=module.TARGET,
+                        submission_id=submission,
+                        revision=2,
+                        transcript_revision=report["transcript_revision"],
+                        speakers=choices,
+                        actor_person_id=owner.person_id,
+                        created_at=owner.now,
+                    )
+                )
+            replay = await load()
+            assert replay["speaker_maps_created"] == 0 and replay["speaker_maps_preserved"] == 1
             async with AsyncSession(engine) as db:
+                assert (
+                    await db.scalar(
+                        select(func.count()).select_from(ConversationSpeakerMapRevision)
+                    )
+                    == 2
+                )
+                latest = await db.scalar(
+                    select(ConversationSpeakerMapRevision)
+                    .order_by(ConversationSpeakerMapRevision.revision.desc())
+                    .limit(1)
+                )
+                assert latest.speakers == choices
                 stored_summary = await db.scalar(
                     select(ConversationSyntheticRecord).where(
                         ConversationSyntheticRecord.kind == "call_summary"

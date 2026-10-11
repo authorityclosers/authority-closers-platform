@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  BIG_PICTURE,
+  COMMON,
+  OUTCOME_CHOICES,
+  OUTCOME_RECORD,
+} from "./report-copy";
 import { useId, useRef, useState } from "react";
 import {
   CALL_OUTCOME_LABELS,
@@ -56,10 +62,10 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
     } catch {
       setError(
         kind === "lost" && !reason.trim()
-          ? "Add a reason for Lost."
+          ? OUTCOME_RECORD.needReason
           : kind === "follow_up" && !date
-            ? "Choose a follow-up date."
-            : "Check the date, amount and currency.",
+            ? OUTCOME_RECORD.needDate
+            : OUTCOME_RECORD.checkValues,
       );
       return;
     }
@@ -72,9 +78,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
       setChoice(null);
     } catch {
       setNeedsReload(true);
-      setError(
-        "Your outcome couldn't be confirmed. Reload before saving again.",
-      );
+      setError(OUTCOME_RECORD.saveNotConfirmed);
     } finally {
       pending.current = false;
       setSaving(false);
@@ -100,9 +104,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
       setError(null);
       setChoice(null);
     } catch {
-      setError(
-        "Call outcome is still unavailable. Reload before saving again.",
-      );
+      setError(OUTCOME_RECORD.stillUnavailable);
     } finally {
       pending.current = false;
       setReloading(false);
@@ -112,19 +114,19 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
   return (
     <section
       className={styles.outcome}
-      aria-label="Recorded call outcome"
+      aria-label={BIG_PICTURE.outcome.label}
       aria-busy={saving || reloading}
     >
       <div className={styles.current}>
-        <strong>Call outcome</strong>
+        <strong>{OUTCOME_RECORD.title}</strong>
         <span>
           {needsReload
-            ? "Unconfirmed"
+            ? OUTCOME_RECORD.notConfirmed
             : value === undefined
-              ? "Unavailable"
+              ? OUTCOME_RECORD.unavailable
               : value === null
-                ? "Unrecorded"
-                : CALL_OUTCOME_LABELS[value.outcome]}
+                ? OUTCOME_RECORD.notSet
+                : OUTCOME_CHOICES[value.outcome]}
         </span>
         {!needsReload && value?.lost_reason && <span>{value.lost_reason}</span>}
         {!needsReload && value?.follow_up_on && (
@@ -141,7 +143,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
           <div
             className={styles.choices}
             role="group"
-            aria-label="Set call outcome"
+            aria-label={OUTCOME_RECORD.title}
           >
             {(Object.keys(CALL_OUTCOME_LABELS) as CallOutcomeKind[]).map(
               (kind) => (
@@ -152,7 +154,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
                   aria-pressed={choice === kind}
                   onClick={() => choose(kind)}
                 >
-                  {CALL_OUTCOME_LABELS[kind]}
+                  {OUTCOME_CHOICES[kind]}
                 </button>
               ),
             )}
@@ -165,12 +167,12 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
                 setCurrency(value?.deal_value?.currency_code ?? "");
               }}
             >
-              Deal value
+              {OUTCOME_RECORD.dealValue}
             </button>
           </div>
           {choice === "lost" && (
             <label htmlFor={`${id}-reason`}>
-              Reason for Lost
+              {OUTCOME_RECORD.lostReason}
               <input
                 id={`${id}-reason`}
                 maxLength={1000}
@@ -182,7 +184,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
           )}
           {choice === "follow_up" && (
             <label htmlFor={`${id}-date`}>
-              Follow-up date
+              {OUTCOME_RECORD.followUpDate}
               <input
                 id={`${id}-date`}
                 type="date"
@@ -195,7 +197,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
           {showValue && (
             <div className={styles.value}>
               <label htmlFor={`${id}-amount`}>
-                Deal amount
+                {OUTCOME_RECORD.amount}
                 <input
                   id={`${id}-amount`}
                   inputMode="decimal"
@@ -205,11 +207,11 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
                 />
               </label>
               <label htmlFor={`${id}-currency`}>
-                Currency code
+                {OUTCOME_RECORD.currency}
                 <input
                   id={`${id}-currency`}
                   maxLength={3}
-                  placeholder="e.g. INR"
+                  placeholder={OUTCOME_RECORD.currencyExample}
                   value={currency}
                   disabled={disabled}
                   onChange={(event) => setCurrency(event.target.value)}
@@ -223,11 +225,15 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
               disabled={disabled}
               onClick={() => void save(choice)}
             >
-              Save outcome
+              {OUTCOME_RECORD.save}
             </button>
           )}
-          {saving && <span className={styles.state}>Saving outcome…</span>}
-          {reloading && <span className={styles.state}>Reading outcome…</span>}
+          {saving && (
+            <span className={styles.state}>{OUTCOME_RECORD.saving}</span>
+          )}
+          {reloading && (
+            <span className={styles.state}>{OUTCOME_RECORD.checking}</span>
+          )}
           {error && (
             <div className={styles.error} role="alert">
               <span>{error}</span>
@@ -237,7 +243,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
                   disabled={reloading}
                   onClick={() => void reload()}
                 >
-                  Reload
+                  {OUTCOME_RECORD.reload}
                 </button>
               ) : choice ? (
                 <button
@@ -245,7 +251,7 @@ function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
                   disabled={saving}
                   onClick={() => void save(choice)}
                 >
-                  Try again
+                  {COMMON.tryAgain}
                 </button>
               ) : null}
             </div>

@@ -92,6 +92,9 @@ def _coaching_v8_schema() -> dict[str, Any]:
             if key != "PillarEvidence"
         }
     )
+    # Empty authored presentation reasons are a canonical import exception,
+    # never a permitted model response.
+    defs["pillar_PillarMoment"]["properties"]["why"]["minLength"] = 1
     return {
         "type": "object",
         "additionalProperties": False,

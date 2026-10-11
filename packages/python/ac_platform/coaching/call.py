@@ -215,7 +215,7 @@ def build_call_coaching(
             "This report has no coaching suggestion. "
             "Start with one small practice for your next call."
         )
-        why = "A clear, agreed next step helps both people understand what happens after the call."
+        why = "A clear next step means you both know what happens after the call."
     if mission is None:
         mission = Mission(
             skill_id=skill_id,
@@ -228,7 +228,7 @@ def build_call_coaching(
             ),
             context=f"When the same kind of moment comes up: {label}"
             if basis != "general_practice"
-            else "When the conversation is ending and a next step is relevant.",
+            else "When the call is ending and a next step makes sense.",
             done_when="You try it once on a real call, so the report can show the moment.",
             cue="One change. Your own words.",
             active_since=created_at,

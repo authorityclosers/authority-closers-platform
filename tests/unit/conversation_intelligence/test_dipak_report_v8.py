@@ -554,6 +554,13 @@ def test_candidate_keeps_existing_sval_gate():
     assert "AC-SVAL-01 Gate 2" in coaching_revision_runtime_block("coaching-v8")
 
 
+def test_provider_schema_keeps_nonempty_moment_reasons(case):
+    payload = deepcopy(case[3])
+    payload["pillars"]["moments"][1]["why"] = ""
+    with pytest.raises(AssertionError):
+        validate_schema(payload, coaching_response_json_schema("coaching-v8"))
+
+
 def test_plain_sales_voice_does_not_use_analyst_words_as_advice():
     instruction = COACHING_PROMPT_V8_INSTRUCTION
     assert "VOICE (Dipak's plain sales language)" in instruction

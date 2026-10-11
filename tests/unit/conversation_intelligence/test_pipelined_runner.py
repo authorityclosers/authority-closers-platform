@@ -68,6 +68,59 @@ async def test_c1_commit_wakes_idle_pipeline_without_poll_delay() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("local", [True, False], ids=["local", "provider"])
+async def test_commit_during_empty_scan_wakes_worker_without_idle_delay(local: bool) -> None:
+    log: list[str] = []
+    stop = asyncio.Event()
+    committed = asyncio.Event()
+    scanned = asyncio.Event()
+    release = asyncio.Event()
+    wakeups = (asyncio.Event(), asyncio.Event())
+
+    class QueueScan(_FakeComponent):
+        async def run_once(self) -> bool:
+            self.calls += 1
+            self.log.append(self.label)
+            # A durable queue read can finish before another transaction
+            # commits, while run_once is still returning its empty result.
+            available = committed.is_set()
+            if self.calls == 1:
+                assert not available
+                scanned.set()
+                await release.wait()
+            if available:
+                stop.set()
+            return available
+
+    queue = QueueScan("queued", log)
+    consumer = PipelinedConversationWorkerRunner(
+        _FakeComponent("retention", log),
+        queue if local else _FakeComponent("offline", log),
+        _FakeComponent("plan", log),
+        _FakeComponent("inference", log) if local else queue,
+        idle_min=timedelta(seconds=5),
+        idle_max=timedelta(seconds=5),
+        wakeups=wakeups,
+    )
+    task = asyncio.create_task(consumer.run(stop))
+    try:
+        await asyncio.wait_for(scanned.wait(), 1)
+        committed.set()
+        # This models the external LISTEN hint, not the local worker's
+        # own successful C1 return. A lost hint would incur the 5 s wait.
+        wakeups[0 if local else 1].set()
+        release.set()
+        summary = await asyncio.wait_for(asyncio.shield(task), 1)
+        assert queue.calls == 2
+        assert summary.offline_work == int(local)
+        assert summary.inference_work == int(not local)
+    finally:
+        stop.set()
+        release.set()
+        await asyncio.wait_for(task, 1)
+
+
+@pytest.mark.asyncio
 async def test_failure_drains_sibling_and_prevents_more_admission() -> None:
     log: list[str] = []
     offline = _FakeComponent("offline", log, block=True)

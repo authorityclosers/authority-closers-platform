@@ -4,7 +4,7 @@ import { LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, type ReactNode } from "react";
 
-import { COMMON } from "../report-copy";
+import { COMMON, recordedOutcome } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
 import type {
   ReportEvidence,
@@ -13,6 +13,7 @@ import type {
 } from "../report-contract";
 import { RichText } from "../report-entities";
 import { useReportPeople } from "../report-kit";
+import { useCallOutcome } from "../report-outcome-context";
 import { reportStoryModel, type Line } from "../report-story-model";
 import { InferredTag, PlayChip, type Select } from "../report-visuals/visuals";
 import styles from "./sections.module.css";
@@ -34,9 +35,18 @@ const EMPTY_TRANSCRIPT = {
   segments: [],
 } as unknown as Transcript;
 
+/** A person's recorded outcome for this call, in the Report's words. */
+function useRecorded() {
+  const { state } = useCallOutcome();
+  const value = state.status === "ready" ? state.record.value : null;
+  // One mapping for the screen and the Document (G's copy module).
+  return useMemo(() => (value ? recordedOutcome(value) : null), [value]);
+}
+
 /** One model per report and speaker roles, shared by all six pillars. */
 export function useStory(data: DocumentReportData, callId: string | null) {
   const people = useReportPeople(callId, data.transcript ?? EMPTY_TRANSCRIPT);
+  const recorded = useRecorded();
   const seller = people.roles?.seller ?? null;
   const prospect = people.roles?.prospect ?? null;
   const model = useMemo(() => {
@@ -44,12 +54,13 @@ export function useStory(data: DocumentReportData, callId: string | null) {
     try {
       return reportStoryModel(data.report, data.transcript, {
         roles: { seller, prospect },
+        recorded,
       });
     } catch {
       // A malformed older report shows a quiet note, never a broken page.
       return "unavailable" as const;
     }
-  }, [data.report, data.transcript, seller, prospect]);
+  }, [data.report, data.transcript, seller, prospect, recorded]);
   return { model, people };
 }
 

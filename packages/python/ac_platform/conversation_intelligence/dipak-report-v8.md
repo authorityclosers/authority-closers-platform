@@ -62,6 +62,14 @@ over the original summary, findings, dimensions or overview. Private-proof
 imports select the legacy parser; pillars alone do not promote them to v8.
 The added evidence, phase timing and next-event timing are still strictly bound
 to the transcript. Durable provider v8 drafts retain the v8 parser and rules.
+Authored legacy imports with an explicitly synthetic bound transcript may keep
+`why: ""` on non-Important-Miss moments and `observation: ""` on cited observed
+dimensions. These empty strings omit stock presentation text without replacing
+it or changing skill states/evidence. The exception requires a canonical v4 read;
+ordinary provider admission, v5–v8 reads and the v8 provider reason bound still
+require real text. Important Miss reasons, whitespace-only notes, uncited and
+unobserved blank skills remain invalid. Older reports retain their original
+text/hashes; a changed authored publication must supersede them.
 
 ## Activation and timing
 

@@ -307,6 +307,73 @@ def test_incomplete_authored_coaching_is_unavailable_never_guessed() -> None:
     assert view.state == "unavailable"
 
 
+def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
+    bundle = sandbox_bundle()
+    coaching = bundle["coaching"]
+    coaching["diagnosis"]["pattern"] = (
+        "The focus behaviour was missed in 2 of the last 2 relevant calls"
+        " available as of this call."
+    )
+    coaching["diagnosis"]["alternatives"] = [
+        "Time pressure or missing context could also explain the behaviour."
+    ]
+    coaching["teaching"]["text_lesson"]["why_it_matters"] = (
+        "The buyer needs decision clarity and a relevant response."
+    )
+    coaching["action"]["practice"]["exercise"] = (
+        "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause."
+    )
+    coaching["progress"]["reason"] = "Per-call observation does not establish longitudinal mastery."
+    coaching["action"]["mission"]["done_when"] = (
+        "The buyer confirms an action and a dated event, or explicitly declines."
+    )
+    coaching["diagnosis"]["root_cause_hypothesis"] = (
+        "The seller appears to confuse a friendly ending with a commitment."
+    )
+    view = rep_view(
+        (indexed(bundle),),
+        bundle,
+        {},
+        person_id=rep_uuid(TENANT, "syn-fixture-R1"),
+        tenant_id=TENANT,
+    )
+    # The rep's page reads across calls: the reason names their newest call,
+    # pillar 1 keeps the count and the pattern points at the moments.
+    assert view.focus and view.focus.selected_reason == "It needed work on their newest call."
+    assert view.focus.explanation == "It needed work in 2 of the last 2 calls on this skill."
+    assert view.pattern.summary == (
+        "It needed work on 2 different calls. "
+        "Replay the moments below and see what they did each time."
+    )
+    one_call = call_view(indexed(bundle), bundle, person_id=VIEWER, tenant_id=TENANT)
+    assert one_call.focus and one_call.focus.selected_reason == "It needed work on this call."
+    assert view.root_cause.alternatives == (
+        "Time pressure or missing context could also explain it.",
+    )
+    assert view.lesson and view.lesson.why_it_matters.startswith("The buyer needs a clear way")
+    assert view.practice and view.practice.exercise.startswith("Rewrite what was said")
+    assert view.mission and view.mission.context == "The next time a buyer gives this opening."
+    agreed = "The buyer agrees to a next step with a date, or clearly says no."
+    assert view.mission.done_when == agreed and view.practice.success_condition == agreed
+    assert view.root_cause.hypothesis == "Taking a friendly goodbye as a yes."
+    assert view.mastery.explanation == "One call can’t show progress over time."
+    # Without the dataset's own line, the progress note is about "them" too.
+    del coaching["progress"]["reason"]
+    unexplained = rep_view(
+        (indexed(bundle),),
+        bundle,
+        {},
+        person_id=rep_uuid(TENANT, "syn-fixture-R1"),
+        tenant_id=TENANT,
+    )
+    assert "Their reports don't count" in unexplained.mastery.explanation
+    # A line the dataset wrote for this call alone stays word for word.
+    one = sandbox_bundle()
+    one["coaching"]["diagnosis"]["pattern"] = "The rep skipped the signer twice."
+    view = call_view(indexed(one), one, person_id=VIEWER, tenant_id=TENANT)
+    assert view.focus and view.focus.explanation == "The rep skipped the signer twice."
+
+
 def test_rep_view_follows_the_newest_call_with_moments_from_cited_calls() -> None:
     first = sandbox_bundle("syn-fixture-J01-C-01", at="2026-07-21T10:00:00+05:30")
     other = sandbox_bundle(
@@ -339,6 +406,10 @@ def test_rep_view_follows_the_newest_call_with_moments_from_cited_calls() -> Non
     assert view.mastery.state == "emerging" and view.mastery.trend == "not_enough_evidence"
     assert [point.state for point in view.progress] == ["suggested", "not_covered", "suggested"]
     assert view.development_path.likely_next == "Diagnose before prescribing"
+    # The two closing calls share a focus skill; the discovery call's is alone.
+    flags = {row.submission_id: row.recurring for row in view.calls}
+    assert flags[calls[0].submission_id] is True and flags[calls[2].submission_id] is True
+    assert flags[calls[1].submission_id] is False
 
 
 def test_team_names_fictional_reps_with_their_newest_focus() -> None:

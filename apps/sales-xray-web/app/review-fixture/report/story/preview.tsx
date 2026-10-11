@@ -229,6 +229,7 @@ export function StoryShellPreview({
                       onRequestDeletion={() => {}}
                     />
                     <ReportModes
+                      fixture
                       documentData={{
                         report: amitReport,
                         transcript,

@@ -57,17 +57,27 @@
   white-space: nowrap;
 }
 
+/* As in a row's meta: the dot sits in the gap before each item, so a wrapped
+   line never starts with "·" (its dot falls past the clipped left edge). */
 .context {
   display: flex;
   flex-wrap: wrap;
+  column-gap: 14px;
   margin: 0;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
 }
 
+.context > span {
+  position: relative;
+}
+
 .context > span + span::before {
-  margin: 0 6px;
+  position: absolute;
+  left: -7px;
   content: "·";
+  transform: translateX(-50%);
 }
 
 .actions {
@@ -508,7 +518,7 @@ a.tile:hover {
   border-radius: 50%;
   background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
   color: var(--sx-ink-2);
-  font-size: max(10px, calc(var(--size, 24px) * 0.4));
+  font-size: max(12px, calc(var(--size, 24px) * 0.4));
   font-weight: 700;
 }
 
@@ -531,6 +541,7 @@ a.tile:hover {
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -570,16 +581,51 @@ a.rowTitle:hover {
   color: var(--sx-accent);
 }
 
+/* A row with a link is one tap target: the title's link stretches over the
+   whole row (the meta line and chevron too), as on Pulse. Controls at the
+   row's end stay above it, and keyboard focus rings the whole row. */
+a.rowTitle::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+}
+
+a.rowTitle:focus-visible {
+  outline: none;
+}
+
+/* Inset, so a list's rounded, clipped frame never cuts the ring. */
+a.rowTitle:focus-visible::after {
+  border-radius: var(--sx-radius-sm);
+  box-shadow: inset 0 0 0 2px var(--sx-accent);
+}
+
+.rowEnd :is(a, button, input, select, textarea, summary, [tabindex]) {
+  position: relative;
+  z-index: 2;
+}
+
+/* The dot sits in the gap before each item; an item that starts a line
+   pushes its dot past the clipped left edge, so no line starts with "·". */
 .rowMeta {
   display: flex;
   flex-wrap: wrap;
+  column-gap: 14px;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
 
-.rowMeta > span + span::before {
-  margin: 0 6px;
+.rowMeta > span {
+  position: relative;
+}
+
+.rowMeta > span::before {
+  position: absolute;
+  left: -7px;
   content: "·";
+  transform: translateX(-50%);
 }
 
 .rowEnd > .meter {

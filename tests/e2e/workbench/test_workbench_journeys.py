@@ -9,6 +9,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from html import unescape
+from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from pathlib import Path
 from urllib.parse import urlsplit
 from zipfile import ZipFile
@@ -21,6 +23,7 @@ from playwright.sync_api import (
     Frame,
     Locator,
     Page,
+    Route,
     expect,
     sync_playwright,
 )
@@ -41,6 +44,14 @@ COACHING_SECTIONS = (
     "Here’s What Better Looks Like",
     "Try This on Your Next Call",
     "See How You’re Improving",
+    "Where We Go From Here",
+)
+REP_COACHING_SECTIONS = (
+    "What They Should Work On Now",
+    "Why This Keeps Happening",
+    "Here’s What Better Looks Like",
+    "Try This on Their Next Call",
+    "See How They’re Improving",
     "Where We Go From Here",
 )
 SKILL_ROWS = (
@@ -105,6 +116,51 @@ def _switch_report_view(page: Page, label: str) -> None:
     action.click()
 
 
+def _cookie_jar_path() -> Path | None:
+    reference = os.environ.get("WB_STORAGE_STATE")
+    if not reference:
+        return None
+    path = Path(reference)
+    try:
+        if path.read_bytes().startswith(b"# Netscape HTTP Cookie File"):
+            return path
+    except OSError:
+        pytest.fail("The approved session reference cannot be read", pytrace=False)
+    return None
+
+
+def _restore_cookie_jar(context: BrowserContext, path: Path) -> None:
+    jar = MozillaCookieJar(str(path))
+    try:
+        jar.load(ignore_discard=True)
+    except (OSError, LoadError):
+        pytest.fail("The approved cookie jar cannot be loaded", pytrace=False)
+    origin = urlsplit(os.environ["WB_BASE_URL"])
+    cookies = list(jar)
+    if not cookies:
+        pytest.fail("The approved cookie jar has no unexpired cookies", pytrace=False)
+    if any(cookie.domain.lstrip(".") != origin.hostname for cookie in cookies):
+        pytest.fail("The approved cookie jar belongs to a different host", pytrace=False)
+    if origin.scheme != "https" and any(cookie.secure for cookie in cookies):
+        pytest.fail("The approved secure cookie requires HTTPS", pytrace=False)
+    # Reuse the existing cookie and its metadata in memory; never issue a
+    # session, change its host or persist a second credential-bearing file.
+    context.add_cookies(
+        [
+            {
+                "name": cookie.name,
+                "value": cookie.value or "",
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "expires": cookie.expires if cookie.expires is not None else -1,
+                "secure": cookie.secure,
+                "httpOnly": cookie.has_nonstandard_attr(HTTPONLY_ATTR),
+            }
+            for cookie in cookies
+        ]
+    )
+
+
 @pytest.fixture(scope="session")
 def browser() -> Iterator[Browser]:
     origin = os.environ.get("WB_BASE_URL")
@@ -144,9 +200,13 @@ class Journey:
     runtime_errors: list[str] = field(default_factory=list)
     server_errors: list[str] = field(default_factory=list)
     visual_errors: list[str] = field(default_factory=list)
+    fixture_outcome_requests: list[str] = field(default_factory=list)
+    outcome_persistence: dict[str, object] | None = None
+    coaching_switch: dict[str, object] | None = None
     observations: list[dict[str, object]] = field(default_factory=list)
     main_navigations: int = 0
     live_refreshes: int = 0
+    refresh_events: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def fixture(self) -> bool:
@@ -220,9 +280,39 @@ class Journey:
         assert not self.runtime_errors, f"Browser exceptions: {self.runtime_errors}"
         assert not self.server_errors, f"HTTP server errors: {self.server_errors}"
         assert not self.visual_errors, f"Visual acceptance: {self.visual_errors}"
+        assert not self.fixture_outcome_requests, "Fictional outcome attempted a live API request"
         assert (
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
+
+    def unclipped_text(self, target: Locator) -> None:
+        """Keep totals readable rather than passing on hidden ellipsised text."""
+        metrics = target.evaluate(
+            """root => {
+              const clipped = [];
+              let checked = 0;
+              for (const el of [root, ...root.querySelectorAll('*')]) {
+                if (!el.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
+                if (![...el.childNodes].some(n =>
+                    n.nodeType === Node.TEXT_NODE && n.textContent.trim())) continue;
+                const style = getComputedStyle(el);
+                const clips = value => ['hidden', 'clip'].includes(value);
+                checked += 1;
+                const horizontal = el.clientWidth > 0 && clips(style.overflowX) &&
+                  el.scrollWidth > el.clientWidth + 1;
+                const vertical = el.clientHeight > 0 && clips(style.overflowY) &&
+                  el.scrollHeight > el.clientHeight + 1;
+                if (horizontal || vertical) clipped.push({tag: el.tagName,
+                  width: el.clientWidth, contentWidth: el.scrollWidth,
+                  height: el.clientHeight, contentHeight: el.scrollHeight});
+              }
+              return {checked, clipped};
+            }"""
+        )
+        # Geometry only: never retain learner names or other page text.
+        self.observations[-1]["text_clipping"] = metrics
+        assert metrics["checked"] > 0, "No rendered total text was checked"
+        assert not metrics["clipped"], "Team totals cut off rendered text"
 
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""
@@ -259,6 +349,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     default_directory = Path.home() / ".cache" / "ac-workbench-qa"
     directory = Path(os.environ.get("WB_SHOTS_DIR", str(default_directory)))
     directory.mkdir(parents=True, exist_ok=True)
+    cookie_jar = _cookie_jar_path()
     context = browser.new_context(
         base_url=os.environ["WB_BASE_URL"].rstrip("/"),
         viewport={"width": width, "height": 844 if width == 390 else 1000},
@@ -266,13 +357,20 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         has_touch=width == 390,
         color_scheme=theme,
         reduced_motion="reduce",
-        storage_state=os.environ.get("WB_STORAGE_STATE") or None,
+        storage_state=None if cookie_jar else os.environ.get("WB_STORAGE_STATE") or None,
         accept_downloads=True,
     )
     context.add_init_script(f"localStorage.setItem('sales-xray:theme', {json.dumps(theme)});")
     page = context.new_page()
     page.set_default_timeout(15_000)
     journey = Journey(page, context, name, width, theme, directory)
+    if journey.fixture:
+
+        def block_fixture_outcome(route: Route) -> None:
+            journey.fixture_outcome_requests.append(route.request.method)
+            route.abort()
+
+        page.route("**/v1/conversation/prospects/calls/*/outcome", block_fixture_outcome)
     # No traces, request bodies, cookies or full error messages in receipts.
     page.on("pageerror", lambda error: journey.runtime_errors.append(error.name))
 
@@ -282,8 +380,18 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             journey.main_navigations += 1
 
     def console(message: ConsoleMessage) -> None:
-        if "[Fast Refresh]" in message.text:
+        if message.text.startswith("[Fast Refresh]"):
             journey.live_refreshes += 1
+            phase = (
+                "rebuilding"
+                if "rebuilding" in message.text
+                else "done"
+                if "done" in message.text
+                else "other"
+            )
+            journey.refresh_events.append(
+                {"phase": phase, "at_ms": int(datetime.now(UTC).timestamp() * 1000)}
+            )
 
     page.on("framenavigated", navigation)
     page.on("console", console)
@@ -298,6 +406,8 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     passed = False
     failure: dict[str, object] | None = None
     try:
+        if cookie_jar:
+            _restore_cookie_jar(context, cookie_jar)
         yield journey
         journey.settled()
         passed = True
@@ -330,13 +440,196 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "failure": failure,
             "main_navigations": journey.main_navigations,
             "live_refreshes": journey.live_refreshes,
+            "refresh_events": journey.refresh_events,
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
+            "fixture_outcome_requests": journey.fixture_outcome_requests,
+            "outcome_persistence": journey.outcome_persistence,
+            "coaching_switch": journey.coaching_switch,
             "observations": journey.observations,
         }
         (directory / f"{name}-{width}-{theme}.json").write_text(json.dumps(receipt, indent=2))
         context.close()
+
+
+def _word_paragraphs(document: str) -> list[str]:
+    # Generated OOXML text only: no XML parser or entity resolution.
+    return [
+        "".join(
+            unescape(text)
+            for text in re.findall(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", paragraph, re.DOTALL)
+        )
+        for paragraph in re.findall(r"<w:p(?:\s[^>]*)?>(.*?)</w:p>", document, re.DOTALL)
+    ]
+
+
+def _word_skill_names(document: str) -> None:
+    paragraphs = _word_paragraphs(document)
+    start = next(
+        index
+        for index, text in enumerate(paragraphs)
+        if re.fullmatch(r"5\.\s+Your Skills on This Call", text, flags=re.IGNORECASE)
+    )
+    end = next(
+        index
+        for index in range(start + 1, len(paragraphs))
+        if re.fullmatch(r"6\.\s+Where the Deal Stands", paragraphs[index], flags=re.IGNORECASE)
+    )
+    cursor = start + 1
+    for name in SKILL_ROWS:
+        cursor = next(index for index in range(cursor, end) if paragraphs[index] == name) + 1
+
+
+def _outcome_validation_snapshot(journey: Journey, editor: Locator, step: str) -> None:
+    notice = editor.get_by_role("alert")
+    expect(notice).to_be_visible()
+    journey.snapshot(step)
+    if journey.width != 390:
+        return
+    nav = journey.page.get_by_role("navigation", name="Mobile Sales Xray navigation", exact=True)
+    notice_box, nav_box = notice.bounding_box(), nav.bounding_box()
+    assert notice_box is not None and nav_box is not None
+    targets = nav.locator("a, button").evaluate_all(
+        """els => els.filter(el => el.checkVisibility()).map(el => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return {width: r.width, height: r.height,
+            reachable: hit === el || el.contains(hit)};
+        })"""
+    )
+    journey.observations[-1]["validation_corner"] = {
+        "notice": notice_box,
+        "mobile_navigation": nav_box,
+        "navigation_targets": targets,
+    }
+    assert notice_box["y"] + notice_box["height"] <= nav_box["y"], (
+        "Outcome validation covers the phone's bottom navigation"
+    )
+    assert targets and all(target["reachable"] for target in targets), (
+        "Outcome validation covers a phone navigation target"
+    )
+
+
+def _word_call_outcome(page: Page, status: str, detail: str | None) -> None:
+    page.locator("[data-document-export]").evaluate(
+        "element => element.scrollIntoView({block: 'start'})"
+    )
+    with page.expect_download() as downloaded:
+        _document_download(page).click()
+    download = downloaded.value
+    assert download.failure() is None, "Recorded-outcome Word download failed"
+    path = download.path()
+    assert path is not None
+    with ZipFile(path) as docx:
+        document = docx.read("word/document.xml").decode()
+    paragraphs = _word_paragraphs(document)
+    start = next(
+        index
+        for index, text in enumerate(paragraphs)
+        if re.fullmatch(r"1\.1\s+Call Outcome", text, flags=re.IGNORECASE)
+    )
+    end = next(
+        index
+        for index in range(start + 1, len(paragraphs))
+        if re.match(r"1\.2\s", paragraphs[index])
+    )
+    outcome = "\n".join(paragraphs[start + 1 : end])
+    assert status in outcome, "Word Call Outcome does not reflect the person's choice"
+    assert "Set by your team" in outcome, "Word outcome loses its human attribution"
+    if detail:
+        assert detail in outcome, "Word Call Outcome omits the recorded reason/date"
+
+
+def _outcome_controls_and_documents(journey: Journey) -> None:
+    """Fixture formatting or an explicitly supplied fictional dev call only."""
+    page = journey.page
+    nav = page.locator("[data-report-sections]")
+    picture = page.locator('[data-report-pillar="overview"]')
+    badge = picture.locator('span[data-size="lg"] > span[data-tone]')
+    editor = picture.get_by_role("region", name=re.compile(r"^Call outcome$", re.IGNORECASE))
+    nav.get_by_role("link", name="The Big Picture", exact=True).click()
+    expect(editor).to_be_visible()
+    editor.get_by_role("button", name="Deal value", exact=True).click()
+    editor.get_by_label("Amount", exact=True).fill("25000")
+    editor.get_by_label("Currency", exact=True).fill("INR")
+    reason = "Fictional prospect chose another option."
+    choices = (
+        ("won", "Won", None),
+        ("lost", "Lost", reason),
+        ("follow-up", "Follow-up Set", "Wednesday, 11 Nov"),
+        ("no-decision", "Decision Pending", None),
+    )
+    for key, status, detail in choices:
+        editor.get_by_role("button", name=status, exact=True).click()
+        if key == "lost":
+            editor.get_by_label("Why was it lost?", exact=True).fill("")
+            editor.get_by_role("button", name="Save", exact=True).click()
+            expect(editor.get_by_role("alert")).to_contain_text("Add why it was lost.")
+            expect(badge).to_have_text("Won")
+            _outcome_validation_snapshot(journey, editor, "outcome-lost-required")
+            editor.get_by_label("Why was it lost?", exact=True).fill(reason)
+            editor.get_by_role("button", name="Save", exact=True).click()
+        elif key == "follow-up":
+            editor.get_by_label("Follow-up date", exact=True).fill("")
+            editor.get_by_role("button", name="Save", exact=True).click()
+            expect(editor.get_by_role("alert")).to_contain_text("Pick a follow-up date.")
+            expect(badge).to_have_text("Lost")
+            _outcome_validation_snapshot(journey, editor, "outcome-follow-up-required")
+            editor.get_by_label("Follow-up date", exact=True).fill("2026-11-11")
+            editor.get_by_role("button", name="Save", exact=True).click()
+        expect(editor).to_have_attribute("aria-busy", "false")
+        expect(badge).to_have_text(status)
+        if not journey.fixture:
+            # Each human choice must survive a real document reload. This branch
+            # is reachable only through the explicitly opted-in fictional dev test.
+            page.reload(wait_until="domcontentloaded")
+            expect(badge).to_have_text(status)
+            journey.snapshot(f"outcome-{key}-reloaded")
+        expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
+        expect(editor).to_contain_text("25000 INR")
+        if key == "lost":
+            expect(editor).to_contain_text(reason)
+        elif key == "follow-up":
+            expect(editor).to_contain_text("2026-11-11")
+        journey.snapshot(f"outcome-{key}")
+        nav.get_by_role("link", name="Where the Deal Stands", exact=True).click()
+        deal_badge = page.locator('[data-report-pillar="facts"] span[data-size] > span[data-tone]')
+        expect(deal_badge).to_be_visible()
+        expect(deal_badge).to_have_text(status)
+        _switch_report_view(page, "Document view")
+        outcome = _document_preview(page).locator('[data-document-section="overview"]')
+        expect(outcome.get_by_text(status, exact=True)).to_be_visible()
+        expect(outcome).to_contain_text("Set by your team")
+        if detail:
+            expect(outcome).to_contain_text(detail)
+        outcome.get_by_text(status, exact=True).scroll_into_view_if_needed()
+        journey.snapshot(f"outcome-{key}-document")
+        _word_call_outcome(page, status, detail)
+        _switch_report_view(page, "Report view")
+        nav.get_by_role("link", name="The Big Picture", exact=True).click()
+    editor.get_by_role("button", name="Won", exact=True).click()
+    expect(editor).to_have_attribute("aria-busy", "false")
+    expect(badge).to_have_text("Won")
+
+
+def _recorded_outcome_reload(journey: Journey) -> None:
+    """Actual authenticated fictional persistence; never a fixture substitute."""
+    assert not journey.fixture
+    page = journey.page
+    picture = page.locator('[data-report-pillar="overview"]')
+    badge = picture.locator('span[data-size="lg"] > span[data-tone]')
+    page.reload(wait_until="domcontentloaded")
+    expect(badge).to_have_text("Won")
+    expect(picture.get_by_text("Set by your team", exact=True)).to_be_visible()
+    journey.snapshot("outcome-reloaded")
+    _switch_report_view(page, "Document view")
+    expect(
+        _document_preview(page)
+        .locator('[data-document-section="overview"]')
+        .get_by_text("Won", exact=True)
+    ).to_be_visible()
+    _word_call_outcome(page, "Won", None)
 
 
 def test_dashboard_to_report(browser: Browser, viewport: tuple[int, str]) -> None:
@@ -441,6 +734,9 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         assert headings.evaluate_all(
             "els => els.map(el => el.getAttribute('data-report-mode-section'))"
         ) == [section for section, _ in REPORT_SECTIONS]
+        expect(
+            preview.locator('section[data-document-section="skills"]').get_by_role("rowheader")
+        ).to_have_text(list(SKILL_ROWS))
         journey.snapshot("document")
         # A section deep link can land below the document's export controls.
         page.locator("[data-document-export]").evaluate(
@@ -455,9 +751,68 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         with ZipFile(file) as docx:
             document = docx.read("word/document.xml").decode()
             assert all(f'w:name="{section}"' in document for section, _ in REPORT_SECTIONS)
+            _word_skill_names(document)
         _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
+
+
+def test_fixture_outcome_formats(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Separate format acceptance from the full Report and canonical persistence."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Fictional formatting does not certify a live report")
+    with _journey(browser, viewport, "outcome-format") as journey:
+        journey.open("/review-fixture/report/story")
+        _outcome_controls_and_documents(journey)
+        journey.outcome_persistence = {
+            "scope": "fixture_format_agreement",
+            "canonical_reload_verified": False,
+        }
+
+
+def test_fictional_outcome_persistence(browser: Browser, viewport: tuple[int, str]) -> None:
+    # The named builder supplies this exact owned fictional call and an existing
+    # approved dev session. Ordinary/staging acceptance cannot enable writes.
+    if os.environ.get("WB_MODE") != "live" or not os.environ.get("WB_OUTCOME_WRITE_PATH"):
+        pytest.skip("Requires an explicitly supplied fictional dev call and existing session")
+    origin = urlsplit(os.environ["WB_BASE_URL"])
+    assert (
+        origin.scheme == "https" and origin.hostname == "salesxray-dev.authorityclosers.com"
+    ) or (origin.scheme == "http" and origin.hostname == "127.0.0.1" and origin.port == 3026), (
+        "Outcome writes are limited to the approved dev origin"
+    )
+    path = _path("WB_OUTCOME_WRITE_PATH", "/")
+    matched = re.fullmatch(r"/analysis/calls/([0-9a-f-]{36})", path, re.IGNORECASE)
+    assert matched is not None, "Supply the exact owned fictional finished-call route"
+    api = f"/v1/conversation/prospects/calls/{matched.group(1)}/outcome"
+    with _journey(browser, viewport, "outcome-persistence") as journey:
+        journey.open(path)
+        before = journey.page.request.get(api)
+        assert before.status == 200, "Fictional call outcome is unavailable"
+        initial = before.json()
+        assert initial.get("schema") == "ac.sales-xray.call-outcome/1"
+        assert initial.get("submission_id") == matched.group(1)
+        assert initial.get("can_edit") is True, "Existing account must own the fictional call"
+        _outcome_controls_and_documents(journey)
+        _recorded_outcome_reload(journey)
+        after = journey.page.request.get(api)
+        assert after.status == 200, "Reloaded fictional outcome is unavailable"
+        persisted = after.json()
+        saved_value = persisted.get("value")
+        assert isinstance(saved_value, dict), "Reloaded outcome must be a saved human fact"
+        assert saved_value.get("outcome") == "won"
+        assert saved_value.get("deal_value") == {
+            "amount": "25000",
+            "currency_code": "INR",
+        }
+        assert persisted.get("revision", 0) > initial.get("revision", 0)
+        journey.outcome_persistence = {
+            "scope": "authenticated_fictional_dev_api",
+            "revision_before": initial["revision"],
+            "revision_after": persisted["revision"],
+            "canonical_reload_verified": True,
+            "choices_reloaded": ["won", "lost", "follow_up", "no_decision"],
+        }
 
 
 def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
@@ -472,6 +827,21 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(preview.locator("[data-report-mode-section]")).to_have_count(6)
         expect(_document_download(journey.page)).to_be_visible()
         journey.snapshot("ready")
+        sections = preview.locator("section[data-document-section]")
+        expect(sections).to_have_count(6)
+        assert sections.evaluate_all(
+            "els => els.map(el => el.getAttribute('data-document-section'))"
+        ) == [section for section, _ in REPORT_SECTIONS]
+        for section, label in REPORT_SECTIONS:
+            panel = preview.locator(f'section[data-document-section="{section}"]')
+            if section == "skills":
+                expect(panel.get_by_role("rowheader")).to_have_text(list(SKILL_ROWS))
+            heading = panel.get_by_role("heading", level=3)
+            expect(heading).to_contain_text(label, ignore_case=True)
+            assert len(panel.inner_text().strip()) > 40, "Document section is empty"
+            heading.evaluate("element => element.scrollIntoView({block: 'start'})")
+            expect(heading).to_be_in_viewport()
+            journey.snapshot(section)
 
 
 def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
@@ -495,7 +865,43 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             expect(page.locator("#call-mission")).to_contain_text("Done when")
             journey.snapshot("call")
             journey.follow_mission("call-mission", "call-mission")
-            page.get_by_role("button", name="My coaching", exact=True).click()
+            personal = page.get_by_role("button", name="My coaching", exact=True)
+            # Diagnose a lost switch without changing its single-click journey.
+            page.evaluate(
+                """() => {
+                  window.__wbCoachingClick = null;
+                  document.addEventListener('click', event => {
+                    const button = event.target?.closest?.('button');
+                    const label = button?.textContent?.trim();
+                    window.__wbCoachingClick = {
+                      control: label === 'My coaching' ? 'personal'
+                        : label === 'This call' ? 'call' : 'other',
+                      x: event.clientX, y: event.clientY,
+                      at_ms: Date.now(),
+                      pressed: button?.getAttribute('aria-pressed') === 'true'
+                    };
+                  }, {capture: true, once: true});
+                }"""
+            )
+            try:
+                personal.click()
+                expect(personal).to_have_attribute("aria-pressed", "true", timeout=15_000)
+            finally:
+                journey.coaching_switch = page.evaluate(
+                    """() => {
+                      const buttons = [...document.querySelectorAll('button')];
+                      const pressed = label => buttons.find(
+                        button => button.textContent.trim() === label
+                      )?.getAttribute('aria-pressed') === 'true';
+                      const view = new URL(location.href).searchParams.get('view');
+                      return {
+                        click: window.__wbCoachingClick ?? null,
+                        personal_pressed: pressed('My coaching'),
+                        call_pressed: pressed('This call'),
+                        url_view: ['me', 'team'].includes(view) ? view : null
+                      };
+                    }"""
+                )
         for index, label in enumerate(COACHING_SECTIONS):
             heading = _heading(page, label)
             heading.scroll_into_view_if_needed()
@@ -515,10 +921,24 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(
             page.get_by_role("heading", name="Who needs help with what", exact=False)
         ).to_be_visible()
+        totals = page.get_by_role("region", name="Team coaching totals", exact=True)
+        totals.scroll_into_view_if_needed()
+        expect(totals.get_by_text("Analysed calls", exact=True)).to_be_visible()
         journey.snapshot("team")
+        journey.unclipped_text(totals)
         if journey.fixture:
             page.get_by_role("button", name="AC Sandbox", exact=True).click()
+            totals.scroll_into_view_if_needed()
             journey.snapshot("sandbox-team")
+            journey.unclipped_text(totals)
+            # Latest-call context must remain readable after leaving the small tile.
+            context = page.get_by_role(
+                "region", name=re.compile(r"^What the team should work on(?:\s|$)")
+            ).get_by_text(re.compile(r"Latest call .+\.$"))
+            context.scroll_into_view_if_needed()
+            expect(context).to_be_visible()
+            expect(context).to_be_in_viewport(ratio=1)
+            journey.snapshot("sandbox-team-context")
             page.get_by_role("button", name="One rep", exact=True).click()
             expect(
                 page.get_by_role(
@@ -527,3 +947,14 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
                 )
             ).to_be_visible()
             journey.snapshot("sandbox-rep")
+            for index, label in enumerate(REP_COACHING_SECTIONS):
+                heading = _heading(page, label)
+                heading.scroll_into_view_if_needed()
+                expect(heading).to_be_visible()
+                journey.snapshot(f"sandbox-rep-pillar-{index + 1}")
+            progress = page.locator("#coaching-progress")
+            spoken = progress.aria_snapshot()
+            summary = "Their calls on this skill, oldest first: 40 needed work."
+            assert spoken.count(summary) == 1, "Rep progress needs one spoken summary"
+            assert spoken.count("- listitem") <= 6, "Progress announces a row per call"
+            expect(progress.get_by_text("Needed work", exact=True)).to_be_visible()

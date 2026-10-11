@@ -94,6 +94,37 @@ describe("report document model", () => {
     expect(textOf(doc)).toContain("Clear because Friday · 4:00 PM is agreed.");
   });
 
+  it("shows the outcome a person recorded, in 1.1 and 6.1, with their reason", () => {
+    const doc = reportDocumentModel(
+      {
+        report: amitReport as SalesReport,
+        transcript: amitTranscript as Transcript,
+      },
+      {
+        roles: AMIT_SPEAKERS,
+        speakerName: (id) => NAMES[id],
+        recorded: { status: "Lost", note: "Went with a cheaper course." },
+      },
+    );
+    const [status, reason] = doc.sections[0].parts[0].items;
+    expect(status).toEqual({
+      type: "status",
+      status: "Lost",
+      origin: "Set by your team",
+      tone: expect.any(String),
+    });
+    expect(reason).toMatchObject({
+      type: "text",
+      text: "Went with a cheaper course.",
+    });
+    const current = doc.sections[5].parts[0];
+    expect(current.heading).toBe("6.1 Current Status");
+    expect(current.items[0]).toMatchObject({ type: "status", status: "Lost" });
+    // Without a person's record the call's own reading stays.
+    const [heard] = amitDoc().sections[0].parts[0].items;
+    expect(heard).toMatchObject({ origin: "As heard on the call" });
+  });
+
   it("puts the call's own words, names and play times in the page", () => {
     const doc = amitDoc();
     const [outcome] = doc.sections[0].parts[0].items;
@@ -133,16 +164,49 @@ describe("report document model", () => {
     const skills = doc.sections[4].parts[0].items[0];
     expect(skills.type === "skills" && skills.rows.map((r) => r.name)).toEqual([
       "Human Connection & Trust",
-      "Discovery & Deep Understanding",
+      "Discovery",
       "Qualification",
-      "Problem, Impact & Desire Clarity",
-      "Solution Relevance & Presentation",
-      "Certainty & Objection Intelligence",
-      "Closing & Decision Management",
-      "Communication & Tonality",
+      "Problem / Impact / Desire",
+      "Presentation & Value",
+      "Objection Intelligence",
+      "Closing",
+      "Communication",
     ]);
     expect(doc.summary?.type === "summary" && doc.summary.cells[0].label).toBe(
       "Call Outcome",
+    );
+  });
+
+  it("an observed skill without a note shows its state and play times only", () => {
+    // C's sandbox writes `observation: ""` (or a stock note) for a cited skill.
+    const report = structuredClone(amitReport) as SalesReport;
+    const notes: Record<string, string> = {
+      human_connection_trust: "",
+      qualification: "Relevant behaviour is evidenced by the cited turn.",
+    };
+    for (const d of report.dimensions)
+      if (d.dimension_id in notes) d.observation = notes[d.dimension_id];
+    report.dimensions = report.dimensions.filter(
+      (d) => d.dimension_id !== "closing_decision_management",
+    );
+    const doc = reportDocumentModel(
+      { report, transcript: amitTranscript as Transcript },
+      { roles: AMIT_SPEAKERS },
+    );
+    const skills = doc.sections[4].parts[0].items[0];
+    if (skills.type !== "skills") throw new Error("no skills");
+    const row = (name: string) => skills.rows.find((r) => r.name === name)!;
+    for (const name of ["Human Connection & Trust", "Qualification"]) {
+      expect(row(name).state).toBe(
+        name === "Qualification" ? "Observed" : "Strongly Demonstrated",
+      );
+      expect(row(name).observation).toBe("");
+      expect(row(name).clips.length).toBeGreaterThan(0);
+    }
+    // A skill the report doesn't cover still says so.
+    expect(row("Closing").state).toBe("Not covered");
+    expect(row("Closing").observation).toBe(
+      "This report doesn't cover this skill.",
     );
   });
 
@@ -341,6 +405,12 @@ describe("report document model", () => {
         expect(part.items.length).toBeGreaterThan(0);
     expect(doc.sections.some((s) => s.gaps.length > 0)).toBe(true);
     expect(doc.title).toBe("Sales call");
+    // Said once: "Outcome not set" and eight "Not covered" rows, not again as gaps.
+    expect(doc.sections[0].parts[0].items[0]).toMatchObject({
+      status: "Outcome not set",
+    });
+    expect(doc.sections[0].gaps).not.toContain("Call outcome");
+    expect(doc.sections[4].gaps).toEqual([]);
   });
 
   it("never prints internal words or empty values", () => {

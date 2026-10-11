@@ -28,7 +28,15 @@
 .momentTag[data-tone="good"],
 .skillState[data-tone="good"],
 .pin[data-tone="good"],
-.quality[data-tone="good"] {
+.quality[data-tone="good"],
+/* One teal accent (owner): "info" (a price moment) is teal too, not blue. */
+.dot[data-tone="info"],
+.card[data-tone="info"],
+.outcomeStatus[data-tone="info"],
+.momentTag[data-tone="info"],
+.skillState[data-tone="info"],
+.pin[data-tone="info"],
+.quality[data-tone="info"] {
   --tone: var(--sx-accent);
 }
 
@@ -52,16 +60,6 @@
   --tone: var(--sx-bad);
 }
 
-.dot[data-tone="info"],
-.card[data-tone="info"],
-.outcomeStatus[data-tone="info"],
-.momentTag[data-tone="info"],
-.skillState[data-tone="info"],
-.pin[data-tone="info"],
-.quality[data-tone="info"] {
-  --tone: var(--lx-info);
-}
-
 .dot {
   display: inline-block;
   flex: none;
@@ -82,15 +80,14 @@
 }
 
 .pillarIndex {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  margin-top: 1px;
-  padding: 0 7px;
-  border-radius: var(--lx-radius-pill);
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font: 650 12px / 1 var(--lx-font-ui);
+  font: 700 13px / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -692,10 +689,16 @@ button.pin {
   cursor: pointer;
 }
 
+/* A 32 px tap target around the 10 px dot (Pulse floor), whatever the box
+   sizing of the page around it. */
 button.pin::after {
   position: absolute;
-  inset: -9px;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
   content: "";
+  transform: translate(-50%, -50%);
 }
 
 button.pin:hover {
@@ -781,6 +784,11 @@ button.pin:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* The phone track's span (00:00 … end), shown only when the stages stack. */
+.trackAxis {
+  display: none;
+}
+
 /* Side by side the next stage's start says where this one ends. */
 .stageEnd {
   display: none;
@@ -798,33 +806,50 @@ button.pin:focus-visible {
   display: none;
 }
 
-/* Narrow: the stages stack as rows on one track of the whole call. */
+/* Narrow: fewer, wider bars; the stages stack as rows on one track of the
+   whole call. Each row is the stage's name and times, with the track the
+   card's full width below it (beside the names it was half as wide). */
 @container timeline (max-width: 679px) {
+  .timeline .bars[data-set="wide"] {
+    display: none;
+  }
+
+  .timeline .bars[data-set="rows"] {
+    display: flex;
+  }
+
   .timeline:not([data-single]) .blocks {
-    --wave-h: 36px;
+    --wave-h: 28px;
     flex-direction: column;
-    gap: 0;
+    gap: 8px;
   }
 
   .timeline:not([data-single]) .block {
-    grid-template-columns: 4px minmax(0, 1fr) minmax(112px, 46%);
-    grid-template-rows: auto;
+    grid-template-columns: 4px minmax(0, 1fr);
+    grid-template-rows: auto var(--wave-h);
     align-items: center;
-    column-gap: 12px;
+    gap: 3px 10px;
+    box-sizing: border-box;
     min-width: 0;
     min-height: 44px;
-    padding: 4px 0;
+    padding: 2px 0;
   }
 
   .timeline:not([data-single]) .stageBar {
-    grid-row: 1;
+    grid-row: 1 / -1;
     grid-column: 1;
     align-self: stretch;
   }
 
   .timeline:not([data-single]) .stageText {
+    display: flex;
     grid-row: 1;
     grid-column: 2;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 2px 12px;
+    flex-wrap: wrap;
+    padding-right: 0;
   }
 
   .timeline:not([data-single]) .stageEnd {
@@ -834,8 +859,8 @@ button.pin:focus-visible {
   /* One track of the whole call: each stage's stretch sits at its true place
      and length, so the rows step from left to right as the call moves on. */
   .timeline:not([data-single]) .block::after {
-    grid-row: 1;
-    grid-column: 3;
+    grid-row: 2;
+    grid-column: 2;
     align-self: center;
     height: 1px;
     background: color-mix(in oklab, var(--sx-ink) 12%, transparent);
@@ -844,24 +869,25 @@ button.pin:focus-visible {
 
   .timeline:not([data-single]) .wave {
     --stretch: max(12px, calc(var(--span, 1) * 100%));
-    grid-row: 1;
-    grid-column: 3;
+    grid-row: 2;
+    grid-column: 2;
     justify-self: start;
     width: var(--stretch);
     margin-left: min(calc(var(--from, 0) * 100%), calc(100% - var(--stretch)));
   }
 
   .timeline:not([data-single]) .bars {
-    inset: 4px 1px;
+    inset: 3px 1px;
     gap: 1px;
   }
 
-  .timeline:not([data-single]) .bars[data-set="wide"] {
-    display: none;
-  }
-
-  .timeline:not([data-single]) .bars[data-set="rows"] {
+  .timeline:not([data-single]) .trackAxis {
     display: flex;
+    justify-content: space-between;
+    margin: 0 0 -4px 14px;
+    color: var(--sx-muted);
+    font: 400 var(--sx-text-xs) / 1 var(--lx-font-ui);
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -1121,6 +1147,7 @@ button.pin:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto 16px;
   align-items: center;
   gap: 12px;
+  box-sizing: border-box;
   min-height: 44px;
   padding: 4px 16px;
   color: var(--sx-ink);
@@ -1180,6 +1207,8 @@ button.pin:focus-visible {
   display: grid;
   grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
   gap: 4px 16px;
+  /* 44 px is the whole row (there is no global border-box reset). */
+  box-sizing: border-box;
   min-height: 44px;
   padding: 11px 16px;
   border-top: 1px solid var(--sx-line);

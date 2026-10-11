@@ -274,7 +274,7 @@
       }
     ],
     "recommended_media": null,
-    "reflection_question": "What made you respond that way in this moment?",
+    "reflection_question": "What stopped you here?",
     "regression": {
       "action": "We need more calls on this skill to tell whether it is slipping.",
       "evidence": [],
@@ -322,7 +322,7 @@
     "history_limited": false,
     "latest_call_at": "2026-10-10T00:00:00Z",
     "limitations": [
-      "Counts are report suggestions, not proof of a repeated mistake or of mastery.",
+      "Counts are report suggestions. They don\u2019t prove a repeated mistake.",
       "Totals never name a rep or show their calls, quotes, focus or mission.",
       "A rep appears by name, with their current focus, only after they share. They can stop at any time, and any change to their membership ends it.",
       "Owners and admins of the organisation see these totals."

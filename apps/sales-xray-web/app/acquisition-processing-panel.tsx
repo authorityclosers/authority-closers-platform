@@ -30,7 +30,11 @@ import {
   type StepState,
 } from "./processing-steps";
 import { useWorkspaceAccess } from "./workspace-access";
-import { AnalysisWave, useMeasuredWave } from "./analysis-wave";
+import {
+  AnalysisWave,
+  CALL_WAVE_TRANSITION,
+  useMeasuredWave,
+} from "./analysis-wave";
 import type { WaveformEnvelope } from "./source-waveform";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-processing-panel.module.css";
@@ -198,19 +202,25 @@ function stepStatus(
   state: StepState,
   duration: number | null,
   row: AcquisitionProcessingStageRow | undefined,
+  failed = false,
 ) {
   if (state === "done") {
-    if (duration !== null) return `Done · ${formatElapsed(duration)}`;
+    // Under a second (work already saved, a cached step) is just "Done", never "0:00".
+    if (duration !== null && duration >= 1_000)
+      return `Done · ${formatElapsed(duration)}`;
     // Part of the work is saved, not the whole step: say exactly that.
     return row?.state === "saved" ? "Work saved" : "Done";
   }
   if (state === "active") return "In progress";
   if (state === "attention")
-    return row?.state === "uncertain"
-      ? "Paused · needs attention"
-      : ["failed", "held"].includes(row?.state ?? "")
-        ? "Needs attention"
-        : "Paused";
+    // A run the server reports failed stopped here; it is not paused.
+    return failed
+      ? "Didn’t finish"
+      : row?.state === "uncertain"
+        ? "Paused · needs attention"
+        : ["failed", "held"].includes(row?.state ?? "")
+          ? "Needs attention"
+          : "Paused";
   return row?.state === "queued" || row?.state === "pending" ? "Queued" : "";
 }
 
@@ -306,6 +316,8 @@ export function AcquisitionProcessingPanel({
           : notStarted
             ? "ready"
             : "working";
+  // The server runs it again (after Try again, or a step waiting to rerun).
+  const retrying = phase === "working" && progress?.run_state === "retrying";
   const headline =
     phase === "example"
       ? "Example processing state"
@@ -319,7 +331,9 @@ export function AcquisitionProcessingPanel({
             ? "Ready to start"
             : phase === "sending"
               ? "Sending your call"
-              : "Analysing your call";
+              : retrying
+                ? "Trying again"
+                : "Analysing your call";
   const subline =
     phase === "example"
       ? "Paused interface example. No call was uploaded or analysed."
@@ -335,8 +349,10 @@ export function AcquisitionProcessingPanel({
                 : "Keep this tab open until it's sent"
               : refreshProblem || offline
                 ? `${offline ? "Your browser is offline." : "Status cannot currently be refreshed."} The steps show the last confirmed update.`
-                : // Measured on staging, 11 Oct: 105-197 s from upload to report.
-                  `Usually 2–3 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
+                : retrying
+                  ? "Your recording is saved. The analysis is running again."
+                  : // Measured on staging, 11 Oct: 105-197 s from upload to report.
+                    `Usually 2–3 minutes${elapsed ? ` · ${elapsed} so far` : ""}`;
   const signedIn = access?.authenticated === true;
   // Recovery and start actions stay in view; the rest wait in the ⋯ menu.
   const actionsInline = phase === "attention" || phase === "ready";
@@ -440,6 +456,8 @@ export function AcquisitionProcessingPanel({
           step's stretch listening; no percentage the server doesn't give. */}
       <AnalysisWave
         envelope={envelope}
+        // The chosen file's wave moves here from its card on "Analyse".
+        transitionName={phase === "sending" ? CALL_WAVE_TRANSITION : undefined}
         arrived={upload?.fraction ?? undefined}
         played={
           phase === "done"
@@ -492,6 +510,7 @@ export function AcquisitionProcessingPanel({
                   state,
                   duration,
                   stageRows.find((row) => row.stage === step.id),
+                  progress?.run_state === "failed",
                 )}
               </small>
             </li>
@@ -505,13 +524,14 @@ export function AcquisitionProcessingPanel({
           <div>
             <strong>Your recording is saved</strong>
             <p>There’s no need to upload it again.</p>
-            <p>
-              {projection.savedTranscript
-                ? "The completed transcript stays attached to this call."
-                : "A completed transcript has not been confirmed yet."}
-            </p>
+            {projection.savedTranscript ? (
+              <p>The transcript is saved with this call.</p>
+            ) : progress?.run_state !== "failed" ? (
+              // Only while it may still continue; a failed run lists what's saved.
+              <p>The full transcript isn’t confirmed yet.</p>
+            ) : null}
             {projection.savedEvidence && (
-              <p>Some conversation analysis is saved with this call.</p>
+              <p>Part of the analysis is saved with this call.</p>
             )}
           </div>
         </aside>

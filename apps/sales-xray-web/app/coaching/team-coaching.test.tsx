@@ -48,7 +48,9 @@ describe("anonymous Team coaching", () => {
       <TeamCoachingStory coaching={fictionalTeamCoaching} />,
     );
     expect(html).toContain("Analysed calls");
-    expect(html).toContain("2 people · updated 9 Oct 2026");
+    // The tile's note stays one short line; the date sits in the footnote.
+    expect(html).toContain(">2 people<");
+    expect(html).toContain("Updates after every call. Latest call 9 Oct 2026.");
     expect(html).toContain("2 of 3 calls");
     expect(html).toContain("67%");
     expect(html).toContain("Private by default");
@@ -57,7 +59,7 @@ describe("anonymous Team coaching", () => {
     expect(html).not.toContain("/analysis/calls/");
     // Every call over time lives in Insights, not recounted here.
     expect(html).toContain('href="/organisation/insights"');
-    expect(html).not.toContain("Play evidence");
+    expect(html).not.toContain("Play moment");
     expect(html).not.toContain("<audio");
   });
   it("defaults absent counts and rows and discards source-supplied labels", () => {
@@ -233,7 +235,7 @@ describe("anonymous Team coaching", () => {
     );
     expect((await readCoaching(`person:${person}`)).data).toBeNull();
     expect((await readCoaching("person:not-a-person")).error).toContain(
-      "invalid",
+      "doesn’t work",
     );
   });
   it("loads the team projection in one same-account request", async () => {

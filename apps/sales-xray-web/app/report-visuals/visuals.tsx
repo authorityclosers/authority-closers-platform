@@ -55,13 +55,16 @@ import {
 } from "../source-waveform";
 import { Avatar } from "../ui/kit";
 import {
+  NARROW_BARS,
   ROW_BARS,
   WAVE_BARS,
   activityBins,
   allocateBars,
+  barsByWidth,
   cleanPhases,
   positionIn,
   shares,
+  stageTints,
   voiceBars,
   type Speech,
   type TimelinePhase,
@@ -84,7 +87,11 @@ const cx = (...names: (string | false | null | undefined)[]) =>
 
 /* ---------- Pillars ---------- */
 
-/** A pillar's heading: its number, name and one-line promise. */
+/**
+ * A pillar's heading: its number, name and one-line promise. The number sits
+ * in the same 28 px circle as the Report's section headings, so the Report and
+ * Coaching read as one product.
+ */
 export function PillarHeading({
   index,
   title,
@@ -104,7 +111,7 @@ export function PillarHeading({
   return (
     <header className={styles.pillarHead}>
       <span className={styles.pillarIndex} aria-hidden="true">
-        {String(index).padStart(2, "0")}
+        {index}
       </span>
       <div className={styles.pillarText}>
         <Title className={styles.pillarTitle} id={id}>
@@ -588,10 +595,19 @@ export function CallTimeline({
     ? stages
     : [{ label: "", start_ms: 0, end_ms: durationMs }];
   const lengths = blocks.map((block) => block.end_ms - block.start_ms);
-  const bars = allocateBars(lengths, WAVE_BARS, 3);
-  // Phones draw the stages as rows on one track of the whole call, with fewer,
-  // wider bars, so a bar is the same width in every row.
-  const rowBars = allocateBars(lengths, ROW_BARS, 2);
+  const tints = stageTints(blocks.map((block) => block.label));
+  // Side by side: bars by each stage block's laid-out width (short stages
+  // are held at a minimum width), so bars are about one width throughout.
+  const bars = stages.length
+    ? barsByWidth(lengths)
+    : allocateBars(lengths, WAVE_BARS, 3);
+  // Phones draw fewer, wider bars: the stages as rows on one track of the
+  // whole call (a bar the same width in every row), or one strip without them.
+  const rowBars = allocateBars(
+    lengths,
+    stages.length ? ROW_BARS : NARROW_BARS,
+    2,
+  );
   const mode = speech?.top.length
     ? "speech"
     : sound
@@ -644,6 +660,13 @@ export function CallTimeline({
               {changeText}
             </span>
           ) : null}
+        </p>
+      ) : null}
+      {stages.length ? (
+        // Phones: the whole call's span over the stages' shared track.
+        <p className={styles.trackAxis} aria-hidden="true">
+          <span>00:00</span>
+          <span>{formatClock(durationMs)}</span>
         </p>
       ) : null}
       <ol className={styles.blocks}>
@@ -699,7 +722,7 @@ export function CallTimeline({
             <li
               key={`${block.label}-${block.start_ms}`}
               className={styles.block}
-              data-stage={index % 4}
+              data-stage={tints[index]}
               style={
                 {
                   flexGrow: block.end_ms - block.start_ms,
@@ -711,7 +734,7 @@ export function CallTimeline({
               {mode !== "none" ? (
                 <div className={styles.wave}>
                   {drawBars(bars[index] ?? 3, "wide")}
-                  {stages.length ? drawBars(rowBars[index] ?? 2, "rows") : null}
+                  {drawBars(rowBars[index] ?? 2, "rows")}
                   {change && inside(change.at_ms) ? (
                     <span
                       className={styles.change}
@@ -804,7 +827,7 @@ export function ChangeSteps({
     <div className={styles.stepsWrap}>
       <ol className={styles.steps}>
         <li>
-          <span className={styles.stepLabel}>Before</span>
+          <span className={styles.stepLabel}>{CALL_FLOW.before}</span>
           <div className={styles.stepText}>{before}</div>
         </li>
         <li className={styles.stepArrow} aria-hidden="true">
@@ -820,7 +843,7 @@ export function ChangeSteps({
           <ArrowDown size={14} className={styles.arrowNarrow} />
         </li>
         <li>
-          <span className={styles.stepLabel}>After</span>
+          <span className={styles.stepLabel}>{CALL_FLOW.after}</span>
           <div className={styles.stepText}>{after}</div>
         </li>
       </ol>

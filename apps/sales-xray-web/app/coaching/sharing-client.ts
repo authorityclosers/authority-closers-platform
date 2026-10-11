@@ -70,7 +70,7 @@ async function call<T>(
     if (response.status === 204) return { data: parse(null) as T, error: null };
     const data = parse(await response.json());
     return data === null
-      ? { data: null, error: "Coaching could not be read. Try again." }
+      ? { data: null, error: "Coaching didn’t load. Try again." }
       : { data, error: null };
   } catch {
     return { data: null, error: "Coaching could not be reached. Try again." };

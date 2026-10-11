@@ -75,8 +75,8 @@
   --lx-hypothesis: #56637a;
   --lx-hypothesis-edge: #aeb6c4;
   --lx-success: var(--lx-teal);
-  --lx-info: #2459e0;
-  --lx-info-soft: #e6eeff;
+  --lx-info: #56637a;
+  --lx-info-soft: #eceff4;
   --lx-warning: #b45309;
   --lx-warning-soft: #fff5e8;
   --lx-danger: #c0261b;

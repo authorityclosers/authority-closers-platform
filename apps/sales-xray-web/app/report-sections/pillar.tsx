@@ -57,6 +57,7 @@ export function StoryPillar({
   onSelect,
   prospectControls,
   onOpenCoaching,
+  liveReads = true,
 }: {
   index: number;
   data: DocumentReportData;
@@ -64,6 +65,8 @@ export function StoryPillar({
   onSelect?: Select;
   prospectControls?: ReactNode;
   onOpenCoaching?: () => void;
+  /** False on fictional fixtures: nothing is read from the server. */
+  liveReads?: boolean;
 }) {
   const { model, people } = useStory(data, callId);
   const id = STORY_PILLARS[index].id;
@@ -86,6 +89,7 @@ export function StoryPillar({
             model={model}
             onSelect={onSelect}
             preview={data.report?.preview}
+            callId={liveReads ? callId : null}
           />
         ) : index === 3 ? (
           <Moments

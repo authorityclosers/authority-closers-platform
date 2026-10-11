@@ -1,10 +1,217 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Current 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
+pytest completion, cause unconfirmed; no owned descendants remain. Six cases
+pass and desktop/dark Report → Document fails after fourteen recorded refresh
+events. The screenshot stays in Report/Deal after the original single click;
+no persistent cause is asserted. Report desktop/light and both phone themes
+pass. Three outcome-format pairs pass; the other cases have no completed receipt.
+
+The network-free clipping negative control rejects the long historical note
+(206 px inside 120 px) and accepts "60 people". Stronger shared-dev Team
+acceptance remains pending. Ten targeted cases (eight unfinished Document/Coaching
+pairs, unfinished phone/dark format and failed desktop/dark Report) are scheduled
+no earlier than 20:30:26 UTC. The launcher now has its own retained process session;
+no retry/force/test relaxation, product mutation, deployment or session creation.
+`ff8bda19` safely adds refresh phase/timestamps and the comparable original
+Coaching click timestamp. Ruff check/format, HTTP import, no-server 24 skips and
+owned diff checks pass. Historical green coverage below is not this new wave.
+
+Partial receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-readback/interrupted-receipt.json`.
+
+New Team clipping guard is prepared after D's `4130bb91` phone repair.
+It checks all rendered total labels/values/notes and captures the full relocated
+latest-call context. Ruff check/format, required HTTP import, no-server collection
+(24 skips) and owned diff checks pass. Browser execution of this stronger guard
+is pending the next allowed wave, no earlier than 20:15:12 UTC.
+
+Latest bounded dev coverage: **PASS across two runs**. Report, Document, Word
+and outcome formats pass twelve cases at `2be67628` → `b24a23ec`
+(19:45:10–19:49:04 UTC). The newer Coaching repeat passes all four screen/theme
+pairs at `82e7a86d` → `a38bda24` (20:00:11–20:00:39 UTC), nineteen observations
+per pair. This includes the completed `3b12d1d7` progress correction and all six
+fictional-rep pillars, their short factual progress summary and readable legend.
+
+The original desktop/dark selection failure did not reproduce. Every pair's
+diagnostic records the single click landing on the personal control, followed
+by My coaching pressed, This call unpressed and `view=me`. There were no retries,
+forced clicks or changed interaction. Cause of the earlier failure remains
+unconfirmed; its receipt stays below. Latest JUnit: 4 passed, no errors/skips;
+refresh/runtime/server/font/overflow/outcome API request counts all zero.
+Both browser launchers exited; latest exit 0. Inspected desktop/dark personal
+focus/pattern/rep progress and phone/light personal progress: readable, the
+"2 of 5" after-mission count excludes the call without a skill opportunity.
+
+Latest receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-coaching-desktop-switch-repeat/receipt.json`.
+Source/dirty boundaries remain recorded. This is mutable shared-dev fixture
+acceptance across separate runs, not one immutable sixteen-case run or canonical
+reload evidence. Shared-dev persistence, compiled canonical CI/Root receipts
+and authenticated staging smoke remain pending under the operator hold.
+Next browser wave no earlier than 20:15:12 UTC, only for relevant completed work.
+
+Superseded full dev matrix: **15 PASS / 1 FAIL**, 19:45:10–19:49:04 UTC,
+recorded source `2be67628` → `b24a23ec`. Report, independent Document, Word and
+all four outcome formats pass every width/theme pair. Coaching passes three
+pairs with nineteen observations each, including all six fictional-rep pillars
+and their one spoken forty-needed-work progress summary. Inspected desktop/light
+and phone light/dark rep diagnosis, mission, progress and development path:
+readable, correct "their" labels and "Needed work" legend.
+
+Desktop/dark Coaching fails the original single-click selected-state guard
+after This call → See the mission → My coaching: expected `aria-pressed=true`,
+but This call remains selected. Inspected failure screenshot confirms that pane.
+Failure at `test_coaching_pages`, line 827; navigation 3, refresh 0, runtime,
+server, font/overflow errors and outcome API requests all zero. Cause remains
+unconfirmed; exact receipt/screenshot handed to D's INBOX. The next bounded
+Coaching repeat is no earlier than 20:00:11 UTC. It now covers all four pairs
+after the new completed `3b12d1d7` progress-denominator correction.
+New fixture-only diagnostic
+records the actual fixed control clicked, coordinates and selected states;
+it preserves the single click and original assertions without a retry.
+
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-rep-coaching-readback/`.
+JUnit 15 passed / 1 failed / zero skips; launcher exit 1, all jobs exited.
+Dev API readiness 200 at 19:47:39 UTC, served release `f06f9d6b` with expected
+host (initial bare loopback Host was refused 400). Source/dirty paths and refresh
+counts remain recorded: this is mutable dev fixture rendering. No shared
+real-rep authenticated route, canonical reload or staging acceptance is claimed.
+Ruff check/format, required HTTP import, no-server collection (24 skips) and
+owned diff checks pass for the added rep coverage and switch diagnostic.
+Actual diagnostic browser execution remains pending for the bounded repeat.
+
+Previous strengthened dev matrix: **16/16 PASS**, 19:29:57–19:33:48 UTC,
+recorded start/end HEAD `f373b4e8f70bfd451075a619a7f5e71908769762`.
+G's `2101a87c` repair clears all eight prior Document-name failures; exact
+short names/order pass in Document and Word section 5 across all four pairs.
+Report retains thirteen observations, independent Document seven (top + all
+six sections), Coaching thirteen and fixture outcome formats ten per pair.
+Won / Lost / Follow-up Set / Decision Pending, required reason/date, optional
+25000 INR, human attribution and Deal/Document/Word 1.1 agreement all pass.
+B's `bc2e4cea` phone notice/nav clearance and target reachability pass again.
+
+Independently inspected all four Document skill captures, both phone validation
+states and current phone/dark + desktop/light My coaching: readable, short names
+consistent, navigation clear. Runtime/server/font/overflow errors and fixture
+outcome API requests: **0**. JUnit: 16 cases, zero failures/errors/skips;
+background launcher exit 0, exited. API readiness at 19:23:42 UTC: 200.
+
+This is mutable shared-dev fixture/rendering acceptance. Uncommitted source
+paths at both boundaries are recorded; equal HEAD does not mean unchanged
+rendering. Refresh counts: Report desktop/light 2, phone/light 2, phone/dark 4;
+Document desktop/light 2; Coaching desktop/light 1, phone/light 2; outcome
+desktop/light 4, phone/dark 3; other pairs 0. Canonical reload verified: **false**.
+Shared-dev persistence and authenticated staging smoke remain **NOT RUN**;
+compiled canonical CI execution and release-operator staging evidence pending.
+Independent disposable PG persistence remains PASS below. Receipt/screenshots:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-skill-name-readback/`.
+Next dev wave starts no earlier than 19:44:58 UTC and requires new relevant work.
+
+Superseded strengthened dev matrix: **8 PASS / 8 FAIL**, 19:03:00–19:06:28 UTC,
+`975c8eeb` → `847f748a`. All four outcome-format cases pass, including phone
+notice/nav geometry and every navigation target reachable, after B's
+`bc2e4cea`. Cards end at y=776, navigation begins at y=788: 12 px clear.
+Inspected light/dark notices are readable. Coaching is 4/4 PASS, thirteen
+observations each; current desktop/dark focus and phone/dark mission inspected.
+No runtime/server/font/overflow errors or outcome API requests.
+
+Those eight failures were the same Document-name defect, now cleared above:
+each Report journey completed six pillars/eight Report skills/four deeper
+groups, then its Document row-name check failed; independent Document journeys
+failed the section-5 row names. The exact request and screenshot went to G.
+It was a copy mismatch, not a page crash. Word section-5 names were unverified
+in that run because it stopped before the download; the latest run checks them.
+Canonical
+shared-dev persistence and staging smoke remain **NOT RUN**. Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-visual-repair-readback/receipt.json`.
+
+Independent agreed canonical PG proof **PASS (1 case, no skips)**, 19:10:27–
+19:10:40 UTC, source `8109676c` → `db7f620d`, existing explicit
+`AC_TEST_DATABASE_URL`, disposable loopback harness only. Real HTTP saves/new
+request reads, append-only history, idempotence, ownership, validation and
+revision/link/stage fences pass. Test digest:
+`551cd4e093ae8fc32bdfa3628f0f9111e449c998881a8f2bd6629658b0a851d4`.
+JUnit/receipt: `/home/acdev/strikes/1694/workbench-release-ci-outcomes-pg-20261011.*`.
+This does not prove shared-dev browser reload or compiled CI execution.
+All owned browser/test/background launcher jobs have exited.
+
+Prior automated shared-dev matrix: **16/16 PASS**, 18:48:00–18:50:33 UTC,
+`50af5fcc` → `7d3361d0`, with recorded dirty paths and refresh counts. Report
+has 13 observations per pair, Document seven (top + six actual sections),
+Coaching 13, independent outcome formats ten (four statuses + required reason
+and date states). All four choices agree with Deal/Document/Word 1.1; optional
+value works. Runtime/server/font/overflow errors and fixture outcome API
+requests are zero. Background launch finishes normally. API readiness: 200.
+
+**Findings at that source:** phone validation cards overlap the bottom
+navigation (subsequently fixed/verified above), and Document/Word rows use long source skill names instead
+of the approved short Report/Dipak names (G INBOX). All six phone Document
+sections were inspected and remain readable. This is an automated PASS with
+two visual findings, not finished visual acceptance. QA adds corner-card/nav
+geometry + hit checks and the exact eight Document/Word names/order. Next
+allowed repeat is 19:03 UTC. Receipt/captures:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-full-readback/`.
+Fixture format agreement is **PASS**, canonical persisted outcomes **NOT RUN
+on shared dev**; compiled disposable CI execution/staging confirmation pending.
+
 Shared-dev rendering uses `dev/live`, existing server `127.0.0.1:3026` and labelled
 fictional review data. The coordinator's later release-CI assignment uses the
 existing disposable PostgreSQL harness and bounded loopback browser backend.
 Only test/evidence files change. Heavy checks use `ac-heavy`; no provider request,
 live data change or shipping action is performed by QA.
+
+New 17:45 UTC owner/coordinator acceptance extends Report QA to human outcomes:
+all four choices, Lost reason / Follow-up date validation, optional value, human
+badge and Deal status, Document/Word 1.1 Call Outcome, then reload. The owned
+fixture formatting journey is implemented; browser verification is pending.
+Fixture outcome API reads/writes are blocked and counted. Its memory-only reset
+is an honest fixture limit, not an API persistence defect. Per CEO's 18:06 UTC
+handoff, the earlier request for browser storage is withdrawn. A separate strict
+opt-in dev test saves each choice, fully reloads and checks Report/Document/Word,
+then reads the API's saved value and revision. Coordinator's 18:19 UTC scope
+confirms there is no approved non-root fictional dev session: do not wait for
+or create one. These optional cases are **NOT RUN on shared dev**. Persistence
+acceptance uses B's disposable PG proof, compiled CI journey and Root reads;
+the new CI execution receipt is pending. Ordinary live journeys and staging smoke stay
+read-only. Fixture formatting now has four independent cases alongside the full
+Report journey's unchanged thirteen checks. The full file collects 24 cases,
+with 12 read-only cases in the staging selection.
+The prior completed Report/Coaching coverage below does not certify this new
+acceptance. Fixture format agreement and canonical persistence remain separate.
+
+The first new outcome wave starts 18:17:51 UTC at `12676745` and ends 143 before
+phone cases/final runner receipt. Desktop/light stops at first skill expansion
+during three refresh notices; cause is unconfirmed. Desktop/dark completes the
+original thirteen steps and shows person-recorded Won in Big Picture and Deal.
+Its next check fails because QA's broad Deal text locator matches both the
+status badge and end strip; the locator is corrected to the actual badge.
+Inspected screenshots are readable; runtime/server/visual errors and outcome
+API requests are zero. New four-choice/Document/Word agreement is **INCOMPLETE**,
+not PASS. Captures: `shots/2026-10-11-workbench-call-outcomes/`. No owned browser
+job remains. B's `25ddd60f` adds Lost save/full-reload/Report/Document/Word to the
+compiled disposable acquisition browser test; its required current compiled
+Next/disposable backend has not run here. Pending release CI is not execution
+evidence or a shared-dev persistence verdict.
+Coordinator's 18:23 diagnostic points to the calling shell ending; ac-heavy's
+guardian forwards cancellation/caller death and has no time limit itself. The
+next bounded run uses the recommended background launch through the same heavy
+slot. Earlier host-cleanup requests are superseded; no host change is requested.
+
+The 18:33:00–18:33:59 UTC fixture repeat finishes normally (exit 1, no 143),
+source `f1826087` → `1b1cbf8b`. All four cases show human Won in Big Picture and
+Deal, then fail at QA's Document selector: `data-report-mode-section=overview`
+marks the sheet header, while the actual section is
+`data-document-section=overview`. Both format and optional canonical helpers
+are corrected to the actual section. Inspected desktop/light Document shows
+Won with human attribution in 6.1; this is a test locator defect, not a missing
+product outcome. No runtime/server/visual errors or outcome API requests.
+Phone/dark has two refresh notices, the other pairs zero. Full four-choice
+format agreement remains **UNVERIFIED** until the corrected repeat completes.
+Receipt: `shots/2026-10-11-workbench-outcome-format-repeat/receipt.json`.
+The independent Document journey now captures all six actual sections as well
+as the top sheet, checks their order/content/headings and applies its existing
+font/overflow audit. This stronger readability coverage is pending the next
+full Report/Document/Coaching/outcome-format wave; earlier Document receipts
+retain their original limited scope.
 
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
@@ -19,10 +226,61 @@ composition, while submission routes remain conditional. Billing rationale was
 posted to the coordinator before committing. No product/billing code or live
 data changed. JUnit: `/home/acdev/strikes/1694/workbench-release-ci-focused-20261011.xml`.
 The corrected static browser journey checks enabled registered-org selection,
-empty history and 404 for the Personal recording. Its compiled proof is pending;
-the live checkout's static export is absent. One pinned, isolated source build
-uses the existing committed-snapshot helper and installed tools, preserving the
-shared dev cache. These test repairs do not certify release CI or staging.
+empty history and 404 for the Personal recording. Ruff check/format passes for
+all six assigned files, as do the required HTTP import and diff checks.
+
+At committed source `45002852c7fcc80854da63f5c2040f92ad29ce24`, the isolated
+default Turbopack static build **passes**. Its source digest remains unchanged:
+`55dddc03236a08d3d3646f8e2431aeb0d8e82be19c6c6b344304980a747821fc`.
+The corrected runner includes CI's generated AudioAtlas preparation and manifest
+validation: **native preparation, default Turbopack build and standalone browser
+all PASS (1 case, no skips)** at the same source and unchanged digest. This covers
+login, registered-org selection, empty history, the Personal recording's 404
+isolation, report/audio/measurement/transcript and logout. Phone workspace and
+desktop private-report screenshots were inspected. Receipt:
+`/home/acdev/strikes/1694/workbench-release-ci-static-native.json`; JUnit, logs
+and screenshots share that prefix. The committed-snapshot helper and
+installed dependencies keep all generated files outside the shared dev cache.
+Earlier attempts are retained: external package links were rejected by Turbo;
+the webpack alternative rejected a global-only CSS selector. Neither failed
+build is reported as acceptance. The first Turbo browser attempt's generic
+fixture failure was missing generated native preparation in my runner; the
+corrected PASS supersedes it. No product/dependency changes were made to
+accommodate those attempts. **Assigned repairs: 20 focused cases + 1 compiled
+browser case PASS.** This regression proof does not replace the twelve-case
+Dipak Report/Document/Coaching staging smoke.
+Coordinator's 17:03 UTC handoff reports green v0.40.0 release CI at `f0437c9` /
+main `a775389`; staging images are building. QA has no staging verdict yet.
+
+Latest Coaching coverage is **PASS across four pairs**, all 13 observations.
+The 17:27 run at recorded start/end `4b32a9ce` passes both desktop themes and
+phone/dark. Its phone/light failure is superseded by the bounded 17:43:27–17:43:38
+repeat at `c3ebfde1` → `28c9cebd`: My coaching is selected after the same single
+click, all six personal pillars complete, both real mission taps are reachable
+and 106 × 44 px, and Team/Sandbox/rep views pass. Phone/light focus and mission
+screenshots were inspected and are readable. Runtime/server/visual errors and
+refresh notices are zero; main-navigation count is 10. This is mutable-dev
+coverage across bounded runs, not one immutable twelve-case release run.
+
+Earlier phone/light timed out before personal pillar 2 and showed This call
+selected / My coaching unselected. Cause remains unconfirmed; no persistent
+defect claim or product fix is inferred from the passing repeat. D received both
+the exact failure and its supersession. QA now checks the selected button after
+the same single click without retrying a lost click or weakening any pillar.
+Receipts: `shots/2026-10-11-workbench-current-coaching-repeat/` and
+`shots/2026-10-11-workbench-coaching-phone-selection-repeat/`.
+
+Latest shared-dev Report/Document readback (17:11:43–17:13:28 UTC) passes **8/8**
+at recorded start/end HEAD `67feed3e`. Each Report pair completes all 13 steps:
+actions, six pillars, eight ordered skill rows, all four deeper groups, reload,
+Document, valid six-bookmark Word file and return. Each independent Document
+pair has six populated sections and a visible Word control. No runtime/server
+or visual errors. Phone overview/light, actions/dark, deeper analysis/dark,
+Document/dark and desktop overview/dark screenshots were inspected and are
+readable. Receipts: `shots/2026-10-11-workbench-release-readback/`.
+The older blank Report/failed Document observations are superseded by this
+completed four-pair repeat; their cause remains unconfirmed. Navigation/refresh
+counters are retained: unchanged HEAD does not certify immutable served bytes.
 
 The bounded 16:10 UTC Coaching run passes **4/4**, all 13 observations per pair,
 at recorded source `aa49b888` with unchanged start/end HEAD. Both call/personal
@@ -31,9 +289,10 @@ heading is visible. Phone/dark call, phone/light personal mission and desktop/da
 focus screenshots were inspected and are readable. Later Report batch at
 `50d088e8` ended 143 before any receipt. Standalone Document fails at `9c2abc63`:
 the inspected image shows "This report didn't load. Please try again.", disabled
-Word export and zero sections. B received the exact capture. Current Report and
-Document acceptance remain incomplete; the historical PASS table below is not
-a newer-dev verdict.
+Word export and zero sections. B/G received the exact capture. These older
+failures are retained as history and did not reproduce in the completed 17:11
+readback above. The newer completed Coaching coverage above supersedes this
+older baseline.
 
 The 16 opt-in cases cover 1440/390, light/dark, dashboard-to-report, all six
 Report sections in Dipak's order, their required example blocks, eight skills,
@@ -51,22 +310,34 @@ the remaining ten cases. Runtime/server/visual error lists are empty in both
 receipts. This incomplete batch cannot replace the prior completed four-pair
 acceptance below or certify the newer dev changes. Exact capture and safe run
 log are in `2026-10-11-workbench-mission-readback/`. Report and backend owners
-received the observations; a bounded repeat is pending at the 15-minute interval.
+received the observations; the completed 17:11 repeat above supersedes these
+interrupted observations.
 
 `3a47bf6a` adds real call/personal mission-link taps, center reachability and
-32 px desktop / 44 px phone target checks. Browser acceptance of these new checks
-is pending because the interrupted batch did not reach Coaching. Failure
+32 px desktop / 44 px phone target checks. The later bounded Coaching run above
+verifies these new checks in all four pairs. Failure
 receipts now preserve exception type and the journey's check/line, excluding
 exception/customer text, even if pytest's batch summary is interrupted.
 
-Coordinator supplied existing private session references at 15:43 UTC; the
-session file is not Playwright storage-state JSON (format checked, no values
-printed). Populated staging smoke still needs a compatible approved session
-reference/format contract, retained Report route, existing Team-read permission
-and confirmed staging version. Coordinator's second staging attempt is running;
+Coordinator supplied existing private session references at 15:43 UTC. The
+session is a valid standard Netscape cookie jar; the earlier JSON-only
+classification was too narrow. At 17:26 UTC Chromium imports its one unexpired
+cookie with exact staging host, secure and HttpOnly flags intact, **zero network
+requests**. The owned journey accepts JSON or this jar in memory, preserving
+host/path/expiry and refusing a different host or insecure origin. No token
+values are printed, converted credential file saved, or new session issued.
+Receipt: `/home/acdev/strikes/1694/workbench-release-ci-cookie-format-proof.json`.
+Ruff check/format, required HTTP import, no-server 16-case skipping and diff
+checks pass. Populated staging smoke still needs the retained Report route,
+existing Team-read context and confirmed staging version. Third staging attempt
+is running
+at `f0437c9` according to its 16:40 UTC note. A newer coordinator inbox puts
+staging smoke **on hold**: native audio input preparation was refused, staging
+is unchanged, and a Root-only preparation is required. Do not run staging smoke
+until the coordinator posts that v0.40.0 is live;
 QA has performed no staging writes, new sign-in/account/access grants or deploy.
 
-Latest completed checks:
+Historical completed baseline (superseded by newer failures where noted above):
 
 | Journey | Result | Evidence / remaining owner |
 | --- | --- | --- |
@@ -109,14 +380,15 @@ No traces or storage-state files are produced.
 
 Ruff passes, all 16 cases collect, and the no-server invocation skips all 16
 without contacting a live server. The required `uv run python -c
-"import ac_platform.http"` check passes. Report/Document/DOCX rendering is green.
+"import ac_platform.http"` check passes. Latest Report/Document/DOCX checks pass
+as recorded above; the staging context/version limits still apply.
 Coaching's source-changing batch (`4b058a59` to `56ea01c6`) passed three pairs;
 its phone/light repeat passed at unchanged recorded HEAD `7058bd8f`. The repeat
 records two navigations and two Fast Refresh notices, showing that unchanged Git
 HEAD does not mean a refresh-free live checkout. All 11 checks still completed.
 The original view reset's cause remains unconfirmed. Receipts retain only counts,
-never console text. Combined dev rendering checks are green; no immutable release
-or authenticated staging verdict is implied. Staging awaits the coordinator's
+never console text. No immutable release or authenticated staging verdict is
+implied. Staging awaits the coordinator's
 version confirmation, approved session-file path and populated Report route.
 
 External screenshots/JSON: `/home/acdev/strikes/1694/shots/`:

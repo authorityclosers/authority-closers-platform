@@ -152,9 +152,7 @@ export function Moments({
             ))}
           </ol>
         </StoryCard>
-      ) : (
-        <p className={styles.note}>{MOMENTS.none}</p>
-      )}
+      ) : null}
       {model.moments.length > model.topMoments.length ? (
         <button
           type="button"

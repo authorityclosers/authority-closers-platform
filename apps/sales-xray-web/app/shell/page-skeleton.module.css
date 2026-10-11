@@ -6,6 +6,10 @@
   animation: skeleton-in 240ms ease-out 150ms both;
 }
 
+.skeleton[data-instant] {
+  animation: none;
+}
+
 .block {
   display: block;
   flex: none;
@@ -136,6 +140,83 @@
 }
 
 /* ---------- A call (processing / report) ---------- */
+/* The route's own frame for a saved call: the studio's opening frame (no
+   panel, no padding), so this outline and the studio's sit in one place. */
+.frame.frame {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* A saved call's Report, laid out where the Report will be (24 px into the
+   studio column on desktop, 16 px on a phone; one column, 984 px at most). */
+.report {
+  display: grid;
+  gap: 14px;
+  box-sizing: border-box;
+  width: min(100%, 1032px);
+  padding: 24px 24px 20px;
+}
+.reportHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pillarHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.reportCard {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+.reportHero {
+  gap: 12px;
+  min-height: 186px;
+  align-content: start;
+  box-sizing: border-box;
+}
+.reportPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.reportModes,
+.reportTabs {
+  display: none;
+}
+@media (max-width: 759.98px) {
+  .report {
+    padding: 16px 16px 16px;
+  }
+  .reportModes {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .reportTabs {
+    display: flex;
+    gap: 24px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--lx-line-soft);
+  }
+  .reportHead > :not(:first-child) {
+    display: none;
+  }
+  .reportPair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .call {
   display: grid;
   min-height: calc(100dvh - var(--lx-topbar-h, 64px) - 150px);

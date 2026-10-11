@@ -291,16 +291,45 @@ it("says so when the person isn't in this organisation", async () => {
   ).not.toBeNull();
 });
 
-it("raises one corner card with Try again when a read fails, never a crash", async () => {
+it("says in place when their calls can't be loaded, with Try again, never a blank page", async () => {
   routes["/v1/organisation/activity?days=84"] = {
     status: 500,
-    body: { detail: "Activity is unavailable." },
+    body: { detail: "Internal Server Error" },
   };
   await show(ashaId);
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
+  expect(host.textContent).toContain(
+    "Their calls and reports couldn't be loaded",
+  );
+  expect(host.textContent).toContain("Check your connection and try again.");
+  expect(host.textContent).not.toContain("Internal Server Error");
+  expect(notices.notify).not.toHaveBeenCalled();
+
+  routes["/v1/organisation/activity?days=84"] = {
+    status: 200,
+    body: { members: [], per_day: [], per_rep: [], calls: [] },
+  };
+  const retry = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Try again",
+  );
+  await act(async () => retry?.click());
+  for (let index = 0; index < 4; index += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  expect(host.textContent).toContain("Asha has no calls in the last 12 weeks");
+});
+
+it("raises one corner card with Try again when the directory can't be read, never a crash", async () => {
+  routes["/v1/organisation/members"] = {
+    status: 503,
+    body: { detail: "Service Unavailable" },
+  };
+  await show(ashaId);
   expect(notices.notify).toHaveBeenCalledWith(
     expect.objectContaining({
       tone: "error",
+      message: "Check your connection and try again.",
       action: expect.objectContaining({ label: "Try again" }),
     }),
   );

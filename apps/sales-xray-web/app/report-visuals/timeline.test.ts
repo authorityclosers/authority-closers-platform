@@ -3,12 +3,14 @@ import { expect, it } from "vitest";
 import {
   activityBins,
   allocateBars,
+  barsByWidth,
   cleanPhases,
   positionIn,
   shares,
   speechFromTranscript,
   splitPair,
   voiceBars,
+  stageTints,
 } from "./timeline";
 
 const segment = (
@@ -117,4 +119,28 @@ it("shapes who talked by how loud the call was, when that was measured", () => {
   expect(shaped.top).toEqual([0.5, 1, 0]);
   // A very quiet stretch with talk still shows a small bar.
   expect(shaped.bottom).toEqual([0, 0, 0.12]);
+});
+
+it("gives a stage the call returns to the same tint as before", () => {
+  expect(
+    stageTints([
+      "Opening",
+      "Discovery",
+      "Presentation",
+      "discovery ",
+      "Price",
+      "Close",
+      "Opening",
+    ]),
+  ).toEqual([0, 1, 2, 1, 3, 0, 0]);
+  expect(stageTints([])).toEqual([]);
+});
+
+it("gives a short stage held at its minimum width as many bars as fit it", () => {
+  // Two 1% stages are drawn 84 px wide, not 9 px: about 9 bars each at the
+  // same pitch as the long stage's 78.
+  expect(barsByWidth([1, 1, 98])).toEqual([9, 9, 78]);
+  // Equal stages share the width equally.
+  expect(barsByWidth([1, 1, 1, 1])).toEqual([24, 24, 24, 24]);
+  expect(barsByWidth([])).toEqual([]);
 });

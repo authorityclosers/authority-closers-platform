@@ -196,15 +196,15 @@ export function Skills({
                   />
                 </summary>
                 <div className={styles.skillBody}>
-                  <Field label={SKILLS.observation}>
-                    <p className={styles.line}>
-                      {skill.observation ? (
+                  {skill.observation ? (
+                    <Field label={SKILLS.observation}>
+                      <p className={styles.line}>
                         <Text text={skill.observation} />
-                      ) : (
-                        SKILLS.notCoveredText
-                      )}
-                    </p>
-                  </Field>
+                      </p>
+                    </Field>
+                  ) : skill.state ? null : (
+                    <p className={styles.line}>{SKILLS.notCoveredText}</p>
+                  )}
                   {skill.sources.length ? (
                     <Field label={SKILLS.evidence}>
                       <p className={styles.plays}>

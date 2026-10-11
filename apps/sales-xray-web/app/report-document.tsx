@@ -11,7 +11,13 @@ import {
   type ReactNode,
 } from "react";
 
-import { COMMON, DEAL, DOCUMENT, playLabel } from "./report-copy";
+import {
+  COMMON,
+  DEAL,
+  DOCUMENT,
+  playLabel,
+  recordedOutcome,
+} from "./report-copy";
 import type { ReportEvidence, Transcript } from "./report-contract";
 import type { DocumentReportData } from "./report-document-data";
 import {
@@ -23,6 +29,7 @@ import {
   type ReportDoc,
 } from "./report-document-model";
 import { useReportPeople } from "./report-kit";
+import { useCallOutcome } from "./report-outcome-context";
 import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import { SpeakerProfilesContext } from "./speaker-profiles";
 import styles from "./report-document.module.css";
@@ -36,12 +43,21 @@ const EMPTY_TRANSCRIPT = {
   segments: [],
 } as unknown as Transcript;
 
-/** The same names and roles the Report screen uses, never guessed. */
+/**
+ * The same names, roles and person-recorded outcome the Report screen uses,
+ * never guessed.
+ */
 function useDocPeople(
   data: DocumentReportData | undefined,
   callId: string | null | undefined,
 ): DocPeople {
   const server = useContext(SpeakerProfilesContext);
+  const { state } = useCallOutcome();
+  const value = state.status === "ready" ? state.record.value : null;
+  const recorded = useMemo(
+    () => (value ? recordedOutcome(value) : null),
+    [value],
+  );
   const transcript = data?.transcript ?? EMPTY_TRANSCRIPT;
   const people = useReportPeople(callId ?? server?.callId ?? null, transcript);
   const seller = people.roles?.seller ?? null;
@@ -57,10 +73,11 @@ function useDocPeople(
       roles: { seller, prospect },
       speakerName: (id: string) =>
         data?.speakerNames?.[id] ?? byId.get(id) ?? null,
+      recorded,
     };
     // `key` carries every input; the people helpers are new each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, data?.speakerNames]);
+  }, [key, data?.speakerNames, recorded]);
 }
 
 function Play({
@@ -284,7 +301,9 @@ function Item({
                 </span>
               </p>
               <div className={styles.skillBody} role="cell">
-                <p className={styles.text}>{row.observation}</p>
+                {row.observation ? (
+                  <p className={styles.text}>{row.observation}</p>
+                ) : null}
                 {row.clips.length ? (
                   <p className={styles.plays}>
                     {row.clips.map((clip, index) => (
@@ -446,8 +465,10 @@ export function ReportDocument({
     if (!data?.report) return null;
     try {
       return reportDocumentModel(data, people);
-    } catch {
-      // A malformed older report shows a quiet note, never a broken page.
+    } catch (error) {
+      // A malformed older report shows a quiet note, never a broken page; the
+      // console says why, so a reviewer on dev can tell what failed.
+      console.error("Document view: this report could not be read.", error);
       return "unavailable" as const;
     }
   }, [data, people]);

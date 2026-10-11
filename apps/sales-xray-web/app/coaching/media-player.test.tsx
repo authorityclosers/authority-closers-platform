@@ -49,7 +49,7 @@ describe("reviewed placeholder clips", () => {
     await act(async () =>
       root.render(<CoachingMedia clips={[fictionalClip]} />),
     );
-    expect(host.textContent).toContain("Read by a stand-in voice");
+    expect(host.textContent).toContain("A stand-in voice reads Dipak’s words");
     expect(host.querySelector("audio")).toBeNull();
     expect(host.textContent).toContain("Find the consequence");
     await act(async () => button("Next slide").click());
@@ -57,6 +57,20 @@ describe("reviewed placeholder clips", () => {
     await act(async () => button("Previous slide").click());
     expect(host.textContent).toContain("Find the consequence");
     expect(host.textContent).toContain(fictionalClip.transcript_excerpt);
+  });
+  it("names whose focus the recommended lesson is for", async () => {
+    const second = { ...fictionalClip, topic_id: "fictional-other-topic" };
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} />),
+    );
+    expect(host.textContent).toContain("Recommended for your current focus");
+    expect(host.textContent).toContain("Also relevant");
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} forCall />),
+    );
+    expect(host.textContent).toContain("Recommended for this call’s focus");
+    expect(host.textContent).not.toContain("your current focus");
+    expect(host.textContent).toContain("Also relevant");
   });
   it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
     const scroll = vi.fn();

@@ -1,7 +1,7 @@
 "use client";
 
 import { Lock, Share2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Badge, Button, kitStyles, Panel, Skeleton } from "../ui/kit";
 import {
   changeSharing,
@@ -10,8 +10,27 @@ import {
   sendFeedback,
   type SharingView,
 } from "./sharing-client";
-import { REFLECTION } from "./coaching-copy";
+import type { Evidence } from "./coaching-client";
+import { DISAGREE, FEEDBACK, REFLECTION, SHARING } from "./coaching-copy";
+import { timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
+
+/** Where Coaching's own-account writes go. */
+export type CoachingWriter = {
+  sharing: typeof changeSharing;
+  context: typeof sendContext;
+  feedback: typeof sendFeedback;
+};
+
+/**
+ * The API by default. The no-login design review provides an in-page writer,
+ * so its taps show the real flow without sending anything.
+ */
+export const CoachingWrites = createContext<CoachingWriter>({
+  sharing: changeSharing,
+  context: sendContext,
+  feedback: sendFeedback,
+});
 
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
 export function SharePanel({
@@ -21,6 +40,7 @@ export function SharePanel({
   initial?: SharingView | null;
 } = {}) {
   const [view, setView] = useState<SharingView | null>(initial);
+  const writes = useContext(CoachingWrites);
   const [error, setError] = useState<string | null>(null);
   // A failed tap's message, kept through the reload that follows it.
   const [failed, setFailed] = useState<string | null>(null);
@@ -39,25 +59,25 @@ export function SharePanel({
   const toggle = async () => {
     if (!view) return;
     setSaving(true);
-    const result = await changeSharing(!view.shared, view.revision);
+    const result = await writes.sharing(!view.shared, view.revision);
     setSaving(false);
     if (result.data) {
       setView(result.data);
       setError(null);
       setFailed(null);
     } else {
-      setFailed(`${result.error} Your sharing is shown as it is now.`);
+      setFailed(`${result.error} ${SHARING.unchanged}`);
       setAttempt((value) => value + 1);
     }
   };
   const names = view?.reaches.map((reach) => reach.name).join(", ");
   return (
     <Panel
-      title="Who sees your coaching"
+      title={SHARING.title}
       tools={
         view ? (
           <Badge tone={view.shared ? "accent" : "neutral"}>
-            {view.shared ? "Shared" : "Private"}
+            {view.shared ? SHARING.shared : SHARING.private}
           </Badge>
         ) : null
       }
@@ -73,14 +93,14 @@ export function SharePanel({
         ) : !view.available ? (
           <p className={styles.eyebrow}>
             <Lock size={14} aria-hidden="true" />
-            Personal workspace: only you can see this coaching.
+            {SHARING.personal}
           </p>
         ) : (
           <>
             <p>
               {view.shared
-                ? `Your admins can see your focus, its likely reason and your mission${names ? `: ${names}` : ""}.`
-                : `Only you can see it. Sharing lets your admins${names ? ` (${names})` : ""} see your focus, its likely reason and your mission.`}
+                ? SHARING.sharedText(names)
+                : SHARING.privateText(names)}
             </p>
             <div className={styles.actions}>
               <Button
@@ -89,19 +109,16 @@ export function SharePanel({
                 disabled={saving}
               >
                 {view.shared ? (
-                  "Stop sharing"
+                  SHARING.stop
                 ) : (
                   <>
                     <Share2 size={14} aria-hidden="true" />
-                    Share with your admins
+                    {SHARING.share}
                   </>
                 )}
               </Button>
             </div>
-            <p className={styles.note}>
-              Sharing adds your Coaching view to what your admins can already
-              open in your calls. You can stop sharing at any time.
-            </p>
+            <p className={styles.note}>{SHARING.note}</p>
             {failed || error ? (
               <p role="status" className={styles.status}>
                 {failed ?? error}
@@ -117,17 +134,59 @@ export function SharePanel({
 /** Agree / not completely with the current focus; never changes a score. */
 const CONTEXT_LIMIT = 1000;
 
-/** The learner's own words about the focus (spec 12.2): kept, shown back. */
-function AddContext({
+/**
+ * What the focus rests on (spec pillar 6, disagreement step 2): each moment's
+ * call, time and what the report saw, shown before asking what we missed.
+ */
+function FocusBasis({ evidence }: { evidence: readonly Evidence[] }) {
+  if (!evidence.length) return null;
+  return (
+    <div className={styles.basis}>
+      <p className={styles.basisHead}>
+        {DISAGREE.basis}
+        <a href="#coaching-why">{DISAGREE.replay}</a>
+      </p>
+      <ul aria-label={DISAGREE.basis}>
+        {evidence.map((moment) => (
+          <li
+            key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}
+          >
+            <span>
+              {moment.call_label} · {timeLabel(moment.start_ms)}
+            </span>
+            {moment.observation}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The learner's own words about the focus (spec 12.2): kept, shown back.
+ * It stays mounted while closed, so a retry after a failed save repeats the
+ * same command.
+ */
+function ContextForm({
   focusSkillId,
   originSubmissionId,
+  open,
+  missed,
+  evidence,
+  onSaved,
+  onCancel,
 }: {
   focusSkillId: string;
   originSubmissionId: string;
+  open: boolean;
+  /** Opened by "Not completely": ask what we missed. */
+  missed: boolean;
+  evidence: readonly Evidence[];
+  onSaved: (note: string) => void;
+  onCancel: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const writes = useContext(CoachingWrites);
   const [text, setText] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // One command per text: a retry of the same note is the same request,
@@ -143,7 +202,7 @@ function AddContext({
     const command =
       attempted?.text === note ? attempted.command : crypto.randomUUID();
     setAttempted({ text: note, command });
-    const result = await sendContext({
+    const result = await writes.context({
       command_id: command,
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,
@@ -152,28 +211,18 @@ function AddContext({
     setSaving(false);
     if (result.error) setError(result.error);
     else {
-      setSaved(note);
       setText("");
-      setOpen(false);
       setAttempted(null);
+      onSaved(note);
     }
   };
-  if (!open)
-    return (
-      <>
-        <Button onClick={() => setOpen(true)}>Add context</Button>
-        {saved ? (
-          <p role="status" className={styles.note}>
-            Saved: “{saved}”. It shows with the likely reason.
-          </p>
-        ) : null}
-      </>
-    );
+  if (!open) return null;
   return (
     <div className={styles.contextForm}>
+      <FocusBasis evidence={evidence} />
       <label className={kitStyles.field}>
         <span className={kitStyles.fieldLabel}>
-          What should we know about this focus?
+          {missed ? DISAGREE.missed : DISAGREE.context}
         </span>
         <textarea
           value={text}
@@ -182,8 +231,7 @@ function AddContext({
           onChange={(event) => setText(event.target.value)}
         />
         <span className={kitStyles.fieldHint}>
-          {text.length}/{CONTEXT_LIMIT} · Only you see it unless you share your
-          coaching. It is deleted with your account.
+          {text.length}/{CONTEXT_LIMIT} · {FEEDBACK.contextHint}
         </span>
       </label>
       <div className={styles.actions}>
@@ -192,10 +240,10 @@ function AddContext({
           disabled={!note || saving}
           onClick={() => void save()}
         >
-          Save
+          {FEEDBACK.save}
         </Button>
-        <Button onClick={() => setOpen(false)} disabled={saving}>
-          Cancel
+        <Button onClick={onCancel} disabled={saving}>
+          {FEEDBACK.cancel}
         </Button>
       </div>
       {error ? (
@@ -221,6 +269,7 @@ function Reflection({
   focusSkillId: string;
   originSubmissionId: string;
 }) {
+  const writes = useContext(CoachingWrites);
   const [chosen, setChosen] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +281,7 @@ function Reflection({
         : crypto.randomUUID();
     setSaving(answer);
     setError(null);
-    const result = await sendContext({
+    const result = await writes.context({
       command_id: command,
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,
@@ -266,7 +315,11 @@ function Reflection({
       </div>
       <p role="status" className={styles.note}>
         {error ??
-          (saving ? "Saving…" : chosen ? REFLECTION.saved : REFLECTION.hint)}
+          (saving
+            ? FEEDBACK.saving
+            : chosen
+              ? REFLECTION.saved
+              : REFLECTION.hint)}
       </p>
     </div>
   );
@@ -276,16 +329,23 @@ export function FocusFeedback({
   focusSkillId,
   originSubmissionId,
   question,
+  evidence = [],
 }: {
   focusSkillId: string;
   originSubmissionId: string;
   /** The one reflection question, answered with a tap (spec pillar 6). */
   question?: string | null;
+  /** The moments behind the focus, shown before asking what we missed. */
+  evidence?: readonly Evidence[];
 }) {
+  const writes = useContext(CoachingWrites);
   const [state, setState] = useState<
     "idle" | "saving" | "agree" | "not_completely"
   >("idle");
   const [error, setError] = useState<string | null>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [missed, setMissed] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   // One command per choice: retrying a choice repeats it; switching after a
   // failed try is a new answer, never a conflict with the first.
   const [commands] = useState(() => ({
@@ -295,7 +355,7 @@ export function FocusFeedback({
   const send = async (agreement: "agree" | "not_completely") => {
     setState("saving");
     setError(null);
-    const result = await sendFeedback({
+    const result = await writes.feedback({
       command_id: commands[agreement],
       agreement,
       focus_skill_id: focusSkillId,
@@ -304,7 +364,14 @@ export function FocusFeedback({
     if (result.error) {
       setState("idle");
       setError(result.error);
-    } else setState(agreement);
+      return;
+    }
+    setState(agreement);
+    // Spec pillar 6 disagreement flow: show the evidence, ask what we missed.
+    if (agreement === "not_completely") {
+      setMissed(true);
+      setContextOpen(true);
+    }
   };
   const done = state === "agree" || state === "not_completely";
   return (
@@ -316,31 +383,56 @@ export function FocusFeedback({
           originSubmissionId={originSubmissionId}
         />
       ) : null}
-      <div className={styles.actions} role="group" aria-label="Your view">
+      <div className={styles.actions} role="group" aria-label={FEEDBACK.group}>
         <Button
           onClick={() => void send("agree")}
           disabled={state !== "idle"}
           aria-pressed={state === "agree"}
         >
-          Agree
+          {FEEDBACK.agree}
         </Button>
         <Button
           onClick={() => void send("not_completely")}
           disabled={state !== "idle"}
           aria-pressed={state === "not_completely"}
         >
-          Not completely
+          {FEEDBACK.notCompletely}
         </Button>
-        <AddContext
-          focusSkillId={focusSkillId}
-          originSubmissionId={originSubmissionId}
-        />
+        {contextOpen ? null : (
+          <Button
+            onClick={() => {
+              setMissed(false);
+              setContextOpen(true);
+            }}
+          >
+            {FEEDBACK.addContext}
+          </Button>
+        )}
       </div>
       <p role="status" className={styles.note}>
-        {done
-          ? "Recorded. It does not change your mission or any score."
-          : (error ?? "Tell us whether this focus fits, or add context.")}
+        {state === "not_completely" && contextOpen
+          ? DISAGREE.noted
+          : done
+            ? FEEDBACK.noted
+            : (error ?? FEEDBACK.ask)}
       </p>
+      <ContextForm
+        focusSkillId={focusSkillId}
+        originSubmissionId={originSubmissionId}
+        open={contextOpen}
+        missed={missed}
+        evidence={evidence}
+        onSaved={(note) => {
+          setSaved(note);
+          setContextOpen(false);
+        }}
+        onCancel={() => setContextOpen(false)}
+      />
+      {saved && !contextOpen ? (
+        <p role="status" className={styles.note}>
+          Saved: “{saved}”. It shows with the likely reason.
+        </p>
+      ) : null}
     </>
   );
 }

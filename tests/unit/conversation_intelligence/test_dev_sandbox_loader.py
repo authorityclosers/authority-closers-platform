@@ -27,6 +27,7 @@ def authored_bundle():
     data["transcript"]["participants"][0].update(
         person_id="syn-fixture-R1", name="Synthetic Rep 1", speaker="rep"
     )
+    data["transcript"]["participants"][1].update(name="Synthetic Buyer 1", speaker="prospect")
     line = data["transcript"]["lines"][0]
     line.update(person_id="syn-fixture-R1", speaker="rep")
     data["transcript"]["timing_source"] = "estimated"
@@ -411,3 +412,111 @@ def test_strongest_part_completes_authored_sentences_without_doubled_punctuation
     assert report["pillars"]["strongest_part"]["text"] == (
         "Asked for context. The buyer gave context" + (ending or ".")
     )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "This changed the information available for the buying decision.",
+        "The concern needed a specific answer; "
+        "raising it alone did not establish approval or a loss.",
+    ],
+)
+def test_adapter_omits_only_exact_stock_notes_without_changing_authored_states_or_evidence(reason):
+    source = dated_bundle().model_dump(by_alias=True)
+    moment = source["report"]["moments_that_mattered"][0]
+    moment["why_it_mattered"] = reason
+    moment["moved_toward"] = "The buyer explained the next decision."
+    skill = source["report"]["your_skills_on_this_call"][0]
+    skill["observation"] = "Relevant behaviour is evidenced by the cited turn."
+    skill["state"] = "Needs Attention"
+    before = deepcopy(source)
+    report, transcript, receipt, _ = loader().adapted_report(
+        SyntheticCallBundle.model_construct(**source)
+    )
+    assert source == before
+    assert report["pillars"]["moments"][0]["why"] == ""
+    assert report["pillars"]["moments"][0]["moved_toward"] == moment["moved_toward"]
+    assert report["pillars"]["moments"][0]["evidence"]
+    assert report["dimensions"][0]["observation"] == ""
+    assert report["dimensions"][0]["status"] == "observed"
+    assert report["dimensions"][0]["call_state"] == "needs_attention"
+    assert report["dimensions"][0]["evidence"]
+    assert report["dimensions"][0]["citations"]
+    assert len(report["dimensions"]) == 8
+    assert report["dimensions"][1]["observation"] == "An authored observation."
+    assert transcript["normalized"]["synthetic"] is True
+    assert receipt["new_provider_calls"] == 0
+
+
+def test_stock_note_without_citation_does_not_acquire_observed_evidence():
+    source = dated_bundle().model_dump(by_alias=True)
+    skill = source["report"]["your_skills_on_this_call"][0]
+    skill["observation"] = "Relevant behaviour is evidenced by the cited turn."
+    skill["evidence"] = {"line_ids": []}
+    report, _, _, _ = loader().adapted_report(SyntheticCallBundle.model_construct(**source))
+    assert report["dimensions"][0]["status"] == "insufficient_evidence"
+    assert report["dimensions"][0]["evidence"] == []
+    assert report["dimensions"][0]["observation"] == "No transcript citation was published."
+    assert "call_state" not in report["dimensions"][0]
+
+
+def test_stock_reason_cannot_explain_an_important_miss_or_create_a_missing_reason():
+    source = dated_bundle().model_dump(by_alias=True)
+    original = source["report"]["moments_that_mattered"][0]
+    missed = {
+        **original,
+        "category": "Important Miss",
+        "why_it_mattered": "This changed the information available for the buying decision.",
+        "moved_toward": "The buyer asked about the decision.",
+        "what_was_missed": "No decision date was explored.",
+    }
+    unexplained = {**original, "why_it_mattered": ""}
+    source["report"]["moments_that_mattered"] = [missed, unexplained, original]
+    report, _, _, _ = loader().adapted_report(SyntheticCallBundle.model_construct(**source))
+    assert [m["kind"] for m in report["pillars"]["moments"]] == ["Turning Point"]
+    assert report["pillars"]["moments"][0]["why"] == original["why_it_mattered"]
+
+
+def test_authored_speaker_roles_are_literal_source_roles_without_account_holder_inference():
+    module = loader()
+    source = dated_bundle()
+    _, transcript, _, _ = module.adapted_report(source)
+    decisions = module.authored_speaker_decisions(source, transcript["normalized"])
+    assert decisions == [
+        {"speaker_id": "prospect", "role": "prospect", "display_name": "Synthetic Buyer 1"},
+        {"speaker_id": "rep", "role": "salesperson", "display_name": "Synthetic Rep 1"},
+    ]
+
+
+def test_other_declared_participant_is_not_promoted_to_the_seller_or_prospect():
+    module = loader()
+    source = dated_bundle().model_dump(by_alias=True)
+    source["transcript"]["participants"].append(
+        {"synthetic": True, "person_id": "syn-fixture-signer", "speaker": "other"}
+    )
+    last = source["transcript"]["lines"][-1]
+    last.update(person_id="syn-fixture-signer", speaker="other")
+    bundle = SyntheticCallBundle.model_construct(**source)
+    _, transcript, _, _ = module.adapted_report(bundle)
+    decisions = module.authored_speaker_decisions(bundle, transcript["normalized"])
+    assert decisions == [
+        {"speaker_id": "other", "role": "other", "display_name": None},
+        {"speaker_id": "rep", "role": "salesperson", "display_name": "Synthetic Rep 1"},
+    ]
+
+
+@pytest.mark.parametrize("failure", ["missing_role", "wrong_participant", "wrong_line_person"])
+def test_synthetic_speaker_roles_refuse_missing_or_conflicting_source_identity(failure):
+    module = loader()
+    data = dated_bundle().model_dump(by_alias=True)
+    if failure == "missing_role":
+        data["transcript"]["participants"][1].pop("speaker")
+    elif failure == "wrong_participant":
+        data["transcript"]["participants"][1]["person_id"] = "syn-fixture-other"
+    else:
+        data["transcript"]["lines"][2]["person_id"] = "syn-fixture-other"
+    source = SyntheticCallBundle.model_construct(**data)
+    _, transcript, _, _ = module.adapted_report(source)
+    with pytest.raises(ValueError):
+        module.authored_speaker_decisions(source, transcript["normalized"])

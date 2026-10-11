@@ -135,20 +135,6 @@ class CoachingLibrary:
             shared=tuple((rep.person_id, rep.name, rep.shared_at) for rep in shared),
         )
 
-    async def owns_call(self, actor: ActorContext, submission_id: UUID) -> bool:
-        """One of the actor's own retained calls in this workspace, right now."""
-        now = await self.ownership.sessions._admit()
-        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
-        from ac_platform.conversation_intelligence.acquisition_models import (
-            ConversationAcquisitionUsage as Usage,
-        )
-
-        return (
-            await self.database.scalar(
-                _account_library_query(actor, now).where(Usage.submission_id == submission_id)
-            )
-        ) is not None
-
     async def read(self, actor: ActorContext) -> CoachingView:
         now = await self.ownership.sessions._admit()
         await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
@@ -297,6 +283,8 @@ class CoachingLibrary:
             pending_calls=pending,
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
+            # Only an owner/admin's read of a rep's shared coaching is about "them".
+            their=organisation,
         )
         return view.model_copy(update={"calls": tuple(reversed(summaries))})
 

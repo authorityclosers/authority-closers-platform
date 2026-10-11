@@ -20,6 +20,7 @@ from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions,
 from ac_platform.coaching.library import CoachingLibrary
 from ac_platform.coaching.sandbox import ReportBind, SandboxCoaching
 from ac_platform.coaching.sharing_store import (
+    CurrentFocus,
     SharingView,
     latest_context,
     read_sharing,
@@ -27,7 +28,7 @@ from ac_platform.coaching.sharing_store import (
     record_feedback,
     set_sharing,
 )
-from ac_platform.coaching.team import LABELS, TeamCoachingView
+from ac_platform.coaching.team import TeamCoachingView
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.application import ConversationError
@@ -77,14 +78,17 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     read_actor = getattr(ctx.require_actor, "read_only", ctx.require_actor)
     call_cache = CallCoachingCache()
 
-    async def with_media(view: CoachingRead) -> CoachingRead:
+    async def with_media(view: CoachingRead, *, their: bool = False) -> CoachingRead:
         if view.focus is None:
             return view
         topics = await asyncio.to_thread(read_topics)
         clips = suggestions(
             topics, skill_id=view.focus.skill_id, gap_type=view.root_cause.gap_type
         ) or await asyncio.to_thread(
-            placeholder.clips_for, view.focus.skill_id, gap_type=view.root_cause.gap_type
+            placeholder.clips_for,
+            view.focus.skill_id,
+            gap_type=view.root_cause.gap_type,
+            their=their,
         )
         limitations = view.limitations
         if clips:
@@ -225,7 +229,8 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 else None
             )
             view = fictional or await library.read_call(actor, submission_id, call_cache)
-            view = await with_media(view)
+            # A fictional call is a sandbox rep's, read by the person who imported it.
+            view = await with_media(view, their=fictional is not None)
             return CallCoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )
@@ -264,32 +269,43 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 view = await with_context(
                     view, person_id, library.ownership.tenant_id, library.database
                 )
-            view = await with_media(view)
+            view = await with_media(view, their=True)
             return CoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )
 
-    async def json_body[T: BaseModel](request: Request, model: type[T], *, limit: int = 1024) -> T:
+    async def read_body(request: Request, *, limit: int = 1024) -> bytes | HTTPException:
+        """Read a write's JSON body before any lock is taken.
+
+        A wrong type or size is returned, not raised: the caller raises it
+        only once the person is signed in (authenticate first).
+        """
         content_types = request.headers.getlist("content-type")
         if (
             len(content_types) != 1
             or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
         ):
-            raise HTTPException(415, "Send this choice as JSON.", headers=PRIVATE)
+            return HTTPException(415, "Send this choice as JSON.", headers=PRIVATE)
         raw = bytearray()
         try:
             async with asyncio.timeout(5):
                 async for block in request.stream():
                     if len(raw) + len(block) > limit:
-                        raise HTTPException(413, "This choice is too large.", headers=PRIVATE)
+                        return HTTPException(413, "This choice is too large.", headers=PRIVATE)
                     raw.extend(block)
-            return model.model_validate_json(bytes(raw))
-        except ValidationError:
-            raise HTTPException(422, "Choose a valid option.", headers=PRIVATE) from None
         except (TimeoutError, ClientDisconnect):
             raise HTTPException(
                 408, "The request was interrupted. Try again.", headers=PRIVATE
             ) from None
+        return bytes(raw)
+
+    def parse_body[T: BaseModel](body: bytes | HTTPException, model: type[T]) -> T:
+        if isinstance(body, HTTPException):
+            raise body
+        try:
+            return model.model_validate_json(body)
+        except ValidationError:
+            raise HTTPException(422, "Choose a valid option.", headers=PRIVATE) from None
 
     def request_id(request: Request) -> str | None:
         value = getattr(request.state, "request_id", None)
@@ -310,8 +326,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     @router.put("/sharing", response_model=SharingView)
     async def change_sharing(request: Request, response: Response) -> SharingView:
         # The body is read before any transaction or row lock is taken.
-        choice = await json_body(request, ShareChoice)
+        body = await read_body(request)
         async with account_library(request, response, write=True) as (library, actor):
+            choice = parse_body(body, ShareChoice)
             try:
                 return await set_sharing(
                     library.database,
@@ -343,17 +360,23 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
             update={"root_cause": view.root_cause.model_copy(update={"learner_context": note})}
         )
 
+    def current_focus(library: CoachingLibrary, actor: ActorContext) -> CurrentFocus:
+        """The focus skill and mission origin My coaching shows this person now."""
+
+        async def read() -> tuple[str, UUID] | None:
+            view = await library.read(actor)
+            if view.focus is None or view.mission is None:
+                return None
+            return view.focus.skill_id, view.mission.origin_submission_id
+
+        return read
+
     @router.post("/context", status_code=204)
     async def add_context(request: Request, response: Response) -> Response:
         # 1,000 characters of Devanagari are up to 3 KB of UTF-8; read before locks.
-        note = await json_body(request, ContextNote, limit=4096)
+        body = await read_body(request, limit=4096)
         async with account_library(request, response, write=True) as (library, actor):
-            if note.focus_skill_id not in LABELS or not await library.owns_call(
-                actor, note.mission_origin_submission_id
-            ):
-                raise HTTPException(
-                    409, "Your focus changed. Reload Coaching and try again.", headers=PRIVATE
-                )
+            note = parse_body(body, ContextNote)
             try:
                 await record_context(
                     library.database,
@@ -363,6 +386,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                     focus_skill_id=note.focus_skill_id,
                     mission_origin_submission_id=note.mission_origin_submission_id,
                     context=note.context,
+                    current_focus=current_focus(library, actor),
                     request_id=request_id(request),
                 )
             except ConversationError as error:
@@ -371,16 +395,11 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.post("/feedback", status_code=204)
     async def feedback(request: Request, response: Response) -> Response:
-        choice = await json_body(request, FeedbackChoice)
+        body = await read_body(request)
         async with account_library(request, response, write=True) as (library, actor):
-            # Feedback attaches to a supported focus on one of the learner's
-            # own retained calls; it never changes a score or another person.
-            if choice.focus_skill_id not in LABELS or not await library.owns_call(
-                actor, choice.mission_origin_submission_id
-            ):
-                raise HTTPException(
-                    409, "Your focus changed. Reload Coaching and try again.", headers=PRIVATE
-                )
+            choice = parse_body(body, FeedbackChoice)
+            # Feedback attaches to the learner's current focus and mission,
+            # derived here; it never changes a score or another person.
             try:
                 await record_feedback(
                     library.database,
@@ -390,6 +409,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                     agreement=choice.agreement,
                     focus_skill_id=choice.focus_skill_id,
                     mission_origin_submission_id=choice.mission_origin_submission_id,
+                    current_focus=current_focus(library, actor),
                     request_id=request_id(request),
                 )
             except ConversationError as error:

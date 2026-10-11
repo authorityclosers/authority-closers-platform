@@ -153,7 +153,7 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   const processing = heading({ heroStage: "processing" });
   expect(
     processing.querySelector('[data-hero-stage="processing"] h1')?.textContent,
-  ).toBe("Analysing your call");
+  ).toBe("Analysing");
   expect(processing.textContent).not.toMatch(/few minutes|We're processing/);
 
   // A failed or paused call: the panel says what happened; the bar names the call.
@@ -164,7 +164,7 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   expect(ready.querySelector('[data-hero-stage="ready"] h1')?.textContent).toBe(
     "Ready to analyse",
   );
-  expect(ready.textContent).not.toContain("Analysing your call");
+  expect(ready.textContent).not.toContain("Analysing");
 
   const preview = heading({
     authenticated: false,

@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -92,6 +91,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { withWaveMorph } from "./analysis-wave";
 import { useFileWave } from "./analysis-wave-file";
 import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
@@ -170,31 +170,6 @@ const isStatusBlip = (error: unknown) =>
   (error instanceof DOMException && error.name === "TimeoutError") ||
   (error instanceof AcquisitionError &&
     (error.status >= 500 || error.status === 408 || error.status === 429));
-/**
- * Runs a state change as a view transition where the browser has them, so
- * elements sharing a view-transition-name (the call's wave) move instead of
- * jumping. Resolves once the new state is on screen; plain update otherwise.
- */
-async function withWaveMorph(update: () => void) {
-  const start = (
-    document as Document & {
-      startViewTransition?: (callback: () => void) => {
-        updateCallbackDone: Promise<void>;
-      };
-    }
-  ).startViewTransition;
-  if (
-    !start ||
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-  ) {
-    update();
-    return;
-  }
-  await start
-    .call(document, () => flushSync(update))
-    .updateCallbackDone.catch(() => update());
-}
-
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -325,6 +300,10 @@ export function AcquisitionStudio({
   // The chosen file's wave, measured in this browser (shared with its card),
   // carries the call's shape into sending and the steps.
   const fileWave = useFileWave(file);
+  // The advertised trial cap is a guest's figure; a signed-in account shows
+  // "checking…" until its own balance arrives (the minutes pill shows it too).
+  const advertisedTrial =
+    access?.authenticated === true ? null : (entry?.allowance_seconds ?? null);
   const uploadPhaseUnresolved =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -1194,7 +1173,9 @@ export function AcquisitionStudio({
             next.state === "held" ||
             next.stages.some((stage) => stage.state === "uncertain");
           if (paused) setError(pausedFailureMessage(next.failure_code));
-          else
+          // A failed run the server lets you retry is said once, in the panel
+          // ("Analysis failed" with its Try again), not again in a corner card.
+          else if (!(next.run_state === "failed" && next.retry_available))
             setError(
               "This analysis needs attention. Your call is saved; completed work remains available.",
             );
@@ -2185,7 +2166,8 @@ export function AcquisitionStudio({
                 <p className="visually-hidden" role="status" aria-live="polite">
                   Opening your saved call
                 </p>
-                <PageSkeleton variant="call" />
+                {/* Takes over from the route's identical outline: no fade. */}
+                <PageSkeleton variant="report" instant />
               </>
             ) : (
               <section
@@ -2200,7 +2182,6 @@ export function AcquisitionStudio({
                   <FileText size={24} aria-hidden="true" />
                 )}
                 <div className={styles.progressCopy}>
-                  <p className={styles.progressKicker}>SAVED CALL</p>
                   <h1 id="existing-call-entry-heading">
                     {opening
                       ? "Opening your saved call"
@@ -2718,7 +2699,7 @@ export function AcquisitionStudio({
                         <ShieldCheck size={19} aria-hidden="true" />
                         {remainingAllowanceLabel(
                           allowance,
-                          entry?.allowance_seconds ?? null,
+                          advertisedTrial,
                           allowanceUnknown,
                         )}
                       </span>
@@ -2993,7 +2974,7 @@ export function AcquisitionStudio({
                     <span>
                       {remainingAllowanceLabel(
                         allowance,
-                        entry?.allowance_seconds ?? null,
+                        advertisedTrial,
                         allowanceUnknown,
                       )}
                     </span>
@@ -3290,7 +3271,7 @@ export function AcquisitionStudio({
                     allowanceLabel={
                       remainingAllowanceLabel(
                         allowance,
-                        entry?.allowance_seconds ?? null,
+                        advertisedTrial,
                         allowanceUnknown,
                       ) ?? undefined
                     }
@@ -3424,7 +3405,7 @@ export function AcquisitionStudio({
                 <NewAnalysisFooter
                   allowanceLabel={remainingAllowanceLabel(
                     allowance,
-                    entry?.allowance_seconds ?? null,
+                    advertisedTrial,
                     allowanceUnknown,
                   )}
                 />

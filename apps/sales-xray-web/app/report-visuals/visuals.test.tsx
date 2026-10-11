@@ -36,7 +36,7 @@ it("names the pillar with its number and promise", () => {
       subtitle="See how the conversation moved."
     />,
   );
-  expect(markup).toContain(">02<");
+  expect(markup).toContain(">2<");
   expect(markup).toContain("<h2");
   expect(markup).toContain("See how the conversation moved.");
 });
@@ -169,15 +169,17 @@ it("draws the call in stages with moments and the change point", () => {
   );
   expect(markup).toMatch(/data-key="change">.*The call changed · 11:18/);
   expect(markup).toContain('data-mode="speech"');
+  // The phone track's span sits over the stages.
+  expect(markup).toMatch(/<span>00:00<\/span><span>25:08<\/span>/);
   // Phones: each stage sits on one track of the call at its own place and
-  // length, with its own set of wider bars (40 across the whole call).
+  // length, with its own set of wider bars (56 across the whole call).
   expect(markup).toContain("--from:0.09946949602122016");
   expect(markup).toContain("--span:0.9005305039787799");
   const rows = [...markup.matchAll(/data-set="rows"[^>]*>(.*?)<\/span>/g)];
   expect(rows).toHaveLength(2);
   expect(
     rows.reduce((sum, [, bars]) => sum + (bars.match(/<i /g) ?? []).length, 0),
-  ).toBe(40);
+  ).toBe(56);
   // No duration, no timeline; no speech or sound, stage blocks only.
   expect(html(<CallTimeline durationMs={0} />)).toBe("");
   expect(html(<CallTimeline durationMs={10_000} />)).toContain(
@@ -245,6 +247,13 @@ it("draws the measured sound when there is no speech, and the player's position"
   );
   expect(markup).toContain('data-mode="level"');
   expect(markup).toContain("left:50%");
+  // Without stages a phone gets one strip of 60 wider bars (96 on desktop).
+  const sets = (set: string) =>
+    (
+      markup.match(new RegExp(`data-set="${set}"[^>]*>(.*?)</span>`))?.[1] ?? ""
+    ).split("<i ").length - 1;
+  expect(sets("wide")).toBe(96);
+  expect(sets("rows")).toBe(60);
   // Outside a report (no player) and no explicit position: no playhead.
   expect(
     html(<CallTimeline durationMs={10_000} envelope={envelope} />),

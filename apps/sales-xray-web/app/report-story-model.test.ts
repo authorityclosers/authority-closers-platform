@@ -146,13 +146,14 @@ describe("honest gaps", () => {
   it("opens an older, sparse report and lists what it lacks instead of inventing it", () => {
     const sparse = reportStoryModel(syntheticReport);
     expect(sparse.picture.outcome.status).toBeNull();
-    expect(sparse.missing[0]).toContain("Call outcome");
+    // The badge says the outcome isn't set; the gap line doesn't repeat it.
+    expect(sparse.missing[0]).not.toContain("Call outcome");
     expect(sparse.flow.metrics).toEqual([]);
     expect(sparse.flow.phases).toBeNull();
     expect(sparse.skills).toHaveLength(8);
-    expect(sparse.skills.filter((s) => s.state === null).length).toBe(
-      sparse.missing[4].length,
-    );
+    // Each row says "Not covered" itself; no second list of names.
+    expect(sparse.skills.some((s) => s.state === null)).toBe(true);
+    expect(sparse.missing[4]).toEqual([]);
     expect(sparse.deal.nextEvent).toBeNull();
     expect(sparse.missing[5]).toContain("Next event");
   });
@@ -215,7 +216,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
 
   it("says plainly what the older format lacks", () => {
     expect(model.flow.phases).toBeNull();
-    expect(model.missing[1]).toContain("Conversation timeline");
+    expect(model.missing[1]).toContain("Call stages");
     expect(model.deal.quality).toBeNull();
     expect(model.missing[5]).toContain("Commitment quality");
     expect(model.skills.every((skill) => skill.state === "Observed")).toBe(
@@ -288,10 +289,60 @@ describe("Sandbox-style findings and prices (G's findings, 11 Oct)", () => {
   it("never shows the prospect's own budget as the price stated", () => {
     const transcript = withLines({
       a27: "Our budget is about one lakh, what does this cost?",
+      a28: "Let me first explain what the program includes.",
     });
     const model = reportStoryModel(amitReport, transcript, {
       roles: AMIT_SPEAKERS,
     });
     expect(model.moments.some((m) => m.kind === "Price Moment")).toBe(false);
   });
+
+  it("claims no 'Price stated' when nobody knows who said what", () => {
+    const transcript = withLines({
+      a27: "What is the price? Our budget is about one lakh.",
+      a28: "The price is two lakh rupees for the full twelve weeks.",
+    });
+    const price = reportStoryModel(amitReport, transcript).moments.find(
+      (m) => m.kind === "Price Moment",
+    );
+    expect(price?.source.segment_id).toBe("a27");
+    expect(price?.priceStated).toBeUndefined();
+    expect(price?.prospectResponse).toBeUndefined();
+  });
+});
+
+it("shows a skill's state and evidence without a placeholder note (C's Sandbox data)", () => {
+  const stock = "Relevant behaviour is evidenced by the cited turn.";
+  const report: SalesReport = {
+    ...amitReport,
+    dimensions: amitReport.dimensions.map((d) => ({
+      ...d,
+      observation: stock,
+    })),
+  };
+  const model = reportStoryModel(report, amitTranscript);
+  const communication = model.skills.find(
+    (s) => s.id === "communication_tonality",
+  );
+  expect(communication?.state).toBeTruthy();
+  expect(communication?.observation).toBeNull();
+  expect(communication?.sources.length).toBeGreaterThan(0);
+  expect(model.deeper.communication.observation).toBeNull();
+});
+
+it("puts a person's outcome first, without the call's contradicting line", () => {
+  const won = reportStoryModel(amitReport, amitTranscript, {
+    recorded: { status: "Won" },
+  });
+  expect(won.picture.outcome).toMatchObject({
+    status: "Won",
+    origin: "person",
+    detail: null,
+  });
+  // Where the prospect stands still reads what the call heard.
+  expect(won.deal.position?.text).toBe(amitReport.overview!.outcome!.text);
+  const lost = reportStoryModel(amitReport, amitTranscript, {
+    recorded: { status: "Lost", note: "Chose another program." },
+  });
+  expect(lost.picture.outcome.detail?.text).toBe("Chose another program.");
 });

@@ -431,11 +431,15 @@ function parseDimensions(
       ),
       label: text(dimension.label, `report_dimension_${index}_label`, 160),
       status,
-      observation: text(
-        dimension.observation,
-        `report_dimension_${index}_observation`,
-        4_000,
-      ),
+      // A cited skill may carry no note (""): its state and evidence speak.
+      observation:
+        dimension.observation === "" && evidence?.length
+          ? ""
+          : text(
+              dimension.observation,
+              `report_dimension_${index}_observation`,
+              4_000,
+            ),
       citations: array(
         dimension.citations,
         `report_dimension_${index}_citations`,

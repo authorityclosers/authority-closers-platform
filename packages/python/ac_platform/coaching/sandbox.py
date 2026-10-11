@@ -7,6 +7,7 @@ fictional. Nothing here analyses, scores, writes or calls a provider. A field
 the dataset did not author makes that call unreadable; it is never guessed.
 """
 
+import re
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.coaching.call import CallCoachingView
 from ac_platform.coaching.contracts import (
+    THEIR_MASTERY,
     CallSummary,
     CoachingView,
     Focus,
@@ -54,11 +56,112 @@ SKILL_IDS = (
     "communication_tonality",
 )
 NAMESPACE = UUID("6f1d0c47-5a7e-4f43-9a55-1d3c0e0b8a21")
-FICTIONAL = "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call."
+FICTIONAL = "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis."
 IMPORTER_ONLY = "Only the person who imported these sandbox calls sees their coaching."
-SOURCE = "Fictional AC Sandbox lesson, authored with the dataset"
+SOURCE = "Fictional AC Sandbox lesson, written with the calls"
 HISTORY_LIMIT = 40
 MAX_MOMENTS = 4
+# The dataset repeats a few authoring templates in system words. Show them in
+# the plain sales words the rest of Coaching uses, with the same meaning; every
+# other authored line passes through unchanged.
+_ONE_CALL = (
+    "From this one call. Earlier calls show whether it repeats; a won or lost deal doesn’t "
+    "prove why."
+)
+PLAIN = {
+    "The labelled behaviour occurs in this call.": "It needed work on this call.",
+    "Keep the same focus; this call alone cannot establish mastery.": (
+        "Keep the same focus. One call can’t show it’s mastered."
+    ),
+    "The cited response or commitment is observed here; maintain it on the next relevant "
+    "opportunity without inferring mastery.": (
+        "It was done well on this call. Keep doing it next time; one call doesn’t prove it yet."
+    ),
+    "One-call evidence only; use the linked rep history for longitudinal claims.": (
+        "From this one call. Earlier calls show whether it repeats."
+    ),
+    "One-call evidence only. Linked history can be reviewed separately; a win or loss does not "
+    "prove causation.": _ONE_CALL,
+    "This key uses only this call. Linked earlier calls may be examined separately; the final "
+    "outcome is not proof of causation.": _ONE_CALL,
+    "One-call evidence only; linked history can be examined separately, and the final outcome "
+    "is not proof of causation.": _ONE_CALL,
+    "Time pressure or missing context could also explain the behaviour.": (
+        "Time pressure or missing context could also explain it."
+    ),
+    "The buyer needs decision clarity and a relevant response.": (
+        "The buyer needs a clear way to decide and an answer that fits what they asked."
+    ),
+    "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.": (
+        "Rewrite what was said in the moment above, the better way. Then say it out loud once, "
+        "with a pause."
+    ),
+    "Next relevant buyer opening": "The next time a buyer gives this opening.",
+    "Next relevant call with this buyer requirement": "The next call where the buyer needs this.",
+    "Next relevant call in this selling context": "The next call like this one.",
+    "Per-call observation does not establish longitudinal mastery.": (
+        "One call can’t show progress over time."
+    ),
+    "Chronological, relevant opportunities only. No future calls used; no mastery inferred from "
+    "a single success.": (
+        "Counted in call order, only where the skill applied. One good call doesn’t mean it’s "
+        "mastered."
+    ),
+    # Mission "Done when" (also the practice's "Success:").
+    "The buyer confirms an action and a dated event, or explicitly declines.": (
+        "The buyer agrees to a next step with a date, or clearly says no."
+    ),
+    "A specific example and its impact are established before the first product explanation.": (
+        "One real example and what it cost them, before any talk about the product."
+    ),
+    "Keep the explanation to one point, then pause for an answer.": (
+        "One point, then a pause for the buyer’s answer."
+    ),
+    "The buyer names the concern and agrees to a specific check before another reassurance.": (
+        "The buyer names the worry and agrees to one way to check it, before any more reassurance."
+    ),
+    "No unsolicited discount; any concession has explicit approval and a reciprocal condition.": (
+        "No discount the buyer didn’t ask for. Anything given is approved and comes with "
+        "something back."
+    ),
+    "A named signing role and approval process are confirmed before asking for purchase.": (
+        "Who signs, and how approval works, are clear before asking for the sale."
+    ),
+    # "Likely reason", which the page already marks as a guess.
+    "The seller appears to confuse a friendly ending with a commitment.": (
+        "Taking a friendly goodbye as a yes."
+    ),
+    "The seller appears to recognise a familiar problem and jump to a familiar product.": (
+        "Hearing a familiar problem and jumping to the familiar product."
+    ),
+    "The seller appears to mistake a complete explanation for a useful explanation.": (
+        "Thinking a full explanation is a useful one."
+    ),
+    "The seller appears to hear risk as rejection and respond with reassurance.": (
+        "Hearing a worry as a no, and answering with reassurance."
+    ),
+    "The seller appears to treat uncertainty as a price problem before the buyer has raised "
+    "one.": "Treating doubt as a price problem before the buyer raised price.",
+    "The seller appears to equate a helpful contact with purchasing authority.": (
+        "Taking a helpful contact for the person who decides."
+    ),
+}
+# The newest call's per-call reason, as read on the rep's page across calls,
+# where "this call" would point at nothing.
+NEWEST = {
+    "The labelled behaviour occurs in this call.": "It needed work on their newest call.",
+    "Keep the same focus; this call alone cannot establish mastery.": (
+        "Their newest call keeps the same focus. One call can’t show it’s mastered."
+    ),
+    "The cited response or commitment is observed here; maintain it on the next relevant "
+    "opportunity without inferring mastery.": (
+        "It was done well on their newest call. One call doesn’t prove it yet."
+    ),
+}
+_MISSED = re.compile(
+    r"The focus behaviour was missed in (\d+) of the last (\d+) relevant calls"
+    r"(?: available as of this call)?\."
+)
 
 
 def call_uuid(tenant_id: UUID, key: str) -> UUID:
@@ -114,6 +217,16 @@ def _text(value: Any, limit: int = 4000) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()[:limit]
     return None
+
+
+def _plain(value: Any, limit: int = 4000) -> str | None:
+    """An authored line, in plain words when it is one of the dataset's templates."""
+    text = _text(value, limit)
+    if text is None:
+        return None
+    if missed := _MISSED.fullmatch(text):
+        return f"It needed work in {missed[1]} of the last {missed[2]} calls on this skill."
+    return PLAIN.get(text, text)
 
 
 def _dict(value: Any) -> dict[str, Any]:
@@ -327,14 +440,14 @@ def authored(
     practice_raw = _dict(action.get("practice"))
     skill = skill_for(current.get("skill_id"))
     label = _text(current.get("label"), 240)
-    behavior, done_when = _text(mission_raw.get("behaviour")), _text(mission_raw.get("done_when"))
+    behavior, done_when = _text(mission_raw.get("behaviour")), _plain(mission_raw.get("done_when"))
     if not skill or not label or not behavior or not done_when:
         return None
     gap = _gap(diagnosis.get("gap_type"))
     mission = Mission(
         skill_id=skill,
         behavior=behavior,
-        context=_text(mission_raw.get("context")) or "Your next comparable moment.",
+        context=_plain(mission_raw.get("context")) or "The next time this kind of moment comes up.",
         done_when=done_when,
         cue=_text(mission_raw.get("cue"), 240) or label,
         active_since=_when(mission_raw.get("active_since")) or call.occurred_at,
@@ -352,15 +465,15 @@ def authored(
         # A focus needs at least one inspectable moment (spec 12.2); without
         # one the call's coaching is unavailable, never a guessed moment.
         return None
-    pattern = _text(diagnosis.get("pattern")) or "This call's authored focus."
-    why = _text(lesson.get("why_it_matters")) or pattern
+    pattern = _plain(diagnosis.get("pattern")) or "This call’s written focus."
+    why = _plain(lesson.get("why_it_matters")) or pattern
     better = _text(lesson.get("better_direction")) or behavior
     focus = Focus(
         skill_id=skill,
         label=label,
         explanation=pattern,
         why_it_matters=why,
-        selected_reason=_text(current.get("selected_reason")) or "Authored for this call.",
+        selected_reason=_plain(current.get("selected_reason")) or "Written for this call.",
         selected_at=call.occurred_at,
         status="provisional",
         verdict=behavior,
@@ -370,7 +483,7 @@ def authored(
     return Authored(
         focus=focus,
         root_cause=RootCause(
-            hypothesis=_text(diagnosis.get("root_cause_hypothesis")) or RootCause().hypothesis,
+            hypothesis=_plain(diagnosis.get("root_cause_hypothesis")) or RootCause().hypothesis,
             gap_type=gap,
             confidence=(
                 _slug(diagnosis.get("confidence"))
@@ -379,7 +492,7 @@ def authored(
             ),
             alternatives=tuple(
                 text
-                for text in (_text(item, 600) for item in diagnosis.get("alternatives") or ())
+                for text in (_plain(item, 600) for item in diagnosis.get("alternatives") or ())
                 if text
             )[:3],
         ),
@@ -406,7 +519,7 @@ def authored(
             next_call_connection=behavior,
         ),
         practice=Practice(
-            exercise=_text(practice_raw.get("exercise"))
+            exercise=_plain(practice_raw.get("exercise"))
             or "Replay one moment. Say one alternative response in your own words.",
             success_condition=done_when,
             gap_type=gap,
@@ -485,6 +598,8 @@ def rep_view(
     """
     newest = calls[0]
     parts = authored(newest, latest)
+    # A call's authored focus skill on another of this rep's calls too.
+    skills = [call.skill_id for call in calls[:HISTORY_LIMIT]]
     summaries = tuple(
         CallSummary(
             submission_id=call.submission_id,
@@ -492,6 +607,7 @@ def rep_view(
             created_at=call.occurred_at,
             state="ready",
             focus_label=call.focus_label,
+            recurring=skills.count(call.skill_id) >= 2 if call.skill_id else None,
         )
         for call in calls[:HISTORY_LIMIT]
     )
@@ -545,11 +661,13 @@ def rep_view(
     baseline_relevant = _int(progress.get("baseline_relevant_opportunities"))
     baseline_correct = _int(progress.get("baseline_correct_execution_count"))
     chronological = sorted(calls[:HISTORY_LIMIT], key=lambda call: call.occurred_at)
+    newest_reason = _text(_dict(coaching.get("current_focus")).get("selected_reason"))
     return CoachingView(
         **common,
         state="ready",
         focus=parts.focus.model_copy(
             update={
+                "selected_reason": NEWEST.get(newest_reason or "", parts.focus.selected_reason),
                 "selected_at": mission.active_since,
                 "status": (
                     "active"
@@ -561,7 +679,14 @@ def rep_view(
         pattern=Pattern(
             relevant_call_count=opportunities or 0,
             attention_call_count=occurrences or 0,
-            summary=parts.pattern,
+            # Pillar 1 already shows the authored count line; this one points
+            # at the moments, as a real learner's pattern does.
+            summary=(
+                f"It needed work on {occurrences} different calls. "
+                "Replay the moments below and see what they did each time."
+                if occurrences and occurrences >= 2
+                else parts.pattern
+            ),
             relevant_opportunities=opportunities,
             occurrence_count=occurrences,
         ),
@@ -580,7 +705,8 @@ def rep_view(
                 else None
             ),
             confidence=parts.root_cause.confidence,
-            explanation=_text(progress.get("reason")) or Mastery().explanation,
+            # Read by the person who imported this fictional rep: "their".
+            explanation=_plain(progress.get("reason")) or THEIR_MASTERY,
         ),
         lesson=parts.lesson,
         progress=tuple(
@@ -649,7 +775,7 @@ def team_view(
         limitations=(
             FICTIONAL,
             IMPORTER_ONLY,
-            "Counts are each fictional call's one authored focus, not measured mistakes.",
+            "The counts are each fictional call’s one written focus, not real mistakes.",
         ),
     )
 

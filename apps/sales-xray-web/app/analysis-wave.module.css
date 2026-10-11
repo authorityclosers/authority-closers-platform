@@ -187,6 +187,11 @@
   gap: 1px;
 }
 
+/* The chosen call, measured: the soft teal it keeps while it is sent. */
+.wave[data-compact][data-measured][data-state="still"] i {
+  background: color-mix(in oklab, var(--lx-teal) 35%, var(--lx-line-strong));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wave i {
     transition: none;

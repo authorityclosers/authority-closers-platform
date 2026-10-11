@@ -204,7 +204,17 @@ export function ReportScrollRail() {
         <button
           type="button"
           className={styles.top}
-          style={{ top: rail.top + rail.height - 128, left: rail.left - 40 }}
+          // On the rail itself (the gutter right of the cards), just below
+          // the last section's checkpoint: it never covers report content.
+          style={{
+            top:
+              rail.top +
+              Math.min(
+                rail.height - 36,
+                (rail.checkpoints.at(-1)?.y ?? rail.height - 128) + 20,
+              ),
+            left: rail.left + 5 - 18,
+          }}
           aria-label="Back to the top of the report"
           onClick={() =>
             scroller.current?.scrollTo({ top: 0, behavior: "smooth" })

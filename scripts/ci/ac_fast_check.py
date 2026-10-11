@@ -32,6 +32,7 @@ if not __package__:
 from scripts.ci import committed_snapshot as SNAPSHOT  # noqa: E402
 
 SCHEMA = "ac.ci.fast-check/1"
+NATIVE_IMAGE_WORKFLOW = ".github/workflows/sales-xray-native-image.yml"
 PYTHON_ROOTS = ("packages/python", "tests", "scripts")
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
 FORMAT_SUFFIXES = SOURCE_SUFFIXES | {".css", ".json", ".md", ".mdx", ".yaml", ".yml"}
@@ -105,6 +106,47 @@ def changed_files(root: Path, base: str, commit: str) -> tuple[str, ...]:
         if Path(path).is_absolute() or ".." in Path(path).parts:
             raise FastCheckError("Changed file identity is not relative to the checkout")
     return paths
+
+
+def native_inputs_changed(root: Path, changed: Sequence[str]) -> tuple[str, ...]:
+    """Read the checked workflow's exact paths and recursive directory inputs."""
+    try:
+        import yaml  # type: ignore[import-untyped]  # installed with the locked environment
+    except ImportError:
+        raise FastCheckError(
+            "Native workflow reader is unavailable; installs are forbidden"
+        ) from None
+    try:
+        value = yaml.safe_load(safe_path(root, NATIVE_IMAGE_WORKFLOW).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        raise FastCheckError("Committed native workflow could not be read") from None
+    if isinstance(value, dict):
+        # SafeLoader can parse GitHub's unquoted `on` key as a YAML 1.1 boolean.
+        value = value.get("on", value.get(True))
+    for key in ("push", "paths"):
+        if not isinstance(value, dict):
+            raise FastCheckError("Committed native workflow paths are unavailable")
+        value = value.get(key)
+    if not isinstance(value, list) or not value:
+        raise FastCheckError("Committed native workflow paths are unavailable")
+    for pattern in value:
+        if not isinstance(pattern, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*(?:/\*\*)?", pattern
+        ):
+            raise FastCheckError("Native workflow paths must be exact paths or directory /** globs")
+        safe_path(root, pattern[:-3] if pattern.endswith("/**") else pattern)
+    return tuple(
+        sorted(
+            {
+                path
+                for path in changed
+                if any(
+                    path == pattern or (pattern.endswith("/**") and path.startswith(pattern[:-2]))
+                    for pattern in value
+                )
+            }
+        )
+    )
 
 
 def module_name(relative: str) -> str | None:
@@ -290,10 +332,23 @@ def node_tool(root: Path, app: Path, name: str, *, fallbacks: Sequence[Path] = (
     raise FastCheckError(f"Installed frontend tool unavailable: {name}")
 
 
+def exclude_test_flags(paths: Iterable[str]) -> tuple[str, ...]:
+    """Use literal file globs so route brackets cannot exclude unrelated tests."""
+    return tuple(
+        argument
+        for path in paths
+        for argument in (
+            "--exclude",
+            "".join("\\" + value if value in r"\*?[]{}()!+@" else value for value in path),
+        )
+    )
+
+
 def plan(
-    root: Path, changed: tuple[str, ...], test_cap: int
+    root: Path, changed: tuple[str, ...], test_cap: int, *, defer_related_vitest: bool = False
 ) -> tuple[tuple[Check, ...], dict[str, Any]]:
     checks = []
+    deduplicated: dict[str, list[str]] = {}
     python = root / ".venv/bin/python"
     pyfiles = tuple(path for path in changed if path.endswith(".py") and (root / path).is_file())
     tests, graph_errors = affected_tests(root, changed)
@@ -438,6 +493,8 @@ def plan(
                     )
                 )
             if related:
+                if direct_tests:
+                    deduplicated[app] = list(direct_tests)
                 checks.append(
                     Check(
                         f"vitest-related:{app}",
@@ -447,6 +504,9 @@ def plan(
                             "--run",
                             *vitest_flags,
                             "--passWithNoTests",
+                            # These exact files already have a direct check.
+                            # Keep other importers selected by Vitest's graph.
+                            *exclude_test_flags(relative(direct_tests)),
                             *relative(related),
                         ),
                         directory,
@@ -487,11 +547,23 @@ def plan(
         )
         direct = tuple(path for path in package_paths if ".test." in path or ".spec." in path)
         related = tuple(path for path in package_paths if path not in direct)
+        if direct and related:
+            deduplicated[package] = list(direct)
         for values, kind in ((direct, "vitest"), (related, "vitest-related")):
             if not values:
                 continue
             mode = ("run",) if kind == "vitest" else ("related", "--run")
-            flags = vitest_flags if kind == "vitest" else (*vitest_flags, "--passWithNoTests")
+            flags = (
+                vitest_flags
+                if kind == "vitest"
+                else (
+                    *vitest_flags,
+                    "--passWithNoTests",
+                    *exclude_test_flags(
+                        Path(path).relative_to(package).as_posix() for path in direct
+                    ),
+                )
+            )
             checks.append(
                 Check(
                     f"{kind}:{package}",
@@ -505,7 +577,16 @@ def plan(
                     tuple(values),
                 )
             )
+    deferred_related = [
+        {"name": check.name, "scope": list(check.scope)}
+        for check in checks
+        if defer_related_vitest and check.name.startswith("vitest-related:")
+    ]
+    if defer_related_vitest:
+        checks = [check for check in checks if not check.name.startswith("vitest-related:")]
     metadata = {
+        "deferred_related_vitest": deferred_related,
+        "deduplicated_vitest_files": deduplicated,
         "selected_pytest": list(selected),
         "omitted_pytest": list(omitted),
         "import_graph_errors": list(graph_errors),
@@ -895,6 +976,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--test-file-cap", type=int, default=12)
     parser.add_argument("--wall-seconds", type=float, default=300)
     parser.add_argument("--cpu-seconds", type=float, default=180)
+    parser.add_argument(
+        "--defer-related-vitest",
+        action="store_true",
+        help="Run direct frontend tests; explicitly defer related tests to required CI (partial)",
+    )
     parser.add_argument("--plan", action="store_true")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -924,7 +1010,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         with SNAPSHOT.committed_snapshot(root, commit) as snapshot:
             receipt["source_sha256"] = snapshot.sha256
-            checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
+            # Include the removed source of a rename, even when Git presents it
+            # as a single renamed destination in the ordinary check plan.
+            native_changed = git(
+                root, "diff", "--name-only", "--no-renames", "-z", base, commit, "--"
+            ).split("\0")
+            receipt["native_inputs_changed"] = list(
+                native_inputs_changed(snapshot.root, tuple(path for path in native_changed if path))
+            )
+            if args.defer_related_vitest:
+                checks, metadata = plan(
+                    snapshot.root, changed, args.test_file_cap, defer_related_vitest=True
+                )
+            else:
+                checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
             checks = tuple(replace(check, source_root=snapshot.root) for check in checks)
             metadata["omitted_generated_frontend_types"] = [
                 check.cwd.relative_to(snapshot.root).as_posix()
@@ -977,6 +1076,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or metadata["unmapped_frontend_sources"]
                 or metadata["unmapped_ci_inputs"]
                 or metadata["omitted_generated_frontend_types"]
+                or metadata.get("deferred_related_vitest")
             ):
                 receipt["status"] = "partial"
             else:
@@ -1000,6 +1100,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"ac-ci/fast {receipt['status']} | {len(receipt.get('changed_files', []))} changed files | "
         f"{receipt['wall_seconds']:.1f}s wall / {receipt['cpu_seconds']:.1f}s process CPU"
     )
+    if receipt.get("native_inputs_changed"):
+        print("needs Root prepare-native before staging")
     if receipt.get("reason"):
         print(f"  reason: {receipt['reason']}")
     for result in receipt["checks"]:
@@ -1021,6 +1123,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"
+        )
+    if receipt.get("deferred_related_vitest"):
+        print(
+            f"  coverage: {len(receipt['deferred_related_vitest'])} related Vitest checks "
+            "explicitly deferred to required GitHub CI"
         )
     if receipt.get("unmapped_ci_inputs"):
         print(

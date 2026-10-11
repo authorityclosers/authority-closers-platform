@@ -9,6 +9,7 @@ Coaching content or names into the audit chain.
 """
 
 import hashlib
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID, uuid4
@@ -35,6 +36,11 @@ from ac_platform.organisations.activity import _mask_email
 from ac_platform.tenancy.models import Membership, Organisation
 
 LEADS = ("owner", "admin")
+FOCUS_CHANGED = "Your focus changed. Reload Coaching and try again."
+
+# The learner's (focus skill, mission origin) as My coaching shows them now,
+# derived on the server; None without a current pair.
+CurrentFocus = Callable[[], Awaitable[tuple[str, UUID] | None]]
 
 
 class Reach(Model):
@@ -293,55 +299,72 @@ async def record_feedback(
     agreement: Literal["agree", "not_completely"],
     focus_skill_id: str,
     mission_origin_submission_id: UUID,
+    current_focus: CurrentFocus,
     request_id: str | None = None,
     now: datetime | None = None,
 ) -> None:
-    """Record agreement with the current focus; the same command is idempotent."""
+    """Record agreement with the current focus; the same command is idempotent.
+
+    A retry of a recorded command is answered from that record, even after the
+    focus moved on. A new command must name the server's current focus skill
+    and mission origin, checked before anything is appended.
+    """
     if actor.tenant_id != tenant_id or await _member(database, tenant_id, actor.person_id) is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
-    created_at = (now or datetime.now(UTC)).astimezone(UTC)
-    # One statement: a concurrent repeat of the same command waits, then sees it.
-    inserted = await database.scalar(
-        insert(CoachingFeedback)
-        .values(
-            id=uuid4(),
-            tenant_id=tenant_id,
-            person_id=actor.person_id,
-            command_id=command_id,
-            focus_skill_id=focus_skill_id,
-            mission_origin_submission_id=mission_origin_submission_id,
-            agreement=agreement,
-            created_at=created_at,
+
+    async def recorded() -> CoachingFeedback | None:
+        return cast(
+            CoachingFeedback | None,
+            await database.scalar(
+                select(CoachingFeedback).where(
+                    CoachingFeedback.tenant_id == tenant_id,
+                    CoachingFeedback.person_id == actor.person_id,
+                    CoachingFeedback.command_id == command_id,
+                )
+            ),
         )
-        .on_conflict_do_nothing(constraint="uq_coaching_feedback_command")
-        .returning(CoachingFeedback.id)
-    )
-    if inserted is None:
-        existing = await database.scalar(
-            select(CoachingFeedback).where(
-                CoachingFeedback.tenant_id == tenant_id,
-                CoachingFeedback.person_id == actor.person_id,
-                CoachingFeedback.command_id == command_id,
+
+    existing = await recorded()
+    if existing is None:
+        if await current_focus() != (focus_skill_id, mission_origin_submission_id):
+            raise ConversationConflict(FOCUS_CHANGED)
+        created_at = (now or datetime.now(UTC)).astimezone(UTC)
+        # One statement: a concurrent repeat of the same command waits, then sees it.
+        inserted = await database.scalar(
+            insert(CoachingFeedback)
+            .values(
+                id=uuid4(),
+                tenant_id=tenant_id,
+                person_id=actor.person_id,
+                command_id=command_id,
+                focus_skill_id=focus_skill_id,
+                mission_origin_submission_id=mission_origin_submission_id,
+                agreement=agreement,
+                created_at=created_at,
             )
+            .on_conflict_do_nothing(constraint="uq_coaching_feedback_command")
+            .returning(CoachingFeedback.id)
         )
-        if existing is None or (
-            existing.agreement != agreement
-            or existing.focus_skill_id != focus_skill_id
-            or existing.mission_origin_submission_id != mission_origin_submission_id
-        ):
-            raise ConversationConflict("This response was already recorded differently.")
-        return
-    await AuditRepository(database).append(
-        tenant_id=tenant_id,
-        actor_person_id=actor.person_id,
-        session_id=actor.session_id,
-        action="coaching.feedback_recorded",
-        resource_type="coaching_feedback",
-        resource_id=command_id,
-        payload={"agreement": agreement},
-        request_id=request_id,
-        now=created_at,
-    )
+        if inserted is not None:
+            await AuditRepository(database).append(
+                tenant_id=tenant_id,
+                actor_person_id=actor.person_id,
+                session_id=actor.session_id,
+                action="coaching.feedback_recorded",
+                resource_type="coaching_feedback",
+                resource_id=command_id,
+                payload={"agreement": agreement},
+                request_id=request_id,
+                now=created_at,
+            )
+            return
+        existing = await recorded()
+    if existing is None or (
+        existing.agreement != agreement
+        or existing.focus_skill_id != focus_skill_id
+        or existing.mission_origin_submission_id != mission_origin_submission_id
+    ):
+        raise ConversationConflict("This response was already recorded differently.")
 
 
 async def record_context(
@@ -353,57 +376,70 @@ async def record_context(
     focus_skill_id: str,
     mission_origin_submission_id: UUID,
     context: str,
+    current_focus: CurrentFocus,
     request_id: str | None = None,
     now: datetime | None = None,
 ) -> None:
     """Keep the learner's own context on their focus; the same command is idempotent.
 
-    The audit event carries no text: the note is erased with the account.
+    Retries and new notes follow `record_feedback`'s rule. The audit event
+    carries no text: the note is erased with the account.
     """
     if actor.tenant_id != tenant_id or await _member(database, tenant_id, actor.person_id) is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
-    created_at = (now or datetime.now(UTC)).astimezone(UTC)
-    inserted = await database.scalar(
-        insert(CoachingLearnerContext)
-        .values(
-            id=uuid4(),
-            tenant_id=tenant_id,
-            person_id=actor.person_id,
-            command_id=command_id,
-            focus_skill_id=focus_skill_id,
-            mission_origin_submission_id=mission_origin_submission_id,
-            context=context,
-            created_at=created_at,
+
+    async def recorded() -> CoachingLearnerContext | None:
+        return cast(
+            CoachingLearnerContext | None,
+            await database.scalar(
+                select(CoachingLearnerContext).where(
+                    CoachingLearnerContext.tenant_id == tenant_id,
+                    CoachingLearnerContext.person_id == actor.person_id,
+                    CoachingLearnerContext.command_id == command_id,
+                )
+            ),
         )
-        .on_conflict_do_nothing(constraint="uq_coaching_learner_context_command")
-        .returning(CoachingLearnerContext.id)
-    )
-    if inserted is None:
-        existing = await database.scalar(
-            select(CoachingLearnerContext).where(
-                CoachingLearnerContext.tenant_id == tenant_id,
-                CoachingLearnerContext.person_id == actor.person_id,
-                CoachingLearnerContext.command_id == command_id,
+
+    existing = await recorded()
+    if existing is None:
+        if await current_focus() != (focus_skill_id, mission_origin_submission_id):
+            raise ConversationConflict(FOCUS_CHANGED)
+        created_at = (now or datetime.now(UTC)).astimezone(UTC)
+        inserted = await database.scalar(
+            insert(CoachingLearnerContext)
+            .values(
+                id=uuid4(),
+                tenant_id=tenant_id,
+                person_id=actor.person_id,
+                command_id=command_id,
+                focus_skill_id=focus_skill_id,
+                mission_origin_submission_id=mission_origin_submission_id,
+                context=context,
+                created_at=created_at,
             )
+            .on_conflict_do_nothing(constraint="uq_coaching_learner_context_command")
+            .returning(CoachingLearnerContext.id)
         )
-        if existing is None or (
-            existing.context != context
-            or existing.focus_skill_id != focus_skill_id
-            or existing.mission_origin_submission_id != mission_origin_submission_id
-        ):
-            raise ConversationConflict("This note was already saved differently.")
-        return
-    await AuditRepository(database).append(
-        tenant_id=tenant_id,
-        actor_person_id=actor.person_id,
-        session_id=actor.session_id,
-        action="coaching.context_added",
-        resource_type="coaching_learner_context",
-        resource_id=command_id,
-        payload={"length": len(context)},
-        request_id=request_id,
-        now=created_at,
-    )
+        if inserted is not None:
+            await AuditRepository(database).append(
+                tenant_id=tenant_id,
+                actor_person_id=actor.person_id,
+                session_id=actor.session_id,
+                action="coaching.context_added",
+                resource_type="coaching_learner_context",
+                resource_id=command_id,
+                payload={"length": len(context)},
+                request_id=request_id,
+                now=created_at,
+            )
+            return
+        existing = await recorded()
+    if existing is None or (
+        existing.context != context
+        or existing.focus_skill_id != focus_skill_id
+        or existing.mission_origin_submission_id != mission_origin_submission_id
+    ):
+        raise ConversationConflict("This note was already saved differently.")
 
 
 async def latest_context(

@@ -81,7 +81,7 @@ describe("private Coaching contract", () => {
         ),
     );
     await expect(fetchCoaching(new AbortController().signal)).rejects.toThrow(
-      "Coaching could not be loaded. Try again.",
+      "Coaching didn’t load. Try again.",
     );
   });
 });

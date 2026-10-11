@@ -3,7 +3,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { AnalysisWave, loudReference, useMeasuredWave } from "./analysis-wave";
+import {
+  AnalysisWave,
+  loudReference,
+  useMeasuredWave,
+  withWaveMorph,
+} from "./analysis-wave";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -104,4 +109,27 @@ it("scales the wave to its loud end, not to one spike or to silence", () => {
   ];
   expect(loudReference(levels)).toBe(0.2);
   expect(loudReference([null, 0, null])).toBe(1);
+});
+
+it("moves the wave with a view transition where there is one, else just updates", async () => {
+  const update = vi.fn();
+  // No transition API: a plain update, at once.
+  await withWaveMorph(update);
+  expect(update).toHaveBeenCalledTimes(1);
+  // With one: the update runs inside it and the call waits for it.
+  const start = vi.fn((callback: () => void) => {
+    callback();
+    return { updateCallbackDone: Promise.resolve() };
+  });
+  Object.assign(document, { startViewTransition: start });
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  await withWaveMorph(update);
+  expect(start).toHaveBeenCalledTimes(1);
+  expect(update).toHaveBeenCalledTimes(2);
+  // Reduced motion: no transition.
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  await withWaveMorph(update);
+  expect(start).toHaveBeenCalledTimes(1);
+  expect(update).toHaveBeenCalledTimes(3);
+  delete (document as { startViewTransition?: unknown }).startViewTransition;
 });

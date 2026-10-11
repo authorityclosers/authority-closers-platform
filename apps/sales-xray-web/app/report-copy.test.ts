@@ -95,5 +95,28 @@ describe("report copy", () => {
     expect(viewAllMoments(8)).toBe("View all 8 moments");
     expect(copy.prospectInsights(1)).toBe("1 prospect insight captured");
     expect(copy.changedAt("11:18")).toBe("The call changed here · 11:18");
+    expect(copy.followUpDate("2026-10-16")).toBe("Follow-up: Friday, 16 Oct");
+    expect(copy.followUpDate("soon")).toBe("Follow-up: soon");
+    expect(copy.backTo("Moments That Mattered")).toBe(
+      "Back to Moments That Mattered",
+    );
+  });
+
+  it("names the outcome buttons exactly like the status they set", () => {
+    for (const status of Object.values(copy.OUTCOME_CHOICES))
+      expect(copy.OUTCOME_STATUSES).toContain(status);
+    expect(
+      copy.recordedOutcome({ outcome: "lost", lost_reason: " Price " }),
+    ).toEqual({ status: "Lost", note: "Price" });
+    expect(
+      copy.recordedOutcome({
+        outcome: "follow_up",
+        follow_up_on: "2026-10-16",
+      }),
+    ).toEqual({ status: "Follow-up Set", note: "Follow-up: Friday, 16 Oct" });
+    expect(copy.recordedOutcome({ outcome: "no_decision" })).toEqual({
+      status: "Decision Pending",
+      note: null,
+    });
   });
 });

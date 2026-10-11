@@ -420,7 +420,7 @@ class ReportDimension(_StrictModel):
         "conflicted",
         "unknown",
     ]
-    observation: str = Field(min_length=1, max_length=4_000)
+    observation: str = Field(max_length=4_000)
     citations: list[ReportCitation] = Field(min_length=1, max_length=8)
     evidence: list[ReportEvidence] | None = Field(
         default=None,
@@ -442,6 +442,10 @@ class ReportDimension(_StrictModel):
 
     @model_validator(mode="after")
     def supported_call_state(self) -> Self:
+        if not self.observation.strip() and not (
+            self.observation == "" and self.status == "observed" and self.evidence
+        ):
+            raise ValueError("report_dimension_observation_invalid")
         if self.call_state in {"strongly_demonstrated", "observed", "needs_attention"} and (
             self.status != "observed" or not self.evidence
         ):
@@ -1409,6 +1413,7 @@ def _normalise_dimensions(
     transcript: Mapping[str, Any],
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
     canonical_read: bool = False,
+    canonical_synthetic: bool = False,
     salvaged: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
@@ -1475,7 +1480,10 @@ def _normalise_dimensions(
         observation = item.get(
             "observation", "No qualitative assessment was returned for this dimension."
         )
-        if not isinstance(observation, str) or not observation.strip():
+        empty_authored_note = canonical_read and canonical_synthetic and observation == ""
+        if not isinstance(observation, str) or (
+            not observation.strip() and not empty_authored_note
+        ):
             raise ReportError("report_dimension_observation_invalid")
         raw_evidence = item.get("evidence")
         evidence: list[dict[str, Any]] = []
@@ -1501,6 +1509,8 @@ def _normalise_dimensions(
             raise ReportError("report_dimension_evidence_required")
         if v7:
             status = dimension_state_ceiling(status, evidence)
+        if empty_authored_note and (status != "observed" or not evidence):
+            raise ReportError("report_dimension_observation_invalid")
         supplied_citations = item.get("citations")
         citations: list[Mapping[str, Any]]
         if supplied_citations is None:
@@ -1854,7 +1864,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/11"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/12"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2954,6 +2964,11 @@ def parse_report_draft(
         raise ReportError("report_payload_invalid")
     v7 = coaching_prompt_revision == COACHING_PROMPT_V7
     v8 = coaching_prompt_revision == COACHING_PROMPT_V8
+    canonical_synthetic = (
+        canonical_read
+        and coaching_prompt_revision == COACHING_PROMPT_V4
+        and transcript.get("synthetic") is True
+    )
     canonical_pillars = canonical_read and not v8 and payload.get("pillars") is not None
     if (
         v8
@@ -2975,6 +2990,7 @@ def parse_report_draft(
                 transcript=validated_transcript,
                 speaker_roles=speaker_roles,
                 canonical_read=canonical_read,
+                canonical_synthetic=canonical_synthetic,
                 normalize_evidence=lambda item: _normalise_c5_evidence(item, validated_transcript),
             )
         except (ValueError, KeyError, TypeError):
@@ -3139,6 +3155,7 @@ def parse_report_draft(
         transcript=validated_transcript,
         coaching_prompt_revision=coaching_prompt_revision,
         canonical_read=canonical_read,
+        canonical_synthetic=canonical_synthetic,
         salvaged=salvaged,
     )
     _truncate_evidence(normalized["dimensions"], ReportDimension, "dimensions", truncated)

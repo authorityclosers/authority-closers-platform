@@ -9,6 +9,7 @@ import {
   amitReport,
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
+import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 // Validate ZIP checksums and parse every OOXML part, rather than checking only a magic header.
@@ -100,6 +101,45 @@ describe("report Word file", () => {
     expect(doc.bookmarks).toEqual(REPORT_PILLARS.map((pillar) => pillar.id));
     expect(doc.text).toContain("Sales call");
     expect(doc.text).toContain("This report doesn't cover:");
+  });
+
+  it("an observed skill without a note keeps its row: state and times", async () => {
+    const report = structuredClone(amitReport) as SalesReport;
+    for (const d of report.dimensions) d.observation = "";
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          { report, transcript: amitTranscript as Transcript },
+          { roles: AMIT_SPEAKERS },
+        ),
+      ),
+    );
+    expect(doc.text).toContain("Human Connection & TrustStrongly Demonstrated");
+    expect(doc.text).not.toContain("This report doesn't cover this skill.");
+    // The Report rows' short names, never the long write-up titles.
+    expect(doc.text).toContain("Problem / Impact / Desire");
+    expect(doc.text).not.toContain("Problem, Impact & Desire Clarity");
+  });
+
+  it("quotes someone's own words in Before / After with who said them", async () => {
+    const doc = inspect(
+      await bytes(
+        await createReportDocx(
+          {
+            report: callB.report as unknown as SalesReport,
+            transcript: callB.transcript as unknown as Transcript,
+          },
+          {
+            roles: { seller: "speaker_0", prospect: "speaker_1" },
+            speakerName: (id) => (id === "speaker_0" ? "Sela" : "Daryl Pell"),
+          },
+        ),
+      ),
+    );
+    expect(doc.text).toContain(
+      "Before“We can start with a scheduled export and map the account key.",
+    );
+    expect(doc.text).toMatch(/before any live import\.”Sela/u);
   });
 
   it("refuses to build without a report", async () => {

@@ -90,6 +90,30 @@ it("measures the silence after a price and the reply", () => {
   expect(price.pushback).toBe(true);
 });
 
+it("hears a price said as the investment, in words (the spec's Amit call)", () => {
+  const amit = call([
+    ["buyer", 0, 3_000, "What is the investment for this?"],
+    [
+      "rep",
+      3_500,
+      9_000,
+      "The program investment is two lakh rupees, for the full twelve weeks.",
+    ],
+    [
+      "buyer",
+      11_000,
+      14_000,
+      "Okay. I will need to discuss this with my partner.",
+    ],
+  ]);
+  const [price] = afterPrice(amit, roles);
+  expect(price.text).toBe(
+    "The program investment is two lakh rupees, for the full twelve weeks.",
+  );
+  expect(price.silence_ms).toBe(2_000);
+  expect(price.reply?.text).toBe("Okay.");
+});
+
 it("lists promises the salesperson made", () => {
   expect(promises(sample, roles).map((item) => item.text)).toEqual([
     "हाँ बिल्कुल मिलेगा, मैं आपको brochure भेज दूंगा।",

@@ -24,6 +24,7 @@ import {
   requestedCall,
   type CoachingResult,
 } from "./coaching-read";
+import { PAGE } from "./coaching-copy";
 import { callDate } from "./coaching-ui";
 import { TeamCoachingStory } from "./team-coaching";
 import { CoachingSkeleton } from "./coaching-skeleton";
@@ -65,11 +66,11 @@ function CoachingResultBody({
         <Panel title="Coaching">
           <Empty
             icon={FileSearch}
-            title="Coaching is temporarily unavailable"
-            text="Your calls and reports are unaffected. Open the call to check its report and analysis status."
+            title={PAGE.failed}
+            text={PAGE.failedText}
             action={{
               href: callId ? `/analysis/calls/${callId}` : "/analysis/calls",
-              label: callId ? "Open the call" : "Open calls",
+              label: callId ? PAGE.openCall : PAGE.openCalls,
             }}
           />
         </Panel>
@@ -135,7 +136,7 @@ function AccountCoaching({
           view.data.tenant_id !== tenantId ||
           (view.data.session_id != null && view.data.session_id !== sessionId))
       )
-        setResult({ data: null, error: "Your workspace changed. Try again." });
+        setResult({ data: null, error: PAGE.workspaceChanged });
       else setResult(view);
     });
     return () => controller.abort();
@@ -220,45 +221,45 @@ export function CoachingPage({
         <PageHeader
           title={
             callId
-              ? "Coaching for this call"
+              ? PAGE.call
               : sharedPersonId
-                ? (seededPerson?.person_name ?? "Rep coaching")
+                ? (seededPerson?.person_name ?? PAGE.rep)
                 : team
-                  ? "Team coaching"
-                  : "My coaching"
+                  ? PAGE.team
+                  : PAGE.mine
           }
           context={
             callId
               ? [
-                  seededCall?.call_label ?? "One focus from this call’s report",
+                  seededCall?.call_label ?? PAGE.callContext,
                   seededCall?.focus
                     ? callDate(seededCall.focus.selected_at)
                     : "",
                 ]
               : sharedPersonId
                 ? sandbox
-                  ? ["Fictional AC Sandbox rep", "Only you see this"]
-                  : ["Shared with you. They can stop sharing at any time."]
+                  ? [...PAGE.sandboxRep]
+                  : [PAGE.sharedRep]
                 : team
                   ? sandbox
-                    ? [
-                        "Fictional AC Sandbox reps and calls",
-                        "Only you see them",
-                      ]
-                    : ["Anonymous totals from your team’s analysed calls"]
-                  : ["Your focus, mission and progress across calls"]
+                    ? [...PAGE.sandboxTeam]
+                    : [PAGE.teamContext]
+                  : [PAGE.mineContext]
           }
           back={
             sharedPersonId || (callId && sandbox)
-              ? { href: "/coaching?view=team", label: "Back to team" }
+              ? { href: "/coaching?view=team", label: PAGE.backToTeam }
               : callId
-                ? { href: `/analysis/calls/${callId}`, label: "Back to report" }
+                ? {
+                    href: `/analysis/calls/${callId}`,
+                    label: PAGE.backToReport,
+                  }
                 : undefined
           }
           actions={
             callId ? (
               <Link className={kitStyles.button} href="/coaching">
-                My coaching
+                {PAGE.mine}
               </Link>
             ) : undefined
           }
@@ -269,8 +270,8 @@ export function CoachingPage({
             param="view"
             current={team ? "team" : "me"}
             items={[
-              { key: "me", label: "My coaching" },
-              { key: "team", label: "Team" },
+              { key: "me", label: PAGE.mine },
+              { key: "team", label: PAGE.tabTeam },
             ]}
           />
         ) : null}
@@ -301,13 +302,13 @@ export function CoachingPage({
               icon={FileSearch}
               title={
                 access.authenticated === false
-                  ? "Sign in for your Coaching"
-                  : "Choose your workspace"
+                  ? PAGE.signIn
+                  : PAGE.chooseWorkspace
               }
-              text="Coaching follows your own analysed calls in the selected workspace."
+              text={PAGE.signInText}
               action={
                 access.authenticated === false
-                  ? { href: "/login", label: "Sign in" }
+                  ? { href: "/login", label: PAGE.signInAction }
                   : undefined
               }
             />
@@ -343,9 +344,7 @@ export function CoachingRoute({
   const seed = invalidCall
     ? ({
         data: null,
-        error: query.has("call")
-          ? "This call link is invalid. Open the call’s report again."
-          : "This link is invalid. Open Team coaching again.",
+        error: query.has("call") ? PAGE.badCallLink : PAGE.badTeamLink,
       } as const)
     : callId === initialCallId &&
         team === initialTeam &&

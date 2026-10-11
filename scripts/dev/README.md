@@ -47,7 +47,25 @@ the dry-run receipt counts `reports_with_pillars` and `reports_without_pillars`.
 Previously loaded report payloads remain immutable: a replay with a different
 report hash refuses the change rather than updating it in place.
 
+The adapter leaves the two exact published stock moment reasons empty, retaining
+the moment's title, citation and any authored direction. It omits an Important
+Miss whose only reason is stock text. The exact stock skill observation is also
+left empty for a cited observed skill; its authored call state, profile citations
+and evidence remain intact. Other authored reasons and observations retain the
+existing report limits.
+These empty strings require the committed synthetic canonical codec and browser
+parser; provider reports still require actual notes. The Report and Document
+show the skill's state and evidence without an observation line. An uncited skill
+keeps its insufficient-evidence state and the existing no-citation explanation.
+
 Synthetic usage is released immediately and has a zero-second no-work settlement.
+Source-declared fictional speakers are saved through the existing speaker-map
+revision model in the same audited transaction: the published representative is
+the salesperson, and the published prospect is the prospect. Both must match the
+participant and transcript person IDs. An explicitly declared third participant
+stays `other`. The importing viewer is never marked as
+the seller. This enables the normal Report metrics and price/response attribution.
+Replay preserves any existing speaker choice and appends no replacement revision.
 Completed local jobs cannot enter the provider queue. Member identities have no
 password, provider identity or verified-email assertion. Replays skip identical
 calls and refuse changes to preserved content or existing membership state.
@@ -70,7 +88,12 @@ preserved authored Team, representative and call Coaching, checks the exact
 mission and transcript quote, refuses another viewer's private coaching and
 keeps text-only moments nonplayable. Calls → Report → Coaching uses the same
 real submission and member IDs written by the loader, including mission and
-moment links; legacy Team links remain readable. Run only these loader checks
+moment links; legacy Team links remain readable. The actual signed-in Coaching
+HTTP route must also match the loaded report's recording ID, source hash,
+transcript revision and report revision. Every diagnostic and own-call lesson
+quote resolves to a loaded transcript segment within its original time span.
+Anonymous requests and requests from another owner in the same organisation
+remain excluded from the importer's private authored Coaching. Run only these loader checks
 with the existing test database injection:
 
 ```sh

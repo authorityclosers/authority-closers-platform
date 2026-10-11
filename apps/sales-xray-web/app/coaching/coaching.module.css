@@ -145,6 +145,10 @@
   font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
 }
 
+.cardLabelMuted {
+  font-weight: 400;
+}
+
 /* "Hear Dipak's take": a quiet button under the focus, never the hero. */
 .take {
   justify-self: start;
@@ -485,6 +489,28 @@
   cursor: default;
 }
 
+/* The Report's "With context" beside a moment's time. */
+.withContext {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.withContext[aria-pressed="true"] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.withContext:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .moreMoments,
 .moreCalls {
   justify-self: start;
@@ -500,6 +526,53 @@
   display: grid;
   flex-basis: 100%;
   gap: 8px;
+}
+
+/* "Not completely": the moments the focus rests on, before the question. */
+.basis {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+
+.basisHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.basisHead a {
+  /* A taller tap area for a small inline link, without moving the line. */
+  display: inline-block;
+  margin-block: -4px;
+  padding-block: 4px;
+  color: var(--sx-accent);
+  text-decoration: none;
+}
+
+.basisHead a:hover {
+  text-decoration: underline;
+}
+
+.basis ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sx-ink-2);
+}
+
+.basis li > span {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 
 .learnerContext {
@@ -940,10 +1013,20 @@
   content: "";
 }
 
-/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold. */
+/* The timeline's mission bar, named in the legend. */
+.legend [data-mark="mission"]::before {
+  width: 2px;
+  height: 12px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--sx-ink-2);
+}
+
+/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold.
+   Each step is at least as wide as its name, so names show whole. */
 .stepper {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(min-content, 1fr));
   gap: 4px;
   margin: 0;
   padding: 0;
@@ -975,9 +1058,35 @@
 }
 
 .stepper li > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Phones: names sit under their bars, the ends flush with the edges. */
+@media (max-width: 400px) {
+  .stepper {
+    gap: 2px;
+  }
+
+  .stepper li {
+    text-align: center;
+  }
+
+  .stepper li:first-child {
+    text-align: start;
+  }
+
+  .stepper li:last-child {
+    text-align: end;
+  }
+}
+
+/* Too narrow for five names: only the current one shows, or the two ends
+   while there is none (all stay readable to screen readers and in tooltips). */
+@media (max-width: 352px) {
+  .stepper:has([aria-current]) li:not([aria-current]) > span,
+  .stepper:not(:has([aria-current])) li:not(:first-child, :last-child) > span {
+    font-size: 0;
+  }
 }
 
 .reflection {
@@ -1127,7 +1236,8 @@
 }
 
 @media (pointer: coarse) {
-  .jump {
+  .jump,
+  .withContext {
     min-height: 44px;
   }
 

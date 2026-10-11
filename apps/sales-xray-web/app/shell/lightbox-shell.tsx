@@ -146,7 +146,8 @@ function pageHeading(
           description:
             "A read-only preview of how your call moves from upload to report.",
         }
-      : { title: "Analysing your call" };
+      : // Short enough for a phone's bar; the panel says "Analysing your call".
+        { title: "Analysing" };
   // The panel names what happened (failed, paused, needs attention).
   if (stage === "attention") return { title: "Your call" };
   if (stage === "welcome") return { title: "New analysis" };

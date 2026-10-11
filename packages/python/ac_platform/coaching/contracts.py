@@ -192,6 +192,14 @@ class Mastery(Model):
     )
 
 
+# The same line on another rep's coaching (a shared or fictional rep).
+THEIR_MASTERY = (
+    "Mastery means doing the skill well in real moments, more than once. Their reports "
+    "don't count those moments yet, so no mastery level is shown. More calls are not "
+    "the same as mastery."
+)
+
+
 class Regression(Model):
     state: Literal["unknown", "monitor", "reminder", "recurring", "severe", "re_stabilizing"]
     action: str

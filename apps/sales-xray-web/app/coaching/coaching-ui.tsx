@@ -20,10 +20,12 @@ import {
   BETTER,
   FOCUS,
   NEXT,
+  THEIR,
   gapCopy,
   type CoachingPillarCopy,
 } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
+import { useTheirCoaching } from "./coaching-voice";
 import { EvidencePlayer } from "./evidence-player";
 import { CoachingMedia, requestClip } from "./media-player";
 import type { CoachingClip } from "./media-contract";
@@ -38,14 +40,11 @@ export { callDate } from "./coaching-format";
 export function Pillar({
   id,
   copy,
-  label,
   level = 2,
   children,
 }: {
   id: string;
   copy: CoachingPillarCopy;
-  /** Another rep's view words the title for "them". */
-  label?: string;
   /** 3 inside a page that already has its own section heading (the Report). */
   level?: 2 | 3;
   children: ReactNode;
@@ -62,7 +61,7 @@ export function Pillar({
         index={copy.number}
         level={level}
         id={heading}
-        title={label ?? copy.label}
+        title={copy.label}
         subtitle={copy.subtitle}
       />
       {children}
@@ -109,6 +108,7 @@ export function FocusHero({
   take?: CoachingClip | null;
   children?: ReactNode;
 }) {
+  const they = useTheirCoaching();
   return (
     <StoryCard emphasis>
       {chips.length ? (
@@ -149,7 +149,7 @@ export function FocusHero({
       </div>
       <div className={styles.nextCall}>
         <p>
-          <span>{FOCUS.onNextCall}</span>
+          <span>{they ? THEIR.onNextCall : FOCUS.onNextCall}</span>
           <span>{mission}</span>
         </p>
         <a className={styles.jump} href={`#${missionAnchor}`}>
@@ -161,6 +161,17 @@ export function FocusHero({
 }
 
 type Lesson = Omit<TextLesson, "own_call"> & { own_call: Evidence | null };
+
+/** The same words, whatever the case, spacing or closing full stop. */
+function sameLine(line: string, other: string) {
+  const words = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[.!?…]+$/u, "");
+  return words(line) !== "" && words(line) === words(other);
+}
 
 /**
  * Pillar 3 in the spec's order: idea, framework, your call against a better
@@ -187,9 +198,20 @@ export function LessonPanel({
   /** My coaching: the strength comes from the newest call that showed one. */
   acrossCalls?: boolean;
 }) {
+  const they = useTheirCoaching();
   const media = Boolean(clips?.length);
   // One level below the pillar heading (h3 under an h2, h4 inside the Report).
   const Title = level === 3 ? "h4" : "h3";
+  // Authored lessons (every AC Sandbox call, the design review) give the
+  // mission as the idea and the better direction too: say each line once.
+  const idea = [lesson.better_direction, lesson.next_call_connection].some(
+    (line) => sameLine(lesson.quick_idea, line),
+  )
+    ? null
+    : lesson.quick_idea;
+  const good = sameLine(lesson.good_looks_like, lesson.better_direction)
+    ? null
+    : lesson.good_looks_like;
   const wording = lesson.example_wording.length ? (
     <div>
       <CardLabel>{BETTER.wording}</CardLabel>
@@ -204,7 +226,7 @@ export function LessonPanel({
     <Pillar id={id} copy={copy} level={level}>
       <StoryCard label={media ? BETTER.dipak : BETTER.textLesson} tone="accent">
         <Title className={styles.lessonTitle}>{lesson.title}</Title>
-        <p>{lesson.quick_idea}</p>
+        {idea ? <p>{idea}</p> : null}
         {lesson.framework.length ? (
           <div className={styles.framework}>
             <ol className={styles.steps} aria-label={BETTER.framework}>
@@ -220,8 +242,12 @@ export function LessonPanel({
             {/* The quote itself is the first moment in pillar 2, just above. */}
             <CardLabel>
               {lesson.own_call
-                ? BETTER.yourCallAt(timeLabel(lesson.own_call.start_ms))
-                : BETTER.yourCall}
+                ? (they ? THEIR.callAt : BETTER.yourCallAt)(
+                    timeLabel(lesson.own_call.start_ms),
+                  )
+                : they
+                  ? THEIR.call
+                  : BETTER.yourCall}
             </CardLabel>
             <p>{lesson.own_call?.observation ?? fallbackObservation}</p>
           </div>
@@ -231,10 +257,18 @@ export function LessonPanel({
           </div>
         </div>
       </StoryCard>
-      <CoachingMedia clips={clips} headingLevel={level === 3 ? 4 : 3} />
+      <CoachingMedia
+        clips={clips}
+        forCall={!acrossCalls}
+        headingLevel={level === 3 ? 4 : 3}
+      />
       {media ? null : wording ? <StoryCard>{wording}</StoryCard> : null}
       {strength ? (
-        <StoryCard label={BETTER.strength} tone="good" icon={Sparkles}>
+        <StoryCard
+          label={they ? THEIR.strength : BETTER.strength}
+          tone="good"
+          icon={Sparkles}
+        >
           <p className={styles.strengthTitle}>{strength.title}</p>
           <ul
             className={`${styles.moments} ${styles.inset}`}
@@ -249,8 +283,14 @@ export function LessonPanel({
             ))}
           </ul>
           <p className={styles.note}>
-            {acrossCalls ? BETTER.strengthAcross : BETTER.strengthCall}{" "}
-            {BETTER.strengthKeep}
+            {acrossCalls
+              ? they
+                ? THEIR.strengthAcross
+                : BETTER.strengthAcross
+              : they
+                ? THEIR.strengthCall
+                : BETTER.strengthCall}{" "}
+            {they ? THEIR.strengthKeep : BETTER.strengthKeep}
           </p>
         </StoryCard>
       ) : null}
@@ -262,10 +302,12 @@ export function LessonPanel({
             <CardLabel>{BETTER.whyMatters}</CardLabel>
             {lesson.why_it_matters}
           </p>
-          <p>
-            <CardLabel>{BETTER.good}</CardLabel>
-            {lesson.good_looks_like}
-          </p>
+          {good ? (
+            <p>
+              <CardLabel>{BETTER.good}</CardLabel>
+              {good}
+            </p>
+          ) : null}
           <p>
             <CardLabel>{BETTER.whenUse}</CardLabel>
             {lesson.when_to_use}
@@ -286,7 +328,7 @@ export function LessonPanel({
           ) : null}
           {/* Spec 6.6: the full lesson ends with the same active mission. */}
           <p>
-            <CardLabel>{BETTER.mission}</CardLabel>
+            <CardLabel>{they ? THEIR.mission : BETTER.mission}</CardLabel>
             {lesson.next_call_connection}
           </p>
           <p className={styles.note}>{lesson.source}</p>
@@ -317,10 +359,11 @@ export function MissionPanel({
   since?: string;
   foot?: ReactNode;
 }) {
+  const they = useTheirCoaching();
   return (
     <Pillar id={id} copy={copy} level={level}>
       <StoryCard
-        label={NEXT.mission}
+        label={they ? THEIR.mission : NEXT.mission}
         tone="accent"
         icon={Target}
         aside={since ? NEXT.since(since) : undefined}

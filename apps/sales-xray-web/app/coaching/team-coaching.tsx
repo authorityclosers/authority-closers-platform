@@ -111,7 +111,7 @@ function RepList({
                 setAll(false);
               }}
             >
-              <option value="all">All areas</option>
+              <option value="all">{TEAM.allAreas}</option>
               {areas.map((row) => (
                 <option key={row.skill_id} value={row.skill_id}>
                   {AREA[row.skill_id] ?? row.label}
@@ -119,9 +119,7 @@ function RepList({
               ))}
             </select>
           </span>
-          <span className={styles.note}>
-            {shown.length} {shown.length === 1 ? "rep" : "reps"}
-          </span>
+          <span className={styles.note}>{TEAM.repCount(shown.length)}</span>
         </div>
       ) : null}
       <List label="Reps and their current focus">
@@ -175,17 +173,14 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           value={analysed}
           note={
             [
-              coaching.rep_count
-                ? `${coaching.rep_count} ${coaching.rep_count === 1 ? "person" : "people"}`
-                : null,
-              coaching.latest_call_at
-                ? `updated ${callDate(coaching.latest_call_at)}`
-                : null,
-              coaching.history_limited ? "last 40" : null,
+              // One line in the tile; the latest call's date sits in the
+              // footnote below, which wraps on phones.
+              coaching.rep_count ? TEAM.people(coaching.rep_count) : null,
+              coaching.history_limited ? TEAM.last40 : null,
             ]
               .filter(Boolean)
               .join(" · ")
-              .replace(/^./, (c) => c.toUpperCase()) || "In this view"
+              .replace(/^./, (c) => c.toUpperCase()) || TEAM.inView
           }
         />
         <Kpi
@@ -247,6 +242,9 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
             <p className={styles.body}>
               <span className={styles.note}>
                 {coaching.sandbox ? TEAM.sandboxNote : TEAM.practiseNote}
+                {coaching.latest_call_at
+                  ? ` ${TEAM.latest(callDate(coaching.latest_call_at))}`
+                  : null}
               </span>
             </p>
           </Panel>

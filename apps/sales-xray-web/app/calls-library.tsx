@@ -65,7 +65,7 @@ import { CallsDrawer } from "./calls-drawer";
 import { useCallInsights, type CallInsight } from "./calls-insights";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
-import { RecentCallsList } from "./dashboard/recent-calls";
+import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -1061,12 +1061,19 @@ function CallsLibraryContent({
       )
     : null;
   if (preview) {
-    if (
-      access?.authenticated !== true ||
-      initialLoading ||
-      submissions.length === 0
-    )
-      return null;
+    // Signed in and still reading: the card's three rows hold their place, so
+    // New analysis doesn't grow when they arrive.
+    if (access?.authenticated === true && initialLoading)
+      return (
+        <Panel
+          title="Recent calls"
+          action={{ href: callsHref, label: "View all calls" }}
+          className="calls-library-preview"
+        >
+          <RecentCallsSkeleton rows={3} />
+        </Panel>
+      );
+    if (access?.authenticated !== true || submissions.length === 0) return null;
     // r17 S6: the Dashboard's recent-calls rows, in the page kit's panel.
     return (
       <Panel

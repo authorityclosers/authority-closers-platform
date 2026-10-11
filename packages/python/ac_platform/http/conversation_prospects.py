@@ -23,6 +23,7 @@ from ac_platform.conversation_intelligence.prospect_suggestions import (
 from ac_platform.conversation_intelligence.sales_xray_tenants import WORKSPACE_UNAVAILABLE_MESSAGE
 from ac_platform.http.auth import RequireActor, require_safe_origin
 from ac_platform.http.conversation_acquisition import Factory
+from ac_platform.http.conversation_call_outcomes import install_call_outcome_http
 from ac_platform.kernel.errors import DomainError
 
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -388,3 +389,11 @@ def install_prospect_http(
         return await read(request, response, prospect_id=prospect_id, offset=offset)
 
     application.include_router(router)
+    # Person-entered call outcomes share the prospects prefix and admission.
+    install_call_outcome_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        factory=factory,
+        served=served,
+    )

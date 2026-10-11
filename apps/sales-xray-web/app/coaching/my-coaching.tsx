@@ -24,7 +24,9 @@ import {
   POINT_COPY,
   PROGRESS,
   REGRESSION_COPY,
-  THEIR_FOCUS,
+  START,
+  THEIR,
+  THEIR_PILLARS,
   TREND_COPY,
   TREND_ARROW,
   WHY,
@@ -38,6 +40,12 @@ import {
   MissionPanel,
   Pillar,
 } from "./coaching-ui";
+import {
+  CallsOpenReports,
+  TheirCoaching,
+  useCallHref,
+  useTheirCoaching,
+} from "./coaching-voice";
 import { MomentList } from "./evidence-player";
 import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
@@ -60,28 +68,40 @@ function statusText(mastery: Coaching["mastery"]) {
 
 /** This skill's calls, oldest first. Reports say what they saw, never success. */
 function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
+  const they = useTheirCoaching();
   if (!points?.length) return null;
-  const after = points.filter((point) => point.after_mission);
+  // "calls on this skill": a call that gave no chance to use it isn't one.
+  const after = points.filter(
+    (point) => point.after_mission && point.state !== "not_covered",
+  );
   const quiet = after.filter((point) => point.state === "no_suggestion");
   const firstAfter = points.findIndex((point) => point.after_mission);
+  const count = (state: ProgressPoint["state"]) =>
+    points.filter((point) => point.state === state).length;
   return (
     <div className={styles.progress}>
       <span className={styles.cardLabel} aria-hidden="true">
-        {PROGRESS.callsLabel}
+        {they ? THEIR.callsLabel : PROGRESS.callsLabel}
+        {" · "}
         <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
       </span>
-      <ol className={styles.timeline} aria-label={PROGRESS.calls}>
+      {/* Screen readers get one sentence, not a row per dot. */}
+      <p className={styles.srOnly}>
+        {they ? THEIR.calls : PROGRESS.calls}:{" "}
+        {PROGRESS.summary(
+          count("suggested"),
+          count("no_suggestion"),
+          count("not_covered"),
+        )}
+      </p>
+      <ol className={styles.timeline} aria-hidden="true">
         {points.map((point, index) => (
           <li
             key={point.submission_id}
             data-state={point.state}
             data-mission-start={index === firstAfter ? "" : undefined}
             title={`${callDate(point.created_at)} · ${POINT_COPY[point.state]}`}
-          >
-            <span className={styles.srOnly}>
-              {callDate(point.created_at)}: {POINT_COPY[point.state]}
-            </span>
-          </li>
+          />
         ))}
       </ol>
       <p className={styles.legend} aria-hidden="true">
@@ -90,11 +110,19 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
             {POINT_COPY[state]}
           </span>
         ))}
+        {firstAfter >= 0 ? (
+          <span data-mark="mission">{PROGRESS.missionStart}</span>
+        ) : null}
       </p>
       <p>
         {after.length
-          ? PROGRESS.sinceMission(quiet.length, after.length)
-          : PROGRESS.noCallSince}
+          ? (they ? THEIR.sinceMission : PROGRESS.sinceMission)(
+              quiet.length,
+              after.length,
+            )
+          : they
+            ? THEIR.noCallSince
+            : PROGRESS.noCallSince}
       </p>
     </div>
   );
@@ -107,6 +135,8 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
  */
 function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const [expanded, setExpanded] = useState(false);
+  const they = useTheirCoaching();
+  const callHref = useCallHref();
   if (!calls?.length) return null;
   return (
     <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
@@ -114,7 +144,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
         className={styles.callList}
         data-expanded={expanded ? "" : undefined}
       >
-        <List label={CALLS.label}>
+        <List label={they ? THEIR.recentCalls : CALLS.label}>
           {calls.map((call) => (
             <Row
               key={call.submission_id}
@@ -122,7 +152,7 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
               title={call.call_label}
               href={
                 call.state === "ready"
-                  ? `/coaching?call=${call.submission_id}`
+                  ? callHref(call.submission_id)
                   : `/analysis/calls/${call.submission_id}`
               }
               meta={[
@@ -131,7 +161,9 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
                   ? CALLS.analysing
                   : call.state === "unavailable"
                     ? CALLS.unavailable
-                    : (call.focus_label ?? CALLS.fallback),
+                    : (call.focus_label ??
+                      (they ? THEIR.callFallback : CALLS.fallback)),
+                call.recurring ? CALLS.recurring : null,
               ]}
               end={
                 call.state === "ready" ? (
@@ -169,11 +201,7 @@ function StartCoaching({
   if (readOnly)
     return (
       <div className={styles.conversation}>
-        <Pillar
-          id="coaching-focus"
-          copy={COACHING_PILLARS.focus}
-          label={THEIR_FOCUS}
-        >
+        <Pillar id="coaching-focus" copy={THEIR_PILLARS.focus}>
           <StoryCard emphasis>
             <p className={styles.chips}>
               <span className={styles.chip} data-tone="neutral">
@@ -182,13 +210,13 @@ function StartCoaching({
             </p>
             <p className={styles.focusTitle}>
               {coaching.analysed_calls
-                ? "Their calls don’t show one focus yet"
-                : "No analysed calls yet"}
+                ? START.theirNoFocus
+                : START.theirNoCalls}
             </p>
             <p className={styles.lead}>
               {coaching.analysed_calls
-                ? "Each analysed call below has its own focus and next-call mission."
-                : "Their coaching starts with their first analysed call."}
+                ? START.theirNoFocusText
+                : START.theirNoCallsText}
             </p>
           </StoryCard>
         </Pillar>
@@ -205,20 +233,14 @@ function StartCoaching({
             </span>
           </p>
           <p className={styles.focusTitle}>
-            {coaching.analysed_calls
-              ? "Start with one call’s coaching"
-              : "Analyse a call to start"}
+            {coaching.analysed_calls ? START.noFocus : START.noCalls}
           </p>
           <p className={styles.lead}>
-            {coaching.analysed_calls
-              ? "Your calls don’t show one skill to work on across calls yet. Each analysed call below already has its own focus and next-call mission."
-              : "Coaching follows your own calls. Your first report brings one focus and one mission for your next call."}
+            {coaching.analysed_calls ? START.noFocusText : START.noCallsText}
           </p>
           {coaching.pending_calls > 0 ? (
             <p className={styles.note}>
-              {coaching.pending_calls} call
-              {coaching.pending_calls === 1 ? " is" : "s are"} still being
-              analysed.
+              {START.pending(coaching.pending_calls)}
             </p>
           ) : null}
           <div className={styles.actions}>
@@ -228,7 +250,7 @@ function StartCoaching({
                 data-variant="primary"
                 href="/coaching?view=team"
               >
-                See {coaching.sandbox_reps} fictional reps’ coaching{" "}
+                {START.sandboxReps(coaching.sandbox_reps)}{" "}
                 <ArrowRight size={14} aria-hidden="true" />
               </Link>
             ) : null}
@@ -241,14 +263,11 @@ function StartCoaching({
               }
               href="/analysis/new"
             >
-              Analyse a call <ArrowRight size={14} aria-hidden="true" />
+              {START.analyse} <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
           {coaching.sandbox_reps ? (
-            <p className={styles.note}>
-              This is AC Sandbox: Team shows the coaching of the fictional reps
-              you imported. Your own coaching follows your own calls.
-            </p>
+            <p className={styles.note}>{START.sandboxNote}</p>
           ) : null}
         </StoryCard>
       </Pillar>
@@ -259,19 +278,36 @@ function StartCoaching({
   );
 }
 
-export function CoachingStory({
-  coaching,
-  requestedFocus,
-  readOnly = false,
-  sharing,
-}: {
+type StoryProps = {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
   /** A known sharing state (design review); otherwise the panel reads it. */
   sharing?: SharingView;
-  /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
+  /**
+   * Another rep's coaching (a fictional AC Sandbox rep, or a rep who shared
+   * theirs): nothing to save here, and every label says "their".
+   */
   readOnly?: boolean;
-}) {
+};
+
+export function CoachingStory(props: StoryProps) {
+  return (
+    <TheirCoaching.Provider value={props.readOnly ?? false}>
+      <CallsOpenReports.Provider
+        value={Boolean(props.readOnly) && !props.coaching.sandbox}
+      >
+        <Story {...props} />
+      </CallsOpenReports.Provider>
+    </TheirCoaching.Provider>
+  );
+}
+
+function Story({
+  coaching,
+  requestedFocus,
+  readOnly = false,
+  sharing,
+}: StoryProps) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
     return (
@@ -287,15 +323,12 @@ export function CoachingStory({
   const path = coaching.development_path;
   const gap = coaching.root_cause.gap_type;
   const confidence = CONFIDENCE_COPY[coaching.root_cause.confidence];
+  const pillars = readOnly ? THEIR_PILLARS : COACHING_PILLARS;
   // One conversation, read top to bottom in Dipak's order (spec 3, 7, 9),
   // each pillar headed the way the Report heads its six parts.
   return (
     <div className={styles.conversation}>
-      <Pillar
-        id="coaching-focus"
-        copy={COACHING_PILLARS.focus}
-        label={readOnly ? THEIR_FOCUS : undefined}
-      >
+      <Pillar id="coaching-focus" copy={pillars.focus}>
         <FocusHero
           label={focus.label}
           chips={[
@@ -312,7 +345,7 @@ export function CoachingStory({
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
         >
-          {requestedFocus && requestedFocus !== focus.skill_id ? (
+          {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
               Your report brought you here for{" "}
               {requestedSkillLabel(requestedFocus)}. Your current next-call
@@ -321,7 +354,7 @@ export function CoachingStory({
           ) : null}
         </FocusHero>
       </Pillar>
-      <Pillar id="coaching-why" copy={COACHING_PILLARS.why}>
+      <Pillar id="coaching-why" copy={pillars.why}>
         <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
@@ -344,7 +377,9 @@ export function CoachingStory({
               <dt>{WHY.gap}</dt>
               <dd>
                 <strong>{gapCopy(gap).name}</strong>
-                {gap !== "uncertain" ? ` · ${gapCopy(gap).line}` : ""}
+                {gap !== "uncertain"
+                  ? ` · ${readOnly ? THEIR.gapLine(gap) : gapCopy(gap).line}`
+                  : ""}
               </dd>
             </div>
             {confidence ? (
@@ -358,13 +393,13 @@ export function CoachingStory({
         <div className={styles.card} data-flush="">
           <MomentList
             evidence={evidence}
-            heading={WHY.evidence}
+            heading={readOnly ? THEIR.evidence : WHY.evidence}
             fictional={coaching.sandbox}
           />
         </div>
       </Pillar>
       <LessonPanel
-        copy={COACHING_PILLARS.better}
+        copy={pillars.better}
         lesson={lesson}
         clips={coaching.media_clips}
         fallbackObservation={focus.explanation}
@@ -373,13 +408,13 @@ export function CoachingStory({
       />
       <MissionPanel
         id="mission"
-        copy={COACHING_PILLARS.next}
+        copy={pillars.next}
         mission={mission}
         practice={practice}
         since={callDate(mission.active_since)}
         foot={NEXT.stays}
       />
-      <Pillar id="coaching-progress" copy={COACHING_PILLARS.progress}>
+      <Pillar id="coaching-progress" copy={pillars.progress}>
         <StoryCard>
           <dl className={styles.diagnosis}>
             <div>
@@ -415,8 +450,10 @@ export function CoachingStory({
             <div>
               <dt>{PROGRESS.regression}</dt>
               <dd>
-                {REGRESSION_COPY[coaching.regression.state] ??
-                  REGRESSION_COPY.unknown}
+                {readOnly && coaching.regression.state === "severe"
+                  ? THEIR.severe
+                  : (REGRESSION_COPY[coaching.regression.state] ??
+                    REGRESSION_COPY.unknown)}
               </dd>
             </div>
           </dl>
@@ -451,20 +488,25 @@ export function CoachingStory({
           </details>
         </StoryCard>
       </Pillar>
-      <Pillar id="coaching-path" copy={COACHING_PILLARS.path}>
+      <Pillar id="coaching-path" copy={pillars.path}>
         <StoryCard>
-          <ol className={styles.route} aria-label="Your development path">
+          <ol
+            className={styles.route}
+            aria-label={readOnly ? THEIR.path : START.path}
+          >
             <li data-now="">
               <span>{PATH.now}</span>
               {path.current ?? focus.label}
             </li>
             <li>
               <span>{PATH.next}</span>
-              {path.likely_next ?? PATH.nextFallback}
+              {path.likely_next ??
+                (readOnly ? THEIR.nextFallback : PATH.nextFallback)}
             </li>
             <li>
               <span>{PATH.later}</span>
-              {path.later ?? PATH.laterFallback}
+              {path.later ??
+                (readOnly ? THEIR.laterFallback : PATH.laterFallback)}
             </li>
           </ol>
           {path.maintain ? (
@@ -478,6 +520,7 @@ export function CoachingStory({
               focusSkillId={focus.skill_id}
               originSubmissionId={mission.origin_submission_id}
               question={coaching.reflection_question}
+              evidence={evidence}
             />
           )}
         </StoryCard>

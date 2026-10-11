@@ -164,6 +164,58 @@ it("uses the server's own stage and clock when the progress read has them", asyn
   expect(host.textContent).toContain("2:51 so far");
 });
 
+it("says it is trying again while the server reruns the analysis", async () => {
+  await mount({
+    progress: {
+      ...running,
+      run_state: "retrying",
+      minute_state: "reserved",
+      retry_available: false,
+    },
+  });
+  expect(host.querySelector("h2")?.textContent).toBe("Trying again");
+  expect(host.textContent).toContain(
+    "Your recording is saved. The analysis is running again.",
+  );
+  expect(host.textContent).not.toContain("Usually 2–3 minutes");
+});
+
+it("says only 'Done' for a step the server finished in under a second", async () => {
+  vi.setSystemTime(new Date("2026-10-10T12:03:00Z"));
+  await mount({
+    progress: {
+      ...running,
+      current_stage: "C5",
+      terminal_state: null,
+      stage_progress: [
+        {
+          stage: "C2",
+          state: "completed",
+          started_at: "2026-10-10T12:00:10Z",
+          finished_at: "2026-10-10T12:01:15Z",
+        },
+        {
+          stage: "C4",
+          state: "completed",
+          started_at: "2026-10-10T12:01:20Z",
+          finished_at: "2026-10-10T12:01:20.400Z",
+        },
+        {
+          stage: "C5",
+          state: "running",
+          started_at: "2026-10-10T12:01:21Z",
+          finished_at: null,
+        },
+      ],
+    },
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+  expect(stepStatus("C2")).toBe("Done · 1:05");
+  expect(stepStatus("C4")).toBe("Done");
+});
+
 it("marks each step done with the time it took once it is seen to finish", async () => {
   stages = ["C1", "C3", "C3", "C5", "done"];
   await mount();
@@ -269,13 +321,33 @@ it("pauses calmly: saved work, the reason and the recovery actions in view", asy
   );
   expect(stepState("C4")).toBe("attention");
   expect(stepStatus("C4")).toBe("Paused · needs attention");
-  expect(host.textContent).toContain("The completed transcript stays attached");
+  expect(host.textContent).toContain("The transcript is saved with this call");
   expect(host.querySelector("details")).toBeNull();
   expect(
     host.querySelector('[role="group"][aria-label="Call actions"]')
       ?.textContent,
   ).toContain("Delete this call…");
   expect(host.textContent).not.toContain("You can leave this page");
+});
+
+it("names a failed run as failed: the step didn't finish, only saved work is listed", async () => {
+  await mount({
+    stageRows: [{ stage: "C2", state: "not_started" }],
+    progress: {
+      ...running,
+      local_state: "failed",
+      run_state: "failed",
+      minute_state: "released",
+      retry_available: false,
+      stages: [{ stage: "C2", state: "not_started" }],
+    },
+  });
+  expect(host.textContent).toContain("Analysis failed");
+  expect(stepStatus("C2")).toBe("Didn’t finish");
+  expect(host.textContent).not.toContain("Paused");
+  expect(
+    host.querySelector('[aria-label="Saved work"]')?.textContent,
+  ).not.toContain("isn’t confirmed yet");
 });
 
 it("falls back to the task rows on a server without a plan for the call", async () => {

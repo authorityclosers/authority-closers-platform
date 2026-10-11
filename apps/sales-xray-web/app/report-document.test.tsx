@@ -10,7 +10,27 @@ import {
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
 
-const mocks = vi.hoisted(() => ({ generate: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  generate: vi.fn(),
+  /** What a person recorded for the call; null = no record (the usual case here). */
+  recorded: null as null | {
+    outcome: "won" | "lost" | "follow_up" | "no_decision";
+    lost_reason: string | null;
+    follow_up_on: string | null;
+    deal_value: null;
+  },
+}));
+vi.mock("./report-outcome-context", () => ({
+  useCallOutcome: () => ({
+    state: mocks.recorded
+      ? {
+          status: "ready",
+          key: "fictional",
+          record: { value: mocks.recorded, can_edit: true },
+        }
+      : { status: "off" },
+  }),
+}));
 vi.mock("./report-docx", () => ({
   createReportDocx: mocks.generate,
   reportDocxFilename: (title: string) => `${title} – Sales Xray report.docx`,
@@ -31,6 +51,7 @@ const DATA: DocumentReportData = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.recorded = null;
   mocks.generate.mockReset().mockResolvedValue(blob);
   url.mockReturnValue("blob:generated-report");
   vi.stubGlobal(
@@ -163,6 +184,26 @@ it("a failed Word file says so and can be tried again", async () => {
   });
   expect(container.querySelector('[role="alert"]')).toBeNull();
   click.mockRestore();
+});
+
+it("shows the outcome a person recorded, on the page and in the Word file", async () => {
+  mocks.recorded = {
+    outcome: "lost",
+    lost_reason: "Went with a cheaper course.",
+    follow_up_on: null,
+    deal_value: null,
+  };
+  await render();
+  const outcome = container.querySelector(
+    '[data-report-mode-section="overview"]',
+  )?.parentElement?.textContent;
+  expect(outcome).toContain("Lost");
+  expect(outcome).toContain("Set by your team");
+  expect(outcome).toContain("Went with a cheaper course.");
+  await act(async () => button("Download Word file").click());
+  expect(mocks.generate.mock.calls[0][1]).toMatchObject({
+    recorded: { status: "Lost", note: "Went with a cheaper course." },
+  });
 });
 
 it("prints the page", async () => {

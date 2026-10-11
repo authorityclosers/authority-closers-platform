@@ -57,9 +57,7 @@ it("opens legacy summaries and preserves observed source bounds, human locks and
     heard_differently: [{ value: { text: "Example company two" } }],
   });
   if (fields.budget?.state !== "known") throw new Error("missing budget");
-  expect(profileValueText(fields.budget.value)).toBe(
-    "Approximately [2–3) lakh INR per year",
-  );
+  expect(profileValueText(fields.budget.value)).toBe("About ₹2–3 lakh a year");
 });
 
 it.each(["phone", "email"])("rejects AI-heard %s even with evidence", (key) => {

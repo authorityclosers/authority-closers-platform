@@ -85,12 +85,49 @@ describe("call metrics shared vectors (AUT-341 §3.1)", () => {
 });
 
 describe("call metrics rules", () => {
-  it("pins the call-metrics/2 timing constants", () => {
-    expect(CALL_METRICS_RULES).toBe("call-metrics/2");
+  it("pins the call-metrics/3 timing constants", () => {
+    expect(CALL_METRICS_RULES).toBe("call-metrics/3");
     expect(CUT_IN_RULES).toEqual({ overlap_ms: 250, latch_ms: 100 });
     expect(PRICE_WORDS.source).toBe(
-      "(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)",
+      "(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा|investment)",
     );
+  });
+
+  it.each([
+    "The program investment is two lakh rupees.",
+    "The program INVESTMENT is ₹2 lakh.",
+    "इस program की investment दो लाख रुपये है।",
+  ])("keeps an investment line and its next different speaker: %s", (text) => {
+    const metrics = computeCallMetrics(
+      toSegments([
+        ["investment-line", "speaker-1", 1232000, 1237000, text],
+        [
+          "same-speaker",
+          "speaker-1",
+          1237200,
+          1237800,
+          "That covers the twelve weeks.",
+        ],
+        [
+          "response-line",
+          "speaker-2",
+          1239000,
+          1244000,
+          "I need to discuss it with my partner.",
+        ],
+      ]),
+      1508000,
+    );
+    expect(metrics.price_moments).toEqual([
+      {
+        segment_id: "investment-line",
+        speaker_id: "speaker-1",
+        at_ms: 1232000,
+        silence_ms: 2000,
+        next_speaker_id: "speaker-2",
+        next_segment_id: "response-line",
+      },
+    ]);
   });
 
   it("joins a speaker's segments at the gap limit and splits just past it", () => {

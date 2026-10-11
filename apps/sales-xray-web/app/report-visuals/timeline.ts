@@ -15,8 +15,11 @@ export type TimelinePhase = { label: string; start_ms: number; end_ms: number };
 /** All the wave bars in a timeline, shared out between its stages. */
 export const WAVE_BARS = 96;
 
-/** The same on a phone, where the stages stack on one narrow track. */
-export const ROW_BARS = 40;
+/** The same on a phone, where the stages stack on one track the card's width. */
+export const ROW_BARS = 56;
+
+/** A phone's timeline without stages: one strip the card's width. */
+export const NARROW_BARS = 60;
 
 /**
  * The two people to draw, from the transcript: the seller on top and the
@@ -135,6 +138,54 @@ export function allocateBars(
   for (let i = 0; left > 0; i = (i + 1) % order.length, left -= 1)
     bars[order[i].index] += 1;
   return bars;
+}
+
+/**
+ * One tint per stage name, in order of first appearance (four, then round
+ * again): a call that returns to a stage shows it in the same colour, since
+ * the framework is non-linear and calls do go back to discovery.
+ */
+export function stageTints(labels: readonly string[], tints = 4): number[] {
+  const seen = new Map<string, number>();
+  return labels.map((label) => {
+    const key = label.trim().toLowerCase();
+    if (!seen.has(key)) seen.set(key, seen.size % tints);
+    return seen.get(key)!;
+  });
+}
+
+/**
+ * Bars per stage from the width each stage block will get side by side
+ * (its share of the call, but never under `minPx`, as the CSS lays it out),
+ * so a bar is about as wide in a short stage held at its minimum as in a
+ * long one. `widthPx` is the timeline's usual width; narrower screens only
+ * make every bar a little thinner.
+ */
+export function barsByWidth(
+  lengths: number[],
+  { total = WAVE_BARS, minPx = 84, widthPx = 940, gapPx = 3, min = 3 } = {},
+): number[] {
+  if (!lengths.length) return [];
+  const room = Math.max(1, widthPx - gapPx * (lengths.length - 1));
+  const sizes = lengths.map((length) => Math.max(0, length));
+  const atMin = sizes.map(() => false);
+  let widths = sizes.map(() => 0);
+  // Blocks below their minimum take it; the rest share what is left.
+  for (let pass = 0; pass < lengths.length; pass += 1) {
+    const free = sizes.reduce(
+      (sum, size, i) => (atMin[i] ? sum : sum + size),
+      0,
+    );
+    const left = room - atMin.filter(Boolean).length * minPx;
+    widths = sizes.map((size, i) =>
+      atMin[i] ? minPx : free > 0 ? (size / free) * left : minPx,
+    );
+    const next = widths.map((width, i) => atMin[i] || width < minPx);
+    if (next.every((value, i) => value === atMin[i])) break;
+    next.forEach((value, i) => (atMin[i] = value));
+  }
+  const pitch = widthPx / total;
+  return widths.map((width) => Math.max(min, Math.round(width / pitch)));
 }
 
 /** Position (0-1) of a time inside a stretch of the call, clamped. */

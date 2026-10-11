@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import shlex
 import shutil
 import subprocess
 import sys
@@ -520,6 +521,109 @@ def test_direct_app_tests_cannot_pass_when_nothing_is_collected(tmp_path: Path) 
     assert "--passWithNoTests" not in check.argv
 
 
+@pytest.mark.parametrize("other_fails", (False, True))
+def test_installed_vitest_deduplicates_direct_files_but_keeps_other_importers(
+    tmp_path: Path, other_fails: bool
+) -> None:
+    installed = Path(FAST.__file__).resolve().parents[2] / "apps/sales-xray-web/node_modules"
+    if not (installed / ".bin/vitest").is_file():
+        pytest.skip("Installed frontend tools are required for this integration proof")
+    app = "apps/sales-xray-web"
+    direct = f"{app}/app/[call]/direct.test.ts"
+    source = f"{app}/app/value.ts"
+    write(tmp_path, source, "export const value = 1;\n")
+    write(
+        tmp_path,
+        direct,
+        "import {test,expect} from 'vitest'; import {value} from '../value';\n"
+        "test('direct',()=>expect(value).toBe(1));\n",
+    )
+    write(
+        tmp_path,
+        f"{app}/app/other.test.ts",
+        "import {test,expect} from 'vitest'; import {value} from './value';\n"
+        f"test('other',()=>expect(value).toBe({2 if other_fails else 1}));\n",
+    )
+    write(
+        tmp_path,
+        f"{app}/vitest.config.mjs",
+        "export default {test:{include:['app/**/*.test.ts']}};\n",
+    )
+    modules = tmp_path / app / "node_modules"
+    (modules / ".bin").mkdir(parents=True)
+    for tool in ("prettier", "eslint", "tsc"):
+        binary = FAST.node_tool(installed.parents[2], installed.parent, tool)
+        (modules / ".bin" / tool).symlink_to(Path(binary).resolve())
+    # pnpm's app wrapper refers to its original relative store layout. Point
+    # this isolated fixture directly at the same installed Vitest entrypoint.
+    wrapper = modules / ".bin/vitest"
+    node = shutil.which("node")
+    assert node is not None
+    entry = (installed / "vitest/vitest.mjs").resolve()
+    wrapper.write_text(f'#!/bin/sh\nexec {shlex.quote(node)} {shlex.quote(str(entry))} "$@"\n')
+    wrapper.chmod(0o755)
+    (modules / "vitest").symlink_to((installed / "vitest").resolve(), target_is_directory=True)
+    checks, metadata = FAST.plan(tmp_path, (direct, source), 12)
+    direct_check = next(check for check in checks if check.name == f"vitest:{app}")
+    related_check = next(check for check in checks if check.name == f"vitest-related:{app}")
+    assert metadata["deduplicated_vitest_files"] == {app: [direct]}
+    first = FAST.run_check(direct_check, 30, 15)
+    second = FAST.run_check(related_check, 30, 15)
+    assert first["status"] == "passed", first
+    assert first["vitest_summary"]["passed"] == 1
+    assert second["status"] == ("failed" if other_fails else "passed")
+    assert second["vitest_summary"]["passed"] == (0 if other_fails else 1)
+    assert second["vitest_summary"]["failed"] == int(other_fails)
+
+
+def test_shared_package_related_check_deduplicates_its_direct_tests(tmp_path: Path) -> None:
+    package, source, test = workspace_fixture(tmp_path)
+    checks, metadata = FAST.plan(tmp_path, (source, test), 12)
+    related = next(check for check in checks if check.name == f"vitest-related:{package}")
+    assert related.argv[related.argv.index("--exclude") + 1] == "src/index.test.ts"
+    assert related.argv[-1] == "src/index.ts"
+    assert metadata["deduplicated_vitest_files"] == {package: [test]}
+
+
+@pytest.mark.parametrize("defer", (False, True))
+def test_explicit_related_deferral_preserves_required_direct_checks_and_partial_receipt(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defer: bool
+) -> None:
+    app = "apps/sales-xray-web"
+    direct = f"{app}/app/direct.test.ts"
+    source = f"{app}/app/source.ts"
+    write(repository, direct, "export {};\n")
+    write(repository, source, "export const value = 1;\n")
+    git(repository, "add", "apps")
+    git(repository, "commit", "-m", "explicit frontend deferral fixture")
+    for tool in ("prettier", "eslint", "tsc", "vitest"):
+        binary = repository / app / "node_modules/.bin" / tool
+        write(repository, binary.relative_to(repository).as_posix(), "#!/bin/sh\nexit 0\n")
+        binary.chmod(0o755)
+    executed = []
+
+    def synthetic_check(check, _wall, _cpu):
+        executed.append(check.name)
+        return {
+            "name": check.name,
+            "status": "failed" if check.name.startswith("vitest-related:") else "passed",
+        }
+
+    monkeypatch.setattr(FAST, "run_check", synthetic_check)
+    receipt = tmp_path.parent / (tmp_path.name + "-related-deferral.json")
+    argv = ["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]
+    if defer:
+        argv.append("--defer-related-vitest")
+    assert FAST.main(argv) == (0 if defer else 1)
+    data = json.loads(receipt.read_text())
+    assert data["status"] == ("partial" if defer else "failed")
+    assert f"vitest:{app}" in executed and f"tsc:{app}" in executed
+    assert (f"vitest-related:{app}" in executed) is not defer
+    assert data["deferred_related_vitest"] == (
+        [{"name": f"vitest-related:{app}", "scope": [source]}] if defer else []
+    )
+
+
 def test_changed_infrastructure_module_is_linted_with_partial_graph(
     tmp_path: Path,
 ) -> None:
@@ -564,9 +668,130 @@ def repository(tmp_path: Path) -> Path:
     git(tmp_path, "config", "user.name", "Synthetic Fast Check")
     git(tmp_path, "config", "user.email", "fast-check@example.invalid")
     write(tmp_path, "README.md", "synthetic fixture\n")
+    workflow = ".github/workflows/sales-xray-native-image.yml"
+    write(tmp_path, workflow, (Path(FAST.__file__).resolve().parents[2] / workflow).read_text())
     git(tmp_path, "add", "README.md")
+    git(tmp_path, "add", workflow)
     git(tmp_path, "commit", "-m", "fixture base")
     return tmp_path
+
+
+@pytest.mark.parametrize("native_change", [False, True])
+def test_native_input_receipt_uses_committed_workflow_and_prints_staging_prerequisite(
+    repository: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    native_change: bool,
+) -> None:
+    workflow = ".github/workflows/sales-xray-native-image.yml"
+    # Use a new exact path so a copied/hardcoded production input list cannot pass.
+    write(repository, workflow, "on:\n  push:\n    paths:\n      - native-fixture.txt\n")
+    git(repository, "add", workflow)
+    git(repository, "commit", "-m", "synthetic native input list")
+    changed = "native-fixture.txt" if native_change else "unrelated-fixture.txt"
+    write(repository, changed, "synthetic input\n")
+    git(repository, "add", changed)
+    git(repository, "commit", "-m", "synthetic input change")
+    # Active builders' edits must not alter the checked commit's prerequisites.
+    write(repository, workflow, "on:\n  push:\n    paths:\n      - unrelated-fixture.txt\n")
+    receipt = tmp_path.parent / (tmp_path.name + "-native-inputs.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "passed"
+    assert data["native_inputs_changed"] == ([changed] if native_change else [])
+    assert data["changed_files"] == [changed]
+    output = capsys.readouterr().out
+    assert output.splitlines().count("needs Root prepare-native before staging") == int(
+        native_change
+    )
+    assert "unrelated-fixture.txt" in (repository / workflow).read_text()
+
+
+def test_native_inputs_match_every_workflow_path_and_nested_directory_without_lookalikes() -> None:
+    root = Path(FAST.__file__).resolve().parents[2]
+    workflow = yaml.safe_load((root / FAST.NATIVE_IMAGE_WORKFLOW).read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    exact = [path for path in triggers["push"]["paths"] if not path.endswith("/**")]
+    nested = ["native/audioatlas/fixture.txt", "native/audioatlas/deep/nested/fixture.txt"]
+    unrelated = [
+        "apps/sales-xray-web/app/report.tsx",
+        "native/audioatlas-lookalike/fixture.txt",
+        "packages/python/ac_platform/conversation_intelligence/signals.py.bak",
+    ]
+    assert FAST.native_inputs_changed(root, [*exact, *nested, *unrelated, *exact]) == tuple(
+        sorted([*exact, *nested])
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        None,
+        "on: [fixture-private-output\n",
+        "on: {}\n",
+        "on:\n  push:\n    paths: fixture-private-output\n",
+        "on:\n  push:\n    paths: []\n",
+        "on:\n  push:\n    paths:\n      - '*.py'\n",
+        "on:\n  push:\n    paths:\n      - ../outside\n",
+    ],
+)
+def test_missing_or_unreadable_native_workflow_cannot_suppress_prerequisites(
+    tmp_path: Path, content: str | None
+) -> None:
+    if content is not None:
+        write(tmp_path, FAST.NATIVE_IMAGE_WORKFLOW, content)
+    with pytest.raises(FAST.FastCheckError) as error:
+        FAST.native_inputs_changed(tmp_path, ("fixture.txt",))
+    assert "fixture-private-output" not in str(error.value)
+
+
+@pytest.mark.parametrize("rename", [False, True])
+def test_removed_or_renamed_native_input_still_requires_preparation(
+    repository: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    rename: bool,
+) -> None:
+    write(repository, ".dockerignore", "synthetic ignored path\n")
+    git(repository, "add", ".dockerignore")
+    git(repository, "commit", "-m", "synthetic native source")
+    (repository / ".dockerignore").unlink()
+    if rename:
+        write(repository, "renamed-fixture.txt", "synthetic ignored path\n")
+    git(repository, "add", "-A")
+    git(repository, "commit", "-m", "remove or rename synthetic native source")
+    receipt = tmp_path.parent / (tmp_path.name + "-removed-native.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["native_inputs_changed"] == [".dockerignore"]
+    if rename:
+        assert data["changed_files"] == ["renamed-fixture.txt"]
+    assert (
+        capsys.readouterr().out.splitlines().count("needs Root prepare-native before staging") == 1
+    )
+
+
+def test_native_prerequisite_is_kept_when_check_planning_is_unavailable(
+    repository: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    changed = "packages/python/ac_platform/conversation_intelligence/signals.py"
+    write(repository, changed, "VALUE = 1\n")
+    git(repository, "add", changed)
+    git(repository, "commit", "-m", "synthetic native Python input")
+    receipt = tmp_path.parent / (tmp_path.name + "-unavailable-native.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 1
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "unavailable"
+    assert data["native_inputs_changed"] == [changed]
+    assert (
+        capsys.readouterr().out.splitlines().count("needs Root prepare-native before staging") == 1
+    )
 
 
 def test_noop_receipt_attests_exact_clean_commit(repository: Path, tmp_path: Path) -> None:

@@ -39,15 +39,15 @@ it("keeps absent data unavailable and an explicitly absent record unrecorded", a
   await act(async () =>
     root.render(<CallOutcomeEditor scopeKey="call-a" canEdit onSave={save} />),
   );
-  expect(host.textContent).toContain("Unavailable");
+  expect(host.textContent).toContain("Couldn't load");
   expect(host.querySelector("button")).toBeNull();
   await act(async () =>
     root.render(
       <CallOutcomeEditor scopeKey="call-a" value={null} onSave={save} />,
     ),
   );
-  expect(host.textContent).toContain("Unrecorded");
-  expect(host.textContent).not.toContain("No decision");
+  expect(host.textContent).toContain("Not set yet");
+  expect(host.textContent).not.toContain("Decision Pending");
   expect(save).not.toHaveBeenCalled();
 });
 it("requires current edit capability and an audited save port", async () => {
@@ -91,9 +91,9 @@ it("records Won on one tap, prevents duplicate dispatch and waits for server rea
     follow_up_on: null,
     deal_value: null,
   });
-  expect(host.textContent).toContain("Saving outcome");
+  expect(host.textContent).toContain("Saving…");
   await act(async () => finish());
-  expect(host.textContent).toContain("Unrecorded");
+  expect(host.textContent).toContain("Not set yet");
   expect(host.textContent).not.toContain("Saved");
 });
 it("does not record Lost until a person supplies a reason", async () => {
@@ -110,14 +110,14 @@ it("does not record Lost until a person supplies a reason", async () => {
   );
   await act(async () => button("Lost").click());
   expect(save).not.toHaveBeenCalled();
-  await act(async () => button("Save outcome").click());
+  await act(async () => button("Save").click());
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-    "Add a reason",
+    "Add why it was lost",
   );
   expect(save).not.toHaveBeenCalled();
   expect(button("Try again").disabled).toBe(false);
-  await type("Reason for Lost", "Chose a different option.");
-  await act(async () => button("Save outcome").click());
+  await type("Why was it lost?", "Chose a different option.");
+  await act(async () => button("Save").click());
   expect(save).toHaveBeenCalledExactlyOnceWith({
     outcome: "lost",
     lost_reason: "Chose a different option.",
@@ -137,14 +137,14 @@ it("retains the exact human follow-up date and optional amount/currency", async 
       />,
     ),
   );
-  await act(async () => button("Follow-up").click());
-  await act(async () => button("Save outcome").click());
+  await act(async () => button("Follow-up Set").click());
+  await act(async () => button("Save").click());
   expect(save).not.toHaveBeenCalled();
   await type("Follow-up date", "2026-10-12");
   await act(async () => button("Deal value").click());
-  await type("Deal amount", "123.0000");
-  await type("Currency code", "INR");
-  await act(async () => button("Save outcome").click());
+  await type("Amount", "123.0000");
+  await type("Currency", "INR");
+  await act(async () => button("Save").click());
   expect(save).toHaveBeenCalledExactlyOnceWith({
     outcome: "follow_up",
     lost_reason: null,
@@ -169,17 +169,19 @@ it("requires a fresh read before retrying an unconfirmed write", async () => {
       />,
     ),
   );
-  await act(async () => button("No decision").click());
-  expect(host.textContent).toContain("Your outcome couldn't be confirmed");
-  expect(host.querySelector("strong + span")?.textContent).toBe("Unconfirmed");
+  await act(async () => button("Decision Pending").click());
+  expect(host.textContent).toContain("We couldn't confirm your save");
+  expect(host.querySelector("strong + span")?.textContent).toBe(
+    "Not confirmed",
+  );
   expect(host.textContent).not.toContain("private response");
-  expect(button("No decision").disabled).toBe(true);
-  await act(async () => button("No decision").click());
+  expect(button("Decision Pending").disabled).toBe(true);
+  await act(async () => button("Decision Pending").click());
   expect(save).toHaveBeenCalledTimes(1);
   await act(async () => button("Reload").click());
   expect(reload).toHaveBeenCalledTimes(1);
-  expect(host.textContent).toContain("Unrecorded");
-  await act(async () => button("No decision").click());
+  expect(host.textContent).toContain("Not set yet");
+  await act(async () => button("Decision Pending").click());
   expect(save).toHaveBeenCalledTimes(2);
 });
 
@@ -203,9 +205,11 @@ it("keeps unconfirmed state and write controls disabled if the fresh read fails"
   );
   await act(async () => button("Won").click());
   await act(async () => button("Reload").click());
-  expect(host.textContent).toContain("still unavailable");
+  expect(host.textContent).toContain("Still couldn't load the outcome");
   expect(host.textContent).not.toContain("private");
-  expect(host.querySelector("strong + span")?.textContent).toBe("Unconfirmed");
+  expect(host.querySelector("strong + span")?.textContent).toBe(
+    "Not confirmed",
+  );
   expect(button("Lost").disabled).toBe(true);
   expect(save).toHaveBeenCalledTimes(1);
 });
@@ -281,7 +285,7 @@ it("reads back a completed write without replaying it or presenting stale previo
   });
   expect(reload).toHaveBeenCalledTimes(1);
   expect(button("Reload").disabled).toBe(true);
-  expect(host.textContent).toContain("Reading outcome");
+  expect(host.textContent).toContain("Checking…");
   await act(async () => {
     render({
       outcome: "won",
@@ -309,7 +313,7 @@ it("discards the previous call or account's draft when its scope changes", async
     ),
   );
   await act(async () => button("Lost").click());
-  await type("Reason for Lost", "Previous private draft");
+  await type("Why was it lost?", "Previous private draft");
   await act(async () =>
     root.render(
       <CallOutcomeEditor

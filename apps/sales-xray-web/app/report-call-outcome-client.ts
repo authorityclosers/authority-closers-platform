@@ -32,6 +32,8 @@ export type CallOutcomeRecord = {
 };
 export type CallOutcomeRead =
   | { status: "ready"; binding: CallOutcomeBinding; data: CallOutcomeRecord }
+  /** Not this person's call to record (403 not_call_owner): nothing to show. */
+  | { status: "not_owner" }
   | { status: "unavailable"; message: string };
 export type CallOutcomeSave =
   | { status: "saved"; binding: CallOutcomeBinding; data: CallOutcomeRecord }
@@ -249,6 +251,7 @@ export async function readCallOutcome(
   options: Options = {},
 ): Promise<CallOutcomeRead> {
   const scope = { ...binding };
+  let notOwner = false;
   try {
     checkBinding(scope);
     const data = await bounded(options, async (signal) => {
@@ -258,6 +261,18 @@ export async function readCallOutcome(
         signal,
         headers: { accept: "application/json" },
       });
+      if (response.status === 403) {
+        // Only the call's owner records it; the server says so with a stable code.
+        const detail = await response
+          .json()
+          .then((data: unknown) =>
+            data && typeof data === "object" && "detail" in data
+              ? (data as { detail: unknown }).detail
+              : null,
+          )
+          .catch(() => null);
+        notOwner = detail === "not_call_owner";
+      }
       if (response.status !== 200) invalid();
       return parseCallOutcomeRecord(
         await responseBody(response, signal),
@@ -266,6 +281,7 @@ export async function readCallOutcome(
     });
     return { status: "ready", binding: scope, data };
   } catch {
+    if (notOwner) return { status: "not_owner" };
     return {
       status: "unavailable",
       message: "Call outcome is unavailable. Try again.",

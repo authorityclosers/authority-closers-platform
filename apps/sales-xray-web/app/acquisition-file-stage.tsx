@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
-import { AnalysisWave } from "./analysis-wave";
+import { AnalysisWave, CALL_WAVE_TRANSITION } from "./analysis-wave";
 import { useFileWave } from "./analysis-wave-file";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-file-stage.module.css";
@@ -279,6 +279,7 @@ export function AcquisitionFileStage({
                         played={0}
                         state={wave ? "still" : "idle"}
                         compact
+                        transitionName={CALL_WAVE_TRANSITION}
                       />
                     </span>
                   ) : null}

@@ -120,7 +120,7 @@ describe("Focus feedback", () => {
         fictionalCoaching.mission!.origin_submission_id,
     });
     expect(body.command_id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(host.textContent).toContain("Recorded.");
+    expect(host.textContent).toContain("Noted.");
     expect(button("Not completely").disabled).toBe(true);
   });
   it("answers the reflection question with one tap, kept as context", async () => {
@@ -203,6 +203,121 @@ describe("Focus feedback", () => {
     });
     expect(host.textContent).toContain("Saved: “ग्राहक was in a hurry”");
     expect(host.querySelector("textarea")).toBeNull();
+    expect(button("Add context")).toBeDefined();
+  });
+  it("“Not completely” shows what the focus rests on, then asks what we missed", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+          evidence={fictionalCoaching.evidence}
+        />,
+      ),
+    );
+    // Closed until asked: no evidence list, no form.
+    expect(host.textContent).not.toContain("This focus is based on");
+    expect(host.querySelector("textarea")).toBeNull();
+    await act(async () => button("Not completely").click());
+    await flush();
+    expect(JSON.parse(fetch.mock.calls[0][1].body).agreement).toBe(
+      "not_completely",
+    );
+    const basis = host.querySelector(
+      'ul[aria-label="This focus is based on"]',
+    )!;
+    expect(basis.querySelectorAll("li")).toHaveLength(
+      fictionalCoaching.evidence.length,
+    );
+    expect(basis.textContent).toContain("Fictional call 1 · ");
+    expect(basis.textContent).toContain(
+      "The handover consequence remained unclear.",
+    );
+    expect(host.querySelector('a[href="#coaching-why"]')).not.toBeNull();
+    expect(host.textContent).toContain("What did we miss?");
+    expect(host.textContent).toContain("Tell us what we missed.");
+    expect(host.querySelector("textarea")).not.toBeNull();
+    const area = host.querySelector("textarea")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(area, "The buyer had already agreed the price");
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Save").click());
+    await flush();
+    expect(fetch.mock.calls[1][0]).toBe("/v1/me/coaching/context");
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({
+      context: "The buyer had already agreed the price",
+      focus_skill_id: "problem_impact_desire",
+    });
+    expect(host.textContent).toContain("Noted. Your mission stays the same.");
+    expect(host.textContent).toContain(
+      "Saved: “The buyer had already agreed the price”",
+    );
+  });
+  it("a note that failed to save keeps its command through Cancel and reopen", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+        />,
+      ),
+    );
+    await act(async () => button("Add context").click());
+    const area = host.querySelector("textarea")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(area, "Price was fixed by head office");
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Save").click());
+    await flush();
+    await act(async () => button("Cancel").click());
+    await act(async () => button("Add context").click());
+    expect(host.querySelector("textarea")!.value).toBe(
+      "Price was fixed by head office",
+    );
+    await act(async () => button("Save").click());
+    await flush();
+    const [first, retry] = fetch.mock.calls.map(
+      (call) => JSON.parse(call[1].body).command_id,
+    );
+    expect(retry).toBe(first);
+  });
+  it("“Agree” keeps the context form closed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+          evidence={fictionalCoaching.evidence}
+        />,
+      ),
+    );
+    await act(async () => button("Agree").click());
+    await flush();
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("Noted. Your mission stays the same.");
   });
   it("a different choice after a failed try is a new answer, not a conflict", async () => {
     const fetch = vi
@@ -226,7 +341,7 @@ describe("Focus feedback", () => {
       (call) => JSON.parse(call[1].body).command_id,
     );
     expect(first).not.toBe(second);
-    expect(host.textContent).toContain("Recorded.");
+    expect(host.textContent).toContain("Noted.");
   });
 });
 

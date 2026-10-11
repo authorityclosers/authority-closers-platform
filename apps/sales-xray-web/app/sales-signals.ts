@@ -45,8 +45,9 @@ export type MoreSignals = {
 const SENTENCE_BREAK = /(?<=[?？।.!])\s+/u;
 const PROBLEM_WORDS =
   /(problem|issue|stuck|loss|difficult|tough|worr|slow|not working|दिक्कत|परेशानी|समस्या|प्रॉब्लम|प्रॉब्लेम|फंस|फँस|नुकसान|मुश्किल|टेंशन|नहीं हो रहा|नहीं मिल|अडचण|त्रास|अडकल)/iu;
+// "Investment" is how a high-ticket seller says the price.
 const PRICE_WORDS =
-  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|cost|रुपये|₹|कितने का)/iu;
+  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|cost|investment|इन्वेस्टमेंट|निवेश|rupees?|रुपये|₹|कितने का)/iu;
 const PUSHBACK_WORDS =
   /(expensive|costly|too much|discount|high|महंगा|महँगा|ज़्यादा|ज्यादा|कम कर|डिस्काउंट|सोच|think about|later|बाद में|महाग)/iu;
 const PROMISE_WORDS =

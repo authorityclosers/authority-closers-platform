@@ -9,6 +9,7 @@
  * listened, and never moves on a timer.
  */
 import { useEffect, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 
 import {
   parseWaveform,
@@ -67,6 +68,34 @@ export function useMeasuredWave(
   return have ? found.envelope : null;
 }
 
+/** The chosen file's wave and the sending panel's: one moves into the other. */
+export const CALL_WAVE_TRANSITION = "sx-call-wave";
+
+/**
+ * Runs a state change as a view transition where the browser has them, so
+ * elements sharing a view-transition-name (the call's wave) move instead of
+ * jumping. Resolves once the new state is on screen; plain update otherwise.
+ */
+export async function withWaveMorph(update: () => void) {
+  const start = (
+    document as Document & {
+      startViewTransition?: (callback: () => void) => {
+        updateCallbackDone: Promise<void>;
+      };
+    }
+  ).startViewTransition;
+  if (
+    !start ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ) {
+    update();
+    return;
+  }
+  await start
+    .call(document, () => flushSync(update))
+    .updateCallbackDone.catch(() => update());
+}
+
 export type WaveState =
   | "idle"
   | "arriving"
@@ -98,6 +127,7 @@ export function AnalysisWave({
   played,
   state,
   compact,
+  transitionName,
 }: {
   envelope: WaveformEnvelope | null;
   /** Omitted when the upload doesn't report its progress. */
@@ -106,6 +136,11 @@ export function AnalysisWave({
   state: WaveState;
   /** A short strip, e.g. inside the chosen file's card. */
   compact?: boolean;
+  /**
+   * A view-transition name shared with another wave, so the browser moves
+   * one into the other (set inline: CSS modules would rename it per file).
+   */
+  transitionName?: string;
 }) {
   const bins = envelope
     ? waveformBins(envelope, 0, envelope.duration_ms, BARS)
@@ -134,7 +169,13 @@ export function AnalysisWave({
       data-compact={compact ? "" : undefined}
       role="img"
       aria-label={label}
-      style={{ "--played": played, "--arrived": arrived } as CSSProperties}
+      style={
+        {
+          "--played": played,
+          "--arrived": arrived,
+          viewTransitionName: transitionName,
+        } as CSSProperties
+      }
     >
       {levels.map((level, index) => {
         const at = (index + 0.5) / BARS;

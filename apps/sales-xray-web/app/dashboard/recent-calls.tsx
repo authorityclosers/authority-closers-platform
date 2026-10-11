@@ -139,6 +139,7 @@ export function RecentCallsList({
                   <span
                     className={styles.owner}
                     data-mine={owner === "You" ? "" : undefined}
+                    title={owner}
                   >
                     <i aria-hidden="true">
                       {owner === "You" ? "Y" : initials(owner)}
@@ -172,7 +173,7 @@ export function RecentCallsList({
 }
 
 /** Recent calls while the list loads: the list's five rows, final shape. */
-export function RecentCallsSkeleton() {
+export function RecentCallsSkeleton({ rows = 5 }: { rows?: number } = {}) {
   return (
     <div
       className={styles.root}
@@ -181,7 +182,7 @@ export function RecentCallsSkeleton() {
       aria-label="Loading recent calls"
     >
       <ul className={styles.list} aria-hidden="true">
-        {[46, 30, 58, 38, 52].map((width, index) => (
+        {[46, 30, 58, 38, 52].slice(0, rows).map((width, index) => (
           <li
             key={width}
             className={styles.skeletonRow}

@@ -31,6 +31,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { VIEWS as VIEWS_COPY } from "./report-copy";
+import {
+  CallOutcomeProvider,
+  FixtureCallOutcomeProvider,
+} from "./report-outcome-context";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -502,6 +506,10 @@ function renderReportPanels(
                 </span>
               }
               headingLevel="h2"
+              // Phones: Coaching's own pillar cards are the frame.
+              className={styles.coachingPanel}
+              headClassName={styles.coachingPanelHead}
+              bodyClassName={styles.coachingPanelBody}
             >
               {panel.content}
             </OperationalPanel>
@@ -564,6 +572,7 @@ export function ReportModes({
   onSelectContextualPlayback,
   prospectControls,
   structure = "custom",
+  fixture = false,
 }: {
   label?: string;
   initialView?: View;
@@ -581,6 +590,8 @@ export function ReportModes({
   ) => void;
   structure?: "custom" | "pillars";
   prospectControls?: ReactNode;
+  /** A fictional fixture: the Report shows its data but reads nothing live. */
+  fixture?: boolean;
 }) {
   const storyPanels =
     // A guest preview gets the Report too when the caller asks for pillars;
@@ -594,6 +605,7 @@ export function ReportModes({
           prospectControls,
           {
             callId: boundCallId ?? null,
+            liveReads: !fixture,
             // Guests have no Coaching view, so no button that does nothing.
             onOpenCoaching: documentData.report.preview
               ? undefined
@@ -892,6 +904,12 @@ export function ReportModes({
     );
     if (!list) return;
     const place = () => {
+      // A row that scrolls sideways fades at its edge, so a name at the edge
+      // reads as "more this way", never as a cut word.
+      list.toggleAttribute(
+        "data-overflow",
+        list.scrollWidth > list.clientWidth + 1,
+      );
       const current = list.querySelector<HTMLElement>(
         '[aria-selected="true"], [aria-current="location"]',
       );
@@ -1329,7 +1347,7 @@ export function ReportModes({
     </div>
   );
 
-  return (
+  const report = (
     <div
       ref={workspaceRef}
       className={styles.workspace}
@@ -1393,5 +1411,19 @@ export function ReportModes({
         </div>
       )}
     </div>
+  );
+  // Fixtures keep the outcome in memory; a guest preview reads none.
+  return fixture && !documentData?.report?.preview ? (
+    <FixtureCallOutcomeProvider>{report}</FixtureCallOutcomeProvider>
+  ) : (
+    <CallOutcomeProvider
+      callId={
+        documentData?.report && !documentData.report.preview && !fixture
+          ? boundCallId
+          : null
+      }
+    >
+      {report}
+    </CallOutcomeProvider>
   );
 }

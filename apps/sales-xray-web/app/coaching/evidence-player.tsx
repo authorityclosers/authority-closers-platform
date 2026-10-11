@@ -1,13 +1,15 @@
 "use client";
 
-import { Pause, Play, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
-import { ClipPlayState } from "../source-waveform";
+import { ClipPlayIcon, ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
+import { MOMENT, THEIR, WHY } from "./coaching-copy";
+import { useCallHref, useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 export { timeLabel } from "./coaching-format";
@@ -24,6 +26,33 @@ export function clipLength(ms: number) {
 
 /** Plays a moment in the Report's own player, where the call is already open. */
 export type PlayInReport = (evidence: Evidence, title: string) => void;
+
+/** The Report's "With context": the moment with the lines around it. */
+export type ContextPlay = {
+  range: { start_ms: number; end_ms: number };
+  play: () => void;
+};
+
+function ContextButton({ context }: { context: ContextPlay }) {
+  return (
+    <ClipPlayState
+      startMs={context.range.start_ms}
+      endMs={context.range.end_ms}
+    >
+      {(playing) => (
+        <button
+          type="button"
+          className={styles.withContext}
+          aria-pressed={playing}
+          aria-label={`${playing ? MOMENT.pauseContext : MOMENT.playContext}, ${timeLabel(context.range.start_ms)}–${timeLabel(context.range.end_ms)}`}
+          onClick={context.play}
+        >
+          {playing ? MOMENT.pause : MOMENT.withContext}
+        </button>
+      )}
+    </ClipPlayState>
+  );
+}
 
 /** The play pill when the Report's player plays the moment. */
 function ReportPlay({
@@ -43,14 +72,10 @@ function ReportPlay({
           className={styles.time}
           data-state={playing ? "playing" : "idle"}
           aria-pressed={playing}
-          aria-label={`${playing ? "Pause" : "Play"} moment ${span}`}
+          aria-label={playing ? MOMENT.pauseMoment(span) : MOMENT.play(span)}
           onClick={() => onPlay(evidence, "Coaching for this call")}
         >
-          {playing ? (
-            <Pause size={13} aria-hidden="true" />
-          ) : (
-            <Play size={13} aria-hidden="true" />
-          )}
+          <ClipPlayIcon playing={playing} size={9} />
           {timeLabel(evidence.start_ms)}
         </button>
       )}
@@ -65,6 +90,7 @@ export function EvidencePlayer({
   extra = false,
   fictional = false,
   onPlay,
+  context,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
@@ -75,8 +101,11 @@ export function EvidencePlayer({
   extra?: boolean;
   /** Inside a Report: play in its player instead of a separate audio. */
   onPlay?: PlayInReport;
+  /** Inside a Report: also play the moment with the lines around it. */
+  context?: ContextPlay | null;
 }) {
   const identity = useId();
+  const callHref = useCallHref();
   const audio = useRef<HTMLAudioElement>(null);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "failed">(
     "idle",
@@ -128,8 +157,6 @@ export function EvidencePlayer({
     }
     if (audio.current) start(audio.current);
   };
-  const Icon =
-    state === "playing" ? Pause : state === "failed" ? RefreshCw : Play;
   return (
     <li className={styles.moment} data-extra={extra ? "" : undefined}>
       {evidence.playable && onPlay ? (
@@ -150,17 +177,21 @@ export function EvidencePlayer({
           }
           aria-label={
             state === "playing"
-              ? `Pause moment ${span}`
+              ? MOMENT.pauseMoment(span)
               : state === "failed"
-                ? `Try audio again ${span}`
-                : `Play evidence ${span}`
+                ? MOMENT.retry(span)
+                : MOMENT.play(span)
           }
         >
-          <Icon size={13} aria-hidden="true" />
+          {state === "failed" ? (
+            <RefreshCw size={13} aria-hidden="true" />
+          ) : (
+            <ClipPlayIcon playing={state === "playing"} size={9} />
+          )}
           {timeLabel(evidence.start_ms)}
         </button>
       ) : (
-        <span className={styles.time} aria-label={`Moment at ${span}`}>
+        <span className={styles.time} aria-label={MOMENT.at(span)}>
           {timeLabel(evidence.start_ms)}
         </span>
       )}
@@ -170,7 +201,7 @@ export function EvidencePlayer({
         <span className={styles.momentMeta}>
           {showCall ? (
             <>
-              <Link href={`/coaching?call=${evidence.submission_id}`}>
+              <Link href={callHref(evidence.submission_id)}>
                 {evidence.call_label}
               </Link>
               <span>{callDate(evidence.created_at)}</span>
@@ -180,18 +211,19 @@ export function EvidencePlayer({
             {span}
             {evidence.playable ? ` · ${clipLength(length)} clip` : ""}
           </span>
-          {state === "loading" ? <span>Loading audio…</span> : null}
+          {state === "loading" ? <span>{MOMENT.loading}</span> : null}
+          {context && onPlay ? <ContextButton context={context} /> : null}
           {!evidence.playable ? (
             <span>
               {fictional
-                ? "Fictional call text; no audio."
-                : "Audio alignment is uncertain; read the quote."}
+                ? MOMENT.fictional
+                : "We couldn’t match this to the audio. Read the quote."}
             </span>
           ) : null}
         </span>
         {state === "failed" ? (
           <p role="status" className={styles.status}>
-            Audio could not be played. Try audio again; the quote stays here.
+            {MOMENT.failed}
           </p>
         ) : null}
       </div>
@@ -201,7 +233,7 @@ export function EvidencePlayer({
           ref={audio}
           src={source}
           preload="metadata"
-          aria-label={`Call evidence from ${timeLabel(evidence.start_ms)}`}
+          aria-label={MOMENT.audio(timeLabel(evidence.start_ms))}
           onLoadedMetadata={() => {
             if (audio.current && active.current) start(audio.current);
           }}
@@ -233,10 +265,11 @@ export function EvidencePlayer({
 export function MomentList({
   evidence,
   showCall = true,
-  label = "Moments from your calls",
+  label,
   heading,
   fictional = false,
   onPlay,
+  contextFor,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
@@ -245,8 +278,10 @@ export function MomentList({
   heading?: string;
   fictional?: boolean;
   onPlay?: PlayInReport;
+  contextFor?: (evidence: Evidence) => ContextPlay | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const they = useTheirCoaching();
   return (
     <>
       {heading ? (
@@ -259,7 +294,7 @@ export function MomentList({
       ) : null}
       <ul
         className={styles.moments}
-        aria-label={label}
+        aria-label={label ?? (they ? THEIR.moments : WHY.moments)}
         data-expanded={expanded ? "" : undefined}
       >
         {evidence.map((moment, index) => (
@@ -270,6 +305,7 @@ export function MomentList({
             extra={index >= 1}
             fictional={fictional}
             onPlay={onPlay}
+            context={contextFor?.(moment)}
           />
         ))}
       </ul>

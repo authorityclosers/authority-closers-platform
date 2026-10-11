@@ -158,11 +158,78 @@ export const BIG_PICTURE = {
 /** "Follow-up: Friday · 4:00 PM" */
 export const followUpOn = (when: string) => `Follow-up: ${when}`;
 
+const WEEKDAYS = "Sunday Monday Tuesday Wednesday Thursday Friday Saturday";
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec";
+
+/** A follow-up date someone picked ("2026-10-16") → "Follow-up: Friday, 16 Oct". */
+export const followUpDate = (isoDate: string) => {
+  const day = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(day.getTime())) return followUpOn(isoDate);
+  const weekday = WEEKDAYS.split(" ")[day.getUTCDay()];
+  const month = MONTHS.split(" ")[day.getUTCMonth()];
+  return followUpOn(`${weekday}, ${day.getUTCDate()} ${month}`);
+};
+
+/**
+ * Recording the outcome yourself (1.1). The buttons carry the same names as
+ * the status above them, so a tap and what the Report then says always match.
+ */
+export const OUTCOME_CHOICES: Record<
+  "won" | "lost" | "follow_up" | "no_decision",
+  OutcomeStatus
+> = {
+  won: "Won",
+  lost: "Lost",
+  follow_up: "Follow-up Set",
+  no_decision: "Decision Pending",
+};
+
+/** A person's recorded outcome in the Report's words: status plus their reason or date. */
+export const recordedOutcome = (value: {
+  outcome: keyof typeof OUTCOME_CHOICES;
+  lost_reason?: string | null;
+  follow_up_on?: string | null;
+}) => ({
+  status: OUTCOME_CHOICES[value.outcome],
+  note:
+    value.outcome === "lost"
+      ? value.lost_reason?.trim() || null
+      : value.outcome === "follow_up" && value.follow_up_on
+        ? followUpDate(value.follow_up_on)
+        : null,
+});
+
+export const OUTCOME_RECORD = {
+  title: "Set the outcome",
+  notSet: "Not set yet",
+  unavailable: "Couldn't load",
+  /** A save the server didn't confirm: it may or may not have landed. */
+  notConfirmed: "Not confirmed",
+  dealValue: "Deal value",
+  lostReason: "Why was it lost?",
+  followUpDate: "Follow-up date",
+  amount: "Amount",
+  currency: "Currency",
+  currencyExample: "INR",
+  save: "Save",
+  saving: "Saving…",
+  checking: "Checking…",
+  reload: "Reload",
+  needReason: "Add why it was lost.",
+  needDate: "Pick a follow-up date.",
+  checkValues: "Check the date, amount and currency.",
+  saveNotConfirmed: "We couldn't confirm your save. Reload, then try again.",
+  stillUnavailable: "Still couldn't load the outcome. Reload the page.",
+  readFailed: "Couldn't load the call outcome.",
+};
+
 /* ── 2. How the Call Played Out ──────────────────────────────────────── */
 
 export const CALL_FLOW = {
   metrics: part("2.1", "Call Metrics", "Call numbers"),
   timeline: part("2.2", "Conversation Timeline", "How the call moved"),
+  /** Gap line when the report names no stages (the talk bars still show). */
+  stagesGap: "Call stages",
   change: part("2.3", "Key Change in the Conversation", "Key change"),
   beforeAfter: part("2.4", "Before / Switch / After", "Before and after"),
   before: "Before",
@@ -433,6 +500,63 @@ export const VIEWS = {
   },
   more: "More views",
 };
+
+/** Getting around a long report. */
+export const NAV = {
+  /** Screen readers: the X beside "Back to …" after a jump. */
+  hideBack: "Hide the Back button",
+  backToTop: "Back to the top",
+};
+
+/** After a jump to a moment or a skill: "Back to Moments That Mattered". */
+export const backTo = (where: string) => `Back to ${where}`;
+
+/* ── Details view: call measurements (counted, no AI) ────────────────── */
+
+export const MEASURE = {
+  title: "Call measurements",
+  subtitle: "Counted from the call's timing, with no AI",
+  callLength: "Call length",
+  /** The recording has no length, so the transcript's first to last line. */
+  transcriptLength: "Transcript length",
+  notMeasured: "Not measured",
+  talkShare: "talk share",
+  talkShareNotMeasured: "Talk share not measured",
+  questions: "Questions:",
+  notCounted: "not counted",
+  meaning:
+    "Talk share is each person's part of the talking. Questions counts the questions they asked.",
+  byMinute: "Talk share by minute",
+  timesTitle: "Talk time and longest turns",
+  talkTime: "Talk time:",
+  timesMeaning: [
+    "Times come from the transcript, so they can include short pauses.",
+    "A turn carries on through pauses of up to 2 seconds if nobody else speaks.",
+    "Went quiet: under 10% of the talking for 3 minutes. Came back: a later minute reaches 25%.",
+  ],
+  longest: "Longest turns",
+  /** Screen readers: "Play 17:41: Arjun, long turn". */
+  longestTurn: "long turn",
+};
+
+/** A speaker the call hasn't named yet: "Speaker 2". */
+export const speakerN = (index: number) => `Speaker ${index + 1}`;
+
+/** "Went quiet at minute 13 · came back" */
+export const wentQuiet = (minute: number, cameBack: boolean) =>
+  `Went quiet at minute ${minute} · ${cameBack ? "came back" : "stayed quiet"}`;
+
+/** Screen readers: what the talk-share chart shows. */
+export const talkShareChart = (
+  name: string,
+  minutes: number,
+  quiet: { minute: number; cameBack: boolean } | null,
+) =>
+  `Talk share by minute for ${name} over ${minutes} minutes. ${
+    quiet
+      ? `Went quiet at minute ${quiet.minute}, ${quiet.cameBack ? "then came back." : "and stayed quiet."}`
+      : "Never went quiet."
+  }`;
 
 export const DOCUMENT = {
   kicker: "Sales Xray · Call Report",

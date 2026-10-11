@@ -1357,6 +1357,14 @@ it("shows the advertised trial allowance for a clean visitor", async () => {
   expect(container.textContent).not.toContain("unavailable until your session");
 });
 
+it("never shows a signed-in account the guest trial cap while its balance loads", async () => {
+  await mountWithAccountAccess();
+  expect(container.textContent).not.toContain("trial allowance");
+  expect(container.textContent).toContain(
+    "Remaining analysis time · checking…",
+  );
+});
+
 it("clears consent when the selected file changes", async () => {
   await mount();
   await select();
@@ -2742,7 +2750,7 @@ it("replaces delayed guidance with real paused recovery without restarting analy
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
   expect(container.textContent).toContain("Analysis paused");
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(
     calls.filter(({ init }) => init.method && init.method !== "GET"),
@@ -2761,10 +2769,10 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "This stage needs checking before analysis can continue",
   );
   expect(container.textContent).toContain(
-    "Some conversation analysis is saved with this call",
+    "Part of the analysis is saved with this call",
   );
   expect(container.textContent).toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "Done",
@@ -2804,6 +2812,29 @@ it("explains provider credential pauses without exposing the raw failure", async
   expect(container.textContent).not.toContain(
     "conversation_broker_service_identity_unavailable",
   );
+});
+
+it("says a failed run once: the panel's Analysis failed and Try again, no corner card", async () => {
+  existing = true;
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "failed",
+    has_report: false,
+    run_state: "failed",
+    minute_state: "released",
+    retry_available: true,
+    stages: [{ stage: "C2", state: "not_started" }],
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain("Analysis failed");
+  expect(container.textContent).toContain(
+    "Your minutes have been released. Your recording is saved.",
+  );
+  expect(button("Try again")).toBeDefined();
+  expect(container.textContent).not.toContain("This analysis needs attention");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
 function reloadHeldCall() {
@@ -2981,10 +3012,10 @@ it.each(["failed", "cancelled"])(
       container.querySelector('[data-phase][data-paused="true"]'),
     ).not.toBeNull();
     expect(container.textContent).toContain(
-      "A completed transcript has not been confirmed yet",
+      "The full transcript isn’t confirmed yet",
     );
     expect(container.textContent).not.toContain(
-      "The completed transcript stays attached",
+      "The transcript is saved with this call",
     );
   },
 );
@@ -3027,10 +3058,10 @@ it("keeps an uncertain transcription honest about missing completed work", async
     "Paused · needs attention",
   );
   expect(container.textContent).toContain(
-    "A completed transcript has not been confirmed yet",
+    "The full transcript isn’t confirmed yet",
   );
   expect(container.textContent).not.toContain(
-    "The completed transcript stays attached",
+    "The transcript is saved with this call",
   );
   expect(container.textContent).not.toContain("Review and continue analysis");
   expect(
@@ -3610,6 +3641,11 @@ it("does not expose a report when an explicit call selector is denied", async ()
     container.querySelector('[aria-label="Sales call report"]'),
   ).toBeNull();
   expect(container.textContent).toContain("Saved call unavailable");
+  // One calm card that starts with its title (no small caps "SAVED CALL" label).
+  expect(
+    container.querySelector('[aria-labelledby="existing-call-entry-heading"]')
+      ?.textContent,
+  ).toMatch(/^Saved call unavailable/);
   expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/claim"))).toBe(false);
 });

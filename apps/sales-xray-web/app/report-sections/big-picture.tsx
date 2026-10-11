@@ -2,11 +2,49 @@
 
 import { CalendarClock, Flag, Sparkles, TriangleAlert } from "lucide-react";
 
-import { BIG_PICTURE, followUpOn } from "../report-copy";
+import { CallOutcomeEditor } from "../report-call-outcome";
+import {
+  BIG_PICTURE,
+  COMMON,
+  OUTCOME_RECORD,
+  followUpOn,
+} from "../report-copy";
+import { useCallOutcome } from "../report-outcome-context";
 import type { StoryModel } from "../report-story-model";
 import { OutcomeBadge, PlayChip, StoryCard } from "../report-visuals/visuals";
 import { Gap, LineText, Text, type Select } from "./shared";
 import styles from "./sections.module.css";
+
+/** One tap records won, lost, follow-up or no decision for this call. */
+function OutcomeControl() {
+  const { state, save, reload } = useCallOutcome();
+  // A teammate's call: its owner records the outcome; nothing to show here.
+  if (state.status === "off" || state.status === "not_owner") return null;
+  if (state.status === "loading")
+    return <span className={styles.outcomeSkeleton} aria-hidden="true" />;
+  if (state.status === "unavailable")
+    return (
+      <p className={styles.gap} role="status">
+        {OUTCOME_RECORD.readFailed}{" "}
+        <button
+          type="button"
+          className={styles.more}
+          onClick={() => void reload().catch(() => {})}
+        >
+          {COMMON.tryAgain}
+        </button>
+      </p>
+    );
+  return (
+    <CallOutcomeEditor
+      scopeKey={state.key}
+      value={state.record.value}
+      canEdit={state.record.can_edit}
+      onSave={save}
+      onReload={reload}
+    />
+  );
+}
 
 /** 1 The Big Picture: one outcome, one summary, one of each, then lower. */
 export function BigPicture({
@@ -51,6 +89,8 @@ export function BigPicture({
             ) : null}
           </div>
         ) : null}
+        {/* Only a person records the outcome (Won / Lost come from here). */}
+        <OutcomeControl />
       </StoryCard>
       {picture.influence ? (
         <StoryCard

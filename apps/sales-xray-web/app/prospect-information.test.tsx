@@ -76,7 +76,7 @@ it("prioritizes six sections, keeps missing qualification unknown and the person
     );
     expect(company?.textContent).toContain("Set by a person");
     expect(company?.textContent).toContain(
-      "A later call heard: Example company two",
+      "A later call said: Example company two",
     );
     // Missing qualification is named once, as Unknown, never guessed.
     const qualification = host.querySelector('[data-prospect-section="3"]');

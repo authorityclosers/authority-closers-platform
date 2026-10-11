@@ -1374,14 +1374,28 @@
   }
 }
 
-/* Phones: the six pillars go by their short names, so more fit in a row. */
-@media (max-width: 640px) {
-  .workspace[data-view="story"] .contents .fullLabel {
-    display: none;
-  }
-  .workspace[data-view="story"] .contents .compactLabel {
-    display: inline;
-  }
+/* The six pillars go by their short names in the section row (Big Picture,
+   Call Flow, Worked / Didn't, Moments, Skills, Deal), so the row fits. */
+.workspace[data-view="story"] .contents .fullLabel {
+  display: none;
+}
+.workspace[data-view="story"] .contents .compactLabel {
+  display: inline;
+}
+/* A row that scrolls sideways (phones, tablets) fades at its edge, so a name
+   there reads as "more this way", not as a cut word. */
+.contents[data-overflow],
+.tabNavigation[data-overflow] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    var(--sx-ink) calc(100% - 32px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    var(--sx-ink) calc(100% - 32px),
+    transparent
+  );
 }
 
 /* Narrow phones: the view words are enough, so the row never runs off the
@@ -1393,4 +1407,40 @@
   .toolbar[data-labelled] > button > svg {
     display: none;
   }
+}
+
+/* Phones: the Coaching tab's content carries its own pillar cards, so its
+   panel drops the frame and the repeated heading (kept for screen readers). */
+@media (max-width: 600px) {
+  .coachingPanel.coachingPanel {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .coachingPanelHead.coachingPanelHead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .coachingPanelBody.coachingPanelBody {
+    padding: 0;
+  }
+}
+
+/* The current section's name has one fixed slot (the longest short name,
+   "Worked / Didn't"), so the bar never slides sideways while reading. */
+.navRow[data-placement="toolbar"]
+  .contents
+  a[aria-current="location"]
+  .compactLabel {
+  display: inline-block;
+  min-width: 100px;
+  text-align: left;
 }

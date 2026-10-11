@@ -20,6 +20,7 @@ import {
   partHeading,
   pillarHeading,
   prospectAgreed,
+  type OutcomeStatus,
   type PartCopy,
   type PillarId,
 } from "./report-copy";
@@ -116,6 +117,7 @@ export type DocItem =
         state: string;
         tone: DocTone;
         meaning: string | null;
+        /** Empty when the skill was seen but the analysis wrote no note. */
         observation: string;
         clips: DocClip[];
       }[];
@@ -146,6 +148,8 @@ export type DocPeople = {
   /** A confirmed or default name for a transcript speaker id. */
   speakerName?: (speakerId: string) => string | null | undefined;
   roles?: { seller?: string | null; prospect?: string | null };
+  /** The outcome a person recorded for this call (Won / Lost only come from here). */
+  recorded?: { status: OutcomeStatus; note?: string | null } | null;
 };
 
 const OUTCOME_TONE: Record<string, DocTone> = {
@@ -261,6 +265,7 @@ export function reportDocumentModel(
 
   const model: StoryModel = reportStoryModel(data.report, transcript, {
     roles: people.roles,
+    recorded: people.recorded,
   });
 
   const prospectName =
@@ -348,7 +353,8 @@ export function reportDocumentModel(
           : null,
       ]),
     ],
-    model.missing[0],
+    // 1.1 always prints a status ("Outcome not set"), so the gap line never repeats it.
+    model.missing[0].filter((name) => name !== BIG_PICTURE.outcome.label),
   );
 
   /* 2. How the Call Played Out */
@@ -642,13 +648,18 @@ export function reportDocumentModel(
           {
             type: "skills",
             rows: model.skills.map((skill) => ({
-              name: skill.label,
+              // The Report rows' short names (Dipak's "Skill UI Design"
+              // list), so screen, page and Word file name each skill alike.
+              name: skill.short,
               state: skill.state ?? SKILLS.notCovered,
               tone: skill.state
                 ? (STATE_TONE[skill.state] ?? "neutral")
                 : "neutral",
               meaning: skill.state ? SKILL_STATE_MEANING[skill.state] : null,
-              observation: skill.observation ?? SKILLS.notCoveredText,
+              // An observed skill without a note (or with a stock one) shows
+              // its state and play times only, as on the Report screen.
+              observation:
+                skill.observation ?? (skill.state ? "" : SKILLS.notCoveredText),
               clips: skill.sources
                 .slice(0, 3)
                 .map((source) => clip(source))
@@ -661,7 +672,8 @@ export function reportDocumentModel(
         ? { heading: SKILLS.deeperTitle, items: deeperItems }
         : null,
     ],
-    model.missing[4],
+    // Every skill has its own row ("Not covered"), so no gap line repeats the names.
+    [],
   );
 
   /* 6. Where the Deal Stands */
