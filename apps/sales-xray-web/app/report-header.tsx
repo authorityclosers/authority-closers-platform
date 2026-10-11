@@ -177,6 +177,18 @@ export function ReportHeader({
     };
   }, []);
 
+  // Without the folding map, the pinned row still needs its solid backdrop
+  // once the Report scrolls beneath it.
+  useEffect(() => {
+    const header = bar.current;
+    if (hasCompact || !header) return;
+    const scroller = scrollParent(header);
+    if (!scroller) return;
+    const update = () => setCompact(scroller.scrollTop > 4);
+    scroller.addEventListener("scroll", update, { passive: true });
+    return () => scroller.removeEventListener("scroll", update);
+  }, [hasCompact]);
+
   // The full waveform folds into the pinned row pixel for pixel. The moment
   // its top meets the row, it hands over to the compact copy (drawn bar for
   // bar the same), placed exactly on top of it; the copy then travels and

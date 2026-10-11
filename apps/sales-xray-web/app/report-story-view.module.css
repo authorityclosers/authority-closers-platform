@@ -97,6 +97,7 @@
 }
 .quote cite {
   display: block;
+  font-family: var(--lx-font-ui);
   margin-bottom: 2px;
   color: var(--lx-muted);
   font-size: 12px;
@@ -631,6 +632,7 @@
 }
 .skillName {
   flex: 1;
+  color: var(--lx-ink);
   min-width: 0;
   overflow: hidden;
   font-size: 14px;
