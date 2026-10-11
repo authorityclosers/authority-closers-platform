@@ -160,7 +160,7 @@ export function NextCallPlan({
           </p>
           {focus ? (
             <p className={styles.target}>
-              <b>You’ll know it worked when:</b>{" "}
+              <b>On the call:</b>{" "}
               <span>
                 <RichText text={focus.target} />
               </span>
