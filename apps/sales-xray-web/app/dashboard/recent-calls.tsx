@@ -139,6 +139,7 @@ export function RecentCallsList({
                   <span
                     className={styles.owner}
                     data-mine={owner === "You" ? "" : undefined}
+                    title={owner}
                   >
                     <i aria-hidden="true">
                       {owner === "You" ? "Y" : initials(owner)}

@@ -18,6 +18,7 @@
   padding: 0;
   overflow: hidden;
   list-style: none;
+  container: recent / inline-size;
 }
 
 .item + .item,
@@ -202,6 +203,24 @@
 @keyframes pulse {
   50% {
     opacity: 0.45;
+  }
+}
+
+/* A narrower list (tablets, a half-width Dashboard card): the owner shows as
+   initials (the name stays for screen readers and on hover), so the call's
+   own name keeps its room. Phones below 720 px have their own layout. */
+@container recent (max-width: 859px) {
+  .list[data-owners] .row {
+    grid-template-columns: minmax(0, 1fr) 24px 96px 64px 156px 16px;
+  }
+
+  .owner > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 

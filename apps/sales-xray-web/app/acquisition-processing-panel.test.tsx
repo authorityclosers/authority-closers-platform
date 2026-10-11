@@ -164,6 +164,42 @@ it("uses the server's own stage and clock when the progress read has them", asyn
   expect(host.textContent).toContain("2:51 so far");
 });
 
+it("says only 'Done' for a step the server finished in under a second", async () => {
+  vi.setSystemTime(new Date("2026-10-10T12:03:00Z"));
+  await mount({
+    progress: {
+      ...running,
+      current_stage: "C5",
+      terminal_state: null,
+      stage_progress: [
+        {
+          stage: "C2",
+          state: "completed",
+          started_at: "2026-10-10T12:00:10Z",
+          finished_at: "2026-10-10T12:01:15Z",
+        },
+        {
+          stage: "C4",
+          state: "completed",
+          started_at: "2026-10-10T12:01:20Z",
+          finished_at: "2026-10-10T12:01:20.400Z",
+        },
+        {
+          stage: "C5",
+          state: "running",
+          started_at: "2026-10-10T12:01:21Z",
+          finished_at: null,
+        },
+      ],
+    },
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+  expect(stepStatus("C2")).toBe("Done · 1:05");
+  expect(stepStatus("C4")).toBe("Done");
+});
+
 it("marks each step done with the time it took once it is seen to finish", async () => {
   stages = ["C1", "C3", "C3", "C5", "done"];
   await mount();

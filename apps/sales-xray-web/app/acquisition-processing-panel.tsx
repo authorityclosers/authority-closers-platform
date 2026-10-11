@@ -204,7 +204,9 @@ function stepStatus(
   row: AcquisitionProcessingStageRow | undefined,
 ) {
   if (state === "done") {
-    if (duration !== null) return `Done · ${formatElapsed(duration)}`;
+    // Under a second (work already saved, a cached step) is just "Done", never "0:00".
+    if (duration !== null && duration >= 1_000)
+      return `Done · ${formatElapsed(duration)}`;
     // Part of the work is saved, not the whole step: say exactly that.
     return row?.state === "saved" ? "Work saved" : "Done";
   }
