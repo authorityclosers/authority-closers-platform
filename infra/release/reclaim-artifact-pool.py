@@ -58,12 +58,13 @@ class GitHub:
         )
 
     def artifacts(self) -> list[dict[str, Any]]:
-        return INVENTORY["read_inventory"](
+        artifacts: list[dict[str, Any]] = INVENTORY["read_inventory"](
             self.executable,
             self.repository,
             "reclamation",
             fetch=lambda: json.dumps(self.api("/actions/artifacts?per_page=100", paginate=True)),
         )
+        return artifacts
 
     def pulls(self, state: str) -> list[dict[str, Any]]:
         pages = self.api(f"/pulls?state={state}&per_page=100", paginate=True)
