@@ -35,6 +35,10 @@ fictional content and are development-only.
 For coordinator-run staging smoke, set `WB_MODE=live`, `WB_BASE_URL` to the
 approved staging origin, `WB_STORAGE_STATE` to an existing private Playwright
 session file, and `WB_REPORT_PATH` to a retained populated report for that user.
+`WB_STORAGE_STATE` accepts Playwright JSON or a standard Netscape cookie jar.
+The jar is loaded into the browser in memory with its existing domain/path,
+expiry, secure and HttpOnly flags; expired cookies and a different host fail.
+No new session or converted credential file is created.
 Team requires a user with the existing team-read permission. Optional route
 overrides are `WB_DASHBOARD_PATH`, `WB_COACHING_PATH`, `WB_TEAM_PATH`. No credentials
 go into this directory, Git, commands or test output. Live mode uses real product

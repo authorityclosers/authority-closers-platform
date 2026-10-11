@@ -93,11 +93,18 @@ verifies these new checks in all four pairs. Failure
 receipts now preserve exception type and the journey's check/line, excluding
 exception/customer text, even if pytest's batch summary is interrupted.
 
-Coordinator supplied existing private session references at 15:43 UTC; the
-session file is not Playwright storage-state JSON (format checked, no values
-printed). Populated staging smoke still needs a compatible approved session
-reference/format contract, retained Report route, existing Team-read permission
-and confirmed staging version. Coordinator's third staging attempt is running
+Coordinator supplied existing private session references at 15:43 UTC. The
+session is a valid standard Netscape cookie jar; the earlier JSON-only
+classification was too narrow. At 17:26 UTC Chromium imports its one unexpired
+cookie with exact staging host, secure and HttpOnly flags intact, **zero network
+requests**. The owned journey accepts JSON or this jar in memory, preserving
+host/path/expiry and refusing a different host or insecure origin. No token
+values are printed, converted credential file saved, or new session issued.
+Receipt: `/home/acdev/strikes/1694/workbench-release-ci-cookie-format-proof.json`.
+Ruff check/format, required HTTP import, no-server 16-case skipping and diff
+checks pass. Populated staging smoke still needs the retained Report route,
+existing Team-read context and confirmed staging version. Third staging attempt
+is running
 at `f0437c9` according to its 16:40 UTC note;
 QA has performed no staging writes, new sign-in/account/access grants or deploy.
 

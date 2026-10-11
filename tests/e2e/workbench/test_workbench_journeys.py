@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from http.cookiejar import HTTPONLY_ATTR, LoadError, MozillaCookieJar
 from pathlib import Path
 from urllib.parse import urlsplit
 from zipfile import ZipFile
@@ -103,6 +104,51 @@ def _switch_report_view(page: Page, label: str) -> None:
     if not action.count():
         page.locator('summary[aria-label="More views"]').click()
     action.click()
+
+
+def _cookie_jar_path() -> Path | None:
+    reference = os.environ.get("WB_STORAGE_STATE")
+    if not reference:
+        return None
+    path = Path(reference)
+    try:
+        if path.read_bytes().startswith(b"# Netscape HTTP Cookie File"):
+            return path
+    except OSError:
+        pytest.fail("The approved session reference cannot be read", pytrace=False)
+    return None
+
+
+def _restore_cookie_jar(context: BrowserContext, path: Path) -> None:
+    jar = MozillaCookieJar(str(path))
+    try:
+        jar.load(ignore_discard=True)
+    except (OSError, LoadError):
+        pytest.fail("The approved cookie jar cannot be loaded", pytrace=False)
+    origin = urlsplit(os.environ["WB_BASE_URL"])
+    cookies = list(jar)
+    if not cookies:
+        pytest.fail("The approved cookie jar has no unexpired cookies", pytrace=False)
+    if any(cookie.domain.lstrip(".") != origin.hostname for cookie in cookies):
+        pytest.fail("The approved cookie jar belongs to a different host", pytrace=False)
+    if origin.scheme != "https" and any(cookie.secure for cookie in cookies):
+        pytest.fail("The approved secure cookie requires HTTPS", pytrace=False)
+    # Reuse the existing cookie and its metadata in memory; never issue a
+    # session, change its host or persist a second credential-bearing file.
+    context.add_cookies(
+        [
+            {
+                "name": cookie.name,
+                "value": cookie.value or "",
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "expires": cookie.expires if cookie.expires is not None else -1,
+                "secure": cookie.secure,
+                "httpOnly": cookie.has_nonstandard_attr(HTTPONLY_ATTR),
+            }
+            for cookie in cookies
+        ]
+    )
 
 
 @pytest.fixture(scope="session")
@@ -259,6 +305,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     default_directory = Path.home() / ".cache" / "ac-workbench-qa"
     directory = Path(os.environ.get("WB_SHOTS_DIR", str(default_directory)))
     directory.mkdir(parents=True, exist_ok=True)
+    cookie_jar = _cookie_jar_path()
     context = browser.new_context(
         base_url=os.environ["WB_BASE_URL"].rstrip("/"),
         viewport={"width": width, "height": 844 if width == 390 else 1000},
@@ -266,7 +313,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         has_touch=width == 390,
         color_scheme=theme,
         reduced_motion="reduce",
-        storage_state=os.environ.get("WB_STORAGE_STATE") or None,
+        storage_state=None if cookie_jar else os.environ.get("WB_STORAGE_STATE") or None,
         accept_downloads=True,
     )
     context.add_init_script(f"localStorage.setItem('sales-xray:theme', {json.dumps(theme)});")
@@ -298,6 +345,8 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
     passed = False
     failure: dict[str, object] | None = None
     try:
+        if cookie_jar:
+            _restore_cookie_jar(context, cookie_jar)
         yield journey
         journey.settled()
         passed = True
