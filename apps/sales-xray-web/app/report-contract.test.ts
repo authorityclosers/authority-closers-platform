@@ -72,6 +72,87 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it("resolves every populated legacy reference at the end of a long transcript without changing the report", () => {
+    const original = overviewFixture.transcript;
+    const expected = parseJobResponse(job(overviewFixture.report), {
+      sourceSha256: original.source_sha256,
+      durationMs: original.duration_ms,
+      transcript: parseTranscript(original, original.source_sha256),
+    });
+    const source = parseTranscript(
+      {
+        ...original,
+        segments: [
+          ...Array.from(
+            { length: 20000 - original.segments.length },
+            (_, i) => ({
+              id: `padding-${i}`,
+              speaker_id: null,
+              start_ms: 0,
+              end_ms: 1,
+              text: "Fictional padding only.",
+            }),
+          ),
+          ...original.segments,
+        ],
+      },
+      original.source_sha256,
+    );
+    expect(
+      parseJobResponse(job(overviewFixture.report), {
+        sourceSha256: source.source_sha256,
+        durationMs: source.duration_ms,
+        transcript: source,
+      }),
+    ).toEqual(expected);
+  });
+
+  it("rechecks source quotes on each read when segment IDs remain the same after withholding", () => {
+    const report = {
+      ...validReport(),
+      summary_evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    };
+    const original = parseTranscript(transcript, sourceSha256);
+    expect(
+      parseJobResponse(job(report), { ...binding, transcript: original })
+        .report,
+    ).toEqual(report);
+    const withheld = parseTranscript(
+      {
+        ...transcript,
+        segments: transcript.segments.map((s) => ({
+          ...s,
+          text: "[Withheld for privacy]",
+        })),
+      },
+      sourceSha256,
+    );
+    expect(() =>
+      parseJobResponse(job(report), { ...binding, transcript: withheld }),
+    ).toThrow("report_summary_evidence_0_quote_mismatch");
+    const safeReport = {
+      ...report,
+      summary_evidence: [
+        { ...report.summary_evidence[0], quote: "[Withheld for privacy]" },
+      ],
+    };
+    expect(
+      parseJobResponse(job(safeReport), { ...binding, transcript: withheld })
+        .report,
+    ).toEqual(safeReport);
+    expect(
+      parseJobResponse(job(report), { ...binding, transcript: original })
+        .report,
+    ).toEqual(report);
+  });
+
   it.each(["summary_evidence", "verdict_evidence", "overview", "story"])(
     "opens older reports with null %s as an honest absent optional field",
     (field) => {
