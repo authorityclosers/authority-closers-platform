@@ -13,7 +13,9 @@ import resource
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
+import xml.etree.ElementTree as element_tree
 from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -588,7 +590,54 @@ def stop_process(process: subprocess.Popen[bytes], owned: dict[int, int]) -> Non
         signal_owned(owned, signal.SIGKILL)
 
 
+def pytest_summary(path: Path) -> dict[str, int]:
+    """Read only execution counts; never retain test messages or captured output."""
+    try:
+        root = element_tree.parse(path).getroot()  # noqa: S314 - pytest's own disposable XML receipt
+    except (OSError, element_tree.ParseError):
+        raise FastCheckError("Pytest did not produce valid test evidence") from None
+    cases = tuple(root.iter("testcase"))
+    if root.tag not in {"testsuite", "testsuites"} or not cases:
+        raise FastCheckError("Pytest did not produce valid test evidence")
+    counts = dict.fromkeys(("passed", "skipped", "failed", "errors"), 0)
+    for case in cases:
+        if case.find("error") is not None:
+            counts["errors"] += 1
+        elif case.find("failure") is not None:
+            counts["failed"] += 1
+        elif case.find("skipped") is not None:
+            counts["skipped"] += 1
+        else:
+            counts["passed"] += 1
+    return counts
+
+
 def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
+    if check.name != "pytest":
+        return _run_check(check, seconds, cpu_remaining)
+    # Keep raw JUnit outside the source and remove it on every outcome. Only
+    # sanitized counts enter the durable receipt. Insert before pytest's --.
+    with tempfile.TemporaryDirectory(prefix="ac-fast-pytest-", dir="/tmp") as directory:
+        report = Path(directory) / "results.xml"
+        separator = check.argv.index("--") if "--" in check.argv else len(check.argv)
+        argv = (*check.argv[:separator], f"--junitxml={report}", *check.argv[separator:])
+        result = _run_check(Check(check.name, argv, check.cwd, check.scope), seconds, cpu_remaining)
+        if result["status"] not in {"passed", "failed"}:
+            return result
+        try:
+            counts = pytest_summary(report)
+        except FastCheckError as error:
+            result.update({"status": "failed", "reason": str(error)})
+            return result
+        result["pytest_summary"] = counts
+        if counts["failed"] or counts["errors"]:
+            result["status"] = "failed"
+        elif result["status"] == "passed" and counts["skipped"]:
+            result["status"] = "partial"
+        return result
+
+
+def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
     environment = {
         **os.environ,
         "UV_OFFLINE": "1",
@@ -728,10 +777,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != receipt["runner_sha256"]
         ):
             raise FastCheckError("Source changed during the checks; the receipt is unusable")
-        if statuses - {"passed", "planned"}:
+        if statuses - {"passed", "planned", "partial"}:
             receipt["status"] = "failed"
         elif (
-            metadata["omitted_pytest"]
+            "partial" in statuses
+            or metadata["omitted_pytest"]
             or metadata["import_graph_errors"]
             or metadata["deleted_files"]
             or metadata["unmapped_python_sources"]
@@ -764,6 +814,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"  reason: {receipt['reason']}")
     for result in receipt["checks"]:
         print(f"  {result['status']:16} {result['name']}")
+    skipped = sum(
+        result.get("pytest_summary", {}).get("skipped", 0) for result in receipt["checks"]
+    )
+    if skipped:
+        print(f"  coverage: {skipped} selected pytest cases skipped")
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"

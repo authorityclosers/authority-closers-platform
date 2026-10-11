@@ -526,6 +526,173 @@ def test_runner_requires_explicit_lane_database_for_pytest(
     assert FAST.run_check(check, 30, 5)["status"] == "unavailable"
 
 
+@pytest.mark.parametrize(
+    ("body", "expected_status", "expected_counts"),
+    [
+        ("def test_pass(): pass\n", "passed", (1, 0, 0, 0)),
+        (
+            "def test_skip(): pytest.skip('fixture-private-output')\n",
+            "partial",
+            (0, 1, 0, 0),
+        ),
+        (
+            "def test_pass(): pass\ndef test_skip(): pytest.skip('fixture-private-output')\n",
+            "partial",
+            (1, 1, 0, 0),
+        ),
+        (
+            "@pytest.mark.xfail(reason='fixture-private-output')\n"
+            "def test_expected_failure(): assert False\n",
+            "partial",
+            (0, 1, 0, 0),
+        ),
+        (
+            "def test_fail(): assert False, 'fixture-private-output'\n"
+            "def test_skip(): pytest.skip('fixture-private-output')\n",
+            "failed",
+            (0, 1, 1, 0),
+        ),
+        (
+            "@pytest.fixture\ndef broken(): raise RuntimeError('fixture-private-output')\n"
+            "def test_error(broken): pass\n",
+            "failed",
+            (0, 0, 0, 1),
+        ),
+    ],
+)
+def test_pytest_receipt_records_execution_and_never_echoes_skip_reasons(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    body: str,
+    expected_status: str,
+    expected_counts: tuple[int, int, int, int],
+) -> None:
+    write(tmp_path, "test_fixture.py", "import pytest\n" + body)
+    monkeypatch.setenv("AC_TEST_DATABASE_URL", "fixture-only")
+    monkeypatch.setenv("PYTEST_ADDOPTS", "")
+    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+    reports = []
+    original_summary = FAST.pytest_summary
+
+    def summary(path):
+        reports.append(path)
+        return original_summary(path)
+
+    monkeypatch.setattr(FAST, "pytest_summary", summary)
+    check = FAST.Check(
+        "pytest",
+        (sys.executable, "-m", "pytest", "-q", "--", "test_fixture.py"),
+        tmp_path,
+        ("test_fixture.py",),
+    )
+    result = FAST.run_check(check, 30, 10)
+    assert result["status"] == expected_status
+    counts = result["pytest_summary"]
+    assert (
+        tuple(counts[key] for key in ("passed", "skipped", "failed", "errors")) == expected_counts
+    )
+    assert reports and all(not report.parent.exists() for report in reports)
+    assert "fixture-private-output" not in json.dumps(result)
+    assert "fixture-private-output" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("evidence", "valid"),
+    [
+        (None, False),
+        ("not xml", False),
+        ("<testsuites />", False),
+        (
+            '<testsuite><testcase><failure message="fixture-private-output" />'
+            "</testcase></testsuite>",
+            True,
+        ),
+        (
+            '<testsuite><testcase><error message="fixture-private-output" />'
+            "</testcase></testsuite>",
+            True,
+        ),
+    ],
+)
+def test_success_without_passing_pytest_evidence_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: str | None,
+    valid: bool,
+) -> None:
+    monkeypatch.setenv("AC_TEST_DATABASE_URL", "fixture-only")
+    script = (
+        "import pathlib, sys\n"
+        "report = next((value.split('=', 1)[1] for value in sys.argv "
+        "if value.startswith('--junitxml=')), None)\n"
+        f"evidence = {evidence!r}\n"
+        "if report is not None and evidence is not None:\n"
+        "    pathlib.Path(report).write_text(evidence)\n"
+    )
+    check = FAST.Check("pytest", (sys.executable, "-c", script), tmp_path, ())
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == "failed"
+    assert result["returncode"] == 0
+    if valid:
+        counts = result["pytest_summary"]
+        assert counts["failed"] + counts["errors"] == 1
+    else:
+        assert result["reason"] == "Pytest did not produce valid test evidence"
+    assert "fixture-private-output" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("skip", [False, True])
+def test_main_receipt_distinguishes_passing_from_unexecuted_pytest_coverage(
+    repository: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    skip: bool,
+) -> None:
+    body = "import pytest\ndef test_fixture(): " + (
+        "pytest.skip('fixture-private-output')\n" if skip else "pass\n"
+    )
+    write(repository, "tests/test_fixture.py", body)
+    git(repository, "add", "tests/test_fixture.py")
+    git(repository, "commit", "-m", "synthetic optional test")
+    monkeypatch.setenv("AC_TEST_DATABASE_URL", "fixture-only")
+    monkeypatch.setenv("PYTEST_ADDOPTS", "")
+    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+    original_plan = FAST.plan
+
+    def pytest_plan(root, changed, cap):
+        # Use real coverage metadata, without requiring unrelated installed linters.
+        (root / ".venv/bin").mkdir(parents=True)
+        (root / ".venv/bin/python").symlink_to(sys.executable)
+        _, metadata = original_plan(root, changed, cap)
+        return (
+            FAST.Check(
+                "pytest",
+                (sys.executable, "-m", "pytest", "-q", "--", "tests/test_fixture.py"),
+                root,
+                ("tests/test_fixture.py",),
+            ),
+        ), metadata
+
+    # The installed interpreter link is fixture setup, not a source mutation.
+    write(repository, ".gitignore", ".venv/\n.pytest_cache/\n__pycache__/\n")
+    git(repository, "add", ".gitignore")
+    git(repository, "commit", "-m", "ignore synthetic interpreter")
+    monkeypatch.setattr(FAST, "plan", pytest_plan)
+    receipt = tmp_path.parent / (tmp_path.name + "-pytest-coverage.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~2", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == ("partial" if skip else "passed")
+    assert data["checks"][0]["pytest_summary"]["skipped"] == int(skip)
+    output = capsys.readouterr().out
+    if skip:
+        assert "1 selected pytest cases skipped" in output
+    assert "fixture-private-output" not in output + json.dumps(data)
+
+
 def test_runner_requires_installed_shared_slot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
