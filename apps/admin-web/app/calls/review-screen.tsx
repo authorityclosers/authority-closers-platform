@@ -285,6 +285,7 @@ export function ReviewScreen({
           <button
             type="button"
             className={kitStyles.button}
+            data-desk=""
             disabled
             title="Re-running a finished call needs an admin re-run command (a new provider charge). Failed steps can be retried from Runs."
           >
@@ -304,6 +305,7 @@ export function ReviewScreen({
           <button
             type="button"
             className={kitStyles.button}
+            data-desk=""
             disabled
             title="Training and test marks arrive with the gold-set store."
           >
@@ -351,6 +353,7 @@ export function ReviewScreen({
             type="button"
             className={kitStyles.button}
             data-variant="icon"
+            data-desk=""
             onClick={() => setHelp((value) => !value)}
             aria-label="Keyboard shortcuts (?)"
             aria-expanded={help}

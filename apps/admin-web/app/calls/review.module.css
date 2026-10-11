@@ -750,6 +750,11 @@
     padding: 10px var(--sx-gutter) 16px;
   }
 
+  /* Unbuilt commands and the keyboard help are desktop-only. */
+  .headActions [data-desk] {
+    display: none;
+  }
+
   .player {
     position: sticky;
     z-index: 5;
