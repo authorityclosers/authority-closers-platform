@@ -152,6 +152,12 @@ type ExistingCallEntryState = {
 const STATUS_RETRY_MS = [3_000, 6_000, 12_000, 24_000, 30_000];
 // Misses in a row before the corner card; one blip shows only in the steps.
 const STATUS_CARD_AFTER = 3;
+/** How long "Your report is ready" holds before the report rises in. */
+const REVEAL_BEAT_MS = 1_100;
+const prefersStill = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Answers no retry changes: signed out, no access, gone, or superseded.
 const isFinalStatusAnswer = (error: unknown) =>
   error instanceof AcquisitionError &&
@@ -335,12 +341,42 @@ export function AcquisitionStudio({
   // The analysis this page watched: its report arrives with a short reveal
   // where the progress panel was (one continuous screen, owner 11 Oct).
   const [watchedId, setWatchedId] = useState<string | null>(null);
+  // Watched means seen in progress here, not a saved call that is loading.
   const watchingId =
-    submission && !result?.report && planView(plan, progress).showProgress
+    submission &&
+    !result?.report &&
+    progress &&
+    !progress.has_report &&
+    planView(plan, progress).showProgress
       ? submission.id
       : null;
   // Remembered as it renders (React's "adjust state on change" pattern).
   if (watchingId && watchingId !== watchedId) setWatchedId(watchingId);
+  // The beat between "Your report is ready" and the report: the panel's wave
+  // finishes its last pass, then the report rises in where the panel was.
+  // Only for a report this page watched being made; reduced motion skips it.
+  const [revealHeld, setRevealHeld] = useState<string | null>(null);
+  const [revealShown, setRevealShown] = useState<string | null>(null);
+  const arrivedId =
+    result?.report && submission && watchedId === submission.id
+      ? submission.id
+      : null;
+  if (
+    arrivedId &&
+    arrivedId !== revealShown &&
+    arrivedId !== revealHeld &&
+    !prefersStill()
+  )
+    setRevealHeld(arrivedId);
+  useEffect(() => {
+    if (!revealHeld) return;
+    const timer = setTimeout(() => {
+      setRevealShown(revealHeld);
+      setRevealHeld(null);
+    }, REVEAL_BEAT_MS);
+    return () => clearTimeout(timer);
+  }, [revealHeld]);
+  const revealing = revealHeld !== null && revealHeld === submission?.id;
   // A new call or a finished report shows up in Recents straight away.
   const recentsCallId = submission?.id ?? null;
   const recentsRunId = result?.runId ?? null;
@@ -2026,7 +2062,8 @@ export function AcquisitionStudio({
         </AcquisitionShell>
       );
     }
-    const report = result?.report;
+    // Held back for the reveal's beat: the panel shows "Your report is ready".
+    const report = revealing ? undefined : result?.report;
     const reportReady = Boolean(report);
     const processingNeedsAttention = projectProcessing(
       progress,

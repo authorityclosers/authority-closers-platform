@@ -309,10 +309,27 @@ async function saveDeferredSource() {
   await settleAll();
 }
 
+/** Reduced motion: the report shows at once, without the reveal's beat. */
+function stubMotion(reduce: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    (query: string) =>
+      ({
+        matches: reduce && query.includes("prefers-reduced-motion"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
 beforeEach(() => {
   navigateToAccount.mockReset();
   replaceToLogin.mockReset();
   vi.useFakeTimers();
+  stubMotion(true);
   calls = [];
   existing = false;
   workspaceUnauthorized = false;
@@ -1092,6 +1109,31 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
       ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
+});
+
+it("holds 'Your report is ready' for a beat, then the report rises in where the panel was", async () => {
+  stubMotion(false);
+  await mountWithAccountAccess();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await flush();
+  const panel = container.querySelector('[aria-label="Analysis progress"]');
+  expect(panel?.querySelector("h2")?.textContent).toBe("Your report is ready");
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Analysis progress"]'),
+  ).toBeNull();
+  const report = container.querySelector('[aria-label="Sales call report"]');
+  expect(report).not.toBeNull();
+  expect(report?.hasAttribute("data-reveal")).toBe(true);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
