@@ -204,3 +204,20 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     expect(model.topMoments.length).toBeGreaterThan(0);
   });
 });
+
+describe("never breaks on a malformed older report", () => {
+  it("opens with missing lists, findings without evidence and a bare overview", () => {
+    const broken = {
+      summary: "Only a summary survived.",
+      strengths: [{ title: "Kept going", explanation: "Steady." }],
+      overview: { outcome: null },
+      dimensions: undefined,
+    } as unknown as SalesReport;
+    const model = reportStoryModel(broken);
+    expect(model.picture.summary?.text).toBe("Only a summary survived.");
+    expect(model.picture.strongest).toBeNull();
+    expect(model.worked[0].what.sources).toEqual([]);
+    expect(model.skills).toHaveLength(8);
+    expect(model.missing[0]).toContain("Strongest part");
+  });
+});

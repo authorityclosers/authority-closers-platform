@@ -472,15 +472,60 @@ function missingInputs(report: SalesReport) {
   return [...new Set(items)].slice(0, 6);
 }
 
+const findings = (list: Finding[] | null | undefined): Finding[] =>
+  (Array.isArray(list) ? list : [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      ...item,
+      title: item.title ?? "",
+      explanation: item.explanation ?? "",
+      evidence: Array.isArray(item.evidence) ? item.evidence : [],
+    }));
+
+/**
+ * Lists default to empty and findings always carry an evidence list, so a
+ * report from any era opens; missing parts become honest gaps.
+ */
+function normalized(report: SalesReport): SalesReport {
+  const overview = report.overview;
+  return {
+    ...report,
+    strengths: findings(report.strengths),
+    improvements: findings(report.improvements),
+    missed_opportunities: findings(report.missed_opportunities),
+    objection_analysis: findings(report.objection_analysis),
+    closing_analysis: findings(report.closing_analysis),
+    dimensions: Array.isArray(report.dimensions) ? report.dimensions : [],
+    overview: overview
+      ? {
+          ...overview,
+          strength_details: overview.strength_details ?? [],
+          improvement_details: overview.improvement_details ?? [],
+          golden_moments: overview.golden_moments ?? [],
+          missed_details: overview.missed_details ?? [],
+          prospect_interpretations: overview.prospect_interpretations ?? [],
+          rewatch: overview.rewatch ?? [],
+          final_assessment: overview.final_assessment ?? {
+            repeat: "",
+            fix_first: "",
+            next_focus: "",
+            assessment: "",
+          },
+        }
+      : undefined,
+  };
+}
+
 /** Builds every pillar from one saved report; older reports simply say less. */
 export function reportStoryModel(
-  report: SalesReport,
+  input: SalesReport,
   transcript?: Transcript,
   options: {
     roles?: { seller?: string | null; prospect?: string | null };
     recorded?: { status: OutcomeStatus; note?: string | null } | null;
   } = {},
 ): StoryModel {
+  const report = normalized(input);
   const overview = report.overview;
   const story = report.story;
   const outcome = callOutcome(report, options.recorded);
