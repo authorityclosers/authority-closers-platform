@@ -547,8 +547,8 @@ export function OverviewHook({
       count: overview?.prospect_interpretations.length ?? 0,
       unit:
         (overview?.prospect_interpretations.length ?? 0) === 1
-          ? "read"
-          : "reads",
+          ? "insight"
+          : "insights",
     },
     {
       id: "next-call-plan",
@@ -571,7 +571,11 @@ export function OverviewHook({
       count: signals
         ? signals.unanswered + signals.overs + signals.promised
         : null,
-      unit: signals ? "signals" : "assign roles to measure",
+      unit: signals
+        ? signals.unanswered + signals.overs + signals.promised === 1
+          ? "signal"
+          : "signals"
+        : "pick the salesperson to count",
     },
     {
       id: "transcript",

@@ -248,7 +248,7 @@ describe("OverviewHook phase cards", () => {
 
   it("shows unavailable call signals until roles are assigned", async () => {
     await renderOverview(transcript, null);
-    expect(host.textContent).toContain("assign roles to measure");
+    expect(host.textContent).toContain("pick the salesperson to count");
     expect(host.textContent).not.toContain("0 signals");
   });
 
@@ -274,6 +274,8 @@ describe("OverviewHook phase cards", () => {
     };
     await renderOverview(noMatches);
     expect(host.textContent).toContain("0 signals");
+    // The prospect door counts insights, as the Report's "prospect insights".
+    expect(host.textContent).toContain("0 insights");
   });
 
   it("keeps silent minutes as gaps in the chart", () => {
