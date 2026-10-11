@@ -117,6 +117,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -131,6 +133,52 @@ describe.each(["list", "profile"] as const)("Prospects %s access", (page) => {
         )}
       </WorkspaceAccessContext.Provider>,
     );
+
+  it("replaces a stalled read's skeleton with a corner retry and loads fresh data once retried", async () => {
+    vi.useFakeTimers();
+    const payload =
+      page === "list"
+        ? {
+            schema: "ac.sales-xray.prospects/1",
+            prospects: [mockProspectSummary],
+            total: 1,
+            stage_filters: [],
+            next_offset: null,
+          }
+        : {
+            schema: "ac.sales-xray.prospects/1",
+            prospect: mockProspectSummary,
+            calls: [mockCall],
+            next_offset: null,
+            promises: [],
+            next_steps: [],
+            buyer_intent_history: [],
+          };
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload)));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => render(mockAccess));
+    expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    await act(async () =>
+      vi.advanceTimersByTimeAsync(prospectsClient.PROSPECT_READ_TIMEOUT_MS),
+    );
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    const corner = host.querySelector('[role="alert"]')!;
+    expect(corner.textContent).toContain(
+      "Prospect information is unavailable. Try again.",
+    );
+    expect(host.textContent).not.toContain(mockProspectSummary.name);
+    expect(fetch).toHaveBeenCalledOnce();
+    await act(async () =>
+      corner.querySelector<HTMLButtonElement>("button")!.click(),
+    );
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(host.textContent).toContain(mockProspectSummary.name);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 
   it("offers sign-in without reading private data and uses the workspace account action", async () => {
     const list = vi.spyOn(prospectsClient, "fetchProspectsList");

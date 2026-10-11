@@ -1,0 +1,44 @@
+# AUT-1677 — Recover stalled Prospect reads
+
+The Prospect list and profile GETs previously relied on a caller's cancellation
+signal. Neither page supplied a deadline. An unavailable service could leave the
+initial skeleton or pagination request pending indefinitely. The focused
+pre-change check reproduces this for both pages: a deliberately stalled fetch
+is still pending after 15 seconds.
+
+The existing list/detail clients now bound the whole read to one 15-second
+deadline, including response headers and success/error JSON. Scope cancellation
+also ends the read even when a defective adapter ignores AbortSignal. A scope
+already cancelled sends no private GET. Timers and parent listeners are removed
+after every completion, and the internal fetch/body is cancelled without
+aborting the caller's scope. Late responses cannot replace a settled failure.
+
+The existing pages handle the failure through their small corner card and
+explicit Try again action. The skeleton clears, customer data remains hidden,
+and a successful fresh read restores the populated list or six-section profile.
+There is no automatic retry. The same GET clients cover pagination and Report
+key-fact detail reads. Human edits/confirmations, permission policy, source
+parsers, identity checks and server data are unchanged.
+
+Verification:
+
+- All 64 focused read/client/list/profile/snapshot cases pass. Fourteen read
+  cases cover stalled headers, success/error JSON, one shared deadline, late
+  results, scope loss, pre-cancelled scope, and successful cleanup. Two page
+  cases use the real clients to prove skeleton clearing, corner retry and
+  restored fictional data. Existing status, identity, profile and access-loss
+  cases remain in the same passing run.
+- Incremental TypeScript, cached changed-file ESLint, Prettier and browser-script
+  Ruff/format pass. Shared-dev browser proof follows the
+  committed refresh; its receipt and screenshot observations are recorded in
+  `/home/acdev/strikes/1677/NOTES.md`.
+- The shared-only browser runner exercises native stalled HTTP reads at
+  390/1440 in light/dark. It intercepts all API reads locally using invented
+  values, rejects writes/unexpected routes, and starts no build/server. It
+  checks no automatic retry, loading clears, explicit recovery, six sections,
+  44px phone retry, overflow and page errors.
+
+The existing AC-UXA-01 recovery and asynchronous-status requirements apply.
+This bounded read repair does not activate providers, schema or persistence.
+Production Report acceptance, saved-call route adoption and canonical
+Company/outcome storage retain their recorded H/QA, A and C/E dependencies.
