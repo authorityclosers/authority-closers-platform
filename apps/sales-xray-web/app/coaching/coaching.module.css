@@ -827,6 +827,17 @@
   background: var(--sx-surface);
 }
 
+/* Narrow columns: panel titles keep one line; subtitles are secondary. */
+@container (max-width: 560px) {
+  .root h2 > small {
+    display: none;
+  }
+
+  .share {
+    width: 92px;
+  }
+}
+
 @media (max-width: 760px) {
   .root,
   .skeleton {
