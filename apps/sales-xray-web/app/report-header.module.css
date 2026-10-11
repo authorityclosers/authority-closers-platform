@@ -31,3 +31,15 @@
 .fileType {
   font-size: var(--sx-text-xs, 12px);
 }
+
+/* Transcript and "…" sit on the page in both themes (semantic tokens). */
+.action.action {
+  border-color: var(--lx-line);
+  background: var(--lx-surface);
+  color: var(--lx-ink-2);
+}
+.action.action:hover {
+  border-color: var(--lx-line-strong);
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+}

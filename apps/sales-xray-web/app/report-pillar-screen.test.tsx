@@ -141,5 +141,5 @@ it("opens a sparse older report with honest, one-line gaps", async () => {
     pillar(host, "skills").querySelectorAll("details > summary").length,
   ).toBeGreaterThanOrEqual(8);
   // Never invents a strength or a next event to fill the page.
-  expect(pillar(host, "facts").textContent).toContain("Next event date");
+  expect(pillar(host, "facts").textContent).toContain("Next event");
 });

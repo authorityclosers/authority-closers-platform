@@ -410,7 +410,7 @@ export function ReportHeader({
           {onOpenTranscript ? (
             <button
               type="button"
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               onClick={onOpenTranscript}
               aria-label="Open transcript reader"
               title="Open transcript reader"
@@ -432,7 +432,7 @@ export function ReportHeader({
             }}
           >
             <summary
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               aria-label="More report actions"
               title="More report actions"
             >

@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useMemo } from "react";
 
-import { CALL_FLOW, changedAt } from "../report-copy";
+import { CALL_FLOW, METRIC_LABELS, changedAt } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
 import { formatClock } from "../lightbox/time";
 import type { StoryModel } from "../report-story-model";
@@ -68,7 +68,7 @@ export function CallFlow({
       value: metric.value,
       note: metric.note,
       visual:
-        split && first && metric.label !== "Questions asked" ? (
+        split && first && metric.label !== METRIC_LABELS.questions ? (
           <SplitBar
             parts={[
               { label: first, value: split[0] },
@@ -94,7 +94,7 @@ export function CallFlow({
     <div className={styles.stack}>
       {metrics.length ? (
         <StoryCard label={CALL_FLOW.metrics.label}>
-          <MetricRow items={metrics} label={CALL_FLOW.metrics.label} />
+          <MetricRow bare items={metrics} label={CALL_FLOW.metrics.label} />
           <p className={styles.note}>{CALL_FLOW.metricsNote}</p>
         </StoryCard>
       ) : null}

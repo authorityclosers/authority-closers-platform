@@ -154,7 +154,7 @@ describe("honest gaps", () => {
       sparse.missing[4].length,
     );
     expect(sparse.deal.nextEvent).toBeNull();
-    expect(sparse.missing[5]).toContain("Next event date");
+    expect(sparse.missing[5]).toContain("Next event");
   });
 
   it("opens a report with no overview or story at all", () => {
@@ -181,6 +181,16 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     roles: { seller: "speaker_0", prospect: "speaker_1" },
   });
 
+  it("shows one summary when the final assessment only restates it", () => {
+    expect(report.overview?.final_assessment.assessment).toBeTruthy();
+    expect(model.picture.summary?.text).toBe(report.summary);
+    expect(model.picture.assessment).toBeNull();
+    // The spec example's second paragraph adds to the first, so it stays.
+    expect(
+      reportStoryModel(amitReport, amitTranscript).picture.assessment,
+    ).toBeTruthy();
+  });
+
   it("fills the Big Picture from the overview it already has", () => {
     expect(model.picture.outcome).toMatchObject({
       status: "Follow-up Set",
@@ -195,7 +205,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
 
   it("says plainly what the older format lacks", () => {
     expect(model.flow.phases).toBeNull();
-    expect(model.missing[1]).toContain("Conversation stages");
+    expect(model.missing[1]).toContain("Conversation timeline");
     expect(model.deal.quality).toBeNull();
     expect(model.missing[5]).toContain("Commitment quality");
     expect(model.skills.every((skill) => skill.state === "Observed")).toBe(

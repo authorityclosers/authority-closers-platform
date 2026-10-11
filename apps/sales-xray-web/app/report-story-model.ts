@@ -5,7 +5,16 @@ import type {
   SalesReport,
   Transcript,
 } from "./report-contract";
-import { STAGE_LABELS } from "./report-copy";
+import {
+  BIG_PICTURE,
+  CALL_FLOW,
+  DEAL,
+  METRIC_LABELS,
+  MOMENTS,
+  PILLAR_COPY,
+  STAGE_LABELS,
+  WORKED_DIDNT,
+} from "./report-copy";
 import type { PillarNote, ReportPillars } from "./report-pillars-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 
@@ -209,6 +218,56 @@ const MOMENT_PRIORITY: MomentKind[] = [
   "Worth Replaying",
 ];
 
+const words = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[\s\p{P}]+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+
+/**
+ * True when a second paragraph only restates the first: the same text, one
+ * inside the other, or the same opening ("You conducted …" twice). The Big
+ * Picture then shows one summary, as the spec asks.
+ */
+function repeats(
+  first: string | null | undefined,
+  second: string | null | undefined,
+) {
+  if (!first?.trim() || !second?.trim()) return false;
+  const a = words(first);
+  const b = words(second);
+  const joinedA = a.join(" ");
+  const joinedB = b.join(" ");
+  if (joinedA.includes(joinedB) || joinedB.includes(joinedA)) return true;
+  return a.length > 2 && b.length > 2 && a[0] === b[0] && a[1] === b[1];
+}
+
+/** A spec heading in sentence case, for the one-line gaps. */
+const sentence = (heading: string) =>
+  heading.charAt(0) + heading.slice(1).toLowerCase();
+
+/** Names of the parts a report can leave out, as the gap line says them. */
+const GAP = {
+  outcome: BIG_PICTURE.outcome.label,
+  summary: BIG_PICTURE.summary.label,
+  influence: BIG_PICTURE.influence.label,
+  strongest: BIG_PICTURE.strongest.label,
+  concern: BIG_PICTURE.concern.label,
+  nextStep: BIG_PICTURE.nextStep.label,
+  stages: sentence(CALL_FLOW.timeline.heading),
+  change: CALL_FLOW.change.label,
+  worked: WORKED_DIDNT.worked.label,
+  didnt: WORKED_DIDNT.didnt.label,
+  moments: PILLAR_COPY.missed.short,
+  blocker: DEAL.blocker.label,
+  prospectCommitment: sentence(DEAL.prospectCommitment.heading),
+  sellerCommitment: sentence(DEAL.sellerCommitment.heading),
+  nextEvent: DEAL.nextEvent.label,
+  quality: DEAL.quality.label,
+};
+
 const clean = (value: string | null | undefined) => {
   const text = value?.trim();
   return text ? text : null;
@@ -326,24 +385,27 @@ function metricsFor(
       : ids.slice(0, 2);
   const names =
     roles?.seller && roles.prospect && ordered[0] === roles.seller
-      ? "You : Prospect"
+      ? METRIC_LABELS.youProspect
       : ordered.length === 2
-        ? "Speaker 1 : Speaker 2"
+        ? METRIC_LABELS.speakers
         : null;
   const metrics: Metric[] = [
-    { label: "Call length", value: formatDuration(transcript.duration_ms) },
+    {
+      label: METRIC_LABELS.callLength,
+      value: formatDuration(transcript.duration_ms),
+    },
   ];
   if (ordered.length === 2 && names) {
     const shares = ordered.map((id) =>
       Math.round((measured.speakers[id].talk_share ?? 0) * 100),
     );
     metrics.push({
-      label: "Talk share",
+      label: METRIC_LABELS.talkShare,
       value: `${shares[0]} : ${shares[1]}`,
       note: names,
     });
     metrics.push({
-      label: "Questions asked",
+      label: METRIC_LABELS.questions,
       value: `${measured.speakers[ordered[0]].questions} : ${measured.speakers[ordered[1]].questions}`,
       note: names,
     });
@@ -359,11 +421,13 @@ function metricsFor(
       );
   if (longest > 0)
     metrics.push({
-      label: seller ? "Longest seller turn" : "Longest turn",
+      label: seller
+        ? METRIC_LABELS.longestSellerTurn
+        : METRIC_LABELS.longestTurn,
       value: formatDuration(longest),
     });
   metrics.push({
-    label: "Talk-overs",
+    label: METRIC_LABELS.talkOvers,
     value: String(measured.cut_ins.length),
   });
   return metrics;
@@ -396,7 +460,7 @@ function momentsFor(
   if (change?.change.evidence[0])
     add({
       kind: "Turning Point",
-      title: "The conversation changed here",
+      title: MOMENTS.titleTurn,
       source: change.change.evidence[0],
       why: line(change.possible_effect, [], true),
     });
@@ -449,8 +513,8 @@ function momentsFor(
       title:
         outcome?.kind === "follow_up" ||
         report.story?.outcome.kind === "follow_up"
-          ? "A next step was agreed"
-          : "How the call ended",
+          ? MOMENTS.titleNextStep
+          : MOMENTS.titleEnding,
       source: closing,
       why: line(outcome?.text ?? report.story?.next_step?.text, []),
     });
@@ -463,7 +527,7 @@ function momentsFor(
     if (price)
       add({
         kind: "Price Moment",
-        title: "Price came up",
+        title: MOMENTS.titlePrice,
         source: price.stated.sources[0],
         why: null,
         priceStated: price.stated,
@@ -617,7 +681,9 @@ export function reportStoryModel(
   const picture = {
     outcome,
     summary: line(report.summary, report.summary_evidence),
-    assessment: clean(overview?.final_assessment.assessment),
+    assessment: repeats(report.summary, overview?.final_assessment.assessment)
+      ? null
+      : clean(overview?.final_assessment.assessment),
     influence: line(overview?.diagnosis?.text, overview?.diagnosis?.evidence),
     strongest,
     concern,
@@ -754,28 +820,27 @@ export function reportStoryModel(
 
   const missing: StoryModel["missing"] = [
     [
-      !outcome.status && "Call outcome",
-      !picture.summary && "Summary",
-      !picture.influence && "What most affected this call",
-      !strongest && "Strongest part",
-      !concern && "Biggest concern",
-      !nextStep && "Next agreed step",
+      !outcome.status && GAP.outcome,
+      !picture.summary && GAP.summary,
+      !picture.influence && GAP.influence,
+      !strongest && GAP.strongest,
+      !concern && GAP.concern,
+      !nextStep && GAP.nextStep,
     ].filter((v): v is string => Boolean(v)),
-    [
-      !flow.phases && "Conversation stages",
-      !flow.change && "Key change",
-    ].filter((v): v is string => Boolean(v)),
-    [!worked.length && "What worked", !didnt.length && "What didn't"].filter(
+    [!flow.phases && GAP.stages, !flow.change && GAP.change].filter(
       (v): v is string => Boolean(v),
     ),
-    moments.length ? [] : ["Moments"],
+    [!worked.length && GAP.worked, !didnt.length && GAP.didnt].filter(
+      (v): v is string => Boolean(v),
+    ),
+    moments.length ? [] : [GAP.moments],
     skills.filter((s) => !s.state).map((s) => s.short),
     [
-      !deal.blocker && "Current blocker",
-      !deal.prospectCommitments.length && "Prospect commitment",
-      !deal.sellerCommitments.length && "Seller commitment",
-      !deal.nextEvent && "Next event date",
-      !deal.quality && "Commitment quality",
+      !deal.blocker && GAP.blocker,
+      !deal.prospectCommitments.length && GAP.prospectCommitment,
+      !deal.sellerCommitments.length && GAP.sellerCommitment,
+      !deal.nextEvent && GAP.nextEvent,
+      !deal.quality && GAP.quality,
     ].filter((v): v is string => Boolean(v)),
   ];
 
@@ -991,22 +1056,22 @@ function withPillars(
   const drop = (index: number, name: string, has: unknown) => {
     if (has) missing[index] = missing[index].filter((item) => item !== name);
   };
-  drop(0, "Call outcome", outcome.status);
-  drop(0, "Summary", picture.summary);
-  drop(0, "What most affected this call", picture.influence);
-  drop(0, "Strongest part", picture.strongest);
-  drop(0, "Biggest concern", picture.concern);
-  drop(0, "Next agreed step", picture.nextStep);
-  drop(1, "Conversation stages", flow.phases);
-  drop(1, "Key change", flow.change);
-  drop(2, "What worked", worked.length);
-  drop(2, "What didn't", didnt.length);
-  drop(3, "Moments", moments.length);
-  drop(5, "Current blocker", deal.blocker);
-  drop(5, "Prospect commitment", deal.prospectCommitments.length);
-  drop(5, "Seller commitment", deal.sellerCommitments.length);
-  drop(5, "Next event date", deal.nextEvent);
-  drop(5, "Commitment quality", deal.quality);
+  drop(0, GAP.outcome, outcome.status);
+  drop(0, GAP.summary, picture.summary);
+  drop(0, GAP.influence, picture.influence);
+  drop(0, GAP.strongest, picture.strongest);
+  drop(0, GAP.concern, picture.concern);
+  drop(0, GAP.nextStep, picture.nextStep);
+  drop(1, GAP.stages, flow.phases);
+  drop(1, GAP.change, flow.change);
+  drop(2, GAP.worked, worked.length);
+  drop(2, GAP.didnt, didnt.length);
+  drop(3, GAP.moments, moments.length);
+  drop(5, GAP.blocker, deal.blocker);
+  drop(5, GAP.prospectCommitment, deal.prospectCommitments.length);
+  drop(5, GAP.sellerCommitment, deal.sellerCommitments.length);
+  drop(5, GAP.nextEvent, deal.nextEvent);
+  drop(5, GAP.quality, deal.quality);
 
   return {
     ...base,

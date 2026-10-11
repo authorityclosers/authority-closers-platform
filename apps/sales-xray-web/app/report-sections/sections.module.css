@@ -130,6 +130,12 @@
 .item > * {
   max-width: 100%;
 }
+/* Their words run the full width of the card. */
+.item > figure,
+.item .fieldText > figure {
+  justify-self: stretch;
+  width: 100%;
+}
 .item:first-child {
   padding-top: 0;
   border-top: 0;
