@@ -320,6 +320,10 @@ export function Coaching({
   );
   return (
     <div className={styles.reading}>
+      <p className={styles.gap}>
+        Read from this call&rsquo;s saved report. The rep&rsquo;s private
+        Coaching (missions, history, what they share) isn&rsquo;t read here.
+      </p>
       <Block title="1. What to work on now">
         {overview.nextCallFocus ? (
           <>
