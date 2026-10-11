@@ -77,8 +77,8 @@
     "mission": {
       "active_since": "2026-10-10T00:00:00Z",
       "behavior": "Ask one impact question.",
-      "context": "When a comparable situation offers an opportunity for this behavior.",
-      "cue": "Recall your one mission before the next relevant call.",
+      "context": "When the same kind of moment comes up on a call.",
+      "cue": "Read your one mission before the call.",
       "done_when": "One consequence explored.",
       "origin_submission_id": "00000000-0000-0000-0000-00000000000a",
       "skill_id": "problem_impact_desire",
@@ -238,8 +238,8 @@
     "mission": {
       "active_since": "2026-10-10T00:00:00Z",
       "behavior": "Ask one impact question.",
-      "context": "When a comparable situation offers an opportunity for this behavior.",
-      "cue": "Recall your one mission before the next relevant call.",
+      "context": "When the same kind of moment comes up on a call.",
+      "cue": "Read your one mission before the call.",
       "done_when": "One consequence explored.",
       "origin_submission_id": "00000000-0000-0000-0000-00000000000a",
       "skill_id": "problem_impact_desire",

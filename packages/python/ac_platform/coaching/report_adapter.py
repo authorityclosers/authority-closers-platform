@@ -67,6 +67,47 @@ def _text(value: Any, maximum: int) -> str | None:
     )
 
 
+# A v8 report names no observable target for its mission; this plain line is.
+V8_DONE_WHEN = "You do it once on your next call, when the same kind of moment comes up."
+CUE = "Read your one mission before the call."
+
+
+def with_pillars_overview(report: dict[str, Any]) -> dict[str, Any]:
+    """Read a v8 report (`pillars`, report-pillars/1) through the v7 fields Coaching uses.
+
+    The v8 compatibility content lists "What Didn't" as `improvements` in the
+    same order. Only the Report's own `deal.coaching_mission`, explicitly linked
+    to one issue by `coaching_mission_for`, becomes that issue's next-call
+    focus; without the link nothing is inferred. A v7 `overview` always wins.
+    """
+    if isinstance(report.get("overview"), dict):
+        return report
+    pillars = report.get("pillars")
+    if not isinstance(pillars, dict) or pillars.get("version") != "report-pillars/1":
+        return report
+    deal, didnt = pillars.get("deal"), pillars.get("didnt")
+    if not isinstance(deal, dict) or not isinstance(didnt, list):
+        return report
+    index, behavior = deal.get("coaching_mission_for"), _text(deal.get("coaching_mission"), 500)
+    if type(index) is not int or not 0 <= index < len(didnt) or not behavior:
+        return report
+    issue = didnt[index] if isinstance(didnt[index], dict) else {}
+    why = _text(issue.get("what_it_affected"), 700)
+    return {
+        **report,
+        "overview": {
+            "next_call_focus": {
+                "improvement_index": index,
+                "behavior": behavior,
+                "target": V8_DONE_WHEN,
+            },
+            "improvement_details": (
+                [{"finding_index": index, "why_it_matters": why}] if why else []
+            ),
+        },
+    }
+
+
 def _moments(
     envelope: dict[str, Any],
     refs: set[tuple[str, str, int, int]],
@@ -141,6 +182,8 @@ def _call_suggestion(
     """
     overview = report.get("overview")
     overview = overview if isinstance(overview, dict) else {}
+    focus = overview.get("next_call_focus")
+    first = focus.get("improvement_index") if isinstance(focus, dict) else None
     for section in (
         "improvements",
         "missed_opportunities",
@@ -150,7 +193,13 @@ def _call_suggestion(
         findings = report.get(section)
         if not isinstance(findings, list):
             continue
-        for index, finding in enumerate(findings):
+        # The report's own proposed finding first, then the rest in order.
+        order = list(range(len(findings)))
+        if section == "improvements" and type(first) is int and 0 <= first < len(findings):
+            order.remove(first)
+            order.insert(0, first)
+        for index in order:
+            finding = findings[index]
             if not isinstance(finding, dict):
                 continue
             title = _text(finding.get("title"), 240)
@@ -186,13 +235,11 @@ def _call_suggestion(
             mission = Mission(
                 skill_id="report_next_step",
                 behavior=behavior or f"Try the report's suggested change: {explanation}",
-                context=f"When a comparable moment relates to: {title}",
+                context=f"When the same kind of moment comes up: {title}",
                 done_when=_text(proposed.get("target"), 500)
-                or (
-                    "Try one alternative response in that situation on your next call; "
-                    "keep the moment for review. An attempt does not establish mastery."
-                ),
-                cue="Recall your one mission before the next relevant call.",
+                or "You try it once on your next call when the same moment comes up. "
+                "One try is not mastery.",
+                cue=CUE,
                 active_since=created_at,
                 origin_submission_id=submission_id,
             )
@@ -257,6 +304,7 @@ def from_report(
     report = projection.get("content")
     if not isinstance(report, dict):
         return None
+    report = with_pillars_overview(report)
     dimensions = report.get("dimensions")
     dimensions = dimensions if isinstance(dimensions, list) else []
     overview = report.get("overview")
@@ -264,14 +312,14 @@ def from_report(
     proposed = overview.get("next_call_focus") if isinstance(overview, dict) else None
     practice = overview.get("practice") if isinstance(overview, dict) else None
     finding: dict[str, Any] | None = None
+    proposed_index = proposed.get("improvement_index") if isinstance(proposed, dict) else None
     if (
-        isinstance(proposed, dict)
-        and proposed.get("improvement_index") == 0
+        type(proposed_index) is int
         and isinstance(improvements, list)
-        and improvements
-        and isinstance(improvements[0], dict)
+        and 0 <= proposed_index < len(improvements)
+        and isinstance(improvements[proposed_index], dict)
     ):
-        finding = improvements[0]
+        finding = improvements[proposed_index]
     finding_refs = _refs(finding.get("evidence")) if finding else set()
     candidates = [
         dim
@@ -309,25 +357,27 @@ def from_report(
                         else []
                     )
                     detail = next(
-                        (d for d in details if isinstance(d, dict) and d.get("finding_index") == 0),
+                        (
+                            d
+                            for d in details
+                            if isinstance(d, dict) and d.get("finding_index") == proposed_index
+                        ),
                         {},
                     )
                     why = _text(detail.get("why_it_matters"), 700)
                     mission = Mission(
                         skill_id=linked_id,
                         behavior=behavior,
-                        context=(
-                            "When a comparable situation offers an opportunity for this behavior."
-                        ),
+                        context="When the same kind of moment comes up on a call.",
                         done_when=target,
                         # A neutral reminder, never a clipped or invented source quote.
-                        cue="Recall your one mission before the next relevant call.",
+                        cue=CUE,
                         active_since=created_at,
                         origin_submission_id=submission_id,
                     )
                     if (
                         isinstance(practice, dict)
-                        and practice.get("improvement_index") == 0
+                        and practice.get("improvement_index") == proposed_index
                         and _text(practice.get("instructions"), 1200)
                         and _text(practice.get("success_condition"), 500)
                     ):
