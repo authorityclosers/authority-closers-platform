@@ -1,133 +1,55 @@
-.panel {
-  padding: 16px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-}
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.header h2 {
-  margin: 0.4rem 0;
-  font-size: 15px;
-}
-.eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-md);
-}
-.panel button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border: 1px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  font: inherit;
-}
-.panel button:focus-visible {
-  outline: 3px solid var(--sx-accent);
-  outline-offset: 3px;
-}
-.panel button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-.panel .action {
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
-}
-.metrics {
+/* Execution & budget: only what the kit doesn't draw. Tokens only. */
+
+.stack {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  margin: 1.5rem 0;
+  gap: var(--sx-gap);
 }
-.metrics div {
-  padding: 1rem;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-sunken);
+
+.body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  font-size: var(--sx-text-sm);
 }
-.metrics dt {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-md);
+
+.body p {
+  margin: 0;
 }
-.metrics dd {
-  margin: 0.4rem 0 0;
-  font-size: 15px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
+
 .alert {
-  padding: 0.85rem 1rem;
-  background: color-mix(in oklab, var(--sx-warn) 10%, var(--sx-surface));
-  border-left: 3px solid var(--sx-warn);
-  color: var(--sx-warn);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-sm);
+  background: color-mix(in oklab, var(--sx-warn) 8%, var(--sx-surface));
+  color: var(--sx-ink-2);
 }
+
 .hint {
   color: var(--sx-muted);
-  font-size: var(--sx-text-md);
+  font-size: var(--sx-text-xs);
 }
+
+.history summary {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--sx-text-xs);
+}
+
 .budgetEditor {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--sx-line);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  align-items: start;
 }
-.field {
-  display: grid;
-  gap: 0.35rem;
-  max-width: 28rem;
-  color: var(--sx-ink);
-  font-weight: 600;
-}
-.field input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--sx-line-strong);
-  border-radius: var(--sx-radius-sm);
-  padding: 0.7rem 0.8rem;
-  color: var(--sx-ink);
-  background: var(--sx-surface);
-  font: inherit;
-}
-.field input:focus-visible {
-  outline: 3px solid var(--sx-accent);
-  outline-offset: 2px;
-}
-.field small {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  font-weight: 400;
-}
+
 .budgetActions {
   display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-}
-.budgetActions > span {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-md);
-}
-@media (max-width: 750px) {
-  .metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 420px) {
-  .metrics {
-    grid-template-columns: 1fr;
-  }
+  grid-column: 1 / -1;
 }

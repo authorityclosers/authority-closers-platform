@@ -4,6 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { newIdempotencyKey } from "@ac/operations-web/api";
+import {
+  Badge,
+  Button,
+  Field,
+  Kpi,
+  Panel,
+  Skeleton,
+  Tiles,
+  kitStyles,
+} from "../ui/kit";
 import styles from "./execution-controls.module.css";
 
 const control = z
@@ -262,174 +272,185 @@ export function ExecutionControlsPanel() {
   const budget = budgetState?.budget ?? state?.budget;
   const approvedBudgetCap = budgetState?.approved_cap_paise;
   return (
-    <section
-      className={styles.panel}
-      aria-labelledby="execution-control-title"
-      aria-busy={busy}
-    >
-      <header className={styles.header}>
-        <div>
-          <p className={styles.eyebrow}>
-            <ShieldCheck size={16} aria-hidden /> Analysis controls{" "}
-            {state && `· ${state.environment}`}
+    <div className={styles.stack} aria-busy={busy}>
+      <Panel
+        title={
+          state?.control.paused
+            ? "New analysis is paused"
+            : "Analysis availability"
+        }
+        sub={state ? state.environment : undefined}
+        tools={
+          <>
+            {state ? (
+              <Badge tone={state.control.paused ? "warn" : "good"}>
+                {state.control.paused ? "Paused" : "Running"}
+              </Badge>
+            ) : null}
+            <Button
+              variant="icon"
+              onClick={() => void refresh()}
+              disabled={busy}
+              aria-label="Refresh analysis controls"
+            >
+              <RefreshCw size={16} aria-hidden />
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.body}>
+          <p className={kitStyles.muted}>
+            <ShieldCheck size={14} aria-hidden /> Pause new analysis when you
+            need to check quality, capacity or cost. Saved calls and reports
+            stay available. Work already started may finish; its costs stay
+            recorded.
           </p>
-          <h2 id="execution-control-title">
-            {state?.control.paused
-              ? "New analysis is paused"
-              : "Manage analysis availability"}
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={busy}
-          aria-label="Refresh analysis controls"
-        >
-          <RefreshCw size={17} aria-hidden />
-        </button>
-      </header>
-      <p>
-        Pause new analysis when you need to check quality, capacity or cost.
-        Saved calls and reports stay available. Work already started may finish;
-        its costs stay recorded.
-      </p>
-      {!state && !error && <p role="status">Loading analysis controls…</p>}
-      {error && (
-        <p role="alert" className={styles.alert}>
-          {error}
-        </p>
-      )}
-      {message && <p role="status">{message}</p>}
-      {budgetError && (
-        <p role="alert" className={styles.alert}>
-          {budgetError}
-        </p>
-      )}
-      {state && (
-        <button
-          type="button"
-          className={styles.action}
-          disabled={busy || !!error}
-          onClick={() => void change()}
-        >
-          {state.control.paused ? (
-            <Play size={17} aria-hidden />
-          ) : (
-            <Pause size={17} aria-hidden />
-          )}
-          {busy
-            ? "Saving…"
-            : state.control.paused
-              ? "Resume new analysis"
-              : "Pause new analysis"}
-        </button>
-      )}
-      {budget ? (
-        <>
-          <dl className={styles.metrics}>
-            <div>
-              <dt>Active budget limit</dt>
-              <dd>{money(budget.cap_paise)}</dd>
-            </div>
-            <div>
-              <dt>Available to reserve</dt>
-              <dd>{money(budget.available_paise)}</dd>
-            </div>
-            <div>
-              <dt>Reserved or held</dt>
-              <dd>{money(budget.held_paise)}</dd>
-            </div>
-            <div>
-              <dt>Settled in the ledger</dt>
-              <dd>{money(budget.settled_paise)}</dd>
-            </div>
-          </dl>
-          <p>
-            {money(budget.uncertain_paise)} is held for outcomes awaiting
-            reconciliation. Reservations are cost ceilings, not provider
-            invoices.
-          </p>
-          {budget.warning !== "normal" && (
+          {!state && !error ? <Skeleton width={180} height={32} /> : null}
+          {error ? (
             <p role="alert" className={styles.alert}>
-              {budget.warning === "exhausted"
-                ? "The shared budget is exhausted or needs reconciliation. New reservations are stopped by the server."
-                : `Budget warning: at least ${budget.warning === "critical" ? budget.critical_percent : budget.warning_percent}% of the ceiling is committed. Review usage before more analysis.`}
+              {error}
             </p>
-          )}
-          <p className={styles.hint}>
-            Usage refreshes every 30 seconds. Warnings include reserved money;
-            the server checks the hard ceiling before each new reservation.
-          </p>
-          {budgetState && approvedBudgetCap != null && (
-            <div className={styles.budgetEditor}>
-              <label className={styles.field}>
-                <span>Shared budget limit (INR)</span>
-                <input
-                  aria-label="Shared budget limit in INR"
-                  type="number"
-                  min="0"
-                  max={approvedBudgetCap / 100}
-                  step="0.01"
-                  inputMode="decimal"
-                  value={budgetDraft}
-                  onChange={(event) => setBudgetDraft(event.target.value)}
-                  disabled={budgetBusy}
+          ) : null}
+          {message ? <p role="status">{message}</p> : null}
+          {state ? (
+            <span>
+              <Button
+                variant={state.control.paused ? "primary" : "secondary"}
+                disabled={busy || !!error}
+                onClick={() => void change()}
+              >
+                {state.control.paused ? (
+                  <Play size={15} aria-hidden />
+                ) : (
+                  <Pause size={15} aria-hidden />
+                )}
+                {busy
+                  ? "Saving…"
+                  : state.control.paused
+                    ? "Resume new analysis"
+                    : "Pause new analysis"}
+              </Button>
+            </span>
+          ) : null}
+          {state?.history.length ? (
+            <details className={styles.history}>
+              <summary>Recent availability changes</summary>
+              <ol>
+                {state.history.map((item) => (
+                  <li key={item.revision}>
+                    {item.paused ? "Paused" : "Resumed"} ·{" "}
+                    {item.changed_at
+                      ? new Date(item.changed_at).toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                        })
+                      : "Time unavailable"}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          ) : null}
+        </div>
+      </Panel>
+
+      <Panel
+        title="Shared processing budget"
+        sub={budgetState ? `revision ${budgetState.revision}` : undefined}
+      >
+        <div className={styles.body}>
+          {budgetError ? (
+            <p role="alert" className={styles.alert}>
+              {budgetError}
+            </p>
+          ) : null}
+          {budget ? (
+            <>
+              <Tiles label="Budget">
+                <Kpi
+                  label="Active budget limit"
+                  value={money(budget.cap_paise)}
                 />
-                <small>
-                  Up to the release-approved ceiling of{" "}
-                  {money(approvedBudgetCap)}. Existing reservations remain held.
-                </small>
-              </label>
-              <label className={styles.field}>
-                <span>Reason for change</span>
-                <input
-                  aria-label="Budget change reason"
-                  type="text"
-                  maxLength={512}
-                  value={budgetReason}
-                  onChange={(event) => setBudgetReason(event.target.value)}
-                  disabled={budgetBusy}
+                <Kpi
+                  label="Available to reserve"
+                  value={money(budget.available_paise)}
                 />
-              </label>
-              <div className={styles.budgetActions}>
-                <button
-                  type="button"
-                  className={styles.action}
-                  onClick={() => void changeBudget()}
-                  disabled={budgetBusy}
-                >
-                  <Save size={16} aria-hidden />
-                  {budgetBusy ? "Saving…" : "Save budget limit"}
-                </button>
-                <span>Revision {budgetState.revision}</span>
-              </div>
-              {budgetMessage && <p role="status">{budgetMessage}</p>}
-            </div>
+                <Kpi
+                  label="Reserved or held"
+                  value={money(budget.held_paise)}
+                />
+                <Kpi
+                  label="Settled in the ledger"
+                  value={money(budget.settled_paise)}
+                />
+              </Tiles>
+              <p className={kitStyles.muted}>
+                {money(budget.uncertain_paise)} is held for outcomes awaiting
+                reconciliation. Reservations are cost ceilings, not provider
+                invoices.
+              </p>
+              {budget.warning !== "normal" ? (
+                <p role="alert" className={styles.alert}>
+                  {budget.warning === "exhausted"
+                    ? "The shared budget is exhausted or needs reconciliation. New reservations are stopped by the server."
+                    : `Budget warning: at least ${budget.warning === "critical" ? budget.critical_percent : budget.warning_percent}% of the ceiling is committed. Review usage before more analysis.`}
+                </p>
+              ) : null}
+              <p className={styles.hint}>
+                Usage refreshes every 30 seconds. Warnings include reserved
+                money; the server checks the hard ceiling before each new
+                reservation.
+              </p>
+              {budgetState && approvedBudgetCap != null ? (
+                <div className={styles.budgetEditor}>
+                  <Field
+                    label="Shared budget limit (INR)"
+                    hint={`Up to the release-approved ceiling of ${money(approvedBudgetCap)}. Existing reservations remain held.`}
+                  >
+                    <input
+                      aria-label="Shared budget limit in INR"
+                      type="number"
+                      min="0"
+                      max={approvedBudgetCap / 100}
+                      step="0.01"
+                      inputMode="decimal"
+                      value={budgetDraft}
+                      onChange={(event) => setBudgetDraft(event.target.value)}
+                      disabled={budgetBusy}
+                    />
+                  </Field>
+                  <Field label="Reason for change">
+                    <input
+                      aria-label="Budget change reason"
+                      type="text"
+                      maxLength={512}
+                      value={budgetReason}
+                      onChange={(event) => setBudgetReason(event.target.value)}
+                      disabled={budgetBusy}
+                    />
+                  </Field>
+                  <span className={styles.budgetActions}>
+                    <Button
+                      variant="primary"
+                      onClick={() => void changeBudget()}
+                      disabled={budgetBusy}
+                    >
+                      <Save size={15} aria-hidden />
+                      {budgetBusy ? "Saving…" : "Save budget limit"}
+                    </Button>
+                  </span>
+                  {budgetMessage ? <p role="status">{budgetMessage}</p> : null}
+                </div>
+              ) : null}
+            </>
+          ) : state ? (
+            <p className={kitStyles.muted}>
+              Budget details are unavailable. No zero balance or extra allowance
+              is assumed.
+            </p>
+          ) : (
+            <Skeleton height={96} />
           )}
-        </>
-      ) : (
-        state && (
-          <p>
-            Budget details are unavailable. No zero balance or extra allowance
-            is assumed.
-          </p>
-        )
-      )}
-      {!!state?.history.length && (
-        <details>
-          <summary>Recent availability changes</summary>
-          <ol>
-            {state.history.map((item) => (
-              <li key={item.revision}>
-                {item.paused ? "Paused" : "Resumed"} ·{" "}
-                {item.changed_at
-                  ? new Date(item.changed_at).toLocaleString()
-                  : "Time unavailable"}
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
-    </section>
+        </div>
+      </Panel>
+    </div>
   );
 }
