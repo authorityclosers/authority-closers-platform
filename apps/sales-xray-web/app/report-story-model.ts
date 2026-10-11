@@ -911,10 +911,10 @@ export function reportStoryModel(
     // Where the prospect stands is what the call heard, whoever set the status.
     position: callOutcome(report).detail,
     blocker: concerns[0] ?? null,
-    prospectCommitments: [
-      ...(story?.prospect_commitments ?? []),
-      ...(story?.prospect_tasks ?? []),
-    ].map((note) => ({ text: note.text, sources: note.evidence })),
+    prospectCommitments: (story?.prospect_commitments ?? []).map((note) => ({
+      text: note.text,
+      sources: note.evidence,
+    })),
     sellerCommitments: (story?.seller_commitments ?? []).map((note) => ({
       text: [note.text, note.due_text].filter(Boolean).join(" · "),
       sources: note.evidence,
@@ -1026,7 +1026,9 @@ function withPillars(
     ...base.picture,
     outcome,
     summary: p.summary
-      ? { text: p.summary, sources: [] }
+      ? p.summary === base.picture.summary?.text
+        ? base.picture.summary
+        : { text: p.summary, sources: [] }
       : base.picture.summary,
     // The supplied summary is already the three to five sentences.
     assessment: p.summary ? null : base.picture.assessment,

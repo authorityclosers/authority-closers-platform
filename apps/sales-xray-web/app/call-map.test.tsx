@@ -123,6 +123,43 @@ function chips() {
   );
 }
 
+it("uses a confirmed seller's colour even when the prospect speaks first", async () => {
+  const voices = [
+    ...new Set(transcript.segments.map((segment) => segment.speaker_id)),
+  ];
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      [voices[0]!]: { name: "Fictional Buyer", role: "prospect", icon: null },
+      [voices[1]!]: {
+        name: "Fictional Seller",
+        role: "salesperson",
+        icon: null,
+      },
+    }),
+  );
+  await renderMap();
+  expect(chips()[0].style.getPropertyValue("--voice")).toBe("var(--lx-muted)");
+  expect(chips()[1].style.getPropertyValue("--voice")).toBe("var(--lx-teal)");
+  expect(
+    host
+      .querySelector<SVGElement>('svg[data-voice="0"]')
+      ?.style.getPropertyValue("--voice"),
+  ).toBe("var(--lx-muted)");
+  expect(
+    host
+      .querySelector<SVGElement>('svg[data-voice="1"]')
+      ?.style.getPropertyValue("--voice"),
+  ).toBe("var(--lx-teal)");
+});
+
+it("keeps unnamed roles neutral rather than making the first voice the seller", () => {
+  expect(
+    chips().every(
+      (chip) => chip.style.getPropertyValue("--voice") === "var(--lx-muted)",
+    ),
+  ).toBe(true);
+});
+
 function type(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
