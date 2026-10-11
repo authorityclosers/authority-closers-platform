@@ -185,6 +185,10 @@ export function StoryShellPreview({
                       durationMs={FIXTURE_DURATION_MS}
                       languageLabel={fixture.language}
                       sourceLabel="Fictional fixture transcript"
+                      label={{
+                        displayName: "Discovery call · Amit Sharma",
+                        revision: 1,
+                      }}
                       claimed
                       busy={false}
                       canDownload={false}

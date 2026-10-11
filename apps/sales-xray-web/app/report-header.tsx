@@ -381,7 +381,6 @@ export function ReportHeader({
             {languageLabel ? (
               <span>Report language: {languageLabel}</span>
             ) : null}
-            <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
         {hasCompact ? (

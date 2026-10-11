@@ -824,6 +824,28 @@ export function ReportModes({
           current = panel.id;
       }
       if (!foundHeading) return;
+      // At the very end the last chapters cannot reach the reading line:
+      // the last one whose heading is on screen is the one being read.
+      const atEnd = scroller
+        ? scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 4
+        : false;
+      if (atEnd && scroller && scroller.scrollTop > 0) {
+        const bottom =
+          scroller === document.scrollingElement ||
+          scroller === document.documentElement
+            ? window.innerHeight
+            : scroller.getBoundingClientRect().bottom;
+        const visible = activePanels.filter((panel) => {
+          const top = document
+            .getElementById(`${id}-heading-${panel.id}`)
+            ?.getBoundingClientRect().top;
+          return top !== undefined && top >= scrollportTop && top < bottom - 48;
+        });
+        // A chapter the reader jumped to stays lit while it is on screen.
+        if (visible.some((panel) => panel.id === selected)) current = selected;
+        else if (visible.length) current = visible[visible.length - 1].id;
+      }
       setReadingSection((previous) =>
         previous === current ? previous : current,
       );

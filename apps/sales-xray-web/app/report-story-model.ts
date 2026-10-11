@@ -5,6 +5,7 @@ import type {
   SalesReport,
   Transcript,
 } from "./report-contract";
+import { STAGE_LABELS } from "./report-copy";
 import { REPORT_SKILLS } from "./report-pillars";
 
 /**
@@ -51,11 +52,14 @@ export type SkillState =
 export type MomentKind =
   | "Strong Moment"
   | "Turning Point"
+  | "Buying Signal"
   | "Important Miss"
   | "Objection"
   | "Price Moment"
   | "Decision Moment"
+  | "Trust Moment"
   | "Commitment"
+  | "Risk"
   | "Worth Replaying";
 
 export type Moment = {
@@ -67,6 +71,9 @@ export type Moment = {
   /** Important Miss only: what the seller did instead, and the open question. */
   movedToward?: Line;
   couldExplore?: string;
+  /** Price Moment only: the words that named the price, and what came back. */
+  priceStated?: Line;
+  prospectResponse?: Line;
 };
 
 export type Item = { title: string; what: Line; why: Line | null };
@@ -114,6 +121,21 @@ export type StoryModel = {
     unclear: string[];
     concerns: Line[];
     findings: Item[];
+    /** Spec 5, Deep Analysis: the four groups, each only with what we have. */
+    discovery: {
+      clear: string[];
+      unclear: string[];
+      openingMissed: Line | null;
+    };
+    decision: {
+      price: Line | null;
+      response: Line | null;
+      likely: Line[];
+    };
+    communication: {
+      longest: string | null;
+      observation: Line | null;
+    };
   };
   deal: {
     outcome: Outcome;
@@ -129,6 +151,13 @@ export type StoryModel = {
   };
   /** Per pillar, what this report does not establish (shown as one line). */
   missing: [string[], string[], string[], string[], string[], string[]];
+  /** The optional end strip (spec): short values, each from the report. */
+  end: {
+    strongest: string | null;
+    issue: string | null;
+    moment: Moment | null;
+    nextEvent: string | null;
+  };
 };
 
 const SKILL_SHORT: Record<string, string> = {
@@ -150,22 +179,17 @@ const CALL_STATE: Record<string, SkillState> = {
   not_applicable: "Not Applicable",
 };
 
-const PHASE_LABELS = {
-  opening: "Opening",
-  discovery: "Discovery",
-  pitch: "Offer discussion",
-  objection: "Concerns",
-  close: "Decision discussion",
-} as const;
-
 const MOMENT_PRIORITY: MomentKind[] = [
   "Turning Point",
   "Important Miss",
+  "Buying Signal",
   "Strong Moment",
   "Commitment",
   "Decision Moment",
   "Objection",
   "Price Moment",
+  "Trust Moment",
+  "Risk",
   "Worth Replaying",
 ];
 
@@ -332,7 +356,7 @@ function phasesFor(report: SalesReport, durationMs: number | undefined) {
   const phases = report.story?.phases;
   if (!phases?.length || !durationMs) return null;
   return phases.map((phase, index) => ({
-    label: PHASE_LABELS[phase.name],
+    label: STAGE_LABELS[phase.name],
     start_ms: phase.start_ms,
     end_ms: phases[index + 1]?.start_ms ?? durationMs,
   }));
@@ -418,21 +442,15 @@ function momentsFor(
       transcript.segments,
       transcript.duration_ms,
     );
-    const price = measured.price_moments[0];
-    const segment = price
-      ? transcript.segments.find((item) => item.id === price.segment_id)
-      : null;
-    if (segment)
+    const price = priceExchange(transcript, measured.price_moments[0]);
+    if (price)
       add({
         kind: "Price Moment",
-        title: "Price or money came up",
-        source: {
-          segment_id: segment.id,
-          quote: segment.text,
-          start_ms: segment.start_ms,
-          end_ms: segment.end_ms,
-        },
+        title: "Price came up",
+        source: price.stated.sources[0],
         why: null,
+        priceStated: price.stated,
+        prospectResponse: price.response ?? undefined,
       });
   }
   for (const item of overview?.rewatch ?? []) {
@@ -446,6 +464,30 @@ function momentsFor(
       });
   }
   return moments;
+}
+
+/** The words that named a price, and the next thing someone else said. */
+function priceExchange(
+  transcript: Transcript,
+  moment: { segment_id: string } | undefined,
+): { stated: Line; response: Line | null } | null {
+  if (!moment) return null;
+  const at = transcript.segments.findIndex((s) => s.id === moment.segment_id);
+  const segment = transcript.segments[at];
+  if (!segment) return null;
+  const evidence = (s: Transcript["segments"][number]): ReportEvidence => ({
+    segment_id: s.id,
+    quote: s.text,
+    start_ms: s.start_ms,
+    end_ms: s.end_ms,
+  });
+  const reply = transcript.segments
+    .slice(at + 1, at + 4)
+    .find((s) => s.speaker_id && s.speaker_id !== segment.speaker_id);
+  return {
+    stated: { text: segment.text, sources: [evidence(segment)] },
+    response: reply ? { text: reply.text, sources: [evidence(reply)] } : null,
+  };
 }
 
 function topMoments(moments: Moment[], limit = 5) {
@@ -624,12 +666,40 @@ export function reportStoryModel(
       inferred: true,
     }),
   );
+  const priceMoment = moments.find((m) => m.kind === "Price Moment");
+  const firstMiss = overview?.missed_details[0];
+  const communication = report.dimensions.find(
+    (d) => d.dimension_id === "communication_tonality",
+  );
+  const longestMetric = flow.metrics.find((m) => /^Longest/.test(m.label));
   const deeper = {
     unclear,
     concerns,
     findings: [...report.objection_analysis, ...report.closing_analysis].map(
       (finding) => findingItem(finding, null, false),
     ),
+    discovery: {
+      clear: [] as string[],
+      unclear,
+      openingMissed: firstMiss
+        ? line(
+            firstMiss.prospect_signal.text,
+            firstMiss.prospect_signal.evidence,
+          )
+        : null,
+    },
+    decision: {
+      price: priceMoment?.priceStated ?? null,
+      response: priceMoment?.prospectResponse ?? null,
+      likely: concerns,
+    },
+    communication: {
+      longest: longestMetric?.value ?? null,
+      observation:
+        communication && skillState(communication)
+          ? line(communication.observation, communication.evidence)
+          : null,
+    },
   };
 
   const rung = story?.outcome.next_step_rung;
@@ -692,16 +762,25 @@ export function reportStoryModel(
     ].filter((v): v is string => Boolean(v)),
   ];
 
+  const top = topMoments(moments);
+  const end = {
+    strongest: worked[0]?.title ?? null,
+    issue: didnt[0]?.title ?? null,
+    moment: top.find((m) => m.kind === "Turning Point") ?? top[0] ?? null,
+    nextEvent: deal.nextEvent?.text ?? null,
+  };
+
   return {
     picture,
     flow,
     worked,
     didnt,
     moments,
-    topMoments: topMoments(moments),
+    topMoments: top,
     skills,
     deeper,
     deal,
     missing,
+    end,
   };
 }

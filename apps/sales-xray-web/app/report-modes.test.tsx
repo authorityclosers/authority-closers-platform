@@ -1486,7 +1486,7 @@ it("opens Coaching from the deal pillar's button", async () => {
     ),
   );
   const open = [...container.querySelectorAll("button")].find(
-    (b) => b.textContent === "Coaching for this call",
+    (b) => b.textContent === "View Personalized Coaching",
   )!;
   await act(async () => open.click());
   expect(mode().dataset.view).toBe("coaching");

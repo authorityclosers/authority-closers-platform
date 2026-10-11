@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { DocumentReportData } from "./report-document-data";
 import type { ReportEvidence } from "./report-contract";
 import type { ReportPanel } from "./report-modes";
-import { STORY_PILLARS, StoryPillar } from "./report-story-view";
+import { STORY_PILLARS, StoryPillar } from "./report-sections/pillar";
 import type { ContextualSourcePlayback } from "./source-playback-context";
 
 type Select = (evidence: ReportEvidence, title: string) => void;

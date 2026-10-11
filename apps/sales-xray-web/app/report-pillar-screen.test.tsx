@@ -72,7 +72,7 @@ it("tells the call as six pillars in the spec's order, without profile or coachi
   expect(picture).toContain("Strongest part");
   expect(picture).toContain("Biggest concern");
   expect(picture).toContain("Next step");
-  expect(picture).not.toContain("Not in this report");
+  expect(picture).not.toContain("This report doesn't cover");
 });
 
 it("plays the exact quoted moment from any pillar", async () => {
@@ -112,16 +112,23 @@ it("keeps moments to five, then shows all on request", async () => {
   expect(moments.querySelectorAll("ol > li").length).toBeGreaterThan(5);
   expect(moments.textContent).toContain("Important Miss");
   expect(moments.textContent).toContain("You moved toward");
+  expect(moments.textContent).toContain("What was missed");
 });
 
 it("ends where the deal stands, with links to the prospect and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const deal = pillar(host, "facts");
-  expect(deal.textContent).toContain("Commitment: Clear");
+  expect(deal.textContent).toContain("Commitment Quality");
+  expect(deal.textContent).toContain("Clear");
   expect(deal.textContent).toContain("Friday · 4:00 PM");
   expect(deal.textContent).toContain("Still needs to become clear");
   expect(deal.querySelector('a[href="/prospects"]')).not.toBeNull();
-  expect(deal.textContent).toContain("Coaching for this call");
+  expect(deal.textContent).toContain("View Prospect Information");
+  expect(deal.textContent).toContain("View Personalized Coaching");
+  // The end strip names the next event, not just "Agreed".
+  expect(
+    deal.querySelector('dl[aria-label="Report summary"]')?.textContent,
+  ).toContain("Friday · 4:00 PM");
 });
 
 it("opens a sparse older report with honest, one-line gaps", async () => {
@@ -129,7 +136,7 @@ it("opens a sparse older report with honest, one-line gaps", async () => {
   const picture = pillar(host, "overview");
   expect(picture.textContent).toContain("Outcome not recorded");
   expect(picture.textContent).toContain("Only a person records won or lost");
-  expect(picture.textContent).toContain("Not in this report:");
+  expect(picture.textContent).toContain("This report doesn't cover:");
   expect(
     pillar(host, "skills").querySelectorAll("details > summary").length,
   ).toBeGreaterThanOrEqual(8);
