@@ -320,6 +320,15 @@ export const REFLECTION = {
   saved: "Saved as your context. It shows with the likely reason.",
 } as const;
 
+/** Spec pillar 6 disagreement flow: the evidence first, then what we missed. */
+export const DISAGREE = {
+  basis: "This focus is based on",
+  replay: "Replay them above",
+  noted: "Noted. Here’s what this focus is based on. Tell us what we missed.",
+  missed: "What did we miss?",
+  context: "What should we know about this focus?",
+} as const;
+
 export const CALLS = {
   title: "Coaching for each call",
   recent: (count: number) => `${count} recent`,

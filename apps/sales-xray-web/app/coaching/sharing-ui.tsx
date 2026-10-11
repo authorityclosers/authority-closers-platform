@@ -10,7 +10,9 @@ import {
   sendFeedback,
   type SharingView,
 } from "./sharing-client";
-import { REFLECTION } from "./coaching-copy";
+import type { Evidence } from "./coaching-client";
+import { DISAGREE, REFLECTION } from "./coaching-copy";
+import { timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
 
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
@@ -117,17 +119,56 @@ export function SharePanel({
 /** Agree / not completely with the current focus; never changes a score. */
 const CONTEXT_LIMIT = 1000;
 
-/** The learner's own words about the focus (spec 12.2): kept, shown back. */
-function AddContext({
+/**
+ * What the focus rests on (spec pillar 6, disagreement step 2): each moment's
+ * call, time and what the report saw, shown before asking what we missed.
+ */
+function FocusBasis({ evidence }: { evidence: readonly Evidence[] }) {
+  if (!evidence.length) return null;
+  return (
+    <div className={styles.basis}>
+      <p className={styles.basisHead}>
+        {DISAGREE.basis}
+        <a href="#coaching-why">{DISAGREE.replay}</a>
+      </p>
+      <ul aria-label={DISAGREE.basis}>
+        {evidence.map((moment) => (
+          <li key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}>
+            <span>
+              {moment.call_label} · {timeLabel(moment.start_ms)}
+            </span>
+            {moment.observation}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The learner's own words about the focus (spec 12.2): kept, shown back.
+ * It stays mounted while closed, so a retry after a failed save repeats the
+ * same command.
+ */
+function ContextForm({
   focusSkillId,
   originSubmissionId,
+  open,
+  missed,
+  evidence,
+  onSaved,
+  onCancel,
 }: {
   focusSkillId: string;
   originSubmissionId: string;
+  open: boolean;
+  /** Opened by "Not completely": ask what we missed. */
+  missed: boolean;
+  evidence: readonly Evidence[];
+  onSaved: (note: string) => void;
+  onCancel: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // One command per text: a retry of the same note is the same request,
@@ -152,28 +193,18 @@ function AddContext({
     setSaving(false);
     if (result.error) setError(result.error);
     else {
-      setSaved(note);
       setText("");
-      setOpen(false);
       setAttempted(null);
+      onSaved(note);
     }
   };
-  if (!open)
-    return (
-      <>
-        <Button onClick={() => setOpen(true)}>Add context</Button>
-        {saved ? (
-          <p role="status" className={styles.note}>
-            Saved: “{saved}”. It shows with the likely reason.
-          </p>
-        ) : null}
-      </>
-    );
+  if (!open) return null;
   return (
     <div className={styles.contextForm}>
+      <FocusBasis evidence={evidence} />
       <label className={kitStyles.field}>
         <span className={kitStyles.fieldLabel}>
-          What should we know about this focus?
+          {missed ? DISAGREE.missed : DISAGREE.context}
         </span>
         <textarea
           value={text}
@@ -194,7 +225,7 @@ function AddContext({
         >
           Save
         </Button>
-        <Button onClick={() => setOpen(false)} disabled={saving}>
+        <Button onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
       </div>
@@ -276,16 +307,22 @@ export function FocusFeedback({
   focusSkillId,
   originSubmissionId,
   question,
+  evidence = [],
 }: {
   focusSkillId: string;
   originSubmissionId: string;
   /** The one reflection question, answered with a tap (spec pillar 6). */
   question?: string | null;
+  /** The moments behind the focus, shown before asking what we missed. */
+  evidence?: readonly Evidence[];
 }) {
   const [state, setState] = useState<
     "idle" | "saving" | "agree" | "not_completely"
   >("idle");
   const [error, setError] = useState<string | null>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [missed, setMissed] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   // One command per choice: retrying a choice repeats it; switching after a
   // failed try is a new answer, never a conflict with the first.
   const [commands] = useState(() => ({
@@ -304,7 +341,14 @@ export function FocusFeedback({
     if (result.error) {
       setState("idle");
       setError(result.error);
-    } else setState(agreement);
+      return;
+    }
+    setState(agreement);
+    // Spec pillar 6 disagreement flow: show the evidence, ask what we missed.
+    if (agreement === "not_completely") {
+      setMissed(true);
+      setContextOpen(true);
+    }
   };
   const done = state === "agree" || state === "not_completely";
   return (
@@ -331,16 +375,41 @@ export function FocusFeedback({
         >
           Not completely
         </Button>
-        <AddContext
-          focusSkillId={focusSkillId}
-          originSubmissionId={originSubmissionId}
-        />
+        {contextOpen ? null : (
+          <Button
+            onClick={() => {
+              setMissed(false);
+              setContextOpen(true);
+            }}
+          >
+            Add context
+          </Button>
+        )}
       </div>
       <p role="status" className={styles.note}>
-        {done
-          ? "Noted. Your mission stays the same."
-          : (error ?? "Does this focus fit you? Tell us, or add context.")}
+        {state === "not_completely" && contextOpen
+          ? DISAGREE.noted
+          : done
+            ? "Noted. Your mission stays the same."
+            : (error ?? "Does this focus fit you? Tell us, or add context.")}
       </p>
+      <ContextForm
+        focusSkillId={focusSkillId}
+        originSubmissionId={originSubmissionId}
+        open={contextOpen}
+        missed={missed}
+        evidence={evidence}
+        onSaved={(note) => {
+          setSaved(note);
+          setContextOpen(false);
+        }}
+        onCancel={() => setContextOpen(false)}
+      />
+      {saved && !contextOpen ? (
+        <p role="status" className={styles.note}>
+          Saved: “{saved}”. It shows with the likely reason.
+        </p>
+      ) : null}
     </>
   );
 }

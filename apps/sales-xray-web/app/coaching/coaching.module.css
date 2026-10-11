@@ -528,6 +528,53 @@
   gap: 8px;
 }
 
+/* "Not completely": the moments the focus rests on, before the question. */
+.basis {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+
+.basisHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font: 600 var(--sx-text-xs) / 1.3 var(--lx-font-ui);
+}
+
+.basisHead a {
+  /* A taller tap area for a small inline link, without moving the line. */
+  display: inline-block;
+  margin-block: -4px;
+  padding-block: 4px;
+  color: var(--sx-accent);
+  text-decoration: none;
+}
+
+.basisHead a:hover {
+  text-decoration: underline;
+}
+
+.basis ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sx-ink-2);
+}
+
+.basis li > span {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
 .learnerContext {
   display: block;
   margin-top: 4px;

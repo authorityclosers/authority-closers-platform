@@ -480,6 +480,7 @@ export function CoachingStory({
               focusSkillId={focus.skill_id}
               originSubmissionId={mission.origin_submission_id}
               question={coaching.reflection_question}
+              evidence={evidence}
             />
           )}
         </StoryCard>
