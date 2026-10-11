@@ -876,6 +876,9 @@ async def admit_processing_actor(
             or owner_member.role == "processing"
         ):
             raise ConversationDenied("The upload owner's account is unavailable.")
+    from ac_platform.conversation_intelligence.bulk_imports import require_import_execution
+
+    await require_import_execution(database, usage, now)
     return usage
 
 
