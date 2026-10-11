@@ -626,8 +626,11 @@ it("reconciles every Overview figure with the calls it lists", async () => {
     /^Sales call · \S/,
   );
   expect(rows[0].textContent).toContain("Report ready");
-  // One sparse day is not a trend in the figure strip.
-  expect(host.querySelector('dl [role="img"]')).toBeNull();
+  // One sparse day is not a trend in the figure strip (share bars stay).
+  expect(host.querySelector('dl [aria-label^="Calls per day"]')).toBeNull();
+  expect(
+    host.querySelector('dl [aria-label="100% of calls have a ready report"]'),
+  ).not.toBeNull();
 });
 
 it("lists active people first and folds quiet and test accounts away", async () => {
@@ -649,13 +652,15 @@ it("lists active people first and folds quiet and test accounts away", async () 
   expect(host.textContent).toContain("No calls");
 });
 
-it("draws a 30-day bar only with at least three active days", async () => {
+it("draws a 14-day sparkline only with at least three active days", async () => {
   activityRoutes([0, 3, 9]);
   await render();
-  expect(
-    host.querySelector('[aria-label="Calls per day over the last 30 days"]')
-      ?.children,
-  ).toHaveLength(30);
+  const spark = host.querySelector(
+    'dl [aria-label^="Calls per day, last 14 days"]',
+  );
+  expect(spark?.children).toHaveLength(14);
+  // Today is the lit column, as on the Dashboard.
+  expect(spark?.lastElementChild?.hasAttribute("data-on")).toBe(true);
   expect(kpi("Reports ready")).toBe("Reports ready1of 3 calls");
   expect(host.textContent).toContain("Analysis in progress");
 });

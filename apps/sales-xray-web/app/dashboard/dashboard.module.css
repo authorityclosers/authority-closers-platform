@@ -87,6 +87,13 @@
   margin-bottom: 4px;
 }
 
+.figureShare {
+  display: block;
+  width: 72px;
+  flex: none;
+  margin-bottom: 9px;
+}
+
 /* Needs attention: a quiet warning dot while something waits. */
 .warnDot {
   display: inline-block;
@@ -428,7 +435,8 @@
   }
 
   /* Two tiles across: a shorter sparkline beside the value and its change. */
-  .figureSpark :global(span[role="img"]) {
+  .figureSpark :global(span[role="img"]),
+  .figureShare {
     width: 48px;
   }
 

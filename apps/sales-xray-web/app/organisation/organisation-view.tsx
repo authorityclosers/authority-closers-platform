@@ -35,6 +35,7 @@ import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
+import { Meter, Spark } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useBranding } from "../shell/branding-store";
@@ -621,55 +622,46 @@ function summarise(activity: OrgActivity) {
     perRep.length > 0
       ? perRep.filter((rep) => rep.calls > 0).length
       : new Set(calls.map((call) => call.ownerPersonId)).size;
-  const byDay = new Map(perDay.map((day) => [day.date, day.calls]));
+  const byDay = new Map(perDay.map((day) => [day.date, day]));
   const today = new Date();
-  const series = Array.from({ length: 30 }, (_, index) => {
+  // The last 14 days, oldest first (today last): the tiles' sparklines.
+  const days = Array.from({ length: 14 }, (_, index) => {
     const day = new Date(
       Date.UTC(
         today.getUTCFullYear(),
         today.getUTCMonth(),
-        today.getUTCDate() - (29 - index),
+        today.getUTCDate() - (13 - index),
       ),
     );
-    return byDay.get(day.toISOString().slice(0, 10)) ?? 0;
+    return byDay.get(day.toISOString().slice(0, 10));
   });
-  return { ...total, people, series };
+  return {
+    ...total,
+    people,
+    series: days.map((day) => day?.calls ?? 0),
+    minuteSeries: days.map((day) => Math.round(day?.recordedMinutes ?? 0)),
+  };
 }
 
+/** A tile as on the Dashboard: label, value, then a sparkline or share bar. */
 function Kpi({
   label,
   value,
   context,
-  series,
+  accessory,
 }: {
   label: string;
   value: ReactNode;
   context: ReactNode;
-  series?: number[];
+  accessory?: ReactNode;
 }) {
-  // One or two busy days do not make a trend: show the number alone.
-  const spark =
-    series && series.filter((count) => count > 0).length >= 3 ? series : null;
-  const top = spark ? Math.max(...spark) : 1;
   return (
     <div className={styles.kpi}>
       <dt>{label}</dt>
       <dd>
         <b>{value}</b>
-        {spark ? (
-          <span
-            className={styles.spark}
-            role="img"
-            aria-label={`${label} per day over the last 30 days`}
-          >
-            {spark.map((count, index) => (
-              <i
-                key={index}
-                data-empty={count === 0 ? "" : undefined}
-                style={{ height: `${Math.max(8, (count / top) * 100)}%` }}
-              />
-            ))}
-          </span>
+        {accessory ? (
+          <span className={styles.kpiAccessory}>{accessory}</span>
         ) : null}
       </dd>
       <dd className={styles.kpiContext}>{context}</dd>
@@ -800,17 +792,39 @@ function PeriodStrip({
           label="Calls"
           value={totals.calls}
           context={totals.calls === 1 ? "call saved" : "calls saved"}
-          series={totals.series}
+          accessory={
+            <Spark
+              values={totals.series}
+              label={`Calls per day, last 14 days: ${totals.series.join(", ")}`}
+            />
+          }
         />
         <Kpi
           label="Minutes recorded"
           value={minutes(totals.minutes)}
           context="length of those calls"
+          accessory={
+            <Spark
+              values={totals.minuteSeries}
+              label={`Minutes recorded per day, last 14 days: ${totals.minuteSeries.join(", ")}`}
+            />
+          }
         />
         <Kpi
           label="Reports ready"
           value={totals.reports}
           context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
+          accessory={
+            totals.calls > 0 ? (
+              <span className={styles.kpiShare}>
+                <Meter
+                  value={totals.reports}
+                  max={totals.calls}
+                  label={`${Math.round((totals.reports / totals.calls) * 100)}% of calls have a ready report`}
+                />
+              </span>
+            ) : null
+          }
         />
         {team ? (
           <Kpi
@@ -820,6 +834,17 @@ function PeriodStrip({
               memberCount !== null
                 ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
                 : "members"
+            }
+            accessory={
+              memberCount ? (
+                <span className={styles.kpiShare}>
+                  <Meter
+                    value={totals.people}
+                    max={memberCount}
+                    label={`${totals.people} of ${memberCount} members made calls`}
+                  />
+                </span>
+              ) : null
             }
           />
         ) : null}

@@ -301,25 +301,27 @@
   white-space: nowrap;
 }
 
-.spark {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  width: 92px;
-  height: 26px;
+/* The tile's sparkline (kit Spark) or share bar (kit Meter), at the row's end. */
+.kpiAccessory {
+  display: inline-flex;
+  flex: none;
+  margin-bottom: 4px;
 }
 
-.spark i {
-  flex: 1;
-  min-width: 0;
-  border-radius: 1px;
-  background: var(--lx-teal);
-  opacity: 0.85;
+.kpiShare {
+  display: block;
+  width: 72px;
+  margin-bottom: 5px;
 }
 
-.spark i[data-empty] {
-  background: var(--lx-line-strong);
-  opacity: 1;
+@media (max-width: 720px) {
+  .kpiAccessory :global(span[role="img"]) {
+    width: 48px;
+  }
+
+  .kpiShare {
+    width: 48px;
+  }
 }
 
 /* ---------- Calls table ---------- */

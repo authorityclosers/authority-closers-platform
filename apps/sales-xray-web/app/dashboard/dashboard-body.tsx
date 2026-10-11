@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
-import { Delta, Spark } from "../ui/kit";
+import { Delta, Meter, Spark } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
@@ -22,7 +22,6 @@ import {
   DayBarsSkeleton,
   MinutesRing,
   MinutesUsed,
-  ReadyShare,
   StatusSplit,
   StatusSplitSkeleton,
 } from "./dashboard-visuals";
@@ -186,7 +185,13 @@ export function DashboardBody({
               }
               accessory={
                 summary && summary.total > 0 ? (
-                  <ReadyShare ready={summary.completed} total={summary.total} />
+                  <span className={styles.figureShare}>
+                    <Meter
+                      value={summary.completed}
+                      max={summary.total}
+                      label={`${Math.round((summary.completed / summary.total) * 100)}% of saved calls have a ready report`}
+                    />
+                  </span>
                 ) : null
               }
             />

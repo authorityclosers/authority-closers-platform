@@ -269,31 +269,6 @@
   color: var(--lx-muted);
 }
 
-/* Reports ready: the ready share as a short bar at the tile's value row. */
-.share {
-  display: block;
-  width: 72px;
-  height: 6px;
-  flex: none;
-  margin-bottom: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--lx-sunken);
-}
-
-.share i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--lx-teal);
-}
-
-@media (max-width: 720px) {
-  .share {
-    width: 48px;
-  }
-}
-
 .review {
   display: inline-flex;
   align-items: center;
