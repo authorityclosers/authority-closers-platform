@@ -189,9 +189,18 @@ const same = (a: string | null | undefined, b: string | null | undefined) => {
 /** A line that stands alone starts with a capital ("next Tuesday" → "Next Tuesday"). */
 const upperFirst = (text: string) =>
   text.replace(
-    /^(\P{L}*)(\p{Ll})/u,
+    /^([“"‘'(]*)(\p{Ll})/u,
     (_, lead: string, letter: string) => `${lead}${letter.toUpperCase()}`,
   );
+
+/**
+ * The same words inside a sentence: "Next Tuesday" → "next Tuesday", while
+ * names of days, months and people keep their capital ("Friday · 4:00 PM").
+ */
+const RELATIVE_WORD =
+  /^(Next|This|Coming|Tomorrow|Today|Tonight|Later|Early|End|Within|After|Before|In|On|By|The)\b/u;
+const inSentence = (text: string) =>
+  text.replace(RELATIVE_WORD, (word) => word.toLowerCase());
 
 /** Blocks without the ones a report can't fill. */
 const keep = (list: (DocItem | null | undefined | false)[]): DocItem[] =>
@@ -317,7 +326,7 @@ export function reportDocumentModel(
         deal.nextEvent && !picture.nextStep?.text.includes(deal.nextEvent.text)
           ? {
               type: "text",
-              text: followUpOn(upperFirst(deal.nextEvent.text)),
+              text: followUpOn(deal.nextEvent.text),
               strong: true,
             }
           : null,
@@ -487,11 +496,12 @@ export function reportDocumentModel(
       ]),
     };
   };
+  /** Their exact words as a quote; a figure the analysis names stays plain. */
   function quoteOf(said: Line): DocItem {
     const at = clip(said.sources[0]);
-    return at
+    return at && same(said.text, said.sources[0]?.quote)
       ? { type: "quote", clip: { ...at, quote: said.text } }
-      : { type: "text", text: said.text };
+      : { type: "text", text: said.text, strong: true, clip: at };
   }
   const topKeys = new Set(model.topMoments.map((m) => m.key));
   const otherMoments = [...model.moments]
@@ -559,11 +569,15 @@ export function reportDocumentModel(
           ),
         ]
       : []),
-    ...(decision.price || decision.likely.length || findings.length
+    ...(decision.price ||
+    decision.likely.length ||
+    decision.likelyStatus?.length ||
+    findings.length
       ? [
           { type: "subheading", text: SKILLS.deeperDecision } as const,
           ...labelled(SKILLS.price, lineItem(decision.price)),
           ...labelled(SKILLS.prospectResponse, lineItem(decision.response)),
+          ...labelled(SKILLS.likelyStatus, listItem(decision.likelyStatus)),
           ...(decision.likely.length
             ? [
                 {
@@ -670,7 +684,7 @@ export function reportDocumentModel(
               type: "text",
               text:
                 deal.quality === "Clear" && deal.nextEvent
-                  ? clearBecause(deal.nextEvent.text)
+                  ? clearBecause(inSentence(deal.nextEvent.text))
                   : deal.quality,
               strong: true,
             },
@@ -712,11 +726,9 @@ export function reportDocumentModel(
       },
       {
         label: END_SUMMARY.nextEvent,
-        value: end?.nextEvent
-          ? upperFirst(end.nextEvent)
-          : picture.nextStep
-            ? END_SUMMARY.agreedNoDate
-            : null,
+        value:
+          end?.nextEvent ??
+          (picture.nextStep ? END_SUMMARY.agreedNoDate : null),
       },
     ] as Cell[]
   ).filter((cell): cell is { label: string; value: string } =>

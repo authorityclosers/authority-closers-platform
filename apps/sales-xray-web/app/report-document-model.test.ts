@@ -13,6 +13,7 @@ import {
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
 import { v8Report } from "./review-fixture/report/pillars/v8-report";
+import { AMIT_PILLARS } from "./review-fixture/report/story/amit-pillars";
 import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
@@ -222,6 +223,44 @@ describe("report document model", () => {
     );
     expect(textOf(doc)).not.toMatch(
       /\b(undefined|null|NaN|\[object Object\]|inferred|insufficient_evidence|C5)\b/,
+    );
+  });
+
+  it("Dipak's example as the analysis writes it: price, likely status, Friday", () => {
+    const doc = reportDocumentModel(
+      {
+        report: { ...(amitReport as SalesReport), pillars: AMIT_PILLARS },
+        transcript: amitTranscript as Transcript,
+      },
+      { roles: AMIT_SPEAKERS, speakerName: (id) => NAMES[id] },
+    );
+    const all = items(doc);
+    // "Price stated: ₹2,00,000" is a figure, not somebody's quote.
+    const price = all.find(
+      (i) => i.type === "card" && i.kicker?.startsWith("Price Moment"),
+    );
+    const priceItems = price?.type === "card" ? price.items : [];
+    const stated =
+      priceItems[
+        priceItems.findIndex((i) => docItemText(i) === "Price stated") + 1
+      ];
+    expect(stated).toMatchObject({ type: "text", text: "₹2,00,000" });
+    expect(priceItems.filter((i) => i.type === "quote")).toHaveLength(1);
+    // Deep analysis: words after a figure keep their case; Likely status listed.
+    const deeper = doc.sections[4].parts.find(
+      (p) => p.heading === "Deeper Analysis",
+    )!;
+    const lines = deeper.items.map(docItemText);
+    expect(lines).toContain("₹2,00,000 discussed.");
+    const likely = lines.indexOf("Likely status");
+    expect(likely).toBeGreaterThan(lines.indexOf("Prospect response"));
+    expect(lines[likely + 1]).toContain("real stakeholder dependency");
+    // A day name keeps its capital inside the sentence.
+    const quality = doc.sections[5].parts.find((p) =>
+      p.heading?.startsWith("6.7"),
+    )!;
+    expect(docItemText(quality.items[0])).toBe(
+      "Clear because Friday · 4:00 PM is agreed.",
     );
   });
 
