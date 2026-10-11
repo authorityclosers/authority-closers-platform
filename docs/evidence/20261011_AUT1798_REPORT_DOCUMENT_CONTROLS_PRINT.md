@@ -74,3 +74,39 @@ The capture cause and actual PDF pixel bounds remain **unproved**. E's already
 scheduled 23:44:55 wave owns original mobile visual-viewport/sheet geometry.
 No speculative print CSS change or new broad browser wave by G. The earlier
 print repair's source/automated/inspected evidence remains separately scoped.
+
+
+## Bounded capture classification from retained QA geometry
+
+E's completed 23:44:55–23:45:25 repeat has eight executed passes, no errors
+or skips, source75fcbdad and journeyf17c5ee4 stable. It independently clears
+the later fictional source/Word contradiction and the earlier print-control
+shapes. G consumed the exact retained execution and visual receipts.
+
+The phone/light PNG is classified as a **capture viewport mismatch**:
+
+- Layout viewport:794 CSS px; paper left0/right794.
+- Visual viewport:785.9390869140625 CSS px, offset0.
+- Thus8.0609130859375 CSS px of paper lies beyond the recorded visible width.
+- Physical PNG:793×1122 rather than requested794×1123.
+- Other three cases: visual width794, offset0, PNG794×1123.
+
+This proves that the phone/light screenshot capture does not cover the full
+recorded paper width. It does not prove why the mobile viewport became
+narrower, locate the final PM glyph, or establish the actual PDF's pixel
+bounds. Scale, paragraph and final-glyph ranges were not retained. The
+original PDF and text-only/native-viewer limits remain intact; no substitute
+PDF, speculative product CSS change, extra run or PDF pixel-pass claim.
+
+Exact visual receipt:
+`1694/shots/2026-10-11-workbench-document-source-print-readback/visual-review-receipt.json`,
+SHA-256 `e46e9e29e4881b22da896e90841f2c3a01ddf4cc7b1990d431cdb2acb815baaa`.
+Its verdict is DOCUMENT_PASS_PRINT_CAPTURE_FINDING, with
+pdf_pixel_quality_verified:false. Coordinator's independently reconciled
+receipt is `coord/document-print-qa-checkpoint-20261011T234839Z.json`, SHA-256
+`7d32b1a157cc1be9049d324a33013c24fd8a5265b97d438d8e10d83edb6a1d05`.
+
+Bounded classification is complete; exact remaining output is the original
+PDF's raster/pixel quality, **NOT VERIFIED** because a working renderer is
+unavailable. Future existing QA captures should preserve the viewport/PNG
+discrepancy rather than call this artifact a full-paper visual pass.

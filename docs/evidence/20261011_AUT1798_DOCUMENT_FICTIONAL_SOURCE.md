@@ -102,3 +102,29 @@ exited normally. Follow-up receipt in `changed-lines/`, SHA-256:
 This is fictional builder evidence, not production or an authenticated
 persistence result. QA's separate phone/light print-capture question uses
 its retained Amit PDF and remains separate from this repaired fixture.
+
+## Independent QA acceptance
+
+E's `f0b199e2` retains its actual 23:44:55–23:45:25 UTC run: **8/8 PASS**,
+four standalone source/Word cases and four separate print guards. Source
+HEAD stayed `75fcbdad7dff73bbeb4c4adf9aa991c886c38e1d`; journey digest
+stayed `f17c5ee4e58d977b34ec234e3b7a92b5065ecc44a6a1e27cf0b7489227c0cbce`.
+No skips, runtime/server/visual/refresh errors or API requests; launcher
+exit 0. QA inspected the actual changed influence/action captures and marks
+the original fictional contradiction **CLEARED**. Word ZIP/bookmarks/eight
+skill names and 1.3/6.9 source agreement pass; the buyer boundary, both
+unknowns and unset person-recorded outcome are preserved.
+
+G independently consumed the completed execution and visual receipts;
+no additional run. Retained in
+`1694/shots/2026-10-11-workbench-document-source-print-readback/`:
+
+- `receipt.json`, SHA-256
+  `67d3de53a296f82120983c272e59d1fed415ea4255639a29f1f935f0d4eb4abf`.
+- `visual-review-receipt.json`, SHA-256
+  `e46e9e29e4881b22da896e90841f2c3a01ddf4cc7b1990d431cdb2acb815baaa`.
+
+The visual verdict is `DOCUMENT_PASS_PRINT_CAPTURE_FINDING`; it preserves
+the separate print PNG viewport mismatch and explicitly records
+`pdf_pixel_quality_verified: false`. It is not blanket PDF pixel acceptance
+or canonical/deployed persistence evidence.
