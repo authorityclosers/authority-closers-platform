@@ -1,27 +1,50 @@
+/* Providers and routes on the console look (AUT-1798). Tokens only; class
+   names unchanged so the controls' logic and tests stay as they were. */
+
 .page {
   display: grid;
-  gap: 22px;
-  max-width: 1120px;
+  gap: var(--sx-gap);
 }
+
+/* ---------- Notes and states ---------- */
 
 .notice,
 .error,
 .success,
 .forbidden {
   display: grid;
-  gap: 6px;
-  padding: 17px 19px;
-  border: 1px solid var(--line-strong);
-  background: var(--panel);
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+}
+
+.notice {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 12px;
+}
+
+.error,
+.forbidden {
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.success {
+  border-color: color-mix(in oklab, var(--sx-good) 35%, var(--sx-line));
 }
 
 .notice h2,
 .error h2,
 .success h2,
-.forbidden h2,
-.card h3,
-.section h2 {
+.forbidden h2 {
   margin: 0;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
 }
 
 .notice p,
@@ -31,71 +54,65 @@
 .card p,
 .section p {
   margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
 }
 
-.notice {
-  grid-template-columns: 1fr auto;
-  border-color: color-mix(in srgb, var(--signal) 36%, var(--line));
-  background: var(--accent-soft);
+.card h3,
+.section h2 {
+  margin: 0;
 }
 
-.notice > :first-child {
-  min-width: 0;
-}
+/* ---------- Badges ---------- */
 
 .noticeCode,
 .status,
 .dormant,
 .pending,
-.saved {
+.saved,
+.stageStatus,
+.stageStatusMuted {
+  display: inline-block;
+  flex: none;
   align-self: start;
-  padding: 5px 7px;
-  border: 1px solid var(--line-strong);
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
+  height: var(--sx-badge-h);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
+  line-height: var(--sx-badge-h);
   white-space: nowrap;
 }
 
-.dormant {
-  border-color: var(--info);
-  color: var(--info);
+.status::first-letter,
+.dormant::first-letter,
+.pending::first-letter,
+.saved::first-letter {
+  text-transform: uppercase;
+}
+
+.noticeCode,
+.stageStatus {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.dormant,
+.saved {
+  background: color-mix(in oklab, var(--sx-info) 12%, transparent);
+  color: var(--sx-info);
 }
 
 .pending {
-  border-color: var(--amber);
-  color: var(--amber);
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--sx-warn);
 }
 
-.saved {
-  border-color: var(--info);
-  color: var(--info);
-}
-
-.error,
-.forbidden {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.error p,
-.forbidden p {
-  color: var(--text);
-}
-
-.success {
-  border-color: var(--info);
-  color: var(--info);
-}
-
-.success p {
-  color: var(--text);
-}
+/* ---------- Layout rows ---------- */
 
 .buttonRow,
 .sectionHeader,
@@ -112,17 +129,10 @@
 
 .buttonRow {
   flex-wrap: wrap;
-  margin-top: 7px;
+  margin-top: 4px;
 }
 
-.buttonRow button,
-.sectionHeader button,
-.cardHeader button,
-.routeHeader button,
-.error button,
-.forbidden button {
-  min-height: 42px;
-}
+/* ---------- Summary tiles ---------- */
 
 .summaryGrid {
   display: grid;
@@ -132,254 +142,44 @@
 
 .summaryCard {
   display: grid;
-  gap: 7px;
-  min-height: 108px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+  align-content: start;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
 
 .summaryCard span,
 .eyebrow,
 .fieldLabel,
 .catalogLabel,
-.routeLabel {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
+.routeLabel,
+.stageLabel {
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .summaryCard strong {
-  font-size: 15px;
-  font-weight: 700;
+  font: var(--sx-text-panel);
 }
 
-.section {
-  display: grid;
-  gap: 17px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+.summaryCard small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 
+/* ---------- Sections (drawn like kit panels) ---------- */
+
+.section,
 .workflowSection {
   display: grid;
-  gap: 17px;
-  padding: 20px;
-  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--line));
-  background: var(--panel);
-}
-
-.stageGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-}
-
-.presetGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.presetCard {
-  display: grid;
-  gap: 13px;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-}
-
-.presetHeader,
-.presetFooter {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.presetHeader > div,
-.presetFooter > small {
-  min-width: 0;
-}
-
-.presetHeader h3 {
-  margin: 4px 0 0;
-  font-size: 15px;
-}
-
-.presetRoutes {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--sx-text-xs);
-  line-height: 1.5;
-}
-
-.presetFooter {
-  align-items: center;
-}
-
-.presetFooter small {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
-  font-size: var(--sx-text-xs);
-}
-
-.stageCard {
-  display: grid;
-  gap: 13px;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-}
-
-.stageHeader,
-.stageRoute {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.stageBadges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.revisionState {
-  color: var(--quiet) !important;
-  font-size: var(--sx-text-xs);
-}
-
-.revisionState strong {
-  color: var(--text);
-}
-
-.stageHeader h2 {
-  margin: 4px 0 0;
-  font-size: 15px;
-}
-
-.stageStatus,
-.stageStatusMuted {
-  flex: 0 0 auto;
-  padding: 5px 7px;
-  border: 1px solid var(--info);
-  color: var(--info);
-  font-family: var(--font-mono), monospace;
-  font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.stageStatusMuted {
-  border-color: var(--line-strong);
-  color: var(--quiet);
-}
-
-.stageRoute {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.stageRoute > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.stageField {
-  display: grid;
-  flex: 1 1 145px;
-  gap: 5px;
-  min-width: 0;
-}
-
-.stageField select {
-  width: 100%;
-  min-height: 40px;
-  padding: 7px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--sx-radius-sm);
-  background: var(--input);
-  color: var(--text);
-}
-
-.stageField select:focus {
-  border-color: var(--focus);
-}
-
-.stageRoute > div:first-child {
-  flex: 1 1 145px;
-}
-
-.stageRoute > div:nth-child(2) {
-  flex: 1 1 145px;
-}
-
-.stageLabel {
-  color: var(--quiet);
-  font-family: var(--font-mono), monospace;
-  font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.stageRoute strong {
-  overflow-wrap: anywhere;
-  font-size: var(--sx-text-md);
-}
-
-.stageData,
-.stageEmpty,
-.stageNote {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--sx-text-xs);
-  line-height: 1.5;
-}
-
-.stageData strong {
-  color: var(--text);
-}
-
-.advancedPanel {
-  display: grid;
-  gap: 14px;
-  order: 8;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.advancedPanel summary {
-  padding: 15px 18px;
-  color: var(--signal);
-  cursor: pointer;
-  font-weight: 700;
-  list-style-position: inside;
-}
-
-.advancedPanel > .section {
-  margin: 0 18px 18px;
-}
-
-.advancedPanel[open] > summary {
-  border-bottom: 1px solid var(--line);
-}
-
-.routeGridAdvanced {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
 }
 
 .sectionHeader,
@@ -398,94 +198,281 @@
 }
 
 .sectionHeader h2 {
-  margin-top: 4px;
-  font-size: 15px;
+  margin-top: 2px;
+  font: var(--sx-text-panel);
 }
+
+/* ---------- Cards inside sections ---------- */
+
+.stageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.presetCard,
+.stageCard,
+.card,
+.routeCard,
+.catalogItem {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+}
+
+.presetHeader,
+.presetFooter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.presetHeader > div,
+.presetFooter > small {
+  min-width: 0;
+}
+
+.presetHeader h3,
+.stageHeader h2,
+.cardHeader h3,
+.catalogHeader strong {
+  margin: 2px 0 0;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.presetRoutes {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.5;
+}
+
+.presetFooter {
+  align-items: center;
+}
+
+.presetFooter small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.stageHeader,
+.stageRoute {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stageBadges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.revisionState {
+  color: var(--sx-muted) !important;
+  font-size: var(--sx-text-xs);
+}
+
+.revisionState strong {
+  color: var(--sx-ink);
+}
+
+.stageRoute {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.stageRoute > div {
+  display: grid;
+  flex: 1 1 145px;
+  gap: 3px;
+  min-width: 0;
+}
+
+.stageField {
+  display: grid;
+  flex: 1 1 145px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stageRoute strong {
+  overflow-wrap: anywhere;
+  font-size: var(--sx-text-sm);
+}
+
+.stageData,
+.stageEmpty,
+.stageNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.5;
+}
+
+.stageData strong {
+  color: var(--sx-ink);
+}
+
+/* ---------- Advanced (collapsed) areas ---------- */
+
+.advancedPanel {
+  display: grid;
+  order: 8;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.advancedPanel summary,
+.advanced summary {
+  width: fit-content;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.advancedPanel summary {
+  width: auto;
+  padding: 10px 16px;
+}
+
+.advancedPanel > .section {
+  margin: 0 14px 14px;
+}
+
+.advancedPanel[open] > summary {
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.advanced {
+  padding-top: 10px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.advanced[open] summary {
+  margin-bottom: 10px;
+}
+
+.routeGridAdvanced {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* ---------- Lists ---------- */
 
 .providerList,
 .routeList,
 .catalogList {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
-.card,
-.routeCard,
+.catalogList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .catalogItem {
-  display: grid;
-  gap: 15px;
-  padding: 17px;
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
+  gap: 6px;
 }
 
-.cardHeader h3,
-.catalogHeader strong {
-  font-size: 15px;
+.catalogItem p {
+  font-size: var(--sx-text-sm);
+}
+
+.catalogStatus {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 
 .providerMeta,
 .routeMeta {
   flex-wrap: wrap;
-  color: var(--muted);
+  color: var(--sx-muted);
   font-size: var(--sx-text-sm);
 }
 
 .providerMeta code,
 .routeMeta code {
-  padding: 3px 5px;
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-family: var(--font-mono), monospace;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font-family: var(--lx-font-mono);
   font-size: var(--sx-text-xs);
 }
+
+/* ---------- Fields (drawn like kit fields) ---------- */
 
 .fieldGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
-.field input,
-.field select,
-.field textarea {
+.field :is(input, select, textarea),
+.stageField select {
   width: 100%;
-  min-height: 44px;
-  padding: 9px 10px;
-  border: 1px solid var(--line-strong);
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
-  background: var(--input);
-  color: var(--text);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: var(--focus);
+.field :is(input, select, textarea):focus,
+.stageField select:focus {
+  border-color: var(--sx-accent);
+  outline: 2px solid var(--sx-accent-soft);
+  outline-offset: 0;
 }
 
 .field textarea {
   min-height: 170px;
+  padding: 8px 10px;
   resize: vertical;
-  font-family: var(--font-mono), monospace;
+  font-family: var(--lx-font-mono);
   font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
 
 .field input[readonly] {
-  color: var(--muted);
+  color: var(--sx-muted);
   cursor: not-allowed;
 }
 
 .field small,
 .helper {
-  color: var(--quiet);
+  color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   line-height: 1.5;
 }
@@ -498,27 +485,6 @@
   flex: 1 1 0;
 }
 
-.advanced {
-  border-top: 1px solid var(--line);
-  padding-top: 13px;
-}
-
-.advanced summary {
-  width: fit-content;
-  color: var(--signal);
-  cursor: pointer;
-  font-size: var(--sx-text-sm);
-  font-weight: 700;
-}
-
-.advanced[open] summary {
-  margin-bottom: 13px;
-}
-
-.routeCard {
-  gap: 12px;
-}
-
 .routeGrid {
   display: grid;
   grid-template-columns: minmax(130px, 0.8fr) minmax(210px, 1.3fr) repeat(
@@ -528,37 +494,12 @@
   gap: 12px;
 }
 
-.routeGrid .field select,
-.routeGrid .field input {
-  min-height: 40px;
-  font-size: var(--sx-text-md);
-}
-
-.catalogList {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.catalogItem {
-  gap: 8px;
-  min-height: 114px;
-}
-
-.catalogItem p {
-  font-size: var(--sx-text-sm);
-}
-
-.catalogStatus {
-  color: var(--muted);
-  font-family: var(--font-mono), monospace;
-  font-size: var(--sx-text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .empty {
-  padding: 17px;
-  border: 1px dashed var(--line-strong);
-  color: var(--muted);
+  padding: 12px 14px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
 .empty p {
@@ -604,5 +545,10 @@
   .fieldRow {
     display: grid;
     align-items: stretch;
+  }
+
+  .field :is(input, select, textarea),
+  .stageField select {
+    font-size: 16px;
   }
 }
