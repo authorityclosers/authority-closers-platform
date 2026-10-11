@@ -57,6 +57,7 @@ def test_refusal_is_generic(monkeypatch, capsys, args) -> None:
         ("timeout", 1, "C4", "timeout"),
         ("unexpected", 1, "C4", "canary_failed"),
         ("invalid_report", 1, "C5", "report_contract_invalid"),
+        ("missing_coaching", 1, "C5", "coaching_contract_invalid"),
         ("no_authority", 2, None, None),
         ("bad_config", 2, None, None),
         ("cleanup", 1, "C6", "canary_failed"),
@@ -128,7 +129,10 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         }
 
     overview = overview_for({"strengths": [], "improvements": []})
-    content = {"overview": None if scenario == "invalid_report" else overview}
+    content = {
+        "overview": None if scenario == "invalid_report" else overview,
+        "improvements": [{}] if scenario == "missing_coaching" else [],
+    }
     reports = SimpleNamespace(
         application=object(),
         progress=progress,
@@ -174,18 +178,54 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "total_seconds",
         "cost_paise",
         "report_present",
+        "coaching_contract_valid",
+        "coaching_mission_present",
         "retention_ref",
     }
     assert result["retention_ref"] == "ref:retention:standard"
     assert result["ok"] == (scenario == "success")
     assert (result["stage_reached"], result["failure_code"]) == (stage, failure)
-    assert result["report_present"] == (scenario in {"success", "invalid_report", "cleanup"})
+    assert result["report_present"] == (
+        scenario in {"success", "invalid_report", "missing_coaching", "cleanup"}
+    )
+    assert result["coaching_contract_valid"] == (scenario in {"success", "cleanup"})
     assert result["cost_paise"] == quote["max_cost_paise"]
     assert result["total_seconds"] >= 0
     assert all(seconds >= 0 for seconds in result["seconds_per_stage"].values())
     assert plans.accept.await_count == (0 if scenario == "over_cap" else 1)
     if scenario != "over_cap":
         assert plans.accept.await_args.args[2].plan_fingerprint == quote["plan_fingerprint"]
+
+
+@pytest.mark.parametrize("part", ["next_call_focus", "practice"])
+def test_canary_refuses_half_a_coaching_mission(part):
+    content = {
+        "improvements": [
+            {
+                "explanation": "Fictional",
+                "evidence": [
+                    {
+                        "segment_id": "fictional-1",
+                        "quote": "Fictional evidence.",
+                        "start_ms": 0,
+                        "end_ms": 1000,
+                    }
+                ],
+            }
+        ],
+        "strengths": [],
+    }
+    content["overview"] = overview_for(content)
+    assert cli.check_report_coaching(content)
+    content["overview"][part] = None
+    with pytest.raises(ValueError, match="pair_incomplete"):
+        cli.check_report_coaching(content)
+
+
+def test_canary_accepts_explicit_no_improvement_without_inventing_a_mission():
+    content = {"improvements": [], "strengths": []}
+    content["overview"] = overview_for(content)
+    assert not cli.check_report_coaching(content)
 
 
 KEEP = "ref:retention/sales-xray-keep-for-training/v1"
