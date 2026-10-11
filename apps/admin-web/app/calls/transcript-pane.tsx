@@ -5,7 +5,7 @@
  * there; the line being heard is highlighted and followed until the reviewer
  * scrolls away, then "Follow audio" brings it back.
  */
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { clock, type Segment } from "./call-data";
@@ -28,6 +28,12 @@ export function TranscriptPane({
 }) {
   const list = useRef<HTMLOListElement>(null);
   const [follow, setFollow] = useState(true);
+  const [find, setFind] = useState("");
+  const needle = find.trim().toLowerCase();
+  const matches = needle
+    ? segments.filter((segment) => segment.text.toLowerCase().includes(needle))
+        .length
+    : 0;
   const programmatic = useRef(false);
 
   useEffect(() => {
@@ -59,6 +65,24 @@ export function TranscriptPane({
     );
   return (
     <div className={styles.transcript}>
+      <label className={styles.find}>
+        <Search size={14} aria-hidden="true" />
+        <input
+          type="search"
+          value={find}
+          placeholder="Find in transcript"
+          aria-label="Find in transcript"
+          onChange={(event) => {
+            setFind(event.target.value);
+            setFollow(!event.target.value.trim());
+          }}
+        />
+        {needle ? (
+          <small aria-live="polite">
+            {matches} line{matches === 1 ? "" : "s"}
+          </small>
+        ) : null}
+      </label>
       <ol
         ref={list}
         className={styles.lines}
@@ -78,6 +102,11 @@ export function TranscriptPane({
               data-segment={segment.id}
               data-active={index === active ? "" : undefined}
               data-focused={segment.id === focused ? "" : undefined}
+              hidden={
+                needle
+                  ? !segment.text.toLowerCase().includes(needle)
+                  : undefined
+              }
               data-role={
                 speaker.startsWith("Rep")
                   ? "rep"

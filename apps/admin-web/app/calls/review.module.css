@@ -238,11 +238,39 @@
 
 .transcript {
   position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
 }
 
+.find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+}
+
+.find input {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  outline: none;
+}
+
+.find small {
+  font-size: var(--sx-text-xs);
+  white-space: nowrap;
+}
+
 .lines {
-  height: 100%;
+  min-height: 0;
   margin: 0;
   padding: 6px;
   overflow-y: auto;

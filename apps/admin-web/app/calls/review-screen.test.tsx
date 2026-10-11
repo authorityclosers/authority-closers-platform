@@ -190,3 +190,24 @@ it("never acts on keys typed into a field", async () => {
   });
   expect(host.textContent).not.toContain("The Big Picture");
 });
+
+it("finds lines in the transcript and counts them", async () => {
+  await render();
+  const find = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Find in transcript"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(find, "कितने");
+    find.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(
+    host.querySelector('[data-segment="s1"]')?.hasAttribute("hidden"),
+  ).toBe(true);
+  expect(
+    host.querySelector('[data-segment="s2"]')?.hasAttribute("hidden"),
+  ).toBe(false);
+  expect(host.textContent).toContain("1 line");
+});
