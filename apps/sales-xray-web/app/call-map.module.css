@@ -437,7 +437,7 @@
 }
 .pin[data-tone="objection"],
 .legend [data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .pin[data-tone="missed"],
 .legend [data-tone="missed"] {
@@ -803,7 +803,7 @@
   --tone: var(--lx-strength);
 }
 .miniDot[data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .miniDot[data-tone="missed"] {
   --tone: var(--lx-warning);
