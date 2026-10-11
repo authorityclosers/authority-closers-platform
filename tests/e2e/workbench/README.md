@@ -23,6 +23,11 @@ Live calls are checked only for deeper groups actually supplied by their report.
 The independent Document journey checks six actual sections in order and
 captures each section's content at both widths/themes, alongside its top sheet.
 
+Coaching also reads all six fictional rep pillars with their own labels. Its
+progress accessibility snapshot must contain one summary of the forty calls
+(40 needed work in this fictional rep's data), rather than announcing
+one list row per call. Every rep pillar gets a readability screenshot.
+
 The separate fictional formatting journey checks Won, Lost with a required reason, Follow-up Set
 with a required date, Decision Pending (the no-decision choice), and optional
 deal value. It checks human attribution, Deal status, Document and the Word

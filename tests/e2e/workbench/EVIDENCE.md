@@ -1,5 +1,13 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+11 Oct 19:44 UTC: new independent Coaching guards read all six fictional-rep
+pillars and their progress accessibility snapshot. This rep's fixture contains
+forty calls needing work; it must announce one factual summary and show the
+"Needed work" legend. Fresh browser acceptance is pending for `91a9d200` /
+`1cbe53cb`; previous sixteen-case PASS below remains historical. Ruff, required
+HTTP import, no-server collection (24 skips) and owned diff checks pass.
+No shared real-rep authenticated journey or staging acceptance is claimed.
+
 Latest strengthened dev matrix: **16/16 PASS**, 19:29:57–19:33:48 UTC,
 recorded start/end HEAD `f373b4e8f70bfd451075a619a7f5e71908769762`.
 G's `2101a87c` repair clears all eight prior Document-name failures; exact

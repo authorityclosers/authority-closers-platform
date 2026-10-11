@@ -46,6 +46,14 @@ COACHING_SECTIONS = (
     "See How You’re Improving",
     "Where We Go From Here",
 )
+REP_COACHING_SECTIONS = (
+    "What They Should Work On Now",
+    "Why This Keeps Happening",
+    "Here’s What Better Looks Like",
+    "Try This on Their Next Call",
+    "See How They’re Improving",
+    "Where We Go From Here",
+)
 SKILL_ROWS = (
     "Human Connection & Trust",
     "Discovery",
@@ -848,3 +856,14 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
                 )
             ).to_be_visible()
             journey.snapshot("sandbox-rep")
+            for index, label in enumerate(REP_COACHING_SECTIONS):
+                heading = _heading(page, label)
+                heading.scroll_into_view_if_needed()
+                expect(heading).to_be_visible()
+                journey.snapshot(f"sandbox-rep-pillar-{index + 1}")
+            progress = page.locator("#coaching-progress")
+            spoken = progress.aria_snapshot()
+            summary = "Their calls on this skill, oldest first: 40 needed work."
+            assert spoken.count(summary) == 1, "Rep progress needs one spoken summary"
+            assert spoken.count("- listitem") <= 6, "Progress announces a row per call"
+            expect(progress.get_by_text("Needed work", exact=True)).to_be_visible()
