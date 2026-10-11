@@ -1,5 +1,35 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Latest independent dev continuation — 23:29:54–23:31:27UTC
+
+**Coaching/quote/print12/12 automated PASS**, no skips/errors, recordedHEAD
+d224e615 at both boundaries and stable journey digest962ea1f9dc6ed4ea04700e347bd31098d47e62a186d27c9809e371019c19f650.
+Each Coaching pair has20 observations and the original single selected/view
+check. Every screen font observation now has positive actual rendered-text
+coverage: Coaching14–71, quote16–39 and print screen32–43 elements. All runtime,
+server, font, overflow, refresh and outcome API counters0. Quote1232characters
+remain exact once through folded/full/refolded states, original2:10–3:37 span,
+one expand/collapse click each, reachable32/44px controls, no media. Inspected
+quote captures at both widths/themes; original absent-main failures preserved.
+
+Print ghost-control repair independently clears: four native Document screen
+and A4 captures,44 targets each meet32/44px before print, six headings/call
+facts intact, hidden search/account0s transition/no animation, overflow0 and
+four PDF files produced. All A4 captures inspected. **One capture finding
+remains unclassified:** phone/light A4 PNG clips the last1.2 paragraph line
+at the right edge and is793×1122 despite requested794×1123; other captures
+794×1123. Mobile viewport/resize behavior is possible, not proved; actual PDF
+clipping is unverified (no installed PDF renderer). Exact PNG/PDF handed toG.
+Thus this is automated PASS with a visual print-capture finding, not full print
+visual acceptance. All owned jobs exited normally.
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-coaching-font-quote-readback/receipt.json`.
+
+G57fd8db7 source-pinned repair of the separate standalone fictional Document
+contradiction is committed. New four-pair Document source/Word agreement and
+four-pair print viewport diagnostic checks are prepared for the next allowed
+wave, no earlier23:44:55. No protected outcome or real-call state is inferred.
+Hosted populated smoke and Root1855 limits below remain unchanged.
+
 Current independent dev readback — 23:14:53–23:17:19 UTC
 
 **Report/Document8 PASS; quote4 FAIL in the new QA locator.** Source ffca886c

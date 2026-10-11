@@ -922,6 +922,33 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(_document_download(journey.page)).to_be_visible()
         journey.snapshot("ready")
         journey.document_controls()
+        if journey.fixture:
+            # This fixture's three source excerpts are confirmed by G57fd8db7.
+            # Keep the repaired diagnosis/deal action bound to that buyer boundary.
+            diagnosis = "The buyer declined a next step and asked the seller not to follow up."
+            action = "Respect the buyer's request not to follow up."
+            for number, text in (("1.3", diagnosis), ("6.9", action)):
+                part = preview.get_by_role(
+                    "heading", level=4, name=re.compile(r"^" + re.escape(number) + r"\s")
+                ).locator("..")
+                expect(part).to_contain_text(text)
+            with journey.page.expect_download() as downloaded:
+                _document_download(journey.page).click()
+            file = downloaded.value.path()
+            assert downloaded.value.failure() is None and file is not None
+            with ZipFile(file) as docx:
+                document = docx.read("word/document.xml").decode()
+            assert all(f'w:name="{section}"' in document for section, _ in REPORT_SECTIONS)
+            _word_skill_names(document)
+            words = " ".join(_word_paragraphs(document))
+            assert diagnosis in words and action in words
+            assert "The closer clarified a follow-up time." not in words
+            journey.observations[-1]["fictional_source_agreement"] = {
+                "document_parts": ["1.3", "6.9"],
+                "word_verified": True,
+                "bookmarks": 6,
+                "short_skills": 8,
+            }
         sections = preview.locator("section[data-document-section]")
         expect(sections).to_have_count(6)
         assert sections.evaluate_all(
@@ -1158,7 +1185,12 @@ def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> 
                   animation: style.animationName};
               });
               const sheet = document.querySelector('[data-document-export] article');
+              const bounds = sheet.getBoundingClientRect();
               return {controls, headings: sheet.querySelectorAll('h3').length,
+                layout_width: innerWidth,
+                visual_width: visualViewport?.width ?? innerWidth,
+                visual_offset: visualViewport?.offsetLeft ?? 0,
+                sheet_left: bounds.left, sheet_right: bounds.right,
                 overflow: Math.max(document.documentElement.scrollWidth - innerWidth,
                   sheet.scrollWidth - sheet.clientWidth)};
             }"""

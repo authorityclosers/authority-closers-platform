@@ -22,6 +22,9 @@ collapsed; the populated example opens all four groups and captures each one.
 Live calls are checked only for deeper groups actually supplied by their report.
 The independent Document journey checks six actual sections in order and
 captures each section's content at both widths/themes, alongside its top sheet.
+Its standalone fictional source additionally checks repaired parts1.3/6.9 and
+the Word file against the already-confirmed buyer-boundary excerpts; live
+reports are never assumed to share those example words.
 Rendered Document links/buttons must meet the 32 px desktop / 44 px phone floor.
 Print-specific compact text is outside this screen-control check.
 
