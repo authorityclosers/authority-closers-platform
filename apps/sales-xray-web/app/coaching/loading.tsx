@@ -2,7 +2,7 @@
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { useWorkspaceAccess } from "../workspace-access";
-import { CoachingSkeleton } from "./coaching-page";
+import { CoachingSkeleton } from "./coaching-skeleton";
 
 /** The frame stays put while the server read streams in: no layout shift. */
 export default function Loading() {
