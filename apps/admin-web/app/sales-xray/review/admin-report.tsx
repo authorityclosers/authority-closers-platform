@@ -214,7 +214,7 @@ export function AdminReportPage({ runId }: { runId: string }) {
     >
       <div className={styles.workspace}>
         <div className={styles.breadcrumbRow}>
-          <Link className="back-link" href="/sales-xray/review">
+          <Link className="back-link" href="/calls">
             <ArrowLeft size={15} aria-hidden="true" /> Back to recordings
           </Link>
           <span className={styles.routeCode}>REPORT · {shortId(runId)}</span>

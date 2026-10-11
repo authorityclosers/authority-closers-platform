@@ -1,0 +1,90 @@
+/* Analysis health: only what the kit doesn't draw. Tokens only. */
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--sx-gap);
+  align-items: start;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+  padding: 14px 14px 0;
+}
+
+.day {
+  display: grid;
+  flex: 1;
+  align-content: end;
+  min-width: 0;
+  height: 100%;
+}
+
+.day i {
+  display: block;
+  border-radius: 3px 3px 0 0;
+  background: var(--sx-accent);
+}
+
+.day i[data-failed] {
+  border-radius: 0;
+  background: var(--sx-bad);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 14px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 2px;
+  background: var(--sx-accent);
+  content: "";
+}
+
+.legend span[data-failed]::before {
+  background: var(--sx-bad);
+}
+
+.retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.retry input {
+  min-width: 180px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.code {
+  font-family: var(--lx-font-mono);
+  font-size: var(--sx-text-xs);
+}

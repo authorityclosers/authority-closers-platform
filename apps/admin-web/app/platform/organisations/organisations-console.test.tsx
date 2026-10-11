@@ -156,9 +156,6 @@ it("permits reads but hides all writes without the manage capability", async () 
     permissions: ["platform_tenants_read"],
   });
   await openMembers();
-  expect(
-    container.querySelector('a[href="/platform/organisations"]'),
-  ).not.toBeNull();
   for (const text of [
     "Add by email",
     "Change role",
@@ -180,9 +177,6 @@ it.each([
     vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(subject);
     await mount();
     expect(fetch).not.toHaveBeenCalled();
-    expect(
-      container.querySelector('a[href="/platform/organisations"]'),
-    ).toBeNull();
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
   },
 );

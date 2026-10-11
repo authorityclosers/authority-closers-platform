@@ -511,7 +511,7 @@ export function ReviewWorkspace({
       <div className={styles.workspace}>
         {assignmentId ? (
           <div className={styles.breadcrumbRow}>
-            <Link className="back-link" href="/sales-xray/review">
+            <Link className="back-link" href="/reviewers">
               <ArrowLeft size={15} aria-hidden="true" /> Back to assignments
             </Link>
             <span className={styles.routeCode}>

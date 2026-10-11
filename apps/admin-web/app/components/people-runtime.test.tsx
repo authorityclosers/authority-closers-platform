@@ -274,11 +274,8 @@ it.each([401, 403])(
     );
     await renderShell();
     await openDiagnosis();
-    expect(
-      host.querySelector('[aria-label="Product admin session denied"]'),
-    ).not.toBeNull();
-    expect(host.textContent).toContain("No verified tenant context");
-    expect(host.textContent).toContain("Sign in");
+    expect(host.textContent).toContain("Access unavailable");
+    expect(host.querySelector('a[href="/login"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Session verified");
     expect(host.textContent).not.toContain("Synthetic Learner");
     expect(host.querySelector("input")).toBeNull();
