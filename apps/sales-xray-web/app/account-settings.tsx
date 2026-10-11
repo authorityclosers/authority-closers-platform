@@ -333,27 +333,7 @@ export function AccountSettings({
           >
             <span>English</span>
           </Row>
-          <Row
-            label="Calls library"
-            hint="Calls and reports stay private to your account and selected workspace."
-          >
-            <Link
-              className={styles.secondary}
-              href="/analysis/calls"
-              replace={variant === "dialog"}
-            >
-              Open Calls
-            </Link>
-          </Row>
-          <Row label="New analysis" hint="Upload a call recording to analyse.">
-            <Link
-              className={styles.secondary}
-              href="/analysis/new"
-              replace={variant === "dialog"}
-            >
-              Start
-            </Link>
-          </Row>
+          {/* Calls and New analysis live in the navigation, not here (r17 S8). */}
         </Pane>
 
         <Pane

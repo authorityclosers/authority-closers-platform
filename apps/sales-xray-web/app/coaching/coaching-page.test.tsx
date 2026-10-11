@@ -100,7 +100,8 @@ describe("Coaching story", () => {
     expect(html).toContain("One focus for this call");
     expect(html).toContain("Why this is the focus for this call");
     expect(html).toContain("Here’s What Better Looks Like");
-    expect(html).toContain("Your next-call mission");
+    expect(html).toContain("Try This on Your Next Call");
+    expect(html.match(/Active mission/g)).toHaveLength(1);
     expect(html).not.toContain("Not Enough Evidence");
     expect(html).not.toContain("Compare one more evidence moment");
     expect(html).not.toContain("<audio");
@@ -165,6 +166,34 @@ describe("Coaching story", () => {
     expect(html).toContain(
       "Saving agreement, disagreement and reflection is not available yet.",
     );
+  });
+  it("shows what comparable calls said since the mission, never success", () => {
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          progress: [
+            {
+              submission_id: fictionalCoaching.evidence[0].submission_id,
+              created_at: "2026-10-09T10:00:00Z",
+              state: "suggested",
+              after_mission: false,
+            },
+            {
+              submission_id: fictionalCoaching.evidence[1].submission_id,
+              created_at: "2026-10-10T10:00:00Z",
+              state: "no_suggestion",
+              after_mission: true,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(html).toContain(
+      "Since your mission started: 1 of 1 comparable call had evidence for this skill and no suggestion. That is not proof of change yet.",
+    );
+    expect(html.match(/data-mission-start/g)).toHaveLength(1);
+    expect(html).toContain("Not Enough Evidence");
   });
   it("has a loading skeleton and makes no request without a confirmed account", async () => {
     const fetch = vi.fn();

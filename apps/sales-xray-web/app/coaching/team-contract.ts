@@ -12,6 +12,8 @@ export type TeamCoaching = {
   pending_calls: number;
   unavailable_calls: number;
   history_limited: boolean;
+  /** Newest counted call's date; never whose call it was. */
+  latest_call_at: string | null;
   suggestions: { skill_id: string; label: string; suggestion_calls: number }[];
   limitations: string[];
 };
@@ -82,6 +84,11 @@ export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
     pending_calls: pending,
     unavailable_calls: unavailable,
     history_limited: data.history_limited === true,
+    latest_call_at:
+      typeof data.latest_call_at === "string" &&
+      Number.isFinite(Date.parse(data.latest_call_at))
+        ? data.latest_call_at
+        : null,
     suggestions,
     limitations: Array.isArray(data.limitations)
       ? data.limitations.filter((s): s is string => typeof s === "string")

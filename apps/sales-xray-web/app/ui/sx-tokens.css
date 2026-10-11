@@ -47,6 +47,13 @@
   --sx-radius-md: var(--lx-radius-md);
   --sx-gap: 16px; /* between surfaces */
   --sx-gutter: 16px; /* phone page edge */
+
+  /* Floating surfaces (corner cards, menus, small dialogs) and the page behind
+     a modal. Tinted from the film colour, which is dark in both themes. */
+  --sx-shadow-float:
+    0 14px 36px color-mix(in oklab, var(--lx-film) 16%, transparent),
+    0 2px 6px color-mix(in oklab, var(--lx-film) 6%, transparent);
+  --sx-scrim: color-mix(in oklab, var(--lx-film) 42%, transparent);
 }
 
 @media (pointer: coarse) {

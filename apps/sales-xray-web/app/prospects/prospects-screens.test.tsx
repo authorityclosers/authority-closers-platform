@@ -14,6 +14,12 @@ import { ProspectDetailView } from "./prospect-detail-view";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+vi.mock("../acquisition-shell", () => ({
+  AcquisitionShell: ({ children }: { children: React.ReactNode }) => (
+    <main>{children}</main>
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -256,7 +262,65 @@ describe("ProspectsListView", () => {
     expect(host.querySelector('[role="alert"] button')?.textContent).toContain(
       "Try again",
     );
+    expect(host.textContent).not.toContain("No prospects recorded yet");
   });
+
+  it.each(["tenantId", "sessionId"])(
+    "hides prior customers and cancels pagination immediately when %s changes",
+    async (field) => {
+      let finishOld: (
+        page: prospectsClient.ProspectListPage,
+      ) => void = () => {};
+      const oldPage = {
+        schema: "ac.sales-xray.prospects/1",
+        prospects: [mockProspectSummary],
+        total: 24,
+        stage_filters: [],
+        next_offset: 20,
+      };
+      const fetcher = vi
+        .spyOn(prospectsClient, "fetchProspectsList")
+        .mockResolvedValueOnce(oldPage)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishOld = resolve;
+            }),
+        )
+        .mockImplementationOnce(() => new Promise(() => {}));
+      const render = (value: WorkspaceAccessValue) =>
+        root.render(
+          <WorkspaceAccessContext.Provider value={value}>
+            <ProspectsListView />
+          </WorkspaceAccessContext.Provider>,
+        );
+      await act(async () => render(mockAccess));
+      expect(host.textContent).toContain(mockProspectSummary.name);
+      const loadMore = Array.from(host.querySelectorAll("button")).find(
+        (button) => button.textContent === "Load more prospects",
+      );
+      await act(async () => loadMore!.click());
+      const oldSignal = fetcher.mock.calls[1][0]!.signal;
+      await act(async () =>
+        render({
+          ...mockAccess,
+          context: {
+            ...mockAccess.context!,
+            [field]: "55555555-5555-4555-8555-555555555555",
+          },
+        }),
+      );
+      expect(oldSignal?.aborted).toBe(true);
+      expect(host.textContent).not.toContain(mockProspectSummary.name);
+      expect(host.textContent).not.toContain("24 recorded");
+      expect(
+        host.querySelector('[aria-label="Loading prospects"]'),
+      ).not.toBeNull();
+      expect(host.querySelector('[role="feed"]')).toBeNull();
+      await act(async () => finishOld(oldPage));
+      expect(host.textContent).not.toContain(mockProspectSummary.name);
+    },
+  );
 });
 
 describe("ProspectDetailView", () => {
@@ -328,52 +392,55 @@ describe("ProspectDetailView", () => {
     );
   });
 
-  it("hides the previous customer while the selected workspace is loading", async () => {
-    let finish: (detail: prospectsClient.ProspectDetail) => void = () => {};
-    const fetch = vi
-      .spyOn(prospectsClient, "fetchProspectDetail")
-      .mockResolvedValueOnce(detailData)
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finish = resolve;
-          }),
+  it.each(["tenantId", "sessionId"])(
+    "hides the previous customer while the selected %s is loading",
+    async (field) => {
+      let finish: (detail: prospectsClient.ProspectDetail) => void = () => {};
+      const fetch = vi
+        .spyOn(prospectsClient, "fetchProspectDetail")
+        .mockResolvedValueOnce(detailData)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        );
+      const render = (value: WorkspaceAccessValue) =>
+        root.render(
+          <WorkspaceAccessContext.Provider value={value}>
+            <ProspectDetailView prospectId={mockProspectSummary.prospect_id} />
+          </WorkspaceAccessContext.Provider>,
+        );
+      await act(async () => render(mockAccess));
+      expect(host.textContent).toContain("Acme Corp Prospect");
+      await act(async () =>
+        render({
+          ...mockAccess,
+          context: {
+            ...mockAccess.context!,
+            [field]: "55555555-5555-4555-8555-555555555555",
+          },
+        }),
       );
-    const render = (value: WorkspaceAccessValue) =>
-      root.render(
-        <WorkspaceAccessContext.Provider value={value}>
-          <ProspectDetailView prospectId={mockProspectSummary.prospect_id} />
-        </WorkspaceAccessContext.Provider>,
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(host.textContent).not.toContain("Acme Corp Prospect");
+      expect(
+        host.querySelector('[aria-label="Loading prospect information"]'),
+      ).not.toBeNull();
+      await act(async () =>
+        finish({
+          ...detailData,
+          calls: [],
+          prospect: {
+            ...mockProspectSummary,
+            name: "Current workspace customer",
+          },
+        }),
       );
-    await act(async () => render(mockAccess));
-    expect(host.textContent).toContain("Acme Corp Prospect");
-    await act(async () =>
-      render({
-        ...mockAccess,
-        context: {
-          ...mockAccess.context!,
-          tenantId: "55555555-5555-4555-8555-555555555555",
-        },
-      }),
-    );
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(host.textContent).not.toContain("Acme Corp Prospect");
-    expect(
-      host.querySelector('[aria-label="Loading prospect information"]'),
-    ).not.toBeNull();
-    await act(async () =>
-      finish({
-        ...detailData,
-        calls: [],
-        prospect: {
-          ...mockProspectSummary,
-          name: "Current workspace customer",
-        },
-      }),
-    );
-    expect(host.textContent).toContain("Current workspace customer");
-    expect(host.textContent).not.toContain("Acme Corp Prospect");
-  });
+      expect(host.textContent).toContain("Current workspace customer");
+      expect(host.textContent).not.toContain("Acme Corp Prospect");
+    },
+  );
 
   it("renders per-call hypothesis snapshot with provenance, interpretations and evidence quotes", async () => {
     vi.spyOn(prospectsClient, "fetchProspectDetail").mockResolvedValueOnce(

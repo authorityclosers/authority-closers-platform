@@ -522,6 +522,45 @@ const expectedSubmission = {
 };
 
 describe("server-withheld guest report preview", () => {
+  it("retains the optional report revision and keeps older envelopes unchanged", () => {
+    const older = parseAcquisitionReport(
+      previewEnvelope(),
+      expectedSubmission,
+      transcript,
+    );
+    expect(older.reportRevision).toBeUndefined();
+    const current = parseAcquisitionReport(
+      { ...previewEnvelope(), report_revision: "a".repeat(64) },
+      expectedSubmission,
+      transcript,
+    );
+    expect(current.reportRevision).toBe("a".repeat(64));
+    expect(current.report).toEqual(older.report);
+    expect(current.claimed).toBe(false);
+    expect(() =>
+      parseAcquisitionReport(
+        {
+          ...previewEnvelope(),
+          report_revision: "a".repeat(64),
+          source_sha256: "f".repeat(64),
+        },
+        expectedSubmission,
+        transcript,
+      ),
+    ).toThrow("report_envelope_binding");
+  });
+  it.each([null, "", "A".repeat(64), "a".repeat(63), "a".repeat(65), 0, {}])(
+    "rejects an invalid present report revision (%#)",
+    (report_revision) => {
+      expect(() =>
+        parseAcquisitionReport(
+          { ...previewEnvelope(), report_revision },
+          expectedSubmission,
+          transcript,
+        ),
+      ).toThrow(ReportContractError);
+    },
+  );
   it("keeps complete source evidence and exact remaining counts without creating hidden findings", () => {
     const value = parseAcquisitionReport(
       previewEnvelope(),
