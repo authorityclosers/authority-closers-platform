@@ -33,63 +33,60 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
       </Panel>
     );
   return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <FocusHero
-          heading="One focus for this call"
-          label={focus.label}
-          badges={[
-            {
-              text: BASIS[coaching.basis],
-              tone:
-                coaching.basis === "general_practice" ? "neutral" : "accent",
-            },
-          ]}
-          explanation={focus.explanation}
-          why={focus.why_it_matters}
-          reason={focus.selected_reason}
-          mission={mission.behavior}
-          missionAnchor="call-mission"
-        />
-        <Panel
-          title="Why this is the focus for this call"
-          sub={
-            evidence.length
-              ? `${evidence.length} moment${evidence.length === 1 ? "" : "s"}`
-              : undefined
-          }
-        >
-          {evidence.length ? (
-            <MomentList
-              evidence={evidence}
-              showCall={false}
-              label="Moments from this call"
-            />
-          ) : (
-            <div className={styles.body}>
-              <p className={styles.momentNote}>
-                This report kept no timestamp for this suggestion.{" "}
-                <Link href={`/analysis/calls/${coaching.submission_id}`}>
-                  Open the report
-                </Link>{" "}
-                to read it in context.
-              </p>
-            </div>
-          )}
-        </Panel>
-        <LessonPanel
-          lesson={lesson}
-          clips={coaching.media_clips}
-          fallbackObservation={focus.explanation}
-          strength={coaching.strength}
-        />
-      </div>
-      <aside className={styles.rail} aria-label="Next call" data-sticky>
+    <div className={styles.story}>
+      <FocusHero
+        heading="One focus for this call"
+        label={focus.label}
+        badges={[
+          {
+            text: BASIS[coaching.basis],
+            tone: coaching.basis === "general_practice" ? "neutral" : "accent",
+          },
+        ]}
+        explanation={focus.explanation}
+        why={focus.why_it_matters}
+        reason={focus.selected_reason}
+        mission={mission.behavior}
+        missionAnchor="call-mission"
+      />
+      <Panel
+        title="Why this is the focus for this call"
+        sub={
+          evidence.length
+            ? `${evidence.length} moment${evidence.length === 1 ? "" : "s"}`
+            : undefined
+        }
+      >
+        {evidence.length ? (
+          <MomentList
+            evidence={evidence}
+            showCall={false}
+            label="Moments from this call"
+          />
+        ) : (
+          <div className={styles.body}>
+            <p className={styles.momentNote}>
+              This report kept no timestamp for this suggestion.{" "}
+              <Link href={`/analysis/calls/${coaching.submission_id}`}>
+                Open the report
+              </Link>{" "}
+              to read it in context.
+            </p>
+          </div>
+        )}
+      </Panel>
+      <LessonPanel
+        lesson={lesson}
+        clips={coaching.media_clips}
+        fallbackObservation={focus.explanation}
+        strength={coaching.strength}
+      />
+      <aside className={styles.storyRail} aria-label="Your next call">
         <MissionPanel
           id="call-mission"
           mission={mission}
           practice={practice}
-          foot="One call shows a suggestion, not a recurring pattern. My coaching keeps your focus across calls."
+          foot="One call gives a suggestion, not a pattern; My coaching follows your calls."
         />
         <Panel title="Keep going">
           <List label="Keep going">

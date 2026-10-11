@@ -4,7 +4,7 @@ import { ArrowRight, ChevronRight, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Badge, Button, kitStyles, List, Panel, Row } from "../ui/kit";
+import { Badge, kitStyles, List, Panel, Row } from "../ui/kit";
 import type {
   CallSummary,
   Coaching,
@@ -200,95 +200,86 @@ export function CoachingStory({
   const pattern = coaching.pattern;
   const recurring = focus.status === "active";
   const step = JOURNEY.indexOf(mastery.state);
+  const path = coaching.development_path;
+  // One conversation in spec order (1–6); on wide screens the mission (4)
+  // stays beside the story instead of a stack of side panels (spec 3, 9).
   return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <FocusHero
-          heading="What You Should Work On Now"
-          label={focus.label}
-          badges={[
-            recurring
-              ? { text: "Active focus", tone: "accent" }
-              : { text: "Provisional focus" },
-            ...(pattern.relevant_call_count > 1
-              ? [
-                  {
-                    text: `In ${pattern.attention_call_count} of ${pattern.relevant_call_count} comparable calls`,
-                  },
-                ]
-              : []),
-            ...(mastery.state !== "not_enough_evidence"
-              ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
-              : []),
-          ]}
-          explanation={focus.explanation}
-          why={focus.why_it_matters}
-          reason={focus.selected_reason}
-          mission={mission.behavior}
-          missionAnchor="mission"
-        >
-          {requestedFocus && requestedFocus !== focus.skill_id ? (
-            <p className={styles.note}>
-              Your report brought you here for{" "}
-              {requestedSkillLabel(requestedFocus)}. Your current next-call
-              mission stays active.
-            </p>
-          ) : null}
-        </FocusHero>
-        <Panel
-          title="Why This Keeps Happening"
-          sub={`${evidence.length} moment${evidence.length === 1 ? "" : "s"}`}
-        >
-          <div className={styles.body}>
-            <p>{pattern.summary}</p>
-            <div className={styles.hypothesis}>
-              <span className={styles.eyebrow}>
-                Likely reason · a working hypothesis
-                <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
-              </span>
-              <p>{coaching.root_cause.hypothesis}</p>
-            </div>
-          </div>
-          <MomentList evidence={evidence} />
-          {evidence.length === 1 ? (
-            <p className={styles.body}>
-              <span className={styles.note}>
-                Only one supporting moment so far. We will not invent more.
-              </span>
-            </p>
-          ) : null}
-        </Panel>
-        <LessonPanel
-          lesson={lesson}
-          clips={coaching.media_clips}
-          fallbackObservation={focus.explanation}
-          strength={coaching.strength}
-          acrossCalls
-        />
-        <div className={styles.late}>
-          <CallsPanel calls={coaching.calls} />
+    <div className={styles.story}>
+      <FocusHero
+        heading="What You Should Work On Now"
+        label={focus.label}
+        badges={[
+          recurring
+            ? { text: "Active focus", tone: "accent" }
+            : { text: "Provisional focus" },
+          ...(pattern.relevant_call_count > 1
+            ? [
+                {
+                  text: `In ${pattern.attention_call_count} of ${pattern.relevant_call_count} comparable calls`,
+                },
+              ]
+            : []),
+          ...(mastery.state !== "not_enough_evidence"
+            ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
+            : []),
+        ]}
+        explanation={focus.explanation}
+        why={focus.why_it_matters}
+        reason={focus.selected_reason}
+        mission={mission.behavior}
+        missionAnchor="mission"
+      >
+        {requestedFocus && requestedFocus !== focus.skill_id ? (
+          <p className={styles.note}>
+            Your report brought you here for{" "}
+            {requestedSkillLabel(requestedFocus)}. Your current next-call
+            mission stays active.
+          </p>
+        ) : null}
+      </FocusHero>
+      <Panel
+        title="Why This Keeps Happening"
+        sub={`${evidence.length} moment${evidence.length === 1 ? "" : "s"}`}
+      >
+        <div className={styles.body}>
+          <p>{pattern.summary}</p>
+          <p className={styles.hypothesis}>
+            <span className={styles.eyebrow}>
+              Likely reason, a working hypothesis
+              <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
+            </span>
+            {coaching.root_cause.hypothesis}
+          </p>
         </div>
-      </div>
-      <aside className={styles.rail} aria-label="Mission and progress">
+        <MomentList evidence={evidence} />
+      </Panel>
+      <LessonPanel
+        lesson={lesson}
+        clips={coaching.media_clips}
+        fallbackObservation={focus.explanation}
+        strength={coaching.strength}
+        acrossCalls
+      />
+      <aside className={styles.storyRail} aria-label="Your next call">
         <MissionPanel
           id="mission"
           mission={mission}
           practice={practice}
           since={callDate(mission.active_since)}
-          foot="The mission stays until real calls show the change. A lesson view or a new date does not complete it."
+          foot="It stays until real calls show the change."
         />
-        <Panel title="See How You’re Improving">
-          <div className={styles.body}>
-            <span className={styles.eyebrow}>
-              Mastery
-              <Badge
-                tone={
-                  mastery.state === "not_enough_evidence" ? "neutral" : "good"
-                }
-              >
-                {masteryLabel[mastery.state]}
-              </Badge>
-            </span>
+      </aside>
+      <Panel title="See How You’re Improving">
+        <div className={styles.body}>
+          <span className={styles.eyebrow}>
+            Mastery
+            <Badge
+              tone={
+                mastery.state === "not_enough_evidence" ? "neutral" : "good"
+              }
+            >
+              {masteryLabel[mastery.state]}
+            </Badge>
             <ol className={styles.stepper} aria-label="Mastery journey">
               {JOURNEY.map((state, index) => (
                 <li
@@ -301,99 +292,76 @@ export function CoachingStory({
                 </li>
               ))}
             </ol>
-            <ProgressStrip points={coaching.progress} />
-            <p className={styles.note}>{mastery.explanation}</p>
-            {mastery.relevant_count !== null ? (
-              <p>
-                {mastery.correct_count} successful executions in{" "}
-                {mastery.relevant_count} relevant opportunities.
-              </p>
-            ) : null}
-            {mastery.baseline ? (
-              <p className={styles.note}>
-                Previous baseline: {mastery.baseline}
-              </p>
-            ) : null}
-            <details className={styles.more}>
-              <summary>Regression and history</summary>
-              <div className={styles.moreBody}>
-                <p>{coaching.regression.action}</p>
-                {mastery.historical_achievement ? (
-                  <p>
-                    Previous achievement:{" "}
-                    {masteryLabel[mastery.historical_achievement]}
-                  </p>
-                ) : null}
-                <p className={styles.note}>
-                  Watching a lesson is participation. Improvement needs evidence
-                  from real opportunities.
+          </span>
+          <ProgressStrip points={coaching.progress} />
+          {mastery.relevant_count !== null ? (
+            <p>
+              {mastery.correct_count} successful executions in{" "}
+              {mastery.relevant_count} relevant opportunities.
+            </p>
+          ) : null}
+          <details className={styles.more}>
+            <summary>How progress is measured</summary>
+            <div className={styles.moreBody}>
+              <p>{mastery.explanation}</p>
+              <p>{coaching.regression.action}</p>
+              {mastery.baseline ? (
+                <p>Previous baseline: {mastery.baseline}</p>
+              ) : null}
+              {mastery.historical_achievement ? (
+                <p>
+                  Previous achievement:{" "}
+                  {masteryLabel[mastery.historical_achievement]}
                 </p>
-              </div>
-            </details>
-          </div>
-        </Panel>
-        <Panel title="Where We Go From Here">
-          <div className={styles.body}>
-            <dl className={styles.path}>
-              <div>
-                <dt>Working on now</dt>
-                <dd>{coaching.development_path.current ?? focus.label}</dd>
-              </div>
-              <div>
-                <dt>Likely next</dt>
-                <dd>
-                  {coaching.development_path.likely_next ??
-                    "Still gathering evidence"}
-                </dd>
-              </div>
-              <div>
-                <dt>Maintain</dt>
-                <dd>
-                  {coaching.development_path.maintain ??
-                    "No established strength yet"}
-                </dd>
-              </div>
-              <div>
-                <dt>Later</dt>
-                <dd>
-                  {coaching.development_path.later ??
-                    "Your future calls will guide this"}
-                </dd>
-              </div>
-            </dl>
-            <p className={styles.note}>
-              {coaching.development_path.explanation}
-            </p>
-            {coaching.reflection_question ? (
-              <p className={styles.reflection}>
-                {coaching.reflection_question}
+              ) : null}
+              <p className={styles.note}>
+                Watching a lesson is participation. Improvement needs evidence
+                from real opportunities.
               </p>
-            ) : null}
-            <div
-              className={styles.actions}
-              aria-label="Learner response unavailable"
-            >
-              {["Agree", "Not completely", "Add context"].map((label) => (
-                <Button key={label} disabled>
-                  {label}
-                </Button>
-              ))}
             </div>
-            <p className={styles.note}>
-              Your context matters. Saving agreement, disagreement and
-              reflection is not available yet.
-            </p>
-          </div>
-        </Panel>
-        <details className={`${styles.more} ${styles.late}`}>
-          <summary>Evidence scope and limitations</summary>
-          <ul className={styles.takeaways}>
-            {coaching.limitations.map((limitation) => (
-              <li key={limitation}>{limitation}</li>
-            ))}
-          </ul>
-        </details>
-      </aside>
+          </details>
+        </div>
+      </Panel>
+      <Panel title="Where We Go From Here">
+        <div className={styles.body}>
+          <ol className={styles.route} aria-label="Your development path">
+            <li data-now="">
+              <span>Now</span>
+              {path.current ?? focus.label}
+            </li>
+            <li>
+              <span>Likely next</span>
+              {path.likely_next ?? "Your next calls decide"}
+            </li>
+            <li>
+              <span>Later</span>
+              {path.later ?? "Your future calls will guide this"}
+            </li>
+          </ol>
+          {path.maintain ? (
+            <p className={styles.note}>Keep strong: {path.maintain}</p>
+          ) : null}
+          {coaching.reflection_question ? (
+            <p className={styles.reflection}>{coaching.reflection_question}</p>
+          ) : null}
+        </div>
+      </Panel>
+      <div className={styles.late}>
+        <CallsPanel calls={coaching.calls} />
+      </div>
+      <details className={`${styles.more} ${styles.late}`}>
+        <summary>About this coaching</summary>
+        <ul className={styles.takeaways}>
+          <li>{path.explanation}</li>
+          {coaching.limitations.map((limitation) => (
+            <li key={limitation}>{limitation}</li>
+          ))}
+          <li>
+            Saving your agreement, disagreement and reflection comes with
+            sharing.
+          </li>
+        </ul>
+      </details>
     </div>
   );
 }
