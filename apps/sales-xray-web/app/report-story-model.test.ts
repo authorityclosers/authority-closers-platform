@@ -146,13 +146,14 @@ describe("honest gaps", () => {
   it("opens an older, sparse report and lists what it lacks instead of inventing it", () => {
     const sparse = reportStoryModel(syntheticReport);
     expect(sparse.picture.outcome.status).toBeNull();
-    expect(sparse.missing[0]).toContain("Call outcome");
+    // The badge says the outcome isn't set; the gap line doesn't repeat it.
+    expect(sparse.missing[0]).not.toContain("Call outcome");
     expect(sparse.flow.metrics).toEqual([]);
     expect(sparse.flow.phases).toBeNull();
     expect(sparse.skills).toHaveLength(8);
-    expect(sparse.skills.filter((s) => s.state === null).length).toBe(
-      sparse.missing[4].length,
-    );
+    // Each row says "Not covered" itself; no second list of names.
+    expect(sparse.skills.some((s) => s.state === null)).toBe(true);
+    expect(sparse.missing[4]).toEqual([]);
     expect(sparse.deal.nextEvent).toBeNull();
     expect(sparse.missing[5]).toContain("Next event");
   });

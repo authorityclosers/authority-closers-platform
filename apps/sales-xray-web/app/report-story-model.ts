@@ -941,7 +941,7 @@ export function reportStoryModel(
 
   const missing: StoryModel["missing"] = [
     [
-      !outcome.status && GAP.outcome,
+      // The outcome badge always says when no outcome is set.
       !picture.summary && GAP.summary,
       !picture.influence && GAP.influence,
       !strongest && GAP.strongest,
@@ -955,7 +955,8 @@ export function reportStoryModel(
       (v): v is string => Boolean(v),
     ),
     moments.length ? [] : [GAP.moments],
-    skills.filter((s) => !s.state).map((s) => s.short),
+    // Each skill row already says "Not covered" when it is.
+    [],
     [
       !deal.blocker && GAP.blocker,
       !deal.prospectCommitments.length && GAP.prospectCommitment,
@@ -1176,7 +1177,6 @@ function withPillars(
   const drop = (index: number, name: string, has: unknown) => {
     if (has) missing[index] = missing[index].filter((item) => item !== name);
   };
-  drop(0, GAP.outcome, outcome.status);
   drop(0, GAP.summary, picture.summary);
   drop(0, GAP.influence, picture.influence);
   drop(0, GAP.strongest, picture.strongest);
