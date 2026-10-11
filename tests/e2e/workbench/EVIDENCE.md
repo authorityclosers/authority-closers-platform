@@ -1,5 +1,46 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Current QA receipt — 23:44:55–23:45:25UTC
+
+**Repaired Document/Word4 PASS + print diagnostic4 PASS**, no skips/errors.
+Recorded source75fcbdad at both boundaries; exact journey digest
+f17c5ee4e58d977b34ec234e3b7a92b5065ecc44a6a1e27cf0b7489227c0cbce.
+Four Document pairs each complete seven observations with positive text coverage,
+ten32/44px controls, six ordered sections/eight skills, and actual Word ZIP/XML
+source agreement for parts1.3/6.9. The fictional follow-up contradiction is
+independently **cleared**: inspected desktop/dark and phone/light overview plus
+phone/dark and desktop/light facts; diagnosis/action match the existing buyer
+boundary, outcome remains unset and both original unknowns remain.
+
+Print ghost controls remain clear, six headings/facts preserved,44 screen targets
+meet32/44px and four PDFs produced. Diagnostics: layout width794px in every
+pair; desktop/light visual794/sheet0–794, both dark visual794/sheet24–770,
+phone/light visual785.9390869140625/sheet0–794. Thus the mobile print-media
+capture has a narrower visual viewport than its paper layout. Inspected both
+new phone A4 captures; keep earlier clipped capture and the viewport mismatch
+as a capture finding. **PDF pixel bounds/quality remain unverified**: no local
+rasterizer, bounded saved-PDF Chromium attempt failed safely; G's independent
+text-only PDF read cannot establish pixel quality. No print CSS repair is
+inferred or requested from this evidence. All owned jobs exited; none queued.
+Receipt/visual geometry:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-document-source-print-readback/receipt.json`
+and adjacent `visual-review-receipt.json`.
+
+Latest scope across separate mutable dev runs: Report/Document8PASS earlier,
+Coaching/quote/print12PASS, repaired Document/print8PASS now. This is not one
+immutable combined matrix or deployed real-account persistence proof. Original
+interruptions, single-click misses, empty font-coverage limits and QA locator
+failures remain below/on disk. The canonical disposable compiled outcome case
+is accepted with its uploaded marker omission explicit. Hosted populated staging/
+production12-case smoke stays **NOTRUN**: approved staging session403; production
+zero readable submissions and Team403. Only already-approved usable host-scoped
+Report/Team contexts can clear that prerequisite. Coordinator/operator have the
+exact gap; no new session/access/workspace/outcome write or ship was performed.
+Dev expected-host API readiness20009a60321; sanitized automatic deploylog read.
+
+Historical entries below retain their original verdicts and pending statements;
+the current receipt supersedes only the specific repairs/limits stated above.
+
 Latest independent dev continuation — 23:29:54–23:31:27UTC
 
 **Coaching/quote/print12/12 automated PASS**, no skips/errors, recordedHEAD
