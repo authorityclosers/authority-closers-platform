@@ -1,9 +1,9 @@
 .panel {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
-  padding: 24px;
+  padding: 14px 16px;
   background: var(--sx-surface);
 }
 
@@ -38,9 +38,7 @@
 .kicker {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .intro,
@@ -71,8 +69,9 @@
 }
 
 .inlineError {
-  color: var(--sx-bad);
-  background: var(--sx-bad-soft);
+  border: 1px solid color-mix(in oklab, var(--sx-warn) 35%, var(--sx-line));
+  color: var(--sx-ink-2);
+  background: color-mix(in oklab, var(--sx-warn) 8%, var(--sx-surface));
 }
 
 .inlineError button {

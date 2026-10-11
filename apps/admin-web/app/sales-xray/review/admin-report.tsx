@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CircleAlert, FileCheck2, LoaderCircle } from "lucide-react";
+import { ArrowLeft, CircleAlert, PlayCircle, RefreshCw } from "lucide-react";
 
 import { AdminShell } from "../../components/admin-shell";
-import { SectionHeading } from "../../components/ops-primitives";
+import { Badge, Button, Panel, Skeleton, kitStyles } from "../../ui/kit";
 import {
   loadAdminReport,
   type AdminReport,
   type AdminReportApiError,
 } from "./admin-report-api";
-import styles from "./review-workspace.module.css";
+import styles from "./reviewers.module.css";
 
 type ReportState =
   | { status: "loading"; report: null }
@@ -39,26 +39,21 @@ function FindingList({
   items: readonly Finding[];
 }) {
   return (
-    <section
-      className={styles.reportSection}
-      aria-labelledby={`report-${title}`}
-    >
-      <h3 id={`report-${title}`}>{title}</h3>
+    <Panel title={title} sub={items.length || undefined}>
       {items.length === 0 ? (
-        <p className={styles.panelIntro}>
-          No evidence-backed items were saved.
+        <p className={styles.body}>
+          <span className={kitStyles.muted}>
+            No evidence-backed items were saved.
+          </span>
         </p>
       ) : (
-        <div className={styles.reportFindings}>
+        <ul className={styles.findings}>
           {items.map((item) => (
-            <article
-              className={styles.reportFinding}
-              key={`${item.title}:${item.explanation}`}
-            >
-              <h4>{item.title}</h4>
+            <li key={`${item.title}:${item.explanation}`}>
+              <strong>{item.title}</strong>
               <p>{item.explanation}</p>
               {item.evidence.length > 0 ? (
-                <details className={styles.lineage}>
+                <details className={styles.tech}>
                   <summary>Source evidence</summary>
                   {item.evidence.map((evidence) => (
                     <blockquote
@@ -73,11 +68,11 @@ function FindingList({
                   ))}
                 </details>
               ) : null}
-            </article>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -85,24 +80,16 @@ function ReportBody({ report }: { report: AdminReport }) {
   const detail = report.report;
   return (
     <>
-      <section
-        className={styles.reportHero}
-        aria-labelledby="report-summary-title"
+      <Panel
+        title={report.recovery ? "Recovered draft" : "Saved draft"}
+        tools={<Badge tone="warn">Not Dipak-adjudicated</Badge>}
       >
-        <div className={styles.noticeIcon} aria-hidden="true">
-          <FileCheck2 size={20} />
+        <div className={styles.body}>
+          <p className={styles.summary}>{detail.summary}</p>
+          <p className={kitStyles.muted}>{detail.verdict}</p>
+          <p className={kitStyles.muted}>{report.message}</p>
         </div>
-        <div>
-          <span className={styles.eyebrow}>
-            {report.recovery
-              ? "Recovered qualitative draft"
-              : "Saved qualitative draft"}
-          </span>
-          <h2 id="report-summary-title">{detail.summary}</h2>
-          <p>{detail.verdict}</p>
-        </div>
-        <span className={styles.noticeCode}>Not Dipak-adjudicated</span>
-      </section>
+      </Panel>
 
       <div className={styles.reportGrid}>
         <FindingList title="Strengths" items={detail.strengths} />
@@ -118,57 +105,63 @@ function ReportBody({ report }: { report: AdminReport }) {
         <FindingList title="Closing analysis" items={detail.closing_analysis} />
       </div>
 
-      <section
-        className={styles.reportSection}
-        aria-labelledby="report-dimensions"
-      >
-        <h3 id="report-dimensions">Observed dimensions</h3>
-        <div className={styles.reportDimensions}>
+      <Panel title="Observed dimensions" sub={detail.dimensions.length}>
+        <ul className={styles.findings}>
           {detail.dimensions.map((dimension) => (
-            <article
-              className={styles.reportDimension}
-              key={dimension.dimension_id}
-            >
-              <div>
-                <h4>{dimension.label}</h4>
-                <span className={styles.pill}>
-                  {dimension.status.replaceAll("_", " ")}
-                </span>
-              </div>
+            <li key={dimension.dimension_id}>
+              <span className={styles.findingHead}>
+                <strong>{dimension.label}</strong>
+                <Badge>{dimension.status.replaceAll("_", " ")}</Badge>
+              </span>
               <p>{dimension.observation}</p>
-            </article>
+            </li>
           ))}
-        </div>
-      </section>
+        </ul>
+      </Panel>
 
-      <details className={styles.lineage}>
-        <summary>Report provenance</summary>
-        <span>
-          <strong>Source</strong> {detail.source_label}
-        </span>
-        <span>
-          <strong>Run</strong> <code>{report.run_id}</code>
-        </span>
-        <span>
-          <strong>Recording</strong> <code>{report.recording_id}</code>
-        </span>
-        <span>
-          <strong>Source revision</strong> {report.source.revision}
-        </span>
-        <span>
-          <strong>Retention until</strong>{" "}
-          {formatRetention(report.source.retention_until)}
-        </span>
-        <span>
-          <strong>Report</strong> <code>{shortId(report.id)}</code>
-        </span>
-        {report.recovery ? (
-          <span>
-            <strong>Recovery</strong> {report.recovery.validation_state} · 0
-            provider calls · review blocked
-          </span>
-        ) : null}
-      </details>
+      <Panel title="Report provenance">
+        <dl className={`${styles.facts} ${styles.body}`}>
+          <div>
+            <dt>Source</dt>
+            <dd>{detail.source_label}</dd>
+          </div>
+          <div>
+            <dt>Run</dt>
+            <dd>
+              <code>{report.run_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Recording</dt>
+            <dd>
+              <code>{report.recording_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Source revision</dt>
+            <dd>{report.source.revision}</dd>
+          </div>
+          <div>
+            <dt>Retention until</dt>
+            <dd>{formatRetention(report.source.retention_until)}</dd>
+          </div>
+          <div>
+            <dt>Report</dt>
+            <dd>
+              <code>{shortId(report.id)}</code>
+            </dd>
+          </div>
+          {report.recovery ? (
+            <div>
+              <dt>Recovery</dt>
+              <dd>
+                {report.recovery.validation_state} · 0 provider calls · review
+                blocked
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </Panel>
     </>
   );
 }
@@ -207,59 +200,51 @@ export function AdminReportPage({ runId }: { runId: string }) {
     <AdminShell
       active="sales-xray"
       surface="operations"
-      eyebrow="Sales Xray / Retained report"
-      title="Open report"
-      description="Review the saved evidence-bound report available to this authorized Admin session."
-      footerText="Private report read · Access is tenant-scoped and audited"
+      title="Saved report"
+      description="The saved, evidence-bound report for one run, as this Admin session may read it. Private, tenant-scoped and audited."
     >
       <div className={styles.workspace}>
-        <div className={styles.breadcrumbRow}>
-          <Link className="back-link" href="/calls">
-            <ArrowLeft size={15} aria-hidden="true" /> Back to recordings
+        <span className={styles.actions}>
+          <Link className={styles.back} href="/reviewers">
+            <ArrowLeft size={14} aria-hidden="true" /> Back to reviewers
           </Link>
-          <span className={styles.routeCode}>REPORT · {shortId(runId)}</span>
-        </div>
+          {state.status === "ready" ? (
+            <Link
+              className={kitStyles.button}
+              data-variant="secondary"
+              href={`/calls/${encodeURIComponent(state.report.recording_id)}?run=${encodeURIComponent(state.report.run_id)}`}
+            >
+              <PlayCircle size={14} aria-hidden="true" /> Open in call review
+            </Link>
+          ) : null}
+        </span>
 
         {state.status === "loading" ? (
-          <div className={styles.queueState} role="status" aria-live="polite">
-            <LoaderCircle size={26} className="spin" aria-hidden="true" />
-            <strong>Opening the saved report</strong>
-            <p>Checking retained permission and report evidence.</p>
+          <div className={styles.skeleton} role="status" aria-live="polite">
+            <span className={kitStyles.srOnly}>Opening the saved report</span>
+            <Skeleton height={120} />
+            <Skeleton height={220} />
           </div>
         ) : state.status === "error" ? (
-          <div className={styles.queueState} role="alert">
-            <CircleAlert size={28} aria-hidden="true" />
-            <strong>{state.message}</strong>
-            <p>
-              This report remains protected by its recording and tenant
-              boundary.
-            </p>
+          <p className={styles.note} role="alert">
+            <CircleAlert size={14} aria-hidden="true" />
+            <span>
+              {state.message} The report stays protected by its recording and
+              organisation boundary.
+            </span>
             {state.retryable ? (
-              <button
-                className="button button-secondary"
-                type="button"
+              <Button
                 onClick={() => {
                   setState({ status: "loading", report: null });
                   setRequestNumber((current) => current + 1);
                 }}
               >
-                Try again
-              </button>
+                <RefreshCw size={14} aria-hidden="true" /> Try again
+              </Button>
             ) : null}
-          </div>
+          </p>
         ) : (
-          <section
-            className={styles.panel}
-            aria-labelledby="report-panel-title"
-          >
-            <SectionHeading
-              eyebrow="Authorized Admin read"
-              id="report-panel-title"
-              title="Report evidence"
-              body={state.report.message}
-            />
-            <ReportBody report={state.report} />
-          </section>
+          <ReportBody report={state.report} />
         )}
       </div>
     </AdminShell>

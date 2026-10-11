@@ -72,6 +72,8 @@ export type NavItem = Readonly<{
   phone?: boolean;
   /** Listed once its screen is built (AUT-1798 builds them in order). */
   soon?: boolean;
+  /** Other paths whose pages belong to this item (its subpages elsewhere). */
+  also?: readonly string[];
 }>;
 
 export type NavGroup = Readonly<{ label: string; items: readonly NavItem[] }>;
@@ -111,6 +113,7 @@ export const NAVIGATION: readonly NavGroup[] = [
         href: "/reviewers",
         label: "Reviewers",
         icon: "reviewers",
+        also: ["/sales-xray/review"],
         need: { kind: "salesXray" },
       },
     ],
@@ -304,12 +307,13 @@ export function activeHref(
 ): string | null {
   const params = new URLSearchParams(search);
   let best: string | null = null;
+  let bestLength = 0;
   for (const group of groups)
     for (const item of group.items)
-      if (
-        matches(item.href, pathname, params) &&
-        (!best || item.href.length > best.length)
-      )
-        best = item.href;
+      for (const href of [item.href, ...(item.also ?? [])])
+        if (matches(href, pathname, params) && href.length > bestLength) {
+          best = item.href;
+          bestLength = href.length;
+        }
   return best;
 }

@@ -343,3 +343,64 @@
     animation: none;
   }
 }
+
+.summary {
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.reportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--sx-gap);
+  align-items: start;
+}
+
+.findings {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.findings > li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+.findings > li:first-child {
+  border-top: 0;
+}
+
+.findings p {
+  margin: 0;
+  color: var(--sx-ink-2);
+  line-height: 1.5;
+}
+
+.findings blockquote {
+  margin: 6px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--sx-line-strong);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.findings cite {
+  display: block;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-style: normal;
+}
+
+.findingHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
