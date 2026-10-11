@@ -73,8 +73,16 @@ required; an old corpus read or unit test is not proof of that target.
   schema, adapters, canonical round trip, role-grounded commitments, timing,
   genuine miss shape, failure cases, account/guest projection, privacy and audit.
 - Retained corpus check (private on server):
-  `/home/acdev/strikes/1801/check-retained-v8.py`; receipt
-  `/home/acdev/strikes/1801/retained-v8-receipt.json` (counts only in notes).
+  `/home/acdev/strikes/1801/check-retained-v8.py --output <new-private-receipt>`.
+  It pins the pre-v8 baseline at `28276ec520d337e0a78a637c535f3c139d4e7238`,
+  refuses identical baseline/candidate parser source and existing receipt paths,
+  and checks parser/input hashes remain stable. Latest corrected receipt:
+  `/home/acdev/strikes/1801/retained-v8-receipt-20261011-fixed-baseline.json`
+  (counts only in notes; earlier receipts are retained).
   13 saved reports keep identical admission and canonical content; 14 complete
   C4 inputs prepare V8 with every C2 segment preserved, including one >20-minute
   source. Provider calls: zero. Historical staging data, not current dev replay.
+
+The remaining current-dev artifact/clock and independent Gate 2 evidence
+requirements are recorded in the private handoff
+`/home/acdev/strikes/1801/report-v8-comparison-handoff.md`.
