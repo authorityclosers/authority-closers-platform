@@ -17,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -185,7 +186,21 @@ export function OrganisationView() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   const branding = useBranding();
-  const [base, setBase] = useState<Base>({ status: "loading" });
+  // The app's session check has just read the workspace directory: start
+  // from it, so the organisation's own reads start at once instead of after
+  // a second directory read (a client waterfall).
+  const [base, setBase] = useState<Base>(() =>
+    authenticated && access.workspaces && access.context
+      ? {
+          status: "ready",
+          workspaces: access.workspaces,
+          selected: access.context.tenantId,
+        }
+      : { status: "loading" },
+  );
+  const seededBase = useRef(
+    base.status === "ready" ? access?.context?.tenantId : undefined,
+  );
   const [baseAttempt, setBaseAttempt] = useState(0);
   const [tab, setTabState] = useState<Tab>(initialTab);
   const [missing, setMissing] = useState(false);
@@ -200,6 +215,16 @@ export function OrganisationView() {
 
   useEffect(() => {
     if (!authenticated) return;
+    // Started from the app's directory for this workspace: no second read
+    // (a retry, or another workspace, reads again).
+    const seeded = seededBase.current;
+    seededBase.current = undefined;
+    if (
+      seeded !== undefined &&
+      seeded === access?.context?.tenantId &&
+      baseAttempt === 0
+    )
+      return;
     const controller = new AbortController();
     readBase(controller.signal)
       .then((value) => {

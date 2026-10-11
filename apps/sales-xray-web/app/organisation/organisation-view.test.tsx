@@ -2,6 +2,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import { resetInvitesForTests } from "../shell/invites-store";
 import { CREATE_ORGANISATION_EVENT } from "../shell/shell-store";
 import { WorkspaceAccessContext } from "../workspace-access";
@@ -306,6 +307,38 @@ it.each([
       ).toBeGreaterThan(1);
   },
 );
+it("starts from the app's workspace directory, so its own reads start at once", async () => {
+  const directory = routes["/v1/me/sales-xray-workspaces"] as {
+    workspaces: SalesXrayWorkspace[];
+  };
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: { personId: ownerId, sessionId: "s-1", tenantId },
+          workspaces: directory.workspaces,
+          retry: accessRetry,
+        }}
+      >
+        <OrganisationView />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const paths = fetchMock.mock.calls.map(([path]) => path);
+  // No second directory read before the organisation's own reads.
+  expect(paths).not.toContain("/v1/me/sales-xray-workspaces");
+  expect(paths).toEqual(
+    expect.arrayContaining([
+      "/v1/organisation",
+      "/v1/organisation/members",
+      "/v1/organisation/activity?days=30",
+    ]),
+  );
+  expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
+});
+
 it("cancels a role change without writing", async () => {
   await render();
   await click("Members");

@@ -1,5 +1,6 @@
 /** Organisation reads and changes against the selected session workspace. */
 import { acquisition, AcquisitionError } from "../acquisition-client";
+import { earlyFetch } from "../early-reads";
 import type { ActivityDay } from "../dashboard/dashboard-data";
 
 export type OrgRole = "owner" | "admin" | "member";
@@ -106,7 +107,8 @@ async function call(
     headers.set("Content-Type", "application/json");
   if (init.method && init.method !== "GET")
     headers.set("Idempotency-Key", requestKey ?? crypto.randomUUID());
-  const response = await fetch(`/v1/organisation${path}`, {
+  // A page's first GETs may already have been started with the HTML.
+  const response = await earlyFetch(`/v1/organisation${path}`, {
     credentials: "same-origin",
     cache: "no-store",
     redirect: "error",

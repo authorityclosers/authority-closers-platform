@@ -65,7 +65,12 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
     `${ACQUISITION}/submissions?include_owners=true`,
   ],
   "/analysis/new": [...SESSION, ...STUDIO],
-  "/organisation": [...SESSION],
+  "/organisation": [
+    ...SESSION,
+    "/v1/organisation",
+    "/v1/organisation/members",
+    "/v1/organisation/activity?days=30",
+  ],
   "/account": [...SESSION],
   "/prospects": [...SESSION],
 };
