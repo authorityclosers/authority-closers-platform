@@ -188,6 +188,8 @@ export function LessonPanel({
   acrossCalls?: boolean;
 }) {
   const media = Boolean(clips?.length);
+  // One level below the pillar heading (h3 under an h2, h4 inside the Report).
+  const Title = level === 3 ? "h4" : "h3";
   const wording = lesson.example_wording.length ? (
     <div>
       <CardLabel>{BETTER.wording}</CardLabel>
@@ -201,7 +203,7 @@ export function LessonPanel({
   return (
     <Pillar id={id} copy={copy} level={level}>
       <StoryCard label={media ? BETTER.dipak : BETTER.textLesson} tone="accent">
-        <h3 className={styles.lessonTitle}>{lesson.title}</h3>
+        <Title className={styles.lessonTitle}>{lesson.title}</Title>
         <p>{lesson.quick_idea}</p>
         {lesson.framework.length ? (
           <div className={styles.framework}>
@@ -229,7 +231,7 @@ export function LessonPanel({
           </div>
         </div>
       </StoryCard>
-      <CoachingMedia clips={clips} />
+      <CoachingMedia clips={clips} headingLevel={level === 3 ? 4 : 3} />
       {media ? null : wording ? <StoryCard>{wording}</StoryCard> : null}
       {strength ? (
         <StoryCard label={BETTER.strength} tone="good" icon={Sparkles}>

@@ -126,10 +126,13 @@ export function ClipOfferCard({
 function ClipCard({
   clip,
   recommended,
+  headingLevel = 3,
 }: {
   clip: CoachingClip;
   recommended: boolean;
+  headingLevel?: 3 | 4;
 }) {
+  const Title = headingLevel === 4 ? "h4" : "h3";
   const identity = useId();
   const card = useRef<HTMLElement>(null);
   const player = useRef<HTMLAudioElement>(null);
@@ -278,7 +281,7 @@ function ClipCard({
           <span className={styles.eyebrow}>
             {recommended ? MEDIA.recommended : MEDIA.other}
           </span>
-          <h3>{clip.title}</h3>
+          <Title>{clip.title}</Title>
           <span className={styles.note}>
             {MEDIA.byline} · {MEDIA.kind(clip.kind === "video")} · {MEDIA.voice}{" "}
             · {timeLabel(length)}
@@ -427,12 +430,24 @@ function ClipCard({
 }
 
 /** One recommended clip first; any others stay secondary (spec 6.2, 6.3). */
-export function CoachingMedia({ clips }: { clips?: CoachingClip[] }) {
+export function CoachingMedia({
+  clips,
+  headingLevel = 3,
+}: {
+  clips?: CoachingClip[];
+  /** 4 inside the Report, where the pillars are h3. */
+  headingLevel?: 3 | 4;
+}) {
   if (!clips?.length) return null;
   return (
     <div className={styles.clips}>
       {clips.map((clip, index) => (
-        <ClipCard key={clipKey(clip)} clip={clip} recommended={index === 0} />
+        <ClipCard
+          key={clipKey(clip)}
+          clip={clip}
+          recommended={index === 0}
+          headingLevel={headingLevel}
+        />
       ))}
     </div>
   );
