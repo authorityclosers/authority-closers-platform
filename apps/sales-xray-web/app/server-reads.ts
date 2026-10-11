@@ -49,7 +49,7 @@ const HOST = /^[a-z0-9.-]+(?::[0-9]+)?$/i;
  */
 export async function serverReads(
   paths: readonly string[],
-  timeoutMs = 1500,
+  timeoutMs = 1000,
 ): Promise<Record<string, ServerRead> | null> {
   const origin = serverApiOrigin();
   if (!origin) return null;
@@ -103,7 +103,9 @@ export type InitialSession = Readonly<{
  * Null unless both reads succeeded.
  */
 export async function serverSession(): Promise<InitialSession | null> {
-  const reads = await serverReads(SESSION_PATHS, 1200);
+  // Every full page load waits for this (the layout), so a slow API costs
+  // at most 0.6 s before the page falls back to the browser's own check.
+  const reads = await serverReads(SESSION_PATHS, 600);
   const identity = reads?.[SESSION_PATHS[0]];
   const directory = reads?.[SESSION_PATHS[1]];
   if (identity?.status !== 200 || directory?.status !== 200) return null;
