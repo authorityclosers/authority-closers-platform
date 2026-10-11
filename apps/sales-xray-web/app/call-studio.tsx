@@ -601,10 +601,10 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     if (
       next.size === 0 ||
       next.size > 32 * 1024 * 1024 ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(next.name)
+      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(next.name)
     ) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC recording up to 32 MB.",
+        "Choose a supported audio recording recording up to 32 MB.",
       );
       return;
     }
@@ -852,6 +852,12 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 m4a: "audio/mp4",
                 ogg: "audio/ogg",
                 flac: "audio/flac",
+                amr: "audio/amr",
+                awb: "audio/amr-wb",
+                aac: "audio/aac",
+                "3ga": "audio/3gpp",
+                webm: "audio/webm",
+                opus: "audio/ogg",
               } as Record<string, string>
             )[file.name.split(".").pop()?.toLowerCase() ?? ""] ?? "audio/mpeg",
           duration_ms: Math.ceil(duration),
@@ -1218,7 +1224,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   <Upload size={18} /> Choose audio file
                 </label>
                 <p className="muted">
-                  MP3, MPEG, WAV, M4A, OGG or FLAC · up to 32 MB
+                  MP3, WAV, M4A and common phone audio formats · up to 32 MB
                 </p>
               </>
             ) : file ? (

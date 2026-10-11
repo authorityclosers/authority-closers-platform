@@ -14,6 +14,8 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 
+from ac_platform.conversation_intelligence import signals
+from ac_platform.conversation_intelligence import worker as worker_module
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
@@ -40,12 +42,31 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
+@pytest.fixture(scope="module")
+def native(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return signals.build_native(tmp_path_factory.mktemp("phone-http-native"))
+
+
 @pytest.mark.parametrize("filename", ["synthetic-nb.amr", "tone.3ga"])
 def test_phone_source_put_reaches_original_bound_report(
-    postgres_harness: Any, tmp_path: Path, filename: str
+    postgres_harness: Any, tmp_path: Path, filename: str, native: Path, monkeypatch: Any
 ) -> None:
+    monkeypatch.setattr(
+        worker_module,
+        "inspect_media",
+        lambda source, outdir, **kwargs: signals.inspect_media(
+            source, outdir, native_executable=native, **kwargs
+        ),
+    )
+
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        # The shared WAV fixture uses the full C1 inspector for preflight. Phone
+        # codecs need the same lightweight decoded-duration receipt as hosted
+        # intake; their original sample rate need not equal the feature rate.
+        setup.native.validate_source = lambda source, outdir, **kwargs: signals.validate_media(
+            source, outdir, rate=kwargs["rate"]
+        )
         data = (FIXTURES / filename).read_bytes()
         # AAC adds codec padding beyond the helper's exact one-second WAV.
         # Permit two seconds in this fictional provider approval only.

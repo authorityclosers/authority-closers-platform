@@ -1267,12 +1267,12 @@ export function AcquisitionStudio({
     setPlanRequiresAction(false);
     if (
       !policy ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(next.name) ||
+      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(next.name) ||
       !next.size ||
       next.size > policy.maximum_file_bytes
     ) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        "Choose a supported audio recording within the displayed size limit.",
       );
       setLocalValidationError(true);
       return;
@@ -1298,7 +1298,7 @@ export function AcquisitionStudio({
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(candidate.name) &&
+        /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(candidate.name) &&
         candidate.size > 0 &&
         candidate.size <= policy.maximum_file_bytes,
     );
@@ -1306,7 +1306,7 @@ export function AcquisitionStudio({
     if (valid.length === 0) {
       if (hasInvalidFiles) {
         setError(
-          "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+          "Choose a supported audio recording within the displayed size limit.",
         );
         setLocalValidationError(true);
       }
@@ -1321,7 +1321,7 @@ export function AcquisitionStudio({
     if (!file) choose(valid[0]);
     if (hasInvalidFiles) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        "Choose a supported audio recording within the displayed size limit.",
       );
       setLocalValidationError(true);
     }
@@ -1967,7 +1967,7 @@ export function AcquisitionStudio({
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
-        ? "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit."
+        ? "Choose a supported audio recording within the displayed size limit."
         : rootAnalysisState === "needs_action" &&
             !plan?.accepted &&
             !progress?.automatic_progression &&
