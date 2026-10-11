@@ -386,6 +386,16 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   expect(button("Remove Admin")).toBeUndefined();
   expect(button("Remove Dipak").disabled).toBe(false);
   expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+  // Every row opens that person's profile (an invitation by its id).
+  expect(
+    [...host.querySelectorAll('a[href^="/organisation/people/"]')].map((link) =>
+      link.getAttribute("href"),
+    ),
+  ).toEqual([
+    `/organisation/people/${ownerId}`,
+    `/organisation/people/${inviteId}`,
+    `/organisation/people/${memberId}`,
+  ]);
 });
 it("uses the API role and shows members only their own row read-only", async () => {
   org().role = "member";
@@ -675,6 +685,12 @@ it("lists active people first and folds quiet and test accounts away", async () 
     );
   expect(people()).toHaveLength(1);
   expect(people()[0]).toContain("1 call");
+  // The whole row opens the person's profile.
+  expect(
+    host
+      .querySelector('[aria-labelledby="org-people"] li a')
+      ?.getAttribute("href"),
+  ).toMatch(/^\/organisation\/people\/[0-9a-f-]{36}$/);
   // Two people share a name, so each shows the email that tells them apart.
   expect(people()[0]).toContain("admin@fictional-studio.in");
   expect(host.textContent).not.toContain("Dipak");
