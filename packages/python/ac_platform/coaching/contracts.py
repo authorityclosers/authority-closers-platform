@@ -287,8 +287,9 @@ class ClipSuggestion(Model):
     kind: Literal["audio", "video"]
     placeholder: Literal[True] = True
     voice: Literal["neutral"] = "neutral"
-    # Locked clips carry no playable source: the stream refuses them.
-    access: Literal["full", "locked"] = "full"
+    # Locked clips carry no playable source: the stream refuses them. A
+    # preview streams only its separate cut, which ends at preview_end_ms.
+    access: Literal["full", "preview", "locked"] = "full"
     entitlement_policy: Literal[
         "AUT-1678-open-access", "AUT-1678-demo-one-free-topic-per-skill"
     ] = "AUT-1678-open-access"
@@ -299,11 +300,19 @@ class ClipSuggestion(Model):
     transcript_excerpt: str
     slides: tuple[Slide, ...]
     offer: ClipOffer | None = None
+    preview_end_ms: int | None = Field(default=None, strict=True)
 
     @model_validator(mode="after")
     def ordered_clip(self) -> "ClipSuggestion":
         if self.end_ms <= self.start_ms:
             raise ValueError("Coaching clips need ordered source timestamps.")
+        if (self.access == "preview") != (self.preview_end_ms is not None) or (
+            self.preview_end_ms is not None
+            and not self.start_ms < self.preview_end_ms < self.end_ms
+        ):
+            raise ValueError("A preview needs its own end inside the clip, and only a preview.")
+        if self.access == "preview" and self.offer is None:
+            raise ValueError("A preview must lead to the full coaching.")
         if (self.access == "full") != (self.entitlement_policy == "AUT-1678-open-access"):
             raise ValueError("Only the open Coaching policy grants a full clip.")
         if self.access == "locked" and self.offer is None:

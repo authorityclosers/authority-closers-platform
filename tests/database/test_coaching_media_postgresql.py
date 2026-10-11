@@ -102,7 +102,7 @@ def test_reviewed_placeholder_clips_same_request_and_private_source(
     run(exercise())
 
 
-def test_packaged_placeholders_free_lesson_streams_and_locked_lesson_never_does(
+def test_packaged_placeholders_free_lesson_streams_and_locked_lesson_only_its_preview(
     postgres_harness: Any, tmp_path: Path, monkeypatch: Any
 ) -> None:
     async def exercise() -> None:
@@ -120,7 +120,8 @@ def test_packaged_placeholders_free_lesson_streams_and_locked_lesson_never_does(
                 assert result.status_code == 200, result.text
                 free, locked = result.json()["media_clips"]
                 assert free["access"] == "full" and free["topic_id"].startswith("syn-coach-")
-                assert locked["access"] == "locked" and locked["offer"]["academy"]
+                assert locked["access"] == "preview" and locked["offer"]["academy"]
+                assert locked["preview_end_ms"] == locked["start_ms"] + 15_000
                 assert "relative_path" not in free and "audio_sha256" not in free
 
                 def source(clip: dict[str, Any]) -> str:
@@ -133,7 +134,13 @@ def test_packaged_placeholders_free_lesson_streams_and_locked_lesson_never_does(
                 media = await client.get(source(free), headers={"Range": "bytes=0-9"})
                 assert media.status_code == 206 and media.content == audio[:10]
                 assert media.headers["cache-control"] == "private, no-store"
-                assert (await client.get(source(locked))).status_code == 404
+                # The locked lesson's URL serves its 15-second cut, never the lesson.
+                cut = (placeholder.MEDIA / f"{locked['topic_id']}.preview.mp3").read_bytes()
+                teaser = await client.get(source(locked))
+                assert teaser.status_code == 200 and teaser.content == cut
+                assert teaser.headers["cache-control"] == "private, no-store"
+                beyond = await client.get(source(locked), headers={"Range": f"bytes={len(cut)}-"})
+                assert beyond.status_code == 416
                 client.cookies.clear()
                 assert (await client.get(source(free))).status_code == 401
         finally:

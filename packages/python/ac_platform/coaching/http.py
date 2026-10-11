@@ -372,9 +372,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     async def media_source(
         topic_id: str, revision: str, review_id: UUID, request: Request, response: Response
     ) -> StreamingResponse:
-        # Reviewed exports and free placeholder topics stream in full; locked
-        # placeholder topics have no audio and are refused here, not just in
-        # the browser. A browser timeupdate is not a paywall.
+        # Reviewed exports and free placeholder topics stream in full; a locked
+        # placeholder topic streams only its preview cut file (or is refused),
+        # here, not just in the browser. A browser timeupdate is not a paywall.
         async with account_library(request, response) as (library, actor):
             now = await library.ownership.sessions._admit()
             await library.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
@@ -384,8 +384,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise HTTPException(404, "Coaching media is unavailable.", headers=PRIVATE)
             free = placeholder.playable(topic_id, revision, review_id)
             if free is not None:
+                # A locked topic streams only its separate preview cut.
                 iterator = placeholder.narration(free)
-                size = free.audio_bytes
+                size = placeholder.audio_file(free)[1]
             else:
                 topics = await asyncio.to_thread(read_topics)
                 topic = next((t for t in topics if t.topic_id == topic_id), None)
