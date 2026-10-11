@@ -67,11 +67,12 @@ import {
 import {
   CREATE_ORGANISATION_EVENT,
   getShellState,
+  markSidebar,
   OPEN_SWITCHER_EVENT,
-  RECENTS_CHANGED_EVENT,
   recentCallsForContext,
-  updateShellState,
+  RECENTS_CHANGED_EVENT,
   type ShellRecentCall,
+  updateShellState,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
@@ -327,6 +328,7 @@ function LightboxShellFrame({
     focusTogglePendingRef.current = true;
     setCollapsed(next);
     updateShellState({ collapsed: next });
+    markSidebar(next);
     try {
       localStorage.setItem("sx.sidebar.collapsed", String(next));
     } catch {}

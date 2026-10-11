@@ -187,7 +187,11 @@
   position: relative;
 }
 
-.collapsed .panel {
+/* Collapsed by the person (state), or already before the app starts (the
+   pre-paint attribute from sidebarInitScript), so a full load never opens
+   the panel and slides it shut. */
+.collapsed .panel,
+:global(html[data-sx-sidebar="collapsed"]) .panel {
   width: 0;
   min-width: 0;
   padding: 0;
@@ -1173,7 +1177,8 @@
   min-width: 224px;
 }
 
-.collapsed .panel {
+.collapsed .panel,
+:global(html[data-sx-sidebar="collapsed"]) .panel {
   border-right: 1px solid transparent;
 }
 
