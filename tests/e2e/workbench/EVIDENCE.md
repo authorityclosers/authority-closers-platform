@@ -7,6 +7,10 @@ Current independent dev readback — 23:14:53–23:17:19 UTC
 All thirteen Report observations and seven independent Document observations
 pass at1440/390 light/dark, including valid Word files. Actual Document controls:
 44 in the Report example and10 in the standalone fixture, each meets32/44px.
+One visual copy finding stays with G: standalone fictional Document1.3 says
+the closer clarified a follow-up time, while1.1/6.2 say the buyer declined a
+next step and requested no follow-up. Exact own overview/facts captures and
+source range supplied; source-bound correction required, no invented outcome.
 No runtime/server/overflow/outcome API errors; one Document/light receipt has
 two timed refresh events. Inspected both widths/themes, intentional paper
 surface and plain sales commitments preserved.
