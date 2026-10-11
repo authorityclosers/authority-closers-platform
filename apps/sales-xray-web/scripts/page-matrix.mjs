@@ -12,7 +12,11 @@
 //     area (a hidden or clipped sideways scrollbar), or draws anything past
 //     the window's edge (the shell clips sideways overflow, so this is how a
 //     clipped layout bug still fails). Sideways scrollers on purpose carry
-//     data-scroll-x. The "widths" pass checks this at 360-1280 px too.
+//     data-scroll-x. The "widths" pass checks this at 360-1280 px too;
+//   - (screens pass) fails the computed-style audit (style-audit.mjs): CSS
+//     missing, classes without rules, default-looking controls, wrong theme
+//     background, serif fallback, a collapsed layout. Its negative control
+//     blocks every stylesheet on three pages and must see them fail.
 //
 //   node apps/sales-xray-web/scripts/page-matrix.mjs --origin http://127.0.0.1:3016 \
 //     --out "$RUNNER_TEMP/page-matrix" [--pass roles|screens|widths|all] [--only /dashboard]
@@ -28,6 +32,7 @@ import {
   PROSPECT_ID,
   ROLES,
 } from "./page-matrix-fixtures.mjs";
+import { auditStyles } from "./style-audit.mjs";
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), "../app");
 
@@ -43,6 +48,13 @@ export const PROTECTED = [
 ];
 
 const PARAMS = { callId: CALL_ID, prospectId: PROSPECT_ID };
+
+/** Pages drawn in the app shell (navigation rail on wide windows). */
+export const SHELL_PAGE =
+  /^\/(dashboard|analysis(\/.*)?|calls|organisation(\/.*)?|account(\/.*)?|prospects(\/.*)?|coaching)?$/;
+
+/** The audit must fail these with every stylesheet blocked (its proof). */
+export const NEGATIVE_CONTROL = ["/dashboard", "/analysis/calls", "/login"];
 
 /** The signed-in app pages the "widths" pass checks for sideways scrolling. */
 export const WIDTH_ROUTES = [...PROTECTED, "/analysis/new", "/coaching"];
@@ -208,7 +220,7 @@ async function visit(browser, origin, view) {
 async function visitOnce(
   browser,
   origin,
-  { route, role, width, height, scheme, out },
+  { route, role, width, height, scheme, out, audit = false, unstyled = false },
 ) {
   const phone = width < 768;
   const context = await browser.newContext({
@@ -223,6 +235,9 @@ async function visitOnce(
   const table = fixtureFor(role);
   const problems = [];
   const writes = [];
+  // The audit's negative control: the page with every stylesheet blocked.
+  if (unstyled)
+    await context.route(/\.css(\?|$)/, (request) => request.abort());
   await context.route("**/v1/**", async (request) => {
     const url = new URL(request.request().url());
     const method = request.request().method();
@@ -291,6 +306,15 @@ async function visitOnce(
         problems.push("a member sees the company details form");
     }
     problems.push(...sidewaysProblems(await page.evaluate(measureSideways)));
+    // A page that is not served in this build (development fixtures answer
+    // 404 in production) has nothing to audit.
+    if (audit && status !== 404)
+      problems.push(
+        ...(await auditStyles(page, {
+          scheme,
+          shell: SHELL_PAGE.test(route.split("?")[0]),
+        })),
+      );
     if (out)
       await page.screenshot({ path: out, fullPage: false }).catch(() => {});
   } catch (error) {
@@ -366,9 +390,35 @@ async function main() {
                 height,
                 scheme,
                 out: join(output, "screens", name),
+                audit: true,
               }),
             );
           }
+    if (pass === "screens" || pass === "all")
+      for (const route of NEGATIVE_CONTROL) {
+        const result = await visit(browser, origin, {
+          route,
+          role: "owner",
+          width: 1440,
+          height: 900,
+          scheme: "light",
+          audit: true,
+          unstyled: true,
+        });
+        const caught = result.problems.some((problem) =>
+          problem.startsWith("style: "),
+        );
+        log({
+          ...result,
+          route: `${route} (stylesheets blocked)`,
+          problems: caught
+            ? []
+            : [
+                "negative control: the style audit passed a page with every stylesheet blocked",
+              ],
+          ok: caught,
+        });
+      }
     if (pass === "widths" || pass === "all")
       for (const route of routes.filter((route) =>
         WIDTH_ROUTES.includes(route.split("?")[0]),
