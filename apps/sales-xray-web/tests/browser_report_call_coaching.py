@@ -56,10 +56,10 @@ def main():
             expect(example).to_contain_text("Placeholder · neutral narration")
             expect(example.locator("audio")).to_have_count(0)
             assert len(media) == (0 if width == 390 else 2)
+            example.get_by_text("Read this clip", exact=True).click()
             example.get_by_role("button", name="Next slide", exact=True).click()
             expect(example).to_contain_text("Wait for their answer.")
             example.get_by_role("button", name="Previous slide", exact=True).click()
-            example.locator("details summary").click()
             expect(example).to_contain_text("समस्या का असर क्या है?")
             example.get_by_role("button", name="Play coaching clip", exact=True).click()
             expect(example.get_by_role("status")).to_contain_text("Narration is unavailable")
@@ -72,17 +72,22 @@ def main():
             expect(lesson.locator("ol li").first).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             if width == 390:
-                assert coaching.locator("button, summary, a").evaluate_all(
-                    "items => items.every(el => el.getBoundingClientRect().height >= 44)"
+                targets = coaching.locator("button, summary, a").evaluate_all(
+                    "items => items.filter(el => el.checkVisibility()).map(el => "
+                    "({label: el.getAttribute('aria-label') || el.textContent.trim(), "
+                    "height: el.getBoundingClientRect().height}))"
                 )
+                assert targets and all(item["height"] >= 44 for item in targets), targets
             lesson.locator("summary").click()
             for theme in ["light", "dark"]:
                 page.locator("html").evaluate(
                     "(el, theme) => el.setAttribute('data-theme', theme)", theme
                 )
                 page.evaluate("window.scrollTo(0, 0)")
-                page.screenshot(path=str(OUT / f"call-coaching-{width}-{theme}.png"))
-                example.screenshot(path=str(OUT / f"call-coaching-media-{width}-{theme}.png"))
+                page.screenshot(path=str(OUT / f"report-call-coaching-{width}-{theme}.png"))
+                example.screenshot(
+                    path=str(OUT / f"report-call-coaching-media-{width}-{theme}.png")
+                )
             proof.append(
                 {
                     "width": width,

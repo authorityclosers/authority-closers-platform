@@ -26,6 +26,13 @@ async function browserRead(path: string, signal: AbortSignal) {
     headers: { accept: "application/json" },
   });
   if (!response.ok) throw new Error("company_read_rejected");
+  return readCompanyResponseBody(response);
+}
+
+/** Bounded JSON shared by Company reads and explicit human-save acknowledgements. */
+export async function readCompanyResponseBody(
+  response: Response,
+): Promise<unknown> {
   if (Number(response.headers.get("content-length")) > 131072)
     throw new Error("company_read_too_large");
   if (!response.body) throw new Error("company_read_empty");
