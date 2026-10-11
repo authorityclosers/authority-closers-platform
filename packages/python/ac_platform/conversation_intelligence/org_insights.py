@@ -1323,6 +1323,29 @@ class OrganisationInsights:
         }
 
 
+async def erase_insights_for_recording(
+    database: AsyncSession, *, tenant_id: UUID, recording_id: UUID
+) -> int:
+    """Purge a call's projected row when the canonical recording erasure completes.
+
+    The row holds only codes and numbers derived from the call's report, but it
+    is still call-linked data: it goes with the call, in the same transaction,
+    without waiting for the next refresh.
+    """
+    submissions = select(cast(ConversationGuestSubmission.submission_id, String)).where(
+        ConversationGuestSubmission.tenant_id == tenant_id,
+        ConversationGuestSubmission.recording_id == recording_id,
+    )
+    result = await database.execute(
+        delete(ConversationInsightCall).where(
+            ConversationInsightCall.tenant_id == tenant_id,
+            ConversationInsightCall.source == "call",
+            ConversationInsightCall.call_key.in_(submissions),
+        )
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 def scope_columns(scope: Select[Any]) -> tuple[Select[Any], Select[Any]]:
     """The two selects OrganisationInsights needs from a library scope query."""
     from ac_platform.conversation_intelligence.acquisition_models import (
@@ -1348,6 +1371,7 @@ def scope_columns(scope: Select[Any]) -> tuple[Select[Any], Select[Any]]:
 
 __all__ = [
     "InsightFilters",
+    "erase_insights_for_recording",
     "OrganisationInsights",
     "objection_kinds",
     "report_language",

@@ -379,6 +379,39 @@ def test_a_newer_report_replaces_the_projected_row(database_url: URL) -> None:
     run(database_url, body)
 
 
+def test_erasing_a_call_purges_its_row_without_a_refresh(database_url: URL) -> None:
+    async def body(sessions: async_sessionmaker[AsyncSession]) -> None:
+        tenant, ids = await seed_calls(sessions)
+        other = uuid4()
+        async with sessions() as db, db.begin():
+            await library(db, tenant).refresh(now=NOW)
+            # The same call key in another tenant is never touched.
+            await db.execute(
+                insert(ConversationInsightCall.__table__).values(
+                    tenant_id=other,
+                    source="call",
+                    call_key=str(ids["s1"]),
+                    source_ref="x",
+                    occurred_at=NOW,
+                    outcome="won",
+                    projected_at=NOW,
+                )
+            )
+        async with sessions() as db, db.begin():
+            removed = await org_insights.erase_insights_for_recording(
+                db, tenant_id=tenant, recording_id=ids["r1"]
+            )
+            assert removed == 1
+        async with sessions() as db, db.begin():
+            keys = {
+                (row.tenant_id, row.call_key)
+                for row in await db.scalars(select(ConversationInsightCall))
+            }
+            assert keys == {(tenant, str(ids["s2"])), (other, str(ids["s1"]))}
+
+    run(database_url, body)
+
+
 def test_a_new_seller_choice_recomputes_talk_share_on_the_same_report(
     database_url: URL,
 ) -> None:
