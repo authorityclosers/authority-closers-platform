@@ -31,6 +31,7 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { callDate, callTone, submissionState } from "../call-status";
 import { useDisplayDates } from "../display-clock";
 import { useServerSeedAllowed } from "../initial-session";
+import { personHref } from "./people/person-data";
 import {
   seededOrganisation,
   type ServerOrganisation,
@@ -1148,39 +1149,47 @@ function PeopleActivity({
         <ul className={styles.people}>
           {shown.map((row) => (
             <li key={row.id} data-quiet={row.calls === 0 ? "" : undefined}>
-              <i className={styles.avatar} aria-hidden="true">
-                {initials(row.name)}
-              </i>
-              <span className={styles.personName}>
-                <b>
-                  <span className={styles.nameText} title={row.name}>
-                    {row.name}
-                  </span>
-                  {row.test ? <span className={styles.tag}>Test</span> : null}
-                </b>
-                {row.duplicate && row.email ? <small>{row.email}</small> : null}
-              </span>
-              {complete ? (
-                <WeekBars
-                  name={row.name}
-                  weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
-                  top={topWeek}
-                />
-              ) : (
-                <span className={styles.personBar} aria-hidden="true">
-                  <i style={{ width: `${(row.calls / top) * 100}%` }} />
+              <Link
+                href={personHref(row.id)}
+                prefetch={false}
+                className={styles.personRow}
+              >
+                <i className={styles.avatar} aria-hidden="true">
+                  {initials(row.name)}
+                </i>
+                <span className={styles.personName}>
+                  <b>
+                    <span className={styles.nameText} title={row.name}>
+                      {row.name}
+                    </span>
+                    {row.test ? <span className={styles.tag}>Test</span> : null}
+                  </b>
+                  {row.duplicate && row.email ? (
+                    <small>{row.email}</small>
+                  ) : null}
                 </span>
-              )}
-              <span className={styles.personFigures}>
-                <b>
-                  {row.calls} {row.calls === 1 ? "call" : "calls"}
-                </b>
-                <small>
-                  {row.calls > 0
-                    ? `${minutes(row.minutes)} min · ${row.reports} ${row.reports === 1 ? "report" : "reports"}`
-                    : "No calls"}
-                </small>
-              </span>
+                {complete ? (
+                  <WeekBars
+                    name={row.name}
+                    weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
+                    top={topWeek}
+                  />
+                ) : (
+                  <span className={styles.personBar} aria-hidden="true">
+                    <i style={{ width: `${(row.calls / top) * 100}%` }} />
+                  </span>
+                )}
+                <span className={styles.personFigures}>
+                  <b>
+                    {row.calls} {row.calls === 1 ? "call" : "calls"}
+                  </b>
+                  <small>
+                    {row.calls > 0
+                      ? `${minutes(row.minutes)} min · ${row.reports} ${row.reports === 1 ? "report" : "reports"}`
+                      : "No calls"}
+                  </small>
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -1486,7 +1495,13 @@ function MembersPanel({
                   </i>
                   <span className={styles.personName}>
                     <b>
-                      <span className={styles.nameText}>{name}</span>
+                      <Link
+                        href={personHref(member.personId ?? member.inviteId)}
+                        prefetch={false}
+                        className={`${styles.nameText} ${styles.memberLink}`}
+                      >
+                        {name}
+                      </Link>
                       {isYou ? (
                         <span className={styles.you}> (you)</span>
                       ) : null}

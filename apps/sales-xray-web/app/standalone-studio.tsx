@@ -32,6 +32,8 @@ import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
+import { CoachingSkeleton } from "./coaching/coaching-skeleton";
+import { PersonSkeleton } from "./organisation/people/person-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { InsightsSkeleton } from "./organisation/insights/insights-view";
 import { ConnectionNotice } from "./connection-notice";
@@ -321,7 +323,7 @@ function StandaloneStudioView({
     | "insights" => {
     if (path === "/dashboard") return "dashboard";
     if (path === "/organisation/insights") return "insights";
-    if (path === "/organisation" || path === "/organisation/invites")
+    if (path === "/organisation" || path.startsWith("/organisation/"))
       return "organisation";
     if (
       path === "/calls" ||
@@ -339,7 +341,7 @@ function StandaloneStudioView({
     if (path === "/dashboard") return "dashboard";
     if (callIdFromPath(path) !== null) return "call";
     if (path === "/account") return "account";
-    if (path === "/prospects" || path === "/coaching") return "list";
+    if (path === "/prospects") return "list";
     return "studio";
   };
   // New analysis and a saved call: the studio's own outline in its shell.
@@ -762,8 +764,12 @@ function StandaloneStudioView({
               <InvitesSkeleton />
             ) : pathname === "/organisation/insights" ? (
               <InsightsSkeleton />
+            ) : pathname?.startsWith("/organisation/people/") ? (
+              <PersonSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
+            ) : pathname === "/coaching" ? (
+              <CoachingSkeleton />
             ) : studioPath ? (
               <NewAnalysisSkeletonContent />
             ) : callPath ? (

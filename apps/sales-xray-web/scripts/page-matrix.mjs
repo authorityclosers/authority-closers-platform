@@ -48,7 +48,13 @@ export const PROTECTED = [
   "/prospects",
 ];
 
-const PARAMS = { callId: CALL_ID, prospectId: PROSPECT_ID };
+/** A person in the fixture organisation (Neha Kulkarni, a member). */
+export const PERSON_ID = "00000000-0000-4000-8000-000000000003";
+const PARAMS = {
+  callId: CALL_ID,
+  prospectId: PROSPECT_ID,
+  personId: PERSON_ID,
+};
 
 /** Pages drawn in the app shell (navigation rail on wide windows). */
 export const SHELL_PAGE =

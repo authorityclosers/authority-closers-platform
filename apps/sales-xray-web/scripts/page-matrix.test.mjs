@@ -4,6 +4,7 @@ import {
   discoverRoutes,
   KNOWN,
   knownFault,
+  PERSON_ID,
   PROTECTED,
   SIDEWAYS_WIDTHS,
   sidewaysProblems,
@@ -19,6 +20,7 @@ describe("page matrix (AUT-1663)", () => {
     for (const route of ["/", "/dashboard", "/organisation", "/analysis/calls"])
       expect(routes).toContain(route);
     expect(routes).toContain(`/analysis/calls/${CALL_ID}`);
+    expect(routes).toContain(`/organisation/people/${PERSON_ID}`);
     expect(routes.every((route) => route.startsWith("/"))).toBe(true);
     expect(routes.some((route) => /[[\]()]/.test(route))).toBe(false);
     expect(new Set(routes).size).toBe(routes.length);
