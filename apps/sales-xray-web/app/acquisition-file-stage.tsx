@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
+import { AnalysisWave } from "./analysis-wave";
 import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
@@ -104,60 +105,21 @@ export function AcquisitionFileStage({
         }}
         onDrop={drop}
       >
-        <span className={styles.cloud} aria-hidden="true">
-          {hasFiles ? (
+        {hasFiles ? (
+          <span className={styles.cloud} aria-hidden="true">
             <Plus size={21} />
-          ) : (
-            <svg
-              className={styles.uploadMark}
-              viewBox="0 0 64 64"
-              fill="none"
-              focusable="false"
-            >
-              <circle
-                className={styles.uploadOrbit}
-                cx="32"
-                cy="32"
-                r="29"
-                stroke="currentColor"
-                strokeOpacity=".25"
-                strokeDasharray="2 7"
-              />
-              <path
-                className={styles.uploadCloud}
-                d="M18 44h27a10 10 0 0 0 2-19.8A16 16 0 0 0 16 28a8 8 0 0 0 2 16Z"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <g
-                className={styles.uploadArrow}
-                stroke="currentColor"
-                strokeWidth="2.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M32 48V28" />
-                <path d="m25 35 7-7 7 7" />
-              </g>
-              <circle
-                cx="11"
-                cy="16"
-                r="1.4"
-                fill="currentColor"
-                fillOpacity=".5"
-              />
-              <circle
-                cx="53"
-                cy="49"
-                r="1.4"
-                fill="currentColor"
-                fillOpacity=".5"
-              />
-            </svg>
-          )}
-        </span>
+          </span>
+        ) : (
+          // The call's wave from the first frame (owner's motif): quiet until
+          // a file is dragged over, then it listens; analysis carries it on.
+          <span className={styles.idleWave} aria-hidden="true">
+            <AnalysisWave
+              envelope={null}
+              played={0}
+              state={dragActive ? "arriving" : "idle"}
+            />
+          </span>
+        )}
         <div className={styles.dropCopy}>
           <strong>
             {dragActive

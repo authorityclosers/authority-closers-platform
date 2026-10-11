@@ -56,6 +56,17 @@
   pointer-events: none;
 }
 
+/* The empty drop area's wave: a strip, not the analysis screen's full height. */
+.idleWave {
+  display: block;
+  width: min(420px, 100%);
+  margin-bottom: 4px;
+}
+
+.idleWave.idleWave > * {
+  --wave-h: 52px;
+}
+
 .uploadMark {
   width: 36px;
   height: 36px;
@@ -251,7 +262,7 @@
   justify-content: flex-start;
   margin: 0;
   padding-left: 54px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .selection {
@@ -283,7 +294,7 @@
 .selectionHeader small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -360,7 +371,7 @@
 .fileCopy small {
   overflow: hidden;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -379,7 +390,7 @@
   background: var(--lx-teal-soft);
   color: var(--lx-strength-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -419,7 +430,7 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--lx-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .pagination button {
@@ -454,13 +465,13 @@
 
   .stage[data-has-files="true"] .browse {
     min-height: 17px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts {
     gap: 2px 8px;
     padding-left: 37px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts svg {
@@ -504,7 +515,7 @@
   .stage[data-has-files="true"] .select {
     min-height: 24px;
     padding: 2px 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .remove {
@@ -534,10 +545,14 @@
     height: 29px;
   }
 
+  .idleWave.idleWave > * {
+    --wave-h: 40px;
+  }
+
   .facts {
     gap: 4px 10px;
     margin-top: 3px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .dropArea {
@@ -553,7 +568,7 @@
 
   .stage[data-has-files="true"] .facts {
     padding-left: 39px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .selection {
@@ -582,7 +597,7 @@
   }
 
   .facts {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .stage[data-has-files="true"] .facts {
@@ -730,14 +745,13 @@
     0 0 0 4px var(--lx-teal-tint),
     var(--lx-shadow-2);
 }
-/* The recording as a document: a vivid tile with a live equaliser. */
+/* The recording as a document: one teal tile with a live equaliser. */
 .stage.stage[data-has-files="true"] .fileIcon {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: var(--lx-gradient-brand);
-  box-shadow: 0 10px 20px -12px var(--lx-teal);
-  color: var(--lx-film-text);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
 }
 .stage.stage[data-has-files="true"] .fileIcon svg {
   width: 26px;

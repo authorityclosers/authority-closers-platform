@@ -67,7 +67,13 @@ export function useMeasuredWave(
   return have ? found.envelope : null;
 }
 
-export type WaveState = "arriving" | "working" | "attention" | "done" | "still";
+export type WaveState =
+  | "idle"
+  | "arriving"
+  | "working"
+  | "attention"
+  | "done"
+  | "still";
 
 /**
  * `arrived` (0-1): how much of the file has reached us (uploading); bars

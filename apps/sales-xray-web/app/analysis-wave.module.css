@@ -50,6 +50,16 @@
   pointer-events: none;
 }
 
+/* Waiting for a file: quiet bars, the light passing slowly now and then. */
+.wave[data-state="idle"] i {
+  opacity: 0.75;
+}
+
+.wave[data-state="idle"] .beam {
+  opacity: 0.85;
+  animation: beam-sweep 6.4s ease-in-out infinite;
+}
+
 .wave[data-state="arriving"] .beam {
   opacity: 1;
   animation: beam-sweep 4.8s linear infinite;

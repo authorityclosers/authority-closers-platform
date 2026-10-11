@@ -169,3 +169,12 @@ it("disables browse, selection, removal and drop during an active action", async
   );
   expect(callbacks.onAddFiles).not.toHaveBeenCalled();
 });
+
+it("shows the call's wave, quiet and hidden from screen readers, until a file is added", async () => {
+  await renderStage();
+  const wave = host.querySelector('[data-state="idle"]');
+  expect(wave).not.toBeNull();
+  expect(wave?.closest('[aria-hidden="true"]')).not.toBeNull();
+  await renderStage({ files: [first], selectedFile: first });
+  expect(host.querySelector('[data-state="idle"]')).toBeNull();
+});
