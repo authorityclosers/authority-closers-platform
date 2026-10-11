@@ -1,14 +1,34 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-11 Oct 19:44 UTC: new independent Coaching guards read all six fictional-rep
-pillars and their progress accessibility snapshot. This rep's fixture contains
-forty calls needing work; it must announce one factual summary and show the
-"Needed work" legend. Fresh browser acceptance is pending for `91a9d200` /
-`1cbe53cb`; previous sixteen-case PASS below remains historical. Ruff, required
-HTTP import, no-server collection (24 skips) and owned diff checks pass.
-No shared real-rep authenticated journey or staging acceptance is claimed.
+Current dev matrix: **15 PASS / 1 FAIL**, 19:45:10–19:49:04 UTC,
+recorded source `2be67628` → `b24a23ec`. Report, independent Document, Word and
+all four outcome formats pass every width/theme pair. Coaching passes three
+pairs with nineteen observations each, including all six fictional-rep pillars
+and their one spoken forty-needed-work progress summary. Inspected desktop/light
+and phone light/dark rep diagnosis, mission, progress and development path:
+readable, correct "their" labels and "Needed work" legend.
 
-Latest strengthened dev matrix: **16/16 PASS**, 19:29:57–19:33:48 UTC,
+Desktop/dark Coaching fails the original single-click selected-state guard
+after This call → See the mission → My coaching: expected `aria-pressed=true`,
+but This call remains selected. Inspected failure screenshot confirms that pane.
+Failure at `test_coaching_pages`, line 827; navigation 3, refresh 0, runtime,
+server, font/overflow errors and outcome API requests all zero. Cause remains
+unconfirmed; exact receipt/screenshot handed to D's INBOX. The next bounded
+desktop/dark repeat is no earlier than 20:00:11 UTC. New fixture-only diagnostic
+records the actual fixed control clicked, coordinates and selected states;
+it preserves the single click and original assertions without a retry.
+
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-rep-coaching-readback/`.
+JUnit 15 passed / 1 failed / zero skips; launcher exit 1, all jobs exited.
+Dev API readiness 200 at 19:47:39 UTC, served release `f06f9d6b` with expected
+host (initial bare loopback Host was refused 400). Source/dirty paths and refresh
+counts remain recorded: this is mutable dev fixture rendering. No shared
+real-rep authenticated route, canonical reload or staging acceptance is claimed.
+Ruff check/format, required HTTP import, no-server collection (24 skips) and
+owned diff checks pass for the added rep coverage and switch diagnostic.
+Actual diagnostic browser execution remains pending for the bounded repeat.
+
+Previous strengthened dev matrix: **16/16 PASS**, 19:29:57–19:33:48 UTC,
 recorded start/end HEAD `f373b4e8f70bfd451075a619a7f5e71908769762`.
 G's `2101a87c` repair clears all eight prior Document-name failures; exact
 short names/order pass in Document and Word section 5 across all four pairs.

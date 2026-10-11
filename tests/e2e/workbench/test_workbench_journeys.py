@@ -202,6 +202,7 @@ class Journey:
     visual_errors: list[str] = field(default_factory=list)
     fixture_outcome_requests: list[str] = field(default_factory=list)
     outcome_persistence: dict[str, object] | None = None
+    coaching_switch: dict[str, object] | None = None
     observations: list[dict[str, object]] = field(default_factory=list)
     main_navigations: int = 0
     live_refreshes: int = 0
@@ -404,6 +405,7 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "visual_errors": journey.visual_errors,
             "fixture_outcome_requests": journey.fixture_outcome_requests,
             "outcome_persistence": journey.outcome_persistence,
+            "coaching_switch": journey.coaching_switch,
             "observations": journey.observations,
         }
         (directory / f"{name}-{width}-{theme}.json").write_text(json.dumps(receipt, indent=2))
@@ -823,8 +825,41 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             journey.snapshot("call")
             journey.follow_mission("call-mission", "call-mission")
             personal = page.get_by_role("button", name="My coaching", exact=True)
-            personal.click()
-            expect(personal).to_have_attribute("aria-pressed", "true", timeout=15_000)
+            # Diagnose a lost switch without changing its single-click journey.
+            page.evaluate(
+                """() => {
+                  window.__wbCoachingClick = null;
+                  document.addEventListener('click', event => {
+                    const button = event.target?.closest?.('button');
+                    const label = button?.textContent?.trim();
+                    window.__wbCoachingClick = {
+                      control: label === 'My coaching' ? 'personal'
+                        : label === 'This call' ? 'call' : 'other',
+                      x: event.clientX, y: event.clientY,
+                      pressed: button?.getAttribute('aria-pressed') === 'true'
+                    };
+                  }, {capture: true, once: true});
+                }"""
+            )
+            try:
+                personal.click()
+                expect(personal).to_have_attribute("aria-pressed", "true", timeout=15_000)
+            finally:
+                journey.coaching_switch = page.evaluate(
+                    """() => {
+                      const buttons = [...document.querySelectorAll('button')];
+                      const pressed = label => buttons.find(
+                        button => button.textContent.trim() === label
+                      )?.getAttribute('aria-pressed') === 'true';
+                      const view = new URL(location.href).searchParams.get('view');
+                      return {
+                        click: window.__wbCoachingClick ?? null,
+                        personal_pressed: pressed('My coaching'),
+                        call_pressed: pressed('This call'),
+                        url_view: ['me', 'team'].includes(view) ? view : null
+                      };
+                    }"""
+                )
         for index, label in enumerate(COACHING_SECTIONS):
             heading = _heading(page, label)
             heading.scroll_into_view_if_needed()
