@@ -30,6 +30,24 @@ const manifest = {
     },
   ],
 };
+
+it("reselecting the same Unicode folder reproduces its manifest independent of browser order", async () => {
+  const files = [
+    recording("Team/स्वामिनी/one"),
+    recording("Team/😀/two"),
+    recording("Team/Rep/three"),
+  ];
+  const first = await inventoryImportFiles(files);
+  const second = await inventoryImportFiles([...files].reverse());
+  expect(first.error).toBeNull();
+  expect(second.data?.manifest).toEqual(first.data?.manifest);
+  expect(await importManifestDigest(second.data!.manifest)).toBe(
+    await importManifestDigest(first.data!.manifest),
+  );
+  expect(
+    selectedImportFiles([recording("Team/Rep/\ud800")]).error,
+  ).toBeTruthy();
+});
 const memberId = "00000000-0000-4000-8000-000000000002";
 const preview = () => ({
   tenant_id: "00000000-0000-4000-8000-000000000001",

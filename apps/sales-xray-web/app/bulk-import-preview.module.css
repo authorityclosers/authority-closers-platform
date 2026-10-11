@@ -12,6 +12,17 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.consent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+}
+.consent input {
+  min-width: 20px;
+  min-height: 20px;
+}
 .progress {
   display: flex;
   align-items: center;

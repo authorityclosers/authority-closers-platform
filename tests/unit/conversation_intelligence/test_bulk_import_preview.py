@@ -98,6 +98,7 @@ def test_duplicate_hash_is_a_hint_without_assigning_or_importing_another_members
         "C:/call",
         "Rep/call\x00",
         "Rep/call\n",
+        "Rep/call\ud800",
     ],
 )
 def test_manifest_rejects_unsafe_or_ambiguous_relative_paths(path):

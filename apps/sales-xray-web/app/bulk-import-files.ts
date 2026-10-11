@@ -48,6 +48,10 @@ const safe = (path: string) =>
   !path.includes("\\") &&
   !/^[a-z]:/i.test(path) &&
   !/[\u0000-\u001f\u007f]/.test(path) &&
+  !Array.from(path).some((character) => {
+    const point = character.codePointAt(0)!;
+    return point >= 0xd800 && point <= 0xdfff;
+  }) &&
   path
     .split("/")
     .every((part) => !["", ".", ".."].includes(part.normalize("NFKC")));
@@ -144,7 +148,17 @@ export async function inventoryImportFiles(
   if (selected.error !== null) return selected;
   const sources: ImportSource[] = [];
   try {
-    for (const [path, file] of selected.data.files) {
+    // Re-selecting the same directory must reproduce the exact confirmed
+    // manifest even if the browser enumerates its entries in a different order.
+    const entries = Array.from(selected.data.files).sort(([left], [right]) => {
+      const a = Array.from(left, (character) => character.codePointAt(0)!);
+      const b = Array.from(right, (character) => character.codePointAt(0)!);
+      for (let index = 0; index < Math.min(a.length, b.length); index++) {
+        if (a[index] !== b[index]) return a[index]! - b[index]!;
+      }
+      return a.length - b.length;
+    });
+    for (const [path, file] of entries) {
       if (options.signal?.aborted)
         return failure("Folder selection was cancelled.");
       const digest = await boundedHash(file, options.signal);

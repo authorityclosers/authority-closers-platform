@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.bulk_import_ownership import ImportOwnership
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import ConversationInference
@@ -98,7 +99,7 @@ from ac_platform.http.auth import (
     _single_raw_cookie,
     require_safe_origin,
 )
-from ac_platform.http.conversation_imports import install_import_http
+from ac_platform.http.conversation_imports import bind_import_request, install_import_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
@@ -286,7 +287,7 @@ def install_submission_http(
                 "Sign in to the public Academy to use this upload workspace.",
             ) from None
 
-    async def current_owner(request: Request) -> AsyncIterator[_Owner]:
+    async def account_or_guest_owner(request: Request) -> AsyncIterator[_Owner]:
         host = guard(request, Response(), write=request.method not in {"GET", "HEAD"})
         if host == "learner":
             try:
@@ -320,6 +321,12 @@ def install_submission_http(
             raise fail(error.status, str(error)) from None
         except DomainError:
             raise fail(401, "Your account session is unavailable. Sign in again.") from None
+
+    async def current_owner(request: Request) -> AsyncIterator[_Owner]:
+        async with asynccontextmanager(account_or_guest_owner)(request) as owner:
+            yield await bind_import_request(
+                owner, request, policy_sha256=upload_policy(runtime.policy)["policy_sha256"]
+            )
 
     dependency = Depends(current_owner, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
@@ -395,7 +402,7 @@ def install_submission_http(
                 "Sign in to the public Academy to use this upload workspace.",
             ) from None
 
-    async def read_only_owner(request: Request) -> AsyncIterator[_Owner]:
+    async def read_account_or_guest_owner(request: Request) -> AsyncIterator[_Owner]:
         host = guard(request, Response(), write=False)
         if host == "learner":
             try:
@@ -440,6 +447,12 @@ def install_submission_http(
             raise fail(error.status, str(error)) from None
         except DomainError:
             raise fail(401, "Your account session is unavailable. Sign in again.") from None
+
+    async def read_only_owner(request: Request) -> AsyncIterator[_Owner]:
+        async with asynccontextmanager(read_account_or_guest_owner)(request) as owner:
+            yield await bind_import_request(
+                owner, request, policy_sha256=upload_policy(runtime.policy)["policy_sha256"]
+            )
 
     read_dependency = Depends(read_only_owner, scope="function")
     streaming_dependency = Depends(read_only_owner, scope="request")
@@ -625,6 +638,15 @@ def install_submission_http(
         async with asynccontextmanager(current_owner)(request) as owner:
             await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
             actor_binding = _actor_binding(owner.actor)
+            if isinstance(owner.ownership, ImportOwnership):
+                reused = await owner.ownership.existing_source(
+                    submission_id,
+                    source_sha256=hashes[0],
+                    source_bytes=int(lengths[0]),
+                    policy_sha256=policies[0],
+                )
+                if reused is not None:
+                    return reused
             allowance = await owner.ownership.sessions.allowance(**owner.arguments)
             available_seconds = allowance["available_seconds"]
             if (
@@ -704,6 +726,15 @@ def install_submission_http(
                         )
                         if _actor_binding(owner.actor) != actor_binding:
                             raise fail(409, "Your account or tenant changed during upload.")
+                        if isinstance(owner.ownership, ImportOwnership):
+                            reused = await owner.ownership.existing_source(
+                                submission_id,
+                                source_sha256=measured.source.source_sha256,
+                                source_bytes=received,
+                                policy_sha256=policies[0],
+                            )
+                            if reused is not None:
+                                return reused
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
                             measured, policy_sha256=policies[0], **owner.arguments
@@ -1271,7 +1302,14 @@ def install_submission_http(
             headers=headers,
         )
 
-    install_import_http(router, current_owner=current_owner, guard=guard, fail=fail)
+    install_import_http(
+        router,
+        current_owner=current_owner,
+        read_only_owner=read_only_owner,
+        guard=guard,
+        fail=fail,
+        policy_sha256=lambda: upload_policy(runtime.policy)["policy_sha256"],
+    )
     application.include_router(router)
 
     from ac_platform.http.conversation_prospects import install_prospect_http

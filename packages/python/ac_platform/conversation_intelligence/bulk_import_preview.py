@@ -48,7 +48,10 @@ class BatchSource(BaseModel):
             or value.startswith("/")
             or "\\" in value
             or (len(value) > 1 and value[0].isascii() and value[0].isalpha() and value[1] == ":")
-            or any(ord(character) < 32 or ord(character) == 127 for character in value)
+            or any(
+                ord(character) < 32 or ord(character) == 127 or 0xD800 <= ord(character) <= 0xDFFF
+                for character in value
+            )
             or any(unicodedata.normalize("NFKC", part) in {"", ".", ".."} for part in parts)
         ):
             raise ValueError("Choose paths relative to the selected folder without traversal.")
