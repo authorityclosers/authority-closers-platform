@@ -6,6 +6,7 @@ import {
   AudioLines,
   BookOpen,
   ChartNoAxesColumnIncreasing,
+  Ellipsis,
   FileText,
   Flag,
   Lightbulb,
@@ -1104,6 +1105,35 @@ export function ReportModes({
 
   if (!activePanels.length) return null;
 
+  // The Report and its Coaching are the two views people use; Document and
+  // Details wait behind "More views" (the current one stays in the row).
+  type ViewChoice = readonly [View, string, string, LucideIcon];
+  const primaryViews: ViewChoice[] = storyPanels.length
+    ? [
+        ["story", "Report", "Report view", FileText],
+        ...(coachingPanels.length
+          ? [["coaching", "Coaching", "Coaching view", Lightbulb] as const]
+          : []),
+        ...(view === "tabs"
+          ? [["tabs", "Details", "Details view", PanelsTopLeft] as const]
+          : view === "document"
+            ? [["document", "Document", "Document view", BookOpen] as const]
+            : []),
+      ]
+    : [
+        ["reading", "Reading view", "Reading view", BookOpen],
+        ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
+        ["document", "Document view", "Document view", FileText],
+      ];
+  const moreViews: ViewChoice[] = storyPanels.length
+    ? (
+        [
+          ["document", "Document · print or Word", "Document view", BookOpen],
+          ["tabs", "All analysis details", "Details view", PanelsTopLeft],
+        ] as const
+      ).filter(([value]) => value !== view)
+    : [];
+
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
@@ -1203,24 +1233,13 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
-        {(storyPanels.length
-          ? ([
-              ["story", "Report", "Report view", FileText],
-              ...(coachingPanels.length
-                ? ([
-                    ["coaching", "Coaching", "Coaching view", Lightbulb],
-                  ] as const)
-                : []),
-              ["tabs", "Details", "Details view", PanelsTopLeft],
-              ["document", "Document", "Document view", BookOpen],
-            ] as const)
-          : ([
-              ["reading", "Reading view", "Reading view", BookOpen],
-              ["tabs", "Tabbed view", "Tabbed view", PanelsTopLeft],
-              ["document", "Document view", "Document view", FileText],
-            ] as const)
-        ).map(([value, text, hint, Icon]) => (
+      <div
+        className={styles.toolbar}
+        role="group"
+        aria-label={`${label} view`}
+        data-labelled={storyPanels.length ? "" : undefined}
+      >
+        {primaryViews.map(([value, text, hint, Icon]) => (
           <button
             key={value}
             type="button"
@@ -1233,6 +1252,41 @@ export function ReportModes({
             <span className={styles.toolbarLabel}>{text}</span>
           </button>
         ))}
+        {moreViews.length ? (
+          <details
+            className={styles.moreViews}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.preventDefault();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }}
+          >
+            <summary aria-label="More views" title="More views">
+              <Ellipsis aria-hidden="true" />
+            </summary>
+            <div className={styles.moreViewsMenu}>
+              {moreViews.map(([value, text, hint, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  title={hint}
+                  aria-label={hint}
+                  aria-pressed={false}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    changeView(value);
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
@@ -1274,6 +1328,8 @@ export function ReportModes({
               id={id}
               textSize={textSize}
               section={selected}
+              callId={boundCallId ?? null}
+              onSelect={onSelectEvidence}
             />
           )}
         </ReportReadingProvider>

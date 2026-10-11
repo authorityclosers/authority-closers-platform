@@ -1449,7 +1449,13 @@ it("opens on the six-pillar Report and keeps every original section under Detail
     [
       ...container.querySelectorAll("[data-report-nav] [role=group] button"),
     ].map((b) => b.textContent),
-  ).toEqual(["Report", "Coaching", "Details", "Document"]);
+  ).toEqual([
+    "Report",
+    "Coaching",
+    // Behind "More views":
+    "Document · print or Word",
+    "All analysis details",
+  ]);
   // No text-size control: browser zoom does that job.
   expect(container.querySelector('[aria-label^="Text size"]')).toBeNull();
   await act(async () =>

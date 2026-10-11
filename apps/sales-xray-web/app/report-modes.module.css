@@ -1264,3 +1264,112 @@
 .workspace[data-view="story"] .toolbar > button {
   min-width: 0;
 }
+
+/* ---------- Two labelled views, the rest behind "More views" ----------
+   The Report and its Coaching say their names; Document and Details sit in
+   a small menu, so the bar reads as one calm control. */
+.toolbar[data-labelled] > button {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+}
+.toolbar[data-labelled] .toolbarLabel,
+.navRow[data-placement="toolbar"] .toolbar[data-labelled] .toolbarLabel {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  font: 600 13px/1 var(--lx-font-ui);
+}
+.navRow[data-placement="toolbar"] .toolbar[data-labelled] > button {
+  display: inline-flex;
+  width: auto;
+  gap: 6px;
+  padding: 0 12px;
+}
+.moreViews {
+  position: relative;
+  flex: none;
+}
+.moreViews > summary {
+  display: grid;
+  width: 32px;
+  min-height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--lx-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.moreViews > summary::-webkit-details-marker {
+  display: none;
+}
+.moreViews > summary:hover,
+.moreViews[open] > summary {
+  background: color-mix(in srgb, var(--lx-ink) 6%, transparent);
+  color: var(--lx-ink);
+}
+.moreViews > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+.moreViews > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.moreViewsMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 228px;
+  padding: 6px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  box-shadow: var(--sx-shadow-float);
+}
+.moreViewsMenu > button {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--lx-ink);
+  font: 500 13px/1.2 var(--lx-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.moreViewsMenu > button:hover,
+.moreViewsMenu > button:focus-visible {
+  outline: none;
+  background: var(--lx-sunken);
+}
+.moreViewsMenu svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--lx-muted);
+}
+@media (max-width: 760px) {
+  .toolbar[data-labelled] > button {
+    width: auto;
+    min-height: 40px;
+    padding: 0 14px;
+  }
+  .moreViews > summary {
+    width: 44px;
+    min-height: 40px;
+  }
+  .moreViewsMenu > button {
+    min-height: 44px;
+  }
+}

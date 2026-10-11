@@ -78,7 +78,7 @@ function MomentRow({
         </Field>
       ) : null}
       {moment.why ? (
-        <Field label={MOMENTS.whyMattered} inferred={moment.why.inferred}>
+        <Field label={MOMENTS.whyMattered}>
           <p className={styles.line}>
             <Text text={moment.why.text} />
           </p>

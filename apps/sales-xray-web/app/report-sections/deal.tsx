@@ -133,7 +133,7 @@ export function DealStands({
             </Field>
           ) : null}
           {deal.quality ? (
-            <Field label={DEAL.quality.heading}>
+            <Field label={DEAL.quality.label}>
               <CommitmentQuality
                 quality={deal.quality}
                 meaning={COMMITMENT_MEANING[deal.quality]}

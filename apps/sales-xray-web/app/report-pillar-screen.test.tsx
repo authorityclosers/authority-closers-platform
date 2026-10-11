@@ -118,7 +118,7 @@ it("keeps moments to five, then shows all on request", async () => {
 it("ends where the deal stands, with links to the prospect and Coaching", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const deal = pillar(host, "facts");
-  expect(deal.textContent).toContain("Commitment Quality");
+  expect(deal.textContent).toContain("Commitment quality");
   expect(deal.textContent).toContain("Clear");
   expect(deal.textContent).toContain("Friday · 4:00 PM");
   expect(deal.textContent).toContain("Still needs to become clear");
