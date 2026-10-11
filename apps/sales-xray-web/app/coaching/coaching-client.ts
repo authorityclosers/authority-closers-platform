@@ -136,6 +136,8 @@ export type Coaching = {
   sandbox?: boolean;
   /** Whose coaching this is, when it is not the viewer's own. */
   person_name?: string | null;
+  /** Fictional AC Sandbox reps this viewer imported; their coaching is on Team. */
+  sandbox_reps?: number;
   limitations: string[];
 };
 
@@ -315,6 +317,11 @@ export function parseCoaching(value: unknown): Coaching {
     calls: parseCallSummaries(item.calls),
     progress: parseProgress(item.progress),
     sandbox: item.sandbox === true,
+    sandbox_reps:
+      Number.isSafeInteger(item.sandbox_reps) &&
+      (item.sandbox_reps as number) > 0
+        ? (item.sandbox_reps as number)
+        : 0,
     person_name:
       typeof item.person_name === "string" && item.person_name.trim()
         ? item.person_name.slice(0, 120)

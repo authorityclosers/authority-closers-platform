@@ -293,6 +293,7 @@
       "learner_context": null
     },
     "sandbox": false,
+    "sandbox_reps": 0,
     "schema": "ac.sales-xray.coaching/1",
     "session_id": "00000000-0000-0000-0000-000000000003",
     "state": "ready",

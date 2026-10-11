@@ -136,8 +136,11 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         async with account_library(request, response) as (library, actor):
             view = await library.read(actor)
             view = await with_media(view)
+            sandbox = await sandbox_for(library, actor)
+            # Your own (real) coaching; a pointer when fictional reps exist.
+            reps = (await sandbox.read_team(actor.person_id)).rep_count if sandbox else 0
             return CoachingView.model_validate(
-                view.model_copy(update={"session_id": actor.session_id})
+                view.model_copy(update={"session_id": actor.session_id, "sandbox_reps": reps})
             )
 
     @router.get(

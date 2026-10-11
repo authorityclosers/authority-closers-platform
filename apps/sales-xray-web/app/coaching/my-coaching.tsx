@@ -174,14 +174,34 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
             </p>
           ) : null}
           <div className={styles.actions}>
+            {coaching.sandbox_reps ? (
+              <Link
+                className={kitStyles.button}
+                data-variant="primary"
+                href="/coaching?view=team"
+              >
+                See {coaching.sandbox_reps} fictional reps’ coaching{" "}
+                <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            ) : null}
             <Link
               className={kitStyles.button}
-              data-variant={coaching.analysed_calls ? undefined : "primary"}
+              data-variant={
+                coaching.analysed_calls || coaching.sandbox_reps
+                  ? undefined
+                  : "primary"
+              }
               href="/analysis/new"
             >
               Analyse a call <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
+          {coaching.sandbox_reps ? (
+            <p className={styles.note}>
+              This is AC Sandbox: Team shows the coaching of the fictional reps
+              you imported. Your own coaching follows your own calls.
+            </p>
+          ) : null}
         </section>
         <CallsPanel calls={coaching.calls} />
       </div>

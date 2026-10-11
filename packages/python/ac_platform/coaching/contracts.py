@@ -351,4 +351,7 @@ class CoachingView(Model):
     sandbox: bool = False
     # Whose coaching this is when it is not the viewer's own (a fictional rep).
     person_name: str | None = Field(default=None, max_length=120)
+    # How many fictional AC Sandbox reps this viewer imported; their coaching
+    # is on Team. A count only; this view stays the viewer's own.
+    sandbox_reps: int = Field(default=0, ge=0)
     limitations: tuple[str, ...]

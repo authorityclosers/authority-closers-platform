@@ -101,6 +101,8 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                                 imported_at=setup.clock[0],
                             )
                         )
+                mine = (await client.get("/v1/me/coaching")).json()
+                assert mine["sandbox_reps"] == 2 and mine["sandbox"] is False
                 team = await client.get("/v1/me/coaching/team")
                 assert team.status_code == 200, team.text
                 assert team.headers["cache-control"] == "private, no-store"
@@ -131,6 +133,7 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                     assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
                     assert (await client.get(f"/v1/me/coaching/calls/{newest}")).status_code == 404
                 client.cookies.set(setup.settings.session_cookie_name, admin_token)
+                assert (await client.get("/v1/me/coaching")).json()["sandbox_reps"] == 0
                 anonymous = (await client.get("/v1/me/coaching/team")).json()
                 assert anonymous["scope"] == "anonymous" and "Nikhil" not in json.dumps(anonymous)
                 # A role change takes effect at once.

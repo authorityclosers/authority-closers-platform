@@ -97,6 +97,76 @@ describe("Coaching story", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(host.textContent).toContain("This call link is invalid.");
   });
+  it("points an AC Sandbox importer with no own calls to the fictional team", () => {
+    const empty = {
+      ...fictionalCoaching,
+      state: "not_enough_evidence" as const,
+      analysed_calls: 0,
+      focus: null,
+      mission: null,
+      practice: null,
+      lesson: null,
+      evidence: [],
+      calls: [],
+      sandbox_reps: 60,
+    };
+    const html = renderToStaticMarkup(<CoachingStory coaching={empty} />);
+    expect(html).toContain("See 60 fictional reps’ coaching");
+    expect(html).toContain('href="/coaching?view=team"');
+    expect(html).toContain("Your own coaching follows your own calls");
+    const plain = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} />,
+    );
+    expect(plain).not.toContain("fictional reps");
+  });
+  it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{ ...fictionalCallCoaching, sandbox: true }}
+      />,
+    );
+    expect(html).toContain("Fictional AC Sandbox");
+    expect(html).toContain("Back to team coaching");
+    expect(html).not.toContain("/analysis/calls/");
+  });
+  it("opens a fictional rep's coaching under their name, read-only", async () => {
+    const person = "00000000-0000-4000-8000-0000000000aa";
+    mocks.access = {
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "00000000-0000-4000-8000-000000000003",
+      },
+      workspaces: [],
+      retry: () => {},
+    } as unknown as WorkspaceAccessValue;
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <CoachingPage
+          sharedPersonId={person}
+          initialResult={{
+            data: {
+              ...fictionalCoaching,
+              person_id: person,
+              session_id: null,
+              sandbox: true,
+              person_name: "Rohan Kendrekar",
+            },
+            error: null,
+          }}
+        />,
+      ),
+    );
+    expect(host.querySelector("h1")?.textContent).toBe("Rohan Kendrekar");
+    expect(host.textContent).toContain("Fictional AC Sandbox rep");
+    expect(host.textContent).toContain("Back to team");
+    expect(host.textContent).not.toContain("Saving your agreement");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("renders a single call's four pillars with no invented pattern or mastery gate", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory coaching={fictionalCallCoaching} />,
