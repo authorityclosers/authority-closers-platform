@@ -1,6 +1,7 @@
 """Anonymous report suggestions only; no rep's private Coaching is disclosed."""
 
 from collections import Counter
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -43,6 +44,8 @@ class TeamCoachingView(Model):
     pending_calls: int = Field(ge=0)
     unavailable_calls: int = Field(ge=0)
     history_limited: bool
+    # When the newest counted report's call happened; a date, never whose call.
+    latest_call_at: datetime | None = None
     suggestions: tuple[TeamSuggestion, ...]
     limitations: tuple[str, ...]
 
@@ -81,6 +84,7 @@ def summarize_team(
         pending_calls=pending_calls,
         unavailable_calls=unavailable_calls,
         history_limited=history_limited,
+        latest_call_at=max((call.created_at for call in unique.values()), default=None),
         suggestions=tuple(
             TeamSuggestion(skill_id=skill, label=LABELS[skill], suggestion_calls=count)
             for skill, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
