@@ -49,7 +49,9 @@ import {
   INSIGHTS_PATH,
   OUTCOMES,
   RANGES,
+  VIEWS,
   activeFilterCount,
+  addressQuery,
   count,
   dateLabel,
   duration,
@@ -66,6 +68,7 @@ import {
   type Group,
   type Insights,
   type RangeKey,
+  type View,
 } from "./insights-data";
 import styles from "./insights.module.css";
 
@@ -113,12 +116,15 @@ const RANGE_TEXT: Record<RangeKey, string> = {
 
 export function InsightsView({
   filters: initialFilters,
+  view = "overview",
   initial,
   initialCalls,
   callHref = callPath,
   fixture = false,
 }: {
   filters: Filters;
+  /** Overview, People or Calls; kept in the address (?view=). */
+  view?: View;
   initial?: InsightsSeed;
   initialCalls?: InsightsSeed;
   /** Where a call opens; null for synthetic calls (they have no report page). */
@@ -130,6 +136,7 @@ export function InsightsView({
   // Filters are the page's own state, written to the address as they change
   // (no server round trip); a reload starts from the address again.
   const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [section, setSection] = useState<View>(view);
   const query = queryOf(filters);
   const [read, setRead] = useState<Read>(
     () => seedOf(initial) ?? { status: "loading" },
@@ -184,10 +191,10 @@ export function InsightsView({
   // The address always says what is shown (after a workspace switch too).
   useEffect(() => {
     if (fixture) return;
-    const target = `${pathname}${queryOf(filters)}`;
+    const target = `${pathname}${addressQuery(filters, section)}`;
     if (`${window.location.pathname}${window.location.search}` !== target)
       window.history.replaceState(null, "", target);
-  }, [filters, fixture, pathname]);
+  }, [filters, fixture, pathname, section]);
 
   useEffect(() => {
     if (fixture || shown.current === query) return;
@@ -238,9 +245,14 @@ export function InsightsView({
     (next: Partial<Filters>) => {
       const merged = { ...filters, ...next };
       setFilters(merged);
-      window.history.replaceState(null, "", `${pathname}${queryOf(merged)}`);
+      if (!fixture)
+        window.history.replaceState(
+          null,
+          "",
+          `${pathname}${addressQuery(merged, section)}`,
+        );
     },
-    [filters, pathname],
+    [filters, fixture, pathname, section],
   );
 
   async function more() {
@@ -315,6 +327,19 @@ export function InsightsView({
     <div className={styles.page} data-updating={updating ? "" : undefined}>
       <PageHeader
         title="Insights"
+        actions={
+          empty ? null : (
+            <Segmented<View>
+              label="View"
+              items={VIEWS.map((item) => ({
+                key: item.key,
+                label: item.label,
+              }))}
+              value={section}
+              onChange={setSection}
+            />
+          )
+        }
         context={[
           RANGE_TEXT[filters.range],
           `${count(data.totals.calls)} calls · ${count(data.totals.people)} people`,
@@ -367,6 +392,7 @@ export function InsightsView({
         </Panel>
       ) : (
         <Sections
+          section={section}
           data={data}
           filters={filters}
           go={go}
@@ -507,6 +533,7 @@ function shareDelta(now: number | null, before: number | null): ReactNode {
 }
 
 function Sections({
+  section,
   data,
   filters,
   go,
@@ -515,6 +542,7 @@ function Sections({
   more,
   moreLoading,
 }: {
+  section: View;
   data: Insights;
   filters: Filters;
   go: (next: Partial<Filters>) => void;
@@ -524,7 +552,7 @@ function Sections({
   moreLoading: boolean;
 }) {
   const { totals, previous } = data;
-  const [view, setView] = useState<"people" | "teams">("people");
+  const [grouping, setGrouping] = useState<"people" | "teams">("people");
   const outcomeRows = data.outcomes
     .filter((row) => row.calls > 0)
     .sort((a, b) => b.calls - a.calls)
@@ -547,7 +575,10 @@ function Sections({
         })),
     [data.skills],
   );
-  const heatGroups = (view === "teams" ? data.teams : data.people).slice(0, 12);
+  const heatGroups = (grouping === "teams" ? data.teams : data.people).slice(
+    0,
+    12,
+  );
   const movers = data.people
     .filter(
       (person) => person.needsAttentionChange !== null && person.calls >= 3,
@@ -611,225 +642,247 @@ function Sections({
         />
       </Tiles>
 
-      <Panel
-        title="Calls over time"
-        sub={`By ${data.window.unit}`}
-        className={styles.wide}
-      >
-        <div className={styles.inset}>
-          <TrendColumns points={data.trend} unit={data.window.unit} />
-        </div>
-      </Panel>
+      {section === "overview" ? (
+        <>
+          <Panel
+            title="Calls over time"
+            sub={`By ${data.window.unit}`}
+            className={styles.wide}
+          >
+            <div className={styles.inset}>
+              <TrendColumns points={data.trend} unit={data.window.unit} />
+            </div>
+          </Panel>
 
-      <div className={styles.grid}>
-        <Panel title="How calls ended" sub="As each report read it">
-          <div className={styles.inset}>
-            <Funnel
-              calls={totals.calls}
-              nextStep={totals.nextStep}
-              won={totals.won}
-            />
-            <BarList
-              rows={outcomeRows}
-              label="Calls by outcome"
+          <div className={styles.grid}>
+            <Panel title="How calls ended" sub="As each report read it">
+              <div className={styles.inset}>
+                <Funnel
+                  calls={totals.calls}
+                  nextStep={totals.nextStep}
+                  won={totals.won}
+                />
+                <BarList
+                  rows={outcomeRows}
+                  label="Calls by outcome"
+                  onSelect={(key) =>
+                    go({
+                      outcome: (filters.outcome === key
+                        ? null
+                        : key) as Filters["outcome"],
+                    })
+                  }
+                />
+              </div>
+            </Panel>
+            <Panel
+              title="Skills across the calls"
+              sub="Eight skills, every call"
+            >
+              <div className={styles.inset}>
+                <SkillSplit skills={data.skills} />
+              </div>
+            </Panel>
+          </div>
+
+          <div className={styles.grid}>
+            <Panel title="Objections" sub="What prospects pushed back on">
+              <div className={styles.inset}>
+                {data.objections.length ? (
+                  <BarList
+                    label="Objections"
+                    rows={data.objections.map((row) => ({
+                      key: row.kind,
+                      label: row.label,
+                      value: row.calls,
+                      note: `${percent(row.calls ? row.won / row.calls : null)} won`,
+                    }))}
+                  />
+                ) : (
+                  <p className={styles.muted}>
+                    No objections recorded in these calls.
+                  </p>
+                )}
+              </div>
+            </Panel>
+            <Panel
+              title={
+                data.mistakes.length
+                  ? "Common mistakes"
+                  : "Skills most often needing work"
+              }
+              sub={
+                data.mistakes.length
+                  ? "The main mistake in each call"
+                  : "Calls where the skill needed attention"
+              }
+            >
+              <div className={styles.inset}>
+                {data.mistakes.length ? (
+                  <BarList
+                    label="Common mistakes"
+                    rows={data.mistakes.map((row) => ({
+                      key: row.kind,
+                      label: row.label,
+                      value: row.calls,
+                    }))}
+                  />
+                ) : attention.length ? (
+                  <BarList label="Skills needing attention" rows={attention} />
+                ) : (
+                  <p className={styles.muted}>
+                    No skill needed attention in these calls.
+                  </p>
+                )}
+              </div>
+            </Panel>
+          </div>
+        </>
+      ) : null}
+
+      {section === "people" ? (
+        <>
+          <Panel
+            title="Skills by person"
+            sub="Share of skill moments observed"
+            className={styles.wide}
+          >
+            <div className={styles.heatBar}>
+              {data.teams.length ? (
+                <Segmented
+                  label="Group by"
+                  items={[
+                    { key: "people", label: "People" },
+                    { key: "teams", label: "Teams" },
+                  ]}
+                  value={grouping}
+                  onChange={setGrouping}
+                />
+              ) : null}
+              <span className={styles.caption}>
+                Amber marks a skill that needed attention; the deeper, the more
+                often.
+              </span>
+            </div>
+            <SkillHeatmap
+              groups={heatGroups}
+              label={grouping === "teams" ? "Team" : "Person"}
               onSelect={(key) =>
-                go({
-                  outcome: (filters.outcome === key
-                    ? null
-                    : key) as Filters["outcome"],
-                })
+                go(grouping === "teams" ? { team: key } : { person: key })
               }
             />
-          </div>
-        </Panel>
-        <Panel title="Skills across the calls" sub="Eight skills, every call">
-          <div className={styles.inset}>
-            <SkillSplit skills={data.skills} />
-          </div>
-        </Panel>
-      </div>
+          </Panel>
 
-      <Panel
-        title="Skills by person"
-        sub="Share of skill moments observed"
-        className={styles.wide}
-      >
-        <div className={styles.heatBar}>
-          {data.teams.length ? (
-            <Segmented
-              label="Group by"
-              items={[
-                { key: "people", label: "People" },
-                { key: "teams", label: "Teams" },
-              ]}
-              value={view}
-              onChange={setView}
+          <Panel
+            title={data.teams.length ? "People and teams" : "People"}
+            sub={`${count(data.people.length)} with calls`}
+            className={styles.wide}
+          >
+            <PeopleTable
+              groups={data.people}
+              teams={data.teams}
+              onPerson={(key) => go({ person: key })}
+              onTeam={(key) => go({ team: key })}
+              profiles={!data.synthetic}
             />
-          ) : null}
-          <span className={styles.caption}>
-            Amber marks a skill that needed attention; the deeper, the more
-            often.
-          </span>
-        </div>
-        <SkillHeatmap
-          groups={heatGroups}
-          label={view === "teams" ? "Team" : "Person"}
-          onSelect={(key) =>
-            go(view === "teams" ? { team: key } : { person: key })
-          }
-        />
-      </Panel>
+          </Panel>
 
-      <Panel
-        title={data.teams.length ? "People and teams" : "People"}
-        sub={`${count(data.people.length)} with calls`}
-        className={styles.wide}
-      >
-        <PeopleTable
-          groups={data.people}
-          teams={data.teams}
-          onPerson={(key) => go({ person: key })}
-          onTeam={(key) => go({ team: key })}
-          profiles={!data.synthetic}
-        />
-      </Panel>
-
-      <div className={styles.grid}>
-        <Panel title="Objections" sub="What prospects pushed back on">
-          <div className={styles.inset}>
-            {data.objections.length ? (
-              <BarList
-                label="Objections"
-                rows={data.objections.map((row) => ({
-                  key: row.kind,
-                  label: row.label,
-                  value: row.calls,
-                  note: `${percent(row.calls ? row.won / row.calls : null)} won`,
-                }))}
-              />
-            ) : (
-              <p className={styles.muted}>
-                No objections recorded in these calls.
-              </p>
-            )}
-          </div>
-        </Panel>
-        <Panel
-          title={
-            data.mistakes.length
-              ? "Common mistakes"
-              : "Skills most often needing work"
-          }
-          sub={
-            data.mistakes.length
-              ? "The main mistake in each call"
-              : "Calls where the skill needed attention"
-          }
-        >
-          <div className={styles.inset}>
-            {data.mistakes.length ? (
-              <BarList
-                label="Common mistakes"
-                rows={data.mistakes.map((row) => ({
-                  key: row.kind,
-                  label: row.label,
-                  value: row.calls,
-                }))}
-              />
-            ) : attention.length ? (
-              <BarList label="Skills needing attention" rows={attention} />
-            ) : (
-              <p className={styles.muted}>
-                No skill needed attention in these calls.
-              </p>
-            )}
-          </div>
-        </Panel>
-      </div>
-
-      <div className={styles.grid}>
-        <Panel
-          title="Talk share"
-          sub={
-            totals.talkShare === null
-              ? "Seller’s share of talk"
-              : `Seller talked ${totals.talkShare}% on average`
-          }
-        >
-          <div className={styles.inset}>
-            {totals.talkCalls ? (
-              <>
-                <TalkBands bands={data.talk} />
+          <div className={styles.grid}>
+            <Panel
+              title="Talk share"
+              sub={
+                totals.talkShare === null
+                  ? "Seller’s share of talk"
+                  : `Seller talked ${totals.talkShare}% on average`
+              }
+            >
+              <div className={styles.inset}>
+                {totals.talkCalls ? (
+                  <>
+                    <TalkBands bands={data.talk} />
+                    <p className={styles.caption}>
+                      From {count(totals.talkCalls)} calls with a measured talk
+                      share. Most good calls sit between 40% and 60%.
+                    </p>
+                  </>
+                ) : (
+                  <p className={styles.muted}>
+                    Talk share appears once reps confirm who the seller is on
+                    their calls.
+                  </p>
+                )}
+              </div>
+            </Panel>
+            <Panel
+              title="Coaching progress"
+              sub="Skill moments needing attention"
+            >
+              <div className={styles.inset}>
+                <ShareLine
+                  points={data.trend.map((point) => ({
+                    at: point.at,
+                    share: point.needsAttentionShare,
+                  }))}
+                  unit={data.window.unit}
+                  label="needing attention"
+                />
+                <div className={styles.movers}>
+                  <MoverList
+                    title="Improving"
+                    people={improving}
+                    onSelect={(key) => go({ person: key })}
+                  />
+                  <MoverList
+                    title="Slipping"
+                    people={slipping}
+                    onSelect={(key) => go({ person: key })}
+                  />
+                </div>
                 <p className={styles.caption}>
-                  From {count(totals.talkCalls)} calls with a measured talk
-                  share. Most good calls sit between 40% and 60%.
+                  Second half of the period against the first, for people with
+                  three or more calls.
                 </p>
-              </>
+              </div>
+            </Panel>
+          </div>
+        </>
+      ) : null}
+
+      {section === "calls" ? (
+        <>
+          <div className={styles.grid}>
+            <Panel
+              title="Strongest calls"
+              sub="Fewest skills needing attention"
+            >
+              <CallList rows={data.strongest} linkFor={linkFor} />
+            </Panel>
+            <Panel title="Calls to review" sub="Most skills needing attention">
+              <CallList rows={data.weakest} linkFor={linkFor} />
+            </Panel>
+          </div>
+
+          <Panel
+            title="All calls"
+            sub={calls ? `${count(calls.total)} in this view` : undefined}
+            className={styles.wide}
+          >
+            {calls ? (
+              <CallsTable
+                page={calls}
+                linkFor={linkFor}
+                more={more}
+                moreLoading={moreLoading}
+              />
             ) : (
-              <p className={styles.muted}>
-                Talk share appears once reps confirm who the seller is on their
-                calls.
+              <p className={styles.mutedInset}>
+                The call list couldn’t load. Change a filter or reload to try
+                again.
               </p>
             )}
-          </div>
-        </Panel>
-        <Panel title="Coaching progress" sub="Skill moments needing attention">
-          <div className={styles.inset}>
-            <ShareLine
-              points={data.trend.map((point) => ({
-                at: point.at,
-                share: point.needsAttentionShare,
-              }))}
-              unit={data.window.unit}
-              label="needing attention"
-            />
-            <div className={styles.movers}>
-              <MoverList
-                title="Improving"
-                people={improving}
-                onSelect={(key) => go({ person: key })}
-              />
-              <MoverList
-                title="Slipping"
-                people={slipping}
-                onSelect={(key) => go({ person: key })}
-              />
-            </div>
-            <p className={styles.caption}>
-              Second half of the period against the first, for people with three
-              or more calls.
-            </p>
-          </div>
-        </Panel>
-      </div>
-
-      <div className={styles.grid}>
-        <Panel title="Strongest calls" sub="Fewest skills needing attention">
-          <CallList rows={data.strongest} linkFor={linkFor} />
-        </Panel>
-        <Panel title="Calls to review" sub="Most skills needing attention">
-          <CallList rows={data.weakest} linkFor={linkFor} />
-        </Panel>
-      </div>
-
-      <Panel
-        title="All calls"
-        sub={calls ? `${count(calls.total)} in this view` : undefined}
-        className={styles.wide}
-      >
-        {calls ? (
-          <CallsTable
-            page={calls}
-            linkFor={linkFor}
-            more={more}
-            moreLoading={moreLoading}
-          />
-        ) : (
-          <p className={styles.mutedInset}>
-            The call list couldn’t load. Change a filter or reload to try again.
-          </p>
-        )}
-      </Panel>
+          </Panel>
+        </>
+      ) : null}
     </>
   );
 }

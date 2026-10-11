@@ -48,6 +48,16 @@ async function render(node: React.ReactNode) {
   });
 }
 
+async function choose(view: string) {
+  const button = Array.from(
+    host.querySelectorAll<HTMLButtonElement>('[aria-label="View"] button'),
+  ).find((item) => item.textContent === view);
+  expect(button).toBeDefined();
+  await act(async () => {
+    button!.click();
+  });
+}
+
 it("renders a seeded sandbox page whole, labelled synthetic, without reading", async () => {
   await render(
     <InsightsView
@@ -60,12 +70,21 @@ it("renders a seeded sandbox page whole, labelled synthetic, without reading", a
   expect(text).toContain("Synthetic sandbox data");
   expect(text).toContain("Calls analysed");
   expect(text).toContain("Agreed a next step");
-  expect(text).toContain("Skills by person");
+  expect(text).toContain("Calls over time");
   expect(text).toContain("Common mistakes");
   expect(text).toContain("not an official score");
+  // People and Calls are their own views, chosen at the top.
+  expect(text).not.toContain("Skills by person");
+  await choose("People");
+  expect(host.textContent).toContain("Skills by person");
+  expect(host.querySelector('a[href^="/organisation/people/"]')).toBeNull();
+  expect(`${window.location.pathname}${window.location.search}`).toBe(
+    "/organisation/insights?view=people",
+  );
+  await choose("Calls");
+  expect(host.textContent).toContain("All calls");
   // Synthetic calls have no report page: nothing links to one.
   expect(host.querySelector('a[href^="/analysis/calls/"]')).toBeNull();
-  expect(host.querySelector('a[href^="/organisation/people/"]')).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
   expect(host.querySelector('select[aria-label="Team"]')).not.toBeNull();
 });
@@ -121,10 +140,13 @@ it("reads in the browser when the server could not, and links real calls", async
   );
   expect(host.textContent).not.toContain("Synthetic sandbox data");
   expect(host.textContent).toContain("Skills most often needing work");
-  expect(host.querySelector('a[href^="/analysis/calls/"]')).not.toBeNull();
   expect(host.querySelector('select[aria-label="Team"]')).toBeNull();
   // Real members open their profile from the people table.
+  await choose("People");
   expect(host.querySelector('a[href^="/organisation/people/"]')).not.toBeNull();
+  // Real calls open their report.
+  await choose("Calls");
+  expect(host.querySelector('a[href^="/analysis/calls/"]')).not.toBeNull();
 });
 
 it("tells a member the view is for owners and admins", async () => {

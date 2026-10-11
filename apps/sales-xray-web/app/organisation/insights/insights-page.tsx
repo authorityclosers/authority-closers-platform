@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { AcquisitionShell } from "../../acquisition-shell";
 import { useWorkspaceAccess } from "../../workspace-access";
-import { filtersFrom, type Filters } from "./insights-data";
+import { filtersFrom, type Filters, type View } from "./insights-data";
 import {
   InsightsSkeleton,
   InsightsView,
@@ -18,10 +18,12 @@ function searchParamsOf(search: string): Record<string, string> {
 /** The shell around Insights; a workspace switch reads the new organisation. */
 export function InsightsPage({
   filters,
+  view,
   initial,
   initialCalls,
 }: {
   filters: Filters;
+  view: View;
   initial: InsightsSeed;
   initialCalls: InsightsSeed;
 }) {
@@ -57,6 +59,7 @@ export function InsightsPage({
         <InsightsView
           key={tenantId}
           filters={current}
+          view={view}
           initial={seeded ? initial : null}
           initialCalls={seeded ? initialCalls : null}
         />
