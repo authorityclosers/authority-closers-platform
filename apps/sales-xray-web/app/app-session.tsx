@@ -9,7 +9,6 @@ import { UUID_RE } from "./prospects-client";
 import { PurchaseShell } from "./plans/purchase-shell";
 import styles from "./plans/plans.module.css";
 import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
-import type { InitialSession } from "./server-reads";
 import { parseWorkspaceChoices, StandaloneStudio } from "./standalone-studio";
 import {
   WorkspaceAccessProvider,
@@ -136,36 +135,13 @@ function PurchaseSession({ children }: { children: ReactNode }) {
  * plans confirms the same identity inside its focused purchase shell;
  * other pages (login, auth, review fixtures) receive their children directly.
  */
-export function AppSession({
-  children,
-  initialSession = null,
-}: {
-  children: ReactNode;
-  /** The session read on the server (dev), for pages that render their data there. */
-  initialSession?: InitialSession | null;
-}) {
+export function AppSession({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (pathname?.replace(/\/$/, "") === "/plans") {
     return <PurchaseSession>{children}</PurchaseSession>;
   }
   if (isShellRoute(pathname)) {
-    return (
-      <StandaloneStudio
-        initialSession={
-          SERVER_RENDERED.has(pathname?.replace(/\/$/, "") || "/")
-            ? initialSession
-            : null
-        }
-      >
-        {children}
-      </StandaloneStudio>
-    );
+    return <StandaloneStudio>{children}</StandaloneStudio>;
   }
   return <>{children}</>;
 }
-
-/**
- * Pages that render their data on the server: they start from the server's
- * session instead of the browser's check (other pages keep the check).
- */
-const SERVER_RENDERED = new Set(["/dashboard"]);

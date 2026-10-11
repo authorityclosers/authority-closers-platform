@@ -26,6 +26,7 @@ import {
   earlyFetch,
 } from "./early-reads";
 import { telemetry } from "./telemetry";
+import { useInitialSession } from "./initial-session";
 import type { InitialSession } from "./server-reads";
 import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
@@ -279,20 +280,16 @@ export function StandaloneStudio({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
-  initialSession = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
-  /** The server's read of the session (dev), for server-rendered pages. */
-  initialSession?: InitialSession | null;
 }) {
   return (
     <PendingAnalysisProvider>
       <StandaloneStudioView
         variant={variant}
         openingExistingCall={openingExistingCall}
-        initialSession={variant === "standalone" ? initialSession : null}
       >
         {children}
       </StandaloneStudioView>
@@ -304,12 +301,10 @@ function StandaloneStudioView({
   children = <CallStudio />,
   variant = "standalone",
   openingExistingCall = false,
-  initialSession = null,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
-  initialSession?: InitialSession | null;
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
@@ -352,6 +347,8 @@ function StandaloneStudioView({
   const [failures, setFailures] = useState(0);
   // A server-read session (dev) starts the page ready; the browser's check
   // below still runs and confirms it, so the page never trusts it alone.
+  // The server's session for a server-rendered page (dev), never for embeds.
+  const initialSession = useInitialSession(embedded ? null : pathname);
   const [view, setView] = useState<ViewState>(() => {
     const seeded = seededChoices(initialSession);
     return seeded ? { kind: "ready", choices: seeded } : { kind: "loading" };
