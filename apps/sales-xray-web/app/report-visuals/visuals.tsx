@@ -753,16 +753,33 @@ export function CallTimeline({
                     const { tone } = momentStyle(moment.kind);
                     const text = `${moment.kind} · ${formatClock(moment.at_ms)}: ${moment.title}`;
                     return onSelect && moment.source ? (
-                      <button
+                      <ClipPlayState
                         key={moment.key}
-                        type="button"
-                        className={styles.pin}
-                        data-tone={tone}
-                        style={{ left: at(moment.at_ms) }}
-                        title={text}
-                        aria-label={`Play ${text}`}
-                        onClick={() => onSelect(moment.source!, moment.title)}
-                      />
+                        startMs={moment.source.start_ms}
+                        endMs={moment.source.end_ms}
+                      >
+                        {(playing) => {
+                          const action = playLabel(
+                            playing,
+                            `${moment.kind} · ${formatClock(moment.at_ms)}`,
+                            moment.title,
+                          );
+                          return (
+                            <button
+                              type="button"
+                              className={styles.pin}
+                              data-tone={tone}
+                              style={{ left: at(moment.at_ms) }}
+                              title={action}
+                              aria-label={action}
+                              aria-pressed={playing}
+                              onClick={() =>
+                                onSelect(moment.source!, moment.title)
+                              }
+                            />
+                          );
+                        }}
+                      </ClipPlayState>
                     ) : (
                       <span
                         key={moment.key}

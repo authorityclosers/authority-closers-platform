@@ -705,6 +705,17 @@ button.pin:hover {
   transform: translateX(-50%) scale(1.25);
 }
 
+/* The same shared player as the clip pills: a steady halo marks the moment
+   actually playing; no animation or guessed playback state. */
+button.pin[aria-pressed="true"] {
+  z-index: 3;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--tone) 28%, transparent);
+}
+
+button.pin[aria-pressed="true"]::before {
+  background: var(--tone);
+}
+
 button.pin:focus-visible {
   outline: none;
   box-shadow: var(--sx-focus-ring);
