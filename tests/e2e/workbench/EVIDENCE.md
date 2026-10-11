@@ -14,9 +14,11 @@ Fixture outcome API reads/writes are blocked and counted. Its memory-only reset
 is an honest fixture limit, not an API persistence defect. Per CEO's 18:06 UTC
 handoff, the earlier request for browser storage is withdrawn. A separate strict
 opt-in dev test saves each choice, fully reloads and checks Report/Document/Word,
-then reads the API's saved value and revision. It needs B's existing approved
-private dev session reference and an owned fictional finished-call route; it
-is **NOT EXECUTED** without them. Ordinary live journeys and staging smoke stay
+then reads the API's saved value and revision. Coordinator's 18:19 UTC scope
+confirms there is no approved non-root fictional dev session: do not wait for
+or create one. These optional cases are **NOT RUN on shared dev**. Persistence
+acceptance uses B's disposable PG proof, compiled CI journey and Root reads;
+the new CI execution receipt is pending. Ordinary live journeys and staging smoke stay
 read-only. Fixture formatting now has four independent cases alongside the full
 Report journey's unchanged thirteen checks. The full file collects 24 cases,
 with 12 read-only cases in the staging selection.
@@ -36,6 +38,10 @@ job remains. B's `25ddd60f` adds Lost save/full-reload/Report/Document/Word to t
 compiled disposable acquisition browser test; its required current compiled
 Next/disposable backend has not run here. Pending release CI is not execution
 evidence or a shared-dev persistence verdict.
+Coordinator's 18:23 diagnostic points to the calling shell ending; ac-heavy's
+guardian forwards cancellation/caller death and has no time limit itself. The
+next bounded run uses the recommended background launch through the same heavy
+slot. Earlier host-cleanup requests are superseded; no host change is requested.
 
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
