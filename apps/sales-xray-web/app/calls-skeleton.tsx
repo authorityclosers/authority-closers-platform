@@ -1,6 +1,16 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 import styles from "./calls-library.module.css";
+
+/** The loaded strip's labels, with a placeholder as long as its usual line. */
+const FIGURES = [
+  ["Calls", "8em"],
+  ["Reports ready", "9em"],
+  ["Call time", "8em"],
+  ["Next step agreed", "10em"],
+] as const;
 
 /** The loaded page's own blocks in loading mode, so nothing moves. */
 export function CallsBodySkeleton({
@@ -16,19 +26,36 @@ export function CallsBodySkeleton({
       aria-label="Loading your calls"
     >
       {workspace ? (
-        <div className={`${styles.strip} ${styles.skeletonStrip}`}>
-          {[0, 1, 2, 3].map((tile) => (
-            <div className={styles.kpi} key={tile}>
-              <i data-w="label" />
-              <i data-w="value" />
-              <i data-w="context" />
+        <dl className={styles.strip}>
+          {FIGURES.map(([label, width]) => (
+            <div className={styles.kpi} key={label}>
+              <dt>{label}</dt>
+              <dd>
+                <i className={styles.phValue} />
+              </dd>
+              <dd className={styles.kpiContext}>
+                <i
+                  className={styles.phText}
+                  style={{ "--w": width } as CSSProperties}
+                />
+              </dd>
             </div>
           ))}
-        </div>
+        </dl>
       ) : null}
-      <div className={styles.skeletonToolbar}>
-        <i data-w="search" />
-        <i data-w="chips" />
+      {/* The toolbar's own boxes (search, chips, sort; on phones also
+          Select), so its one or two rows keep their height. */}
+      <div className={styles.toolbar}>
+        <span className={`${styles.search} ${styles.phControl}`} />
+        <span className={styles.filters}>
+          {[0, 1, 2].map((chip) => (
+            <i key={chip} className={styles.phChip} />
+          ))}
+        </span>
+        <span className={`${styles.sort} ${styles.phControl}`} />
+        <span
+          className={`${styles.tool} ${styles.selectToggle} ${styles.phControl}`}
+        />
       </div>
       <div className={styles.table}>
         <div className={styles.head} aria-hidden="true" />

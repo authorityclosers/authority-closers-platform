@@ -1067,10 +1067,6 @@
   gap: 16px;
 }
 
-.skeletonStrip .kpi {
-  gap: 8px;
-}
-
 .skeleton i {
   display: block;
   border-radius: var(--lx-radius-xs);
@@ -1078,37 +1074,33 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeletonStrip i[data-w="label"] {
-  width: 64px;
-  height: 12px;
-}
-
-.skeletonStrip i[data-w="value"] {
+/* The loading outline uses the loaded strip and toolbar themselves, so every
+   tile, control and row keeps its box; only the words wait. */
+.skeleton i.phValue {
   width: 48px;
   height: 28px;
 }
 
-.skeletonStrip i[data-w="context"] {
-  width: 112px;
-  height: 12px;
+/* A word-shaped bar inside a line of text: the line keeps its height. */
+.skeleton i.phText {
+  display: inline-block;
+  width: var(--w, 8em);
+  max-width: 100%;
+  height: 0.8em;
+  vertical-align: -0.05em;
 }
 
-.skeletonToolbar {
-  display: flex;
-  gap: 8px;
+.skeleton .phControl {
+  border-color: transparent;
+  background: var(--lx-sunken);
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeletonToolbar i {
-  height: 32px;
-  border-radius: var(--lx-radius-sm);
-}
-
-.skeletonToolbar i[data-w="search"] {
-  width: 260px;
-}
-
-.skeletonToolbar i[data-w="chips"] {
-  width: 300px;
+.skeleton .phChip {
+  display: inline-block;
+  width: 72px;
+  min-height: var(--lx-control-compact-h, 32px);
+  border-radius: var(--lx-radius-pill);
 }
 
 .skeletonRow {
@@ -1373,8 +1365,11 @@
     display: none;
   }
 
+  /* Two lines kept for every tile, so a tile's height never depends on
+     its words (and the loading outline lands on the same lines). */
   .kpiContext {
     display: -webkit-box;
+    min-height: 2lh;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -1393,15 +1388,6 @@
   .skeletonRow {
     min-height: 64px;
     padding-left: 14px;
-  }
-
-  .skeletonToolbar i[data-w="search"] {
-    flex: 1;
-    width: auto;
-  }
-
-  .skeletonToolbar i[data-w="chips"] {
-    width: 120px;
   }
 
   .bulk {
@@ -1426,6 +1412,10 @@
 }
 
 @media (pointer: coarse) {
+  .skeleton .phChip {
+    min-height: var(--lx-row-min-h, 44px);
+  }
+
   .refresh,
   .tool,
   .primary,
