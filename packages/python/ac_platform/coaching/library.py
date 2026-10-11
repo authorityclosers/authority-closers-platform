@@ -1,23 +1,29 @@
 """Read the signed-in person's retained call history through canonical report access.
 
-Never widen to an organisation administrator's readable teammates. Reading this
+Private views never widen to an administrator's readable teammates. Reading this
 projection does not renew a claim, write progress, charge credits or call AI.
 """
 
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CallHistory, CoachingView
 from ac_platform.coaching.learner import build_learner
 from ac_platform.coaching.report_adapter import from_report
+from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
     _account_library_query,
     _report_columns,
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
-from ac_platform.conversation_intelligence.application import ConversationError
+from ac_platform.conversation_intelligence.application import (
+    ConversationDenied,
+    ConversationError,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
@@ -35,6 +41,92 @@ HISTORY_LIMIT = 40
 class CoachingLibrary:
     def __init__(self, ownership: GuestOwnership) -> None:
         self.ownership, self.database = ownership, ownership.database
+
+    async def read_call(
+        self, actor: ActorContext, submission_id: UUID, cache: CallCoachingCache
+    ) -> CallCoachingView:
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+
+        usage = await self.database.scalar(
+            _account_library_query(actor, now).where(Usage.submission_id == submission_id)
+        )
+        if usage is None:
+            raise ConversationNotFound("This call's coaching is unavailable.")
+        # Always reauthorize the retained report before consulting the derived
+        # cache. Managers/admins have no private-coaching bypass.
+        envelope = await AcquisitionReports(self.ownership).report(
+            submission_id, actor=actor, shared_identity_locks=True
+        )
+        return cache.read(
+            envelope,
+            submission_id=submission_id,
+            created_at=usage.created_at,
+            person_id=actor.person_id,
+            tenant_id=self.ownership.tenant_id,
+        )
+
+    async def read_team(self, actor: ActorContext) -> TeamCoachingView:
+        now = await self.ownership.sessions._admit()
+        await self.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
+        if not await self.ownership.organisation_call_reader(actor):
+            raise ConversationDenied("Team coaching needs current organisation owner/admin access.")
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage as Usage,
+        )
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationVisitorClaim as Claim,
+        )
+
+        has_report, state = _report_columns()
+        rows = (
+            await self.database.execute(
+                _account_library_query(actor, now, every_owner=True)
+                .add_columns(func.coalesce(Usage.person_id, Claim.person_id), has_report, state)
+                .order_by(Usage.created_at.desc(), Usage.submission_id.desc())
+                .limit(HISTORY_LIMIT + 1)
+            )
+        ).all()
+        history: list[tuple[UUID, CallHistory]] = []
+        pending, unavailable = 0, 0
+        reports = AcquisitionReports(self.ownership)
+        for usage, owner, ready, plan_state in rows[:HISTORY_LIMIT]:
+            if not ready:
+                pending += int(plan_state == "active")
+                unavailable += int(plan_state != "active")
+                continue
+            try:
+                # Existing organisation report access derives only anonymous
+                # counts. No private Coaching view or quote is returned.
+                envelope = await reports.report(
+                    usage.submission_id,
+                    actor=actor,
+                    shared_identity_locks=True,
+                    allow_organisation_read=True,
+                )
+                call = from_report(
+                    envelope,
+                    submission_id=usage.submission_id,
+                    created_at=usage.created_at,
+                    comparison_key=f"unlinked:{usage.submission_id}",
+                )
+                if call is None:
+                    unavailable += 1
+                else:
+                    history.append((owner, call))
+            except (ConversationError, ValueError, KeyError):
+                unavailable += 1
+        return summarize_team(
+            tuple(history),
+            person_id=actor.person_id,
+            tenant_id=self.ownership.tenant_id,
+            pending_calls=pending,
+            unavailable_calls=unavailable,
+            history_limited=len(rows) > HISTORY_LIMIT,
+        )
 
     async def read(self, actor: ActorContext) -> CoachingView:
         now = await self.ownership.sessions._admit()
