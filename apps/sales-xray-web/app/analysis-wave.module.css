@@ -1,12 +1,87 @@
 /* The call as a wave: measured bars, teal up to the finished steps, the
    current step's stretch shimmering, the rest quiet. Tokens only. */
 .wave {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
   width: 100%;
-  height: var(--wave-h, 96px);
+  height: var(--wave-h, clamp(96px, 14vh, 140px));
   min-width: 0;
+  isolation: isolate;
+}
+
+/* A faint centre line, like a scope's baseline (the wave motif's). */
+.wave::before {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lx-line-strong) 12%,
+    var(--lx-line-strong) 88%,
+    transparent
+  );
+  content: "";
+}
+
+.beam {
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: calc(var(--played) * 100%);
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--lx-teal) 18%,
+    var(--lx-teal) 82%,
+    transparent
+  );
+  box-shadow:
+    0 0 10px 1px color-mix(in srgb, var(--lx-teal) 55%, transparent),
+    0 0 36px 8px color-mix(in srgb, var(--lx-teal) 16%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wave[data-state="arriving"] .beam {
+  opacity: 1;
+  animation: beam-sweep 4.8s linear infinite;
+}
+
+.wave[data-state="working"] .beam {
+  opacity: 1;
+  animation: beam-step 2.6s ease-in-out infinite alternate;
+}
+
+.wave[data-state="done"] .beam {
+  left: calc(100% - 2px);
+  opacity: 0.6;
+}
+
+@keyframes beam-sweep {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 2px);
+  }
+}
+
+/* Over the current step's stretch only: never ahead of the work. */
+@keyframes beam-step {
+  from {
+    left: calc(var(--played) * 100%);
+  }
+  to {
+    left: calc(min(var(--played) + 0.3333, 1) * 100% - 2px);
+  }
 }
 
 .wave i {
@@ -55,7 +130,7 @@
 
 @media (max-width: 759.98px) {
   .wave {
-    --wave-h: 64px;
+    --wave-h: 72px;
     gap: 1px;
   }
 }
@@ -65,7 +140,8 @@
     transition: none;
   }
 
-  .wave[data-state="working"] i[data-next] {
+  .wave[data-state="working"] i[data-next],
+  .wave .beam {
     animation: none;
   }
 }
