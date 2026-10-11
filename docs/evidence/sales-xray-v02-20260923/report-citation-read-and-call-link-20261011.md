@@ -57,3 +57,20 @@ link remains. Older Reports keep their views/defaults and honest missing fields.
 Authenticated hosted verification remains with H/QA. A still owns the saved-call
 route/studio adoption of the prepared server preload; this change does not claim
 that route integration or a production deployment.
+
+## Shared-dev integration follow-up
+
+After main `d2c2caa` was integrated as `d986c9e`, the focused Report/Company
+integration passes 175 frontend cases and incremental typecheck/lint/format.
+The actual retained account/guest/pillar/Word/Coaching corpus proof passes again
+on `22765f8`, after the main Coaching component changes, with zero providers.
+
+The shared `dev/live` journey exposed 40px clip retry and 32px slide controls at
+390px inside Report. Report's existing scoped control rule now also covers
+nested buttons, with a 44px height/width floor on phone widths. No Coaching-owned
+file, shared token, raw colour or permission changes. The browser proof checks
+visible controls in a touch-enabled phone context, explicit play/retry and
+transcript/slide interaction. Screenshots come from the existing shared server
+at `http://127.0.0.1:3026`; no private preview or local build is started. Final
+receipts, source pin and individual image observations are recorded in strike
+NOTES.md and `shots/2026-10-11/`, after the committed-work refresh.

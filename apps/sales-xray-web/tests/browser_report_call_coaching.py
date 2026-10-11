@@ -18,7 +18,10 @@ def main():
         browser = runtime.chromium.launch(headless=True)
         for width, height in [(390, 844), (1440, 900)]:
             page = browser.new_page(
-                viewport={"width": width, "height": height}, reduced_motion="reduce"
+                viewport={"width": width, "height": height},
+                reduced_motion="reduce",
+                is_mobile=width == 390,
+                has_touch=width == 390,
             )
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -75,9 +78,12 @@ def main():
                 targets = coaching.locator("button, summary, a").evaluate_all(
                     "items => items.filter(el => el.checkVisibility()).map(el => "
                     "({label: el.getAttribute('aria-label') || el.textContent.trim(), "
-                    "height: el.getBoundingClientRect().height}))"
+                    "height: el.getBoundingClientRect().height, "
+                    "width: el.getBoundingClientRect().width}))"
                 )
-                assert targets and all(item["height"] >= 44 for item in targets), targets
+                assert targets and all(
+                    item["height"] >= 44 and item["width"] >= 44 for item in targets
+                ), targets
             lesson.locator("summary").click()
             for theme in ["light", "dark"]:
                 page.locator("html").evaluate(
