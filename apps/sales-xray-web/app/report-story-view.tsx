@@ -32,6 +32,12 @@ import styles from "./report-story-view.module.css";
 
 export type Select = (evidence: ReportEvidence, title: string) => void;
 
+/** Calm prose: words only, no coloured entity chips inside the story. */
+const NO_CHIPS = [] as const;
+function Text({ text }: { text: string }) {
+  return <RichText text={text} kinds={NO_CHIPS} />;
+}
+
 export const STORY_PILLARS = [
   {
     id: "overview",
@@ -151,7 +157,7 @@ function Quote({
     <blockquote className={styles.quote}>
       {person ? <cite>{person.name}</cite> : null}
       <span>
-        “<RichText text={source.quote} />”
+        “<Text text={source.quote} />”
       </span>
     </blockquote>
   );
@@ -221,7 +227,7 @@ function Callout({
         {line.inferred ? <Inferred /> : null}
       </p>
       <p className={styles.calloutText}>
-        <RichText text={line.text} />
+        <Text text={line.text} />
       </p>
       <Play source={line.sources[0]} title={label} onSelect={onSelect} />
     </div>
@@ -244,17 +250,17 @@ function BigPicture({
         <OutcomeBadge outcome={picture.outcome} />
         {picture.summary ? (
           <p className={styles.lead}>
-            <RichText text={picture.summary.text} />
+            <Text text={picture.summary.text} />
           </p>
         ) : null}
         {picture.assessment ? (
           <p className={styles.leadMore}>
-            <RichText text={picture.assessment} />
+            <Text text={picture.assessment} />
           </p>
         ) : null}
         {picture.outcome.detail && !nextStepRepeats ? (
           <p className={styles.outcomeDetail}>
-            <RichText text={picture.outcome.detail.text} />{" "}
+            <Text text={picture.outcome.detail.text} />{" "}
             <Play
               source={picture.outcome.detail.sources[0]}
               title="Call outcome"
@@ -294,7 +300,7 @@ function BigPicture({
           <div>
             <p className={styles.calloutLabel}>Next step</p>
             <p className={styles.calloutText}>
-              <RichText text={picture.nextStep.text} />
+              <Text text={picture.nextStep.text} />
             </p>
           </div>
           <Play
@@ -394,24 +400,35 @@ function CallFlow({
   const turn = flow.change?.turn.sources[0];
   return (
     <>
-      {flow.metrics.length ? (
-        <dl className={styles.metrics}>
-          {flow.metrics.map((metric) => (
-            <div key={metric.label}>
-              <dd>{metric.value}</dd>
-              <dt>
-                {metric.label}
-                {metric.note ? <small>{metric.note}</small> : null}
-              </dt>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {flow.metrics.length ? (
-        <p className={styles.note}>
-          Numbers describe the call. What they mean depends on the moment.
-        </p>
-      ) : null}
+      {/* The report header moves its interactive call map in here. */}
+      <div className={styles.mapSlot} data-report-map-slot />
+      <div className={styles.fallback}>
+        {flow.metrics.length ? (
+          <dl className={styles.metrics}>
+            {flow.metrics.map((metric) => (
+              <div key={metric.label}>
+                <dd>{metric.value}</dd>
+                <dt>
+                  {metric.label}
+                  {metric.note ? <small>{metric.note}</small> : null}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        {flow.metrics.length ? (
+          <p className={styles.note}>
+            Numbers describe the call. What they mean depends on the moment.
+          </p>
+        ) : null}
+        {!flow.phases && data.transcript ? (
+          <SpeakerStrip
+            transcript={data.transcript}
+            people={people}
+            moments={model.topMoments}
+          />
+        ) : null}
+      </div>
       {flow.phases ? (
         <ol className={styles.phases} aria-label="Conversation stages">
           {flow.phases.map((phase, index) => (
@@ -427,12 +444,6 @@ function CallFlow({
             </li>
           ))}
         </ol>
-      ) : data.transcript ? (
-        <SpeakerStrip
-          transcript={data.transcript}
-          people={people}
-          moments={model.topMoments}
-        />
       ) : null}
       {flow.change && turn ? (
         <div className={styles.change}>
@@ -449,26 +460,26 @@ function CallFlow({
             <li>
               <span>Before</span>
               <p>
-                <RichText text={flow.change.before.text} />
+                <Text text={flow.change.before.text} />
               </p>
             </li>
             <li data-switch>
               <span>The switch</span>
               <p>
-                <RichText text={flow.change.turn.text} />
+                <Text text={flow.change.turn.text} />
               </p>
             </li>
             <li>
               <span>After</span>
               <p>
-                <RichText text={flow.change.after.text} />
+                <Text text={flow.change.after.text} />
               </p>
             </li>
           </ol>
           {flow.change.effect ? (
             <p className={styles.effect}>
               <span>Possible effect</span> <Inferred />{" "}
-              <RichText text={flow.change.effect} />
+              <Text text={flow.change.effect} />
             </p>
           ) : null}
         </div>
@@ -492,10 +503,10 @@ function ItemCard({
   return (
     <li className={styles.item} data-tone={tone}>
       <p className={styles.itemTitle}>
-        <RichText text={item.title} />
+        <Text text={item.title} />
       </p>
       <p className={styles.itemText}>
-        <RichText text={item.what.text} />
+        <Text text={item.what.text} />
       </p>
       <Play
         source={item.what.sources[0]}
@@ -505,7 +516,7 @@ function ItemCard({
       {item.why ? (
         <p className={styles.why}>
           <span>{whyLabel}</span>
-          <RichText text={item.why.text} />
+          <Text text={item.why.text} />
         </p>
       ) : null}
     </li>
@@ -601,25 +612,25 @@ function MomentCard({
         <Play source={moment.source} title={moment.title} onSelect={onSelect} />
       </p>
       <p className={styles.itemTitle}>
-        <RichText text={moment.title} />
+        <Text text={moment.title} />
       </p>
       <Quote source={moment.source} person={people.speakerOf(moment.source)} />
       {moment.movedToward ? (
         <p className={styles.why}>
           <span>You moved toward</span>
-          <RichText text={moment.movedToward.text} />
+          <Text text={moment.movedToward.text} />
         </p>
       ) : null}
       {moment.couldExplore ? (
         <p className={styles.why}>
           <span>Could have explored</span>
-          <RichText text={moment.couldExplore} />
+          <Text text={moment.couldExplore} />
         </p>
       ) : null}
       {moment.why ? (
         <p className={styles.why}>
           <span>Why it mattered</span>
-          <RichText text={moment.why.text} />
+          <Text text={moment.why.text} />
         </p>
       ) : null}
     </li>
@@ -708,7 +719,7 @@ function Skills({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
               <div className={styles.skillBody}>
                 <p className={styles.itemText}>
                   {skill.observation ? (
-                    <RichText text={skill.observation} />
+                    <Text text={skill.observation} />
                   ) : (
                     "This report does not establish a state for this skill."
                   )}
@@ -755,7 +766,7 @@ function Skills({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
                 <ul className={styles.bullets}>
                   {deeper.unclear.map((item) => (
                     <li key={item}>
-                      <RichText text={item} />
+                      <Text text={item} />
                     </li>
                   ))}
                 </ul>
@@ -769,7 +780,7 @@ function Skills({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
                 <ul className={styles.bullets}>
                   {deeper.concerns.map((concern, index) => (
                     <li key={index}>
-                      <RichText text={concern.text} />{" "}
+                      <Text text={concern.text} />{" "}
                       <Play
                         source={concern.sources[0]}
                         title="Possible concern"
@@ -787,9 +798,9 @@ function Skills({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
                   {deeper.findings.map((finding, index) => (
                     <li key={index}>
                       <strong>
-                        <RichText text={finding.title} />
+                        <Text text={finding.title} />
                       </strong>{" "}
-                      <RichText text={finding.what.text} />{" "}
+                      <Text text={finding.what.text} />{" "}
                       <Play
                         source={finding.what.sources[0]}
                         title={finding.title}
@@ -839,7 +850,7 @@ function LineText({
 }) {
   return (
     <>
-      <RichText text={line.text} />{" "}
+      <Text text={line.text} />{" "}
       <Play source={line.sources.at(-1)} title={title} onSelect={onSelect} />
     </>
   );
@@ -918,7 +929,7 @@ function DealStands({
             <ul className={styles.bullets}>
               {deal.unclear.map((item) => (
                 <li key={item}>
-                  <RichText text={item} />
+                  <Text text={item} />
                 </li>
               ))}
             </ul>
@@ -926,7 +937,7 @@ function DealStands({
         ) : null}
         {deal.action ? (
           <Fact label="Recommended next move">
-            <RichText text={deal.action} />
+            <Text text={deal.action} />
           </Fact>
         ) : null}
       </dl>
@@ -950,7 +961,7 @@ function DealStands({
       {deal.coachingMission ? (
         <p className={styles.note}>
           Coaching mission for your next call:{" "}
-          <RichText text={deal.coachingMission} />
+          <Text text={deal.coachingMission} />
         </p>
       ) : null}
       {prospectControls ? (

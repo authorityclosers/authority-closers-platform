@@ -186,6 +186,7 @@ export function StoryShellPreview() {
                       label="Explore your sales report"
                       lightSurface={resolvedTheme !== "dark"}
                       boundCallId={FIXTURE_CALL_ID}
+                      onSelectEvidence={selectSource}
                       panels={[
                         {
                           id: "overview",

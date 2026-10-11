@@ -84,9 +84,15 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
       s.getAttribute("data-report-mode-section"),
     ),
   ).toEqual(["overview", "coaching", "moments", "missed", "skills", "facts"]);
-  // The header's glance strip and call map are mounted too.
+  // The Report starts with its conclusion: no glance strip in the header,
+  // and the interactive call map sits inside "How the Call Played Out".
   expect(
     report?.querySelector('[aria-label="This call at a glance"]'),
+  ).toBeNull();
+  expect(
+    report?.querySelector(
+      '[data-report-pillar="coaching"] [data-report-map-slot] figure',
+    ),
   ).not.toBeNull();
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),

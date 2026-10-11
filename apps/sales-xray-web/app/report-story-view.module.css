@@ -883,3 +883,16 @@ details[open] > summary .chevron {
     display: none;
   }
 }
+
+/* The header's interactive call map lands in pillar 2; when it does, the
+   simple measurements and speaker strip step aside (the map shows both). */
+.mapSlot:empty {
+  display: none;
+}
+.mapSlot:not(:empty) + .fallback {
+  display: none;
+}
+.fallback {
+  display: grid;
+  gap: 12px;
+}
