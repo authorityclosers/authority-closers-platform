@@ -22,6 +22,26 @@
 
 export const EARLY_READ_TTL_MS = 10_000;
 
+/**
+ * Conversation reads start early only after this tab has seen the selected
+ * workspace with Sales Xray on (sessionStorage). A first visit, a switch to
+ * another workspace, signing out, or a workspace without Sales Xray: only
+ * the session reads start early, and the page asks for the rest itself.
+ */
+export const EARLY_CONVERSATION_KEY = "sx.early.conversation";
+
+const EARLY_SESSION_ONLY = (url: string) => url.startsWith("/v1/me/");
+
+/** Remember (or forget) that conversation reads may start early here. */
+export function allowEarlyConversationReads(allowed: boolean) {
+  try {
+    if (allowed) window.sessionStorage.setItem(EARLY_CONVERSATION_KEY, "1");
+    else window.sessionStorage.removeItem(EARLY_CONVERSATION_KEY);
+  } catch {
+    // Storage refused: the page simply reads as before.
+  }
+}
+
 const ACQUISITION = "/v1/conversation/acquisition";
 const SESSION = ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces"];
 const STUDIO = [
@@ -81,7 +101,8 @@ export function earlyReadsScript(): string {
   const call = JSON.stringify(CALL_PAGE.source);
   const callReads = JSON.stringify(CALL_READS);
   const acquisition = JSON.stringify(ACQUISITION);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReads}.concat([${acquisition}+"/submissions/"+m[1].toLowerCase()]):t[r];if(!l||!l.length)return;var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
+  const key = JSON.stringify(EARLY_CONVERSATION_KEY);
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReads}.concat([${acquisition}+"/submissions/"+m[1].toLowerCase()]):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
@@ -122,11 +143,18 @@ export function settleEarlyRead(url: string) {
   if (early) delete early[url];
 }
 
-/** Forget every early answer (the workspace selection is changing). */
+/**
+ * Forget every early answer: the workspace selection or the person changed
+ * (a sign-in on the page, a sign-out), so none of them is current any more.
+ */
 export function dropEarlyReads() {
   const early = store();
   if (early) for (const url of Object.keys(early)) delete early[url];
 }
+
+/** Only the session reads (for tests and the script's own rule). */
+export const sessionOnly = (urls: readonly string[]) =>
+  urls.filter(EARLY_SESSION_ONLY);
 
 /**
  * fetch() for a GET, served from the early answer when there is one. The

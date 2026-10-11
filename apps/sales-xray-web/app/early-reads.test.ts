@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  allowEarlyConversationReads,
   dropEarlyReads,
   EARLY_READ_TTL_MS,
   earlyFetch,
@@ -16,8 +17,9 @@ const A = "/v1/conversation/acquisition";
 let network: ReturnType<typeof vi.fn>;
 
 /** Run the layout's inline script for an address, as the browser would. */
-function boot(path: string) {
+function boot(path: string, conversation = true) {
   window.history.replaceState(null, "", path);
+  allowEarlyConversationReads(conversation);
   new Function(earlyReadsScript())();
 }
 
@@ -30,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (window as EarlyWindow).__sxEarly;
+  window.sessionStorage.clear();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -77,6 +80,14 @@ it("starts the reads from the inline script with the browser's own session", asy
     });
   boot("/pricing");
   expect(network).toHaveBeenCalledTimes(6);
+});
+
+it("starts only the session reads until this tab has seen Sales Xray on", () => {
+  boot("/dashboard", false);
+  expect(network.mock.calls.map(([url]) => url)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-workspaces",
+  ]);
 });
 
 it("answers the page's read from the early one, once", async () => {
@@ -137,8 +148,7 @@ it("never serves writes, custom requests, stale or dropped answers", async () =>
 
 it("falls back to the server when the early read itself failed", async () => {
   network.mockRejectedValueOnce(new TypeError("offline"));
-  window.history.replaceState(null, "", "/analysis/calls");
-  new Function(earlyReadsScript())();
+  boot("/analysis/calls");
   // The first early read (/v1/me/workspaces) failed: the app asks again.
   const response = await earlyFetch("/v1/me/workspaces");
   expect(response.status).toBe(200);

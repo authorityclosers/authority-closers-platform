@@ -20,7 +20,11 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
-import { dropEarlyReads, earlyFetch } from "./early-reads";
+import {
+  allowEarlyConversationReads,
+  dropEarlyReads,
+  earlyFetch,
+} from "./early-reads";
 import { telemetry } from "./telemetry";
 import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
 import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
@@ -177,7 +181,13 @@ async function readWorkspaceChoices(
     signal,
     headers: { accept: "application/json" },
   });
-  if (response.status === 401) return null;
+  if (response.status === 401) {
+    // Signed out: nothing read early for this page is current (a sign-in on
+    // the page would otherwise meet the signed-out answers).
+    dropEarlyReads();
+    allowEarlyConversationReads(false);
+    return null;
+  }
   if (!response.ok) throw new Error("workspace_read_rejected");
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
@@ -496,6 +506,18 @@ function StandaloneStudioView({
     openProfileGate(selected.intentId);
     return false;
   };
+  // Conversation reads start early on later loads only where Sales Xray is
+  // on for the selected workspace (fail closed everywhere else).
+  const earlyConversation =
+    view.kind === "ready" &&
+    view.choices.selected_tenant_id !== null &&
+    view.choices.salesXrayWorkspaces?.find(
+      (item) => item.tenant_id === view.choices.selected_tenant_id,
+    )?.sales_xray_enabled === true;
+  useEffect(() => {
+    if (view.kind === "loading") return;
+    allowEarlyConversationReads(earlyConversation);
+  }, [view.kind, earlyConversation]);
   // Telemetry events carry the signed-in session; the server checks it.
   const telemetrySession =
     view.kind === "ready" && view.choices.selected_tenant_id
