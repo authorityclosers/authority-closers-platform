@@ -42,6 +42,11 @@ def main():
             expect(coaching).to_be_visible()
             expect(coaching).to_contain_text("Fictional API focus")
             expect(coaching).to_contain_text("Your next-call mission")
+            call_link = coaching.get_by_role("link", name="Open full coaching for this call")
+            expect(call_link).to_be_visible()
+            expect(call_link).to_have_attribute(
+                "href", "/coaching?call=7b6443d3-9b2d-4f97-9e70-5e82e54f8738"
+            )
             expect(coaching.get_by_role("link", name="My coaching across calls")).to_be_visible()
             coaching.locator("button").first.click()
             expect(page.get_by_role("status")).to_contain_text("ms ·")
@@ -67,7 +72,7 @@ def main():
             expect(lesson.locator("ol li").first).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             if width == 390:
-                assert coaching.locator("button, summary").evaluate_all(
+                assert coaching.locator("button, summary, a").evaluate_all(
                     "items => items.every(el => el.getBoundingClientRect().height >= 44)"
                 )
             lesson.locator("summary").click()
@@ -84,6 +89,7 @@ def main():
                     "bootstrap": True,
                     "source": True,
                     "lesson": True,
+                    "full_call_coaching_link": True,
                     "media_click_retry": True,
                 }
             )
