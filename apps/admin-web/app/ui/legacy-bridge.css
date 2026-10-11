@@ -1,0 +1,39 @@
+/*
+ * Bridge for screens not yet rebuilt on the kit: the shared operations-web
+ * stylesheet (sign-in and older admin screens) reads these names. Pointing them
+ * at the Lightbox tokens gives those screens the console's teal palette, fonts
+ * and both themes. Delete a line once nothing reads it.
+ */
+:root[data-console] {
+  --bg: var(--lx-paper);
+  --panel: var(--lx-surface);
+  --panel-raised: var(--lx-surface);
+  --panel-soft: var(--lx-sunken);
+  --input: var(--lx-surface);
+  --line: var(--lx-line);
+  --line-strong: var(--lx-line-strong);
+  --text: var(--lx-ink);
+  --muted: var(--lx-muted);
+  --quiet: var(--lx-muted-2);
+  --signal: var(--lx-teal);
+  --signal-hover: var(--lx-teal-hover);
+  --signal-ink: var(--lx-on-teal);
+  --focus: var(--lx-teal);
+  --accent-soft: var(--sx-accent-soft);
+  --accent-line: color-mix(in oklab, var(--lx-teal) 30%, var(--lx-line));
+  --disabled-surface: var(--lx-sunken);
+  --disabled-text: var(--lx-muted);
+  --amber: var(--lx-warning);
+  --warning-surface: color-mix(
+    in oklab,
+    var(--lx-warning) 10%,
+    var(--lx-surface)
+  );
+  --danger: var(--lx-danger);
+  --danger-surface: var(--sx-bad-soft);
+  --info: var(--lx-teal);
+  --success-surface: var(--sx-accent-soft);
+  --shadow: var(--lx-shadow-1);
+  --ac-mark-cut: var(--lx-paper);
+  --font-sans: var(--lx-font-ui);
+}

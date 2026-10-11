@@ -69,7 +69,9 @@ it("documents missing benchmark APIs without rendering an unsafe run action", as
   );
   expect(host.textContent).toContain("/v1/admin/conversation/benchmarks");
   expect(host.textContent).toContain("approved_call_test");
-  expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeTruthy();
+  expect(
+    host.querySelector('a[href="/sales-xray/providers?tab=providers"]'),
+  ).toBeTruthy();
   expect(host.querySelectorAll("details[open]")).toHaveLength(0);
   expect(host.textContent).not.toContain("execution_activated false");
   expect(host.textContent).not.toContain("authoritative run");
