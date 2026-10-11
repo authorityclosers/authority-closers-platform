@@ -23,3 +23,13 @@ and diff checks pass before commit. The populated input browser check now
 requires Unconfirmed, disabled writes and a successful explicit reload at
 touch 390/1440 light/dark. Committed shared-dev screenshots and source receipt
 are recorded in strike NOTES after the refresh; no production claim.
+
+The first committed shared-dev journey passes on `7827547` with eight filled
+input screenshots and stable source `ad97f0c`. All eight were inspected.
+Visual inspection found the Reload label split onto two lines and a phone
+card reaching the left edge despite the page overflow check passing. The
+owned card now includes padding in its maximum width and prevents its button
+from shrinking or wrapping. The browser check requires actual 16px corner
+insets and a single text line in both themes, alongside the existing 44px
+phone controls and successful explicit reload. The initial screenshots remain
+preserved; final committed source proof follows the next shared refresh.

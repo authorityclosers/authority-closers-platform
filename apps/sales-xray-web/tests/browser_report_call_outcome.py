@@ -11,6 +11,15 @@ BASE = os.environ["SALES_XRAY_BASE_URL"].rstrip("/")
 OUT = Path(os.environ["SALES_XRAY_UX_EVIDENCE_DIR"])
 
 
+def check_corner_card(notice, width):
+    bounds = notice.bounding_box()
+    assert bounds and bounds["x"] >= 15 and bounds["x"] + bounds["width"] <= width - 15
+    assert notice.get_by_role("button", name="Reload", exact=True).evaluate(
+        "el => { const range = document.createRange(); range.selectNodeContents(el); "
+        "return range.getClientRects().length === 1; }"
+    )
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     errors, outside, unexpected, proof = [], [], [], []
@@ -58,6 +67,7 @@ def main():
                 page.locator("html").evaluate(
                     "(el, theme) => el.setAttribute('data-theme', theme)", theme
                 )
+                check_corner_card(notice, width)
                 page.screenshot(path=str(OUT / f"outcome-lost-unconfirmed-{width}-{theme}.png"))
             with page.expect_navigation(wait_until="domcontentloaded") as navigation:
                 editor.get_by_role("button", name="Reload", exact=True).click()
@@ -91,6 +101,7 @@ def main():
                 page.locator("html").evaluate(
                     "(el, theme) => el.setAttribute('data-theme', theme)", theme
                 )
+                check_corner_card(notice, width)
                 page.screenshot(
                     path=str(OUT / f"outcome-follow-up-unconfirmed-{width}-{theme}.png")
                 )
@@ -102,6 +113,7 @@ def main():
                     "unconfirmed_write_disabled": True,
                     "explicit_reload_before_next_write": True,
                     "filled_human_values_retained": True,
+                    "corner_insets_and_single_line_reload": True,
                 }
             )
             page.close()
