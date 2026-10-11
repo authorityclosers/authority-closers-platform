@@ -25,6 +25,33 @@ export function clipLength(ms: number) {
 /** Plays a moment in the Report's own player, where the call is already open. */
 export type PlayInReport = (evidence: Evidence, title: string) => void;
 
+/** The Report's "With context": the moment with the lines around it. */
+export type ContextPlay = {
+  range: { start_ms: number; end_ms: number };
+  play: () => void;
+};
+
+function ContextButton({ context }: { context: ContextPlay }) {
+  return (
+    <ClipPlayState
+      startMs={context.range.start_ms}
+      endMs={context.range.end_ms}
+    >
+      {(playing) => (
+        <button
+          type="button"
+          className={styles.withContext}
+          aria-pressed={playing}
+          aria-label={`${playing ? "Pause context playback" : "Play with context"}, ${timeLabel(context.range.start_ms)}–${timeLabel(context.range.end_ms)}`}
+          onClick={context.play}
+        >
+          {playing ? "Pause" : "With context"}
+        </button>
+      )}
+    </ClipPlayState>
+  );
+}
+
 /** The play pill when the Report's player plays the moment. */
 function ReportPlay({
   evidence,
@@ -65,6 +92,7 @@ export function EvidencePlayer({
   extra = false,
   fictional = false,
   onPlay,
+  context,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
@@ -75,6 +103,8 @@ export function EvidencePlayer({
   extra?: boolean;
   /** Inside a Report: play in its player instead of a separate audio. */
   onPlay?: PlayInReport;
+  /** Inside a Report: also play the moment with the lines around it. */
+  context?: ContextPlay | null;
 }) {
   const identity = useId();
   const audio = useRef<HTMLAudioElement>(null);
@@ -181,6 +211,7 @@ export function EvidencePlayer({
             {evidence.playable ? ` · ${clipLength(length)} clip` : ""}
           </span>
           {state === "loading" ? <span>Loading audio…</span> : null}
+          {context && onPlay ? <ContextButton context={context} /> : null}
           {!evidence.playable ? (
             <span>
               {fictional
@@ -237,6 +268,7 @@ export function MomentList({
   heading,
   fictional = false,
   onPlay,
+  contextFor,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
@@ -245,6 +277,7 @@ export function MomentList({
   heading?: string;
   fictional?: boolean;
   onPlay?: PlayInReport;
+  contextFor?: (evidence: Evidence) => ContextPlay | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -270,6 +303,7 @@ export function MomentList({
             extra={index >= 1}
             fictional={fictional}
             onPlay={onPlay}
+            context={contextFor?.(moment)}
           />
         ))}
       </ul>

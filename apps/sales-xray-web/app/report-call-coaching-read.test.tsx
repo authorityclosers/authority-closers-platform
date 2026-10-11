@@ -102,6 +102,32 @@ it("renders current-call API coaching and its exact source, not across-call stat
     "Compare the situations in two calls",
   );
 });
+it("offers 'With context' when the Report can play the lines around a moment", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(fictionalCallCoaching()))),
+  );
+  const contextual = vi.fn();
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <ReportCallCoaching
+          callId={submissionId}
+          data={data}
+          onSelectEvidence={vi.fn()}
+          onSelectContextualPlayback={contextual}
+        />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const button = [...container.querySelectorAll("button")].find(
+    (b) => b.textContent === "With context",
+  )!;
+  expect(button).toBeTruthy();
+  await act(async () => button.click());
+  expect(contextual).toHaveBeenCalledOnce();
+  expect(contextual.mock.calls[0][1]).toBe("Coaching for this call");
+});
 it("uses a source-checked server bootstrap without another read", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);

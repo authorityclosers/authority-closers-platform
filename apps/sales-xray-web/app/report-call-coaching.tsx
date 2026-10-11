@@ -25,7 +25,10 @@ import coachingStyles from "./coaching/coaching.module.css";
 import { MomentList } from "./coaching/evidence-player";
 import { Quote, StoryCard } from "./report-visuals/visuals";
 import { kitStyles } from "./ui/kit";
-import type { ContextualSourcePlayback } from "./source-playback-context";
+import {
+  buildContextualSourcePlayback,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
 import styles from "./report-call-coaching.module.css";
 import { useWorkspaceAccess } from "./workspace-access";
 import { notify, dismissNotice } from "./notice-center";
@@ -289,6 +292,7 @@ function CanonicalCallCoaching({
   data,
   coaching,
   onSelectEvidence,
+  onSelectContextualPlayback,
 }: Props & { coaching: CallCoaching }) {
   const { focus, lesson, mission, practice } = coaching;
   if (!focus || !lesson || !mission || !practice || !data.report) return null;
@@ -319,6 +323,26 @@ function CanonicalCallCoaching({
                 heading={WHY.callEvidence}
                 label="Moments from this call"
                 onPlay={onSelectEvidence}
+                contextFor={(source) => {
+                  const playback =
+                    data.report && data.transcript && onSelectContextualPlayback
+                      ? buildContextualSourcePlayback(
+                          data.report,
+                          data.transcript,
+                          source,
+                        )
+                      : null;
+                  return playback
+                    ? {
+                        range: playback.playback_range,
+                        play: () =>
+                          onSelectContextualPlayback!(
+                            playback,
+                            "Coaching for this call",
+                          ),
+                      }
+                    : null;
+                }}
               />
             </div>
           ) : (

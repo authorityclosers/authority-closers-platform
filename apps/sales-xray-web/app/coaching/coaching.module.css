@@ -485,6 +485,28 @@
   cursor: default;
 }
 
+/* The Report's "With context" beside a moment's time. */
+.withContext {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-xs) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.withContext[aria-pressed="true"] {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.withContext:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .moreMoments,
 .moreCalls {
   justify-self: start;
@@ -1127,7 +1149,8 @@
 }
 
 @media (pointer: coarse) {
-  .jump {
+  .jump,
+  .withContext {
     min-height: 44px;
   }
 
