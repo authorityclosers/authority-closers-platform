@@ -43,7 +43,7 @@ class SalesXrayProfileRevisionConflict(SalesXrayProfileError):
 @dataclass(frozen=True, slots=True)
 class SalesXrayProfileSnapshot:
     name: str | None
-    email: str | None
+    email: str
     phone_number_e164: str | None
     phone_verified: bool
     profile_complete: bool
@@ -78,13 +78,6 @@ def _resolved_name(person: Person) -> str | None:
     return normalized or None
 
 
-def _verified_account(person: Person) -> bool:
-    return not person.password_change_required and bool(
-        (person.email is not None and person.email_verified_at is not None)
-        or (person.username is not None and person.username_verified_at is not None)
-    )
-
-
 def _snapshot(
     person: Person,
     profile: SalesXrayProfile | None,
@@ -92,7 +85,7 @@ def _snapshot(
 ) -> SalesXrayProfileSnapshot:
     name = _resolved_name(person)
     email = person.email
-    if not _verified_account(person):
+    if email is None or person.email_verified_at is None:
         raise SalesXrayProfileUnavailable("A verified AC account is required.")
     phone = None if profile is None else profile.phone_number_e164
     complete = bool(name and phone and _E164.fullmatch(phone))
@@ -216,7 +209,7 @@ async def update_sales_xray_profile(
         raise ValueError("expected_revision_invalid")
 
     person, profile = await _read_rows(session, person_id, lock=True)
-    if not _verified_account(person):
+    if person.email is None or person.email_verified_at is None:
         raise SalesXrayProfileUnavailable("A verified AC account is required.")
     current_revision = 0 if profile is None else profile.revision
     if expected_revision != current_revision:

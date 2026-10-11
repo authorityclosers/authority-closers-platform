@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import MetaData, Table, func, select, text
+from sqlalchemy import Table, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -42,30 +42,9 @@ async def seed(sessions, *, historical_session_table: Table | None = None):
     now, tenant_id = datetime.now(UTC), uuid4()
     actors = tuple(ActorContext(uuid4(), uuid4(), tenant_id) for _ in range(2))
     async with sessions() as database, database.begin():
-        historical_person_table = (
-            await database.run_sync(
-                lambda sync: Table("persons", MetaData(), autoload_with=sync.connection())
-            )
-            if historical_session_table is not None
-            else None
-        )
-        if historical_person_table is not None:
-            assert "username" not in historical_person_table.c
         database.add(Tenant(id=tenant_id, slug=tenant_id.hex, name="Isolated Studio academy"))
         for actor in actors:
-            if historical_person_table is None:
-                database.add(Person(id=actor.person_id, email_verified_at=now))
-            else:
-                await database.execute(
-                    historical_person_table.insert().values(
-                        id=actor.person_id,
-                        email_verified_at=now,
-                        status="active",
-                        created_at=now,
-                        updated_at=now,
-                        revision=0,
-                    )
-                )
+            database.add(Person(id=actor.person_id, email_verified_at=now))
         await database.flush()
         for actor in actors:
             database.add(Membership(tenant_id=tenant_id, person_id=actor.person_id, role="learner"))

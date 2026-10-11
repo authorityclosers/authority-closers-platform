@@ -25,7 +25,7 @@ def test_default_identity_rate_limits_cover_every_public_password_command() -> N
     }
     assert covered == {
         ("POST", r"^/v1/auth/password/register$"),
-        ("POST", r"^/v1/auth/password/(?:login|first-change)$"),
+        ("POST", r"^/v1/auth/password/login$"),
         ("POST", r"^/v1/auth/password/recovery$"),
         ("POST", r"^/v1/auth/password/resend-verification$"),
         ("POST", r"^/v1/auth/password/verify$"),
@@ -383,26 +383,3 @@ async def test_concurrent_requests_cannot_oversubscribe_one_bucket() -> None:
     results = await asyncio.gather(*(limiter.consume("same-client", rule) for _ in range(100)))
 
     assert sum(1 for allowed, _retry, _remaining in results if allowed) == 10
-
-
-async def test_login_and_first_password_change_share_the_same_brute_force_budget() -> None:
-    app = FastAPI()
-
-    async def accepted() -> PlainTextResponse:
-        return PlainTextResponse("accepted")
-
-    paths = ("/v1/auth/password/login", "/v1/auth/password/first-change")
-    for path in paths:
-        app.add_api_route(path, accepted, methods=["POST"])
-    limited = RateLimitMiddleware(
-        app,
-        rules=DEFAULT_RATE_LIMIT_RULES,
-        limiter=InMemoryTokenBucketLimiter(clock=lambda: 0.0),
-    )
-    async with AsyncClient(
-        transport=ASGITransport(app=limited, client=("8.8.8.8", 1000)), base_url="http://test"
-    ) as client:
-        for index in range(10):
-            assert (await client.post(paths[index % 2])).status_code == 200
-        for path in paths:
-            assert (await client.post(path)).status_code == 429

@@ -8,17 +8,15 @@ import hmac
 import json
 import logging
 import re
-from collections.abc import AsyncIterator, Callable, Coroutine, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Literal, cast
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -86,7 +84,6 @@ from ac_platform.identity.password_auth import (
     PasswordAuthError,
     PasswordIdentityService,
     PasswordPolicyError,
-    TemporaryPasswordChangeRequired,
 )
 from ac_platform.identity.sales_xray_profile import (
     get_sales_xray_profile,
@@ -123,7 +120,6 @@ from ac_platform.tenancy.models import (
     MembershipRole,
     MembershipStatus,
     Organisation,
-    Tenant,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -234,38 +230,13 @@ class AuthenticatedTransaction:
 RequireActor = Callable[[Request], AsyncIterator[AuthenticatedTransaction]]
 
 
-class _PasswordInputRoute(APIRoute):
-    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
-        handler = super().get_route_handler()
-
-        async def without_password_input(request: Request) -> Response:
-            try:
-                return await handler(request)
-            except RequestValidationError:
-                if request.url.path.startswith("/v1/auth/password/"):
-                    response = problem_response(
-                        request=request,
-                        status_code=422,
-                        code="password_request_invalid",
-                        title="Invalid password request",
-                        detail="Check the required sign-in fields.",
-                    )
-                    response.headers["cache-control"] = "private, no-store"
-                    return response
-                raise
-
-        return without_password_input
-
-
 class MeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     person_id: UUID
-    email: str | None
+    email: str
     display_name: str | None
-    email_verified_at: datetime | None
-    username: str | None = None
-    username_verified_at: datetime | None = None
+    email_verified_at: datetime
     selected_tenant_id: UUID | None
     membership_role: str | None
     permissions: list[str]
@@ -390,14 +361,7 @@ class PasswordLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=3, max_length=320)
-    password: str = Field(min_length=1, max_length=256, repr=False)
-
-
-class FirstPasswordChangeRequest(PasswordLoginRequest):
-    new_password: str = Field(min_length=12, max_length=256, repr=False)
-    consent: Literal[True]
-    age_attested: Literal[True]
-    consent_version: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class PasswordRecoveryRequest(BaseModel):
@@ -459,14 +423,8 @@ class PasswordSessionResponse(BaseModel):
 
     authenticated: Literal[True]
     person_id: UUID
-    email: str | None
-    username: str | None = None
+    email: str
     display_name: str | None
-
-
-class TemporaryPasswordResponse(BaseModel):
-    authenticated: Literal[False] = False
-    password_change_required: Literal[True] = True
 
 
 class EmailLoginCodeConfigResponse(BaseModel):
@@ -1630,7 +1588,7 @@ def install_identity_http(
     )
     token_pepper = settings.session_token_pepper.get_secret_value()
     challenge_secret = settings.email_challenge_secret.get_secret_value()
-    router = APIRouter(prefix="/v1", tags=["identity"], route_class=_PasswordInputRoute)
+    router = APIRouter(prefix="/v1", tags=["identity"])
     application.add_exception_handler(IdentityServiceError, identity_error_handler)  # type: ignore[arg-type]
 
     def _identity(database: AsyncSession) -> AsyncIdentityApplication:
@@ -1960,16 +1918,12 @@ def install_identity_http(
         response.headers["cache-control"] = "no-store"
         return PasswordRegistrationResponse(status="verification_required")
 
-    @router.post(
-        "/auth/password/login",
-        response_model=PasswordSessionResponse | TemporaryPasswordResponse,
-        response_model_exclude_unset=True,
-    )
+    @router.post("/auth/password/login", response_model=PasswordSessionResponse)
     async def login_password(
         request: Request,
         response: Response,
         body: PasswordLoginRequest,
-    ) -> PasswordSessionResponse | TemporaryPasswordResponse:
+    ) -> PasswordSessionResponse:
         require_safe_origin(request, settings)
         try:
             async with sessions() as database, database.begin():
@@ -1982,8 +1936,6 @@ def install_identity_http(
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
                 )
-                username = getattr(person, "username", None)
-                selected_tenant = None
                 tenant_id = settings.public_learner_tenant_id
                 if tenant_id is not None:
                     membership = await database.scalar(
@@ -1996,28 +1948,6 @@ def install_identity_http(
                     )
                     if membership is not None:
                         await identity.select_tenant(issued.token, tenant_id)
-                        selected_tenant = tenant_id
-                if username is not None and selected_tenant is None:
-                    memberships = list(
-                        await database.scalars(
-                            select(Membership)
-                            .join(Tenant, Tenant.id == Membership.tenant_id)
-                            .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
-                            .where(
-                                Membership.person_id == person.id,
-                                Membership.status == "active",
-                                Membership.ended_at.is_(None),
-                                Tenant.status == "active",
-                                Membership.role.in_(("owner", "admin", "member")),
-                            )
-                        )
-                    )
-                    if len(memberships) == 1:
-                        await identity.select_tenant(issued.token, memberships[0].tenant_id)
-        except TemporaryPasswordChangeRequired:
-            _delete_session_cookie(response, settings)
-            response.headers["cache-control"] = "private, no-store"
-            return TemporaryPasswordResponse(authenticated=False, password_change_required=True)
         except EmailVerificationRequired as error:
             raise PasswordEmailVerificationRequired(str(error)) from error
         except (InvalidPasswordCredentials, ValueError) as error:
@@ -2027,89 +1957,7 @@ def install_identity_http(
         return PasswordSessionResponse(
             authenticated=True,
             person_id=person.id,
-            email=person.email,
-            display_name=person.display_name,
-            **({"username": username} if username is not None else {}),
-        )
-
-    @router.post(
-        "/auth/password/first-change",
-        response_model=PasswordSessionResponse,
-        response_model_exclude_unset=True,
-    )
-    async def first_password_change(
-        request: Request,
-        response: Response,
-        body: FirstPasswordChangeRequest,
-    ) -> PasswordSessionResponse:
-        from ac_platform.audit.service import append_audit_event
-        from ac_platform.identity.username_accounts import choose_first_password
-
-        require_safe_origin(request, settings)
-        configured_version = (settings.learner_consent_version or "").strip()
-        if not configured_version:
-            raise PasswordRegistrationUnavailable("Reviewed account consent must be configured.")
-        _require_current_learner_consent(
-            settings, submitted_version=body.consent_version, configured_version=configured_version
-        )
-        try:
-            async with sessions() as database, database.begin():
-                person = await choose_first_password(
-                    database,
-                    identifier=body.email,
-                    temporary_password=body.password,
-                    new_password=body.new_password,
-                    consent_version=configured_version,
-                    token_secret=challenge_secret,
-                )
-                identity = _identity(database)
-                issued = await identity.issue_authenticated_session(
-                    person.id,
-                    user_agent=request.headers.get("user-agent"),
-                    ip_address=request.client.host if request.client else None,
-                )
-                memberships = list(
-                    await database.scalars(
-                        select(Membership)
-                        .join(Tenant, Tenant.id == Membership.tenant_id)
-                        .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
-                        .where(
-                            Membership.person_id == person.id,
-                            Membership.status == "active",
-                            Membership.ended_at.is_(None),
-                            Tenant.status == "active",
-                            Membership.role.in_(("owner", "admin", "member")),
-                        )
-                    )
-                )
-                if len(memberships) == 1:
-                    await identity.select_tenant(issued.token, memberships[0].tenant_id)
-                audit_tenant = settings.operations_tenant_id or settings.public_learner_tenant_id
-                if audit_tenant is None:
-                    raise PasswordRegistrationUnavailable(
-                        "Account audit context must be configured."
-                    )
-                await append_audit_event(
-                    database,
-                    tenant_id=audit_tenant,
-                    actor_person_id=person.id,
-                    actor_type="person",
-                    action="identity.first_password_changed",
-                    resource_type="person",
-                    resource_id=person.id,
-                    payload={"username_verified": True, "consent_version": configured_version},
-                )
-        except PasswordPolicyError as error:
-            raise PasswordRequestInvalid(str(error)) from error
-        except (InvalidPasswordCredentials, ValueError) as error:
-            raise PasswordCredentialsRejected("Sign-in details are not valid.") from error
-        _set_session_cookie(response, issued.token, settings)
-        response.headers["cache-control"] = "private, no-store"
-        return PasswordSessionResponse(
-            authenticated=True,
-            person_id=person.id,
-            email=person.email,
-            username=person.username,
+            email=person.email or "",
             display_name=person.display_name,
         )
 
@@ -3350,23 +3198,18 @@ def install_identity_http(
         response.headers["pragma"] = "no-cache"
         return GoogleCompletionResponse(matched=matched)
 
-    @router.get("/me", response_model=MeResponse, response_model_exclude_unset=True)
+    @router.get("/me", response_model=MeResponse)
     async def me(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> MeResponse:
         person = await auth.identity.repository.get_person(auth.resolved.actor.person_id)
-        if person is None:
+        if person is None or person.email is None or person.email_verified_at is None:
             raise ResourceNotFound("The authenticated person no longer exists.")
         return MeResponse(
             person_id=person.id,
             email=person.email,
             display_name=person.display_name,
             email_verified_at=person.email_verified_at,
-            **(
-                {"username": person.username, "username_verified_at": person.username_verified_at}
-                if person.username is not None
-                else {}
-            ),
             selected_tenant_id=auth.resolved.actor.tenant_id,
             membership_role=auth.resolved.membership_role,
             permissions=sorted(auth.resolved.actor.permissions),

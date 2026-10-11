@@ -147,10 +147,6 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                     "onboarding_status",
                     "onboarding_step",
                     "onboarding_revision",
-                    "username",
-                    "username_verified_at",
-                    "password_change_required",
-                    "temporary_password_expires_at",
                 }
             if model is Session:
                 # The reviewer audience is introduced at0038, not in this
@@ -182,9 +178,6 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                     "ck_persons_onboarding_step_bounds",
                     "ck_persons_onboarding_revision_nonnegative",
                     "ck_persons_onboarding_completed_fields",
-                    "ck_persons_username_normalized",
-                    "ck_persons_username_verification_binding",
-                    "ck_persons_temporary_password_binding",
                 }
             if model is Session:
                 expected_checks -= {

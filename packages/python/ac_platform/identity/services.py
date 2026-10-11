@@ -268,10 +268,6 @@ class PersonSnapshot:
     consent_version: str | None = None
     consented_at: datetime | None = None
     revision: int = 0
-    username: str | None = None
-    username_verified_at: datetime | None = None
-    password_change_required: bool = False
-    temporary_password_expires_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -624,16 +620,7 @@ def require_verified_person(
     *,
     provider_email: str | None = None,
 ) -> None:
-    """Require current account verification; provider linking still proves email."""
-
-    if person.password_change_required:
-        raise AuthorizationDenied("Choose your own password before continuing.")
-    if (
-        provider_email is None
-        and person.username is not None
-        and person.username_verified_at is not None
-    ):
-        return
+    """Fail closed unless the canonical person satisfies the verified-email gate."""
 
     if person.email is None or person.email_verified_at is None:
         raise EmailVerificationRequiredError("canonical person must have a verified email")
