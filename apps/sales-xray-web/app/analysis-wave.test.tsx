@@ -89,4 +89,10 @@ it("shows how much of the file has arrived while it is sent", async () => {
   expect(bars.filter((bar) => bar.hasAttribute("data-pending")).length).toBe(
     58,
   );
+  // An upload that doesn't report its progress claims no percentage.
+  await act(async () =>
+    root.render(<AnalysisWave envelope={null} played={0} state="arriving" />),
+  );
+  expect(wave.getAttribute("aria-label")).toBe("Uploading your call");
+  expect(wave.querySelector("[data-pending]")).toBeNull();
 });

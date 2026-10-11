@@ -75,11 +75,12 @@ export type WaveState = "arriving" | "working" | "attention" | "done" | "still";
  */
 export function AnalysisWave({
   envelope,
-  arrived = 1,
+  arrived,
   played,
   state,
 }: {
   envelope: WaveformEnvelope | null;
+  /** Omitted when the upload doesn't report its progress. */
   arrived?: number;
   played: number;
   state: WaveState;
@@ -91,7 +92,9 @@ export function AnalysisWave({
     : MOTIF;
   const label =
     state === "arriving"
-      ? `Uploading your call, ${Math.round(arrived * 100)}% sent`
+      ? arrived === undefined
+        ? "Uploading your call"
+        : `Uploading your call, ${Math.round(arrived * 100)}% sent`
       : state === "done"
         ? "Your call, fully analysed"
         : envelope
@@ -113,7 +116,9 @@ export function AnalysisWave({
             key={index}
             data-played={at <= played ? "" : undefined}
             data-next={at > played && at <= played + 1 / 3 ? "" : undefined}
-            data-pending={at > arrived ? "" : undefined}
+            data-pending={
+              arrived !== undefined && at > arrived ? "" : undefined
+            }
             style={
               {
                 "--h": `${Math.round(Math.max(4, level * 100))}%`,

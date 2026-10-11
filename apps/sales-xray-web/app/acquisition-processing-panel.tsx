@@ -431,7 +431,7 @@ export function AcquisitionProcessingPanel({
           step's stretch listening; no percentage the server doesn't give. */}
       <AnalysisWave
         envelope={envelope}
-        arrived={upload?.fraction ?? 1}
+        arrived={upload?.fraction ?? undefined}
         played={
           phase === "done"
             ? 1
