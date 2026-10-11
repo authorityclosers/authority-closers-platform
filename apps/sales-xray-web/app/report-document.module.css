@@ -173,6 +173,9 @@
   list-style: none;
 }
 .contents a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   text-decoration: none;
@@ -294,7 +297,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 24px;
+  min-height: var(--sx-control-h);
   padding: 0 8px;
   border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, transparent);
   border-radius: 999px;
@@ -712,9 +715,14 @@
     box-shadow: none;
   }
   .play {
+    min-height: 0;
     padding: 0;
     border: 0;
     background: none;
+  }
+  .contents a {
+    display: inline;
+    min-height: 0;
   }
   .play svg,
   .playWord {
