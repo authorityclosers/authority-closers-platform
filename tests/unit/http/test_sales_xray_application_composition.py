@@ -23,4 +23,6 @@ def test_actual_application_constructs_with_and_without_sales_xray_intake(
     assert "/v1/me/sales-xray-workspaces" in paths
     assert "/v1/me/sales-xray-profile" in paths
     assert "/v1/admin/conversation/insights" in paths
-    assert ("/v1/conversation/acquisition/insights" in paths) is configured
+    # Saved-report reads remain available when upload/provider composition is absent.
+    assert "/v1/conversation/acquisition/insights" in paths
+    assert ("/v1/conversation/acquisition/submissions" in paths) is configured

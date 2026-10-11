@@ -1,8 +1,39 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Scope: shared `dev/live`, existing server `127.0.0.1:3026`, labelled fictional
-review data. Changes are only browser tests and their documentation. Browsers
-use `ac-heavy`; no server, provider request, database change or shipping action.
+Shared-dev rendering uses `dev/live`, existing server `127.0.0.1:3026` and labelled
+fictional review data. The coordinator's later release-CI assignment uses the
+existing disposable PostgreSQL harness and bounded loopback browser backend.
+Only test/evidence files change. Heavy checks use `ac-heavy`; no provider request,
+live data change or shipping action is performed by QA.
+
+Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
+six existing organisation/Company-read release-CI files (exact claims in NOTES).
+The five HTTP/PostgreSQL modules pass **20 focused cases** after fixture repairs;
+the unit activity organisation 403 was reproduced first. Billing status, balance
+and trial assertions remain unchanged: its two-member tenant is now registered
+as the fictional Organisation required by request admission. Admin's fake
+returns UUID registry rows before recording rows; activity selects its fake
+registry's known org; tags register a real disposable foreign organisation
+before testing its unchanged 404 isolation; saved insights mount without upload
+composition, while submission routes remain conditional. Billing rationale was
+posted to the coordinator before committing. No product/billing code or live
+data changed. JUnit: `/home/acdev/strikes/1694/workbench-release-ci-focused-20261011.xml`.
+The corrected static browser journey checks enabled registered-org selection,
+empty history and 404 for the Personal recording. Its compiled proof is pending;
+the live checkout's static export is absent. One pinned, isolated source build
+uses the existing committed-snapshot helper and installed tools, preserving the
+shared dev cache. These test repairs do not certify release CI or staging.
+
+The bounded 16:10 UTC Coaching run passes **4/4**, all 13 observations per pair,
+at recorded source `aa49b888` with unchanged start/end HEAD. Both call/personal
+mission actions are reachable and 32 px desktop / 44 px phone; the clicked mission
+heading is visible. Phone/dark call, phone/light personal mission and desktop/dark
+focus screenshots were inspected and are readable. Later Report batch at
+`50d088e8` ended 143 before any receipt. Standalone Document fails at `9c2abc63`:
+the inspected image shows "This report didn't load. Please try again.", disabled
+Word export and zero sections. B received the exact capture. Current Report and
+Document acceptance remain incomplete; the historical PASS table below is not
+a newer-dev verdict.
 
 The 16 opt-in cases cover 1440/390, light/dark, dashboard-to-report, all six
 Report sections in Dipak's order, their required example blocks, eight skills,

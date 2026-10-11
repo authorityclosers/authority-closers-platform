@@ -39,6 +39,8 @@ Team requires a user with the existing team-read permission. Optional route
 overrides are `WB_DASHBOARD_PATH`, `WB_COACHING_PATH`, `WB_TEAM_PATH`. No credentials
 go into this directory, Git, commands or test output. Live mode uses real product
 routes; it never tries to enable development-only fixtures on staging.
+For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
+Use the receipt's safe exception type and check/line for the failure handoff.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.

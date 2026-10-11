@@ -16,7 +16,6 @@ from sqlalchemy import MetaData, Table, event, literal, select, text, update
 from sqlalchemy.orm import registry
 from starlette.requests import Request
 
-import ac_platform.http.conversation_prospects as prospect_http
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
 from ac_platform.conversation_intelligence import guest_models, guest_ownership
@@ -272,16 +271,7 @@ def test_rejected_tags_and_read_only_authority_preserve_state(
     postgres_harness: Any, tmp_path: Path, monkeypatch: Any
 ) -> None:
     async def exercise() -> None:
-        served: set[UUID] = set()
-        install = prospect_http.install_prospect_http
-
-        def fixture_workspaces(*args: Any, **kwargs: Any) -> None:
-            served.update(kwargs.pop("served"))
-            install(*args, **kwargs, served=served)
-
-        with monkeypatch.context() as patch:
-            patch.setattr(prospect_http, "install_prospect_http", fixture_workspaces)
-            setup = await _setup(postgres_harness, tmp_path)
+        setup = await _setup(postgres_harness, tmp_path)
         try:
             async with client_for(setup) as client:
                 identifier = await create(setup, client)
@@ -402,7 +392,17 @@ def test_rejected_tags_and_read_only_authority_preserve_state(
                     setup.settings.session_cookie_name, await _session(setup, foreign)
                 )
                 private(await client.patch(path, json=BODY), 403)  # unserved selected workspace
-                served.add(foreign.tenant_id)
+                # Enable the selected workspace through its real live registry.
+                # Serving it must still preserve cross-tenant prospect isolation.
+                async with setup.sessions() as db, db.begin():
+                    db.add(
+                        Organisation(
+                            tenant_id=foreign.tenant_id,
+                            created_by_person_id=foreign.person_id,
+                            creation_command_id=uuid4(),
+                            domain_verification_token="fictional-tags-" + uuid4().hex,
+                        )
+                    )
                 private(await client.patch(path, json=BODY), 404)  # served foreign workspace
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 async with setup.sessions() as db, db.begin():
