@@ -11,6 +11,8 @@ height requirement, using existing semantic styles and no new colors. Source
 selection, confirmed speaker roles and report content are unchanged.
 The map's existing legends, times and statistics also use at least 12px text,
 including phone styles, without changing their values or color system.
+The visible speaker-avatar fallback glyphs receive a map-only 12px rule; the
+shared avatar component and its other callers are unchanged.
 
 The first post-commit browser run then found a separate returning-view defect:
 the server rendered Who talked, while hydration read a saved Talk share view

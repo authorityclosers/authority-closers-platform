@@ -84,6 +84,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.speaker > span[aria-hidden="true"] {
+  font-size: 12px;
+}
 .speaker small {
   padding: 2px 6px;
   border-radius: var(--lx-radius-pill);
