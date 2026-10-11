@@ -10,6 +10,26 @@ import styles from "../../../report-pillar-screen.module.css";
 
 export function PillarsPreview() {
   const [source, setSource] = useState<ReportEvidence | null>(null);
+  const [closingKind, setClosingKind] = useState<"won" | "lost" | null>(null);
+  const report = closingKind
+    ? {
+        ...syntheticReport,
+        // Simulate a misleading analysis label, never a human-entered fact.
+        story: {
+          version: "report-story/1" as const,
+          phases: [],
+          outcome: {
+            kind: closingKind,
+            next_step_rung: "none" as const,
+            next_step_when: null,
+            evidence: syntheticReport.strengths[0].evidence,
+          },
+          next_step: null,
+          prospect_commitments: [],
+          seller_commitments: [],
+        },
+      }
+    : syntheticReport;
   return (
     <main className={styles.preview} data-synthetic-report>
       <div className={styles.previewFrame}>
@@ -17,12 +37,29 @@ export function PillarsPreview() {
         <p>
           No recording, customer, account, audio or provider call exists here.
         </p>
+        <div
+          className={styles.previewControls}
+          aria-label="Fictional analysis labels"
+        >
+          {(["won", "lost"] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => setClosingKind(kind)}
+            >
+              Simulate {kind} analysis
+            </button>
+          ))}
+          <button type="button" onClick={() => setClosingKind(null)}>
+            Older report
+          </button>
+        </div>
         <ReportModes
           structure="pillars"
           initialView="story"
           lightSurface={false}
           documentData={{
-            report: syntheticReport,
+            report,
             callRecord: syntheticCallRecord,
             callLength: "00:35",
             title: "Fictional Report pillars",

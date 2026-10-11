@@ -74,3 +74,25 @@ transcript/slide interaction. Screenshots come from the existing shared server
 at `http://127.0.0.1:3026`; no private preview or local build is started. Final
 receipts, source pin and individual image observations are recorded in strike
 NOTES.md and `shots/2026-10-11/`, after the committed-work refresh.
+
+## Human outcome boundary — owner 11 October 04:50 IST
+
+The owner requires deal outcomes to be facts entered by people. Story previously
+promoted a source-cited C5 `won`/`lost` classification into its Call outcome and
+Current status rows. C5 now contributes closing evidence, commitments and
+as-stated next-event timing; its classification does not establish a recorded
+human outcome. Report and the shared Word pillar projection keep that outcome
+Unknown until the separate human read is available. Canonical C5 drafts and
+wire enums are preserved; no AI label writes an outcome or prospect stage.
+
+Five classification cases cover won, lost, follow-up, disqualified and none,
+with and without source evidence. The existing six-pillar/Word/withholding
+checks protect older reports and exports. The development-only pillars fixture
+can simulate misleading won/lost labels against the invented buyer-decline
+quote; browser proof checks both Unknown rows, retained exact source selection
+and no displayed Won/Lost status at touch 390/1440 in light/dark. This is a
+presentation guard, not a provider-quality or persisted-outcome receipt.
+
+Focused verification: all 25 pillar/screen/Word/withholding cases pass;
+incremental app typecheck, cached changed-file ESLint and browser-script
+Ruff/format pass. Final shared-dev receipts follow the committed refresh.

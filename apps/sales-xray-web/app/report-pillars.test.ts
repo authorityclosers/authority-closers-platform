@@ -3,6 +3,75 @@ import { reportPillars, REPORT_PILLARS } from "./report-pillars";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 
 describe("C5 six-pillar projection", () => {
+  it.each(["won", "lost", "follow_up", "disqualified", "none"] as const)(
+    "keeps analysis %s separate from a human-recorded outcome, including Word pillars",
+    (kind) => {
+      const evidence = syntheticReport.strengths[0].evidence;
+      const story = {
+        version: "report-story/1" as const,
+        phases: [],
+        outcome: {
+          kind,
+          next_step_rung:
+            kind === "follow_up" ? ("dated_call" as const) : ("none" as const),
+          next_step_when:
+            kind === "follow_up" ? "Fictional Friday, 4 PM" : null,
+          evidence,
+        },
+        next_step:
+          kind === "follow_up"
+            ? { text: "Fictional follow-up mentioned", evidence }
+            : null,
+        prospect_commitments: [],
+        seller_commitments: [],
+      };
+      const pillars = reportPillars({ ...syntheticReport, story });
+      expect(pillars[0].entries[0]).toMatchObject({
+        label: "Call outcome",
+        gap: true,
+        evidence: [],
+      });
+      expect(pillars[5].entries[0]).toMatchObject({
+        label: "Current status",
+        gap: true,
+        evidence: [],
+      });
+      expect(
+        pillars[0].entries.find((entry) => entry.label === "Closing evidence"),
+      ).toMatchObject({ evidence });
+      if (kind === "follow_up") {
+        expect(
+          pillars[0].entries.find(
+            (entry) => entry.label === "Next agreed step",
+          ),
+        ).toMatchObject({
+          text: story.next_step!.text,
+          evidence,
+        });
+        expect(
+          pillars[5].entries.find(
+            (entry) => entry.label === "Next event timing · as stated",
+          ),
+        ).toMatchObject({
+          text: story.outcome.next_step_when,
+          evidence,
+        });
+      }
+      expect(
+        pillars
+          .flatMap((pillar) => pillar.entries)
+          .some((entry) => ["Won", "Lost"].includes(entry.text)),
+      ).toBe(false);
+      const noSource = reportPillars({
+        ...syntheticReport,
+        story: { ...story, outcome: { ...story.outcome, evidence: [] } },
+      });
+      expect(noSource[0].entries[0].gap).toBe(true);
+      expect(
+        noSource[0].entries.some((entry) => entry.label === "Closing evidence"),
+      ).toBe(false);
+    },
+  );
   it.each([
     ["strongly_demonstrated", "Strongly Demonstrated"],
     ["observed", "Observed"],
