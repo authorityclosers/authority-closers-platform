@@ -21,6 +21,8 @@ export function SharePanel({
 } = {}) {
   const [view, setView] = useState<SharingView | null>(initial);
   const [error, setError] = useState<string | null>(null);
+  // A failed tap's message, kept through the reload that follows it.
+  const [failed, setFailed] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -41,8 +43,9 @@ export function SharePanel({
     if (result.data) {
       setView(result.data);
       setError(null);
+      setFailed(null);
     } else {
-      setError(result.error);
+      setFailed(`${result.error} Your sharing is shown as it is now.`);
       setAttempt((value) => value + 1);
     }
   };
@@ -98,9 +101,9 @@ export function SharePanel({
               Sharing adds your Coaching view to what your admins can already
               open in your calls. You can stop sharing at any time.
             </p>
-            {error ? (
+            {failed || error ? (
               <p role="status" className={styles.status}>
-                {error}
+                {failed ?? error}
               </p>
             ) : null}
           </>
@@ -126,11 +129,19 @@ function AddContext({
   const [saved, setSaved] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [command, setCommand] = useState(() => crypto.randomUUID());
+  // One command per text: a retry of the same note is the same request,
+  // an edited note is a new one (never a conflict with the first try).
+  const [attempted, setAttempted] = useState<{
+    text: string;
+    command: string;
+  } | null>(null);
   const note = text.trim();
   const save = async () => {
     setSaving(true);
     setError(null);
+    const command =
+      attempted?.text === note ? attempted.command : crypto.randomUUID();
+    setAttempted({ text: note, command });
     const result = await sendContext({
       command_id: command,
       focus_skill_id: focusSkillId,
@@ -143,7 +154,7 @@ function AddContext({
       setSaved(note);
       setText("");
       setOpen(false);
-      setCommand(crypto.randomUUID());
+      setAttempted(null);
     }
   };
   if (!open)
@@ -206,12 +217,17 @@ export function FocusFeedback({
     "idle" | "saving" | "agree" | "not_completely"
   >("idle");
   const [error, setError] = useState<string | null>(null);
-  const [command] = useState(() => crypto.randomUUID());
+  // One command per choice: retrying a choice repeats it; switching after a
+  // failed try is a new answer, never a conflict with the first.
+  const [commands] = useState(() => ({
+    agree: crypto.randomUUID(),
+    not_completely: crypto.randomUUID(),
+  }));
   const send = async (agreement: "agree" | "not_completely") => {
     setState("saving");
     setError(null);
     const result = await sendFeedback({
-      command_id: command,
+      command_id: commands[agreement],
       agreement,
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,

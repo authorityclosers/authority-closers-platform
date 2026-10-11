@@ -1,5 +1,6 @@
 """Private by default; one revocable share opens a rep's Coaching to owners/admins."""
 
+import asyncio
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -147,10 +148,17 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 assert (await client.get(TEAM)).status_code == 403
 
                 as_(setup.token)
-                stopped = await client.put(
-                    SHARING, json={"shared": False, "expected_revision": 1}, headers=WRITE
+                # Two tabs stop sharing at once: one revision, no deadlock.
+                stops = await asyncio.gather(
+                    *(
+                        client.put(
+                            SHARING, json={"shared": False, "expected_revision": 1}, headers=WRITE
+                        )
+                        for _ in range(2)
+                    )
                 )
-                assert stopped.status_code == 200 and stopped.json()["revision"] == 2
+                assert [r.status_code for r in stops] == [200, 200], [r.text for r in stops]
+                assert {r.json()["revision"] for r in stops} == {2}
                 as_(admin_token)
                 assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
                 assert (await client.get(TEAM)).json()["reps"] == []
@@ -164,7 +172,11 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                     "focus_skill_id": focus,
                     "mission_origin_submission_id": origin,
                 }
-                assert (await client.post(FEEDBACK, json=body, headers=WRITE)).status_code == 204
+                # A repeat of the same command, even at the same moment, is one answer.
+                repeats = await asyncio.gather(
+                    *(client.post(FEEDBACK, json=body, headers=WRITE) for _ in range(2))
+                )
+                assert [r.status_code for r in repeats] == [204, 204], [r.text for r in repeats]
                 assert (await client.post(FEEDBACK, json=body, headers=WRITE)).status_code == 204
                 changed = {**body, "agreement": "not_completely"}
                 assert (await client.post(FEEDBACK, json=changed, headers=WRITE)).status_code == 409

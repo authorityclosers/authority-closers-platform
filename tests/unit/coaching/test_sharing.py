@@ -116,3 +116,11 @@ def test_records_reject_impossible_histories() -> None:
             assigned_by=ADMIN,
             assigned_at=NOW,
         )
+
+
+def test_shared_names_fit_the_views_whatever_the_profile_holds() -> None:
+    from ac_platform.coaching.sharing_store import _name
+
+    assert len(_name("A" * 200, None)) == 120
+    assert _name("  Asha Rao  ", "asha@example.com") == "Asha Rao"
+    assert _name(None, None) == "[redacted]"

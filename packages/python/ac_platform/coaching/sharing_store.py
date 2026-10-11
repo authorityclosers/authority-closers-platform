@@ -8,12 +8,14 @@ free-text note: never edited, erased with the account. Payloads never carry
 Coaching content or names into the audit chain.
 """
 
+import hashlib
 from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import AwareDatetime, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
@@ -95,7 +97,19 @@ async def _organisation(database: AsyncSession, tenant_id: UUID) -> bool:
 
 
 def _name(display_name: str | None, email: str | None) -> str:
-    return (display_name or "").strip() or _mask_email(email)
+    # Views carry at most 120 characters; display names may hold 200.
+    return ((display_name or "").strip() or _mask_email(email))[:120]
+
+
+async def _share_lock(database: AsyncSession, tenant_id: UUID, person_id: UUID) -> None:
+    """Serialize one rep's share changes without upgrading the membership row's
+    shared lock (two tabs upgrading it would deadlock)."""
+    key = int.from_bytes(
+        hashlib.sha256(b"coaching-share:" + tenant_id.bytes + person_id.bytes).digest()[:8],
+        "big",
+        signed=True,
+    )
+    await database.execute(select(func.pg_advisory_xact_lock(key)))
 
 
 async def read_sharing(database: AsyncSession, *, tenant_id: UUID, person_id: UUID) -> SharingView:
@@ -141,8 +155,8 @@ async def set_sharing(
     """Append one share revision; a stale retry of the same choice is harmless."""
     if actor.tenant_id != tenant_id:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
-    # Serialize this rep's share changes on their own membership row.
-    if await _member(database, tenant_id, actor.person_id, lock=True) is None:
+    await _share_lock(database, tenant_id, actor.person_id)
+    if await _member(database, tenant_id, actor.person_id) is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
     if not await _organisation(database, tenant_id):
         raise ConversationConflict("A Personal workspace has nobody to share Coaching with.")
@@ -255,24 +269,11 @@ async def record_feedback(
     """Record agreement with the current focus; the same command is idempotent."""
     if actor.tenant_id != tenant_id or await _member(database, tenant_id, actor.person_id) is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
-    existing = await database.scalar(
-        select(CoachingFeedback).where(
-            CoachingFeedback.tenant_id == tenant_id,
-            CoachingFeedback.person_id == actor.person_id,
-            CoachingFeedback.command_id == command_id,
-        )
-    )
-    if existing is not None:
-        if (
-            existing.agreement != agreement
-            or existing.focus_skill_id != focus_skill_id
-            or existing.mission_origin_submission_id != mission_origin_submission_id
-        ):
-            raise ConversationConflict("This response was already recorded differently.")
-        return
     created_at = (now or datetime.now(UTC)).astimezone(UTC)
-    database.add(
-        CoachingFeedback(
+    # One statement: a concurrent repeat of the same command waits, then sees it.
+    inserted = await database.scalar(
+        insert(CoachingFeedback)
+        .values(
             id=uuid4(),
             tenant_id=tenant_id,
             person_id=actor.person_id,
@@ -282,8 +283,24 @@ async def record_feedback(
             agreement=agreement,
             created_at=created_at,
         )
+        .on_conflict_do_nothing(constraint="uq_coaching_feedback_command")
+        .returning(CoachingFeedback.id)
     )
-    await database.flush()
+    if inserted is None:
+        existing = await database.scalar(
+            select(CoachingFeedback).where(
+                CoachingFeedback.tenant_id == tenant_id,
+                CoachingFeedback.person_id == actor.person_id,
+                CoachingFeedback.command_id == command_id,
+            )
+        )
+        if existing is None or (
+            existing.agreement != agreement
+            or existing.focus_skill_id != focus_skill_id
+            or existing.mission_origin_submission_id != mission_origin_submission_id
+        ):
+            raise ConversationConflict("This response was already recorded differently.")
+        return
     await AuditRepository(database).append(
         tenant_id=tenant_id,
         actor_person_id=actor.person_id,
@@ -315,24 +332,10 @@ async def record_context(
     """
     if actor.tenant_id != tenant_id or await _member(database, tenant_id, actor.person_id) is None:
         raise ConversationDenied("Coaching is unavailable in this workspace.")
-    existing = await database.scalar(
-        select(CoachingLearnerContext).where(
-            CoachingLearnerContext.tenant_id == tenant_id,
-            CoachingLearnerContext.person_id == actor.person_id,
-            CoachingLearnerContext.command_id == command_id,
-        )
-    )
-    if existing is not None:
-        if (
-            existing.context != context
-            or existing.focus_skill_id != focus_skill_id
-            or existing.mission_origin_submission_id != mission_origin_submission_id
-        ):
-            raise ConversationConflict("This note was already saved differently.")
-        return
     created_at = (now or datetime.now(UTC)).astimezone(UTC)
-    database.add(
-        CoachingLearnerContext(
+    inserted = await database.scalar(
+        insert(CoachingLearnerContext)
+        .values(
             id=uuid4(),
             tenant_id=tenant_id,
             person_id=actor.person_id,
@@ -342,8 +345,24 @@ async def record_context(
             context=context,
             created_at=created_at,
         )
+        .on_conflict_do_nothing(constraint="uq_coaching_learner_context_command")
+        .returning(CoachingLearnerContext.id)
     )
-    await database.flush()
+    if inserted is None:
+        existing = await database.scalar(
+            select(CoachingLearnerContext).where(
+                CoachingLearnerContext.tenant_id == tenant_id,
+                CoachingLearnerContext.person_id == actor.person_id,
+                CoachingLearnerContext.command_id == command_id,
+            )
+        )
+        if existing is None or (
+            existing.context != context
+            or existing.focus_skill_id != focus_skill_id
+            or existing.mission_origin_submission_id != mission_origin_submission_id
+        ):
+            raise ConversationConflict("This note was already saved differently.")
+        return
     await AuditRepository(database).append(
         tenant_id=tenant_id,
         actor_person_id=actor.person_id,

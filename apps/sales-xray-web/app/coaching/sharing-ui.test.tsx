@@ -159,4 +159,52 @@ describe("Focus feedback", () => {
     expect(host.textContent).toContain("Saved: “ग्राहक was in a hurry”");
     expect(host.querySelector("textarea")).toBeNull();
   });
+  it("a different choice after a failed try is a new answer, not a conflict", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+        />,
+      ),
+    );
+    await act(async () => button("Agree").click());
+    await flush();
+    await act(async () => button("Not completely").click());
+    await flush();
+    const [first, second] = fetch.mock.calls.map(
+      (call) => JSON.parse(call[1].body).command_id,
+    );
+    expect(first).not.toBe(second);
+    expect(host.textContent).toContain("Recorded.");
+  });
+});
+
+describe("Sharing failures", () => {
+  it("keeps a failed tap's message after the panel reloads", async () => {
+    const view = {
+      available: true,
+      shared: false,
+      revision: 0,
+      reaches: [{ name: "Priya Shah", why: "admin" }],
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(view))
+      .mockResolvedValueOnce(json({}, 500))
+      .mockResolvedValueOnce(json(view));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<SharePanel />));
+    await flush();
+    await act(async () => button("Share with your admins").click());
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(host.textContent).toContain("Not saved. Try again.");
+    expect(host.textContent).toContain("Share with your admins");
+  });
 });
