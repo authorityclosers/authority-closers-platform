@@ -179,9 +179,11 @@ export function DashboardBody({
               status={summaryState.status}
               value={summary?.completed}
               context={
-                summary === null
-                  ? null
-                  : `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+                summary === null ? null : team === null ? (
+                  <Ph w="9em" />
+                ) : (
+                  `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+                )
               }
               accessory={
                 summary && summary.total > 0 ? (

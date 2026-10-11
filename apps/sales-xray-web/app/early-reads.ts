@@ -157,7 +157,13 @@ export function takeEarlyRead(
     return null;
   }
   if (init.signal?.aborted) return null;
-  return early.p.then((answer) => (answer ? responseOf(answer) : null));
+  // Only a success is served: an early "not ready" or error answer may be
+  // stale by the time a later reader asks (a call that finished meanwhile).
+  return early.p.then((answer) =>
+    answer && answer.status >= 200 && answer.status < 300
+      ? responseOf(answer)
+      : null,
+  );
 }
 
 /** The reader got its answer (not cancelled): later reads ask the server. */

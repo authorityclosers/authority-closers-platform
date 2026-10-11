@@ -138,25 +138,46 @@ it("keeps the answer for the next reader when the first is cancelled (double mou
   expect(network).toHaveBeenCalledTimes(3);
 });
 
-it("gives every reader its own copy and keeps the server's status", async () => {
+it("gives every reader its own copy", async () => {
   window.history.replaceState(null, "", "/dashboard");
   (window as EarlyWindow).__sxEarly = {
-    [`${A}/forbidden`]: {
+    [`${A}/session`]: {
       at: Date.now(),
       p: Promise.resolve({
-        status: 403,
-        statusText: "Forbidden",
+        status: 200,
+        statusText: "OK",
         headers: [["content-type", "application/json"]],
-        body: "{}",
+        body: '{"allowance":null}',
       }),
     },
   };
   const both = await Promise.all([
-    earlyFetch(`${A}/forbidden`),
-    earlyFetch(`${A}/forbidden`),
+    earlyFetch(`${A}/session`),
+    earlyFetch(`${A}/session`),
   ]);
-  expect(both.map((response) => response.status)).toEqual([403, 403]);
+  expect(await Promise.all(both.map((response) => response.json()))).toEqual([
+    { allowance: null },
+    { allowance: null },
+  ]);
   expect(network).not.toHaveBeenCalled();
+});
+
+it("asks the server again rather than serve an early failure or not-ready answer", async () => {
+  window.history.replaceState(null, "", "/analysis/calls");
+  (window as EarlyWindow).__sxEarly = {
+    [`${A}/forbidden`]: {
+      at: Date.now(),
+      p: Promise.resolve({
+        status: 409,
+        statusText: "Conflict",
+        headers: [],
+        body: "{}",
+      }),
+    },
+  };
+  const response = await earlyFetch(`${A}/forbidden`);
+  expect(network).toHaveBeenCalledTimes(1);
+  expect(response.status).toBe(403);
 });
 
 it("never serves writes, custom requests, stale or dropped answers", async () => {

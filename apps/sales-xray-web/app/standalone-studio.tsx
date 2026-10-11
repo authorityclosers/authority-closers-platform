@@ -412,6 +412,8 @@ function StandaloneStudioView({
     activeController.current?.abort();
     activeController.current = controller;
     setView({ kind: "selecting", choices, selectedTenantId: tenantId });
+    // Reads started before a workspace was chosen must not be used.
+    dropEarlyReads();
     try {
       await selectWorkspace(tenantId, controller.signal);
       if (controller.signal.aborted || generation.current !== requestGeneration)

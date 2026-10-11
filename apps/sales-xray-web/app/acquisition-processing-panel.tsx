@@ -250,9 +250,13 @@ export function AcquisitionProcessingPanel({
       ? formatElapsed(now - started)
       : null;
 
-  // Analytics only: the person saw the finished analysis (wait in bands).
+  // Analytics only: the person saw the analysis finish here (wait in bands).
+  // A call that was already done when the panel opened is not counted.
+  const sawWorking = useRef(false);
+  if (!hasReport) sawWorking.current = true;
   useEffect(() => {
-    if (!hasReport || staticPreview || !submissionId) return;
+    if (!hasReport || staticPreview || !submissionId || !sawWorking.current)
+      return;
     trackOnce(`analysis-done:${submissionId}`, "sx.analysis_seen_done", {
       wait_band: waitBand(Date.now() - started),
     });
