@@ -185,7 +185,7 @@ def build_learner(
         selected_reason=(
             f"{your.capitalize()} call's report suggested this."
             if suggestion
-            else f"It came up in {count} of {your} last {total} calls on this skill."
+            else f"It needed work in {count} of {your} last {total} calls on this skill."
             if recurring
             else f"One call suggested this. We're still learning {your} pattern."
         ),
@@ -232,7 +232,7 @@ def build_learner(
             relevant_call_count=total,
             attention_call_count=count,
             summary=(
-                f"It came up on {count} different calls. "
+                f"It needed work on {count} different calls. "
                 f"Replay the moments below and see what {you} did each time."
                 if recurring
                 else "So far this comes from one call. It isn't a pattern yet."

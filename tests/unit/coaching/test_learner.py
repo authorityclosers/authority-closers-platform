@@ -258,7 +258,7 @@ def test_a_calls_focus_recurs_only_in_another_comparable_call_with_the_same_skil
 def test_the_pattern_line_counts_every_flagged_call_not_only_the_four_moments() -> None:
     result = view(*(call(index) for index in range(1, 7)))
     assert len(result.evidence) == 4 and result.pattern.attention_call_count == 6
-    assert result.pattern.summary.startswith("It came up on 6 different calls")
+    assert result.pattern.summary.startswith("It needed work on 6 different calls")
     assert "6 of your last 6 calls" in result.focus.selected_reason
 
 
@@ -285,7 +285,9 @@ def test_a_repeated_focus_comes_before_a_one_call_focus_and_then_stays() -> None
 def test_an_admins_read_of_shared_coaching_talks_about_the_rep() -> None:
     history = tuple(call(index) for index in range(1, 4))
     theirs = build_learner(history, person_id=PERSON, tenant_id=TENANT, their=True)
-    assert theirs.focus.selected_reason == "It came up in 3 of their last 3 calls on this skill."
+    assert theirs.focus.selected_reason == (
+        "It needed work in 3 of their last 3 calls on this skill."
+    )
     assert theirs.pattern.summary.endswith("see what they did each time.")
     assert theirs.development_path.explanation.startswith("Their next focus depends on their")
     assert all(" your " not in f" {line} " for line in theirs.limitations)
@@ -295,7 +297,7 @@ def test_an_admins_read_of_shared_coaching_talks_about_the_rep() -> None:
     assert theirs.reflection_question == "What stopped you here?"
     # The same history read by the rep is unchanged.
     mine = view(*history)
-    assert mine.focus.selected_reason == "It came up in 3 of your last 3 calls on this skill."
+    assert mine.focus.selected_reason == "It needed work in 3 of your last 3 calls on this skill."
     assert mine.limitations[0].startswith("This is Sales Xray's reading of your calls.")
     assert "Your reports don't count" in mine.mastery.explanation
     assert mine.mission == theirs.mission and mine.evidence == theirs.evidence

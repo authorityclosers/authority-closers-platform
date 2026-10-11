@@ -25,7 +25,7 @@ export const fictionalCoaching: Coaching & {
     label: "Problem, Impact & Desire Clarity",
     explanation: "Explore the consequence before recommending a solution.",
     why_it_matters: "The recommendation needs a clear purpose.",
-    selected_reason: "It came up in 2 of your last 2 calls on this skill.",
+    selected_reason: "It needed work in 2 of your last 2 calls on this skill.",
     selected_at: "2026-10-09T10:00:00Z",
     status: "active",
     verdict: "Ask one impact question.",

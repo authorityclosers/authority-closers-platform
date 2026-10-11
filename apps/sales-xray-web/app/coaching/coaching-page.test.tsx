@@ -201,6 +201,13 @@ describe("Coaching story", () => {
     expect(mine).toContain("Since your mission started");
     expect(mine).not.toContain("Their next-call mission");
     expect(mine).toContain('aria-label="Moments from your calls"');
+    // One sentence for screen readers, not a row per progress dot.
+    expect(mine).toContain(
+      "Your calls on this skill, oldest first: 1 needed work.",
+    );
+    expect(theirs).toContain(
+      "Their calls on this skill, oldest first: 1 needed work.",
+    );
   });
   it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
     const html = renderToStaticMarkup(

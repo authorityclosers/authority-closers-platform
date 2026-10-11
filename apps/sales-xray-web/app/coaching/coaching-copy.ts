@@ -283,7 +283,7 @@ export const TREND_ARROW: Record<string, string> = {
 
 /** What one call's report said about the focus skill. Never "success". */
 export const POINT_COPY: Record<ProgressPoint["state"], string> = {
-  suggested: "Came up again",
+  suggested: "Needed work",
   no_suggestion: "Skill used, nothing to fix",
   not_covered: "Didn’t come up",
 };
@@ -315,6 +315,15 @@ export const PROGRESS = {
   calls: "Your calls on this skill, oldest first",
   callsLabel: "Your calls on this skill",
   oldestFirst: "oldest first",
+  /** One sentence for screen readers instead of a row per dot. */
+  summary: (needed: number, used: number, missing: number) =>
+    [
+      `${needed} needed work`,
+      used ? `${used} used the skill with nothing to fix` : null,
+      missing ? `${missing} didn’t give a chance to use it` : null,
+    ]
+      .filter(Boolean)
+      .join(", ") + ".",
   correct: (correct: number, relevant: number) =>
     `Done well in ${correct} of ${relevant} chances`,
   sinceMission: (quiet: number, after: number) =>

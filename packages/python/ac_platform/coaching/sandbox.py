@@ -69,7 +69,7 @@ _ONE_CALL = (
     "prove why."
 )
 PLAIN = {
-    "The labelled behaviour occurs in this call.": "It came up on this call.",
+    "The labelled behaviour occurs in this call.": "It needed work on this call.",
     "Keep the same focus; this call alone cannot establish mastery.": (
         "Keep the same focus. One call can’t show it’s mastered."
     ),
@@ -175,7 +175,7 @@ def _plain(value: Any, limit: int = 4000) -> str | None:
     if text is None:
         return None
     if missed := _MISSED.fullmatch(text):
-        return f"It came up in {missed[1]} of the last {missed[2]} calls on this skill."
+        return f"It needed work in {missed[1]} of the last {missed[2]} calls on this skill."
     return PLAIN.get(text, text)
 
 

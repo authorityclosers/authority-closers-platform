@@ -331,8 +331,8 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
         person_id=rep_uuid(TENANT, "syn-fixture-R1"),
         tenant_id=TENANT,
     )
-    assert view.focus and view.focus.selected_reason == "It came up on this call."
-    assert view.pattern.summary == "It came up in 2 of the last 2 calls on this skill."
+    assert view.focus and view.focus.selected_reason == "It needed work on this call."
+    assert view.pattern.summary == "It needed work in 2 of the last 2 calls on this skill."
     assert view.root_cause.alternatives == (
         "Time pressure or missing context could also explain it.",
     )

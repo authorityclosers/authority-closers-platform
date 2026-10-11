@@ -614,9 +614,9 @@
     "focus": {
       "skill_id": "discovery_deep_understanding",
       "label": "Diagnose before prescribing",
-      "explanation": "It came up in 6 of the last 6 calls on this skill.",
+      "explanation": "It needed work in 6 of the last 6 calls on this skill.",
       "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
-      "selected_reason": "It came up on this call.",
+      "selected_reason": "It needed work on this call.",
       "selected_at": "2026-07-23T13:00:00+05:30",
       "status": "active",
       "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."
@@ -624,7 +624,7 @@
     "pattern": {
       "relevant_call_count": 6,
       "attention_call_count": 6,
-      "summary": "It came up in 6 of the last 6 calls on this skill.",
+      "summary": "It needed work in 6 of the last 6 calls on this skill.",
       "relevant_opportunities": 6,
       "occurrence_count": 6,
       "contexts": [],
@@ -1422,9 +1422,9 @@
     "focus": {
       "skill_id": "discovery_deep_understanding",
       "label": "Diagnose before prescribing",
-      "explanation": "It came up in 6 of the last 6 calls on this skill.",
+      "explanation": "It needed work in 6 of the last 6 calls on this skill.",
       "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
-      "selected_reason": "It came up on this call.",
+      "selected_reason": "It needed work on this call.",
       "selected_at": "2026-08-28T14:00:00+05:30",
       "status": "provisional",
       "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."

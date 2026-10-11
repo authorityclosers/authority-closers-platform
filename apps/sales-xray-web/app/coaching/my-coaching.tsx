@@ -72,6 +72,8 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
   const after = points.filter((point) => point.after_mission);
   const quiet = after.filter((point) => point.state === "no_suggestion");
   const firstAfter = points.findIndex((point) => point.after_mission);
+  const count = (state: ProgressPoint["state"]) =>
+    points.filter((point) => point.state === state).length;
   return (
     <div className={styles.progress}>
       <span className={styles.cardLabel} aria-hidden="true">
@@ -79,21 +81,23 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
         {" · "}
         <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
       </span>
-      <ol
-        className={styles.timeline}
-        aria-label={they ? THEIR.calls : PROGRESS.calls}
-      >
+      {/* Screen readers get one sentence, not a row per dot. */}
+      <p className={styles.srOnly}>
+        {they ? THEIR.calls : PROGRESS.calls}:{" "}
+        {PROGRESS.summary(
+          count("suggested"),
+          count("no_suggestion"),
+          count("not_covered"),
+        )}
+      </p>
+      <ol className={styles.timeline} aria-hidden="true">
         {points.map((point, index) => (
           <li
             key={point.submission_id}
             data-state={point.state}
             data-mission-start={index === firstAfter ? "" : undefined}
             title={`${callDate(point.created_at)} · ${POINT_COPY[point.state]}`}
-          >
-            <span className={styles.srOnly}>
-              {callDate(point.created_at)}: {POINT_COPY[point.state]}
-            </span>
-          </li>
+          />
         ))}
       </ol>
       <p className={styles.legend} aria-hidden="true">
