@@ -167,8 +167,10 @@ describe("Coaching story", () => {
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
     expect(html).toContain("कामाला");
+    // No dead controls: feedback buttons appear only once saving works.
+    expect(html).not.toContain("Not completely");
     expect(html).toContain(
-      "Saving agreement, disagreement and reflection is not available yet.",
+      "Saving your agreement, disagreement and reflection comes with sharing.",
     );
   });
   it("teaches in the spec's order and keeps the text short beside a clip", () => {

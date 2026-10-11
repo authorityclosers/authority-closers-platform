@@ -11,6 +11,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
+from ac_platform.coaching import placeholder
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions, verified_narration
@@ -41,7 +42,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         if view.focus is None:
             return view
         topics = await asyncio.to_thread(read_topics)
-        clips = suggestions(topics, skill_id=view.focus.skill_id, gap_type=view.root_cause.gap_type)
+        clips = suggestions(
+            topics, skill_id=view.focus.skill_id, gap_type=view.root_cause.gap_type
+        ) or await asyncio.to_thread(placeholder.clips_for, view.focus.skill_id)
         limitations = view.limitations
         if clips:
             limitations = tuple(
@@ -144,9 +147,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     async def media_source(
         topic_id: str, revision: str, review_id: UUID, request: Request, response: Response
     ) -> StreamingResponse:
-        # Full access is the explicit current Coaching entitlement policy.
-        # Do not expose a future limited stream until durable credits/usage
-        # enforcement exists. A browser timeupdate is not a paywall.
+        # Reviewed exports and free placeholder topics stream in full; locked
+        # placeholder topics have no audio and are refused here, not just in
+        # the browser. A browser timeupdate is not a paywall.
         async with account_library(request, response) as (library, actor):
             now = await library.ownership.sessions._admit()
             await library.ownership.sessions._owner(None, actor, now, shared_identity_locks=True)
@@ -154,15 +157,21 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 r"[0-9a-f]{64}", revision
             ):
                 raise HTTPException(404, "Coaching media is unavailable.", headers=PRIVATE)
-            topics = await asyncio.to_thread(read_topics)
-            topic = next((t for t in topics if t.topic_id == topic_id), None)
-            if (
-                topic is None
-                or topic.transcript.sha256 != revision
-                or not any(clip.review.review_id == review_id for clip in topic.clips())
-            ):
-                raise HTTPException(404, "Coaching media is unavailable.", headers=PRIVATE)
-            iterator = verified_narration(DATASET_ROOT, topic)
+            free = placeholder.playable(topic_id, revision, review_id)
+            if free is not None:
+                iterator = placeholder.narration(free)
+                size = free.audio_bytes
+            else:
+                topics = await asyncio.to_thread(read_topics)
+                topic = next((t for t in topics if t.topic_id == topic_id), None)
+                if (
+                    topic is None
+                    or topic.transcript.sha256 != revision
+                    or not any(clip.review.review_id == review_id for clip in topic.clips())
+                ):
+                    raise HTTPException(404, "Coaching media is unavailable.", headers=PRIVATE)
+                iterator = verified_narration(DATASET_ROOT, topic)
+                size = topic.narration.source_bytes
             try:
                 # Complete hash verification occurs before the first byte.
                 first = await join_thread(lambda: next(iterator, None))
@@ -177,7 +186,6 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 raise
             ranges = request.headers.getlist("range")
             try:
-                size = topic.narration.source_bytes
                 if len(ranges) > 1:
                     raise ValueError("Duplicate range.")
                 start, end = byte_range(ranges[0] if ranges else None, size)

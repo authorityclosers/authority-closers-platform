@@ -102,9 +102,8 @@ export function ClipOfferCard({
             className={kitStyles.button}
             target="_blank"
             rel="noopener noreferrer"
-            title={offer.academy.label}
           >
-            Open the course on the Learner’s Academy
+            {offer.academy.label}
           </a>
         ) : null}
       </div>
@@ -293,15 +292,21 @@ function ClipCard({
           </div>
         </div>
       )}
-      <p>
-        <span className={styles.label}>Why this fits your focus</span>
-        {clip.reason}
-      </p>
-      <ul className={styles.takeaways}>
-        {clip.takeaways.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
+      {locked ? (
+        <p className={styles.note}>{clip.reason}</p>
+      ) : (
+        <>
+          <p>
+            <span className={styles.label}>Why this fits your focus</span>
+            {clip.reason}
+          </p>
+          <ul className={styles.takeaways}>
+            {clip.takeaways.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {locked || state === "limit" ? (
         <ClipOfferCard clip={clip} finished={state === "limit"} />
       ) : null}

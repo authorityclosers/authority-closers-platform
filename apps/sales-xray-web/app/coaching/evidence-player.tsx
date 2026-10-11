@@ -154,8 +154,9 @@ export function EvidencePlayer({
 }
 
 /**
- * The moments behind a focus, every one inspectable (spec 5.5). One-column
- * screens open with one moment; the rest stay one tap away (spec 9, 12.7).
+ * The moments behind a focus, every one inspectable (spec 5.5). Wide screens
+ * open with two moments and one-column screens with one; the rest stay one
+ * tap away (spec 9, 12.7).
  */
 export function MomentList({
   evidence,
@@ -187,6 +188,7 @@ export function MomentList({
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreMoments}`}
+          data-many={evidence.length > 2 ? "" : undefined}
           onClick={() => setExpanded(true)}
         >
           Show all {evidence.length} moments
