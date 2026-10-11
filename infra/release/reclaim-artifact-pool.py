@@ -7,15 +7,18 @@ import argparse
 import json
 import os
 import re
+import runpy
 import shutil
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 SHA = r"[0-9a-f]{40}"
 RECLAIMABLE = re.compile(rf"^(sales-xray-visual-({SHA})-[1-9][0-9]*|ac-sales-xray-web-({SHA}))$")
 REPLACEMENTS = ("ac-application", "ac-sales-xray-web")
+INVENTORY = runpy.run_path(str(Path(__file__).with_name("read-artifact-inventory.py")))
 
 
 class GitHub:
@@ -23,6 +26,7 @@ class GitHub:
         if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None:
             raise ValueError("Repository identity is malformed")
         self.root = f"/repos/{repository}"
+        self.repository = repository
         executable = shutil.which("gh")
         if executable is None:
             raise ValueError("GitHub CLI is unavailable")
@@ -47,33 +51,19 @@ class GitHub:
         )
         if result.returncode != 0:
             raise ValueError(f"GitHub metadata request failed: {path}")
-        return None if delete else json.loads(result.stdout)
+        return (
+            None
+            if delete
+            else json.loads(result.stdout, object_pairs_hook=INVENTORY["unique_object"])
+        )
 
     def artifacts(self) -> list[dict[str, Any]]:
-        pages = self.api("/actions/artifacts?per_page=100", paginate=True)
-        if (
-            not isinstance(pages, list)
-            or not pages
-            or any(
-                not isinstance(page, dict) or not isinstance(page.get("artifacts"), list)
-                for page in pages
-            )
-        ):
-            raise ValueError("Repository artifact inventory could not be proven")
-        artifacts = [artifact for page in pages for artifact in page["artifacts"]]
-        ids = set()
-        for artifact in artifacts:
-            if (
-                not isinstance(artifact, dict)
-                or type(artifact.get("id")) is not int
-                or artifact["id"] <= 0
-                or artifact["id"] in ids
-                or type(artifact.get("size_in_bytes")) is not int
-                or artifact["size_in_bytes"] < 0
-                or not isinstance(artifact.get("name"), str)
-            ):
-                raise ValueError("Repository artifact usage could not be proven")
-            ids.add(artifact["id"])
+        artifacts: list[dict[str, Any]] = INVENTORY["read_inventory"](
+            self.executable,
+            self.repository,
+            "reclamation",
+            fetch=lambda: json.dumps(self.api("/actions/artifacts?per_page=100", paginate=True)),
+        )
         return artifacts
 
     def pulls(self, state: str) -> list[dict[str, Any]]:
