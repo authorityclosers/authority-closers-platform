@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, UserRound } from "lucide-react";
+import { Building2, CloudOff, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -59,6 +59,16 @@ type Read<T> =
   | { status: "ready"; value: T }
   | { status: "error"; message: string };
 
+const OFFLINE = "Check your connection and try again.";
+
+/** The server's sentence ("No organisation selected."), never a bare
+ * HTTP phrase like "Not Found" or "Internal Server Error". */
+function readMessage(error: unknown) {
+  return error instanceof OrgApiError && /[.!?]$/.test(error.message.trim())
+    ? error.message
+    : OFFLINE;
+}
+
 function useRead<T>(read: (signal: AbortSignal) => Promise<T>, on: boolean) {
   const [state, setState] = useState<Read<T>>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -71,13 +81,7 @@ function useRead<T>(read: (signal: AbortSignal) => Promise<T>, on: boolean) {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setState({
-          status: "error",
-          message:
-            error instanceof OrgApiError
-              ? error.message
-              : "Check your connection and try again.",
-        });
+        setState({ status: "error", message: readMessage(error) });
       });
     return () => controller.abort();
   }, [read, on, attempt]);
@@ -175,29 +179,21 @@ function PersonPage({
   );
   const [busy, setBusy] = useState(false);
 
-  const failed = members.status === "error" || activity.status === "error";
+  // The directory read names the person: when it fails, a corner card. A
+  // failed activity read says so in its own place (below), once.
+  const failed = members.status === "error";
+  const failure = members.status === "error" ? members.message : undefined;
   useEffect(() => {
     if (!failed) return;
     notify({
       id: LOAD_NOTICE,
       tone: "error",
       title: "Some of this page could not be loaded.",
-      message:
-        members.status === "error"
-          ? members.message
-          : activity.status === "error"
-            ? activity.message
-            : undefined,
-      action: {
-        label: "Try again",
-        run: () => {
-          if (members.status === "error") retryMembers();
-          if (activity.status === "error") retryActivity();
-        },
-      },
+      message: failure,
+      action: { label: "Try again", run: retryMembers },
     });
     return () => dismissNotice(LOAD_NOTICE);
-  }, [failed, members, activity, retryMembers, retryActivity]);
+  }, [failed, failure, retryMembers]);
 
   const member =
     members.status === "ready" ? findMember(members.value, id) : null;
@@ -302,6 +298,17 @@ function PersonPage({
         />
       ) : activity.status === "loading" ? (
         <ActivitySkeleton />
+      ) : activity.status === "error" ? (
+        <Empty
+          icon={CloudOff}
+          title={
+            isYou
+              ? "Your calls and reports couldn't be loaded"
+              : "Their calls and reports couldn't be loaded"
+          }
+          text={activity.message}
+          action={{ label: "Try again", onClick: retryActivity }}
+        />
       ) : null}
     </>
   );
