@@ -2,6 +2,7 @@
   box-sizing: border-box;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
+  font-size: 14px;
   width: 100%;
   max-width: 1080px;
   margin: 0 auto;
@@ -16,7 +17,7 @@
   margin-bottom: 20px;
 }
 .header h1 {
-  font-size: 24px;
+  font-size: 20px;
   margin: 0 0 6px;
 }
 .header p,
@@ -34,8 +35,11 @@
   display: grid;
   gap: 16px;
 }
+.panelBody {
+  padding: 14px;
+}
 .story h3 {
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.5;
   margin: 10px 0;
 }
@@ -58,7 +62,7 @@
   border-top: 3px solid var(--lx-teal);
 }
 .story .focus {
-  font-size: clamp(21px, 3vw, 28px);
+  font-size: 20px;
 }
 .meta {
   display: flex;
@@ -83,8 +87,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 8px 12px;
+  min-height: 32px;
+  padding: 6px 12px;
   border: 1px solid var(--lx-line-strong);
   border-radius: var(--lx-radius-sm);
   background: var(--lx-surface);
@@ -223,6 +227,9 @@
   border: 1px solid var(--lx-line);
 }
 @media (max-width: 600px) {
+  .button {
+    min-height: 44px;
+  }
   .root {
     padding: 14px 12px;
   }
@@ -238,4 +245,11 @@
   .story p {
     margin: 10px 0;
   }
+}
+
+.mediaSlide {
+  padding: 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
 }

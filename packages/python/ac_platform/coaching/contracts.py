@@ -171,7 +171,7 @@ class TextLesson(Model):
     when_not: str
     checklist: tuple[str, ...]
     source: str
-    own_call: Moment
+    own_call: Moment | None
     next_call_connection: str
 
 
@@ -219,12 +219,43 @@ class LearnerFeedback(Model):
     resolution: Literal["pending", "maintain", "modify", "withdraw"] = "pending"
 
 
+class Slide(Model):
+    segment_id: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=256)
+    bullets: tuple[str, ...] = Field(min_length=1, max_length=5)
+
+
+class ClipSuggestion(Model):
+    topic_id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,99}$")
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_id: UUID
+    title: str
+    kind: Literal["audio", "video"]
+    placeholder: Literal[True] = True
+    voice: Literal["neutral"] = "neutral"
+    access: Literal["full"] = "full"
+    entitlement_policy: Literal["AUT-1678-open-access"] = "AUT-1678-open-access"
+    start_ms: int = Field(ge=0, strict=True)
+    end_ms: int = Field(gt=0, strict=True)
+    reason: str
+    takeaways: tuple[str, ...]
+    transcript_excerpt: str
+    slides: tuple[Slide, ...]
+
+    @model_validator(mode="after")
+    def ordered_clip(self) -> "ClipSuggestion":
+        if self.end_ms <= self.start_ms:
+            raise ValueError("Coaching clips need ordered source timestamps.")
+        return self
+
+
 class CoachingView(Model):
     schema_id: Literal["ac.sales-xray.coaching/1"] = Field(
         default="ac.sales-xray.coaching/1", alias="schema"
     )
     person_id: UUID
     tenant_id: UUID
+    session_id: UUID | None = None
     authority: Literal["provisional"] = "provisional"
     entitlement: Literal["coaching"] = "coaching"
     entitlement_policy: Literal["AUT-1678-open-access"] = "AUT-1678-open-access"
@@ -244,6 +275,7 @@ class CoachingView(Model):
         state="unknown", action="More comparable behavior evidence is needed to assess regression."
     )
     lesson: TextLesson | None
+    media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: LearningAsset | None = None
     other_format: LearningAsset | None = None
     development_path: Path
