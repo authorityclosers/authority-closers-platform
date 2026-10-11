@@ -74,9 +74,16 @@ function MomentRow({
       )}
       {moment.movedToward ? (
         <Field label={MOMENTS.movedToward}>
-          <p className={styles.line}>
-            <Text text={moment.movedToward.text} />
-          </p>
+          {moment.movedToward.quoted ? (
+            <Quote
+              text={<Text text={moment.movedToward.text} />}
+              speaker={speakerOf(people, moment.movedToward.sources[0])}
+            />
+          ) : (
+            <p className={styles.line}>
+              <Text text={moment.movedToward.text} />
+            </p>
+          )}
         </Field>
       ) : null}
       {moment.couldExplore ? (

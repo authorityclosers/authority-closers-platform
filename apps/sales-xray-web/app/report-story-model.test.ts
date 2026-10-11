@@ -181,6 +181,16 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     roles: { seller: "speaker_0", prospect: "speaker_1" },
   });
 
+  it("marks lines that are someone's own words, so they read as speech", () => {
+    expect(model.flow.change?.before.quoted).toBe(true);
+    expect(model.flow.change?.after.quoted).toBe(true);
+    const miss = model.moments.find((m) => m.kind === "Important Miss");
+    expect(miss?.movedToward?.quoted).toBe(true);
+    // The spec example's before/after are summaries, not quotes.
+    const amit = reportStoryModel(amitReport, amitTranscript);
+    expect(amit.flow.change?.before.quoted).toBeUndefined();
+  });
+
   it("shows one summary when the final assessment only restates it", () => {
     expect(report.overview?.final_assessment.assessment).toBeTruthy();
     expect(model.picture.summary?.text).toBe(report.summary);

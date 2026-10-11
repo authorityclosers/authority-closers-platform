@@ -30,6 +30,8 @@ export type Line = {
   sources: ReportEvidence[];
   /** The analysis offers this as a possibility, not an established fact. */
   inferred?: boolean;
+  /** Someone's own words: the text is (nearly all of) one of its quotes. */
+  quoted?: boolean;
 };
 
 export const OUTCOME_STATUSES = [
@@ -219,6 +221,28 @@ const MOMENT_PRIORITY: MomentKind[] = [
   "Risk",
   "Worth Replaying",
 ];
+
+const normal = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[\s\p{P}]+/gu, " ")
+    .trim();
+
+/** A line whose text is one of its own quotes says so, so it reads as speech. */
+function sourced(text: string, sources: ReportEvidence[]): Line {
+  const said = normal(text);
+  const quoted = sources.some((source) => {
+    const quote = normal(source.quote);
+    return (
+      quote === said ||
+      (said.length > 12 && quote.includes(said)) ||
+      (quote.length > 12 &&
+        said.includes(quote) &&
+        quote.length >= said.length * 0.8)
+    );
+  });
+  return quoted ? { text, sources, quoted } : { text, sources };
+}
 
 const words = (text: string) =>
   text
@@ -479,9 +503,12 @@ function momentsFor(
       title: finding.title,
       source,
       why: line(missed.potential_impact, [], true),
-      movedToward:
-        line(missed.closer_response.text, missed.closer_response.evidence) ??
-        undefined,
+      movedToward: clean(missed.closer_response.text)
+        ? sourced(
+            missed.closer_response.text.trim(),
+            missed.closer_response.evidence,
+          )
+        : undefined,
       couldExplore: clean(missed.follow_up) ?? undefined,
     });
   }
@@ -702,9 +729,9 @@ export function reportStoryModel(
     phases: phasesFor(report, transcript?.duration_ms),
     change: change
       ? {
-          before: { text: change.before.text, sources: change.before.evidence },
-          turn: { text: change.change.text, sources: change.change.evidence },
-          after: { text: change.after.text, sources: change.after.evidence },
+          before: sourced(change.before.text, change.before.evidence),
+          turn: sourced(change.change.text, change.change.evidence),
+          after: sourced(change.after.text, change.after.evidence),
           effect: clean(change.possible_effect),
         }
       : null,

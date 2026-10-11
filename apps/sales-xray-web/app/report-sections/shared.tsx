@@ -66,6 +66,18 @@ export function speakerOf(people: People, source: ReportEvidence | undefined) {
   return { name: person.name, role };
 }
 
+/** A line in the call's own words reads as speech: in quotes, with who said it. */
+export function Words({ line, people }: { line: Line; people: People }) {
+  if (!line.quoted) return <Text text={line.text} />;
+  const who = speakerOf(people, line.sources[0]);
+  return (
+    <span className={styles.said}>
+      “<Text text={line.text} />”
+      {who ? <span className={styles.saidBy}>{who.name}</span> : null}
+    </span>
+  );
+}
+
 /** One quiet line naming what this report leaves out of a pillar. */
 export function Gap({ items }: { items: string[] }) {
   if (!items.length) return null;

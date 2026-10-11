@@ -19,7 +19,14 @@ import {
   StoryCard,
   type MetricItem,
 } from "../report-visuals/visuals";
-import { Gap, Text, speakerOf, type People, type Select } from "./shared";
+import {
+  Gap,
+  Text,
+  Words,
+  speakerOf,
+  type People,
+  type Select,
+} from "./shared";
 import styles from "./sections.module.css";
 
 /** "62 : 38" → [62, 38], for the measured split under the figure. */
@@ -145,10 +152,10 @@ export function CallFlow({
                     {flow.change.beforeLabel}
                   </strong>
                 ) : null}
-                <Text text={flow.change.before.text} />
+                <Words line={flow.change.before} people={people} />
               </>
             }
-            turn={<Text text={flow.change.turn.text} />}
+            turn={<Words line={flow.change.turn} people={people} />}
             after={
               <>
                 {flow.change.afterLabel ? (
@@ -156,7 +163,7 @@ export function CallFlow({
                     {flow.change.afterLabel}
                   </strong>
                 ) : null}
-                <Text text={flow.change.after.text} />
+                <Words line={flow.change.after} people={people} />
               </>
             }
             turnLabel={CALL_FLOW.switch}

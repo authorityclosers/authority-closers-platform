@@ -149,6 +149,18 @@
   font-weight: 600;
   line-height: 1.4;
 }
+/* Someone's own words inside a summary box. */
+.said {
+  color: var(--sx-ink);
+}
+.saidBy {
+  display: block;
+  margin-top: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
 .stepName {
   display: block;
   color: var(--sx-ink);
