@@ -72,6 +72,11 @@ TARGET = UUID("90ec1979-0d85-4829-ba8d-cabde2a9a9d3")
 NAMESPACE = UUID("1dfdfac9-bfa2-49ab-b061-d98776454e0f")
 POLICY = "synthetic-dev-authored/1"
 EXPECTED_BUNDLES = 3360
+STOCK_SKILL_NOTE = "Relevant behaviour is evidenced by the cited turn."
+STOCK_MOMENT_REASONS = {
+    "This changed the information available for the buying decision.",
+    "The concern needed a specific answer; raising it alone did not establish approval or a loss.",
+}
 
 
 def short_title(value: Any, limit: int = 48) -> str:
@@ -233,7 +238,14 @@ def authored_pillars(
                 continue
             cited = refs(row.get("evidence"))
             title, why = short_title(row.get("title")), text(row.get("why_it_mattered"))
-            if cited and title and why:
+            if not why:
+                continue
+            if why in STOCK_MOMENT_REASONS:
+                if row["category"] == "Important Miss":
+                    # A stock reason does not explain this specific missed chance.
+                    continue
+                why = ""
+            if cited and title:
                 moments.append(
                     {
                         "kind": row["category"],
@@ -350,6 +362,7 @@ def authored_pillars(
             speaker_roles=None,
             normalize_evidence=lambda ref: ref,
             canonical_read=True,
+            canonical_synthetic=transcript.get("synthetic") is True,
         ).model_dump(mode="json")
     except (ValueError, KeyError, TypeError):
         # Optional presentation never prevents the accepted canonical call import.
@@ -449,12 +462,15 @@ def adapted_report(bundle: SyntheticCallBundle) -> tuple[dict, dict, dict, str]:
         if row["name"] != expected["label"]:
             raise ValueError("The authored skill does not match the controlled report profile.")
         refs = evidence(row.get("evidence"))
+        observation = row.get("observation") or "No transcript citation was published."
+        if isinstance(observation, str) and observation.strip() == STOCK_SKILL_NOTE:
+            observation = "" if refs else "No transcript citation was published."
         dimensions.append(
             {
                 "dimension_id": expected["id"],
                 "label": expected["label"],
                 "status": "observed" if refs else "insufficient_evidence",
-                "observation": row.get("observation") or "No transcript citation was published.",
+                "observation": observation,
                 "citations": expected["citations"],
                 "evidence": refs,
             }

@@ -47,6 +47,17 @@ the dry-run receipt counts `reports_with_pillars` and `reports_without_pillars`.
 Previously loaded report payloads remain immutable: a replay with a different
 report hash refuses the change rather than updating it in place.
 
+The adapter leaves the two exact published stock moment reasons empty, retaining
+the moment's title, citation and any authored direction. It omits an Important
+Miss whose only reason is stock text. The exact stock skill observation is also
+left empty for a cited observed skill; its authored call state, profile citations
+and evidence remain intact. Other authored reasons and observations retain the
+existing report limits.
+These empty strings require the committed synthetic canonical codec and browser
+parser; provider reports still require actual notes. The Report and Document
+show the skill's state and evidence without an observation line. An uncited skill
+keeps its insufficient-evidence state and the existing no-citation explanation.
+
 Synthetic usage is released immediately and has a zero-second no-work settlement.
 Completed local jobs cannot enter the provider queue. Member identities have no
 password, provider identity or verified-email assertion. Replays skip identical
