@@ -38,6 +38,13 @@ B's first font class did not win that cascade; the subsequent A/B fixes are
 independently verified. Closed-menu, font and phone-overlap failures are superseded.
 The top bar now correctly says Report in the inspected screenshots.
 
+After B replaced the example data with Dipak's exact scenario (`c195f4cb`),
+another focused Report run passes all four pairs and all nine steps at unchanged
+recorded start/end HEAD `c195f4cb`. Menu reachability, six sections/eight skills,
+reload, Document, valid six-bookmark Word file and return all pass; no browser,
+server or visual errors. Latest phone overview was inspected. Live API readiness
+returns HTTP 200; the backend deploy log was checked without printing raw lines.
+
 The font audit checks native element visibility, text ranges and ancestor
 transform scaling. A read-only center-point hit test checks the open menu's
 Copy link action without changing the clipboard or invoking a download.
@@ -71,6 +78,8 @@ External screenshots/JSON: `/home/acdev/strikes/1694/shots/`:
   phone/light view-selection interruption; no persistent defect conclusion yet.
 - `2026-10-11-workbench-coaching-repeat/`: 390/light PASS, all 11 steps;
   navigation/refresh counts and unchanged recorded start/end HEAD.
+- `2026-10-11-workbench-dipak-example/`: final exact-example Report PASS, four
+  pairs/all nine steps, at recorded HEAD `c195f4cb`.
 
 Strike NOTES records current verdicts, commits and exact owning INBOX handoffs.
 Two queued checks ended 143; those incomplete runs do not establish acceptance.
