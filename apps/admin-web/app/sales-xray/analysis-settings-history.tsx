@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { responseSchema } from "./analysis-settings-contract";
 import styles from "./analysis-settings.module.css";
+import { istStamp } from "../lib/time";
 
 const historySchema = z
   .object({
@@ -115,7 +116,7 @@ function RevisionHistory() {
                 <strong>Revision {item.revision}</strong>
                 {item.created_at && (
                   <time dateTime={item.created_at}>
-                    {new Date(item.created_at).toLocaleString("en")}
+                    {istStamp(item.created_at)}
                   </time>
                 )}
                 <dl>

@@ -7,6 +7,7 @@ import { CircleAlert, FileAudio, Search } from "lucide-react";
 import { Badge, Button, Empty, Panel, Skeleton, kitStyles } from "../../ui/kit";
 import { loadAdminRecordings, type AdminRecording } from "./recordings-api";
 import styles from "./reviewers.module.css";
+import { istStamp } from "../../lib/time";
 
 type InventoryState =
   | { status: "loading"; items: readonly AdminRecording[] }
@@ -19,10 +20,7 @@ type InventoryState =
     };
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return istStamp(value, value);
 }
 
 function formatBytes(value: number): string {

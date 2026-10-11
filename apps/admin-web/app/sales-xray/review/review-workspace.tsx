@@ -44,6 +44,7 @@ import {
   REVIEWER_INVITATIONS_AVAILABLE,
 } from "./review-invitation-panel";
 import { localReviewDate, reviewDateEpoch } from "./review-date";
+import { istStamp } from "../../lib/time";
 
 const lensLabels: Record<ReviewMode, { label: string; detail: string }> = {
   sales: { label: "Sales expert", detail: "Coaching and call quality" },
@@ -91,10 +92,7 @@ type FormErrors = Partial<
 >;
 
 function formatEpoch(epoch: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(epoch * 1000));
+  return istStamp(new Date(epoch * 1000), "Unavailable");
 }
 
 function shortId(value: string): string {

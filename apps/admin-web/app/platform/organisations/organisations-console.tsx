@@ -30,9 +30,9 @@ import {
   kitStyles,
 } from "../../ui/kit";
 import styles from "./organisations.module.css";
+import { istStamp } from "../../lib/time";
 
-const date = (value: string | null) =>
-  value ? new Date(value).toLocaleString() : "—";
+const date = (value: string | null) => istStamp(value);
 
 export function OrganisationsConsole() {
   const [identity, setIdentity] = useState<PlatformIdentity | null>(null);

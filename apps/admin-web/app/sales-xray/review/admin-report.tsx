@@ -12,6 +12,7 @@ import {
   type AdminReportApiError,
 } from "./admin-report-api";
 import styles from "./reviewers.module.css";
+import { istStamp } from "../../lib/time";
 
 type ReportState =
   | { status: "loading"; report: null }
@@ -25,10 +26,7 @@ function shortId(value: string): string {
 }
 
 function formatRetention(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return istStamp(value, value);
 }
 
 function FindingList({
