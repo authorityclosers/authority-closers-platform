@@ -25,6 +25,7 @@ from sqlalchemy import (
     Table,
     Uuid,
     create_engine,
+    func,
     insert,
     select,
     text,
@@ -46,6 +47,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
 )
 from ac_platform.conversation_intelligence.org_insights import InsightFilters, OrganisationInsights
+from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.speaker_map_models import (
     ConversationSpeakerMapRevision,
 )
@@ -65,6 +67,7 @@ MODELS = (
     ConversationSandboxOrganisation,
     ConversationSyntheticRecord,
     ConversationGuestSubmission,
+    ConversationRetainedC5Version,
     Person,
 )
 
@@ -88,6 +91,8 @@ scope_table = Table(
     Column("created_at", DateTime(timezone=True)),
     Column("seconds", Integer),
     Column("recording_id", Uuid),
+    Column("recording_person_id", Uuid),
+    Column("generation", Integer),
 )
 
 
@@ -180,6 +185,8 @@ async def seed_calls(
                     created_at=at,
                     seconds=seconds,
                     recording_id=ids[recording],
+                    recording_person_id=ids[owner],
+                    generation=1,
                 )
             )
             await db.execute(
@@ -234,16 +241,22 @@ async def seed_calls(
     return tenant, ids
 
 
-def library(db: AsyncSession, tenant: UUID) -> OrganisationInsights:
+def library(db: AsyncSession, tenant: UUID, *, recordings: bool = False) -> OrganisationInsights:
     rows = select(
         scope_table.c.submission_id,
         scope_table.c.owner,
         scope_table.c.created_at,
         scope_table.c.seconds,
         scope_table.c.recording_id,
+        scope_table.c.recording_person_id,
+        scope_table.c.generation,
     )
     return OrganisationInsights(
-        db, tenant, scope_ids=select(scope_table.c.submission_text), scope_rows=rows
+        db,
+        tenant,
+        scope_ids=select(scope_table.c.submission_text),
+        scope_rows=rows,
+        recordings=recordings,
     )
 
 
@@ -273,7 +286,7 @@ def test_real_calls_project_aggregate_and_leave_with_the_library(database_url: U
             asha = rows[str(ids["s1"])]
             assert (asha.outcome, asha.talk_share, asha.language) == ("won", 55, "hi-en")
             assert asha.skills == "OONOOOOO" and asha.objection == "price"
-            assert asha.duration_ms == 600_000 and asha.source_ref == f"{ids['d1']}:1"
+            assert asha.duration_ms == 600_000 and asha.source_ref == f"d{ids['d1']}:1"
             ravi = rows[str(ids["s2"])]
             assert (ravi.outcome, ravi.talk_share, ravi.objection) == ("lost", None, "timing|price")
 
@@ -319,12 +332,20 @@ def test_real_calls_project_aggregate_and_leave_with_the_library(database_url: U
                 InsightFilters.window(NOW, span="12m", person=str(ids["ravi"]))
             )
             assert ravi_calls["total"] == 1 and ravi_calls["items"][0]["outcome"] == "lost"
-            page = await library(db, tenant).calls(InsightFilters.window(NOW, span="12m"))
+            page = await library(db, tenant, recordings=True).calls(
+                InsightFilters.window(NOW, span="12m")
+            )
+            # The Sales Xray answer never carries internal recording ids.
+            plain = await library(db, tenant).calls(InsightFilters.window(NOW, span="12m"))
+            assert "recording_id" not in plain["items"][0]
             assert [item["key"] for item in page["items"]] == [str(ids["s1"]), str(ids["s2"])]
             assert page["items"][0]["objections"] == ["price"] and page["next_offset"] is None
             # Admin opens a real call in the review console by its recording.
             assert page["items"][0]["recording_id"] == str(ids["r1"])
-            assert strongest[0]["recording_id"] == str(ids["r1"])
+            ranked = await library(db, tenant, recordings=True).overview(
+                InsightFilters.window(NOW, span="12m"), now=NOW
+            )
+            assert ranked["calls"]["strongest"][0]["recording_id"] == str(ids["r1"])
 
             # A call the library no longer shows drops out of every read at once ...
             await db.execute(scope_table.delete().where(scope_table.c.submission_id == ids["s2"]))
@@ -371,7 +392,7 @@ def test_a_newer_report_replaces_the_projected_row(database_url: URL) -> None:
             row = await db.get(ConversationInsightCall, (tenant, "call", str(ids["s1"])))
             assert row is not None
             assert (row.source_ref, row.outcome, row.skills) == (
-                f"{newer}:1",
+                f"d{newer}:1",
                 "follow_up",
                 "OOOOOOOO",
             )
@@ -441,7 +462,7 @@ def test_a_new_seller_choice_recomputes_talk_share_on_the_same_report(
                 populate_existing=True,
             )
             assert row is not None
-            assert (row.talk_share, row.source_ref) == (45, f"{ids['d1']}:2")
+            assert (row.talk_share, row.source_ref) == (45, f"d{ids['d1']}:2")
 
     run(database_url, body)
 
@@ -611,7 +632,7 @@ def test_sandbox_history_projects_in_sql_and_is_labelled_synthetic(database_url:
             assert page["synthetic"] is True
             assert [item["key"] for item in page["items"]] == ["syn-x-C1", "syn-x-C2", "syn-x-C3"]
             assert page["items"][0]["person"] == "Meera Joshi"
-            assert page["items"][0]["recording_id"] is None
+            assert "recording_id" not in page["items"][0]
 
             # Cached per projection state: a repeat read is served from the cache,
             # a refresh that projects new rows reads fresh.
@@ -653,5 +674,107 @@ def test_projection_keeps_payloads_out(database_url: URL) -> None:
             rows = (await db.execute(text("SELECT * FROM conversation_insight_calls"))).all()
             dumped = json.dumps([list(map(str, row)) for row in rows])
             assert "Meera" not in dumped and "Fictional Advisory" not in dumped
+
+    run(database_url, body)
+
+
+def test_a_recovered_report_wins_like_the_report_page(database_url: URL) -> None:
+    async def body(sessions: async_sessionmaker[AsyncSession]) -> None:
+        tenant, ids = await seed_calls(sessions)
+        recovered = uuid4()
+        async with sessions() as db, db.begin():
+            await db.execute(
+                insert(ConversationRetainedC5Version.__table__).values(
+                    id=recovered,
+                    tenant_id=tenant,
+                    person_id=ids["ravi"],
+                    recording_id=ids["r2"],
+                    generation=1,
+                    payload=report("closed", {}, []),
+                    created_at=NOW,
+                )
+            )
+            await library(db, tenant).refresh(now=NOW)
+            row = await db.get(ConversationInsightCall, (tenant, "call", str(ids["s2"])))
+            assert row is not None
+            assert (row.outcome, row.source_ref) == ("won", f"r{recovered}:0")
+
+    run(database_url, body)
+
+
+def test_two_refreshes_at_once_both_succeed(database_url: URL) -> None:
+    async def body(sessions: async_sessionmaker[AsyncSession]) -> None:
+        tenant, _ids = await seed_calls(sessions)
+
+        async def one() -> dict[str, int]:
+            async with sessions() as db, db.begin():
+                return await library(db, tenant).refresh(now=NOW)
+
+        first, second = await asyncio.gather(one(), one())
+        assert first["pending"] == 0 and second["pending"] == 0
+        async with sessions() as db:
+            count = await db.scalar(select(func.count()).select_from(ConversationInsightCall))
+            assert count == 2
+
+    run(database_url, body)
+
+
+def test_sandbox_odd_records_and_new_revisions(database_url: URL) -> None:
+    async def body(sessions: async_sessionmaker[AsyncSession]) -> None:
+        tenant = await seed_sandbox(sessions)
+        async with sessions() as db, db.begin():
+            # A text holding \u0000 can't become jsonb: skipped, never blocking a batch.
+            broken = summary("syn-x-C0", "syn-x-R1", "2026-10-02T10:00:00+05:30", "Won")
+            broken["objection"] = "price\u0000"
+            await db.execute(
+                insert(ConversationSyntheticRecord.__table__).values(
+                    tenant_id=tenant,
+                    revision=1,
+                    kind="call_summary",
+                    synthetic_key="syn-x-C0",
+                    business_id="syn-x",
+                    payload=broken,
+                    occurred_at=datetime(2026, 10, 2, 4, 30, tzinfo=UTC),
+                )
+            )
+            # Duplicate skill ids never shift the eight states.
+            twice = summary("syn-x-C9", "syn-x-R2", "2026-10-03T10:00:00+05:30", "Lost")
+            twice["report"]["your_skills_on_this_call"][7]["skill_id"] = "skill-1"
+            await db.execute(
+                insert(ConversationSyntheticRecord.__table__).values(
+                    tenant_id=tenant,
+                    revision=1,
+                    kind="call_summary",
+                    synthetic_key="syn-x-C9",
+                    business_id="syn-x",
+                    payload=twice,
+                    occurred_at=datetime(2026, 10, 3, 4, 30, tzinfo=UTC),
+                )
+            )
+            insights = OrganisationInsights(db, tenant)
+            assert await insights.pending() == 4
+            assert (await insights.refresh(now=NOW))["pending"] == 0
+            keys = set(await db.scalars(select(ConversationInsightCall.call_key)))
+            assert "syn-x-C0" not in keys and "syn-x-C9" in keys
+            twin = await db.get(ConversationInsightCall, (tenant, "synthetic", "syn-x-C9"))
+            assert twin is not None and twin.skills is None
+            # A newer revision imported after the last refresh is pending.
+            await db.execute(
+                insert(ConversationSyntheticRecord.__table__).values(
+                    tenant_id=tenant,
+                    revision=2,
+                    kind="call_summary",
+                    synthetic_key="syn-x-C1",
+                    business_id="syn-x",
+                    payload=summary("syn-x-C1", "syn-x-R1", "2026-10-01T10:00:00+05:30", "Lost"),
+                    occurred_at=datetime(2026, 10, 1, 4, 30, tzinfo=UTC),
+                    imported_at=NOW + timedelta(minutes=5),
+                )
+            )
+            assert await OrganisationInsights(db, tenant).pending() == 1
+            refreshed = await OrganisationInsights(db, tenant).refresh(
+                now=NOW + timedelta(minutes=10)
+            )
+            assert refreshed == {"projected": 1, "pending": 0}
 
     run(database_url, body)

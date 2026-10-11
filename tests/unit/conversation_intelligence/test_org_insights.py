@@ -150,3 +150,22 @@ def test_authored_history_windows_end_on_the_hour_for_one_cache_entry() -> None:
     assert a.since is not None and a.until - a.since == timedelta(days=30)
     exact = InsightFilters.window(NOW, span="all").to_the_hour()
     assert exact.until == NOW and exact.since is None
+
+
+def test_explicit_windows_are_never_moved_and_dates_stay_in_range() -> None:
+    start = datetime(2026, 9, 30, 18, 30, tzinfo=UTC)
+    end = datetime(2026, 10, 2, 18, 30, tzinfo=UTC)
+    fixed = InsightFilters.window(NOW, start=start, end=end)
+    assert fixed.fixed and fixed.to_the_hour() == fixed
+    kwargs: dict[str, Any] = dict(
+        now=NOW, span=None, person=None, team=None, outcome=None, language=None
+    )
+    for early, late in ((date(1999, 12, 31), None), (None, date(9999, 12, 31))):
+        query = "&".join(
+            name + "=" + str(value)
+            for name, value in (("from", early), ("to", late))
+            if value is not None
+        )
+        with pytest.raises(HTTPException) as refused:
+            insight_filters(_request(query), start=early, end=late, **kwargs)
+        assert refused.value.status_code == 422

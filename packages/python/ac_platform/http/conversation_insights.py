@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 INDIA = ZoneInfo("Asia/Kolkata")
+FIRST_DAY, LAST_DAY = date(2000, 1, 1), date(2100, 12, 31)
 PARAMS = {"range", "from", "to", "person", "team", "outcome", "language", "offset"}
 DENIED = "Only owners and admins of this organisation can see the company view."
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -92,6 +93,9 @@ def insight_filters(
         raise HTTPException(422, "Use 30d, 90d, 12m or all.")
     if outcome is not None and outcome not in OUTCOMES:
         raise HTTPException(422, "Use a known outcome.")
+    for value in (start, end):
+        if value is not None and not FIRST_DAY <= value <= LAST_DAY:
+            raise HTTPException(422, "Pick dates between 2000 and 2100.")
     since = None if start is None else datetime.combine(start, time(), INDIA).astimezone(UTC)
     until = (
         None
@@ -112,19 +116,23 @@ def insight_filters(
     )
 
 
-def library_insights(database: AsyncSession, actor: ActorContext) -> OrganisationInsights:
+def library_insights(
+    database: AsyncSession, actor: ActorContext, *, recordings: bool = False
+) -> OrganisationInsights:
     """Insights limited to the calls the organisation's library shows today."""
     assert actor.tenant_id is not None
     now = datetime.now(UTC)
     ids, rows = scope_columns(_account_library_query(actor, now, every_owner=True))
-    return OrganisationInsights(database, actor.tenant_id, scope_ids=ids, scope_rows=rows)
+    return OrganisationInsights(
+        database, actor.tenant_id, scope_ids=ids, scope_rows=rows, recordings=recordings
+    )
 
 
 def tenant_insights(
     database: AsyncSession, actor: ActorContext, tenant_id: Any
 ) -> OrganisationInsights:
     """The Admin counterpart: the same scope for one chosen organisation."""
-    return library_insights(database, replace(actor, tenant_id=tenant_id))
+    return library_insights(database, replace(actor, tenant_id=tenant_id), recordings=True)
 
 
 async def insight_organisations(
