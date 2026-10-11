@@ -93,14 +93,19 @@ def main():
                             )
                         )
                         expect(populated).to_be_visible()
-                        before = state["reads"]
-                        state["stall"] = True
                         if kind == "list":
+                            before = state["reads"]
+                            state["stall"] = True
                             page.get_by_role("searchbox", name="Search prospects").fill(
                                 f"Fictional {theme}"
                             )
                         else:
-                            states.get_by_role("button", name="Signed out", exact=True).click()
+                            # Re-enabling the same scope can retain already-loaded
+                            # data. Unmount the profile to test a fresh initial GET.
+                            states.get_by_role("button", name="Preview list", exact=True).click()
+                            expect(page.get_by_role("feed", name="Prospects list")).to_be_visible()
+                            before = state["reads"]
+                            state["stall"] = True
                             states.get_by_role("button", name="Preview profile", exact=True).click()
                         expect(page.locator('[aria-busy="true"]')).to_be_visible()
                         expect(populated).to_have_count(0)

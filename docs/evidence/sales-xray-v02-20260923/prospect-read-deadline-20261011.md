@@ -42,3 +42,10 @@ The existing AC-UXA-01 recovery and asynchronous-status requirements apply.
 This bounded read repair does not activate providers, schema or persistence.
 Production Report acceptance, saved-call route adoption and canonical
 Company/outcome storage retain their recorded H/QA, A and C/E dependencies.
+
+The first shared attempt verified the desktop light list timeout/retry and
+captured two PNGs, then failed its profile-skeleton precondition: toggling
+access for the same already-loaded profile retains that view's data. The
+corrected runner unmounts the profile through the list before stalling a fresh
+profile GET. The partial attempt is preserved separately and is not a complete
+browser pass. Final committed-source verification remains required.
