@@ -33,7 +33,7 @@ import {
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
 import * as processingReviewPort from "./processing-review-port";
-import { spokenClipRange } from "./lightbox/time";
+import { formatClock, spokenClipRange } from "./lightbox/time";
 import {
   allowance,
   entry,
@@ -1197,18 +1197,19 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   );
   expect(container.textContent).toContain("Sign in to save");
   expect(container.textContent).toContain("Download report");
+  // A finished call opens on the six-part Report.
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(7);
+  ).toHaveLength(6);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await clickReportSection("Moments");
+  await clickReportSection("Moments That Mattered");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 
@@ -2678,7 +2679,7 @@ it("keeps one steady headline through a long wait without changing progress, ide
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
 });
 
 it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
@@ -3217,9 +3218,10 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
+  // A saved call opens straight on the six-part Report, nothing hidden.
   expect(
     container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("reading");
+  ).toBe("story");
   expect(
     container.querySelectorAll("[data-report-mode-section][hidden]"),
   ).toHaveLength(0);
@@ -3230,38 +3232,13 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
       ),
     ].map((link) => link.getAttribute("aria-label")),
   ).toEqual([
-    "Overview",
-    "Moments",
-    "Prospect",
-    "Next-call plan",
-    "Sales skills",
-    "Call signals",
-    "Raw data",
-  ]);
-  await act(async () =>
-    container
-      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
-      .click(),
-  );
-  await flush();
-  expect(
-    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("story");
-  const reportSections = [
     "The Big Picture",
     "How the Call Played Out",
-    "What Worked & What Didn't",
+    "What Worked — & What Didn't",
     "Moments That Mattered",
     "Your Skills on This Call",
     "Where the Deal Stands",
-  ];
-  expect(
-    [
-      ...container.querySelectorAll<HTMLAnchorElement>(
-        '[aria-label="Explore your sales report"] a',
-      ),
-    ].map((link) => link.getAttribute("aria-label")),
-  ).toEqual(reportSections);
+  ]);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
@@ -3279,11 +3256,11 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   ).not.toBeNull();
   expect(container.querySelector('a[href="/prospects"]')).not.toBeNull();
   const prospectSource = envelope.report.content.strengths[0].evidence[0];
-  // The clip shows its time; its accessible name says what it plays.
+  // The play chip shows its time; its accessible name says what it plays.
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        `[aria-label="Play source moment, ${spokenClipRange(prospectSource.start_ms, prospectSource.end_ms)}"]`,
+        `[aria-label="Play ${formatClock(prospectSource.start_ms)}: Strongest part"]`,
       )!
       .click(),
   );
@@ -3305,7 +3282,8 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',
@@ -3398,7 +3376,8 @@ it("toggles every visible clip control against the one shared player", async () 
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',
@@ -3512,7 +3491,8 @@ it("keeps the current evidence stop boundary when contextual playback revalidati
   existing = true;
   claimed = true;
   accepted = true;
-  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  // The classic Reading view keeps every original clip control.
+  window.history.replaceState(null, "", `/?call=${submissionId}&view=reading`);
   await mount();
   const audio = container.querySelector<HTMLAudioElement>(
     '[aria-label="Call audio player"] audio',

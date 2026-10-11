@@ -1155,24 +1155,14 @@ export function ReportModes({
       <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
         {(storyPanels.length
           ? ([
-              ["story", "Report", "The six-part Report", FileText],
+              ["story", "Report", "Report view", FileText],
               ...(coachingPanels.length
                 ? ([
-                    [
-                      "coaching",
-                      "Coaching",
-                      "Coaching for this call",
-                      Lightbulb,
-                    ],
+                    ["coaching", "Coaching", "Coaching view", Lightbulb],
                   ] as const)
                 : []),
-              [
-                "tabs",
-                "Details",
-                "Every section, transcript and raw data",
-                PanelsTopLeft,
-              ],
-              ["document", "Print", "Printable document", BookOpen],
+              ["tabs", "Details", "Details view", PanelsTopLeft],
+              ["document", "Document", "Document view", BookOpen],
             ] as const)
           : ([
               ["reading", "Reading view", "Reading view", BookOpen],
