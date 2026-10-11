@@ -70,9 +70,7 @@ export function BulkImportPreview({
     preview?.members.find((member) => member.personId === id)?.name ??
     "Unassigned";
   return (
-    <Panel
-      title="Import recordings"
-    >
+    <Panel title="Import recordings">
       <div className={styles.body}>
         <Field
           label="Recording folder"

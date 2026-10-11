@@ -35,3 +35,10 @@ production screenshots have no sideways overflow or page errors; visible file
 inputs/buttons measure exactly 32px desktop and 44px phone. Files:
 `/home/acdev/strikes/1676/shots/2026-10-11/bulk-import-{1440,390}-{light,dark}.png`.
 The reproducible harness and receipt are in the strike's `bulk-browser/` folder.
+
+CI run 38099761207 built and tested the frontend successfully, then its final
+Prettier step rejected the preview's multiline Panel opening. The repository
+formatter collapses that opening to one line. This changes only whitespace;
+the existing 36 cases and production screenshots exercise identical JSX.
+CI's Python gates and acquisition browser also passed at 8f0f42a. The unrelated
+shared-migration slot with #442 remains recorded separately.
