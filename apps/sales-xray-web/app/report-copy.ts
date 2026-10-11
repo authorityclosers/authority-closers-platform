@@ -511,6 +511,51 @@ export const NAV = {
 /** After a jump to a moment or a skill: "Back to Moments That Mattered". */
 export const backTo = (where: string) => `Back to ${where}`;
 
+/* ── Details view: call measurements (counted, no AI) ────────────────── */
+
+export const MEASURE = {
+  title: "Call measurements",
+  subtitle: "Counted from the call's timing, with no AI",
+  callLength: "Call length",
+  /** The recording has no length, so the transcript's first to last line. */
+  transcriptLength: "Transcript length",
+  notMeasured: "Not measured",
+  talkShare: "talk share",
+  talkShareNotMeasured: "Talk share not measured",
+  questions: "Questions:",
+  notCounted: "not counted",
+  meaning:
+    "Talk share is each person's part of the talking. Questions counts the questions they asked.",
+  byMinute: "Talk share by minute",
+  timesTitle: "Talk time and longest turns",
+  talkTime: "Talk time:",
+  timesMeaning: [
+    "Times come from the transcript, so they can include short pauses.",
+    "A turn carries on through pauses of up to 2 seconds if nobody else speaks.",
+    "Went quiet: under 10% of the talking for 3 minutes. Came back: a later minute reaches 25%.",
+  ],
+  longest: "Longest turns",
+};
+
+/** A speaker the call hasn't named yet: "Speaker 2". */
+export const speakerN = (index: number) => `Speaker ${index + 1}`;
+
+/** "Went quiet at minute 13 · came back" */
+export const wentQuiet = (minute: number, cameBack: boolean) =>
+  `Went quiet at minute ${minute} · ${cameBack ? "came back" : "stayed quiet"}`;
+
+/** Screen readers: what the talk-share chart shows. */
+export const talkShareChart = (
+  name: string,
+  minutes: number,
+  quiet: { minute: number; cameBack: boolean } | null,
+) =>
+  `Talk share by minute for ${name} over ${minutes} minutes. ${
+    quiet
+      ? `Went quiet at minute ${quiet.minute}, ${quiet.cameBack ? "then came back." : "and stayed quiet."}`
+      : "Never went quiet."
+  }`;
+
 export const DOCUMENT = {
   kicker: "Sales Xray · Call Report",
   untitled: "Sales call",

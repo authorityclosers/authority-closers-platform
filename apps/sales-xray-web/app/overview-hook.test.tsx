@@ -232,8 +232,10 @@ describe("OverviewHook phase cards", () => {
       report.summary,
     );
     expect(visuals.textContent).toContain("Call length02:00");
-    expect(visuals.textContent).toContain("alex");
-    expect(visuals.textContent).toContain("sam");
+    // Unnamed voices read as the rest of the report names them, never by id.
+    expect(visuals.textContent).toContain("Speaker 1");
+    expect(visuals.textContent).toContain("Speaker 2");
+    expect(visuals.textContent).not.toMatch(/alex|sam/);
     expect(
       visuals.querySelector('[aria-label="Call map AI visual readings"]'),
     ).toBeNull();

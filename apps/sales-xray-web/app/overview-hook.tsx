@@ -825,6 +825,7 @@ export function OverviewHook({
         transcript={transcript}
         callMap={null}
         onSeek={onSeek}
+        nameOf={(id) => person(id)?.name}
       />
 
       {listen.length ? (
