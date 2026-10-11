@@ -431,8 +431,6 @@ def plan(
                     "--incremental",
                     "--project",
                     "tsconfig.json",
-                    "--tsBuildInfoFile",
-                    str(cache / "tsconfig.tsbuildinfo"),
                 ),
                 directory,
                 (app,),
