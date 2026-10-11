@@ -1239,12 +1239,19 @@ function LightboxShellFrame({
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />
-      {invites.live ? (
+      {/* Mounted only while open, so each opening starts fresh. */}
+      {invites.live && createOpen ? (
         <CreateOrganisationDialog
-          open={createOpen}
+          open
           onClose={() => setCreateOpen(false)}
           onCreated={(tenantId) =>
-            void handleSelectWorkspace(tenantId, "/organisation?tab=members")
+            void handleSelectWorkspace(
+              tenantId,
+              "/organisation?tab=members",
+            ).then((moving) => {
+              // Created, but the switch failed: its corner card offers a retry.
+              if (!moving) setCreateOpen(false);
+            })
           }
         />
       ) : null}
