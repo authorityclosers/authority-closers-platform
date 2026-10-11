@@ -485,6 +485,8 @@ def rep_view(
     """
     newest = calls[0]
     parts = authored(newest, latest)
+    # A call's authored focus skill on another of this rep's calls too.
+    skills = [call.skill_id for call in calls[:HISTORY_LIMIT]]
     summaries = tuple(
         CallSummary(
             submission_id=call.submission_id,
@@ -492,6 +494,7 @@ def rep_view(
             created_at=call.occurred_at,
             state="ready",
             focus_label=call.focus_label,
+            recurring=skills.count(call.skill_id) >= 2 if call.skill_id else None,
         )
         for call in calls[:HISTORY_LIMIT]
     )

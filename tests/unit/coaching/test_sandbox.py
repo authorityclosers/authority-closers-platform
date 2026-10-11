@@ -339,6 +339,10 @@ def test_rep_view_follows_the_newest_call_with_moments_from_cited_calls() -> Non
     assert view.mastery.state == "emerging" and view.mastery.trend == "not_enough_evidence"
     assert [point.state for point in view.progress] == ["suggested", "not_covered", "suggested"]
     assert view.development_path.likely_next == "Diagnose before prescribing"
+    # The two closing calls share a focus skill; the discovery call's is alone.
+    flags = {row.submission_id: row.recurring for row in view.calls}
+    assert flags[calls[0].submission_id] is True and flags[calls[2].submission_id] is True
+    assert flags[calls[1].submission_id] is False
 
 
 def test_team_names_fictional_reps_with_their_newest_focus() -> None:
