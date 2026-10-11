@@ -77,7 +77,7 @@ def validate_inventory(
             raise ValueError("incomplete inventory page")
         if not expected_size and (index or len(pages) != 1):
             raise ValueError("unexpected empty inventory page")
-        recent = 0
+        recent: set[int] = set()
         for artifact in page["artifacts"]:
             if (
                 not isinstance(artifact, dict)
@@ -106,13 +106,13 @@ def validate_inventory(
                 older[identity] = artifact
                 snapshot.known[identity] = artifact
             else:
-                recent += 1
+                recent.add(identity)
         if index == 0:
             # GitHub lists newest artifacts first. If the boundary is hidden
             # behind a whole page of concurrent uploads, do not guess its count.
-            if recent == PAGE_SIZE and page["total_count"] > PAGE_SIZE:
+            if len(recent) == PAGE_SIZE and page["total_count"] > PAGE_SIZE:
                 raise ValueError("inventory snapshot boundary is not visible")
-            expected = page["total_count"] - recent
+            expected = page["total_count"] - len(recent)
             if snapshot.expected_count is None:
                 snapshot.expected_count = expected
             elif expected != snapshot.expected_count:

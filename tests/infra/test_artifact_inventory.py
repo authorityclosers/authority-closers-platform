@@ -85,6 +85,13 @@ def test_recent_upload_size_churn_uses_largest_observed_size() -> None:
     assert sum(item["size_in_bytes"] for item in items) == 1500
 
 
+def test_duplicate_recent_ids_cannot_hide_a_missing_older_artifact() -> None:
+    recent = artifact(1, recent=True)
+    pages = [{"total_count": 2, "artifacts": [recent, recent]}]
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](json.dumps(pages), snapshot=snapshot())
+
+
 def test_duplicate_older_size_change_fails_closed() -> None:
     pages = changing_pages()
     pages[1]["artifacts"][0] = {**pages[1]["artifacts"][0], "size_in_bytes": 1}

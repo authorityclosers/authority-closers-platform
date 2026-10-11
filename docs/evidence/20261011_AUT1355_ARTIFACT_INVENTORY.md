@@ -31,7 +31,7 @@ diagnostic artifacts or relax the ceiling.
 
 Validation on the AC server:
 
-- `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **116 passed in 17.10 s**.
+- `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **117 passed in 19.79 s**.
 - Focused Ruff checks and `git diff --check`: passed.
 - Read-only live admission inventory: **attempt 1/3**, **92 pages**, **9,154
   unique artifacts**, **2,244,516,417 bytes**. No artifact deletion was invoked.
