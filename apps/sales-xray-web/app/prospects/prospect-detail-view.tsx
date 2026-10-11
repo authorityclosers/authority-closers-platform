@@ -19,6 +19,7 @@ import {
   fetchProspectDetail,
   type ProspectCall,
   type ProspectDetail,
+  ProspectsContractError,
 } from "../prospects-client";
 import styles from "./prospects.module.css";
 import { ProspectInformation } from "../prospect-information";
@@ -94,7 +95,8 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);
@@ -139,7 +141,8 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
             : "Prospect details could not be loaded. Try again; your completed work remains private.";
         setError(msg);

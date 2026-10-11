@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { LockKeyhole } from "lucide-react";
 import { InlineEdit } from "./ui/kit";
 import { formatClock } from "./lightbox/time";
@@ -137,9 +137,16 @@ const NO_TRANSCRIPT = {
   segments: [],
 } as unknown as Transcript;
 
+/** Call names by id, so a source reads "Heard · Discovery call · 18:42". */
+const CallNames = createContext<Map<string, string>>(new Map());
+
 function SourceLink({ source }: { source?: BriefSource }) {
+  const names = useContext(CallNames);
   if (!source) return null;
-  const at = formatClock(source.start_ms);
+  const name = source.callId ? names.get(source.callId) : undefined;
+  const at = name
+    ? `${name} · ${formatClock(source.start_ms)}`
+    : formatClock(source.start_ms);
   return source.callId ? (
     <Link
       className={styles.briefSource}
@@ -341,129 +348,136 @@ export function ProspectInformation({
     }
   }
   const fields = prospect.profile_fields ?? {};
+  const callNames = new Map(
+    calls
+      .filter((call) => call.display_name)
+      .map((call) => [call.submission_id, call.display_name as string]),
+  );
   return (
-    <div className={styles.information} aria-label="Prospect's Information">
-      {prospect.origin === "detected" &&
-        !prospect.confirmed_at &&
-        prospect.can_confirm !== false &&
-        onSaved && (
-          <div className={styles.detected}>
-            <span>Detected from a call · not yet confirmed</span>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={async () => {
-                if (saving) return;
-                setSaving(true);
-                try {
-                  await confirmDetectedProspect(
-                    prospect.prospect_id,
-                    prospect.revision,
-                  );
-                  dismissNotice("prospect-confirmation");
-                  onSaved();
-                } catch (error) {
-                  notify({
-                    id: "prospect-confirmation",
-                    tone: "error",
-                    title: "Prospect wasn't confirmed",
-                    message:
-                      error instanceof Error ? error.message : "Try again.",
-                    action: { label: "Try again", run: onSaved },
-                  });
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            >
-              {saving ? "Confirming…" : "Confirm prospect"}
-            </button>
-          </div>
-        )}
-      <p className={styles.briefBasis} data-brief-state={latestState}>
-        {latestState === "ready" && brief.basedOn
-          ? `Call facts from your latest analysed call: ${brief.basedOn.label}.`
-          : latestState === "loading"
-            ? "Reading the latest analysed call…"
-            : latestState === "unavailable"
-              ? "The latest call's report couldn't be read; only saved facts are shown."
-              : "No analysed call yet; only saved facts are shown."}
-      </p>
-      {BRIEF_SECTIONS.map(({ title, subtitle }, index) => {
-        const part = brief.sections[index];
-        return (
-          <section
-            key={title}
-            className={styles.briefSection}
-            data-prospect-section={index + 1}
-            data-brief-lead={index === 0 || undefined}
-            aria-labelledby={`brief-${index + 1}`}
-          >
-            <header className={styles.briefHead}>
-              <span className={styles.briefNumber} aria-hidden="true">
-                {index + 1}
-              </span>
-              <div>
-                <h2 id={`brief-${index + 1}`}>{title}</h2>
-                <p>{subtitle}</p>
-              </div>
-            </header>
-            {index === 2 && fields.budget?.state === "known" ? (
-              <p className={styles.note}>
-                A discussed amount does not confirm ability or willingness to
-                invest.
-              </p>
-            ) : null}
-            {part.facts.length ? (
-              <dl className={styles.briefFacts}>
-                {part.facts.map((fact, i) => (
-                  <BriefFactRow
-                    key={`${fact.label}-${i}`}
-                    fact={fact}
-                    canEdit={canEdit}
-                    saving={saving}
-                    save={save}
-                  />
-                ))}
-              </dl>
-            ) : null}
-            {latestState === "loading" ? (
-              <span className={styles.briefSkeleton} aria-hidden="true" />
-            ) : null}
-            <BriefUnknown
-              items={part.unknown}
-              canEdit={canEdit}
-              saving={saving}
-              save={save}
-            />
-          </section>
-        );
-      })}
-      <details className={styles.briefMore}>
-        <summary>Contact details &amp; tags</summary>
-        <p className={styles.note}>
-          Phone and email are entered by people only.
+    <CallNames.Provider value={callNames}>
+      <div className={styles.information} aria-label="Prospect's Information">
+        {prospect.origin === "detected" &&
+          !prospect.confirmed_at &&
+          prospect.can_confirm !== false &&
+          onSaved && (
+            <div className={styles.detected}>
+              <span>Detected from a call · not yet confirmed</span>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  if (saving) return;
+                  setSaving(true);
+                  try {
+                    await confirmDetectedProspect(
+                      prospect.prospect_id,
+                      prospect.revision,
+                    );
+                    dismissNotice("prospect-confirmation");
+                    onSaved();
+                  } catch (error) {
+                    notify({
+                      id: "prospect-confirmation",
+                      tone: "error",
+                      title: "Prospect wasn't confirmed",
+                      message:
+                        error instanceof Error ? error.message : "Try again.",
+                      action: { label: "Try again", run: onSaved },
+                    });
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? "Confirming…" : "Confirm prospect"}
+              </button>
+            </div>
+          )}
+        <p className={styles.briefBasis} data-brief-state={latestState}>
+          {latestState === "ready" && brief.basedOn
+            ? `Call facts from your latest analysed call: ${brief.basedOn.label}.`
+            : latestState === "loading"
+              ? "Reading the latest analysed call…"
+              : latestState === "unavailable"
+                ? "The latest call's report couldn't be read; only saved facts are shown."
+                : "No analysed call yet; only saved facts are shown."}
         </p>
-        <dl className={styles.facts}>
-          <Field
-            label="Phone"
-            field={fields.phone}
-            disabled={saving}
-            onSave={canEdit ? (value) => save("phone", value) : undefined}
-          />
-          <Field
-            label="Email"
-            field={fields.email}
-            disabled={saving}
-            onSave={canEdit ? (value) => save("email", value) : undefined}
-          />
-          <Field
-            label="Tags"
-            text={prospect.tags.length ? prospect.tags.join(", ") : null}
-            state="Observed"
-          />
-        </dl>
-      </details>
-    </div>
+        {BRIEF_SECTIONS.map(({ title, subtitle }, index) => {
+          const part = brief.sections[index];
+          return (
+            <section
+              key={title}
+              className={styles.briefSection}
+              data-prospect-section={index + 1}
+              data-brief-lead={index === 0 || undefined}
+              aria-labelledby={`brief-${index + 1}`}
+            >
+              <header className={styles.briefHead}>
+                <span className={styles.briefNumber} aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div>
+                  <h2 id={`brief-${index + 1}`}>{title}</h2>
+                  <p>{subtitle}</p>
+                </div>
+              </header>
+              {index === 2 && fields.budget?.state === "known" ? (
+                <p className={styles.note}>
+                  A discussed amount does not confirm ability or willingness to
+                  invest.
+                </p>
+              ) : null}
+              {part.facts.length ? (
+                <dl className={styles.briefFacts}>
+                  {part.facts.map((fact, i) => (
+                    <BriefFactRow
+                      key={`${fact.label}-${i}`}
+                      fact={fact}
+                      canEdit={canEdit}
+                      saving={saving}
+                      save={save}
+                    />
+                  ))}
+                </dl>
+              ) : null}
+              {latestState === "loading" ? (
+                <span className={styles.briefSkeleton} aria-hidden="true" />
+              ) : null}
+              <BriefUnknown
+                items={part.unknown}
+                canEdit={canEdit}
+                saving={saving}
+                save={save}
+              />
+            </section>
+          );
+        })}
+        <details className={styles.briefMore}>
+          <summary>Contact details &amp; tags</summary>
+          <p className={styles.note}>
+            Phone and email are entered by people only.
+          </p>
+          <dl className={styles.facts}>
+            <Field
+              label="Phone"
+              field={fields.phone}
+              disabled={saving}
+              onSave={canEdit ? (value) => save("phone", value) : undefined}
+            />
+            <Field
+              label="Email"
+              field={fields.email}
+              disabled={saving}
+              onSave={canEdit ? (value) => save("email", value) : undefined}
+            />
+            <Field
+              label="Tags"
+              text={prospect.tags.length ? prospect.tags.join(", ") : null}
+              state="Observed"
+            />
+          </dl>
+        </details>
+      </div>
+    </CallNames.Provider>
   );
 }
