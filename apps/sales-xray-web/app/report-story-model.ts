@@ -307,12 +307,20 @@ function metricsFor(
       note: names,
     });
   }
-  const longest = Math.max(
-    0,
-    ...ids.map((id) => measured.speakers[id].longest_monologue_ms),
-  );
+  // With confirmed roles this is the seller's own longest turn (spec 2.1).
+  const seller =
+    roles?.seller && ids.includes(roles.seller) ? roles.seller : null;
+  const longest = seller
+    ? measured.speakers[seller].longest_monologue_ms
+    : Math.max(
+        0,
+        ...ids.map((id) => measured.speakers[id].longest_monologue_ms),
+      );
   if (longest > 0)
-    metrics.push({ label: "Longest turn", value: formatDuration(longest) });
+    metrics.push({
+      label: seller ? "Longest seller turn" : "Longest turn",
+      value: formatDuration(longest),
+    });
   metrics.push({
     label: "Talk-overs",
     value: String(measured.cut_ins.length),

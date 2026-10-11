@@ -55,7 +55,7 @@ describe("reportStoryModel", () => {
       "Call length",
       "Talk share",
       "Questions asked",
-      "Longest turn",
+      "Longest seller turn",
       "Talk-overs",
     ]);
     expect(model.flow.metrics[0].value).toBe("25:08");
