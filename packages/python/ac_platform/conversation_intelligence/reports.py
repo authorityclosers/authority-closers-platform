@@ -1854,7 +1854,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/10"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/11"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2954,15 +2954,21 @@ def parse_report_draft(
         raise ReportError("report_payload_invalid")
     v7 = coaching_prompt_revision == COACHING_PROMPT_V7
     v8 = coaching_prompt_revision == COACHING_PROMPT_V8
-    if v8:
-        if not canonical_read and set(payload) != {
+    canonical_pillars = canonical_read and not v8 and payload.get("pillars") is not None
+    if (
+        v8
+        and not canonical_read
+        and set(payload)
+        != {
             "pillars",
             "dimensions",
             "summary_evidence",
             "sensitive_segments",
             "review_status",
-        }:
-            raise ReportError("report_payload_invalid")
+        }
+    ):
+        raise ReportError("report_payload_invalid")
+    if v8 or canonical_pillars:
         try:
             pillars = normalize_pillars(
                 payload.get("pillars"),
@@ -2973,6 +2979,7 @@ def parse_report_draft(
             )
         except (ValueError, KeyError, TypeError):
             raise ReportError("report_payload_invalid") from None
+    if v8:
         retained_extras = payload.get("provider_extras") if canonical_read else None
         payload = legacy_pillars_payload(pillars, payload)
         if retained_extras is not None:
@@ -2998,6 +3005,10 @@ def parse_report_draft(
     consumed_provider_keys: set[str] = (
         {"pillars", "sensitive_segments", "summary_evidence", "verdict_evidence"} if v8 else set()
     )
+    if canonical_pillars:
+        consumed_provider_keys.add("pillars")
+        if speaker_label_leaks(_prose_texts(pillars.model_dump(mode="json"))):
+            raise ReportError("report_speaker_label_leak")
     overview_payload = payload.get("overview")
     # Older Gemini responses emitted the detailed overview keys beside the
     # report findings instead of under ``overview``.  Keep that response
@@ -3058,6 +3069,10 @@ def parse_report_draft(
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
     normalized = dict(payload)
+    if canonical_pillars:
+        # Canonical presentation additions keep the original legacy C5 content
+        # and dimension rules. Only their own native evidence is normalized.
+        normalized["pillars"] = pillars.model_dump(mode="json")
     if v7 or v8:
         for field in ("summary_evidence", "verdict_evidence"):
             normalized[field] = [
@@ -3153,6 +3168,8 @@ def parse_report_draft(
         if v8
         else set()
     )
+    if canonical_pillars:
+        extensions.add("pillars")
     for key in tuple(normalized):
         if key not in _CANONICAL_REPORT_ROOT_FIELDS and key not in extensions:
             normalized.pop(key, None)

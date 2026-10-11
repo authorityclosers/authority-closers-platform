@@ -140,7 +140,10 @@ class ConversationReports:
             raise ConversationConflict("The stored report evidence is unavailable.")
         try:
             transcript = draft.transcript["normalized"]
-            if draft.evidence_receipt.get("schema_id") == "ac.sales-xray.durable-draft-proof/1":
+            durable_draft = (
+                draft.evidence_receipt.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
+            )
+            if durable_draft:
                 durable = DurableDraftProof.model_validate(draft.evidence_receipt)
                 native_ref = draft.transcript["native_response_ref"]
                 profile = draft.transcript["profile"]
@@ -179,8 +182,10 @@ class ConversationReports:
                 source_label=report.source_label,
                 profile=profile,
                 canonical_read=True,
+                # Private authored imports may add bound presentation pillars
+                # while retaining their original legacy dimension semantics.
                 coaching_prompt_revision="coaching-v8"
-                if report.pillars is not None
+                if report.pillars is not None and durable_draft
                 else "coaching-v7"
                 if report.call_map is not None
                 else "coaching-v4",

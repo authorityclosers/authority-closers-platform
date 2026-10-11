@@ -50,6 +50,11 @@ It preserves the exact legacy `story` shape and the existing guest boundary.
 Before/after and timeline keep their source evidence privately in saved C5.
 Public deeper analysis uses B's strings/enums. Privacy withholding still applies
 recursively; the saved source/report is not rewritten by presentation.
+Canonical legacy reads also admit optional native pillars without copying them
+over the original summary, findings, dimensions or overview. Private-proof
+imports select the legacy parser; pillars alone do not promote them to v8.
+The added evidence, phase timing and next-event timing are still strictly bound
+to the transcript. Durable provider v8 drafts retain the v8 parser and rules.
 
 ## Activation and timing
 
