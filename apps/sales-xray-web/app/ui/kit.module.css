@@ -541,6 +541,7 @@ a.tile:hover {
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -578,6 +579,30 @@ a.tile:hover {
 
 a.rowTitle:hover {
   color: var(--sx-accent);
+}
+
+/* A row with a link is one tap target: the title's link stretches over the
+   whole row (the meta line and chevron too), as on Pulse. Controls at the
+   row's end stay above it, and keyboard focus rings the whole row. */
+a.rowTitle::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+}
+
+a.rowTitle:focus-visible {
+  outline: none;
+}
+
+a.rowTitle:focus-visible::after {
+  border-radius: var(--sx-radius-sm);
+  box-shadow: var(--sx-focus-ring);
+}
+
+.rowEnd :is(a, button, input, select, textarea, summary, [tabindex]) {
+  position: relative;
+  z-index: 2;
 }
 
 /* The dot sits in the gap before each item; an item that starts a line
