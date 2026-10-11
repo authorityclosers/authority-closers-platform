@@ -201,6 +201,8 @@ export const BETTER = {
 /** Dipak's lesson card (spec 3.4 "Media card requirements"). */
 export const MEDIA = {
   recommended: "Recommended for your current focus",
+  /** A call's coaching and the Report: the focus is this call's, not My coaching's. */
+  recommendedCall: "Recommended for this call’s focus",
   other: "Also relevant",
   why: "Why this is recommended",
   takeaways: "Read key takeaways",

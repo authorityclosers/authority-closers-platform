@@ -231,7 +231,11 @@ export function LessonPanel({
           </div>
         </div>
       </StoryCard>
-      <CoachingMedia clips={clips} headingLevel={level === 3 ? 4 : 3} />
+      <CoachingMedia
+        clips={clips}
+        forCall={!acrossCalls}
+        headingLevel={level === 3 ? 4 : 3}
+      />
       {media ? null : wording ? <StoryCard>{wording}</StoryCard> : null}
       {strength ? (
         <StoryCard label={BETTER.strength} tone="good" icon={Sparkles}>

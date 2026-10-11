@@ -58,6 +58,20 @@ describe("reviewed placeholder clips", () => {
     expect(host.textContent).toContain("Find the consequence");
     expect(host.textContent).toContain(fictionalClip.transcript_excerpt);
   });
+  it("names whose focus the recommended lesson is for", async () => {
+    const second = { ...fictionalClip, topic_id: "fictional-other-topic" };
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} />),
+    );
+    expect(host.textContent).toContain("Recommended for your current focus");
+    expect(host.textContent).toContain("Also relevant");
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} forCall />),
+    );
+    expect(host.textContent).toContain("Recommended for this call’s focus");
+    expect(host.textContent).not.toContain("your current focus");
+    expect(host.textContent).toContain("Also relevant");
+  });
   it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
     const scroll = vi.fn();
     HTMLElement.prototype.scrollIntoView = scroll;

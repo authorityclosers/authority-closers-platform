@@ -126,10 +126,12 @@ export function ClipOfferCard({
 function ClipCard({
   clip,
   recommended,
+  forCall = false,
   headingLevel = 3,
 }: {
   clip: CoachingClip;
   recommended: boolean;
+  forCall?: boolean;
   headingLevel?: 3 | 4;
 }) {
   const Title = headingLevel === 4 ? "h4" : "h3";
@@ -279,7 +281,11 @@ function ClipCard({
         </button>
         <div className={styles.clipTitle}>
           <span className={styles.eyebrow}>
-            {recommended ? MEDIA.recommended : MEDIA.other}
+            {recommended
+              ? forCall
+                ? MEDIA.recommendedCall
+                : MEDIA.recommended
+              : MEDIA.other}
           </span>
           <Title>{clip.title}</Title>
           <span className={styles.note}>
@@ -432,9 +438,12 @@ function ClipCard({
 /** One recommended clip first; any others stay secondary (spec 6.2, 6.3). */
 export function CoachingMedia({
   clips,
+  forCall = false,
   headingLevel = 3,
 }: {
   clips?: CoachingClip[];
+  /** One call's coaching (and the Report): its focus is the call's own. */
+  forCall?: boolean;
   /** 4 inside the Report, where the pillars are h3. */
   headingLevel?: 3 | 4;
 }) {
@@ -446,6 +455,7 @@ export function CoachingMedia({
           key={clipKey(clip)}
           clip={clip}
           recommended={index === 0}
+          forCall={forCall}
           headingLevel={headingLevel}
         />
       ))}
