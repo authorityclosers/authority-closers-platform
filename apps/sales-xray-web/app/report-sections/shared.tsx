@@ -87,6 +87,15 @@ export const GUEST = {
   fullReport: "Sign in to see the full report",
 };
 
+/** The app's router, or null where none is mounted (a static render). */
+function useOptionalRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return null;
+  }
+}
+
 /** Sign-in that keeps this analysed call (the studio restores it after). */
 export function UnlockButton({
   className,
@@ -95,7 +104,13 @@ export function UnlockButton({
   className?: string;
   children: ReactNode;
 }) {
-  const router = useRouter();
+  const router = useOptionalRouter();
+  if (!router)
+    return (
+      <a className={className} href="/login">
+        {children}
+      </a>
+    );
   return (
     <button
       type="button"
