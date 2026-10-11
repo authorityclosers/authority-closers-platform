@@ -205,6 +205,21 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
         ("coaching-v5", 3),
         ("coaching-v6", 1),
     ]
+    # A call counts for every prompt it was analysed with, not only its latest.
+    rerun = _recording(
+        TEAM_A,
+        "Asha",
+        [_run("completed")],
+        [_plan(coaching_prompt_revision="coaching-v7"), _plan()],
+    )
+    with_rerun = _queue_service(monkeypatch, [ready, failed, busy, marathi, rerun])
+    v5 = await with_rerun.queue(actor, prompt="coaching-v5")
+    assert str(rerun.id) in {item["recording_id"] for item in v5["items"]}
+    assert {entry["value"]: entry["count"] for entry in v5["facets"]["prompts"]} == {
+        "coaching-v5": 4,
+        "coaching-v6": 1,
+        "coaching-v7": 1,
+    }
     newest_prompt = await service.queue(actor, prompt="coaching-v6")
     assert [item["recording_id"] for item in newest_prompt["items"]] == [str(marathi.id)]
     assert (await service.queue(actor, prompt="coaching-v1"))["items"] == []

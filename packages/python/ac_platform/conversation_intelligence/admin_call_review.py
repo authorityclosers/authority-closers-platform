@@ -409,6 +409,15 @@ class AdminCallReview:
                     "provider": facts["provider"],
                     "model": facts["model"],
                     "prompt_revision": facts["prompt_revision"],
+                    # Every prompt this call was analysed with, latest or not.
+                    "prompt_revisions": sorted(
+                        {
+                            value
+                            for plan in recording_plans
+                            if isinstance(value := _plan_facts(plan)["prompt_revision"], str)
+                            and value
+                        }
+                    ),
                     "runs": len(recording_runs),
                     "latest_run": None
                     if latest_run is None
@@ -430,7 +439,7 @@ class AdminCallReview:
         if provider is not None:
             items = [item for item in items if item["provider"] == provider]
         if prompt is not None:
-            items = [item for item in items if item["prompt_revision"] == prompt]
+            items = [item for item in items if prompt in item["prompt_revisions"]]
         counts = {name: 0 for name in STATUSES}
         for item in items:
             counts[item["status"]] += 1
@@ -626,11 +635,18 @@ def _facets(items: Sequence[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         "providers": tally(
             lambda item: (item["provider"], item["provider"]) if item["provider"] else None
         ),
-        "prompts": tally(
-            lambda item: (
-                (item["prompt_revision"], item["prompt_revision"])
-                if isinstance(item["prompt_revision"], str) and item["prompt_revision"]
-                else None
-            )
-        ),
+        "prompts": _multi_tally(item["prompt_revisions"] for item in items),
     }
+
+
+def _multi_tally(groups: Iterable[Sequence[str]]) -> list[dict[str, Any]]:
+    """Calls per value when a call can have several (e.g. the prompts it was analysed with)."""
+
+    counted: dict[str, int] = defaultdict(int)
+    for values in groups:
+        for value in set(values):
+            counted[value] += 1
+    return [
+        {"value": value, "label": value, "count": count}
+        for value, count in sorted(counted.items(), key=lambda entry: (-entry[1], entry[0]))
+    ]
