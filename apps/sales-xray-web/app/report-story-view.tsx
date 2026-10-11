@@ -965,17 +965,13 @@ function DealStands({
         </p>
       ) : null}
       {prospectControls ? (
-        <details className={styles.deeper}>
-          <summary>
-            Link this call to a prospect
-            <ChevronDown
-              className={styles.chevron}
-              size={14}
-              aria-hidden="true"
-            />
-          </summary>
-          <div className={styles.deeperBody}>{prospectControls}</div>
-        </details>
+        <section
+          className={styles.prospectLink}
+          aria-label="Prospect for this call"
+        >
+          <h3 className={styles.columnHead}>Prospect for this call</h3>
+          {prospectControls}
+        </section>
       ) : null}
       <EndStrip model={model} />
     </>

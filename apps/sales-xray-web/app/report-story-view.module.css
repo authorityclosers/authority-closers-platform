@@ -898,3 +898,15 @@ details[open] > summary .chevron {
   display: grid;
   gap: 12px;
 }
+
+.prospectLink {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+}
+.prospectLink .columnHead::before {
+  background: var(--lx-teal);
+}
