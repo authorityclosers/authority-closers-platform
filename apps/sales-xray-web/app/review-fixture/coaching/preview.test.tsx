@@ -5,6 +5,7 @@ import { parseCallCoaching } from "../../coaching/coaching-read";
 import { parseTeamCoaching } from "../../coaching/team-contract";
 import { CoachingFixture } from "./preview";
 import sandbox from "./sandbox.json";
+import acSandbox from "./sandbox-team.json";
 
 describe("Coaching review fixture", () => {
   it("passes every sandbox payload through the real parsers", () => {
@@ -30,5 +31,20 @@ describe("Coaching review fixture", () => {
     expect(html).toContain("Part of Dipak’s full coaching");
     expect(html).toContain("Get the full coaching");
     expect(html).not.toContain("<audio");
+  });
+  it("passes the AC Sandbox states through the same parsers", () => {
+    const team = parseTeamCoaching(acSandbox.team);
+    expect(team?.sandbox).toBe(true);
+    expect(team?.reps.length).toBe(acSandbox.team.rep_count);
+    const rep = parseCoaching(acSandbox.rep);
+    expect(rep.sandbox).toBe(true);
+    expect(rep.person_name).toBeTruthy();
+    expect(rep.focus?.skill_id).toBeTruthy();
+    const call = parseCallCoaching(
+      acSandbox.call,
+      acSandbox.call.submission_id,
+    );
+    expect(call?.state).toBe("ready");
+    expect(call?.evidence.every((moment) => !moment.playable)).toBe(true);
   });
 });
