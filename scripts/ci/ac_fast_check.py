@@ -25,6 +25,23 @@ SCHEMA = "ac.ci.fast-check/1"
 PYTHON_ROOTS = ("packages/python", "tests", "scripts")
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
 FORMAT_SUFFIXES = SOURCE_SUFFIXES | {".css", ".json", ".md", ".mdx", ".yaml", ".yml"}
+CI_INPUT_TESTS = {
+    ".github/workflows/application.yml": (
+        "tests/infra/test_recovery_ci_gates.py",
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+    ),
+    ".github/workflows/control-plane.yml": ("tests/infra/test_recovery_ci_gates.py",),
+    "scripts/ci/python-test-exclusions.txt": (
+        "tests/infra/test_recovery_ci_gates.py",
+        "tests/unit/ci/test_python_test_shard.py",
+    ),
+    "scripts/ci/python-test-durations.json": (
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+        "tests/unit/ci/test_refresh_python_durations.py",
+    ),
+}
 
 
 class FastCheckError(RuntimeError):
@@ -267,11 +284,15 @@ def plan(
     checks = []
     python = root / ".venv/bin/python"
     pyfiles = tuple(path for path in changed if path.endswith(".py") and (root / path).is_file())
+    tests, graph_errors = affected_tests(root, changed)
+    ci_tests = {test for path in changed for test in CI_INPUT_TESTS.get(path, ())}
+    for test in sorted(ci_tests):
+        if not safe_path(root, test).is_file():
+            raise FastCheckError("A required CI input regression is unavailable")
+    selected, omitted = capped_tests((*tests, *ci_tests), changed, test_cap)
+    if (pyfiles or selected) and not python.is_file():
+        raise FastCheckError("The locked Python environment is unavailable; installs are forbidden")
     if pyfiles:
-        if not python.is_file():
-            raise FastCheckError(
-                "The locked Python environment is unavailable; installs are forbidden"
-            )
         checks.append(
             Check("ruff", (str(python), "-m", "ruff", "check", "--", *pyfiles), root, pyfiles)
         )
@@ -292,8 +313,6 @@ def plan(
                     modules,
                 )
             )
-    tests, graph_errors = affected_tests(root, changed)
-    selected, omitted = capped_tests(tests, changed, test_cap)
     if selected:
         checks.append(
             Check(
@@ -488,6 +507,18 @@ def plan(
             for path in changed
             if Path(path).suffix in SOURCE_SUFFIXES
             and not any(path in check.scope for check in checks)
+        ],
+        "unmapped_ci_inputs": [
+            path
+            for path in changed
+            if (
+                path.startswith(".github/workflows/")
+                or (
+                    path.startswith("scripts/ci/")
+                    and Path(path).suffix not in {".py", *SOURCE_SUFFIXES}
+                )
+            )
+            and path not in CI_INPUT_TESTS
         ],
     }
     return tuple(checks), metadata
@@ -705,6 +736,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             or metadata["deleted_files"]
             or metadata["unmapped_python_sources"]
             or metadata["unmapped_frontend_sources"]
+            or metadata["unmapped_ci_inputs"]
         ):
             receipt["status"] = "partial"
         else:
@@ -735,6 +767,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"
+        )
+    if receipt.get("unmapped_ci_inputs"):
+        print(
+            f"  coverage: {len(receipt['unmapped_ci_inputs'])} CI inputs "
+            "deferred to required GitHub CI"
         )
     print(f"  receipt: {args.receipt}")
     return 0 if receipt["status"] in {"passed", "planned", "partial"} else 1

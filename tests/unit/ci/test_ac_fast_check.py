@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.ci import ac_fast_check as FAST
 
@@ -172,6 +174,70 @@ def test_frontend_config_only_change_still_typechecks_the_app(tmp_path: Path) ->
     assert [check.name.split(":")[0] for check in checks] == ["prettier", "tsc"]
 
 
+@pytest.mark.parametrize(
+    ("changed", "required"),
+    [
+        (".github/workflows/application.yml", "tests/infra/test_recovery_ci_gates.py"),
+        (".github/workflows/control-plane.yml", "tests/infra/test_recovery_ci_gates.py"),
+        ("scripts/ci/python-test-exclusions.txt", "tests/infra/test_recovery_ci_gates.py"),
+        ("scripts/ci/python-test-durations.json", "tests/unit/ci/test_measured_shards.py"),
+    ],
+)
+def test_non_python_ci_inputs_run_guards_and_report_capped_coverage(
+    tmp_path: Path, changed: str, required: str
+) -> None:
+    (tmp_path / ".venv/bin").mkdir(parents=True)
+    (tmp_path / ".venv/bin/python").symlink_to(sys.executable)
+    for test in (
+        "tests/infra/test_recovery_ci_gates.py",
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+        "tests/unit/ci/test_refresh_python_durations.py",
+    ):
+        write(tmp_path, test, "def test_fixture(): pass\n")
+    checks, metadata = FAST.plan(tmp_path, (changed,), 12)
+    assert [check.name for check in checks] == ["pytest"]
+    assert required in checks[0].scope
+    assert metadata["unmapped_ci_inputs"] == []
+    capped, limited = FAST.plan(tmp_path, (changed,), 1)
+    assert set(capped[0].scope) | set(limited["omitted_pytest"]) == set(checks[0].scope)
+
+
+def test_workflow_input_routes_the_existing_static_browser_contract(tmp_path: Path) -> None:
+    root = Path(FAST.__file__).resolve().parents[2]
+    guard_path = "tests/infra/test_recovery_ci_gates.py"
+    (tmp_path / ".venv/bin").mkdir(parents=True)
+    (tmp_path / ".venv/bin/python").symlink_to(sys.executable)
+    for path in (
+        guard_path,
+        "tests/unit/ci/test_python_test_shard.py",
+        "tests/unit/ci/test_measured_shards.py",
+    ):
+        write(tmp_path, path, (root / path).read_text())
+    changed = ".github/workflows/application.yml"
+    write(tmp_path, changed, (root / changed).read_text())
+    checks, _ = FAST.plan(tmp_path, (changed,), 12)
+    assert guard_path in checks[0].scope
+    namespace = runpy.run_path(str(tmp_path / guard_path))
+    contract = namespace["test_sales_xray_static_preview_is_built_before_application_validation"]
+    contract()
+    workflow = yaml.safe_load((tmp_path / changed).read_text())
+    steps = workflow["jobs"]["validate-python-gates"]["steps"]
+    steps[:] = [
+        step
+        for step in steps
+        if step.get("name") != "PRE-VALIDATION: Build Sales Xray static preview"
+    ]
+    (tmp_path / changed).write_text(yaml.safe_dump(workflow))
+    with pytest.raises(AssertionError, match="Missing or duplicated required step"):
+        contract()
+
+
+def test_missing_ci_guard_cannot_be_silently_omitted(tmp_path: Path) -> None:
+    with pytest.raises(FAST.FastCheckError, match="required CI input regression"):
+        FAST.plan(tmp_path, (".github/workflows/application.yml",), 12)
+
+
 def workspace_fixture(root: Path) -> tuple[str, str, str]:
     package = "packages/typescript/shared"
     source = f"{package}/src/index.ts"
@@ -298,6 +364,23 @@ def test_noop_receipt_attests_exact_clean_commit(repository: Path, tmp_path: Pat
     assert data["status"] == "passed"
     assert data["commit"] == sha
     assert data["changed_files"] == data["checks"] == []
+
+
+def test_unknown_workflow_receipt_reports_partial_coverage(
+    repository: Path, tmp_path: Path
+) -> None:
+    changed = ".github/workflows/new-gate.yml"
+    write(repository, changed, "jobs: {}\n")
+    git(repository, "add", changed)
+    git(repository, "commit", "-m", "unknown synthetic workflow")
+    receipt = tmp_path.parent / (tmp_path.name + "-unknown-ci.json")
+    assert (
+        FAST.main(["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]) == 0
+    )
+    data = json.loads(receipt.read_text())
+    assert data["status"] == "partial"
+    assert data["unmapped_ci_inputs"] == [changed]
+    assert data["checks"] == []
 
 
 @pytest.mark.parametrize("dirty", [False, True])
