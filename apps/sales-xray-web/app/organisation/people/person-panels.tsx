@@ -444,9 +444,12 @@ const CALLS_SHOWN = 8;
 export function PersonCalls({
   data,
   dates,
+  callsHref,
 }: {
   data: PersonActivity;
   dates: DisplayDates;
+  /** Calls filtered to this person, for the full list and search. */
+  callsHref?: string;
 }) {
   const [all, setAll] = useState(false);
   const calls = all ? data.listed : data.listed.slice(0, CALLS_SHOWN);
@@ -454,6 +457,9 @@ export function PersonCalls({
     <Panel
       title="Calls"
       sub={`${data.listed.length} in the last ${PERSON_WEEKS} weeks`}
+      action={
+        callsHref ? { href: callsHref, label: "Open in Calls" } : undefined
+      }
       foot={
         !data.complete ? (
           <span>
