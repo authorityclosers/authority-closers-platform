@@ -20,6 +20,7 @@ export function parseHumanCallOutcome(input: unknown): HumanCallOutcome {
   if (!input || typeof input !== "object" || Array.isArray(input)) invalid();
   const row = input as Record<string, unknown>;
   if (
+    !Object.hasOwn(row, "outcome") ||
     typeof row.outcome !== "string" ||
     !Object.hasOwn(CALL_OUTCOME_LABELS, row.outcome) ||
     Object.keys(row).some(
@@ -50,22 +51,29 @@ export function parseHumanCallOutcome(input: unknown): HumanCallOutcome {
       invalid();
   } else if (date !== null) invalid();
   const value = row.deal_value ?? null;
+  let dealValue: HumanCallOutcome["deal_value"] = null;
   if (value !== null) {
     if (typeof value !== "object" || Array.isArray(value)) invalid();
     const amount = value as Record<string, unknown>;
     if (
       Object.keys(amount).length !== 2 ||
+      !Object.hasOwn(amount, "amount") ||
+      !Object.hasOwn(amount, "currency_code") ||
       typeof amount.amount !== "string" ||
       !/^(?:0|[1-9]\d{0,15})(?:\.\d{1,4})?$/.test(amount.amount) ||
       typeof amount.currency_code !== "string" ||
       !/^[A-Z]{3}$/.test(amount.currency_code)
     )
       invalid();
+    dealValue = {
+      amount: amount.amount as string,
+      currency_code: amount.currency_code as string,
+    };
   }
   return {
     outcome: row.outcome as CallOutcomeKind,
     lost_reason: reason as string | null,
     follow_up_on: date as string | null,
-    deal_value: value as HumanCallOutcome["deal_value"],
+    deal_value: dealValue,
   };
 }
