@@ -88,6 +88,11 @@
   background: var(--sx-surface);
 }
 
+/* Nothing inside a panel (forms, toolbars) can grow wider than the panel. */
+.panel > * {
+  min-width: 0;
+}
+
 .panelHead {
   display: flex;
   align-items: center;
@@ -101,15 +106,18 @@
 
 .panelTitle {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 0 8px;
   min-width: 0;
   margin: 0;
   color: var(--sx-ink);
   font: var(--sx-text-panel);
 }
 
+/* A long sub-line drops below the title instead of squeezing it. */
 .panelTitle small {
+  max-width: 100%;
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
@@ -162,14 +170,16 @@
   color: var(--sx-accent);
 }
 
+/* Tinted badges mix their text toward the ink so 12 px text keeps 4.5:1 on
+   any surface, in both themes (axe, 11 Oct). */
 .badge[data-tone="good"] {
   background: color-mix(in oklab, var(--sx-good) 12%, transparent);
-  color: var(--sx-good);
+  color: color-mix(in oklab, var(--sx-good) 78%, var(--sx-ink));
 }
 
 .badge[data-tone="warn"] {
   background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
-  color: var(--sx-warn);
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
 }
 
 .badge[data-tone="bad"] {
@@ -283,6 +293,11 @@
     0 -1px 0 var(--sx-line);
 }
 
+a.tile:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
 a.tile:hover {
   background: var(--sx-sunken);
 }
@@ -307,6 +322,11 @@ a.tile:hover {
   font: var(--sx-text-kpi);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+.tileValue[data-words] {
+  font: var(--sx-text-panel);
+  letter-spacing: 0;
 }
 
 .tileValue small {
@@ -531,12 +551,39 @@ a.tile:hover {
 }
 
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--sx-row-h);
   box-sizing: border-box;
   padding: 8px 14px;
+}
+
+/* A row with a link opens from anywhere on it, not just its title text. */
+a.rowTitle::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.row:has(> .rowMain > a.rowTitle):hover {
+  background: color-mix(in oklab, var(--sx-sunken) 70%, transparent);
+}
+
+a.rowTitle:focus-visible {
+  outline: none;
+}
+
+a.rowTitle:focus-visible::after {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: -2px;
+}
+
+/* Controls at a row's end stay clickable above the stretched link. */
+.rowEnd :is(a, button, input, select, textarea, label) {
+  position: relative;
+  z-index: 1;
 }
 
 .row + .row {
@@ -955,6 +1002,7 @@ a.rowTitle:hover {
 
   .toolbar > :is(select, input) {
     flex: 1 1 140px;
+    min-width: 0;
     font-size: 16px;
   }
 }

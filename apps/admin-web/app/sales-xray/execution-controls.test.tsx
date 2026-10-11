@@ -218,3 +218,23 @@ it("edits the shared limit with the current revision and an audit reason", async
   expect(new Headers(call![1].headers).get("Idempotency-Key")).toBeTruthy();
   expect(host.textContent).toContain("revision 1");
 });
+
+it("says plainly when nothing could be read: small cards, no alert, no lingering skeleton", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json({}, 503)),
+  );
+  await render();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  const cards = [...host.querySelectorAll('[role="status"]')].map(
+    (card) => card.textContent,
+  );
+  expect(
+    cards.some((text) => text?.includes("The pause control is unavailable")),
+  ).toBe(true);
+  expect(
+    cards.some((text) => text?.includes("The budget is unavailable")),
+  ).toBe(true);
+  expect(host.querySelector('span[aria-hidden="true"][style]')).toBeNull();
+  expect(button("Pause new analysis")).toBeUndefined();
+});

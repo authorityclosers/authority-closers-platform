@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Layers } from "lucide-react";
 
 import { when } from "@/app/calls/call-data";
 import {
@@ -14,6 +14,7 @@ import styles from "@/app/health/health.module.css";
 import { RetryJob } from "@/app/health/retry-job";
 import { adminRead } from "@/app/lib/server-api";
 import {
+  Card,
   Empty,
   Kpi,
   List,
@@ -32,7 +33,7 @@ export const dynamic = "force-dynamic";
 
 const WINDOWS = [
   { key: "7", label: "7 days" },
-  { key: "1", label: "Today" },
+  { key: "1", label: "24 hours" },
   { key: "30", label: "30 days" },
 ];
 
@@ -179,7 +180,32 @@ export default async function HealthPage({
             }
           >
             {health.failed.length ? (
-              <Table label="Failed jobs">
+              <Table
+                label="Failed jobs"
+                cards={health.failed.map((job) => (
+                  <Card key={job.jobId}>
+                    <strong>{STAGE_LABEL[job.stage] ?? job.stage}</strong>
+                    <span className={styles.code}>{job.code}</span>
+                    <span>
+                      {job.attempts === 1
+                        ? "1 attempt"
+                        : `${job.attempts} attempts`}{" "}
+                      · failed {when(job.failedAt)}
+                      {job.recordingId ? (
+                        <>
+                          {" · "}
+                          <Link href={`/calls/${job.recordingId}`}>
+                            Open call
+                          </Link>
+                        </>
+                      ) : null}
+                    </span>
+                    <span>
+                      <RetryJob jobId={job.jobId} retryable={job.retryable} />
+                    </span>
+                  </Card>
+                ))}
+              >
                 <thead>
                   <tr>
                     <th scope="col">Step</th>
@@ -223,6 +249,125 @@ export default async function HealthPage({
             )}
           </Panel>
 
+          <Panel
+            title="By prompt version"
+            tools={
+              <Why detail="Analyses in this window, grouped by coaching prompt and Report model. A failed audio check happens before any plan step, so it counts only under Failed jobs. Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
+            }
+          >
+            {health.versions.length ? (
+              <Table
+                label="By prompt version"
+                cards={health.versions.map((row) => (
+                  <Card
+                    key={`${row.promptRevision}|${row.provider}|${row.model}`}
+                  >
+                    <strong>
+                      {row.promptRevision ?? "Prompt not recorded"} ·{" "}
+                      {row.model ?? row.provider ?? "model not recorded"}
+                    </strong>
+                    <span>
+                      {row.analyses} analyses · {row.completed} finished ·{" "}
+                      {row.running} running
+                      {row.held ? ` · ${row.held} held` : ""} ·{" "}
+                      {row.failedSteps} failed steps
+                    </span>
+                    <span>
+                      Report step {span(row.reportP50)} · cost{" "}
+                      {rupees(row.paisePerMinute)} / min
+                    </span>
+                    {row.promptRevision ? (
+                      <span>
+                        <Link
+                          href={`/calls?prompt=${encodeURIComponent(row.promptRevision)}`}
+                        >
+                          Review this version&rsquo;s calls
+                        </Link>
+                      </span>
+                    ) : null}
+                  </Card>
+                ))}
+              >
+                <thead>
+                  <tr>
+                    <th scope="col">Prompt</th>
+                    <th scope="col">Report model</th>
+                    <th scope="col" data-num="">
+                      Analyses
+                    </th>
+                    <th scope="col" data-num="">
+                      Finished
+                    </th>
+                    <th scope="col" data-num="">
+                      Running
+                    </th>
+                    <th scope="col" data-num="">
+                      Failed steps
+                    </th>
+                    <th scope="col" data-num="">
+                      Report step
+                    </th>
+                    <th scope="col" data-num="">
+                      Cost / min
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {health.versions.map((row) => (
+                    <tr
+                      key={`${row.promptRevision}|${row.provider}|${row.model}`}
+                    >
+                      <th
+                        scope="row"
+                        className={row.promptRevision ? styles.code : undefined}
+                      >
+                        {row.promptRevision ? (
+                          <Link
+                            href={`/calls?prompt=${encodeURIComponent(row.promptRevision)}`}
+                            title="Review this version's calls"
+                          >
+                            {row.promptRevision}
+                          </Link>
+                        ) : (
+                          "Not recorded"
+                        )}
+                      </th>
+                      <td>{row.model ?? row.provider ?? "Not recorded"}</td>
+                      <td data-num="">{row.analyses}</td>
+                      <td data-num="">{row.completed}</td>
+                      <td data-num="">
+                        {row.running}
+                        {row.held ? (
+                          <small className={styles.aside}>
+                            {" "}
+                            · {row.held} held
+                          </small>
+                        ) : null}
+                      </td>
+                      <td data-num="">
+                        {row.failedSteps}
+                        {row.retriedSteps ? (
+                          <small className={styles.aside}>
+                            {" "}
+                            · {row.retriedSteps} retried
+                          </small>
+                        ) : null}
+                      </td>
+                      <td data-num="">{span(row.reportP50)}</td>
+                      <td data-num="">{rupees(row.paisePerMinute)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <Empty
+                icon={Layers}
+                title="No planned analyses in this window"
+                text="Rows appear for analyses that ran under a processing plan, grouped by the prompt and model the plan recorded."
+              />
+            )}
+          </Panel>
+
           <div className={styles.columns}>
             <Panel
               title="Jobs by step"
@@ -230,7 +375,22 @@ export default async function HealthPage({
                 health.truncated ? "newest 5,000 jobs" : `${health.total} jobs`
               }
             >
-              <Table label="Jobs by step">
+              <Table
+                label="Jobs by step"
+                cards={health.byStage.map((row) => (
+                  <Card key={row.stage}>
+                    <strong>{STAGE_LABEL[row.stage] ?? row.stage}</strong>
+                    <span>
+                      {JOB_STATUSES.filter((status) => row.counts[status])
+                        .map(
+                          (status) =>
+                            `${row.counts[status]} ${JOB_STATUS_LABEL[status].toLowerCase()}`,
+                        )
+                        .join(" · ") || "No jobs"}
+                    </span>
+                  </Card>
+                ))}
+              >
                 <thead>
                   <tr>
                     <th scope="col">Step</th>
@@ -261,7 +421,23 @@ export default async function HealthPage({
                 <Why detail="Provider time is from dispatch to receipt for each provider job; a whole analysis is from run start to finish." />
               }
             >
-              <Table label="Time per step">
+              <Table
+                label="Time per step"
+                cards={[
+                  { stage: "Whole analysis", duration: health.runs },
+                  ...health.providerByStage,
+                ].map((row) => (
+                  <Card key={row.stage}>
+                    <strong>{STAGE_LABEL[row.stage] ?? row.stage}</strong>
+                    <span>
+                      {row.duration.count} jobs · typical{" "}
+                      {span(row.duration.p50)} · slowest 10%{" "}
+                      {span(row.duration.p90)} · slowest{" "}
+                      {span(row.duration.max)}
+                    </span>
+                  </Card>
+                ))}
+              >
                 <thead>
                   <tr>
                     <th scope="col">Step</th>

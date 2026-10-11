@@ -40,6 +40,21 @@ export type FailedJob = {
   failedAt: string | null;
   retryable: boolean;
 };
+/** Analyses per prompt version and Report model: operations only, never quality. */
+export type Version = {
+  promptRevision: string | null;
+  provider: string | null;
+  model: string | null;
+  analyses: number;
+  completed: number;
+  running: number;
+  held: number;
+  failedSteps: number;
+  retriedSteps: number;
+  reportP50: number | null;
+  pricedMinutes: number;
+  paisePerMinute: number | null;
+};
 export type Health = {
   days: number;
   truncated: boolean;
@@ -72,6 +87,7 @@ export type Health = {
     unpriced: number;
   };
   daily: { day: string; analysed: number; failed: number }[];
+  versions: Version[];
 };
 
 const counts = (raw: unknown) => {
@@ -89,6 +105,20 @@ const duration = (raw: unknown): Duration => {
     max: read.optionalNumber(body.max_ms),
   };
 };
+
+/** One dead-lettered job, as Analysis health and the call screen both show it. */
+export function normalizeFailedJob(raw: unknown): FailedJob {
+  const row = read.object(raw);
+  return {
+    jobId: read.string(row.job_id),
+    stage: read.string(row.stage, "?"),
+    recordingId: read.optionalString(row.recording_id),
+    attempts: read.number(row.attempts),
+    code: read.string(row.code, "not_recorded"),
+    failedAt: read.optionalString(row.failed_at),
+    retryable: read.boolean(row.retryable),
+  };
+}
 
 export function normalizeHealth(raw: unknown): Health {
   const body = read.object(raw);
@@ -109,18 +139,7 @@ export function normalizeHealth(raw: unknown): Health {
       (sum, value) => sum + read.number(value),
       0,
     ),
-    failed: read.array(body.failed).map((item) => {
-      const row = read.object(item);
-      return {
-        jobId: read.string(row.job_id),
-        stage: read.string(row.stage, "?"),
-        recordingId: read.optionalString(row.recording_id),
-        attempts: read.number(row.attempts),
-        code: read.string(row.code, "not_recorded"),
-        failedAt: read.optionalString(row.failed_at),
-        retryable: read.boolean(row.retryable),
-      };
-    }),
+    failed: read.array(body.failed).map(normalizeFailedJob),
     held: read.array(body.held).map((item) => {
       const row = read.object(item);
       return {
@@ -173,6 +192,23 @@ export function normalizeHealth(raw: unknown): Health {
         day: read.string(row.day),
         analysed: read.number(row.analysed),
         failed: read.number(row.failed),
+      };
+    }),
+    versions: read.array(body.versions).map((item) => {
+      const row = read.object(item);
+      return {
+        promptRevision: read.optionalString(row.prompt_revision),
+        provider: read.optionalString(row.provider),
+        model: read.optionalString(row.model),
+        analyses: read.number(row.analyses),
+        completed: read.number(row.completed),
+        running: read.number(row.running),
+        held: read.number(row.held),
+        failedSteps: read.number(row.failed_steps),
+        retriedSteps: read.number(row.retried_steps),
+        reportP50: read.optionalNumber(row.report_p50_ms),
+        pricedMinutes: read.number(row.priced_minutes),
+        paisePerMinute: read.optionalNumber(row.paise_per_minute),
       };
     }),
   };

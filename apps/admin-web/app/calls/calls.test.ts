@@ -11,6 +11,7 @@ import {
   when,
 } from "./call-data";
 import { filterQuery, queueApiPath, queueFilters } from "./queue-query";
+import { startAt, wordDiff } from "./review-logic";
 import { reportPillars, REPORT_PILLARS } from "./report-pillars";
 import {
   compareReports,
@@ -142,6 +143,38 @@ describe("call review data", () => {
     expect(pickRun(call, "new")?.id).toBe("mid");
     expect(pickRun(call, undefined)?.id).toBe("mid");
     expect(pickRun(normalizeCall({ runs: [] }), undefined)).toBeNull();
+  });
+
+  it("reads a call's failed steps with defaults, and none when the field is missing", () => {
+    expect(normalizeCall({}).failedJobs).toEqual([]);
+    const call = normalizeCall({
+      failed_jobs: [
+        {
+          job_id: "job-1",
+          stage: "C2",
+          recording_id: "rec-1",
+          attempts: 3,
+          code: "provider_timeout",
+          failed_at: "2026-10-11T03:00:00Z",
+          retryable: true,
+        },
+        { job_id: "job-2" },
+      ],
+    });
+    expect(call.failedJobs[0]).toEqual({
+      jobId: "job-1",
+      stage: "C2",
+      recordingId: "rec-1",
+      attempts: 3,
+      code: "provider_timeout",
+      failedAt: "2026-10-11T03:00:00Z",
+      retryable: true,
+    });
+    expect(call.failedJobs[1]).toMatchObject({
+      stage: "?",
+      code: "not_recorded",
+      retryable: false,
+    });
   });
 
   it("builds the bundle, its audio URL and speaker names from the call map", () => {
@@ -346,5 +379,61 @@ describe("queue address", () => {
       "status=ready&organisation=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&language=mr-Deva%2Ben&since=2026-10-01",
     );
     expect(queueApiPath({}, 20)).toBe("/v1/admin/conversation/calls?limit=20");
+  });
+
+  it("filters by prompt version, from the address and the facet", () => {
+    expect(queueFilters({ prompt: "coaching-v5" })).toEqual({
+      prompt: "coaching-v5",
+    });
+    expect(queueFilters({ prompt: "v5 <b>" })).toEqual({});
+    expect(queueApiPath({ prompt: "coaching-v5", status: "ready" }, 50)).toBe(
+      "/v1/admin/conversation/calls?status=ready&prompt=coaching-v5&limit=50",
+    );
+    expect(
+      normalizeQueue({
+        facets: { prompts: [{ value: "coaching-v5", count: 3 }] },
+      }).facets.prompts,
+    ).toEqual([{ value: "coaching-v5", label: "coaching-v5", count: 3 }]);
+    expect(normalizeQueue({}).facets.prompts).toEqual([]);
+  });
+});
+
+describe("shared moment", () => {
+  it("accepts a whole number of ms within a day, and nothing else", () => {
+    expect(startAt("83000")).toBe(83_000);
+    expect(startAt("0")).toBe(0);
+    expect(startAt(undefined)).toBeNull();
+    expect(startAt("-5")).toBeNull();
+    expect(startAt("1.5")).toBeNull();
+    expect(startAt("99999999")).toBeNull();
+    expect(startAt("12abc")).toBeNull();
+  });
+});
+
+describe("compared runs", () => {
+  it("marks the words each side has that the other lacks, Devanagari too", () => {
+    const diff = wordDiff(
+      "Buyer has not committed to a meeting",
+      "Buyer has committed to a dated meeting",
+    )!;
+    expect(diff.left).toEqual([
+      { text: "Buyer has ", changed: false },
+      { text: "not ", changed: true },
+      { text: "committed to a meeting", changed: false },
+    ]);
+    expect(diff.right.filter((part) => part.changed)).toEqual([
+      { text: "dated ", changed: true },
+    ]);
+    const hindi = wordDiff("कितने का पड़ेगा?", "कितने का होगा?")!;
+    expect(hindi.left.filter((part) => part.changed)[0]!.text).toBe("पड़ेगा?");
+    // The words always add back up to the original text.
+    expect(diff.right.map((part) => part.text).join("")).toBe(
+      "Buyer has committed to a dated meeting",
+    );
+  });
+
+  it("gives up on very long texts instead of slowing the screen", () => {
+    expect(wordDiff("a b c", "a b d", 10)).toBeNull();
+    expect(wordDiff("", "")).toEqual({ left: [], right: [] });
   });
 });

@@ -23,6 +23,7 @@ import {
   useAdminSession,
   useInvalidateAdminSession,
 } from "../lib/admin-session";
+import { istStamp } from "../lib/time";
 
 export const PEOPLE_READ_TIMEOUT_MS = 15_000;
 const defaultApi = {
@@ -38,7 +39,7 @@ function label(value: string) {
 }
 
 function ReadTime({ value }: { value: string }) {
-  return <time dateTime={value}>{new Date(value).toLocaleString()}</time>;
+  return <time dateTime={value}>{istStamp(value)}</time>;
 }
 
 export function PeopleRuntime({ api = defaultApi }: { api?: PeopleApi }) {
