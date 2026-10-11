@@ -600,7 +600,8 @@ describe("ProspectDetailView", () => {
     expect(host.textContent).toContain("Opportunity history (2 visible calls)");
     expect(host.textContent).toContain("Follow-up Discussion");
     expect(host.textContent).toContain("3m 0s");
-    expect(host.textContent).toContain("State: report_ready");
+    // A finished call needs no status label; internal states never show.
+    expect(host.textContent).not.toContain("State:");
     expect(host.textContent).not.toContain("Score");
     expect(host.textContent).not.toContain("Buyer readiness");
 
@@ -669,7 +670,7 @@ describe("ProspectDetailView", () => {
     },
   );
 
-  it("renders per-call hypothesis snapshot with provenance, interpretations and evidence quotes", async () => {
+  it("keeps provenance hashes off the page and shows the call's concern once, as Inferred", async () => {
     vi.spyOn(prospectsClient, "fetchProspectDetail").mockResolvedValueOnce(
       detailData,
     );
@@ -682,22 +683,17 @@ describe("ProspectDetailView", () => {
       );
     });
 
-    const snapshotEl = host.querySelector(
-      '[data-testid="call-snapshot-55555555-5555-4555-8555-555555555555"]',
+    expect(
+      host.querySelector(
+        '[data-testid="call-snapshot-55555555-5555-4555-8555-555555555555"]',
+      ),
+    ).toBeNull();
+    expect(host.textContent).not.toContain("scribe-response-r1");
+    expect(host.textContent).not.toContain("Per-call hypothesis");
+    const holding = host.querySelector('[data-prospect-section="5"]')!;
+    const concern = [...holding.querySelectorAll("[data-fact-label]")].find(
+      (fact) => fact.textContent?.includes("Possible concern"),
     );
-    expect(snapshotEl).not.toBeNull();
-    expect(snapshotEl?.textContent).toContain(
-      "Per-call hypothesis (c5_checkpoint)",
-    );
-    expect(snapshotEl?.textContent).toContain("rev 1");
-    expect(snapshotEl?.textContent).toContain("scribe-response-r1");
-    expect(snapshotEl?.textContent).toContain("inference");
-    expect(snapshotEl?.textContent).toContain(
-      "The buyer asks about pricing and implementation timeline.",
-    );
-    expect(snapshotEl?.textContent).toContain(
-      "how fast can we get started and what are the license tiers?",
-    );
-    expect(snapshotEl?.textContent).toContain("00:12 – 00:18");
+    expect(concern?.getAttribute("data-fact-label")).toBe("Inferred");
   });
 });
