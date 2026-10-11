@@ -184,6 +184,21 @@ export const OUTCOME_CHOICES: Record<
   no_decision: "Decision Pending",
 };
 
+/** A person's recorded outcome in the Report's words: status plus their reason or date. */
+export const recordedOutcome = (value: {
+  outcome: keyof typeof OUTCOME_CHOICES;
+  lost_reason?: string | null;
+  follow_up_on?: string | null;
+}) => ({
+  status: OUTCOME_CHOICES[value.outcome],
+  note:
+    value.outcome === "lost"
+      ? value.lost_reason?.trim() || null
+      : value.outcome === "follow_up" && value.follow_up_on
+        ? followUpDate(value.follow_up_on)
+        : null,
+});
+
 export const OUTCOME_RECORD = {
   title: "Set the outcome",
   notSet: "Not set yet",

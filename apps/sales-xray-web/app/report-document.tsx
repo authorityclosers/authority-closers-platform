@@ -11,7 +11,13 @@ import {
   type ReactNode,
 } from "react";
 
-import { COMMON, DEAL, DOCUMENT, playLabel } from "./report-copy";
+import {
+  COMMON,
+  DEAL,
+  DOCUMENT,
+  playLabel,
+  recordedOutcome,
+} from "./report-copy";
 import type { ReportEvidence, Transcript } from "./report-contract";
 import type { DocumentReportData } from "./report-document-data";
 import {
@@ -23,6 +29,7 @@ import {
   type ReportDoc,
 } from "./report-document-model";
 import { useReportPeople } from "./report-kit";
+import { useCallOutcome } from "./report-outcome-context";
 import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import { SpeakerProfilesContext } from "./speaker-profiles";
 import styles from "./report-document.module.css";
@@ -36,12 +43,21 @@ const EMPTY_TRANSCRIPT = {
   segments: [],
 } as unknown as Transcript;
 
-/** The same names and roles the Report screen uses, never guessed. */
+/**
+ * The same names, roles and person-recorded outcome the Report screen uses,
+ * never guessed.
+ */
 function useDocPeople(
   data: DocumentReportData | undefined,
   callId: string | null | undefined,
 ): DocPeople {
   const server = useContext(SpeakerProfilesContext);
+  const { state } = useCallOutcome();
+  const value = state.status === "ready" ? state.record.value : null;
+  const recorded = useMemo(
+    () => (value ? recordedOutcome(value) : null),
+    [value],
+  );
   const transcript = data?.transcript ?? EMPTY_TRANSCRIPT;
   const people = useReportPeople(callId ?? server?.callId ?? null, transcript);
   const seller = people.roles?.seller ?? null;
@@ -57,10 +73,11 @@ function useDocPeople(
       roles: { seller, prospect },
       speakerName: (id: string) =>
         data?.speakerNames?.[id] ?? byId.get(id) ?? null,
+      recorded,
     };
     // `key` carries every input; the people helpers are new each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, data?.speakerNames]);
+  }, [key, data?.speakerNames, recorded]);
 }
 
 function Play({

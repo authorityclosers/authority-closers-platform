@@ -102,5 +102,18 @@ describe("report copy", () => {
   it("names the outcome buttons exactly like the status they set", () => {
     for (const status of Object.values(copy.OUTCOME_CHOICES))
       expect(copy.OUTCOME_STATUSES).toContain(status);
+    expect(
+      copy.recordedOutcome({ outcome: "lost", lost_reason: " Price " }),
+    ).toEqual({ status: "Lost", note: "Price" });
+    expect(
+      copy.recordedOutcome({
+        outcome: "follow_up",
+        follow_up_on: "2026-10-16",
+      }),
+    ).toEqual({ status: "Follow-up Set", note: "Follow-up: Friday, 16 Oct" });
+    expect(copy.recordedOutcome({ outcome: "no_decision" })).toEqual({
+      status: "Decision Pending",
+      note: null,
+    });
   });
 });
