@@ -4,13 +4,19 @@ import asyncio
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
+from fastapi import FastAPI
+from pydantic import SecretStr
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from ac_platform.application.settings import Settings
 from ac_platform.audit.service import verify_audit_chain
+from ac_platform.coaching.http import install_coaching_http
 from ac_platform.coaching.report_adapter import from_report
 from ac_platform.coaching.sandbox import SandboxCoaching, call_uuid, rep_uuid
 from ac_platform.conversation_intelligence.acquisition_library import account_library
@@ -21,6 +27,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import ConversationReportDraft
 from ac_platform.conversation_intelligence.org_insights import OrganisationInsights
@@ -32,9 +39,13 @@ from ac_platform.conversation_intelligence.synthetic_import_contracts import (
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSyntheticRecord,
 )
+from ac_platform.http.auth import install_identity_http
+from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import PasswordCredential, ProviderIdentity
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 from tests.unit.conversation_intelligence.test_dev_sandbox_loader import dated_bundle, loader
@@ -160,6 +171,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert stored_report.payload["pillars"]["summary"] == "A fictional discovery call."
                 assert stored_report.payload["improvements"][0]["title"] == "Agree a date"
                 assert stored_report.payload["dimensions"][0]["call_state"] == "observed"
+                normalized = stored_report.transcript["normalized"]
                 coaching = from_report(
                     report,
                     submission_id=submission,
@@ -228,6 +240,65 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert not alarm["released_unfinished_runs"]
                 insights = OrganisationInsights(db, module.TARGET)
                 assert await insights.pending() == 0
+
+            # The Report embeds Coaching only when every identity and citation
+            # matches its loaded report. Exercise the actual signed-in HTTP path.
+            origin = "https://salesxray.example.test"
+            settings = Settings(
+                _env_file=None,
+                environment="test",
+                public_app_url="https://learner.example.test",
+                admin_app_url="https://admin.example.test",
+                coach_app_url="https://coach.example.test",
+                api_url="https://api.example.test",
+                sales_xray_app_url=origin,
+                public_learner_tenant_id=uuid4(),
+                operations_tenant_id=uuid4(),
+                session_token_pepper=SecretStr("fictional-loader-session-hash-test-only"),
+            )
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            app = FastAPI()
+            register_problem_handlers(app)
+            require_actor = install_identity_http(app, settings=settings, sessions=sessions)
+            install_coaching_http(app, RouteContext(settings, require_actor, sessions))
+            token = await _session(SimpleNamespace(settings=settings, sessions=sessions), owner)
+            route = f"/v1/me/coaching/calls/{submission}"
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url=origin
+            ) as client:
+                assert (await client.get(route)).status_code == 401
+                client.cookies.set(settings.session_cookie_name, token)
+                response = await client.get(route)
+                assert response.status_code == 200
+                bound = response.json()
+                assert bound["state"] == "ready"
+                for key in ("recording_id", "source_sha256", "transcript_revision"):
+                    assert bound[key] == report[key]
+                assert bound["report_revision"] == content_hash(report["report"])
+                segments = {s["id"]: s for s in normalized["segments"]}
+                moments = [*bound["evidence"], bound["lesson"]["own_call"]]
+                assert moments
+                for moment in moments:
+                    assert moment["submission_id"] == str(submission)
+                    for key in ("recording_id", "source_sha256", "transcript_revision"):
+                        assert moment[key] == report[key]
+                    segment = segments[moment["segment_id"]]
+                    assert moment["quote"] in segment["text"]
+                    assert (
+                        segment["start_ms"]
+                        <= moment["start_ms"]
+                        < moment["end_ms"]
+                        <= segment["end_ms"]
+                    )
+                    assert moment["playable"] is False
+                other_token = await _session(
+                    SimpleNamespace(settings=settings, sessions=sessions),
+                    await seed(engine, tenant_id=module.TARGET, role="owner"),
+                )
+                client.cookies.set(settings.session_cookie_name, other_token)
+                denied = await client.get(route)
+                assert denied.status_code == 404
+                assert source.coaching["action"]["mission"]["behaviour"] not in denied.text
 
             summary = SyntheticRecordInput.model_validate(
                 {

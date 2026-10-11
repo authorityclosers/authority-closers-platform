@@ -70,7 +70,12 @@ preserved authored Team, representative and call Coaching, checks the exact
 mission and transcript quote, refuses another viewer's private coaching and
 keeps text-only moments nonplayable. Calls → Report → Coaching uses the same
 real submission and member IDs written by the loader, including mission and
-moment links; legacy Team links remain readable. Run only these loader checks
+moment links; legacy Team links remain readable. The actual signed-in Coaching
+HTTP route must also match the loaded report's recording ID, source hash,
+transcript revision and report revision. Every diagnostic and own-call lesson
+quote resolves to a loaded transcript segment within its original time span.
+Anonymous requests and requests from another owner in the same organisation
+remain excluded from the importer's private authored Coaching. Run only these loader checks
 with the existing test database injection:
 
 ```sh
