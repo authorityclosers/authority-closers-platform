@@ -39,6 +39,7 @@ import {
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
 import { SectionBoundary } from "./ui/section-boundary";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -273,11 +274,15 @@ export function CallsLibrary({
           ])
         : "authenticated-context-pending"
       : `authentication:${String(access?.authenticated ?? "unknown")}`;
-  // The server read the list with the session this page started from, so its
-  // rows belong only to that first identity (never to a later one).
+  // The server read the list for one identity (person, session, workspace)
+  // as this document loaded: only that identity, mounting now, starts from
+  // it, and only while it stays (never a later one).
+  const seedAllowed = useServerSeedAllowed(
+    access?.context ? identityKey : null,
+  );
   const [firstIdentity] = useState(identityKey);
   const [seed] = useState(() =>
-    preview || !access?.context ? null : seededLibraryPage(initial),
+    preview || !seedAllowed ? null : seededLibraryPage(initial),
   );
   return (
     <CallsLibraryContent

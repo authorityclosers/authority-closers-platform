@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act } from "react";
-import { hydrateRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -16,6 +16,7 @@ import { CALLS_LIST_PATH, seededLibraryPage } from "./calls-seed";
 import { DisplayDatesProvider } from "./display-clock";
 import { dayKey } from "./display-dates";
 import { UploadSessionProvider } from "./hooks/upload-session";
+import { InitialSessionProvider } from "./initial-session";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
 (
@@ -65,21 +66,29 @@ afterEach(async () => {
 const page = (
   identity: typeof context | null,
   initial: { status: number; body: unknown } | null,
+  served: typeof context = context,
 ) => (
-  <UploadSessionProvider>
-    <DisplayDatesProvider value={dates}>
-      <WorkspaceAccessProvider
-        value={{
-          status: "ready",
-          authenticated: true,
-          context: identity,
-          retry: () => {},
-        }}
-      >
-        <CallsLibrary insights initial={initial} />
-      </WorkspaceAccessProvider>
-    </DisplayDatesProvider>
-  </UploadSessionProvider>
+  <InitialSessionProvider
+    value={{
+      identity: { person_id: served.personId, session_id: served.sessionId },
+      directory: { selected_tenant_id: served.tenantId },
+    }}
+  >
+    <UploadSessionProvider>
+      <DisplayDatesProvider value={dates}>
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: identity,
+            retry: () => {},
+          }}
+        >
+          <CallsLibrary insights initial={initial} />
+        </WorkspaceAccessProvider>
+      </DisplayDatesProvider>
+    </UploadSessionProvider>
+  </InitialSessionProvider>
 );
 
 const listReads = () =>
@@ -135,5 +144,26 @@ it("reads the list in the browser without a server read, or for another identity
     ),
   );
   expect(listReads()).toBe(2);
+  host.remove();
+});
+
+it("never seeds a later session (signed in again in place) with the server's read", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  // The document was read for session-0; this mount is session-1.
+  await act(async () =>
+    root?.render(
+      page(
+        context,
+        { status: 200, body: listPage },
+        {
+          ...context,
+          sessionId: "session-0",
+        },
+      ),
+    ),
+  );
+  expect(listReads()).toBe(1);
   host.remove();
 });

@@ -25,6 +25,7 @@ import {
   type ReadState,
 } from "./dashboard-body";
 import { seededDashboard, type ServerDashboard } from "./dashboard-seed";
+import { useServerSeedAllowed } from "../initial-session";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { PolicyFooter } from "../policy-footer";
 import styles from "./dashboard.module.css";
@@ -82,9 +83,16 @@ export function DashboardView({
 
 function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   const access = useWorkspaceAccess();
-  // Reads the server made for this page (dev) seed the panels; the browser
-  // reads only what is still missing.
-  const [seed] = useState(() => seededDashboard(initial));
+  // Reads the server made for this page (dev) seed the panels, for the
+  // identity it read them for while the document is new; the browser reads
+  // only what is still missing.
+  const context = access?.context;
+  const seedAllowed = useServerSeedAllowed(
+    context
+      ? JSON.stringify([context.personId, context.sessionId, context.tenantId])
+      : null,
+  );
+  const [seed] = useState(() => seededDashboard(seedAllowed ? initial : null));
 
   const [hiddenRecent, setHiddenRecent] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
