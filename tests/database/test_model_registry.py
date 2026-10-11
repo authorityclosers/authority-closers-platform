@@ -22,6 +22,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "persons",
         "coaching_share_revisions",
         "coaching_feedback",
+        "coaching_learner_context",
         "password_credentials",
         "email_challenges",
         "email_login_codes",

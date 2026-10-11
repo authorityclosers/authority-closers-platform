@@ -13,3 +13,12 @@ def test_coaching_sharing_state_is_in_all_consumers() -> None:
             "coaching_share_revisions",
             "coaching_feedback",
         )
+
+
+def test_coaching_learner_context_is_in_all_consumers() -> None:
+    for module in (backup, proof, drill):
+        assert module.parity_contract_for_head("20261011_0086") == "ac-postgres-parity-v57"
+        assert module.parity_tables_for_head("20261011_0086") == (
+            *module.parity_tables_for_head("20261011_0085"),
+            "coaching_learner_context",
+        )

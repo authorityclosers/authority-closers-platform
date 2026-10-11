@@ -2,10 +2,11 @@
 
 import { Lock, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Badge, Button, Panel, Skeleton } from "../ui/kit";
+import { Badge, Button, kitStyles, Panel, Skeleton } from "../ui/kit";
 import {
   changeSharing,
   readSharing,
+  sendContext,
   sendFeedback,
   type SharingView,
 } from "./sharing-client";
@@ -110,6 +111,90 @@ export function SharePanel({
 }
 
 /** Agree / not completely with the current focus; never changes a score. */
+const CONTEXT_LIMIT = 1000;
+
+/** The learner's own words about the focus (spec 12.2): kept, shown back. */
+function AddContext({
+  focusSkillId,
+  originSubmissionId,
+}: {
+  focusSkillId: string;
+  originSubmissionId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [command, setCommand] = useState(() => crypto.randomUUID());
+  const note = text.trim();
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const result = await sendContext({
+      command_id: command,
+      focus_skill_id: focusSkillId,
+      mission_origin_submission_id: originSubmissionId,
+      context: note,
+    });
+    setSaving(false);
+    if (result.error) setError(result.error);
+    else {
+      setSaved(note);
+      setText("");
+      setOpen(false);
+      setCommand(crypto.randomUUID());
+    }
+  };
+  if (!open)
+    return (
+      <>
+        <Button onClick={() => setOpen(true)}>Add context</Button>
+        {saved ? (
+          <p role="status" className={styles.note}>
+            Saved: “{saved}”. It shows with the likely reason.
+          </p>
+        ) : null}
+      </>
+    );
+  return (
+    <div className={styles.contextForm}>
+      <label className={kitStyles.field}>
+        <span className={kitStyles.fieldLabel}>
+          What should we know about this focus?
+        </span>
+        <textarea
+          value={text}
+          maxLength={CONTEXT_LIMIT}
+          rows={3}
+          onChange={(event) => setText(event.target.value)}
+        />
+        <span className={kitStyles.fieldHint}>
+          {text.length}/{CONTEXT_LIMIT} · Only you see it unless you share your
+          coaching. It is deleted with your account.
+        </span>
+      </label>
+      <div className={styles.actions}>
+        <Button
+          variant="primary"
+          disabled={!note || saving}
+          onClick={() => void save()}
+        >
+          Save
+        </Button>
+        <Button onClick={() => setOpen(false)} disabled={saving}>
+          Cancel
+        </Button>
+      </div>
+      {error ? (
+        <p role="status" className={styles.status}>
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function FocusFeedback({
   focusSkillId,
   originSubmissionId,
@@ -154,12 +239,15 @@ export function FocusFeedback({
         >
           Not completely
         </Button>
+        <AddContext
+          focusSkillId={focusSkillId}
+          originSubmissionId={originSubmissionId}
+        />
       </div>
       <p role="status" className={styles.note}>
         {done
           ? "Recorded. It does not change your mission or any score."
-          : (error ??
-            "Tell us whether this focus fits. Adding written context comes next.")}
+          : (error ?? "Tell us whether this focus fits, or add context.")}
       </p>
     </>
   );

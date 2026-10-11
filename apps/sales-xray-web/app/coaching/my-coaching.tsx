@@ -280,6 +280,12 @@ export function CoachingStory({
               <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
             </span>
             {coaching.root_cause.hypothesis}
+            {coaching.root_cause.learner_context ? (
+              <span className={styles.learnerContext}>
+                {readOnly ? "Their context" : "Your context"}: “
+                {coaching.root_cause.learner_context}”
+              </span>
+            ) : null}
           </p>
         </div>
         <MomentList evidence={evidence} fictional={coaching.sandbox} />

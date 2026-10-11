@@ -97,7 +97,13 @@ export type Coaching = {
     attention_call_count: number;
     summary: string;
   };
-  root_cause: { hypothesis: string; gap_type: string; confidence: string };
+  root_cause: {
+    hypothesis: string;
+    gap_type: string;
+    confidence: string;
+    /** The learner's own newest note about this focus ("Add context"). */
+    learner_context?: string | null;
+  };
   evidence: Evidence[];
   practice: null | {
     exercise: string;

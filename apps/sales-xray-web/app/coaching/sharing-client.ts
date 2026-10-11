@@ -86,6 +86,17 @@ export const changeSharing = (shared: boolean, expectedRevision: number) =>
     body: JSON.stringify({ shared, expected_revision: expectedRevision }),
   });
 
+export const sendContext = (body: {
+  command_id: string;
+  focus_skill_id: string;
+  mission_origin_submission_id: string;
+  context: string;
+}) =>
+  call("/v1/me/coaching/context", () => true, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 export const sendFeedback = (body: {
   command_id: string;
   agreement: "agree" | "not_completely";

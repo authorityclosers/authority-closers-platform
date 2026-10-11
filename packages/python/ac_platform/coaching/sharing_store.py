@@ -3,8 +3,9 @@
 Owner decisions 10 Oct 2026: Coaching is private by default; one revocable tap
 shares it with the workspace's owners/admins (and, later, assigned coaches).
 Reads always use current membership and the latest share revision; nothing is
-updated or deleted, a new revision supersedes. Payloads never carry Coaching
-content or names into the audit chain.
+updated or deleted, a new revision supersedes. Learner context is the one
+free-text note: never edited, erased with the account. Payloads never carry
+Coaching content or names into the audit chain.
 """
 
 from datetime import UTC, datetime
@@ -12,12 +13,16 @@ from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import AwareDatetime, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.coaching.contracts import Model
-from ac_platform.coaching.models import CoachingFeedback, CoachingShareRevision
+from ac_platform.coaching.models import (
+    CoachingFeedback,
+    CoachingLearnerContext,
+    CoachingShareRevision,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
@@ -290,3 +295,88 @@ async def record_feedback(
         request_id=request_id,
         now=created_at,
     )
+
+
+async def record_context(
+    database: AsyncSession,
+    *,
+    actor: ActorContext,
+    tenant_id: UUID,
+    command_id: UUID,
+    focus_skill_id: str,
+    mission_origin_submission_id: UUID,
+    context: str,
+    request_id: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Keep the learner's own context on their focus; the same command is idempotent.
+
+    The audit event carries no text: the note is erased with the account.
+    """
+    if actor.tenant_id != tenant_id or await _member(database, tenant_id, actor.person_id) is None:
+        raise ConversationDenied("Coaching is unavailable in this workspace.")
+    existing = await database.scalar(
+        select(CoachingLearnerContext).where(
+            CoachingLearnerContext.tenant_id == tenant_id,
+            CoachingLearnerContext.person_id == actor.person_id,
+            CoachingLearnerContext.command_id == command_id,
+        )
+    )
+    if existing is not None:
+        if (
+            existing.context != context
+            or existing.focus_skill_id != focus_skill_id
+            or existing.mission_origin_submission_id != mission_origin_submission_id
+        ):
+            raise ConversationConflict("This note was already saved differently.")
+        return
+    created_at = (now or datetime.now(UTC)).astimezone(UTC)
+    database.add(
+        CoachingLearnerContext(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            person_id=actor.person_id,
+            command_id=command_id,
+            focus_skill_id=focus_skill_id,
+            mission_origin_submission_id=mission_origin_submission_id,
+            context=context,
+            created_at=created_at,
+        )
+    )
+    await database.flush()
+    await AuditRepository(database).append(
+        tenant_id=tenant_id,
+        actor_person_id=actor.person_id,
+        session_id=actor.session_id,
+        action="coaching.context_added",
+        resource_type="coaching_learner_context",
+        resource_id=command_id,
+        payload={"length": len(context)},
+        request_id=request_id,
+        now=created_at,
+    )
+
+
+async def latest_context(
+    database: AsyncSession, *, tenant_id: UUID, person_id: UUID, focus_skill_id: str
+) -> str | None:
+    """The newest note this person added about this focus, if any."""
+    note: str | None = await database.scalar(
+        select(CoachingLearnerContext.context)
+        .where(
+            CoachingLearnerContext.tenant_id == tenant_id,
+            CoachingLearnerContext.person_id == person_id,
+            CoachingLearnerContext.focus_skill_id == focus_skill_id,
+        )
+        .order_by(CoachingLearnerContext.created_at.desc())
+        .limit(1)
+    )
+    return note
+
+
+async def erase_coaching_context_for_person(database: AsyncSession, *, person_id: UUID) -> int:
+    """Purge a person's free-text Coaching notes in the account-deletion transaction."""
+    result = await database.execute(
+        delete(CoachingLearnerContext).where(CoachingLearnerContext.person_id == person_id)
+    )
+    return int(getattr(result, "rowcount", 0) or 0)

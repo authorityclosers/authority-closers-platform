@@ -10,7 +10,12 @@ from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError
 
 from ac_platform.audit.models import AuditEvent
-from ac_platform.coaching.models import CoachingFeedback, CoachingShareRevision
+from ac_platform.coaching.models import (
+    CoachingFeedback,
+    CoachingLearnerContext,
+    CoachingShareRevision,
+)
+from ac_platform.coaching.sharing_store import erase_coaching_context_for_person
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_coaching_postgresql import draft_for, install
 from tests.database.test_coaching_postgresql import postgres_harness as _postgres_harness
@@ -23,6 +28,8 @@ SHARING = "/v1/me/coaching/sharing"
 TEAM = "/v1/me/coaching/team"
 FEEDBACK = "/v1/me/coaching/feedback"
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
+JSON_ONLY = {"Content-Type": "application/json"}
+CONTEXT = "/v1/me/coaching/context"
 
 
 @pytest.fixture
@@ -170,6 +177,32 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                 unknown = {**body, "command_id": str(uuid4()), "focus_skill_id": "made_up"}
                 assert (await client.post(FEEDBACK, json=unknown, headers=WRITE)).status_code == 409
 
+                # Add context: the learner's own words, shown back with the reason.
+                note = {
+                    "command_id": str(uuid4()),
+                    "focus_skill_id": focus,
+                    "mission_origin_submission_id": origin,
+                    "context": "  ग्राहक was in a hurry; I skipped the impact question.  ",
+                }
+                assert (await client.post(CONTEXT, json=note, headers=WRITE)).status_code == 204
+                assert (await client.post(CONTEXT, json=note, headers=WRITE)).status_code == 204
+                rewritten = {**note, "context": "Something else"}
+                assert (
+                    await client.post(CONTEXT, json=rewritten, headers=WRITE)
+                ).status_code == 409
+                for bad in ({**note, "context": "   "}, {**note, "context": "x" * 1001}):
+                    bad["command_id"] = str(uuid4())
+                    assert (await client.post(CONTEXT, json=bad, headers=WRITE)).status_code == 422
+                assert (
+                    await client.post(
+                        CONTEXT, json={**note, "command_id": str(uuid4())}, headers=JSON_ONLY
+                    )
+                ).status_code == 403  # writes need this Sales Xray page's Origin
+                mine = (await client.get("/v1/me/coaching")).json()
+                assert mine["root_cause"]["learner_context"] == (
+                    "ग्राहक was in a hurry; I skipped the impact question."
+                )
+
             async with setup.sessions() as db:
                 revisions = (
                     await db.scalars(
@@ -182,15 +215,28 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
                     await db.scalars(select(AuditEvent).where(AuditEvent.action.like("coaching.%")))
                 ).all()
                 assert sorted(event.action for event in events) == [
+                    "coaching.context_added",
                     "coaching.feedback_recorded",
                     "coaching.share_changed",
                     "coaching.share_changed",
                 ]
                 assert all("Ask before presenting" not in str(e.payload) for e in events)
+                assert all("hurry" not in str(e.payload) for e in events)
             # History is append-only: supersede, never rewrite.
             with pytest.raises(DBAPIError):
                 async with setup.sessions() as db, db.begin():
                     await db.execute(text("UPDATE coaching_share_revisions SET shared = true"))
+            # A note is never edited, but account erasure purges its text.
+            with pytest.raises(DBAPIError):
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(text("UPDATE coaching_learner_context SET context = 'x'"))
+            async with setup.sessions() as db, db.begin():
+                removed = await erase_coaching_context_for_person(
+                    db, person_id=setup.state.person_id
+                )
+            assert removed == 1
+            async with setup.sessions() as db:
+                assert (await db.scalars(select(CoachingLearnerContext))).all() == []
         finally:
             await setup.engine.dispose()
 

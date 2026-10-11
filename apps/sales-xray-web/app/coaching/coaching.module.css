@@ -419,6 +419,20 @@
   margin-top: 8px;
 }
 
+/* "Add context": the learner's own words about the focus. */
+.contextForm {
+  display: grid;
+  flex-basis: 100%;
+  gap: 8px;
+}
+
+.learnerContext {
+  display: block;
+  margin-top: 4px;
+  color: var(--sx-ink-2);
+  font-style: italic;
+}
+
 /* Team: the area filter above the named sandbox reps. */
 .repFilter {
   display: flex;

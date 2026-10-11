@@ -4,7 +4,7 @@ import asyncio
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
@@ -21,7 +21,9 @@ from ac_platform.coaching.library import CoachingLibrary
 from ac_platform.coaching.sandbox import SandboxCoaching
 from ac_platform.coaching.sharing_store import (
     SharingView,
+    latest_context,
     read_sharing,
+    record_context,
     record_feedback,
     set_sharing,
 )
@@ -48,6 +50,16 @@ class ShareChoice(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     shared: bool
     expected_revision: int = Field(ge=0)
+
+
+class ContextNote(BaseModel):
+    """The learner's own words about their focus ("Add context")."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    command_id: UUID
+    focus_skill_id: str = Field(min_length=1, max_length=64)
+    mission_origin_submission_id: UUID
+    context: str = Field(min_length=1, max_length=1000)
 
 
 class FeedbackChoice(BaseModel):
@@ -169,6 +181,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         async with account_library(request, response) as (library, actor):
             view = await library.read(actor)
             view = await with_media(view)
+            view = await with_context(
+                view, actor.person_id, library.ownership.tenant_id, library.database
+            )
             sandbox = await sandbox_for(library, actor)
             # Your own (real) coaching; a pointer when fictional reps exist.
             reps = (await sandbox.read_team(actor.person_id)).rep_count if sandbox else 0
@@ -222,12 +237,15 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                         "This coaching is not shared with you.",
                         headers=PRIVATE,
                     ) from None
+                view = await with_context(
+                    view, person_id, library.ownership.tenant_id, library.database
+                )
             view = await with_media(view)
             return CoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )
 
-    async def json_body[T: BaseModel](request: Request, model: type[T]) -> T:
+    async def json_body[T: BaseModel](request: Request, model: type[T], *, limit: int = 1024) -> T:
         content_types = request.headers.getlist("content-type")
         if (
             len(content_types) != 1
@@ -238,7 +256,7 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         try:
             async with asyncio.timeout(5):
                 async for block in request.stream():
-                    if len(raw) + len(block) > 1024:
+                    if len(raw) + len(block) > limit:
                         raise HTTPException(413, "This choice is too large.", headers=PRIVATE)
                     raw.extend(block)
             return model.model_validate_json(bytes(raw))
@@ -280,6 +298,47 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
             except ConversationError as error:
                 raise HTTPException(error.status, str(error), headers=PRIVATE) from None
+
+    async def with_context(
+        view: CoachingView, person_id: UUID, tenant_id: UUID, db: Any
+    ) -> CoachingView:
+        """Show the person's own newest note about this focus with the likely reason."""
+        if view.focus is None or view.sandbox:
+            return view
+        note = await latest_context(
+            db, tenant_id=tenant_id, person_id=person_id, focus_skill_id=view.focus.skill_id
+        )
+        if note is None:
+            return view
+        return view.model_copy(
+            update={"root_cause": view.root_cause.model_copy(update={"learner_context": note})}
+        )
+
+    @router.post("/context", status_code=204)
+    async def add_context(request: Request, response: Response) -> Response:
+        async with account_library(request, response, write=True) as (library, actor):
+            # 1,000 characters of Devanagari are up to 3 KB of UTF-8.
+            note = await json_body(request, ContextNote, limit=4096)
+            if note.focus_skill_id not in LABELS or not await library.owns_call(
+                actor, note.mission_origin_submission_id
+            ):
+                raise HTTPException(
+                    409, "Your focus changed. Reload Coaching and try again.", headers=PRIVATE
+                )
+            try:
+                await record_context(
+                    library.database,
+                    actor=actor,
+                    tenant_id=library.ownership.tenant_id,
+                    command_id=note.command_id,
+                    focus_skill_id=note.focus_skill_id,
+                    mission_origin_submission_id=note.mission_origin_submission_id,
+                    context=note.context,
+                    request_id=request_id(request),
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error), headers=PRIVATE) from None
+        return Response(status_code=204, headers=PRIVATE)
 
     @router.post("/feedback", status_code=204)
     async def feedback(request: Request, response: Response) -> Response:

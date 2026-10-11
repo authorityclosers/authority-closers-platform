@@ -123,4 +123,40 @@ describe("Focus feedback", () => {
     expect(host.textContent).toContain("Recorded.");
     expect(button("Not completely").disabled).toBe(true);
   });
+  it("keeps the learner's own context, trimmed, and shows it back", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <FocusFeedback
+          focusSkillId="problem_impact_desire"
+          originSubmissionId={fictionalCoaching.mission!.origin_submission_id}
+        />,
+      ),
+    );
+    await act(async () => button("Add context").click());
+    const area = host.querySelector("textarea")!;
+    expect(area.maxLength).toBe(1000);
+    expect(button("Save").disabled).toBe(true);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!;
+      setter.call(area, "  ग्राहक was in a hurry  ");
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Save").click());
+    await flush();
+    expect(fetch.mock.calls[0][0]).toBe("/v1/me/coaching/context");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body).toMatchObject({
+      context: "ग्राहक was in a hurry",
+      focus_skill_id: "problem_impact_desire",
+    });
+    expect(host.textContent).toContain("Saved: “ग्राहक was in a hurry”");
+    expect(host.querySelector("textarea")).toBeNull();
+  });
 });
