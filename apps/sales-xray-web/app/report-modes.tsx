@@ -506,6 +506,10 @@ function renderReportPanels(
                 </span>
               }
               headingLevel="h2"
+              // Phones: Coaching's own pillar cards are the frame.
+              className={styles.coachingPanel}
+              headClassName={styles.coachingPanelHead}
+              bodyClassName={styles.coachingPanelBody}
             >
               {panel.content}
             </OperationalPanel>
