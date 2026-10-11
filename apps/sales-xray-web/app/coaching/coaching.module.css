@@ -1225,6 +1225,10 @@
 }
 
 @media (max-width: 760px) {
+  .quoteToggle {
+    min-height: 44px;
+  }
+
   .root,
   .skeleton {
     padding: 14px var(--sx-gutter) 32px;
