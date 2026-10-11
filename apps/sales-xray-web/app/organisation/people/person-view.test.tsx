@@ -219,7 +219,7 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
   const marks = [...host.querySelectorAll('tbody [role="img"]')].map((mark) =>
     mark.getAttribute("aria-label"),
   );
-  expect(marks).toEqual(["Partly seen", "Evidence found"]);
+  expect(marks).toEqual(["Partly seen", "Observed"]);
   // Their calls link to each report.
   expect(
     [...host.querySelectorAll(`a[href="/analysis/calls/${callA}"]`)].map(

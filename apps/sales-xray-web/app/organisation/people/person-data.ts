@@ -8,6 +8,7 @@
 import { submissionState, callTone, type CallTone } from "../../call-status";
 import type { OrgActivity, OrgMember, PersonWeeks } from "../organisation-api";
 import type { ReportPattern } from "../team-patterns";
+import { getReportUiCopy } from "../../report-ui-copy";
 
 /** Twelve 7-day weeks, within the activity read's 90-day limit. */
 export const PERSON_WEEKS = 12;
@@ -178,17 +179,26 @@ export function skillMatrix(
 }
 
 /**
- * The report's own evidence words (report-ui-copy.ts). Evidence found is not
- * a score, so the cells use shapes (filled, half, ring), never good/bad colour.
+ * The report's own skill words (report-ui-copy.ts, Dipak's): the same word
+ * here as in the Report. Not a score, so the cells use shapes (filled, half,
+ * ring), never good/bad colour.
  */
-export const SKILL_STATUS: Record<string, { label: string; mark: string }> = {
-  observed: { label: "Evidence found", mark: "full" },
-  partial: { label: "Partly seen", mark: "half" },
-  insufficient_evidence: { label: "Need more evidence", mark: "ring" },
-  conflicted: { label: "Mixed evidence", mark: "mixed" },
-  not_applicable: { label: "Not relevant here", mark: "none" },
-  unknown: { label: "Not assessed", mark: "none" },
+const WORDS = getReportUiCopy("en").factorStatus;
+const MARKS: Record<string, string> = {
+  observed: "full",
+  partial: "half",
+  insufficient_evidence: "ring",
+  conflicted: "mixed",
+  not_applicable: "none",
+  unknown: "none",
 };
+export const SKILL_STATUS: Record<string, { label: string; mark: string }> =
+  Object.fromEntries(
+    Object.entries(MARKS).map(([status, mark]) => [
+      status,
+      { label: WORDS[status] ?? status.replace(/_/g, " "), mark },
+    ]),
+  );
 
 export function skillStatus(status: string | null) {
   if (status === null) return { label: "Not in this report", mark: "none" };
