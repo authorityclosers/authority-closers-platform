@@ -4,6 +4,7 @@ import { normalizeAcademies } from "../platform/platform-data";
 import {
   MESSAGES,
   adminRead,
+  devEdgeTransport,
   internalTransport,
   read,
   sessionCookieFrom,
@@ -147,5 +148,57 @@ describe("server reads", () => {
       academies: [],
       nextAfterId: null,
     });
+  });
+
+  it("in development only, reads through the loopback dev edge as admin-dev", async () => {
+    const dev = {
+      NODE_ENV: "development",
+      AC_ADMIN_DEV_HOST: "admin-dev.authorityclosers.com",
+      AC_ADMIN_DEV_EDGE_ORIGIN: "http://127.0.0.1:3017",
+    };
+    expect(devEdgeTransport(dev)?.adminHost).toBe(
+      "admin-dev.authorityclosers.com",
+    );
+    expect(devEdgeTransport({ ...dev, NODE_ENV: "production" })).toBeNull();
+    expect(
+      devEdgeTransport({
+        ...dev,
+        AC_ADMIN_DEV_HOST: "admin.authorityclosers.com",
+      }),
+    ).toBeNull();
+    expect(
+      devEdgeTransport({
+        ...dev,
+        AC_ADMIN_DEV_EDGE_ORIGIN: "http://10.0.0.5:3017",
+      }),
+    ).toBeNull();
+    expect(
+      devEdgeTransport({
+        ...dev,
+        AC_ADMIN_DEV_EDGE_ORIGIN: "https://127.0.0.1:3017",
+      }),
+    ).toBeNull();
+    expect(internalTransport(dev)?.origin.toString()).toBe(
+      "http://127.0.0.1:3017/",
+    );
+    const get = ok({ email: "x" });
+    const devCookie = { name: "ac_session", value: "d".repeat(43) };
+    expect(
+      await adminRead("/v1/me", read.object, {
+        env: dev,
+        cookies: [devCookie],
+        get,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(get.mock.calls[0]![1]).toBe("admin-dev.authorityclosers.com");
+    expect(get.mock.calls[0]![2]).toBe(`ac_session=${"d".repeat(43)}`);
+    // Production transports never accept the development cookie name.
+    expect(
+      await adminRead("/v1/me", read.object, {
+        env,
+        cookies: [devCookie],
+        get,
+      }),
+    ).toMatchObject({ ok: false, status: 401 });
   });
 });
