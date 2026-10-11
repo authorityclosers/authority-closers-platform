@@ -124,6 +124,57 @@ summaries remain summaries and appear in Insights; they are not completed report
 records. The seven verified audio examples use the separate existing media import
 path. Loading authored text alone does not make playback available.
 
+## Reviewed summary wording supersession
+
+`repair-sales-xray-summary-prefixes.py` prepares the bounded wording reviewed by
+G on 11 Oct. In the pinned 3,360-call publication, 391 executive-summary sentences
+start with exactly `The conversation ended as Won: ` and 436 with exactly
+`The conversation ended as Lost: `. The repair removes only those prefixes,
+keeping each complete authored buyer-position sentence, punctuation and position.
+The other 12,493 sentences, all quoted evidence and recorded outcomes stay intact.
+The ordinary loader remains unchanged; replay still checks its original drafts.
+
+The default command produces an **offline plan**, containing report IDs and
+before/after hashes, without reading or writing any database:
+
+```sh
+ac-heavy uv run python scripts/dev/repair-sales-xray-summary-prefixes.py \
+  --dataset /home/acdev/strikes/1676/sandbox-source-20261011-0537
+```
+
+This review is not an apply approval. The named operator first obtains a separately
+recorded approval for this exact dev supersession and preserves the dev snapshot.
+The operator has now recorded synthetic outcomes as person-recorded revisions.
+Before considering this wording apply, reconcile the ordinary Report and outcome
+badge on the same sample dev call against those revisions, as the coordinator
+requested. The offline plan does not establish a live outcome-display defect.
+Using the existing runtime dev injection, run the same command with
+`--preview-live --approver-person-id "$AC_SANDBOX_APPROVER_PERSON_ID"` and
+`--approval-reference` naming that recorded decision. Preserve the offline plan
+and the live preview receipt. An apply uses the same arguments, replaces
+`--preview-live` with `--apply`, and adds `--expected-plan-sha256` with the exact
+digest returned by the preview. The executable refuses staging, production and
+any database other than the dedicated live-dev database.
+
+The live preview verifies each exact original draft, transcript, proof, source
+bundle and completed run. Apply appends 827 new drafts in the same runs, then an
+audit event linking every old/new report ID and hash to the approver and plan.
+Existing drafts and source rows are preserved. All writes share one transaction;
+an audit failure or changed original rolls back the entire repair. A later report
+or run requires separate review. An identical replay adds no draft or audit event.
+Normal Report and Coaching reads select the latest draft; verify the sample
+`syn-advisory-J10-C-05` now reads
+`Buyer explicitly declines the service and requests closure.` in its summary,
+while its person-recorded outcome, transcript and coaching remain intact.
+
+Focused checks use the disposable test database:
+
+```sh
+ac-heavy uv run pytest \
+  tests/unit/conversation_intelligence/test_dev_sandbox_summary_repair.py \
+  tests/database/test_dev_sandbox_summary_repair_postgresql.py -q -x --tb=short
+```
+
 ## Owner's Drive recordings on dev
 
 `import-sales-xray-drive.py` runs the existing ordinary recording importer with
