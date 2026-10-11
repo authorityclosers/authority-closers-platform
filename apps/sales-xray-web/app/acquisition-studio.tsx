@@ -2180,7 +2180,6 @@ export function AcquisitionStudio({
                   <FileText size={24} aria-hidden="true" />
                 )}
                 <div className={styles.progressCopy}>
-                  <p className={styles.progressKicker}>SAVED CALL</p>
                   <h1 id="existing-call-entry-heading">
                     {opening
                       ? "Opening your saved call"

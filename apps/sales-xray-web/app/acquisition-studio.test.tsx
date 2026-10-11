@@ -3618,6 +3618,11 @@ it("does not expose a report when an explicit call selector is denied", async ()
     container.querySelector('[aria-label="Sales call report"]'),
   ).toBeNull();
   expect(container.textContent).toContain("Saved call unavailable");
+  // One calm card that starts with its title (no small caps "SAVED CALL" label).
+  expect(
+    container.querySelector('[aria-labelledby="existing-call-entry-heading"]')
+      ?.textContent,
+  ).toMatch(/^Saved call unavailable/);
   expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/claim"))).toBe(false);
 });

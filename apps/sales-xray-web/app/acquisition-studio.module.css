@@ -813,16 +813,6 @@
 .progressCopy {
   min-width: 0;
 }
-.progressKicker {
-  margin: 0 0 8px;
-  color: #007d79;
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.13em;
-}
-.processingPanel[data-paused="true"] .progressKicker {
-  color: #b26a19;
-}
 .progressCopy h3 {
   margin: 0 0 10px;
   color: #10243d;
@@ -2427,10 +2417,6 @@ a.overviewCard:hover {
     font-size: 13px;
     line-height: 1.5;
   }
-  .progressKicker {
-    font-size: 9px;
-    letter-spacing: 0.09em;
-  }
   .app[data-stage="processing"] .progressRail,
   .app[data-stage="uploading"] .progressRail {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3419,13 +3405,6 @@ a.overviewCard:hover {
   width: min(100%, 720px);
   animation: progress-sheet-in var(--lx-dur-reveal) var(--lx-ease-move) both;
 }
-.app.app[data-stage="uploading"] .uploadProgress .progressKicker {
-  margin: 0 0 10px;
-  color: var(--lx-muted-2);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
 .app.app[data-stage="uploading"] .uploadProgress .progressCopy h3 {
   margin: 0 0 8px;
   color: var(--lx-ink);
@@ -3595,6 +3574,8 @@ a.overviewCard:hover {
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .processingPanel {
   display: grid;
+  /* One column: the icon sits over the words, not in the panel's 140 px slot. */
+  grid-template-columns: minmax(0, 1fr);
   width: min(100%, 560px);
   justify-items: center;
   gap: 18px;
@@ -3627,22 +3608,13 @@ a.overviewCard:hover {
   justify-items: center;
   gap: 0;
 }
-.app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressKicker {
-  margin: 0 0 10px;
-  color: var(--lx-muted-2);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
 .app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy h1 {
   margin: 0 0 10px;
   color: var(--lx-ink);
-  font: 800 clamp(26px, 2.4vw, 36px) / 1.1 var(--lx-font-display);
-  letter-spacing: -0.03em;
+  font: 700 clamp(22px, 2vw, 28px) / 1.2 var(--lx-font-display);
+  letter-spacing: -0.02em;
 }
-.app.app:is([data-stage="opening"], [data-stage="recovery"])
-  .progressCopy
-  > p:not(.progressKicker) {
+.app.app:is([data-stage="opening"], [data-stage="recovery"]) .progressCopy > p {
   max-width: 48ch;
   margin: 0;
   color: var(--lx-muted);
@@ -3660,19 +3632,26 @@ a.overviewCard:hover {
   .errorActions
   > :is(button, a) {
   display: inline-flex;
-  min-height: 40px;
+  min-height: 32px;
   align-items: center;
   justify-content: center;
   gap: 7px;
   margin: 0;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-pill);
   background: var(--lx-surface);
   box-shadow: none;
   color: var(--lx-ink-3);
-  font: 600 13.5px/1 var(--lx-font-ui);
+  font: 600 13px/1 var(--lx-font-ui);
   text-decoration: none;
+}
+@media (max-width: 720px) {
+  .app.app:is([data-stage="opening"], [data-stage="recovery"])
+    .errorActions
+    > :is(button, a) {
+    min-height: 44px;
+  }
 }
 .app.app:is([data-stage="opening"], [data-stage="recovery"])
   .errorActions
