@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from ac_platform.coaching.sandbox import (
     FICTIONAL,
+    ReportBind,
     SandboxIndex,
     call_uuid,
     call_view,
@@ -236,6 +237,64 @@ def test_the_dev_loaders_call_and_member_ids_open_the_same_authored_coaching() -
     assert index.call(uuid4()) is None and index.rep_calls(tenant, uuid4()) == ()
     # Another tenant's ids never match.
     assert index.call(call_uuid(uuid4(), "syn-fixture-call-1")) is None
+
+
+def test_a_loader_id_view_bound_to_its_real_report_cites_the_loaders_segments() -> None:
+    # The Report checks moments against its own recording, hashes and segments;
+    # the loader made each line one segment (full id, the line's timing and text).
+    bundle = sandbox_bundle("syn-fixture-call-1")
+    bundle["transcript"]["lines"] = [
+        {
+            "line_id": "syn-fixture-call-1:L001",
+            "person_id": "syn-fixture-BUY",
+            "start_ms": 900,
+            "end_ms": 3600,
+            "text": "माझा प्रश्न scope बद्दल आहे. What would we test first?",
+        },
+        {
+            "line_id": "syn-fixture-call-1:L002",
+            "person_id": "syn-fixture-R1",
+            "start_ms": 3900,
+            "end_ms": 7600,
+            "text": "Okay. Sure, we will be in touch sometime. Thanks, bye.",
+        },
+    ]
+    tenant = UUID("90ec1979-0d85-4829-ba8d-cabde2a9a9d3")
+    call = index_call(
+        key="syn-fixture-call-1",
+        occurred_at=datetime.fromisoformat(bundle["metadata"]["at"]),
+        payload_sha256="a" * 64,
+        metadata=bundle["metadata"],
+        participants=bundle["transcript"]["participants"],
+        focus=bundle["coaching"]["current_focus"],
+        tenant_id=tenant,
+    )
+    assert call is not None
+    loaded = SandboxIndex((call,)).call(call.loaded_id)
+    assert loaded is not None
+    bind = ReportBind(
+        recording_id=UUID(int=77),
+        source_sha256="b" * 64,
+        transcript_revision="c" * 64,
+        report_revision="d" * 64,
+    )
+    view = call_view(loaded, bundle, person_id=VIEWER, tenant_id=tenant, bind=bind)
+    assert view.state == "ready"
+    assert (view.recording_id, view.source_sha256, view.transcript_revision) == (
+        UUID(int=77),
+        "b" * 64,
+        "c" * 64,
+    )
+    assert view.report_revision == "d" * 64
+    by_segment = {line["line_id"]: line for line in bundle["transcript"]["lines"]}
+    for moment in (*view.evidence, view.lesson.own_call):
+        line = by_segment[moment.segment_id]
+        assert (moment.start_ms, moment.end_ms) == (line["start_ms"], line["end_ms"])
+        assert moment.quote in line["text"] and moment.recording_id == UUID(int=77)
+        assert moment.playable is False
+    # Without the real report the view keeps its own (legacy) identity.
+    unbound = call_view(loaded, bundle, person_id=VIEWER, tenant_id=tenant)
+    assert unbound.recording_id != UUID(int=77)
 
 
 def test_incomplete_authored_coaching_is_unavailable_never_guessed() -> None:

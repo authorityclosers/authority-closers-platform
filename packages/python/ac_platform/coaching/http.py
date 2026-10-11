@@ -18,7 +18,7 @@ from ac_platform.coaching.call import NO_CLIP, CallCoachingCache, CallCoachingVi
 from ac_platform.coaching.contracts import CoachingView
 from ac_platform.coaching.dataset import DATASET_ROOT, read_topics, suggestions, verified_narration
 from ac_platform.coaching.library import CoachingLibrary
-from ac_platform.coaching.sandbox import SandboxCoaching
+from ac_platform.coaching.sandbox import ReportBind, SandboxCoaching
 from ac_platform.coaching.sharing_store import (
     SharingView,
     latest_context,
@@ -28,9 +28,11 @@ from ac_platform.coaching.sharing_store import (
     set_sharing,
 )
 from ac_platform.coaching.team import LABELS, TeamCoachingView
+from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImports
@@ -195,7 +197,33 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
     ) -> CallCoachingView:
         async with account_library(request, response) as (library, actor):
             sandbox = await sandbox_for(library, actor)
-            fictional = await sandbox.read_call(actor.person_id, submission_id) if sandbox else None
+
+            async def loader_report(call_id: UUID) -> ReportBind | None:
+                # A call opened by the dev loader's id is a real call of a
+                # fictional rep: bind the authored view to that report. The read
+                # is the existing owner/admin organisation read, freshly
+                # authorized; only its identity hashes are used.
+                try:
+                    envelope = await AcquisitionReports(library.ownership).report(
+                        call_id,
+                        actor=actor,
+                        shared_identity_locks=True,
+                        allow_organisation_read=True,
+                    )
+                    return ReportBind(
+                        recording_id=UUID(envelope["recording_id"]),
+                        source_sha256=envelope["source_sha256"],
+                        transcript_revision=envelope["transcript_revision"],
+                        report_revision=content_hash(envelope["report"]),
+                    )
+                except (ConversationError, KeyError, TypeError, ValueError):
+                    return None
+
+            fictional = (
+                await sandbox.read_call(actor.person_id, submission_id, loader_report)
+                if sandbox
+                else None
+            )
             view = fictional or await library.read_call(actor, submission_id, call_cache)
             view = await with_media(view)
             return CallCoachingView.model_validate(

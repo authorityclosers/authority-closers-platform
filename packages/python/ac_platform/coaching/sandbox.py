@@ -8,6 +8,7 @@ the dataset did not author makes that call unreadable; it is never guessed.
 """
 
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, get_args
@@ -232,7 +233,24 @@ def index_call(
 # ---------- One authored call → the normal Coaching parts ----------
 
 
-def _moments(call: SandboxCall, payload: dict[str, Any], raw: Any) -> list[Moment]:
+@dataclass(frozen=True)
+class ReportBind:
+    """The dev loader's real report for a call opened by its loader id.
+
+    The Report checks every moment against its own recording, source and
+    transcript; the loader made each authored line one segment (full line id,
+    the line's own timing and text), so a bound moment cites exactly that.
+    """
+
+    recording_id: UUID
+    source_sha256: str
+    transcript_revision: str
+    report_revision: str
+
+
+def _moments(
+    call: SandboxCall, payload: dict[str, Any], raw: Any, bind: ReportBind | None = None
+) -> list[Moment]:
     lines = {
         line.get("line_id"): line
         for line in _dict(payload.get("transcript")).get("lines") or ()
@@ -248,17 +266,31 @@ def _moments(call: SandboxCall, payload: dict[str, Any], raw: Any) -> list[Momen
         line_id = ids[0] if isinstance(ids, list) and ids and isinstance(ids[0], str) else None
         if not quote or start is None or end is None or end <= start or line_id is None:
             continue
-        speaker = names.get(str(_dict(lines.get(line_id)).get("person_id")))
+        line = _dict(lines.get(line_id))
+        speaker = names.get(str(line.get("person_id")))
         role = {"rep": "the seller", "prospect": "the buyer"}.get(speaker[1] if speaker else "")
+        segment = line_id.rsplit(":", 1)[-1][:128]
+        if bind is not None:
+            # Exactly the loader's citation of this line (adapted_report).
+            text = _text(line.get("text"), 100_000)
+            line_start, line_end = _int(line.get("start_ms")), _int(line.get("end_ms"))
+            if not text or line_start is None or line_end is None or line_end <= line_start:
+                continue
+            segment, start, end = line_id[:128], line_start, line_end
+            quote = quote if quote in text else text[:1000]
         moments.append(
             Moment(
                 submission_id=call.submission_id,
-                recording_id=uuid5(NAMESPACE, f"recording:{call.submission_id}"),
-                source_sha256=call.payload_sha256,
-                transcript_revision=f"synthetic:{call.payload_sha256}",
+                recording_id=bind.recording_id
+                if bind
+                else uuid5(NAMESPACE, f"recording:{call.submission_id}"),
+                source_sha256=bind.source_sha256 if bind else call.payload_sha256,
+                transcript_revision=bind.transcript_revision
+                if bind
+                else f"synthetic:{call.payload_sha256}",
                 created_at=call.occurred_at,
                 call_label=call.call_label,
-                segment_id=line_id.rsplit(":", 1)[-1][:128],
+                segment_id=segment,
                 quote=quote,
                 start_ms=start,
                 end_ms=end,
@@ -284,7 +316,9 @@ class Authored:
     payload: dict[str, Any]
 
 
-def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
+def authored(
+    call: SandboxCall, payload: dict[str, Any], bind: ReportBind | None = None
+) -> Authored | None:
     """The call's authored coaching in the normal shapes, or None if incomplete."""
     coaching = _dict(payload.get("coaching"))
     current, diagnosis = _dict(coaching.get("current_focus")), _dict(coaching.get("diagnosis"))
@@ -306,14 +340,14 @@ def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
         active_since=_when(mission_raw.get("active_since")) or call.occurred_at,
         origin_submission_id=call.submission_id,
     )
-    evidence = tuple(_moments(call, payload, diagnosis.get("playable_moments"))[:MAX_MOMENTS])
+    evidence = tuple(_moments(call, payload, diagnosis.get("playable_moments"), bind)[:MAX_MOMENTS])
     # The lesson's "Your call" box shows the moment's words, not a speaker tag.
     own = [
         moment.model_copy(update={"observation": f"“{moment.quote}”"[:4000]})
-        for moment in _moments(call, payload, lesson.get("own_call_example"))
+        for moment in _moments(call, payload, lesson.get("own_call_example"), bind)
     ]
     if not evidence and own:
-        evidence = (_moments(call, payload, lesson.get("own_call_example"))[0],)
+        evidence = (_moments(call, payload, lesson.get("own_call_example"), bind)[0],)
     if not evidence:
         # A focus needs at least one inspectable moment (spec 12.2); without
         # one the call's coaching is unavailable, never a guessed moment.
@@ -385,22 +419,31 @@ def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
 
 
 def call_view(
-    call: SandboxCall, payload: dict[str, Any], *, person_id: UUID, tenant_id: UUID
+    call: SandboxCall,
+    payload: dict[str, Any],
+    *,
+    person_id: UUID,
+    tenant_id: UUID,
+    bind: ReportBind | None = None,
 ) -> CallCoachingView:
     common: dict[str, Any] = dict(
         person_id=person_id,
         tenant_id=tenant_id,
         submission_id=call.submission_id,
-        recording_id=uuid5(NAMESPACE, f"recording:{call.submission_id}"),
-        source_sha256=call.payload_sha256,
-        transcript_revision=f"synthetic:{call.payload_sha256}",
-        report_revision=call.payload_sha256,
+        recording_id=bind.recording_id
+        if bind
+        else uuid5(NAMESPACE, f"recording:{call.submission_id}"),
+        source_sha256=bind.source_sha256 if bind else call.payload_sha256,
+        transcript_revision=bind.transcript_revision
+        if bind
+        else f"synthetic:{call.payload_sha256}",
+        report_revision=bind.report_revision if bind else call.payload_sha256,
         call_label=call.call_label,
         sandbox=True,
         rep_person_id=call.loaded_rep_id if call.loaded else rep_uuid(tenant_id, call.rep_key),
         rep_name=call.rep_name[:120],
     )
-    parts = authored(call, payload)
+    parts = authored(call, payload, bind)
     if parts is None:
         return CallCoachingView(
             **common,
@@ -717,13 +760,20 @@ class SandboxCoaching:
         )
         return {row.synthetic_key: row.payload for row in rows if isinstance(row.payload, dict)}
 
-    async def read_call(self, person_id: UUID, submission_id: UUID) -> CallCoachingView | None:
+    async def read_call(
+        self,
+        person_id: UUID,
+        submission_id: UUID,
+        report: Callable[[UUID], Awaitable[ReportBind | None]] | None = None,
+    ) -> CallCoachingView | None:
+        """`report` reads the loader's real report for a call opened by its loader id."""
         index = await self.index(person_id)
         call = index.call(submission_id)
         payload = await self.payload(person_id, call.key) if call else None
         if call is None or payload is None:
             return None
-        return call_view(call, payload, person_id=person_id, tenant_id=self.tenant_id)
+        bind = await report(call.submission_id) if call.loaded and report else None
+        return call_view(call, payload, person_id=person_id, tenant_id=self.tenant_id, bind=bind)
 
     async def read_rep(self, person_id: UUID, rep_person_id: UUID) -> CoachingView | None:
         calls = (await self.index(person_id)).rep_calls(self.tenant_id, rep_person_id)
