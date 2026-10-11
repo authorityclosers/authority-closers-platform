@@ -202,6 +202,20 @@ const RELATIVE_WORD =
 const inSentence = (text: string) =>
   text.replace(RELATIVE_WORD, (word) => word.toLowerCase());
 
+/**
+ * A title that only repeats the start of its own sentence (the same words, or
+ * the sentence cut short at a title's length) isn't a headline: the sentence
+ * becomes the title, once, without its full stop.
+ */
+function sentenceAsTitle(title: string, text: string): string | null {
+  const head = title.trim().replace(/[\s.…]+$/u, "");
+  const body = text.trim();
+  if (!head || !body.startsWith(head)) return null;
+  const rest = body.slice(head.length).replace(/^[\s.]+$/u, "");
+  const cut = /^[\p{L}\p{N}]/u.test(rest) || head.length >= 40;
+  return !rest || cut ? body.replace(/(?<!\.)\.$/u, "") : null;
+}
+
 /** Blocks without the ones a report can't fill. */
 const keep = (list: (DocItem | null | undefined | false)[]): DocItem[] =>
   list.filter(present);
@@ -421,12 +435,13 @@ export function reportDocumentModel(
   const itemCard = (item: Item, why: string, tone: DocTone): DocItem => {
     const play = clip(item.what.sources[0]);
     const areas = item.areas?.filter((area) => area?.trim()) ?? [];
+    const sentence = sentenceAsTitle(item.title, item.what.text);
     return {
       type: "card",
-      title: item.title,
+      title: sentence ?? item.title,
       tone,
       items: keep([
-        { type: "text", text: item.what.text },
+        sentence ? null : { type: "text", text: item.what.text },
         areas.length ? { type: "label", text: WORKED_DIDNT.areasLead } : null,
         areas.length ? { type: "list", items: areas } : null,
         play ? { type: "play", clip: play } : null,

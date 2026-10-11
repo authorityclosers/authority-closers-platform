@@ -226,6 +226,38 @@ describe("report document model", () => {
     );
   });
 
+  it("a card whose title only repeats its sentence says it once (sandbox reports)", () => {
+    const { report, transcript } = v8Report();
+    const [first] = report.pillars!.worked!;
+    const worked = [
+      // The same words twice, and the sentence cut at a title's 48 characters.
+      { ...first, title: "Separated evaluation from signing authority" },
+      { ...first, title: "Answered a specific scope question with an expli" },
+    ];
+    worked[0].what = "Separated evaluation from signing authority";
+    worked[1].what =
+      "Answered a specific scope question with an explicit limit.";
+    const doc = reportDocumentModel({
+      report: { ...report, pillars: { ...report.pillars!, worked } },
+      transcript,
+    });
+    const cards = doc.sections[2].parts[0].items.filter(
+      (item) => item.type === "card",
+    );
+    expect(cards.map((card) => card.type === "card" && card.title)).toEqual([
+      "Separated evaluation from signing authority",
+      "Answered a specific scope question with an explicit limit",
+    ]);
+    const lines = cards.flatMap((card) =>
+      card.type === "card" ? card.items.map(docItemText) : [],
+    );
+    expect(lines.some((line) => line.startsWith("Separated"))).toBe(false);
+    expect(lines.some((line) => line.startsWith("Answered"))).toBe(false);
+    // A real headline above a different sentence stays as it was.
+    const amit = amitDoc().sections[2].parts[0].items[0];
+    expect(amit.type === "card" && amit.items[0].type).toBe("text");
+  });
+
   it("Dipak's example as the analysis writes it: price, likely status, Friday", () => {
     const doc = reportDocumentModel(
       {
