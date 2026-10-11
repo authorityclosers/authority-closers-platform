@@ -49,7 +49,7 @@ def main():
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 reads = []
 
-                def boundary(route, *, reads=reads):
+                def boundary(route, request, *, reads=reads):
                     url = urlsplit(route.request.url)
                     if url.netloc != urlsplit(BASE).netloc:
                         outside.append(url.netloc)
@@ -79,7 +79,9 @@ def main():
                     page.screenshot(path=str(OUT / f"{name}-{width}-{theme}.png"))
 
                 for theme in ["light", "dark"]:
+                    states.get_by_role("button", name="Signed out", exact=True).click()
                     states.get_by_role("button", name="Preview list", exact=True).click()
+                    expect(page.get_by_text("Sign-in requested", exact=True)).to_have_count(0)
                     feed = page.get_by_role("feed", name="Prospects list")
                     expect(feed).to_contain_text("Fictional व्यवसाय prospect")
                     shot("prospect-access-list", theme)
@@ -111,7 +113,9 @@ def main():
                     expect(
                         page.get_by_role("heading", name="Fictional व्यवसाय prospect", exact=True)
                     ).to_have_count(0)
-                    expect(page.get_by_role("link", name="Sign in", exact=True)).to_have_count(0)
+                    expect(
+                        page.get_by_role("region", name="Prospects account access")
+                    ).to_have_count(0)
                     assert len(reads) == count
 
                     states.get_by_role("button", name="Signed out", exact=True).click()
@@ -120,7 +124,9 @@ def main():
                     ).to_be_visible()
                     expect(page.locator('[aria-busy="true"]')).to_have_count(0)
                     expect(page.locator("[data-prospect-section]")).to_have_count(0)
-                    sign_in = page.get_by_role("link", name="Sign in", exact=True)
+                    sign_in = page.get_by_role(
+                        "region", name="Prospects account access"
+                    ).get_by_role("link", name="Sign in", exact=True)
                     assert (
                         sign_in.get_attribute("href") == "/login/"
                         or sign_in.get_attribute("href") == "/login"

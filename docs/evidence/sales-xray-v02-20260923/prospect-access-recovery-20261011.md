@@ -33,8 +33,8 @@ All 26 focused list/profile cases pass, including confirmed guest access,
 missing provider callback, unresolved/loading/selecting access, workspace retry,
 immediate hiding/read cancellation on sign-out, and retained scoped pagination
 and six-section profile behavior. Incremental typecheck, cached changed-file
-ESLint, Prettier and browser-script Ruff/format are required before push; the
-strike notes retain the result and any interrupted attempt.
+ESLint, Prettier and browser-script Ruff/format pass. The strike notes retain
+the interrupted static attempts and their successful retry.
 
 The development-only `/review-fixture/prospects/library` adds explicit access
 state controls. The bounded browser proof supplies a fictional populated list
@@ -43,6 +43,18 @@ loss, skeleton clearing, sign-in callback, no private reads without ready access
 corner retry, phone targets, overflow and page errors. Screenshots at 390/1440 in
 light/dark follow the committed shared-dev refresh and are listed individually
 in strike NOTES.md. No separate server or build is started.
+
+The shared-dev journey now passes at both widths and themes. All 16 screenshots
+were inspected, with no overflow, page errors, external requests or private
+reads after access loss. Source-hidden pending/guest states, existing sign-in
+callback, six-section profile, corner retry and 44px phone actions pass. The
+final receipt is retained outside Git at
+`/home/acdev/strikes/1677/shots/2026-10-11/access-b5b83c3-final/shared-access-source-receipt.json`.
+It binds the six owned UI/fixture blobs to committed source `b5b83c3`, unchanged
+on shared `dev/live` `09951fed` across the original successful read and final
+recapture. Initial runner attempts exposed a Playwright callback signature and
+a shell/action locator collision; the corrected runner scopes to the owned
+access region and resets the fixture's sign-in status before each theme.
 
 This is a Prospect recovery repair. Production Report acceptance remains with
 H/QA, and canonical Company/outcome persistence still awaits the shared
