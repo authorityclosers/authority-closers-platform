@@ -15,7 +15,8 @@ export type ShellActive =
   | "account"
   | "organisation"
   | "prospects"
-  | "coaching";
+  | "coaching"
+  | "insights";
 
 const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   dashboard: "dashboard",
@@ -25,6 +26,7 @@ const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
   coaching: "coaching",
   account: "more",
   organisation: "more",
+  insights: "more",
 };
 
 const under = (pathname: string, root: string) =>
@@ -71,6 +73,7 @@ export function shellActiveFor(
     if (under(pathname, NEW_ANALYSIS_PATH)) return "analyse";
     if (under(pathname, "/prospects")) return "prospects";
     if (under(pathname, "/coaching")) return "coaching";
+    if (under(pathname, "/organisation/insights")) return "insights";
     if (under(pathname, "/organisation")) return "organisation";
     if (under(pathname, "/account")) return "account";
   }

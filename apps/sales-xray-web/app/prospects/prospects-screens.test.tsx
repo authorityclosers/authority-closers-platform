@@ -355,7 +355,7 @@ describe("ProspectsListView", () => {
     expect(host.textContent).not.toContain("appear here automatically");
   });
 
-  it("renders prospects list with initials and missing stage badge", async () => {
+  it("renders prospects list with initials and a quiet missing stage", async () => {
     vi.spyOn(prospectsClient, "fetchProspectsList").mockResolvedValueOnce({
       schema: "ac.sales-xray.prospects/1",
       prospects: [mockProspectSummary],
@@ -374,7 +374,9 @@ describe("ProspectsListView", () => {
 
     expect(host.textContent).toContain("Acme Corp Prospect");
     expect(host.textContent).toContain("2 visible calls");
-    expect(host.textContent).toContain("Missing stage");
+    // No stage is stored yet: a quiet note, and no filter that matches all.
+    expect(host.textContent).toContain("No stage yet");
+    expect(host.querySelector('[aria-label="Stage filters"]')).toBeNull();
     // Initials for Acme Corp Prospect
     expect(host.textContent).toContain("AC");
   });
@@ -439,7 +441,7 @@ describe("ProspectsListView", () => {
         schema: "ac.sales-xray.prospects/1",
         prospects: [],
         total: 0,
-        stage_filters: [],
+        stage_filters: ["Discovery"],
         next_offset: null,
       });
 

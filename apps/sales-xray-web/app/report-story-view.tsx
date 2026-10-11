@@ -10,7 +10,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Component, useMemo, useState, type ReactNode } from "react";
 
 import { formatClock } from "./lightbox/time";
 import type { DocumentReportData } from "./report-document-data";
@@ -90,15 +90,17 @@ function useStory(data: DocumentReportData, callId: string | null) {
   const people = useReportPeople(callId, transcript);
   const seller = people.roles?.seller ?? null;
   const prospect = people.roles?.prospect ?? null;
-  const model = useMemo(
-    () =>
-      data.report
-        ? reportStoryModel(data.report, data.transcript, {
-            roles: { seller, prospect },
-          })
-        : null,
-    [data.report, data.transcript, seller, prospect],
-  );
+  const model = useMemo(() => {
+    if (!data.report) return null;
+    try {
+      return reportStoryModel(data.report, data.transcript, {
+        roles: { seller, prospect },
+      });
+    } catch {
+      // A malformed older report shows a quiet note, never a broken page.
+      return "unavailable" as const;
+    }
+  }, [data.report, data.transcript, seller, prospect]);
   return { model, people };
 }
 
@@ -1005,6 +1007,35 @@ function EndStrip({ model }: { model: StoryModel }) {
   );
 }
 
+function PillarUnavailable({ id }: { id: string }) {
+  return (
+    <div className={styles.pillar} data-report-pillar={id}>
+      <p className={styles.missing} role="status">
+        This part of the report couldn&apos;t be shown. The rest of the report
+        and Details still work.
+      </p>
+    </div>
+  );
+}
+
+/** One pillar's render error stays inside that pillar. */
+class PillarBoundary extends Component<
+  { id: string; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? (
+      <PillarUnavailable id={this.props.id} />
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 /** One pillar of the story; all six share the same model. */
 export function StoryPillar({
   index,
@@ -1023,31 +1054,38 @@ export function StoryPillar({
 }) {
   const { model, people } = useStory(data, callId);
   if (!model) return null;
+  if (model === "unavailable")
+    return <PillarUnavailable id={STORY_PILLARS[index].id} />;
   return (
-    <div className={styles.pillar} data-report-pillar={STORY_PILLARS[index].id}>
-      {index === 0 ? (
-        <BigPicture model={model} onSelect={onSelect} />
-      ) : index === 1 ? (
-        <CallFlow
-          model={model}
-          data={data}
-          people={people}
-          onSelect={onSelect}
-        />
-      ) : index === 2 ? (
-        <WorkedDidnt model={model} onSelect={onSelect} />
-      ) : index === 3 ? (
-        <Moments model={model} people={people} onSelect={onSelect} />
-      ) : index === 4 ? (
-        <Skills model={model} onSelect={onSelect} />
-      ) : (
-        <DealStands
-          model={model}
-          onSelect={onSelect}
-          prospectControls={prospectControls}
-          onOpenCoaching={onOpenCoaching}
-        />
-      )}
-    </div>
+    <PillarBoundary id={STORY_PILLARS[index].id}>
+      <div
+        className={styles.pillar}
+        data-report-pillar={STORY_PILLARS[index].id}
+      >
+        {index === 0 ? (
+          <BigPicture model={model} onSelect={onSelect} />
+        ) : index === 1 ? (
+          <CallFlow
+            model={model}
+            data={data}
+            people={people}
+            onSelect={onSelect}
+          />
+        ) : index === 2 ? (
+          <WorkedDidnt model={model} onSelect={onSelect} />
+        ) : index === 3 ? (
+          <Moments model={model} people={people} onSelect={onSelect} />
+        ) : index === 4 ? (
+          <Skills model={model} onSelect={onSelect} />
+        ) : (
+          <DealStands
+            model={model}
+            onSelect={onSelect}
+            prospectControls={prospectControls}
+            onOpenCoaching={onOpenCoaching}
+          />
+        )}
+      </div>
+    </PillarBoundary>
   );
 }

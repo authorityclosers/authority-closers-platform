@@ -90,7 +90,7 @@ class ImportSessions(AcquisitionSessions):
         ):
             raise ConversationDenied("The measured source differs from the exact import item.")
         now = await self._admit(mutation=True)
-        await self.imports.fair_admission(item.submission_id)
+        await self.imports.fair_admission(item.submission_id, self.uploader)
         usage_id = await super().reserve(source, actor=actor)
         if item.usage_id is None:
             item.usage_id, item.linked_at = usage_id, now
@@ -116,7 +116,7 @@ class ImportSessions(AcquisitionSessions):
         ):
             raise ConversationDenied("Use this exact imported call's safe retry.")
         await self._admit(mutation=True)
-        await self.imports.fair_admission(submission_id)
+        await self.imports.fair_admission(submission_id, self.uploader)
         return await super().reserve_report_retry(submission_id, key=key, actor=actor)
 
 
@@ -186,7 +186,7 @@ class ImportOwnership(GuestOwnership):
             .limit(1)
         )
         if usage is None:
-            await self.imports.fair_admission(submission_id)
+            await self.imports.fair_admission(submission_id, self.uploader)
             return None
         if item.usage_id is None:
             item.usage_id, item.reused, item.linked_at = usage.id, True, now

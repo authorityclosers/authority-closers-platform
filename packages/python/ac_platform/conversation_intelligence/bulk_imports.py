@@ -8,12 +8,11 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
-    ConversationReportMinuteEvent,
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import (
@@ -292,6 +291,9 @@ class RecordingImports:
                 "run_state": None,
                 "current_stage": None,
                 "minute_state": None,
+                "local_state": None,
+                "plan_state": None,
+                "terminal_state": None,
                 "retry_available": False,
             }
             if item.usage_id is not None:
@@ -313,7 +315,14 @@ class RecordingImports:
                         result.update(
                             {
                                 field: progress.get(field)
-                                for field in ("run_state", "current_stage", "minute_state")
+                                for field in (
+                                    "run_state",
+                                    "current_stage",
+                                    "minute_state",
+                                    "local_state",
+                                    "plan_state",
+                                    "terminal_state",
+                                )
                             }
                         )
                         result["state"] = (
@@ -371,34 +380,18 @@ class RecordingImports:
             "files": rows,
         }
 
-    async def fair_admission(self, submission_id: UUID) -> None:
-        # Call only while holding the normal tenant admission lock. A batch
-        # never queues its complete folder or consumes ordinary-user capacity.
-        latest_revision = (
-            select(func.max(ConversationReportMinuteEvent.revision))
-            .where(ConversationReportMinuteEvent.usage_id == ConversationAcquisitionUsage.id)
-            .correlate(ConversationAcquisitionUsage)
-            .scalar_subquery()
-        )
+    async def fair_admission(self, submission_id: UUID, uploader: ActorContext) -> None:
+        # All callers hold the ordinary tenant mutation lock and have already
+        # authorised this exact batch/item. Minute outcomes never own capacity.
+        from ac_platform.conversation_intelligence.bulk_import_admission import active_local_item
+
         active = await self.database.scalar(
-            select(ConversationAcquisitionUsage.id)
-            .join(
-                ConversationRecordingImportItem,
-                ConversationRecordingImportItem.usage_id == ConversationAcquisitionUsage.id,
+            active_local_item(
+                tenant_id=self.ownership.tenant_id,
+                uploader_id=uploader.person_id,
+                submission_id=submission_id,
+                now=utc(self.ownership.clock()),
             )
-            .outerjoin(
-                ConversationReportMinuteEvent,
-                (ConversationReportMinuteEvent.usage_id == ConversationAcquisitionUsage.id)
-                & (ConversationReportMinuteEvent.revision == latest_revision),
-            )
-            .where(
-                ConversationRecordingImportItem.tenant_id == self.ownership.tenant_id,
-                ConversationRecordingImportItem.reused.is_(False),
-                ConversationAcquisitionUsage.submission_id != submission_id,
-                (ConversationReportMinuteEvent.kind.is_(None))
-                | (ConversationReportMinuteEvent.kind == "reserved"),
-            )
-            .limit(1)
         )
         if active is not None:
             raise ConversationConflict(

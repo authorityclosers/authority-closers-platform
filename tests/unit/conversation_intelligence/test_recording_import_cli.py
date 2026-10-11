@@ -211,7 +211,7 @@ def test_operator_uses_normal_intake_quote_accept_and_replay_without_auto_retry(
     client, value, tenant, batch, sent = server(tmp_path, outcome=outcome)
     monkeypatch.setattr(cli.time, "sleep", lambda seconds: None)
     with client:
-        result = cli.apply(client, value, tenant, max_wait=60)
+        result = cli.apply(client, value, tenant, max_wait=600)
         assert result["state"] == outcome
         assert result["held"] == [{"index": 1, "person": "Rep B", "reason": "needs_member"}]
         writes = len([r for r in sent if r.method != "GET"])

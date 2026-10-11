@@ -377,7 +377,11 @@ function PersonActivityView({
         reading={reading}
         dates={dates}
       />
-      <PersonCalls data={data} dates={dates} />
+      <PersonCalls
+        data={data}
+        dates={dates}
+        callsHref={`/analysis/calls?rep=${encodeURIComponent(personId)}`}
+      />
     </>
   );
 }

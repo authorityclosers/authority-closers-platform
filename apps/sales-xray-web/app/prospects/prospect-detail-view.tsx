@@ -26,6 +26,7 @@ import { PageSkeleton } from "../shell/page-skeleton";
 import informationStyles from "../prospect-information.module.css";
 import { ProspectsAccessState } from "./prospects-access-state";
 import { useLatestCallReport } from "../prospect-latest-call";
+import { prospectRow } from "../prospect-brief-model";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Never";
@@ -221,10 +222,15 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                 <div className={styles.profileInfo}>
                   <h1 className={styles.prospectHeaderName}>{prospect.name}</h1>
                   <div className={styles.profileIdText}>
-                    Prospect’s Information{" "}
-                    {prospect.origin === "detected" && !prospect.confirmed_at
-                      ? " · Detected"
-                      : ""}
+                    {[
+                      prospectRow(prospect).subtitle,
+                      prospect.stage,
+                      prospect.origin === "detected" && !prospect.confirmed_at
+                        ? "Detected"
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Prospect’s Information"}
                   </div>
                 </div>
               </div>

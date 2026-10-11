@@ -19,6 +19,10 @@ from uuid import UUID
 
 import httpx
 
+from ac_platform.conversation_intelligence.acquisition_usage import (
+    LONGEST_CALL_EXCEEDED_MESSAGE,
+    TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
+)
 from ac_platform.conversation_intelligence.bulk_import_contracts import ImportConfirmation
 from ac_platform.conversation_intelligence.bulk_import_preview import (
     MAX_BATCH_BYTES,
@@ -32,8 +36,24 @@ from ac_platform.conversation_intelligence.processing_plan import PlanAcceptance
 
 PREFIX = "/v1/conversation/acquisition"
 SHA = re.compile(r"[0-9a-f]{64}\Z")
-TERMINAL = {"done", "failed", "already_imported", "expired", "needs_member"}
+TERMINAL = {"done", "failed", "held", "already_imported", "expired", "needs_member"}
 STATES = TERMINAL | {"awaiting_upload", "queued", "working", "retrying", "unavailable"}
+CAPACITY_DETAIL = (
+    "The previous batch recording is still processing. Other callers can continue uploading."
+)
+ITEM_REFUSALS = {
+    (403, TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE),
+    (403, LONGEST_CALL_EXCEEDED_MESSAGE),
+    (403, "The complete plan exceeds the effective provider budget."),
+    (409, "The provider budget cannot cover this complete plan."),
+    (409, "The approved allowance cannot cover this bounded processing plan."),
+}
+
+
+class RequestRefused(ValueError):
+    def __init__(self, status: int, reason: str) -> None:
+        super().__init__(f"Recording import refused a request (HTTP {status}).")
+        self.status, self.reason = status, reason
 
 
 def origin(value: str) -> str:
@@ -166,8 +186,28 @@ def inventory(manifest_path: Path, members_path: Path | None = None) -> Inventor
 
 def request(client: httpx.Client, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
     response = client.request(method, PREFIX + path, **kwargs)
+    return response_receipt(response)
+
+
+def response_receipt(response: httpx.Response) -> dict[str, Any]:
     if response.status_code not in {200, 201, 202}:
-        raise ValueError(f"Recording import refused a request (HTTP {response.status_code}).")
+        try:
+            problem = response.json()
+        except ValueError:
+            problem = None
+        detail = problem.get("detail") if isinstance(problem, dict) else None
+        reason = (
+            "local_capacity"
+            if response.status_code == 409 and detail == CAPACITY_DETAIL
+            else "temporarily_unavailable"
+            if response.status_code in {429, 502, 503, 504}
+            else "item_refused"
+            if response.status_code in {402, 413, 415, 422}
+            or isinstance(detail, str)
+            and (response.status_code, detail) in ITEM_REFUSALS
+            else "authority_or_conflict"
+        )
+        raise RequestRefused(response.status_code, reason)
     try:
         result = response.json()
     except ValueError:
@@ -265,6 +305,11 @@ def batch_receipt(
         minute_state = row.get("minute_state")
         run_state = row.get("run_state")
         stage = row.get("current_stage")
+        local_state, plan_state, terminal_state = (
+            row.get("local_state"),
+            row.get("plan_state"),
+            row.get("terminal_state"),
+        )
         if (
             minute_state not in (None, "reserved", "released", "delivered")
             or run_state not in (None, "queued", "working", "retrying", "failed", "done")
@@ -273,6 +318,9 @@ def batch_receipt(
                 and (not isinstance(stage, str) or re.fullmatch(r"C[0-6]", stage) is None)
             )
             or type(row.get("retry_available", False)) is not bool
+            or local_state not in (None, "queued", "running", "completed", "failed", "cancelled")
+            or plan_state not in (None, "quoted", "active", "held", "completed", "cancelled")
+            or terminal_state not in (None, "done", "failed")
         ):
             raise ValueError("The canonical call progress receipt is unavailable.")
         items.append(
@@ -294,6 +342,9 @@ def batch_receipt(
                 "minute_state": minute_state,
                 "current_stage": stage,
                 "retry_available": row.get("retry_available", False),
+                "local_state": local_state,
+                "plan_state": plan_state,
+                "terminal_state": terminal_state,
             }
         )
     if type(result.get("total_bytes")) is not int or result["total_bytes"] != sum(
@@ -326,17 +377,15 @@ def batch_receipt(
     }
 
 
-def advance(
-    client: httpx.Client, batch: dict[str, Any], value: Inventory, manifest: BatchManifest
-) -> None:
-    active = next(
-        (r for r in batch["files"] if r["state"] in {"queued", "working", "retrying"}), None
-    )
-    if active is None:
-        pending = next((r for r in batch["files"] if r["state"] == "awaiting_upload"), None)
-        if pending is None:
-            return
-        source = manifest.files[pending["item_index"]]
+def advance_item(
+    client: httpx.Client,
+    batch: dict[str, Any],
+    item: dict[str, Any],
+    value: Inventory,
+    manifest: BatchManifest,
+) -> str:
+    if item["state"] == "awaiting_upload":
+        source = manifest.files[item["item_index"]]
         file = next(f for f in value.files if f.source.relative_path == source.relative_path)
         if (
             file.path.stat().st_size != source.source_bytes
@@ -347,11 +396,11 @@ def advance(
             uploaded = request(
                 client,
                 "PUT",
-                f"/submissions/{pending['upload_submission_id']}/source",
+                f"/submissions/{item['upload_submission_id']}/source",
                 content=stream,
                 headers={
                     "X-Recording-Import": batch["batch_id"],
-                    "X-Recording-Import-Item": str(pending["item_index"]),
+                    "X-Recording-Import-Item": str(item["item_index"]),
                     "X-Source-SHA256": source.source_sha256,
                     "X-Upload-Policy": batch["policy_sha256"],
                     "X-Upload-Consent": "accepted",
@@ -363,23 +412,30 @@ def advance(
         uuid(uploaded.get("submission_id"))
         if uploaded.get("source_sha256") != source.source_sha256:
             raise ValueError("Upload did not return its exact source receipt.")
-        return
-    submission = uuid(active.get("submission_id"))
+        return "advanced"
+    submission = uuid(item.get("submission_id"))
     headers = {
         "X-Recording-Import": batch["batch_id"],
-        "X-Recording-Import-Item": str(active["item_index"]),
+        "X-Recording-Import-Item": str(item["item_index"]),
     }
     progress = request(client, "GET", f"/submissions/{submission}", headers=headers)
-    if progress.get("source_sha256") != active["source_sha256"]:
+    if progress.get("source_sha256") != item["source_sha256"]:
         raise ValueError("Call progress changed its source binding.")
-    recording = uuid(progress.get("recording_id"))
+    if (
+        progress.get("run_state") == "failed"
+        or progress.get("terminal_state") == "failed"
+        or progress.get("local_state") in {"failed", "cancelled"}
+        or progress.get("plan_state") in {"held", "cancelled"}
+        and progress.get("local_state") == "completed"
+    ):
+        return "needs_attention"
     if (
         progress.get("local_state") != "completed"
         or progress.get("automatic_progression") is not False
         or progress.get("has_report") is not False
-        or progress.get("run_state") == "failed"
     ):
-        return
+        return "waiting"
+    recording = uuid(progress.get("recording_id"))
     response = client.get(PREFIX + f"/submissions/{submission}/plan", headers=headers)
     if response.status_code == 404:
         plan = request(
@@ -388,26 +444,26 @@ def advance(
             f"/submissions/{submission}/plan/quote",
             headers={
                 **headers,
-                "Idempotency-Key": f"import-plan:{batch['batch_id']}:{active['item_index']}",
+                "Idempotency-Key": f"import-plan:{batch['batch_id']}:{item['item_index']}",
             },
             json={"report_language": "en"},
         )
     else:
-        if response.status_code != 200:
-            raise ValueError("The analysis plan is unavailable.")
-        plan = response.json()
+        plan = response_receipt(response)
     if not isinstance(plan, dict) or plan.get("recording_id") != recording:
         raise ValueError("The plan does not bind this call.")
     uuid(plan.get("id"))
+    if plan.get("state") in {"held", "cancelled"}:
+        return "needs_attention"
     if plan.get("accepted") is True:
-        return
+        return "waiting"
     if (
         plan.get("accepted") is not False
         or plan.get("state") != "quoted"
         or type(plan.get("expires_at_epoch")) is not int
         or plan["expires_at_epoch"] <= time.time()
     ):
-        raise ValueError("This call needs attention in the safe retry view.")
+        return "needs_attention"
     acceptance = PlanAcceptance.model_validate(
         {
             "plan_id": plan["id"],
@@ -430,6 +486,36 @@ def advance(
         or accepted.get("accepted") is not True
     ):
         raise ValueError("The exact analysis acceptance receipt is unavailable. Resume safely.")
+    return "advanced"
+
+
+def advance(
+    client: httpx.Client,
+    batch: dict[str, Any],
+    value: Inventory,
+    manifest: BatchManifest,
+    attention: dict[int, dict[str, Any]],
+) -> bool:
+    # Provider processing may continue while the next source passes local C0/C1.
+    # Attention is an operator-window skip, never a mutation of canonical state.
+    for item in batch["files"]:
+        index = item["item_index"]
+        if index in attention or item["state"] in TERMINAL:
+            continue
+        if item["local_state"] == "completed" and item["plan_state"] == "active":
+            continue
+        try:
+            outcome = advance_item(client, batch, item, value, manifest)
+        except RequestRefused as error:
+            if error.reason != "item_refused":
+                raise
+            attention[index] = {"item_index": index, "reason": error.reason, "status": error.status}
+            continue
+        if outcome == "needs_attention":
+            attention[index] = {"item_index": index, "reason": "needs_attention"}
+        elif outcome == "advanced":
+            return True
+    return False
 
 
 def apply(client: httpx.Client, value: Inventory, tenant: str, *, max_wait: int) -> dict[str, Any]:
@@ -470,16 +556,64 @@ def apply(client: httpx.Client, value: Inventory, tenant: str, *, max_wait: int)
         policy=policy,
     )
     batch_id, deadline = batch["batch_id"], time.monotonic() + max_wait
-    while time.monotonic() < deadline and any(r["state"] not in TERMINAL for r in batch["files"]):
-        advance(client, batch, value, manifest)
-        time.sleep(min(60, max(0, deadline - time.monotonic())))
-        batch = batch_receipt(
-            request(client, "GET", f"/imports/{batch_id}"),
-            tenant=tenant,
-            manifest=manifest,
-            policy=policy,
-            batch_id=batch_id,
-        )
+    attention: dict[int, dict[str, Any]] = {}
+    backoff, waiting_reason, read_back_pending = 60, None, False
+    while time.monotonic() < deadline and any(
+        r["state"] not in TERMINAL and r["item_index"] not in attention for r in batch["files"]
+    ):
+        try:
+            advanced = False
+            if not read_back_pending:
+                advanced = advance(client, batch, value, manifest, attention)
+                backoff, waiting_reason = 60, None
+        except RequestRefused as error:
+            if error.reason not in {"local_capacity", "temporarily_unavailable"}:
+                raise
+            advanced, waiting_reason = False, error.reason
+        except httpx.TransportError:
+            # An upload/acceptance may have committed. Read back before another
+            # attempt, using the same item/hash/idempotency keys.
+            advanced, waiting_reason = False, "ambiguous_request"
+        remaining = deadline - time.monotonic()
+        if remaining < backoff:
+            # Preserve the result of the last write even when no poll fits in
+            # the remaining window. A future invocation resumes this receipt.
+            if advanced or waiting_reason == "ambiguous_request":
+                try:
+                    batch = batch_receipt(
+                        request(client, "GET", f"/imports/{batch_id}"),
+                        tenant=tenant,
+                        manifest=manifest,
+                        policy=policy,
+                        batch_id=batch_id,
+                    )
+                except RequestRefused as error:
+                    if error.reason != "temporarily_unavailable":
+                        raise
+                    waiting_reason = error.reason
+                except httpx.TransportError:
+                    waiting_reason = "read_back_unavailable"
+            break
+        time.sleep(backoff)
+        try:
+            batch = batch_receipt(
+                request(client, "GET", f"/imports/{batch_id}"),
+                tenant=tenant,
+                manifest=manifest,
+                policy=policy,
+                batch_id=batch_id,
+            )
+            read_back_pending = False
+        except RequestRefused as error:
+            if error.reason != "temporarily_unavailable":
+                raise
+            read_back_pending, waiting_reason = True, error.reason
+        except httpx.TransportError:
+            read_back_pending, waiting_reason = True, "read_back_unavailable"
+        if waiting_reason:
+            backoff = min(300, backoff * 2)
+        elif advanced:
+            backoff = 60
     states = [
         row["run_state"] or "already_imported"
         if row["state"] == "already_imported"
@@ -488,14 +622,29 @@ def apply(client: httpx.Client, value: Inventory, tenant: str, *, max_wait: int)
     ]
     outcome = (
         "failed"
-        if any(s in {"failed", "expired"} for s in states)
+        if attention or any(s in {"failed", "held", "expired"} for s in states)
         else "done"
         if all(s == "done" for s in states)
         else "already_imported"
         if all(s in {"done", "already_imported"} for s in states)
         else "waiting"
     )
-    return {**value.receipt(), "batch": batch, "state": outcome}
+    for row in batch["files"]:
+        if row["state"] in {"failed", "held", "expired", "needs_member"}:
+            attention.setdefault(
+                row["item_index"],
+                {
+                    "item_index": row["item_index"],
+                    "reason": row["state"],
+                },
+            )
+    return {
+        **value.receipt(),
+        "batch": batch,
+        "state": outcome,
+        "attention": list(attention.values()),
+        "waiting_reason": waiting_reason,
+    }
 
 
 def main() -> int:

@@ -23,6 +23,8 @@ const SHELL_ROUTES = new Set([
   "/account",
   "/organisation",
   "/organisation/invites",
+  // The company view for owners and admins (AUT-1798).
+  "/organisation/insights",
   "/analysis",
   "/analysis/new",
   "/analysis/calls",

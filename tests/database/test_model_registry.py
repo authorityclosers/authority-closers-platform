@@ -151,6 +151,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_sandbox_organisations",
         "conversation_synthetic_records",
         "conversation_review_labels",
+        "conversation_insight_calls",
         "conversation_report_minute_events",
         "conversation_canary_submissions",
         "conversation_sensitive_segment_marks",
