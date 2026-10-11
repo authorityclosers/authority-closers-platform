@@ -68,10 +68,20 @@
   --status: var(--lx-line);
 }
 
+.legend li[data-status="strongly_demonstrated"],
+.dot[data-status="strongly_demonstrated"],
+.detailStatus[data-status="strongly_demonstrated"],
 .legend li[data-status="observed"],
 .dot[data-status="observed"],
 .detailStatus[data-status="observed"] {
   --status: var(--lx-teal);
+}
+
+/* As the Report's skill rows: a clear weakness on this call, in the warm tone. */
+.legend li[data-status="needs_attention"],
+.dot[data-status="needs_attention"],
+.detailStatus[data-status="needs_attention"] {
+  --status: var(--lx-warning);
 }
 
 .legend li[data-status="conflicted"],
