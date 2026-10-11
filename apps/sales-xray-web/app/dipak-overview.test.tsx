@@ -612,7 +612,7 @@ it("presents the supplied priorities and one focus without generating scores, es
   );
   expect(
     container.querySelector('[data-review-point="13"]')?.textContent,
-  ).toContain("this report says nothing about progress");
+  ).toContain("no earlier calls to compare, so it says nothing about progress");
   for (const anchor of container.querySelectorAll<HTMLAnchorElement>("nav a")) {
     expect(document.getElementById(anchor.hash.slice(1))).not.toBeNull();
   }

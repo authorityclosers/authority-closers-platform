@@ -1417,8 +1417,8 @@ export function DipakOverview({
                         <p className={styles.eyebrow}>Human review note</p>
                         <h3>Ethics observations</h3>
                         <p>
-                          Notes from the call for a coach to read. They don’t
-                          judge anyone.
+                          Notes from the call for a coach to read. No verdict is
+                          given.
                         </p>
                       </div>
                       {detail.ethics_notes.map((note, index) => (
@@ -1511,8 +1511,8 @@ export function DipakOverview({
 
                   <ReviewBlock number="13" title="Across-call pattern">
                     <p className={styles.empty}>
-                      There aren’t enough earlier calls to compare, so this
-                      report says nothing about progress.
+                      This report has no earlier calls to compare, so it says
+                      nothing about progress.
                     </p>
                   </ReviewBlock>
 
