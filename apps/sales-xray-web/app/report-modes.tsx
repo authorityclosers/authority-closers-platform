@@ -30,7 +30,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { VIEWS as VIEWS_COPY } from "./report-copy";
+import { DEAL, NAV, VIEWS as VIEWS_COPY, backTo } from "./report-copy";
 import {
   CallOutcomeProvider,
   FixtureCallOutcomeProvider,
@@ -621,7 +621,7 @@ export function ReportModes({
       ? [
           {
             id: "call-coaching",
-            label: "Coaching for this call",
+            label: DEAL.coachingForCall,
             content: (
               <ReportCallCoaching
                 data={documentData}
@@ -1398,12 +1398,12 @@ export function ReportModes({
             onClick={returnToOrigin}
           >
             <Undo2 aria-hidden="true" />
-            Back to {returnPoint.label}
+            {backTo(returnPoint.label)}
           </button>
           <button
             type="button"
             className={styles.returnDismiss}
-            aria-label="Dismiss return shortcut"
+            aria-label={NAV.hideBack}
             onClick={() => setReturnPoint(null)}
           >
             <X aria-hidden="true" />

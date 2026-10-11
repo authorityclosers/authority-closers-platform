@@ -3,6 +3,7 @@
 import { ArrowUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { NAV } from "./report-copy";
 import styles from "./report-scroll-rail.module.css";
 
 type Checkpoint = { id: string; label: string; y: number; active: boolean };
@@ -215,7 +216,7 @@ export function ReportScrollRail() {
               ),
             left: rail.left + 5 - 18,
           }}
-          aria-label="Back to the top of the report"
+          aria-label={NAV.backToTop}
           onClick={() =>
             scroller.current?.scrollTo({ top: 0, behavior: "smooth" })
           }
