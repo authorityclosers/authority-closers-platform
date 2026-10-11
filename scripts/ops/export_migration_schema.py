@@ -14,7 +14,8 @@ import sys
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
-    "ac_schema_export_backup", Path(__file__).with_name("ac-postgres-backup.py")
+    "ac_schema_export_backup",
+    Path(__file__).resolve().parents[2] / "infra/vps-foundation/scripts/ac-postgres-backup.py",
 )
 assert SPEC and SPEC.loader
 backup = importlib.util.module_from_spec(SPEC)

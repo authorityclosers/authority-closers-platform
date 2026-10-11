@@ -45,19 +45,29 @@ Lane: platform. Tier: non-routine; this is the CEO's bounded end-to-end item 1.
 ## Verification in the platform checkout
 
 ```sh
-uv run --frozen pytest tests/infra/test_migration_schema_gate.py tests/infra/test_postgres_schema_export.py tests/unit/test_migration_safety.py
-uv run --frozen ruff check scripts/ci/migration_schema_gate.py infra/vps-foundation/scripts/ac-postgres-schema-export.py tests/infra/test_migration_schema_gate.py tests/infra/test_postgres_schema_export.py
+uv run --frozen pytest tests/infra/test_migration_schema_gate.py tests/infra/test_postgres_schema_export.py tests/unit/test_migration_safety.py tests/infra/test_postgres_backup.py::test_every_operational_script_and_unit_is_in_the_exact_install_manifest
+uv run --frozen ruff check scripts/ci/migration_schema_gate.py scripts/ops/export_migration_schema.py tests/infra/test_migration_schema_gate.py tests/infra/test_postgres_schema_export.py
 uv run --frozen python scripts/ci/migration_schema_gate.py --base-ref origin/main
 pnpm exec prettier --check .github/workflows/migration-safety.yml
 ac-gate check
 ```
 
-The local pytest receipt is **85 passed, 3 skipped**. The three real PostgreSQL
+The local pytest receipt is **86 passed, 3 skipped**. The three real PostgreSQL
 cases require Docker, whose socket is denied to the local lane operator. The
 workflow requires those cases with `AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST=1`, so
 they cannot silently skip in the named CI job. The CLI's irrelevant-PR receipt is
 `migration-safety: PASS (no migration changes)`. CI receipts are attached to the
 PR; local test results do not certify CI, installed settings or deployed state.
+
+The initial CI receipt at `2bb659ce` failed the foundation install-manifest test
+because the exporter was placed among installed foundation scripts. The
+repository-run exporter now lives in `scripts/ops`, imports the existing backup
+tool there, and passes the exact manifest regression above. No foundation
+installation changes are needed for this operator tool.
+
+The same receipt failed `single-track`: PR #437 holds the shared-file slot.
+The PostgreSQL job was cancelled before producing its proof. These are recorded
+CI limits, not passing CI results; no lane-order blocker is added for PR #437.
 
 ## Governed artifact and activation handoff
 
@@ -67,8 +77,8 @@ the schema exporter against the exact staging release, then publishes only
 No staging credential or full backup is supplied to a PR runner.
 
 ```sh
-python3 infra/vps-foundation/scripts/ac-postgres-schema-export.py --output <new-absolute-export-directory>
-python3 infra/vps-foundation/scripts/ac-postgres-schema-export.py --output <new-absolute-export-directory> --apply
+python3 scripts/ops/export_migration_schema.py --output <new-absolute-export-directory>
+python3 scripts/ops/export_migration_schema.py --output <new-absolute-export-directory> --apply
 ```
 
 Root records the artifact ID and SHA-256 of `manifest.json` in governed repository
