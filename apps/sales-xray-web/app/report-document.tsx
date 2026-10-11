@@ -448,8 +448,10 @@ export function ReportDocument({
     if (!data?.report) return null;
     try {
       return reportDocumentModel(data, people);
-    } catch {
-      // A malformed older report shows a quiet note, never a broken page.
+    } catch (error) {
+      // A malformed older report shows a quiet note, never a broken page; the
+      // console says why, so a reviewer on dev can tell what failed.
+      console.error("Document view: this report could not be read.", error);
       return "unavailable" as const;
     }
   }, [data, people]);
