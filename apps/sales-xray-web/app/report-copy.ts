@@ -176,6 +176,8 @@ export const CALL_FLOW = {
   noStages: "The call's stages aren't marked in this report.",
   whoSpokeWhen: "Who spoke when",
   momentsLane: "Moments",
+  /** On the timeline, beside the line where the call changed: "Changed here · 11:18". */
+  changedShort: "Changed here",
 };
 
 /** "The call changed here · 11:18" */
