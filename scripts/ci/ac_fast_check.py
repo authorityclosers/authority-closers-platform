@@ -290,10 +290,23 @@ def node_tool(root: Path, app: Path, name: str, *, fallbacks: Sequence[Path] = (
     raise FastCheckError(f"Installed frontend tool unavailable: {name}")
 
 
+def exclude_test_flags(paths: Iterable[str]) -> tuple[str, ...]:
+    """Use literal file globs so route brackets cannot exclude unrelated tests."""
+    return tuple(
+        argument
+        for path in paths
+        for argument in (
+            "--exclude",
+            "".join("\\" + value if value in r"\*?[]{}()!+@" else value for value in path),
+        )
+    )
+
+
 def plan(
-    root: Path, changed: tuple[str, ...], test_cap: int
+    root: Path, changed: tuple[str, ...], test_cap: int, *, defer_related_vitest: bool = False
 ) -> tuple[tuple[Check, ...], dict[str, Any]]:
     checks = []
+    deduplicated: dict[str, list[str]] = {}
     python = root / ".venv/bin/python"
     pyfiles = tuple(path for path in changed if path.endswith(".py") and (root / path).is_file())
     tests, graph_errors = affected_tests(root, changed)
@@ -438,6 +451,8 @@ def plan(
                     )
                 )
             if related:
+                if direct_tests:
+                    deduplicated[app] = list(direct_tests)
                 checks.append(
                     Check(
                         f"vitest-related:{app}",
@@ -447,6 +462,9 @@ def plan(
                             "--run",
                             *vitest_flags,
                             "--passWithNoTests",
+                            # These exact files already have a direct check.
+                            # Keep other importers selected by Vitest's graph.
+                            *exclude_test_flags(relative(direct_tests)),
                             *relative(related),
                         ),
                         directory,
@@ -487,11 +505,23 @@ def plan(
         )
         direct = tuple(path for path in package_paths if ".test." in path or ".spec." in path)
         related = tuple(path for path in package_paths if path not in direct)
+        if direct and related:
+            deduplicated[package] = list(direct)
         for values, kind in ((direct, "vitest"), (related, "vitest-related")):
             if not values:
                 continue
             mode = ("run",) if kind == "vitest" else ("related", "--run")
-            flags = vitest_flags if kind == "vitest" else (*vitest_flags, "--passWithNoTests")
+            flags = (
+                vitest_flags
+                if kind == "vitest"
+                else (
+                    *vitest_flags,
+                    "--passWithNoTests",
+                    *exclude_test_flags(
+                        Path(path).relative_to(package).as_posix() for path in direct
+                    ),
+                )
+            )
             checks.append(
                 Check(
                     f"{kind}:{package}",
@@ -505,7 +535,16 @@ def plan(
                     tuple(values),
                 )
             )
+    deferred_related = [
+        {"name": check.name, "scope": list(check.scope)}
+        for check in checks
+        if defer_related_vitest and check.name.startswith("vitest-related:")
+    ]
+    if defer_related_vitest:
+        checks = [check for check in checks if not check.name.startswith("vitest-related:")]
     metadata = {
+        "deferred_related_vitest": deferred_related,
+        "deduplicated_vitest_files": deduplicated,
         "selected_pytest": list(selected),
         "omitted_pytest": list(omitted),
         "import_graph_errors": list(graph_errors),
@@ -895,6 +934,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--test-file-cap", type=int, default=12)
     parser.add_argument("--wall-seconds", type=float, default=300)
     parser.add_argument("--cpu-seconds", type=float, default=180)
+    parser.add_argument(
+        "--defer-related-vitest",
+        action="store_true",
+        help="Run direct frontend tests; explicitly defer related tests to required CI (partial)",
+    )
     parser.add_argument("--plan", action="store_true")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -924,7 +968,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         with SNAPSHOT.committed_snapshot(root, commit) as snapshot:
             receipt["source_sha256"] = snapshot.sha256
-            checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
+            if args.defer_related_vitest:
+                checks, metadata = plan(
+                    snapshot.root, changed, args.test_file_cap, defer_related_vitest=True
+                )
+            else:
+                checks, metadata = plan(snapshot.root, changed, args.test_file_cap)
             checks = tuple(replace(check, source_root=snapshot.root) for check in checks)
             metadata["omitted_generated_frontend_types"] = [
                 check.cwd.relative_to(snapshot.root).as_posix()
@@ -977,6 +1026,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or metadata["unmapped_frontend_sources"]
                 or metadata["unmapped_ci_inputs"]
                 or metadata["omitted_generated_frontend_types"]
+                or metadata.get("deferred_related_vitest")
             ):
                 receipt["status"] = "partial"
             else:
@@ -1021,6 +1071,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if receipt.get("omitted_pytest"):
         print(
             f"  cap: {len(receipt['omitted_pytest'])} related files deferred to required GitHub CI"
+        )
+    if receipt.get("deferred_related_vitest"):
+        print(
+            f"  coverage: {len(receipt['deferred_related_vitest'])} related Vitest checks "
+            "explicitly deferred to required GitHub CI"
         )
     if receipt.get("unmapped_ci_inputs"):
         print(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import shlex
 import shutil
 import subprocess
 import sys
@@ -518,6 +519,109 @@ def test_direct_app_tests_cannot_pass_when_nothing_is_collected(tmp_path: Path) 
     checks, _ = FAST.plan(tmp_path, (test,), 12)
     check = next(check for check in checks if check.name == f"vitest:{app}")
     assert "--passWithNoTests" not in check.argv
+
+
+@pytest.mark.parametrize("other_fails", (False, True))
+def test_installed_vitest_deduplicates_direct_files_but_keeps_other_importers(
+    tmp_path: Path, other_fails: bool
+) -> None:
+    installed = Path(FAST.__file__).resolve().parents[2] / "apps/sales-xray-web/node_modules"
+    if not (installed / ".bin/vitest").is_file():
+        pytest.skip("Installed frontend tools are required for this integration proof")
+    app = "apps/sales-xray-web"
+    direct = f"{app}/app/[call]/direct.test.ts"
+    source = f"{app}/app/value.ts"
+    write(tmp_path, source, "export const value = 1;\n")
+    write(
+        tmp_path,
+        direct,
+        "import {test,expect} from 'vitest'; import {value} from '../value';\n"
+        "test('direct',()=>expect(value).toBe(1));\n",
+    )
+    write(
+        tmp_path,
+        f"{app}/app/other.test.ts",
+        "import {test,expect} from 'vitest'; import {value} from './value';\n"
+        f"test('other',()=>expect(value).toBe({2 if other_fails else 1}));\n",
+    )
+    write(
+        tmp_path,
+        f"{app}/vitest.config.mjs",
+        "export default {test:{include:['app/**/*.test.ts']}};\n",
+    )
+    modules = tmp_path / app / "node_modules"
+    (modules / ".bin").mkdir(parents=True)
+    for tool in ("prettier", "eslint", "tsc"):
+        binary = FAST.node_tool(installed.parents[2], installed.parent, tool)
+        (modules / ".bin" / tool).symlink_to(Path(binary).resolve())
+    # pnpm's app wrapper refers to its original relative store layout. Point
+    # this isolated fixture directly at the same installed Vitest entrypoint.
+    wrapper = modules / ".bin/vitest"
+    node = shutil.which("node")
+    assert node is not None
+    entry = (installed / "vitest/vitest.mjs").resolve()
+    wrapper.write_text(f'#!/bin/sh\nexec {shlex.quote(node)} {shlex.quote(str(entry))} "$@"\n')
+    wrapper.chmod(0o755)
+    (modules / "vitest").symlink_to((installed / "vitest").resolve(), target_is_directory=True)
+    checks, metadata = FAST.plan(tmp_path, (direct, source), 12)
+    direct_check = next(check for check in checks if check.name == f"vitest:{app}")
+    related_check = next(check for check in checks if check.name == f"vitest-related:{app}")
+    assert metadata["deduplicated_vitest_files"] == {app: [direct]}
+    first = FAST.run_check(direct_check, 30, 15)
+    second = FAST.run_check(related_check, 30, 15)
+    assert first["status"] == "passed", first
+    assert first["vitest_summary"]["passed"] == 1
+    assert second["status"] == ("failed" if other_fails else "passed")
+    assert second["vitest_summary"]["passed"] == (0 if other_fails else 1)
+    assert second["vitest_summary"]["failed"] == int(other_fails)
+
+
+def test_shared_package_related_check_deduplicates_its_direct_tests(tmp_path: Path) -> None:
+    package, source, test = workspace_fixture(tmp_path)
+    checks, metadata = FAST.plan(tmp_path, (source, test), 12)
+    related = next(check for check in checks if check.name == f"vitest-related:{package}")
+    assert related.argv[related.argv.index("--exclude") + 1] == "src/index.test.ts"
+    assert related.argv[-1] == "src/index.ts"
+    assert metadata["deduplicated_vitest_files"] == {package: [test]}
+
+
+@pytest.mark.parametrize("defer", (False, True))
+def test_explicit_related_deferral_preserves_required_direct_checks_and_partial_receipt(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defer: bool
+) -> None:
+    app = "apps/sales-xray-web"
+    direct = f"{app}/app/direct.test.ts"
+    source = f"{app}/app/source.ts"
+    write(repository, direct, "export {};\n")
+    write(repository, source, "export const value = 1;\n")
+    git(repository, "add", "apps")
+    git(repository, "commit", "-m", "explicit frontend deferral fixture")
+    for tool in ("prettier", "eslint", "tsc", "vitest"):
+        binary = repository / app / "node_modules/.bin" / tool
+        write(repository, binary.relative_to(repository).as_posix(), "#!/bin/sh\nexit 0\n")
+        binary.chmod(0o755)
+    executed = []
+
+    def synthetic_check(check, _wall, _cpu):
+        executed.append(check.name)
+        return {
+            "name": check.name,
+            "status": "failed" if check.name.startswith("vitest-related:") else "passed",
+        }
+
+    monkeypatch.setattr(FAST, "run_check", synthetic_check)
+    receipt = tmp_path.parent / (tmp_path.name + "-related-deferral.json")
+    argv = ["--root", str(repository), "--base", "HEAD~1", "--receipt", str(receipt)]
+    if defer:
+        argv.append("--defer-related-vitest")
+    assert FAST.main(argv) == (0 if defer else 1)
+    data = json.loads(receipt.read_text())
+    assert data["status"] == ("partial" if defer else "failed")
+    assert f"vitest:{app}" in executed and f"tsc:{app}" in executed
+    assert (f"vitest-related:{app}" in executed) is not defer
+    assert data["deferred_related_vitest"] == (
+        [{"name": f"vitest-related:{app}", "scope": [source]}] if defer else []
+    )
 
 
 def test_changed_infrastructure_module_is_linted_with_partial_graph(
