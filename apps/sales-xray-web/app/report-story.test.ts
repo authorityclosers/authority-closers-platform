@@ -92,7 +92,22 @@ describe("Report story source binding", () => {
       { ...syntheticReport, story },
       transcript.duration_ms,
     );
-    expect(pillars[0].entries[0].text).toBe("Follow-up Set");
+    expect(pillars[0].entries[0]).toMatchObject({
+      label: "Call outcome",
+      gap: true,
+      evidence: [],
+    });
+    expect(
+      pillars[0].entries.find((e) => e.label === "Closing evidence")?.evidence,
+    ).toEqual(story.outcome.evidence);
+    expect(
+      pillars[5].entries.find((e) => e.label === "Current status")?.gap,
+    ).toBe(true);
+    expect(
+      pillars[5].entries.find(
+        (e) => e.label === "Next event timing · as stated",
+      )?.text,
+    ).toBe("Friday at four");
     expect(pillars[1].timeline?.map((p) => p.label)).toEqual([
       "Opening",
       "Discovery",

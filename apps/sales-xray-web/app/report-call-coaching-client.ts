@@ -54,6 +54,7 @@ export type CallCoaching = {
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA = /^[0-9a-f]{64}$/;
+const MAX_BODY_BYTES = 128_000;
 export class CallCoachingReadError extends Error {
   constructor(readonly status?: number) {
     super("This call’s coaching is unavailable. Try again.");
@@ -218,6 +219,50 @@ export function parseCallCoaching(
   } as CallCoaching;
 }
 
+/** Bound the body before decoding; scope loss also closes a stalled stream. */
+async function readBody(response: Response, signal: AbortSignal) {
+  if (
+    signal.aborted ||
+    Number(response.headers.get("content-length")) > MAX_BODY_BYTES ||
+    !response.body
+  ) {
+    void response.body?.cancel().catch(() => {});
+    return invalid();
+  }
+  const reader = response.body.getReader();
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    // A defective stream's cancellation promise must not delay recovery.
+    void reader.cancel().catch(() => {});
+  };
+  signal.addEventListener("abort", cancel, { once: true });
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (signal.aborted) return invalid();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > MAX_BODY_BYTES) return invalid();
+      chunks.push(part.value);
+    }
+    const body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    cancel();
+    reader.releaseLock();
+  }
+}
+
 /** One own-call GET. It cannot load another person's coaching or start a job. */
 export async function readCallCoaching(
   binding: CallCoachingBinding,
@@ -240,10 +285,8 @@ export async function readCallCoaching(
     });
     if (!response.ok) throw new CallCoachingReadError(response.status);
     if (response.redirected) return invalid();
-    const body = await response.text();
-    if (body.length > 128000) return invalid();
     try {
-      return parseCallCoaching(JSON.parse(body), binding);
+      return parseCallCoaching(await readBody(response, signal), binding);
     } catch {
       return invalid();
     }

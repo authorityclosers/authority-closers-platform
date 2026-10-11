@@ -45,7 +45,7 @@
   padding-top: 8px;
 }
 .coaching summary,
-.coaching > button {
+.coaching button {
   min-height: 32px;
   cursor: pointer;
 }
@@ -78,7 +78,10 @@
     min-height: 44px;
   }
   .coaching summary,
-  .coaching > button {
+  .coaching button {
     min-height: 44px;
+  }
+  .coaching button {
+    min-width: 44px;
   }
 }

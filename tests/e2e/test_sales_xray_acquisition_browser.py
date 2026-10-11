@@ -789,33 +789,26 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     journey_checks.update(await db(assert_single_settlement()))
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
-                    reading_view = page.get_by_role("button", name="Reading view", exact=True)
-                    tabbed_view = page.get_by_role("button", name="Tabbed view", exact=True)
+                    report_view = page.get_by_role("button", name="Report view", exact=True)
+                    details_view = page.get_by_role("button", name="Details view", exact=True)
                     # Intended default: a bound report URL without view= opens
-                    # in Tabbed view on a desktop-width (>=1100px) viewport.
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
-                    await expect(reading_view).to_have_attribute("aria-pressed", "false")
-                    # The reader can explicitly choose Reading view: one
-                    # horizontal row of section links, all sections shown.
-                    # The transcript lives in its own reader, not in Reading.
-                    await reading_view.click()
-                    await expect(reading_view).to_have_attribute("aria-pressed", "true")
-                    reading_nav = page.get_by_role(
+                    # on the six-part Report, whatever the viewport width.
+                    await expect(report_view).to_have_attribute("aria-pressed", "true")
+                    await expect(details_view).to_have_attribute("aria-pressed", "false")
+                    report_nav = page.get_by_role(
                         "navigation", name="Explore your sales report", exact=True
                     )
-                    await expect(reading_nav.get_by_role("link")).to_have_count(7)
+                    await expect(report_nav.get_by_role("link")).to_have_count(6)
                     await expect(
-                        reading_nav.get_by_role("link", name="Transcript", exact=True)
-                    ).to_have_count(0)
-                    await expect(
-                        page.get_by_role(
-                            "navigation", name="Explore your sales report", exact=True
-                        ).get_by_role("link", name="Raw data", exact=True)
-                    ).to_be_visible()
-                    assert "view=reading" in page.url
-                    await tabbed_view.click()
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                        report_nav.get_by_role("link", name="The Big Picture", exact=True)
+                    ).to_have_count(1)
+                    # Details keeps every original section, transcript and raw data.
+                    await details_view.click()
+                    await expect(details_view).to_have_attribute("aria-pressed", "true")
                     assert "view=tabs" in page.url
+                    await expect(
+                        page.get_by_role("tab", name="Raw data", exact=True)
+                    ).to_have_count(1)
                     await page.get_by_role("tab", name="Moments", exact=True).click()
                     assert (
                         await page.locator("audio").get_attribute("src")
@@ -901,9 +894,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
-                    tabbed_view = library_page.get_by_role("button", name="Tabbed view", exact=True)
-                    await tabbed_view.click()
-                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                    details_view = library_page.get_by_role(
+                        "button", name="Details view", exact=True
+                    )
+                    await details_view.click()
+                    await expect(details_view).to_have_attribute("aria-pressed", "true")
                     await library_page.get_by_role("tab", name="Moments", exact=True).click()
                     player = library_page.locator("audio")
                     await expect(player).to_have_count(1)

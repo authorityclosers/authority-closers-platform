@@ -63,6 +63,14 @@ it("keeps every owner-approved report section", async () => {
   );
   await act(async () => root.render(<FullShellPreview />));
   await settle();
+  // The six-part Report opens first (owner, 11 Oct); every approved section
+  // stays, one tap away under Details.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
+      .click(),
+  );
+  await settle();
   const headings = [...host.querySelectorAll("h1, h2, h3")].map((node) =>
     (node.textContent ?? "").replace(/\s+/g, " ").trim(),
   );
