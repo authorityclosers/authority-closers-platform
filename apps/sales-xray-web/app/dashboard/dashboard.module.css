@@ -118,6 +118,18 @@
   height: 28px;
 }
 
+/* A word-shaped placeholder inside a line of text: the line keeps its box. */
+.ph {
+  display: inline-block;
+  width: var(--w, 8em);
+  max-width: 100%;
+  height: 0.8em;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  vertical-align: -0.05em;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
 .skeletonContext {
   width: 120px;
   height: 12px;
@@ -435,7 +447,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .skeletonValue,
-  .skeletonContext {
+  .skeletonContext,
+  .ph {
     animation: none;
   }
 }

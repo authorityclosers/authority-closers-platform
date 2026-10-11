@@ -155,6 +155,9 @@ function resolvePageTitle(
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
+  // The studio names its stage once it loads; until then (and while a route
+  // loads) the bar already says where you are, so nothing swaps in later.
+  if (active === "analyse") return "New analysis";
   return null;
 }
 
@@ -1081,9 +1084,11 @@ function LightboxShellFrame({
                   workspaceLabel ? `Workspace: ${workspaceLabel}` : undefined
                 }
               >
-                {workspaceLabel ? (
-                  <small>{pageTitle ? workspaceLabel : "Workspace"}</small>
-                ) : null}
+                {/* Two lines from the first paint: the workspace line is a
+                    placeholder while it loads, so the title never drops. */}
+                <small className={styles.mobileContext}>
+                  {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                </small>
                 <b>{pageTitle ?? workspaceLabel}</b>
               </span>
             </div>

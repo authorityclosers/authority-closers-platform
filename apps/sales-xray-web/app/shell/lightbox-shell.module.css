@@ -1245,6 +1245,14 @@
   color: transparent;
   animation: shell-placeholder 1.6s ease-in-out infinite;
 }
+.shell[data-loading="true"] .mobileContext {
+  width: fit-content;
+  min-width: 96px;
+  border-radius: 6px;
+  background: var(--lx-sunken);
+  color: transparent;
+  animation: shell-placeholder 1.6s ease-in-out infinite;
+}
 .shell[data-loading="true"] .workspaceSub {
   min-width: 70px;
   margin-top: 5px;
@@ -1268,7 +1276,8 @@
 @media (prefers-reduced-motion: reduce) {
   .shell[data-loading="true"] .workspaceName,
   .shell[data-loading="true"] .workspaceSub,
-  .shell[data-loading="true"] .titleContext {
+  .shell[data-loading="true"] .titleContext,
+  .shell[data-loading="true"] .mobileContext {
     animation: none;
   }
 }

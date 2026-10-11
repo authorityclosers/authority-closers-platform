@@ -20,7 +20,14 @@ export function greetingFor(hour: number | null): string {
   return "Working late";
 }
 
-export function DashboardGreeting({ subtitle }: { subtitle: string }) {
+export function DashboardGreeting({
+  subtitle,
+  placeholder = false,
+}: {
+  subtitle: string;
+  /** While the page loads: the title's line, without words that may change. */
+  placeholder?: boolean;
+}) {
   const hour = useSyncExternalStore(
     subscribeToGreetingHour,
     readGreetingHour,
@@ -29,10 +36,16 @@ export function DashboardGreeting({ subtitle }: { subtitle: string }) {
   const name = useProfileFirstName();
   return (
     <div className={styles.greeting}>
-      <h1 className={styles.title}>
-        {greetingFor(hour)}
-        {name ? `, ${name}` : ""}
-      </h1>
+      {placeholder ? (
+        <p className={styles.title}>
+          <i className={styles.placeholder} aria-hidden="true" />
+        </p>
+      ) : (
+        <h1 className={styles.title}>
+          {greetingFor(hour)}
+          {name ? `, ${name}` : ""}
+        </h1>
+      )}
       <p className={styles.subtitle}>{subtitle}</p>
     </div>
   );
