@@ -156,7 +156,8 @@ def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) ->
                 "succeeded",
                 "dead_letter",
             }
-            assert len(health["daily"]) == 30
+            # A rolling 30-day window touches 31 calendar dates (the first in part).
+            assert len(health["daily"]) == 31
             assert health["durations"]["runs"]["count"] >= 1
             assert health["cost"]["basis"] == "admin_pricing_estimate_not_settlement"
             for item in health["failed"]:

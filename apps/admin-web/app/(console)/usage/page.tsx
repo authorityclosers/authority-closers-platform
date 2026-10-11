@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 const WINDOWS = [
   { key: "7", label: "7 days" },
-  { key: "1", label: "Today" },
+  { key: "1", label: "24 hours" },
   { key: "30", label: "30 days" },
   { key: "90", label: "90 days" },
 ];

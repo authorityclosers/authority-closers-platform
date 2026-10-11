@@ -424,7 +424,8 @@ class AdminAnalysisHealth:
             if job.status == "dead_letter":
                 daily[day]["failed"] += 1
         series = []
-        for offset in range(days - 1, -1, -1):
+        # Every date the rolling window touches, so the chart adds up to the totals.
+        for offset in range((now.date() - since.date()).days, -1, -1):
             day = (now - timedelta(days=offset)).date().isoformat()
             series.append(
                 {"day": day, "analysed": daily[day]["analysed"], "failed": daily[day]["failed"]}

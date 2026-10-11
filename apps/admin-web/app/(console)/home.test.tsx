@@ -70,7 +70,7 @@ it("shows today's calls and health as tiles that open the right view", async () 
   expect(html).toContain("Reports ready");
   expect(html).toContain('href="/calls?status=ready"');
   expect(html).toContain('href="/calls?status=failed"');
-  expect(html).toContain("Reports made today");
+  expect(html).toContain("Reports, last 24 h");
   expect(html).toContain(">12<");
   expect(html).toContain("Stuck now");
 });
@@ -79,5 +79,5 @@ it("keeps the call tiles when the health read fails", async () => {
   reads.health = false;
   const html = await markup();
   expect(html).toContain("Reports ready");
-  expect(html).not.toContain("Reports made today");
+  expect(html).not.toContain("Reports, last 24 h");
 });

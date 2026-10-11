@@ -83,7 +83,7 @@ function Today({
       {health.ok ? (
         <>
           <Kpi
-            label="Reports made today"
+            label="Reports, last 24 h"
             value={
               health.data.byStage.find((row) => row.stage === "C5")?.counts
                 .succeeded ?? 0
@@ -91,7 +91,7 @@ function Today({
             href="/health?days=1"
           />
           <Kpi
-            label="Failed jobs today"
+            label="Failed jobs, last 24 h"
             value={health.data.byStatus.dead_letter}
             tone={health.data.byStatus.dead_letter ? "bad" : "good"}
             href="/health?days=1"

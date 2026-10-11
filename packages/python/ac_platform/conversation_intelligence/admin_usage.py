@@ -79,7 +79,8 @@ class AdminUsage:
                 .limit(200)
             )
         ).all()
-        day = func.date(AnalyticsEvent.occurred_at)
+        # Days are UTC dates, like the window itself, whatever the session's zone.
+        day = func.date(func.timezone("UTC", AnalyticsEvent.occurred_at))
         daily_rows = {
             str(value): (count, people)
             for value, count, people in (
@@ -90,8 +91,9 @@ class AdminUsage:
                 )
             ).all()
         }
+        # Every date the rolling window touches, so the chart adds up to the totals.
         daily = []
-        for offset in range(days - 1, -1, -1):
+        for offset in range((now.date() - since.date()).days, -1, -1):
             key = (now - timedelta(days=offset)).date().isoformat()
             count, people = daily_rows.get(key, (0, 0))
             daily.append({"day": key, "events": count, "people": people})
