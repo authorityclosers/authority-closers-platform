@@ -306,7 +306,7 @@ function blocks(
         para(
           [
             {
-              text: `${step.label}${step.title ? ` · ${step.title}` : ""}`,
+              text: step.label,
               bold: true,
               caps: true,
               size: 17,
@@ -315,6 +315,15 @@ function blocks(
           ],
           { after: 0, keepNext: true, border: index === 1 ? C.teal : C.line },
         ),
+        ...(step.title
+          ? [
+              para([{ text: step.title, bold: true, size: 23, color: C.ink }], {
+                after: 0,
+                keepNext: true,
+                border: index === 1 ? C.teal : C.line,
+              }),
+            ]
+          : []),
         para([{ text: step.text }], { border: index === 1 ? C.teal : C.line }),
       ]);
     case "card": {

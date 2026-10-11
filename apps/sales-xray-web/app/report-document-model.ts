@@ -371,13 +371,21 @@ export function reportDocumentModel(
             {
               type: "steps",
               steps: [
-                { label: CALL_FLOW.before, text: flow.change.before.text },
+                {
+                  label: CALL_FLOW.before,
+                  title: flow.change.beforeLabel ?? undefined,
+                  text: flow.change.before.text,
+                },
                 {
                   label: CALL_FLOW.switch,
                   title: turnClip?.at,
                   text: flow.change.turn.text,
                 },
-                { label: CALL_FLOW.after, text: flow.change.after.text },
+                {
+                  label: CALL_FLOW.after,
+                  title: flow.change.afterLabel ?? undefined,
+                  text: flow.change.after.text,
+                },
               ],
             },
             flow.change.effect

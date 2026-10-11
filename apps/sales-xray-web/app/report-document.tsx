@@ -241,10 +241,10 @@ function Item({
         <ol className={styles.steps}>
           {item.steps.map((step, index) => (
             <li key={index} data-switch={index === 1 || undefined}>
-              <span className={styles.stepLabel}>
-                {step.label}
-                {step.title ? ` · ${step.title}` : ""}
-              </span>
+              <span className={styles.stepLabel}>{step.label}</span>
+              {step.title ? (
+                <strong className={styles.stepTitle}>{step.title}</strong>
+              ) : null}
               <p>{step.text}</p>
             </li>
           ))}

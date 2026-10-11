@@ -503,6 +503,12 @@
 .steps p {
   margin: 2px 0 0;
 }
+.stepTitle {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-ink);
+  font: 700 calc(16px * var(--doc-scale)) / 1.35 var(--lx-font-ui);
+}
 .stepLabel {
   color: var(--sx-ink);
   font: 800 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
