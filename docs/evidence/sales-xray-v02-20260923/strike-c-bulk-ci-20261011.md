@@ -17,3 +17,21 @@ passed (110.10s), including the original failing test. After the fixture change,
 all 41 studio-video byte tests passed (49.98s). This is loopback/disposable and
 fictional-data proof; final-head CI remains required. No hosted write or provider
 dispatch occurred.
+
+## Bulk component production-build proof
+
+The current `BulkRecordingImport`/preview components and page kit were imported
+directly into a temporary Next 16.3.6 harness outside Git. `next build --webpack`
+and `next start` ran under `ac-heavy`; the browser and server were closed in a
+`finally` block. A populated fictional batch covers queued, working, retrying,
+failed with Try again, done, unassigned and source-hash reuse. Unassigned has no
+processing stage. This is component proof, not an authenticated deployed journey.
+
+The preview heading now stays compact on phones. Its scoped CSS uses the shared
+UI font, including Devanagari, and explicit 32px/44px control floors without new
+colours or changes to A's pages, shell, tokens or shared kit. All 36 focused bulk
+frontend cases, frontend typecheck and changed ESLint pass. The four reviewed
+production screenshots have no sideways overflow or page errors; visible file
+inputs/buttons measure exactly 32px desktop and 44px phone. Files:
+`/home/acdev/strikes/1676/shots/2026-10-11/bulk-import-{1440,390}-{light,dark}.png`.
+The reproducible harness and receipt are in the strike's `bulk-browser/` folder.

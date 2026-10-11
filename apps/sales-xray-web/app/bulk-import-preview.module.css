@@ -4,6 +4,7 @@
   min-width: 0;
   padding: 12px;
   font-size: 13px;
+  font-family: var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
 .hint {
@@ -40,4 +41,12 @@
   background: var(--lx-surface);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+.body :is(button, input[type="file"], select) {
+  min-height: 32px;
+}
+@media (max-width: 640px) {
+  .body :is(button, input[type="file"], select) {
+    min-height: 44px;
+  }
 }

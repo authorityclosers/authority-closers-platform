@@ -71,8 +71,7 @@ export function BulkImportPreview({
     "Unassigned";
   return (
     <Panel
-      title="Import a recording folder"
-      sub="Review the member matches before importing"
+      title="Import recordings"
     >
       <div className={styles.body}>
         <Field
