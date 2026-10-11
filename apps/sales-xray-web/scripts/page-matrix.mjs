@@ -20,6 +20,7 @@
 //
 //   node apps/sales-xray-web/scripts/page-matrix.mjs --origin http://127.0.0.1:3016 \
 //     --out "$RUNNER_TEMP/page-matrix" [--pass roles|screens|widths|all] [--only /dashboard]
+//     [--workers 3]
 import { readdirSync, statSync } from "node:fs";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
@@ -343,6 +344,7 @@ async function main() {
   const output = argument("out", "page-matrix");
   const pass = argument("pass", "all");
   const only = argument("only", "")?.split(",").filter(Boolean);
+  const workers = Number(argument("workers", "3"));
   const { chromium } = await import("playwright");
   await mkdir(join(output, "screens"), { recursive: true });
 
@@ -362,41 +364,43 @@ async function main() {
       `${mark} ${where}${result.problems.length ? ` :: ${result.problems.join("; ")}` : ""}`,
     );
   };
-  try {
-    if (pass === "roles" || pass === "all")
-      for (const route of routes)
-        for (const role of ROLES)
-          log(
-            await visit(browser, origin, {
+  // Every visit is its own browser context, so they run side by side
+  // (--workers, default 3): the full gate fits CI's ten-minute budget.
+  const jobs = [];
+  if (pass === "roles" || pass === "all")
+    for (const route of routes)
+      for (const role of ROLES)
+        jobs.push(() =>
+          visit(browser, origin, {
+            route,
+            role,
+            width: 1280,
+            height: 800,
+            scheme: "light",
+          }),
+        );
+  if (pass === "screens" || pass === "all") {
+    for (const route of routes)
+      for (const [width, height] of [
+        [390, 844],
+        [1440, 900],
+      ])
+        for (const scheme of ["light", "dark"]) {
+          const name = `${route.replace(/[^\w]+/g, "_").replace(/^_|_$/g, "") || "home"}-${width}-${scheme}.png`;
+          jobs.push(() =>
+            visit(browser, origin, {
               route,
-              role,
-              width: 1280,
-              height: 800,
-              scheme: "light",
+              role: "owner",
+              width,
+              height,
+              scheme,
+              out: join(output, "screens", name),
+              audit: true,
             }),
           );
-    if (pass === "screens" || pass === "all")
-      for (const route of routes)
-        for (const [width, height] of [
-          [390, 844],
-          [1440, 900],
-        ])
-          for (const scheme of ["light", "dark"]) {
-            const name = `${route.replace(/[^\w]+/g, "_").replace(/^_|_$/g, "") || "home"}-${width}-${scheme}.png`;
-            log(
-              await visit(browser, origin, {
-                route,
-                role: "owner",
-                width,
-                height,
-                scheme,
-                out: join(output, "screens", name),
-                audit: true,
-              }),
-            );
-          }
-    if (pass === "screens" || pass === "all")
-      for (const route of NEGATIVE_CONTROL) {
+        }
+    for (const route of NEGATIVE_CONTROL)
+      jobs.push(async () => {
         const result = await visit(browser, origin, {
           route,
           role: "owner",
@@ -409,7 +413,7 @@ async function main() {
         const caught = result.problems.some((problem) =>
           problem.startsWith("style: "),
         );
-        log({
+        return {
           ...result,
           route: `${route} (stylesheets blocked)`,
           problems: caught
@@ -418,22 +422,30 @@ async function main() {
                 "negative control: the style audit passed a page with every stylesheet blocked",
               ],
           ok: caught,
-        });
-      }
-    if (pass === "widths" || pass === "all")
-      for (const route of routes.filter((route) =>
-        WIDTH_ROUTES.includes(route.split("?")[0]),
-      ))
-        for (const [width, height] of SIDEWAYS_WIDTHS)
-          log(
-            await visit(browser, origin, {
-              route,
-              role: "owner",
-              width,
-              height,
-              scheme: "light",
-            }),
-          );
+        };
+      });
+  }
+  if (pass === "widths" || pass === "all")
+    for (const route of routes.filter((route) =>
+      WIDTH_ROUTES.includes(route.split("?")[0]),
+    ))
+      for (const [width, height] of SIDEWAYS_WIDTHS)
+        jobs.push(() =>
+          visit(browser, origin, {
+            route,
+            role: "owner",
+            width,
+            height,
+            scheme: "light",
+          }),
+        );
+  try {
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.max(1, workers) }, async () => {
+        while (next < jobs.length) log(await jobs[next++]());
+      }),
+    );
   } finally {
     await browser.close();
   }
