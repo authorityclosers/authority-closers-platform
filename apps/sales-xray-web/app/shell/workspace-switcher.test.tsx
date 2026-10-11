@@ -103,3 +103,61 @@ it("shows the organisation's logo in its tile, and the icon without one", async 
   expect(trigger.querySelector("img")).toBeNull();
   expect(trigger.querySelector("svg")).not.toBeNull();
 });
+
+const invitation = {
+  inviteId: "55555555-5555-4555-8555-555555555555",
+  tenantId: "66666666-6666-4666-8666-666666666666",
+  organisationName: "Brightline Coaching",
+  role: "member",
+  invitedAt: "2026-10-10T09:00:00Z",
+  expiresAt: "2026-10-17T09:00:00Z",
+} as const;
+
+it("offers each invitation as one Join, and Create only where the server can", async () => {
+  const onJoin = vi.fn();
+  const onCreate = vi.fn();
+  const render = (joining: string | null) =>
+    act(async () =>
+      root.render(
+        <WorkspaceSwitcher
+          workspaces={[personal]}
+          currentId={personal.tenant_id}
+          personName="Asha Menon"
+          pending={false}
+          open
+          setOpen={() => {}}
+          containerRef={createRef()}
+          onSelect={() => {}}
+          invites={[invitation]}
+          joining={joining}
+          onJoin={onJoin}
+          onCreate={onCreate}
+        />,
+      ),
+    );
+  await render(null);
+  expect(
+    host.querySelector("[aria-haspopup=menu]")?.getAttribute("aria-label"),
+  ).toBe("Current workspace: Personal · 1 invitation waiting");
+  const menu = host.querySelector("[role=menu]") as HTMLElement;
+  // With an invitation waiting, "not in an organisation" would be beside the point.
+  expect(menu.textContent).not.toContain("You are not in an organisation yet");
+  const join = menu.querySelector<HTMLButtonElement>(
+    '[aria-label="Join Brightline Coaching as a member"]',
+  )!;
+  expect(join.textContent).toContain("Invited as member");
+  await act(async () => join.click());
+  expect(onJoin).toHaveBeenCalledWith(invitation);
+  const create = [...menu.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("Create an organisation"),
+  )!;
+  await act(async () => create.click());
+  expect(onCreate).toHaveBeenCalledTimes(1);
+
+  await render(invitation.inviteId);
+  const busy = host.querySelector<HTMLButtonElement>(
+    '[aria-label="Join Brightline Coaching as a member"]',
+  )!;
+  expect(busy.disabled).toBe(true);
+  expect(busy.textContent).toContain("Joining…");
+});

@@ -98,6 +98,7 @@ it("counts how calls ended, skills found only partly and each first fix", async 
   ]);
   expect(fixes[2].textContent).toContain("Asha Menon");
   expect(fixes[2].textContent).toContain("Discovery · Amit, Pixel Digital");
+  expect(text).not.toContain("reports ·");
   expect(text).toContain("drafts, not scores");
   // A call without a report is never read.
   expect(
@@ -157,4 +158,21 @@ it("is honest when reports can't be opened or none are ready", async () => {
   await render([call(2, false)]);
   expect(host.textContent).toContain("shows here once reports are ready");
   expect(host.querySelector("section")).toBeNull();
+});
+
+it("shows a first fix that several reports give once, with how many and who", async () => {
+  replies[id(1)] = () =>
+    json(report("follow_up", "partial", "Ask what the budget is."));
+  replies[id(2)] = () =>
+    json(report("follow_up", "partial", "ask what the budget is"));
+  replies[id(3)] = () => json(report("no_sale", "observed", "Slow down."));
+  await render([call(1), call(2), call(3)]);
+  const fixes = [...host.querySelectorAll("a")];
+  expect(fixes).toHaveLength(2);
+  expect(fixes[0].querySelector("span")?.textContent).toBe(
+    "ask what the budget is",
+  );
+  expect(fixes[0].textContent).toContain("2 reports");
+  expect(fixes[0].textContent).toContain("latest");
+  expect(fixes[1].textContent).not.toContain("reports");
 });

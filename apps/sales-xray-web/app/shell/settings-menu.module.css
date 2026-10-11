@@ -1,9 +1,10 @@
-/* The account card that opens from the gear in the rail. */
+/* The account card that opens from the gear in the rail. Opened on purpose,
+   so it sits above the first-call guide's card (350) until it closes. */
 .card {
   position: fixed;
-  z-index: 300;
-  left: 74px;
-  bottom: 16px;
+  z-index: 360;
+  left: var(--card-left, 74px);
+  bottom: var(--card-bottom, 16px);
   width: min(300px, calc(100vw - 16px));
   max-height: min(620px, calc(100dvh - 32px));
   overflow: hidden auto;
@@ -428,14 +429,6 @@
   }
 }
 
-@media (max-width: 720px) {
-  .card {
-    right: 8px;
-    left: 8px !important;
-    width: auto;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .card,
   .view,
@@ -567,7 +560,7 @@
 @media (max-width: 720px) {
   .card {
     right: 8px;
-    left: 8px !important;
+    left: 8px;
     width: auto;
     transform-origin: bottom right;
   }

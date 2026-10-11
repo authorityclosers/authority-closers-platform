@@ -117,6 +117,45 @@ it("says one true thing and moves the steps with the plan's live stage", async (
   expect(host.textContent).not.toMatch(/\b\d+%/);
 });
 
+it("uses the server's own stage and clock when the progress read has them", async () => {
+  vi.setSystemTime(new Date("2026-10-10T12:03:00Z"));
+  await mount({
+    progress: {
+      ...running,
+      current_stage: "C4",
+      terminal_state: null,
+      stage_progress: [
+        {
+          stage: "C2",
+          state: "completed",
+          started_at: "2026-10-10T12:00:10Z",
+          finished_at: "2026-10-10T12:01:15Z",
+        },
+        {
+          stage: "C4",
+          state: "running",
+          started_at: "2026-10-10T12:01:20Z",
+          finished_at: null,
+        },
+      ],
+    },
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+  // No second poll of the plan: the page's own progress read carries it.
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
+    "done",
+    "active",
+    "waiting",
+  ]);
+  expect(stepStatus("C2")).toBe("Done · 1:05");
+  expect(stepStatus("C4")).toBe("In progress");
+  // Elapsed from the server's first recorded start, not from this page.
+  expect(host.textContent).toContain("2:51 so far");
+});
+
 it("marks each step done with the time it took once it is seen to finish", async () => {
   stages = ["C1", "C3", "C3", "C5", "done"];
   await mount();

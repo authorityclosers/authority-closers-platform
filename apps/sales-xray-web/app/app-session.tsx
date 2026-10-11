@@ -22,6 +22,7 @@ const SHELL_ROUTES = new Set([
   "/prospects",
   "/account",
   "/organisation",
+  "/organisation/invites",
   "/analysis",
   "/analysis/new",
   "/analysis/calls",

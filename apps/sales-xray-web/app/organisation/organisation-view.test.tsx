@@ -2,6 +2,8 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { resetInvitesForTests } from "../shell/invites-store";
+import { CREATE_ORGANISATION_EVENT } from "../shell/shell-store";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { OrganisationView } from "./organisation-view";
 import { receiptFixture } from "./receipt-activity.fixture";
@@ -45,6 +47,7 @@ let accessRetry: ReturnType<typeof vi.fn<() => void>>;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 beforeEach(() => {
+  resetInvitesForTests();
   window.history.replaceState(null, "", "/organisation");
   notices.notify.mockClear();
   host = document.createElement("div");
@@ -209,7 +212,7 @@ async function select(label: string, value: string) {
 async function add() {
   await act(async () => {
     const input = host.querySelector<HTMLInputElement>(
-      'input[aria-label="Email to add"]',
+      'input[aria-label="Email to invite"]',
     )!;
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
@@ -362,8 +365,10 @@ it("uses the API role and shows members only their own row read-only", async () 
   expect(host.textContent).not.toContain("dipak@example.com");
   expect(host.textContent).not.toContain("new@example.com");
   // Members see one quiet line instead of a form they cannot use.
-  expect(host.querySelector('input[aria-label="Email to add"]')).toBeNull();
-  expect(host.textContent).toContain("Only owners and admins can add people");
+  expect(host.querySelector('input[aria-label="Email to invite"]')).toBeNull();
+  expect(host.textContent).toContain(
+    "Only owners and admins see everyone, add people or change roles.",
+  );
   expect(button("Remove Admin")).toBeUndefined();
 });
 it.each([
@@ -412,6 +417,16 @@ it.each(["/v1/organisation", "/v1/organisation/members"])(
     expect(host.querySelector('[role="alert"]')).toBeNull();
   },
 );
+it("lets everyone open their own profile from their row, and no one else's", async () => {
+  await render();
+  await click("Members");
+  const edit = host.querySelectorAll('[aria-label="Edit your profile"]');
+  expect(edit).toHaveLength(1);
+  expect(edit[0].closest('[role="row"]')?.textContent).toContain("(you)");
+  await act(async () => (edit[0] as HTMLButtonElement).click());
+  expect(window.location.hash).toBe("#settings/profile");
+  window.history.replaceState(null, "", "/organisation");
+});
 it("does not invent rows or usage when members cannot load", async () => {
   delete routes["/v1/organisation/members"];
   await render();
@@ -420,11 +435,11 @@ it("does not invent rows or usage when members cannot load", async () => {
   expect(host.textContent).toContain("Members could not be loaded");
   expect(host.textContent).not.toContain("admin@example.com");
   expect(
-    host.querySelector<HTMLInputElement>('input[aria-label="Email to add"]')
+    host.querySelector<HTMLInputElement>('input[aria-label="Email to invite"]')
       ?.disabled,
   ).toBe(true);
 });
-it("shows no promised Create/Join buttons on Personal and makes no organisation reads", async () => {
+it("shows no promised Create/Join buttons on Personal and reads only your invitations", async () => {
   (
     routes["/v1/me/sales-xray-workspaces"] as { selected_tenant_id: string }
   ).selected_tenant_id = "personal";
@@ -432,10 +447,54 @@ it("shows no promised Create/Join buttons on Personal and makes no organisation 
   expect(host.textContent).toContain("You are on your personal account");
   expect(host.textContent).toContain("To open Directory name");
   expect(host.textContent).not.toMatch(/soon/i);
-  expect(host.querySelectorAll("button")).toHaveLength(0);
+  // This server has no invitations yet (404): nothing is offered.
+  expect(host.querySelectorAll("button, a")).toHaveLength(0);
   expect(
-    fetchMock.mock.calls.some(([path]) => path.startsWith("/v1/organisation")),
-  ).toBe(false);
+    fetchMock.mock.calls
+      .map(([path]) => String(path))
+      .filter((path) => path.startsWith("/v1/organisation")),
+  ).toEqual(["/v1/organisation/invites"]);
+});
+it("offers Personal one action the server can keep: an invitation first, else Create", async () => {
+  const workspaces = routes["/v1/me/sales-xray-workspaces"] as {
+    selected_tenant_id: string;
+    workspaces: { kind: string }[];
+  };
+  workspaces.selected_tenant_id = "personal";
+  workspaces.workspaces = workspaces.workspaces.filter(
+    (item) => item.kind === "personal",
+  );
+  routes["/v1/organisation/invites"] = { invites: [] };
+  const create = vi.fn();
+  window.addEventListener(CREATE_ORGANISATION_EVENT, create);
+  await render();
+  await act(async () => button("Create an organisation").click());
+  expect(create).toHaveBeenCalledTimes(1);
+  window.removeEventListener(CREATE_ORGANISATION_EVENT, create);
+
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  resetInvitesForTests();
+  routes["/v1/organisation/invites"] = {
+    invites: [
+      {
+        invite_id: inviteId,
+        tenant_id: tenantId,
+        organisation_name: "Brightline Coaching",
+        role: "member",
+        invited_at: "2026-10-10T09:00:00Z",
+        expires_at: "2026-10-17T09:00:00Z",
+      },
+    ],
+  };
+  await render();
+  const link = host.querySelector<HTMLAnchorElement>(
+    'a[href="/organisation/invites"]',
+  );
+  expect(link?.textContent).toBe(
+    "See your invitation from Brightline Coaching",
+  );
+  expect(button("Create an organisation")).toBeUndefined();
 });
 it("rejects expanded directory responses without the old workspace list", async () => {
   routes["/v1/me/sales-xray-workspaces"] = {

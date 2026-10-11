@@ -544,3 +544,91 @@ export const saveDomains = (verifiedDomains: string[], autoJoin: boolean) =>
       auto_join: autoJoin,
     }),
   });
+
+/** An invitation waiting for the signed-in person (explicit acceptance). */
+export type PendingInvite = {
+  inviteId: string;
+  tenantId: string;
+  organisationName: string;
+  role: "admin" | "member";
+  invitedAt: string | null;
+  expiresAt: string | null;
+};
+
+/** Strict per row: a row that doesn't match is left out, never guessed. */
+export function parsePendingInvites(value: unknown): PendingInvite[] {
+  return list(obj(value).invites).flatMap((raw) => {
+    const item = obj(raw);
+    const name = text(item.organisation_name)?.trim();
+    if (
+      !id(item.invite_id) ||
+      !id(item.tenant_id) ||
+      !name ||
+      (item.role !== "admin" && item.role !== "member")
+    )
+      return [];
+    return [
+      {
+        inviteId: item.invite_id,
+        tenantId: item.tenant_id,
+        organisationName: name,
+        role: item.role,
+        invitedAt: text(item.invited_at),
+        expiresAt: text(item.expires_at),
+      },
+    ];
+  });
+}
+
+/**
+ * Invitations for the signed-in person. Null where this server has no
+ * invitations yet, so nothing that depends on them is offered.
+ */
+export async function readPendingInvites(
+  signal?: AbortSignal,
+): Promise<PendingInvite[] | null> {
+  try {
+    return parsePendingInvites(await call("/invites", { signal }));
+  } catch (error) {
+    if (notLive(error)) return null;
+    throw error;
+  }
+}
+
+/** Joins the organisation. The same key makes a retry safe. */
+export async function acceptInvite(
+  inviteId: string,
+  requestKey: string,
+): Promise<{ tenantId: string; role: OrgRole }> {
+  const value = obj(
+    await call(
+      `/invites/${encodeURIComponent(inviteId)}/accept`,
+      { method: "POST" },
+      requestKey,
+    ),
+  );
+  if (
+    value.status !== "accepted" ||
+    !id(value.tenant_id) ||
+    !validRole(value.role)
+  )
+    throw new OrgApiError(502, "The answer could not be read. Try again.");
+  return { tenantId: value.tenant_id, role: value.role };
+}
+
+/** Creates an organisation with you as its owner. The same key makes a retry safe. */
+export async function createOrganisation(
+  name: string,
+  requestKey: string,
+): Promise<{ tenantId: string; name: string }> {
+  const value = obj(
+    await call(
+      "",
+      { method: "POST", body: JSON.stringify({ name }) },
+      requestKey,
+    ),
+  );
+  if (!id(value.tenant_id))
+    throw new OrgApiError(502, "The answer could not be read. Try again.");
+  return { tenantId: value.tenant_id, name: text(value.name) ?? name };
+}

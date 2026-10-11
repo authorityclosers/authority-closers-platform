@@ -61,8 +61,7 @@ async def resolve_organisation_invitation_message(
     policy = (await invitation_policies(database, [invite]))[invite.id]
     tenant = await database.get(Tenant, invite.tenant_id)
     if (
-        not policy.explicit_acceptance
-        or policy.expires_at is None
+        policy.expires_at is None
         or policy.expired(datetime.now(UTC))
         or tenant is None
         or tenant.status != "active"
@@ -83,5 +82,6 @@ async def resolve_organisation_invitation_message(
             "organisation_name": tenant.name,
             "action_link": action_link,
             "expires_at": policy.expires_at.isoformat(),
+            "join_on_sign_in": not policy.explicit_acceptance,
         },
     )

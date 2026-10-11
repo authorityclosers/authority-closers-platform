@@ -223,6 +223,15 @@
   }
 }
 
+/* Tablets show the phone tab bar (below 900 px, lightbox-shell): sit above it,
+   so Prospects, Coaching and More stay reachable while the guide is open. */
+@media (min-width: 620.02px) and (max-width: 899.98px) and (min-height: 560.02px) {
+  .card {
+    bottom: max(76px, calc(64px + env(safe-area-inset-bottom)));
+    max-height: calc(100dvh - 160px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .content,

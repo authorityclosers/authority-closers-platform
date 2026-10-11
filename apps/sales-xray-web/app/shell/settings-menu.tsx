@@ -12,6 +12,8 @@ import {
   Gem,
   Globe,
   LifeBuoy,
+  MailOpen,
+  Plus,
   Settings2,
   Sparkles,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -133,6 +136,8 @@ export function SettingsMenu({
   workspaces = [],
   currentWorkspaceId = null,
   onSelectWorkspace,
+  invitesWaiting = 0,
+  onCreateOrganisation,
   initialView = "main",
 }: {
   initialView?: View;
@@ -142,6 +147,10 @@ export function SettingsMenu({
   workspaces?: readonly { tenant_id: string; kind: string; name: string }[];
   currentWorkspaceId?: string | null;
   onSelectWorkspace?: (tenantId: string) => void;
+  /** Invitations waiting for you: one row to the Invitations page. */
+  invitesWaiting?: number;
+  /** Offered only where the server can create organisations. */
+  onCreateOrganisation?: () => void;
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -259,7 +268,16 @@ export function SettingsMenu({
       className={styles.card}
       role="dialog"
       aria-label="Account menu"
-      style={place ? { left: place.left, bottom: place.bottom } : undefined}
+      // Variables, not left/bottom: the phone sheet's own CSS then wins
+      // without !important (r17 S8).
+      style={
+        place
+          ? ({
+              "--card-left": `${place.left}px`,
+              "--card-bottom": `${place.bottom}px`,
+            } as CSSProperties)
+          : undefined
+      }
     >
       <div key={view} className={styles.view}>
         {view === "main" && (
@@ -292,10 +310,15 @@ export function SettingsMenu({
                 ) : null}
               </button>
             ) : null}
-            {workspaces.length > 1 && onSelectWorkspace ? (
+            {(workspaces.length > 1 && onSelectWorkspace) ||
+            invitesWaiting > 0 ||
+            onCreateOrganisation ? (
               <div className={styles.list} role="group" aria-label="Workspace">
                 <p className={styles.note}>Workspace</p>
-                {workspaces.map((workspace) => {
+                {(onSelectWorkspace && workspaces.length > 1
+                  ? workspaces
+                  : []
+                ).map((workspace) => {
                   const current = workspace.tenant_id === currentWorkspaceId;
                   const name =
                     workspace.kind === "personal" ? "Personal" : workspace.name;
@@ -308,7 +331,7 @@ export function SettingsMenu({
                       onClick={() => {
                         if (current) return;
                         onClose();
-                        onSelectWorkspace(workspace.tenant_id);
+                        onSelectWorkspace?.(workspace.tenant_id);
                       }}
                     >
                       <span className={styles.rowIcon} aria-hidden="true">
@@ -329,6 +352,36 @@ export function SettingsMenu({
                     </button>
                   );
                 })}
+                {invitesWaiting > 0 ? (
+                  <Link
+                    href="/organisation/invites"
+                    className={styles.row}
+                    onClick={onClose}
+                  >
+                    <span className={styles.rowIcon} aria-hidden="true">
+                      <MailOpen size={16} />
+                    </span>
+                    <span className={styles.rowLabel}>Invitations</span>
+                    <span className={styles.badge}>{invitesWaiting}</span>
+                  </Link>
+                ) : null}
+                {onCreateOrganisation ? (
+                  <button
+                    type="button"
+                    className={styles.row}
+                    onClick={() => {
+                      onClose();
+                      onCreateOrganisation();
+                    }}
+                  >
+                    <span className={styles.rowIcon} aria-hidden="true">
+                      <Plus size={16} />
+                    </span>
+                    <span className={styles.rowLabel}>
+                      Create an organisation
+                    </span>
+                  </button>
+                ) : null}
                 <span className={styles.divider} />
               </div>
             ) : null}
