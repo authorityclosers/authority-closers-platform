@@ -10,6 +10,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from ac_platform.conversation_intelligence import sales_xray_tenants
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
 from ac_platform.http.conversation_insights import install_insights_routes
 from ac_platform.kernel.authz import ActorContext
@@ -54,6 +55,14 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
         return state["reader"]
 
     monkeypatch.setattr("ac_platform.http.conversation_insights.organisation_reader", reader)
+
+    # The live registry's predicate (AUT-1694) serves exactly the selected org.
+    async def workspace_served(database, settings, tenant_id):
+        return tenant_id == selected
+
+    monkeypatch.setattr(
+        sales_xray_tenants, "sales_xray_workspace_served", workspace_served, raising=False
+    )
     insights = SimpleNamespace(
         overview=AsyncMock(return_value={"source": "call", "totals": {"calls": 3}}),
         calls=AsyncMock(return_value={"items": [], "total": 0}),
@@ -145,8 +154,6 @@ async def test_company_view_admits_only_current_owners_and_admins(tmp_path, monk
 @pytest.mark.asyncio
 async def test_served_organisations_are_read_per_request(tmp_path, monkeypatch):
     """With the live registry (AUT-1694), availability follows it on every request."""
-    from ac_platform.conversation_intelligence import sales_xray_tenants
-
     created_later = uuid4()  # not in the intake policy at start
     actor = ActorContext(PERSON_ID, SESSION_ID, created_later)
     live: dict[str, Any] = {"served": set(), "reader": True}
@@ -196,3 +203,45 @@ async def test_served_organisations_are_read_per_request(tmp_path, monkeypatch):
         live["served"].discard(created_later)
         assert (await client.get(PREFIX + "/insights")).status_code == 403
         assert insights.overview.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_without_the_live_registry_the_composed_set_decides(tmp_path, monkeypatch):
+    """Before AUT-1694's registry lands, the composed served set is used, per request."""
+    monkeypatch.delattr(sales_xray_tenants, "sales_xray_workspace_served", raising=False)
+    served_org = uuid4()
+    actor = ActorContext(PERSON_ID, SESSION_ID, served_org)
+
+    async def require_actor(request):
+        yield AuthenticatedTransaction(
+            _Database(), SimpleNamespace(), SimpleNamespace(actor=actor), "fictional-session"
+        )
+
+    require_actor.read_only = require_actor
+
+    async def reader(database, who, operations):
+        return True
+
+    monkeypatch.setattr("ac_platform.http.conversation_insights.organisation_reader", reader)
+    monkeypatch.setattr(
+        "ac_platform.http.conversation_insights.library_insights",
+        lambda db, who: SimpleNamespace(overview=AsyncMock(return_value={"source": "call"})),
+    )
+    app, runtime = FastAPI(), _runtime(tmp_path)
+    intake = replace(
+        runtime.intake,
+        policy=replace(runtime.intake.policy, tenant_ids=frozenset({PUBLIC_TENANT, served_org})),
+    )
+    install_insights_routes(
+        app,
+        settings=_settings(),
+        require_actor=require_actor,
+        intake=intake,
+        acquisition_intake=intake,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
+    ) as client:
+        assert (await client.get(PREFIX + "/insights")).status_code == 200
+        actor = ActorContext(PERSON_ID, SESSION_ID, uuid4())
+        assert (await client.get(PREFIX + "/insights")).status_code == 403

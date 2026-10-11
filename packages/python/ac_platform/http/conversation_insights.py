@@ -219,8 +219,10 @@ def install_insights_routes(
 ) -> None:
     """Mount the company view: Sales Xray for owners/admins, Admin for AC staff."""
     # Which organisations are served is read inside each request, so an
-    # organisation created or suspended after start is seen at once.
-    if settings.sales_xray_app_url is not None and acquisition_intake is not None:
+    # organisation created or suspended after start is seen at once. These are
+    # reads of stored figures (no provider call), so they stay mounted on the
+    # Sales Xray host even when acquisition isn't composed.
+    if settings.sales_xray_app_url is not None:
         _install_sales_xray(
             application,
             settings=settings,
@@ -235,7 +237,7 @@ def _install_sales_xray(
     *,
     settings: Settings,
     require_actor: RequireActor,
-    intake: ConversationIntakeRuntime,
+    intake: ConversationIntakeRuntime | None,
 ) -> None:
     assert settings.sales_xray_app_url is not None
     hostname = settings.sales_xray_app_url.host
