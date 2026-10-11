@@ -32,6 +32,7 @@ def _artifact(artifact_id: int, name: str, size: int) -> dict:
         "name": name,
         "size_in_bytes": size,
         "expired": False,
+        "created_at": "2026-10-01T00:00:00Z",
         "workflow_run": {"id": 101},
     }
 
@@ -321,6 +322,29 @@ def test_multi_page_inventory_counts_every_artifact(harness: _Harness) -> None:
     assert harness.state()["artifacts"] == artifacts
 
 
+def test_concurrent_unseen_uploads_cannot_pass_admission_ceiling(harness: _Harness) -> None:
+    older = [_artifact(i, f"retained-{i}", 5_000_000) for i in range(201, 0, -1)]
+    uploads = [
+        {**_artifact(i, f"new-diagnostic-{i}", 500_000_000), "created_at": "2099-01-01T00:00:00Z"}
+        for i in (203, 202)
+    ]
+    shifted = [
+        {"total_count": 201, "artifacts": older[:100]},
+        {"total_count": 202, "artifacts": older[99:199]},
+        {"total_count": 203, "artifacts": older[198:]},
+    ]
+    artifacts = [*uploads, *older]
+    harness.set_state(artifacts, list_results=[{"stdout": json.dumps(shifted)}])
+    result = harness.run(ADMIT)
+    assert result.returncode != 0
+    assert "attempt=1/3 rejected" in result.stderr
+    assert "attempt=2/3 complete pages=3 artifacts=203 bytes=2005000000" in result.stderr
+    assert "2405000000 bytes; refusing upload above 2000000000" in result.stderr
+    assert "projected repository pool is 1405000000" not in result.stdout
+    assert harness.state()["artifacts"] == artifacts
+    assert not any("DELETE" in call for call in harness.state()["calls"])
+
+
 @pytest.mark.parametrize("step", [ADMIT, RECLAIM])
 @pytest.mark.parametrize(
     "defect", ["gh_partial", "empty", "truncated", "missing_page", "schema", "identity", "size"]
@@ -443,10 +467,10 @@ def test_reader_rejects_missing_duplicate_and_changing_pages() -> None:
     with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages[:1]))
     pages[1]["total_count"] = 102
-    with pytest.raises(ValueError, match="count changed"):
+    with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages))
     pages = _pages([*artifacts[:100], artifacts[0]])
-    with pytest.raises(ValueError, match="duplicate identity"):
+    with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages))
 
 
