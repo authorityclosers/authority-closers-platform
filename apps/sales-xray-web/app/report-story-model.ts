@@ -586,11 +586,13 @@ function momentsFor(
         prospectResponse: price.response ?? undefined,
       });
   }
+  // "Watch this again" clips are Coaching material; only the ones to repeat
+  // are moments of this call (Dipak's labels have no "Worth Replaying").
   for (const item of overview?.rewatch ?? []) {
     const source = item.evidence[0];
-    if (source)
+    if (source && item.purpose === "repeat")
       add({
-        kind: item.purpose === "repeat" ? "Strong Moment" : "Worth Replaying",
+        kind: "Strong Moment",
         title: item.text,
         source,
         why: null,
