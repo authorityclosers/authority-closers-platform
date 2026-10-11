@@ -4,7 +4,7 @@ import { LockKeyhole } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, type ReactNode } from "react";
 
-import { COMMON, recordedOutcome } from "../report-copy";
+import { COMMON, GUEST, recordedOutcome } from "../report-copy";
 import type { DocumentReportData } from "../report-document-data";
 import type {
   ReportEvidence,
@@ -20,6 +20,7 @@ import styles from "./sections.module.css";
 
 export type { Select };
 export type People = ReturnType<typeof useReportPeople>;
+export { GUEST } from "../report-copy";
 
 const NO_CHIPS = [] as const;
 
@@ -101,14 +102,6 @@ export function Gap({ items }: { items: string[] }) {
 
 export type Preview = NonNullable<SalesReport["preview"]>;
 type PreviewSection = keyof Preview["sections"];
-
-/** Guest words until the copy module carries them (asked of G, 1798). */
-export const GUEST = {
-  more: (count: number, noun: [string, string]) =>
-    `${count} more ${count === 1 ? noun[0] : noun[1]} ${count === 1 ? "is" : "are"} saved for your account.`,
-  unlock: "Unlock with a free account",
-  fullReport: "Sign in to see the full report",
-};
 
 /** The app's router, or null where none is mounted (a static render). */
 function useOptionalRouter() {
