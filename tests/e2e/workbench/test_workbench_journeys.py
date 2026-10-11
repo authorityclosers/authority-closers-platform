@@ -721,6 +721,19 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(preview.locator("[data-report-mode-section]")).to_have_count(6)
         expect(_document_download(journey.page)).to_be_visible()
         journey.snapshot("ready")
+        sections = preview.locator("section[data-document-section]")
+        expect(sections).to_have_count(6)
+        assert sections.evaluate_all(
+            "els => els.map(el => el.getAttribute('data-document-section'))"
+        ) == [section for section, _ in REPORT_SECTIONS]
+        for section, label in REPORT_SECTIONS:
+            panel = preview.locator(f'section[data-document-section="{section}"]')
+            heading = panel.get_by_role("heading", level=3)
+            expect(heading).to_contain_text(label, ignore_case=True)
+            assert len(panel.inner_text().strip()) > 40, "Document section is empty"
+            heading.evaluate("element => element.scrollIntoView({block: 'start'})")
+            expect(heading).to_be_in_viewport()
+            journey.snapshot(section)
 
 
 def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:

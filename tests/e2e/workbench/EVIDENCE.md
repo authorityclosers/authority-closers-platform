@@ -54,6 +54,11 @@ product outcome. No runtime/server/visual errors or outcome API requests.
 Phone/dark has two refresh notices, the other pairs zero. Full four-choice
 format agreement remains **UNVERIFIED** until the corrected repeat completes.
 Receipt: `shots/2026-10-11-workbench-outcome-format-repeat/receipt.json`.
+The independent Document journey now captures all six actual sections as well
+as the top sheet, checks their order/content/headings and applies its existing
+font/overflow audit. This stronger readability coverage is pending the next
+full Report/Document/Coaching/outcome-format wave; earlier Document receipts
+retain their original limited scope.
 
 Coordinator's urgent 16:12 UTC assignment temporarily extends test ownership to
 six existing organisation/Company-read release-CI files (exact claims in NOTES).
