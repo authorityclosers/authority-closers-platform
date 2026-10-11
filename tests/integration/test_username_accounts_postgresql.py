@@ -233,6 +233,46 @@ def test_admin_http_issuance_first_change_and_member_revocation(postgres_harness
                 )
                 actor = (await identity.resolve_actor(client.cookies.get("ac_session"))).actor
                 await ConversationApplication(db).admit(actor)
+            with Session(postgres_harness.engine) as db:
+                credential = db.scalar(
+                    select(PasswordCredential).where(
+                        PasswordCredential.person_id == UUID(created["person_id"])
+                    )
+                )
+                before_verifier = (credential.password_hash, credential.revision)
+                before_audits = db.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(AuditEvent.tenant_id == tenant)
+                )
+            refused_reset = await client.post(
+                f"{path}/accounts/{created['person_id']}/temporary-password",
+                headers={**headers, "Idempotency-Key": str(uuid4())},
+                json={"reason": "Fictional completed-account reset attempt"},
+            )
+            assert refused_reset.status_code == 409
+            assert "temporary_password" not in refused_reset.json()
+            with Session(postgres_harness.engine) as db:
+                credential = db.scalar(
+                    select(PasswordCredential).where(
+                        PasswordCredential.person_id == UUID(created["person_id"])
+                    )
+                )
+                assert (credential.password_hash, credential.revision) == before_verifier
+                assert verify_password(PERSONAL_PASSWORD, credential.password_hash)
+                person = db.get(Person, UUID(created["person_id"]))
+                assert (
+                    not person.password_change_required and person.username_verified_at is not None
+                )
+                assert (
+                    db.scalar(
+                        select(func.count())
+                        .select_from(AuditEvent)
+                        .where(AuditEvent.tenant_id == tenant)
+                    )
+                    == before_audits
+                )
+            assert (await client.get("/v1/me")).status_code == 200
             removed = await client.request(
                 "DELETE",
                 f"{path}/members/{created['person_id']}",

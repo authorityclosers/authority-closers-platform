@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.password_auth import verify_password
-from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from tests.unit.http.test_platform_organisations import (  # noqa: F401
     REASON,
     audits,
@@ -83,10 +83,16 @@ async def test_invalid_account_is_bounded_and_rolls_back(operator, body):
     assert audits(operator) == []
 
 
-async def test_account_creation_requires_session_capability_admin_origin_and_unprotected_org(state):
-    path = f"/{state.tenant}/accounts"
+@pytest.mark.parametrize(
+    "command", ["accounts", "accounts/00000000-0000-4000-8000-000000000001/temporary-password"]
+)
+async def test_account_commands_require_session_capability_admin_origin_and_unprotected_org(
+    state, command
+):
+    path = f"/{state.tenant}/{command}"
+    body = account_body() if command == "accounts" else {"reason": REASON}
     for options, status in (({"token": None}, 401), ({}, 403)):
-        response = await call(state, "POST", path, body=account_body(), key=uuid4(), **options)
+        response = await call(state, "POST", path, body=body, key=uuid4(), **options)
         assert response.status_code == status
     from tests.unit.http.test_platform_organisations import MANAGE, grant
 
@@ -96,14 +102,12 @@ async def test_account_creation_requires_session_capability_admin_origin_and_unp
         ({"origin": "https://foreign.test"}, 403),
         ({"origin": None}, 403),
     ):
-        response = await call(state, "POST", path, body=account_body(), key=uuid4(), **options)
+        response = await call(state, "POST", path, body=body, key=uuid4(), **options)
         assert response.status_code == status
     for tenant in (state.tenants["Beta"], state.tenants["Other"], uuid4()):
-        response = await call(
-            state, "POST", f"/{tenant}/accounts", body=account_body(), key=uuid4()
-        )
+        response = await call(state, "POST", f"/{tenant}/{command}", body=body, key=uuid4())
         assert response.status_code == 404
-    assert (await call(state, "POST", path, body=account_body())).status_code == 422
+    assert (await call(state, "POST", path, body=body)).status_code == 422
     assert audits(state) == []
 
 
@@ -160,3 +164,73 @@ async def test_lost_initial_password_can_be_reissued_once_without_replay_or_reac
         key=UUID(audits(operator)[0].request_id),
     )
     assert replay_creation.json()["membership_status"] == "inactive"
+
+
+@pytest.mark.parametrize("role", ["owner", "admin"])
+async def test_initial_password_reissue_cannot_reset_an_elevated_member(operator, role):
+    created = (
+        await call(
+            operator, "POST", f"/{operator.tenant}/accounts", body=account_body(), key=uuid4()
+        )
+    ).json()
+    person_id = UUID(created["person_id"])
+    with Session(operator.engine) as db, db.begin():
+        if role == "owner":
+            db.get(Membership, (operator.tenant, operator.owner)).role = "member"
+        db.get(Membership, (operator.tenant, person_id)).role = role
+    response = await call(
+        operator,
+        "POST",
+        f"/{operator.tenant}/accounts/{person_id}/temporary-password",
+        body={"reason": REASON},
+        key=uuid4(),
+    )
+    assert response.status_code == 404
+    with Session(operator.engine) as db:
+        credential = db.scalar(
+            select(PasswordCredential).where(PasswordCredential.person_id == person_id)
+        )
+        assert credential.revision == 0
+        assert verify_password(created["temporary_password"], credential.password_hash)
+    assert len(audits(operator)) == 1
+
+
+async def test_other_membership_does_not_grant_initial_password_reissue_provenance(operator):
+    created = (
+        await call(
+            operator, "POST", f"/{operator.tenant}/accounts", body=account_body(), key=uuid4()
+        )
+    ).json()
+    person_id, other_tenant = UUID(created["person_id"]), uuid4()
+    with Session(operator.engine) as db, db.begin():
+        db.add(Tenant(id=other_tenant, name="Other organisation", slug=f"other-{other_tenant}"))
+        db.flush()
+        db.add(
+            Organisation(
+                tenant_id=other_tenant,
+                creation_command_id=uuid4(),
+                domain_verification_token="f" * 43,
+            )
+        )
+        db.add_all(
+            [
+                Membership(tenant_id=other_tenant, person_id=operator.owner, role="owner"),
+                Membership(tenant_id=other_tenant, person_id=person_id, role="member"),
+            ]
+        )
+    assert (await call(operator, path=f"/{other_tenant}/members")).status_code == 200
+    response = await call(
+        operator,
+        "POST",
+        f"/{other_tenant}/accounts/{person_id}/temporary-password",
+        body={"reason": REASON},
+        key=uuid4(),
+    )
+    assert response.status_code == 404
+    with Session(operator.engine) as db:
+        credential = db.scalar(
+            select(PasswordCredential).where(PasswordCredential.person_id == person_id)
+        )
+        assert credential.revision == 0
+        assert verify_password(created["temporary_password"], credential.password_hash)
+    assert len(audits(operator)) == 1
