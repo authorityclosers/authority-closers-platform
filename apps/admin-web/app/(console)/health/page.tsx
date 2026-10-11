@@ -274,6 +274,15 @@ export default async function HealthPage({
                       Report step {span(row.reportP50)} · cost{" "}
                       {rupees(row.paisePerMinute)} / min
                     </span>
+                    {row.promptRevision ? (
+                      <span>
+                        <Link
+                          href={`/calls?prompt=${encodeURIComponent(row.promptRevision)}`}
+                        >
+                          Review this version&rsquo;s calls
+                        </Link>
+                      </span>
+                    ) : null}
                   </Card>
                 ))}
               >
@@ -310,7 +319,16 @@ export default async function HealthPage({
                         scope="row"
                         className={row.promptRevision ? styles.code : undefined}
                       >
-                        {row.promptRevision ?? "Not recorded"}
+                        {row.promptRevision ? (
+                          <Link
+                            href={`/calls?prompt=${encodeURIComponent(row.promptRevision)}`}
+                            title="Review this version's calls"
+                          >
+                            {row.promptRevision}
+                          </Link>
+                        ) : (
+                          "Not recorded"
+                        )}
                       </th>
                       <td>{row.model ?? row.provider ?? "Not recorded"}</td>
                       <td data-num="">{row.analyses}</td>

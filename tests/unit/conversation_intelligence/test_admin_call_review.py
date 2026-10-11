@@ -171,6 +171,7 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
         [
             _plan(
                 report_language="mr-Deva+en",
+                coaching_prompt_revision="coaching-v6",
                 stages=[{"stage": "C5", "provider_id": "openai", "model_id": "x"}],
             )
         ],
@@ -200,6 +201,13 @@ async def test_queue_filters_counts_facets_and_pages(monkeypatch: pytest.MonkeyP
     assert [item["recording_id"] for item in marathi_only["items"]] == [str(marathi.id)]
     openai = await service.queue(actor, provider="openai")
     assert [item["recording_id"] for item in openai["items"]] == [str(marathi.id)]
+    assert [(entry["value"], entry["count"]) for entry in everything["facets"]["prompts"]] == [
+        ("coaching-v5", 3),
+        ("coaching-v6", 1),
+    ]
+    newest_prompt = await service.queue(actor, prompt="coaching-v6")
+    assert [item["recording_id"] for item in newest_prompt["items"]] == [str(marathi.id)]
+    assert (await service.queue(actor, prompt="coaching-v1"))["items"] == []
     asha = await service.queue(actor, rep=ready.person_id)
     assert [item["recording_id"] for item in asha["items"]] == [str(ready.id)]
 

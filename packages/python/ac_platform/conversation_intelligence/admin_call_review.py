@@ -4,7 +4,8 @@ Three read-only views over the served Sales Xray recordings, for the same
 operations control accounts that may open Admin reports today:
 
 * ``queue``: the newest calls in a bounded window, filterable by organisation,
-  rep, report language, provider, status and upload date;
+  rep, report language, provider, coaching prompt revision, status and upload
+  date;
 * ``call``: one recording with every analysis run (prompt version, provider
   and whether a report exists), for comparing runs, and its failed steps
   (stored codes only) for the existing admin job retry;
@@ -365,6 +366,7 @@ class AdminCallReview:
         rep: UUID | None = None,
         language: str | None = None,
         provider: str | None = None,
+        prompt: str | None = None,
         status: str | None = None,
         since: date | None = None,
         until: date | None = None,
@@ -458,6 +460,8 @@ class AdminCallReview:
             items = [item for item in items if item["language"] == language]
         if provider is not None:
             items = [item for item in items if item["provider"] == provider]
+        if prompt is not None:
+            items = [item for item in items if item["prompt_revision"] == prompt]
         counts = {name: 0 for name in STATUSES}
         for item in items:
             counts[item["status"]] += 1
@@ -652,5 +656,12 @@ def _facets(items: Sequence[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         ),
         "providers": tally(
             lambda item: (item["provider"], item["provider"]) if item["provider"] else None
+        ),
+        "prompts": tally(
+            lambda item: (
+                (item["prompt_revision"], item["prompt_revision"])
+                if isinstance(item["prompt_revision"], str) and item["prompt_revision"]
+                else None
+            )
         ),
     }

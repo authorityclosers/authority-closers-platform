@@ -75,6 +75,7 @@ export type Queue = {
     reps: Facet[];
     languages: Facet[];
     providers: Facet[];
+    prompts: Facet[];
   };
   nextCursor: string | null;
   truncated: boolean;
@@ -137,6 +138,7 @@ export function normalizeQueue(raw: unknown): Queue {
       reps: facets(facetBody.reps),
       languages: facets(facetBody.languages),
       providers: facets(facetBody.providers),
+      prompts: facets(facetBody.prompts),
     },
     nextCursor: read.optionalString(body.next_cursor),
     truncated: read.boolean(window.truncated),

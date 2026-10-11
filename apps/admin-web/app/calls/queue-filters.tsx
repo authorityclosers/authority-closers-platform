@@ -31,7 +31,7 @@ export function QueueFilters({
     );
   };
   const select = (
-    key: "organisation" | "rep" | "language" | "provider",
+    key: "organisation" | "rep" | "language" | "provider" | "prompt",
     label: string,
     options: Queue["facets"]["organisations"],
     name: (value: string, fallback: string) => string = (_value, fallback) =>
@@ -66,6 +66,7 @@ export function QueueFilters({
         languageLabel(value),
       )}
       {select("provider", "Provider", facets.providers)}
+      {select("prompt", "Prompt", facets.prompts, (value) => value)}
       <label className={styles.dateFilter}>
         <span>From</span>
         <input

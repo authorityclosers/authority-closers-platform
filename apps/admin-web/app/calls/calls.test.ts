@@ -379,4 +379,20 @@ describe("queue address", () => {
     );
     expect(queueApiPath({}, 20)).toBe("/v1/admin/conversation/calls?limit=20");
   });
+
+  it("filters by prompt version, from the address and the facet", () => {
+    expect(queueFilters({ prompt: "coaching-v5" })).toEqual({
+      prompt: "coaching-v5",
+    });
+    expect(queueFilters({ prompt: "v5 <b>" })).toEqual({});
+    expect(queueApiPath({ prompt: "coaching-v5", status: "ready" }, 50)).toBe(
+      "/v1/admin/conversation/calls?status=ready&prompt=coaching-v5&limit=50",
+    );
+    expect(
+      normalizeQueue({
+        facets: { prompts: [{ value: "coaching-v5", count: 3 }] },
+      }).facets.prompts,
+    ).toEqual([{ value: "coaching-v5", label: "coaching-v5", count: 3 }]);
+    expect(normalizeQueue({}).facets.prompts).toEqual([]);
+  });
 });
