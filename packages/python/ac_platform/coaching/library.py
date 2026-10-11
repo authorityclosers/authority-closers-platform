@@ -173,6 +173,9 @@ class CoachingLibrary:
                 )
             )
 
+        # Authorize and read every report first (fresh access/withholding on
+        # each), then resolve evaluator receipts for all calls in a few queries.
+        readable: list[tuple[Any, dict[str, Any]]] = []
         for usage, ready, plan_state in reversed(rows[:HISTORY_LIMIT]):
             if not ready:
                 pending += int(plan_state == "active")
@@ -185,58 +188,22 @@ class CoachingLibrary:
                     actor=actor,
                     shared_identity_locks=True,
                 )
-                recording_id = UUID(envelope["recording_id"])
-                # Comparable suggestions need the canonical evaluator receipt;
-                # a shared candidate profile alone does not link revisions.
-                draft = await self.database.scalar(
-                    select(ConversationReportDraft)
-                    .join(ConversationRun, ConversationRun.id == ConversationReportDraft.run_id)
-                    .join(
-                        ConversationRecording,
-                        ConversationRecording.id == ConversationReportDraft.recording_id,
-                    )
-                    .where(
-                        ConversationReportDraft.recording_id == recording_id,
-                        ConversationReportDraft.tenant_id == actor.tenant_id,
-                        ConversationReportDraft.erased_at.is_(None),
-                        ConversationReportDraft.payload.is_not(None),
-                        ConversationRun.generation == ConversationRecording.generation,
-                        ConversationRun.state == "completed",
-                        ConversationReportDraft.run_id == UUID(envelope["run_id"]),
-                    )
-                    .order_by(ConversationReportDraft.created_at.desc())
-                    .limit(1)
-                )
-                if envelope.get("recovery") is not None:
-                    draft = None
-                recipe = (
-                    await self.database.scalar(
-                        select(ConversationRun.recipe_revision).where(
-                            ConversationRun.id == UUID(envelope["run_id"])
-                        )
-                    )
-                    if draft is not None
-                    else None
-                )
-                comparison = f"unlinked:{usage.submission_id}"
-                proof = draft.evidence_receipt if draft is not None else None
-                if (
-                    isinstance(proof, dict)
-                    and proof.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
-                    and recipe
-                ):
-                    checkpoint = await self.database.get(
-                        ConversationCheckpoint, UUID(proof["coaching_checkpoint_id"])
-                    )
-                    recording = await self.database.get(ConversationRecording, recording_id)
-                    if checkpoint is not None and recording is not None:
-                        verified = verified_checkpoint(checkpoint, binding_for(recording))
-                        comparison = evaluator_key(verified.as_dict(), recipe)
+                UUID(envelope["recording_id"]), UUID(envelope["run_id"])
+                readable.append((usage, envelope))
+            except (ConversationError, ValueError, KeyError):
+                unavailable += 1
+                summary(usage, "unavailable")
+        keys = await self._comparison_keys(actor, [envelope for _, envelope in readable])
+        for usage, envelope in readable:
+            try:
                 call = from_report(
                     envelope,
                     submission_id=usage.submission_id,
                     created_at=usage.created_at,
-                    comparison_key=comparison,
+                    comparison_key=keys.get(
+                        (UUID(envelope["recording_id"]), UUID(envelope["run_id"])),
+                        f"unlinked:{usage.submission_id}",
+                    ),
                 )
                 if call is None:
                     unavailable += 1
@@ -253,6 +220,8 @@ class CoachingLibrary:
             except (ConversationError, ValueError, KeyError):
                 unavailable += 1
                 summary(usage, "unavailable")
+        # Summaries were appended oldest first within each pass; show newest first.
+        summaries.sort(key=lambda row: (row.created_at, str(row.submission_id)))
         view = build_learner(
             tuple(history),
             person_id=actor.person_id,
@@ -262,6 +231,97 @@ class CoachingLibrary:
             history_limited=len(rows) > HISTORY_LIMIT,
         )
         return view.model_copy(update={"calls": tuple(reversed(summaries))})
+
+    async def _comparison_keys(
+        self, actor: ActorContext, envelopes: list[dict[str, Any]]
+    ) -> dict[tuple[UUID, UUID], str]:
+        """Evaluator comparison keys for authorized reports, in three queries.
+
+        Comparable suggestions need the canonical evaluator receipt; a shared
+        candidate profile alone does not link revisions. Only receipt columns
+        are loaded, never report or transcript content.
+        """
+        wanted = {
+            (UUID(envelope["recording_id"]), UUID(envelope["run_id"]))
+            for envelope in envelopes
+            if envelope.get("recovery") is None
+        }
+        if not wanted:
+            return {}
+        rows = (
+            await self.database.execute(
+                select(
+                    ConversationReportDraft.recording_id,
+                    ConversationReportDraft.run_id,
+                    ConversationReportDraft.evidence_receipt,
+                    ConversationRun.recipe_revision,
+                )
+                .join(ConversationRun, ConversationRun.id == ConversationReportDraft.run_id)
+                .join(
+                    ConversationRecording,
+                    ConversationRecording.id == ConversationReportDraft.recording_id,
+                )
+                .where(
+                    ConversationReportDraft.recording_id.in_({key[0] for key in wanted}),
+                    ConversationReportDraft.run_id.in_({key[1] for key in wanted}),
+                    ConversationReportDraft.tenant_id == actor.tenant_id,
+                    ConversationReportDraft.erased_at.is_(None),
+                    ConversationReportDraft.payload.is_not(None),
+                    ConversationRun.generation == ConversationRecording.generation,
+                    ConversationRun.state == "completed",
+                )
+                .order_by(ConversationReportDraft.created_at.desc())
+            )
+        ).all()
+        receipts: dict[tuple[UUID, UUID], tuple[Any, str | None]] = {}
+        for recording_id, run_id, receipt, recipe in rows:
+            if (recording_id, run_id) in wanted:
+                # The newest draft for an exact recording/run pair wins.
+                receipts.setdefault((recording_id, run_id), (receipt, recipe))
+        durable: dict[tuple[UUID, UUID], tuple[UUID, str]] = {}
+        for key, (proof, recipe) in receipts.items():
+            try:
+                if (
+                    isinstance(proof, dict)
+                    and proof.get("schema_id") == "ac.sales-xray.durable-draft-proof/1"
+                    and recipe
+                ):
+                    durable[key] = (UUID(proof["coaching_checkpoint_id"]), recipe)
+            except (KeyError, TypeError, ValueError):
+                continue  # A malformed receipt stays unlinked, never comparable.
+        if not durable:
+            return {}
+        checkpoints = {
+            row.id: row
+            for row in (
+                await self.database.scalars(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.id.in_({value[0] for value in durable.values()})
+                    )
+                )
+            )
+        }
+        recordings = {
+            row.id: row
+            for row in (
+                await self.database.scalars(
+                    select(ConversationRecording).where(
+                        ConversationRecording.id.in_({key[0] for key in durable})
+                    )
+                )
+            )
+        }
+        keys: dict[tuple[UUID, UUID], str] = {}
+        for key, (checkpoint_id, recipe) in durable.items():
+            checkpoint, recording = checkpoints.get(checkpoint_id), recordings.get(key[0])
+            if checkpoint is None or recording is None:
+                continue
+            try:
+                verified = verified_checkpoint(checkpoint, binding_for(recording))
+                keys[key] = evaluator_key(verified.as_dict(), recipe)
+            except (ConversationError, KeyError, TypeError, ValueError):
+                continue  # Unverifiable lineage stays unlinked, never comparable.
+        return keys
 
     async def _display_names(self, submission_ids: list[UUID]) -> dict[UUID, str]:
         """Owner-chosen call names in one query, for rows already in library scope."""

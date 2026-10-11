@@ -60,7 +60,8 @@
 
   /* The rail already shows the mission beside the focus. */
   .hero .nextCall,
-  .root .moreMoments {
+  .root .moreMoments,
+  .root .moreCalls {
     display: none;
   }
 }
@@ -76,7 +77,7 @@
 }
 
 /* One column: pillars keep their order, the call list goes last, and only
-   the first two moments show until asked (spec 9, mobile). */
+   the first moment and three newest calls show until asked (spec 9, 12.7). */
 @container (max-width: 899.98px) {
   .main,
   .rail {
@@ -87,7 +88,8 @@
     order: 1;
   }
 
-  .moments:not([data-expanded]) > [data-extra] {
+  .moments:not([data-expanded]) > [data-extra],
+  .callList:not([data-expanded]) li:nth-child(n + 4) {
     display: none;
   }
 }
@@ -251,6 +253,10 @@
 }
 
 .momentMeta a {
+  /* A taller tap area for a small inline link, without moving the line. */
+  display: inline-block;
+  margin-block: -4px;
+  padding-block: 4px;
   color: var(--sx-accent);
   text-decoration: none;
 }
@@ -293,9 +299,14 @@
   cursor: default;
 }
 
-.moreMoments {
+.moreMoments,
+.moreCalls {
   justify-self: start;
   margin: 0 14px 12px;
+}
+
+.moreCalls {
+  margin-top: 8px;
 }
 
 .status {
@@ -375,6 +386,24 @@
 .compare > div[data-kind="better"] {
   border-color: color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
   background: var(--sx-accent-soft);
+}
+
+/* Spec 3.6: a quoted strength from this call, to build the mission on. */
+.strength {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+
+.strengthTitle {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.strength .moment {
+  padding: 6px 0;
 }
 
 .wording {
@@ -825,6 +854,17 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+}
+
+/* Narrow columns: panel titles keep one line; subtitles are secondary. */
+@container (max-width: 560px) {
+  .root h2 > small {
+    display: none;
+  }
+
+  .share {
+    width: 92px;
+  }
 }
 
 @media (max-width: 760px) {

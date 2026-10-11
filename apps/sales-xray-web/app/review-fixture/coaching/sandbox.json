@@ -193,6 +193,27 @@
         "takeaways": ["Every concession buys a commitment."]
       }
     ],
+    "strength": {
+      "title": "Asked for a recent example and consequence",
+      "explanation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-07-27T11:00:00+05:30",
+          "call_label": "ArthaPath · Kunal K. · Scope call",
+          "segment_id": "L004",
+          "quote": "Could you walk me through one recent example, and what happened because of it?",
+          "start_ms": 38947,
+          "end_ms": 44904,
+          "observation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+          "playable": true
+        }
+      ]
+    },
+    "other_suggestions": 0,
     "limitations": ["Synthetic sandbox call."],
     "recommended_media": null
   },
@@ -420,6 +441,26 @@
     ],
     "recommended_media": null,
     "other_format": null,
+    "strength": {
+      "title": "Answered a scope question with a clear limit",
+      "explanation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000106",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000206",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-09-07T12:00:00+05:30",
+          "call_label": "ArthaPath · Chennai clinic · Close",
+          "segment_id": "L018",
+          "quote": "That is for your own accounts adviser to decide. The commercial quote will name the purchaser and service clearly. I should not infer tax treatment from the account used for payment.",
+          "start_ms": 181063,
+          "end_ms": 194254,
+          "observation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+          "playable": true
+        }
+      ]
+    },
     "calls": [
       {
         "submission_id": "5a0d0000-0000-4000-8000-000000000150",

@@ -16,6 +16,12 @@ Local API proof: 74 Coaching unit cases and 6 disposable PostgreSQL cases passed
 
 Call UI proof: 25 focused Vitest cases, ESLint, TypeScript and the static-preview production export pass. Fictional browser proof at 390/1440 in light/dark verifies four pillars, one server read, zero Coaching refetches during hydration, cleared skeletons, Devanagari fonts, no overflow/eager audio/page errors, and source/corner retries. All local server/browser processes are stopped. Shared shell/Report files are untouched. This is not authenticated deployed owner verification.
 
+### Strengths, one focus and the web contract (11 Oct, #447)
+
+Spec 3.6 "Use your strength": each call's history keeps its report's first retained "What worked" finding that has its own quoted moments (`report_adapter.quoted_strength`, at most two moments bound to that call's exact source). Call coaching offers it unless it already supplied the focus; My coaching offers the newest call's, worded as one call rather than an established strength. A missing, withheld, unquoted or malformed strength is skipped; it never makes a call unavailable. Call coaching also counts the report's other titled, non-withheld suggestions (`other_suggestions`, never their content) so the page can say why it shows one focus.
+
+`tests/unit/coaching/test_web_contract.py` serializes fictional call, My and Team views exactly as the API returns them and compares them with `apps/sales-xray-web/app/coaching/server-contract.json`; `server-contract.test.ts` feeds the same file to the web parsers. A field change on either side fails one of them. Regenerate after an intended change with `AC_UPDATE_COACHING_CONTRACT=1`, then Prettier.
+
 ### Anonymous Team coaching
 
 `GET /v1/me/coaching/team` and `/coaching?view=team` show anonymous counts of source-linked report suggestions in the fixed eight-skill taxonomy, plus an explicit unclassified category for legacy suggestions. Current organisation owner/admin authority is re-read from active membership before reading team reports. Personal accounts and ordinary members are denied; a role downgrade takes effect on the next read. Each retained report still passes source, retention and withholding checks, so a new report is included when the view is read again. Duplicate uploads count once per owner/source and the recent 40-call bound is disclosed. A qualitative report state alone never counts as a mistake, success or mastery.

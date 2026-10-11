@@ -16,6 +16,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await act(async () => root.unmount());
+  window.localStorage.clear();
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -77,6 +78,51 @@ describe("reviewed placeholder clips", () => {
     );
     await act(async () => button("Try clip again").click());
     expect(host.querySelector("audio")).not.toBe(audio);
+  });
+  it("resumes where the learner stopped on a later visit", async () => {
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    audio.currentTime = 3.5;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await act(async () => button("Pause").click());
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip]} />),
+    );
+    expect(host.querySelector("audio")).toBeNull();
+    expect(host.textContent).toContain("0:02");
+    await act(async () => button("Resume clip").click());
+    const next = host.querySelector("audio")!;
+    await act(async () => next.dispatchEvent(new Event("loadedmetadata")));
+    expect(next.currentTime).toBe(3.5);
+    next.currentTime = 5;
+    await act(async () => next.dispatchEvent(new Event("timeupdate")));
+    expect(window.localStorage.length).toBe(0);
+  });
+  it("never restores a position outside the preview window", async () => {
+    const [clip] = parseClips([
+      {
+        ...fictionalClip,
+        access: "preview",
+        entitlement_policy: "future-preview-plan",
+        preview_end_ms: 3000,
+      },
+    ]);
+    window.localStorage.setItem(
+      `sx-coaching-clip:${clip.topic_id}:${clip.revision}:${clip.review_id}`,
+      "2500",
+    );
+    await act(async () => root.render(<CoachingMedia clips={[clip]} />));
+    expect(button("Play coaching clip")).toBeTruthy();
+    await act(async () => button("Play coaching clip").click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(audio.currentTime).toBe(1);
   });
   it("pauses narration when another coaching player takes over", async () => {
     await act(async () =>

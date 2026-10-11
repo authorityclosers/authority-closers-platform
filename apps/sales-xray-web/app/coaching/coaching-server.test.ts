@@ -46,7 +46,7 @@ describe("server coaching page", () => {
     expect(mocks.headers).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
-  it("rejects invalid deployment origins and degrades network errors without diagnostics", async () => {
+  it("leaves the read to the browser when the server read cannot succeed", async () => {
     const fetch = vi.fn().mockRejectedValue(new Error("private diagnostic"));
     vi.stubGlobal("fetch", fetch);
     for (const origin of [
@@ -55,16 +55,18 @@ describe("server coaching page", () => {
       "file:///tmp/data",
     ]) {
       vi.stubEnv("AC_CONVERSATION_API_ORIGIN", origin);
-      expect((await loadServerCoaching(null))?.error).toContain("unavailable");
+      expect(await loadServerCoaching(null)).toBeNull();
     }
     expect(fetch).not.toHaveBeenCalled();
     vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "https://api.example.test");
     mocks.headers.mockResolvedValue(
       new Headers({ host: "sales-xray.example.test" }),
     );
-    expect(await loadServerCoaching(null)).toEqual({
-      data: null,
-      error: "Coaching could not be loaded. Try again.",
-    });
+    expect(await loadServerCoaching(null)).toBeNull();
+    // An older or misrouted API without the route: the browser tries itself.
+    fetch.mockResolvedValue(new Response("{}", { status: 404 }));
+    expect(
+      await loadServerCoaching(fictionalCallCoaching.submission_id),
+    ).toBeNull();
   });
 });
