@@ -82,6 +82,14 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* Where the app shows its bottom navigation, the card sits above it. */
+@media (max-width: 899.98px) {
+  .error {
+    bottom: calc(
+      var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 12px
+    );
+  }
+}
 @media (max-width: 600px) {
   .outcome button,
   .outcome input {
