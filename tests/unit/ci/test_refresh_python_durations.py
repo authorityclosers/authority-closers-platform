@@ -132,3 +132,14 @@ def test_duration_file_rejects_invalid_costs(tmp_path: Path, value: object) -> N
     )
     with pytest.raises(DURATIONS.DurationError):
         DURATIONS.read_durations(path)
+
+
+@pytest.mark.parametrize("result", ["failure", "error"])
+def test_junit_failure_cannot_refresh_even_with_successful_manifest(
+    tmp_path: Path, result: str
+) -> None:
+    directories = [receipt(tmp_path, index) for index in range(4)]
+    junit = directories[0] / "junit.xml"
+    junit.write_text(junit.read_text().replace(" />", f"><{result} message='failed' /></testcase>"))
+    with pytest.raises(DURATIONS.DurationError, match="passing JUnit"):
+        DURATIONS.measured_costs(tmp_path, SHA)

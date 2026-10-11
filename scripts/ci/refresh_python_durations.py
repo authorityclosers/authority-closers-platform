@@ -108,6 +108,8 @@ def measured_costs(
             junit = directory / "junit.xml"
             validate_junit_input(junit)
             for _, element in ET.iterparse(junit, events=("end",)):  # noqa: S314 - bounded, DTD-free
+                if element.tag in {"failure", "error"}:
+                    raise DurationError("Only passing JUnit receipts can refresh durations")
                 if element.tag != "testcase":
                     element.clear()
                     continue
