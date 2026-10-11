@@ -54,7 +54,8 @@ console messages are never retained. Recheck an interrupted case before treating
 it as a persistent product defect or claiming a complete PASS.
 Failure receipts retain exception type and the journey's check/line, without
 exception text, so an interrupted batch still has a useful failure location.
-Coaching also follows both call and personal "See the mission" links, checks
+Coaching verifies that My coaching is selected after its single click before
+checking the personal pillars. It also follows both call and personal "See the mission" links, checks
 that their targets are at least 32 px on desktop / 44 px on phones and reachable
 at the center, and verifies that the mission heading comes into view. Target
 dimensions are retained in the receipt; no learner feedback is saved.

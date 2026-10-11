@@ -544,7 +544,9 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             expect(page.locator("#call-mission")).to_contain_text("Done when")
             journey.snapshot("call")
             journey.follow_mission("call-mission", "call-mission")
-            page.get_by_role("button", name="My coaching", exact=True).click()
+            personal = page.get_by_role("button", name="My coaching", exact=True)
+            personal.click()
+            expect(personal).to_have_attribute("aria-pressed", "true", timeout=15_000)
         for index, label in enumerate(COACHING_SECTIONS):
             heading = _heading(page, label)
             heading.scroll_into_view_if_needed()

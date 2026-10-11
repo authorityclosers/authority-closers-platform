@@ -45,6 +45,17 @@ Dipak Report/Document/Coaching staging smoke.
 Coordinator's 17:03 UTC handoff reports green v0.40.0 release CI at `f0437c9` /
 main `a775389`; staging images are building. QA has no staging verdict yet.
 
+Latest Coaching repeat (17:27:44–17:28:18 UTC) at recorded start/end `4b32a9ce`
+passes **3/4** (both desktop themes and phone/dark, all 13 observations). On
+phone/light the journey times out before the second personal pillar. Its
+inspected failure screenshot shows This call selected / My coaching unselected,
+after the existing My coaching click. No refresh/runtime/server/visual errors;
+cause unconfirmed. D has the exact screenshot and receipt in
+`shots/2026-10-11-workbench-current-coaching-repeat/`. QA now explicitly checks
+the selected button after the same single click, without retrying a lost click
+or weakening any pillar check. Phone/light acceptance remains pending a bounded
+repeat at the 15-minute interval.
+
 Latest shared-dev Report/Document readback (17:11:43–17:13:28 UTC) passes **8/8**
 at recorded start/end HEAD `67feed3e`. Each Report pair completes all 13 steps:
 actions, six pillars, eight ordered skill rows, all four deeper groups, reload,
@@ -66,7 +77,8 @@ focus screenshots were inspected and are readable. Later Report batch at
 the inspected image shows "This report didn't load. Please try again.", disabled
 Word export and zero sections. B/G received the exact capture. These older
 failures are retained as history and did not reproduce in the completed 17:11
-readback above. Coaching edits after its 16:10 run await the next allowed repeat.
+readback above. The newer Coaching repeat above supersedes this older baseline;
+three pairs pass and phone/light remains unverified.
 
 The 16 opt-in cases cover 1440/390, light/dark, dashboard-to-report, all six
 Report sections in Dipak's order, their required example blocks, eight skills,
@@ -105,7 +117,10 @@ Ruff check/format, required HTTP import, no-server 16-case skipping and diff
 checks pass. Populated staging smoke still needs the retained Report route,
 existing Team-read context and confirmed staging version. Third staging attempt
 is running
-at `f0437c9` according to its 16:40 UTC note;
+at `f0437c9` according to its 16:40 UTC note. A newer coordinator inbox puts
+staging smoke **on hold**: native audio input preparation was refused, staging
+is unchanged, and a Root-only preparation is required. Do not run staging smoke
+until the coordinator posts that v0.40.0 is live;
 QA has performed no staging writes, new sign-in/account/access grants or deploy.
 
 Historical completed baseline (superseded by newer failures where noted above):
