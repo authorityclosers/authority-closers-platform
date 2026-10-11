@@ -327,3 +327,21 @@ it("adds the call's measured length to its file line once the server has it", as
   expect(host.textContent).toContain("12.4 MB · 25:20");
   wave.measured = null;
 });
+
+it("draws the chosen file's own wave while it is sent, until the server measures it", async () => {
+  const local = {
+    schema: "ac.sales-xray.waveform/1" as const,
+    kind: "rms_envelope" as const,
+    duration_ms: 185_000,
+    points: [{ start_ms: 0, level: 0.3 }],
+  };
+  await mount({ upload: { fraction: null }, localEnvelope: local });
+  const strip = () => host.querySelector('[role="img"]')!;
+  expect(strip().hasAttribute("data-measured")).toBe(true);
+  expect(host.textContent).toContain("12.4 MB · 3:05");
+  // The server's measurement wins once it exists.
+  wave.measured = { ...local, duration_ms: 186_000 };
+  await mount({ localEnvelope: local });
+  expect(host.textContent).toContain("12.4 MB · 3:06");
+  wave.measured = null;
+});
