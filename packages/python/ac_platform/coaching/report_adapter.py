@@ -11,7 +11,14 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from ac_platform.coaching.contracts import CallHistory, Mission, Moment, Practice, SkillObservation
+from ac_platform.coaching.contracts import (
+    CallHistory,
+    Mission,
+    Moment,
+    Practice,
+    SkillObservation,
+    Strength,
+)
 from ac_platform.conversation_intelligence.sensitive_segments import WITHHELD_MARKER
 
 SKILLS = frozenset(
@@ -86,6 +93,33 @@ def _moments(
         )
         for ref in sorted(refs, key=lambda ref: (ref[2], ref[0]))[:8]
     )
+
+
+def quoted_strength(
+    report: dict[str, Any],
+    envelope: dict[str, Any],
+    submission_id: UUID,
+    created_at: datetime,
+    exclude: str | None = None,
+) -> Strength | None:
+    """The first retained "What worked" finding with its own quoted moments.
+
+    `exclude` skips a strength already used as the call's focus.
+    """
+    findings = report.get("strengths")
+    for finding in findings if isinstance(findings, list) else ():
+        if not isinstance(finding, dict) or WITHHELD_MARKER in str(finding):
+            continue
+        title = _text(finding.get("title"), 240)
+        text = _text(finding.get("explanation"), 4000)
+        if not title or not text or title == exclude:
+            continue
+        moments = _moments(
+            envelope, _refs(finding.get("evidence")), text, submission_id, created_at
+        )
+        if moments:
+            return Strength(title=title, explanation=text, evidence=moments[:2])
+    return None
 
 
 def _call_suggestion(
@@ -304,6 +338,7 @@ def from_report(
             created_at=created_at,
             comparison_key=comparison_key,
             skills=tuple(rows),
+            strength=quoted_strength(report, envelope, submission_id, created_at),
         )
     except (KeyError, TypeError, ValueError, ValidationError):
         # Withheld or incompatible content must not create a fallback diagnosis.

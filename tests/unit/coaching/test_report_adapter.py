@@ -156,3 +156,18 @@ def test_missing_malformed_or_withheld_findings_never_supply_fallback_evidence()
     data["report"]["content"]["dimensions"] = []
     data["report"]["content"]["improvements"][0]["explanation"] = "[Withheld for privacy]"
     assert adapt(data).skills == ()
+
+
+def test_history_keeps_the_first_quoted_strength_only() -> None:
+    data = envelope()
+    ref = {"segment_id": "seg-2", "quote": "Tell me more.", "start_ms": 4000, "end_ms": 6000}
+    data["report"]["content"]["strengths"] = [
+        {"title": "No quote", "explanation": "Missing moment.", "evidence": []},
+        {"title": "Follow-up", "explanation": "You asked a follow-up.", "evidence": [ref]},
+    ]
+    result = adapt(data)
+    assert result is not None and result.strength is not None
+    assert result.strength.title == "Follow-up"
+    assert result.strength.evidence[0].quote == "Tell me more."
+    data["report"]["content"]["strengths"] = []
+    assert adapt(data).strength is None

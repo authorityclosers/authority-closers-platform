@@ -320,6 +320,8 @@ export function CoachingStory({
           lesson={lesson}
           clips={coaching.media_clips}
           fallbackObservation={focus.explanation}
+          strength={coaching.strength}
+          acrossCalls
         />
         <div className={styles.late}>
           <CallsPanel calls={coaching.calls} />

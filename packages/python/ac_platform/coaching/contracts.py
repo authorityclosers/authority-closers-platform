@@ -102,19 +102,34 @@ class SkillObservation(Model):
         return self
 
 
+class Strength(Model):
+    """A retained "What worked" finding from one call (spec 3.6), never a trait.
+
+    It needs its own quoted moments; an unquoted strength is not shown.
+    """
+
+    title: str = Field(min_length=1, max_length=240)
+    explanation: str = Field(min_length=1, max_length=4000)
+    evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
+
+
 class CallHistory(Model):
     submission_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     created_at: datetime
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
+    strength: Strength | None = None
 
     @model_validator(mode="after")
     def bound_evidence(self) -> "CallHistory":
+        moments = (
+            *(moment for skill in self.skills for moment in skill.evidence),
+            *(self.strength.evidence if self.strength else ()),
+        )
         if len({skill.skill_id for skill in self.skills}) != len(self.skills) or any(
             moment.submission_id != self.submission_id or moment.source_sha256 != self.source_sha256
-            for skill in self.skills
-            for moment in skill.evidence
+            for moment in moments
         ):
             raise ValueError("Call evidence cannot cross a source or duplicate a skill.")
         return self
@@ -198,17 +213,6 @@ class Focus(Model):
     selected_at: datetime
     status: Literal["provisional", "active"]
     verdict: str
-
-
-class Strength(Model):
-    """A retained "What worked" finding from one call (spec 3.6), never a trait.
-
-    It needs its own quoted moments; an unquoted strength is not shown.
-    """
-
-    title: str = Field(min_length=1, max_length=240)
-    explanation: str = Field(min_length=1, max_length=4000)
-    evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
 
 
 class Path(Model):
@@ -313,6 +317,8 @@ class CoachingView(Model):
     media_clips: tuple[ClipSuggestion, ...] = Field(default=(), max_length=3)
     recommended_media: LearningAsset | None = None
     other_format: LearningAsset | None = None
+    # The newest own call's quoted strength; one call, never an established trait.
+    strength: Strength | None = None
     calls: tuple[CallSummary, ...] = Field(default=(), max_length=40)
     progress: tuple[ProgressPoint, ...] = Field(default=(), max_length=40)
     development_path: Path

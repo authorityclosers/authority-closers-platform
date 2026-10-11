@@ -20,7 +20,13 @@ from ac_platform.coaching.contracts import (
     TextLesson,
 )
 from ac_platform.coaching.lessons import lesson_for
-from ac_platform.coaching.report_adapter import _moments, _refs, _text, from_report
+from ac_platform.coaching.report_adapter import (
+    _moments,
+    _refs,
+    _text,
+    from_report,
+    quoted_strength,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.sensitive_segments import WITHHELD_MARKER
 
@@ -91,30 +97,6 @@ class CallCoachingView(Model):
         ):
             raise ValueError("Unavailable coaching must not retain private evidence.")
         return self
-
-
-def _strength(
-    report: dict[str, Any],
-    envelope: dict[str, Any],
-    submission_id: UUID,
-    created_at: datetime,
-    focus_label: str,
-) -> Strength | None:
-    """The first retained, quoted strength that is not already the focus."""
-    findings = report.get("strengths")
-    for finding in findings if isinstance(findings, list) else ():
-        if not isinstance(finding, dict) or WITHHELD_MARKER in str(finding):
-            continue
-        title = _text(finding.get("title"), 240)
-        text = _text(finding.get("explanation"), 4000)
-        if not title or not text or title == focus_label:
-            continue
-        moments = _moments(
-            envelope, _refs(finding.get("evidence")), text, submission_id, created_at
-        )
-        if moments:
-            return Strength(title=title, explanation=text, evidence=moments[:2])
-    return None
 
 
 def build_call_coaching(
@@ -261,7 +243,7 @@ def build_call_coaching(
             success_condition=mission.done_when,
         ),
         mission=mission,
-        strength=_strength(report, envelope, submission_id, created_at, label),
+        strength=quoted_strength(report, envelope, submission_id, created_at, exclude=label),
         limitations=(
             "This coaching is specific to one call; "
             "it does not establish a recurring pattern or mastery.",

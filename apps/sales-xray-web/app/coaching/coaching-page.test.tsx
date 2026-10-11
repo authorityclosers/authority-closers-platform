@@ -224,6 +224,26 @@ describe("Coaching story", () => {
       ),
     ).not.toContain("Use your strength");
   });
+  it("names the call a My coaching strength came from, never a trait", () => {
+    const moment = fictionalCoaching.evidence[0];
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          strength: {
+            title: "Asked a follow-up",
+            explanation: "It made the problem specific.",
+            evidence: [moment],
+          },
+        }}
+      />,
+    );
+    expect(html).toContain("Use your strength");
+    expect(html).toContain("One call is not an established strength.");
+    expect(html.lastIndexOf(moment.call_label)).toBeGreaterThan(
+      html.indexOf("Use your strength"),
+    );
+  });
   it("opens with the three newest calls on one column until asked", async () => {
     const calls = Array.from({ length: 5 }, (_, index) => ({
       submission_id: `00000000-0000-0000-0000-00000000009${index}`,

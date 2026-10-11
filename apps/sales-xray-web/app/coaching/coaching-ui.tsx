@@ -3,8 +3,12 @@
 import { ArrowDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge, Panel, type Tone } from "../ui/kit";
-import type { Coaching, Evidence, TextLesson } from "./coaching-client";
-import type { CallStrength } from "./coaching-read";
+import type {
+  Coaching,
+  Evidence,
+  Strength,
+  TextLesson,
+} from "./coaching-client";
 import { timeLabel } from "./coaching-format";
 import { EvidencePlayer } from "./evidence-player";
 import { CoachingMedia } from "./media-player";
@@ -85,11 +89,14 @@ export function LessonPanel({
   clips,
   fallbackObservation,
   strength,
+  acrossCalls = false,
 }: {
   lesson: Lesson;
   clips?: CoachingClip[];
   fallbackObservation: string;
-  strength?: CallStrength | null;
+  strength?: Strength | null;
+  /** My coaching: the strength comes from the newest call that showed one. */
+  acrossCalls?: boolean;
 }) {
   const media = Boolean(clips?.length);
   const wording = lesson.example_wording.length ? (
@@ -147,13 +154,15 @@ export function LessonPanel({
                 <EvidencePlayer
                   key={`${moment.segment_id}:${moment.start_ms}`}
                   evidence={moment}
-                  showCall={false}
+                  showCall={acrossCalls}
                 />
               ))}
             </ul>
             <p className={styles.note}>
-              You already did this on the call. Keep it while you practise the
-              mission.
+              {acrossCalls
+                ? "From your latest call where the report noted one. One call is not an established strength."
+                : "You already did this on the call."}{" "}
+              Keep it while you practise the mission.
             </p>
           </section>
         ) : null}

@@ -3,7 +3,16 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from ac_platform.coaching.contracts import CallHistory, Mission, Moment, SkillObservation
+import pytest
+from pydantic import ValidationError
+
+from ac_platform.coaching.contracts import (
+    CallHistory,
+    Mission,
+    Moment,
+    SkillObservation,
+    Strength,
+)
 from ac_platform.coaching.learner import build_learner
 
 PERSON, TENANT = UUID(int=1), UUID(int=2)
@@ -188,3 +197,33 @@ def test_report_suggestion_focus_progress_stays_one_call() -> None:
     view = build_learner((unlinked, call(2)), person_id=PERSON, tenant_id=TENANT)
     assert view.focus is not None and view.focus.skill_id == "report_next_step"
     assert [point.submission_id for point in view.progress] == [UUID(int=101)]
+
+
+def test_my_coaching_offers_the_newest_calls_quoted_strength() -> None:
+    first, second, third = call(1), call(2), call(3)
+
+    def with_strength(history: CallHistory, title: str) -> CallHistory:
+        moment = history.skills[0].evidence[0].model_copy(update={"quote": "Tell me more."})
+        strength = Strength(title=title, explanation="You asked a follow-up.", evidence=(moment,))
+        return history.model_copy(update={"strength": strength})
+
+    view = build_learner(
+        (with_strength(first, "Older strength"), with_strength(second, "Newest strength"), third),
+        person_id=PERSON,
+        tenant_id=TENANT,
+    )
+    assert view.state == "ready"
+    assert view.strength is not None and view.strength.title == "Newest strength"
+    assert view.strength.evidence[0].submission_id == second.submission_id
+    assert build_learner((first, third), person_id=PERSON, tenant_id=TENANT).strength is None
+
+
+def test_a_strength_cannot_cross_into_another_calls_history() -> None:
+    first, second = call(1), call(2)
+    strength = Strength(
+        title="Borrowed", explanation="Not this call.", evidence=second.skills[0].evidence
+    )
+    data = first.model_dump()
+    data["strength"] = strength.model_dump()
+    with pytest.raises(ValidationError, match="cannot cross a source"):
+        CallHistory.model_validate(data)

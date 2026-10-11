@@ -2,8 +2,10 @@ import { parseClips, type CoachingClip } from "./media-contract";
 import {
   parseCoaching,
   parseEvidence,
+  parseStrength,
   type Coaching,
   type Evidence,
+  type Strength,
   type TextLesson,
 } from "./coaching-client";
 import { parseTeamCoaching, type TeamCoaching } from "./team-contract";
@@ -35,13 +37,8 @@ export type CallCoaching = {
   mission: Coaching["mission"];
   media_clips?: CoachingClip[];
   /** A quoted "What worked" finding from this call's report (spec 3.6). */
-  strength?: CallStrength | null;
+  strength?: Strength | null;
   limitations: string[];
-};
-export type CallStrength = {
-  title: string;
-  explanation: string;
-  evidence: Evidence[];
 };
 export type CoachingResult =
   | { data: Coaching | CallCoaching | TeamCoaching; error: null }
@@ -151,21 +148,9 @@ export function parseCallCoaching(
   const ownCall = lesson.own_call == null ? null : ownEvidence(lesson.own_call);
   if (lesson.own_call != null && !ownCall) return null;
   // Optional: a malformed or foreign strength is dropped, never the coaching.
-  const strengthItem = object(item.strength);
-  const strengthEvidence = (
-    Array.isArray(strengthItem.evidence) ? strengthItem.evidence : []
-  ).map(ownEvidence);
   const strength =
-    item.state === "ready" &&
-    text(strengthItem.title) &&
-    text(strengthItem.explanation) &&
-    strengthEvidence.length &&
-    strengthEvidence.every(Boolean)
-      ? {
-          title: text(strengthItem.title),
-          explanation: text(strengthItem.explanation),
-          evidence: (strengthEvidence as Evidence[]).slice(0, 2),
-        }
+    item.state === "ready"
+      ? parseStrength(item.strength, (moment) => ownEvidence(moment) !== null)
       : null;
   return {
     schema: "ac.sales-xray.call-coaching/1",
