@@ -295,3 +295,22 @@ describe("Sandbox-style findings and prices (G's findings, 11 Oct)", () => {
     expect(model.moments.some((m) => m.kind === "Price Moment")).toBe(false);
   });
 });
+
+it("shows a skill's state and evidence without a placeholder note (C's Sandbox data)", () => {
+  const stock = "Relevant behaviour is evidenced by the cited turn.";
+  const report: SalesReport = {
+    ...amitReport,
+    dimensions: amitReport.dimensions.map((d) => ({
+      ...d,
+      observation: stock,
+    })),
+  };
+  const model = reportStoryModel(report, amitTranscript);
+  const communication = model.skills.find(
+    (s) => s.id === "communication_tonality",
+  );
+  expect(communication?.state).toBeTruthy();
+  expect(communication?.observation).toBeNull();
+  expect(communication?.sources.length).toBeGreaterThan(0);
+  expect(model.deeper.communication.observation).toBeNull();
+});

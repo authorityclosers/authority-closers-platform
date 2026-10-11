@@ -292,6 +292,18 @@ function repeats(
 const upperFirst = (text: string) =>
   text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : text;
 
+/**
+ * Placeholder notes some sources put where a skill observation belongs; they
+ * say nothing about the call, so the Report shows the state and evidence only.
+ */
+const STOCK_NOTES = new Set([
+  "relevant behaviour is evidenced by the cited turn.",
+]);
+const observationText = (text: string | null | undefined) => {
+  const value = clean(text);
+  return value && !STOCK_NOTES.has(value.toLowerCase()) ? value : null;
+};
+
 /** A spec heading in sentence case, for the one-line gaps. */
 const sentence = (heading: string) =>
   heading.charAt(0) + heading.slice(1).toLowerCase();
@@ -807,7 +819,8 @@ export function reportStoryModel(
       label,
       short: SKILL_SHORT[id] ?? label,
       state,
-      observation: state && dimension ? clean(dimension.observation) : null,
+      observation:
+        state && dimension ? observationText(dimension.observation) : null,
       sources: state ? (dimension?.evidence ?? []) : [],
     };
   });
@@ -851,7 +864,10 @@ export function reportStoryModel(
       longest: longestMetric?.value ?? null,
       observation:
         communication && skillState(communication)
-          ? line(communication.observation, communication.evidence)
+          ? line(
+              observationText(communication.observation),
+              communication.evidence,
+            )
           : null,
     },
   };
