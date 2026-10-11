@@ -102,7 +102,7 @@ def apply_dataset(
     fingerprint = hashlib.sha256()
     with httpx.Client(
         base_url=origin,
-        headers={"Cookie": cookie, "Origin": origin},
+        headers={"Cookie": cookie, "Origin": origin, "X-AC-Sandbox-Tenant": str(tenant)},
         timeout=30,
         follow_redirects=False,
         trust_env=False,

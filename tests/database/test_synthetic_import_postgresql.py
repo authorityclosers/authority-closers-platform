@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImports
 from ac_platform.db.models import model_metadata
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
@@ -143,6 +144,122 @@ async def flag(setup):
         )
 
 
+def test_bound_sandbox_requests_refuse_changed_selection_before_any_import(
+    postgres_harness, tmp_path
+):
+    async def exercise():
+        setup = await setup_import(postgres_harness, tmp_path)
+        try:
+            await flag(setup)
+            # Both organisations are served and explicitly flagged. The header
+            # must assert the chosen target, without selecting it or granting access.
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    Organisation(
+                        tenant_id=setup.state.tenant_id,
+                        created_by_person_id=setup.state.person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token="g" * 43,
+                    )
+                )
+                await db.flush()
+                db.add(
+                    ConversationSandboxOrganisation(
+                        tenant_id=setup.state.tenant_id,
+                        approved_by_person_id=setup.state.person_id,
+                        approval_reference="fictional-second-sandbox:AUT-1676",
+                        created_at=setup.clock[0],
+                    )
+                )
+                await db.execute(
+                    update(Membership)
+                    .where(
+                        Membership.tenant_id == setup.state.tenant_id,
+                        Membership.person_id == setup.state.person_id,
+                    )
+                    .values(role="owner")
+                )
+            headers = {
+                "Origin": ORIGIN,
+                "Idempotency-Key": "bound-target",
+                "X-AC-Sandbox-Tenant": str(setup.organisation.tenant_id),
+            }
+            endpoint = PREFIX + "/imports/sandbox"
+            data, media = media_bundle(b"fictional-recording")
+            call_path = endpoint + "/calls/" + data["metadata"]["call_id"]
+            async with await client_for(setup) as client:
+                before = await client.get(endpoint, headers=headers)
+                assert before.status_code == 200, before.text
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(IdentitySession)
+                        .where(IdentitySession.id == setup.state.session_id)
+                        .values(selected_tenant_id=setup.state.tenant_id)
+                    )
+                changed = await client.get(endpoint, headers=headers)
+                assert changed.status_code == 409, changed.text
+                unbound = await client.get(endpoint)
+                assert unbound.status_code == 200, unbound.text
+                assert unbound.json()["tenant_id"] == str(setup.state.tenant_id)
+                for path, body in (
+                    (endpoint + "/calls", data),
+                    (
+                        endpoint + "/records",
+                        {
+                            "schema": "synthetic-record-batch/1",
+                            "synthetic": True,
+                            "records": [
+                                {
+                                    "kind": "companies",
+                                    "key": "syn-fixture-company-1",
+                                    "business_id": "syn-fixture",
+                                    "revision": 1,
+                                    "occurred_at": "2017-01-01T00:00:00Z",
+                                    "payload": {
+                                        "synthetic": True,
+                                        "schema_version": "synthetic-sales-v1.0",
+                                        "name": "Fictional",
+                                    },
+                                }
+                            ],
+                        },
+                    ),
+                    (call_path + "/audio", media),
+                ):
+                    refused = await client.post(path, json=body, headers=headers)
+                    assert refused.status_code == 409, refused.text
+                    assert "selected sandbox changed" in refused.json()["detail"]
+                refused = await client.put(
+                    call_path + "/source",
+                    content=b"fictional-recording",
+                    headers={**headers, "Content-Type": "audio/mpeg"},
+                )
+                assert refused.status_code == 409, refused.text
+                assert "selected sandbox changed" in refused.json()["detail"]
+                for target in ("not-a-uuid", str(setup.state.tenant_id) + "," + str(uuid4())):
+                    malformed = await client.post(
+                        endpoint + "/calls",
+                        json=data,
+                        headers={**headers, "X-AC-Sandbox-Tenant": target},
+                    )
+                    assert malformed.status_code == 422, malformed.text
+                duplicated = await client.post(
+                    endpoint + "/calls",
+                    json=data,
+                    headers=[*headers.items(), ("X-AC-Sandbox-Tenant", str(setup.state.tenant_id))],
+                )
+                assert duplicated.status_code == 422, duplicated.text
+            async with setup.sessions() as db:
+                assert (
+                    await db.scalar(select(func.count()).select_from(ConversationSyntheticRecord))
+                    == 0
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_cookie_import_requires_flag_preserves_authored_report_and_never_creates_run_or_charge(
     postgres_harness,
     tmp_path,
@@ -151,7 +268,11 @@ def test_cookie_import_requires_flag_preserves_authored_report_and_never_creates
         setup = await setup_import(postgres_harness, tmp_path)
         data = bundle()
         endpoint = PREFIX + "/imports/sandbox/calls"
-        headers = {"Origin": ORIGIN, "Idempotency-Key": "fictional-sandbox-call"}
+        headers = {
+            "Origin": ORIGIN,
+            "Idempotency-Key": "fictional-sandbox-call",
+            "X-AC-Sandbox-Tenant": str(setup.organisation.tenant_id),
+        }
         try:
             async with await client_for(setup) as client:
                 refused = await client.post(endpoint, json=data, headers=headers)
@@ -259,7 +380,11 @@ def test_atomic_master_batches_supersede_and_current_role_revocation_denies_read
             }
             data = {"schema": "synthetic-record-batch/1", "synthetic": True, "records": [row]}
             endpoint = PREFIX + "/imports/sandbox/records"
-            headers = {"Origin": ORIGIN, "Idempotency-Key": "master-1"}
+            headers = {
+                "Origin": ORIGIN,
+                "Idempotency-Key": "master-1",
+                "X-AC-Sandbox-Tenant": str(setup.organisation.tenant_id),
+            }
             async with await client_for(setup) as client:
                 first = await client.post(endpoint, json=data, headers=headers)
                 assert first.status_code == 201, first.text
@@ -355,7 +480,11 @@ def test_retained_synthetic_audio_is_source_bound_replayable_and_never_creates_a
         data, body = media_bundle(payload)
         endpoint = PREFIX + "/imports/sandbox/calls"
         call_path = endpoint + "/" + data["metadata"]["call_id"]
-        headers = {"Origin": ORIGIN, "Idempotency-Key": "fixture-call-with-audio"}
+        headers = {
+            "Origin": ORIGIN,
+            "Idempotency-Key": "fixture-call-with-audio",
+            "X-AC-Sandbox-Tenant": str(setup.organisation.tenant_id),
+        }
         try:
             await flag(setup)
             async with await client_for(setup) as client:
@@ -402,6 +531,7 @@ def test_retained_synthetic_audio_is_source_bound_replayable_and_never_creates_a
                 upload_headers = {
                     "Origin": ORIGIN,
                     "Idempotency-Key": "media-bytes",
+                    "X-AC-Sandbox-Tenant": str(setup.organisation.tenant_id),
                     "Content-Type": "audio/mpeg",
                     "Content-Length": str(len(payload)),
                 }

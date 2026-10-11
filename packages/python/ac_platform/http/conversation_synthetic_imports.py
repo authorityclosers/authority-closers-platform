@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Header, Path, Request, Response
 
@@ -22,6 +23,25 @@ if TYPE_CHECKING:
     from ac_platform.http.conversation_imports import _Guard
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
     from ac_platform.http.conversation_submissions import _Owner
+
+
+def require_sandbox_target(request: Request, owner: _Owner, fail: Callable[..., Any]) -> None:
+    """Assert an operator's target; the ordinary session still supplies all authority."""
+    values = request.headers.getlist("x-ac-sandbox-tenant")
+    if not values:
+        return
+    try:
+        if len(values) != 1 or str(UUID(values[0])) != values[0]:
+            raise ValueError
+        target = UUID(values[0])
+    except ValueError:
+        raise fail(422, "Supply one exact sandbox target UUID.") from None
+    if (
+        owner.actor is None
+        or owner.actor.tenant_id != target
+        or owner.ownership.tenant_id != target
+    ):
+        raise fail(409, "The selected sandbox changed. Select the import target and try again.")
 
 
 def install_synthetic_import_http(
@@ -58,6 +78,7 @@ def install_synthetic_import_http(
             async with asynccontextmanager(current_owner)(request) as owner:
                 if owner.actor is None or owner.token is not None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
                 return await SyntheticImports(owner.ownership).call(owner.actor, bundle, key=key)
         except ConversationError as error:
@@ -75,6 +96,7 @@ def install_synthetic_import_http(
             async with asynccontextmanager(current_owner)(request) as owner:
                 if owner.actor is None or owner.token is not None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
                 return await SyntheticImports(owner.ownership).records(owner.actor, batch, key=key)
         except ConversationError as error:
@@ -87,6 +109,7 @@ def install_synthetic_import_http(
             async with asynccontextmanager(read_only_owner)(request) as owner:
                 if owner.actor is None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 return await SyntheticImports(owner.ownership).progress(owner.actor)
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -108,6 +131,7 @@ def install_synthetic_import_http(
             async with asynccontextmanager(read_only_owner)(request) as owner:
                 if owner.actor is None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 return await SyntheticImports(owner.ownership).list_records(
                     owner.actor, kind=kind, after=cursor, limit=100
                 )
@@ -122,6 +146,7 @@ def install_synthetic_import_http(
             async with asynccontextmanager(read_only_owner)(request) as owner:
                 if owner.actor is None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 return await SyntheticImports(owner.ownership).read_call(
                     owner.actor, call_id, coaching=request.url.path.endswith("/coaching")
                 )

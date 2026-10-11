@@ -187,3 +187,42 @@ failed as expected (5.65s). Logs are `sandbox-target-readback-before.log` and
 `sandbox-target-readback-verified.log` in the strike folder. No database/runtime,
 ledger, HTTP route, UI, dependency or foreign strike file is changed by this
 follow-up; final-head CI remains required after publication.
+
+## Buyer-boundary publication and exact-target assertion
+
+The immutable operator input is now
+`/home/acdev/strikes/1676/sandbox-source-20261011-0424`, SHA256
+`fe51b45f8b786aaff8b1750388f66061503cbfee775447f84b59f405c8e06e3f`.
+It contains the published `buyer-boundaries/1` revision, with 87 separately
+authored calls in 29 journeys and unchanged complete corpus totals. All 16,807
+published bundle hashes match the 16,978-file copy. The final delivery receipt
+binds its CSV, bundle index and bundle-hash receipt; all nine assurance proof
+pins and PASS states were independently matched. Two supplemental check receipts
+are retained separately, preserving the frozen dataset. Full offline request,
+record, bundle and seven-media hash/decode/text/timing validation exits zero.
+Earlier immutable inputs and guides remain intact. Native fluency is unverified.
+
+The importer carries `X-AC-Sandbox-Tenant` on every request. The header asserts
+the operator's exact intended target against the authenticated actor and service
+workspace. It cannot select an organisation or grant permission. Existing cookie,
+origin, current role, profile and immutable sandbox-flag checks remain required.
+The assertion is optional for existing readers; when present, malformed or repeated
+headers are refused and a changed selection fails before any import write. Audio
+checks the target before receiving bytes and again after spooling. This supersedes
+the earlier intermediate-write warning in this verified server change.
+No new schema, identity grant, billing or provider behavior is introduced.
+
+The original CLI regression fails because it sends no intended-target header.
+The new real-cookie/PostgreSQL regression changes the session between two
+explicitly flagged, served organisations and checks all four write paths before
+any synthetic record is created. All 24 operator unit cases (7.19s) and all six
+actual sandbox PostgreSQL cases (33.60s) pass. Changed-file Ruff/format and
+three-source mypy pass. Replay, simultaneous imports, private native media and
+zero charge/job writes are verified with the bound requests. The original server
+returned another flagged tenant from the bound GET; the final server refuses all
+four wrong-target write paths and malformed/repeated headers with zero imported
+records. Receipts: `logs/sandbox-target-prefx-unit.log`,
+`logs/sandbox-target-prefx-postgresql-second.log` and
+`logs/sandbox-target-final-checks-second.log` in the strike folder. No staging or
+production import, deployment, service change or manual merge is claimed. #437
+remains closed under the recorded #446 -> #442 -> #437 serialization order.

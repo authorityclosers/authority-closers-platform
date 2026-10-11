@@ -204,6 +204,7 @@ def test_verified_media_is_source_pinned_sent_in_bounded_transport_and_read_back
 
     def respond(request):
         sent.append(request)
+        assert request.headers.get("x-ac-sandbox-tenant") == str(AC_SANDBOX)
         if request.method == "GET":
             return httpx.Response(
                 200,

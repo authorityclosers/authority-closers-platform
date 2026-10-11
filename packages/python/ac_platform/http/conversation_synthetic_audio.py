@@ -33,6 +33,7 @@ from ac_platform.conversation_intelligence.synthetic_imports import SyntheticImp
 from ac_platform.conversation_intelligence.worker import _FencedExecutor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
+from ac_platform.http.conversation_synthetic_imports import require_sandbox_target
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 
 if TYPE_CHECKING:
@@ -67,6 +68,7 @@ def install_synthetic_audio_http(
             async with asynccontextmanager(current_owner)(request) as owner:
                 if owner.actor is None or owner.token is not None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
                 return await SyntheticAudio(SyntheticImports(owner.ownership)).manifest(
                     owner.actor, body, key=key
@@ -102,6 +104,7 @@ def install_synthetic_audio_http(
             async with asynccontextmanager(read_only_owner)(request) as owner:
                 if owner.actor is None or owner.token is not None:
                     raise fail(401, "Sign in to the sandbox organisation.")
+                require_sandbox_target(request, owner, fail)
                 _, prepared = await SyntheticAudio(SyntheticImports(owner.ownership)).prepared(
                     owner.actor, call_id
                 )
@@ -151,6 +154,7 @@ def install_synthetic_audio_http(
                         != binding
                     ):
                         raise fail(403, "The sandbox upload session changed.")
+                    require_sandbox_target(request, owner, fail)
                     await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
                     audio = SyntheticAudio(SyntheticImports(owner.ownership))
                     _, fresh = await audio.prepared(owner.actor, call_id, write=True)
@@ -225,6 +229,7 @@ def install_synthetic_audio_http(
         if owner.actor is None:
             raise fail(401, "Sign in to the sandbox organisation.")
         try:
+            require_sandbox_target(request, owner, fail)
             imports = SyntheticImports(owner.ownership)
             _, manifest = await SyntheticAudio(imports).prepared(owner.actor, call_id)
             row = await imports.database.get(
