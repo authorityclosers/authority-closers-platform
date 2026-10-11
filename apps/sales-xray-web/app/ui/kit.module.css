@@ -508,7 +508,7 @@ a.tile:hover {
   border-radius: 50%;
   background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
   color: var(--sx-ink-2);
-  font-size: max(10px, calc(var(--size, 24px) * 0.4));
+  font-size: max(12px, calc(var(--size, 24px) * 0.4));
   font-weight: 700;
 }
 
@@ -570,15 +570,24 @@ a.rowTitle:hover {
   color: var(--sx-accent);
 }
 
+/* The dot sits in the gap before each item; an item that starts a line
+   pushes its dot past the clipped left edge, so no line starts with "·". */
 .rowMeta {
   display: flex;
   flex-wrap: wrap;
+  column-gap: 14px;
+  overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
 
-.rowMeta > span + span::before {
-  margin: 0 6px;
+.rowMeta > span {
+  position: relative;
+}
+
+.rowMeta > span::before {
+  position: absolute;
+  left: -10px;
   content: "·";
 }
 
