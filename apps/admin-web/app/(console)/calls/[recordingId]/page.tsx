@@ -112,11 +112,8 @@ export default async function CallReviewPage({
           </Panel>
         ) : null}
         {call.data.failedJobs.length ? (
-          <Panel
-            title="Failed steps"
-            sub="Retry runs the step again; it needs a reason and is audited."
-          >
-            <FailedSteps jobs={call.data.failedJobs} />
+          <Panel title="Failed steps" sub="Retry asks for a reason">
+            <FailedSteps jobs={call.data.failedJobs} inset />
           </Panel>
         ) : null}
         {call.data.runs.length ? (

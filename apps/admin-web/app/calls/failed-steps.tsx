@@ -9,16 +9,27 @@ import { RetryJob } from "../health/retry-job";
 import { when } from "./call-data";
 import styles from "./review.module.css";
 
-export function FailedSteps({ jobs }: { jobs: FailedJob[] }) {
+export function FailedSteps({
+  jobs,
+  inset = false,
+}: {
+  jobs: FailedJob[];
+  /** Pad the list when it sits straight inside a panel. */
+  inset?: boolean;
+}) {
   if (!jobs.length) return null;
   return (
-    <ul className={styles.runs} aria-label="Failed steps">
+    <ul
+      className={styles.runs}
+      data-inset={inset ? "" : undefined}
+      aria-label="Failed steps"
+    >
       {jobs.map((job) => (
         <li key={job.jobId}>
           <span className={styles.runHead}>
             <strong>{STAGE_LABEL[job.stage] ?? job.stage}</strong>
             <Badge tone="bad">Failed</Badge>
-            <code className={styles.runMeta}>{job.code}</code>
+            <code className={styles.failCode}>{job.code}</code>
           </span>
           <span className={styles.runMeta}>
             {[
