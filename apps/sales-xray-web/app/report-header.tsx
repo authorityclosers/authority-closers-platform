@@ -5,6 +5,7 @@ import {
   Clock3,
   Download,
   Ellipsis,
+  Languages,
   Link2,
   Pencil,
   Plus,
@@ -379,7 +380,11 @@ export function ReportHeader({
               {formatClock(durationMs)}
             </span>
             {languageLabel ? (
-              <span>Report language: {languageLabel}</span>
+              <span title={`Report language: ${languageLabel}`}>
+                <Languages size={14} aria-hidden="true" />
+                <span className={pinned.hidden}>Report language: </span>
+                {languageLabel}
+              </span>
             ) : null}
           </p>
         </div>
@@ -411,7 +416,7 @@ export function ReportHeader({
               title="Open transcript reader"
             >
               <BookOpen size={16} aria-hidden="true" />
-              <span>Transcript</span>
+              <span className={pinned.wideOnly}>Transcript</span>
             </button>
           ) : null}
           {/* Every action lives in one calm menu; "New analysis" is in the app header. */}
