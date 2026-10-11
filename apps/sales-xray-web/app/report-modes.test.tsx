@@ -57,6 +57,12 @@ afterEach(async () => {
 });
 
 const call = "c2793fdf-4948-47e4-a4bc-973f2b7720bc";
+// A guest preview has no six-pillar Report, so the classic Reading, Tabbed
+// and Document views (and their navigation) stay the whole toolbar.
+const legacyReport = {
+  ...syntheticReport,
+  preview: { version: "guest-findings-v1", sections: {} },
+} as unknown as typeof syntheticReport;
 function JumpToPoint() {
   const navigate = useReportNavigation();
   return (
@@ -102,7 +108,7 @@ async function render(boundCallId?: string) {
       <ReportModes
         panels={panels()}
         boundCallId={boundCallId}
-        documentData={{ report: syntheticReport }}
+        documentData={{ report: legacyReport }}
       />,
     ),
   );
@@ -125,6 +131,8 @@ it("opens call Coaching from the retained report without loading another route",
       />,
     ),
   );
+  // The six-part Report is the default; Coaching sits beside it.
+  expect(mode().dataset.view).toBe("story");
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>('button[title="Coaching view"]')!
@@ -148,7 +156,7 @@ it("opens call Coaching from the retained report without loading another route",
   );
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
       .click(),
   );
   expect(mode().dataset.view).toBe("tabs");
@@ -1139,34 +1147,12 @@ it("switches to Document view and preserves the reader's place", async () => {
   expect(window.location.search).toContain("view=tabs");
 });
 
-it("controls text size with steps 100%, 112.5%, 125% and remembers choice", async () => {
-  localStorage.clear();
+it("keeps an earlier saved text size without showing a size control", async () => {
+  localStorage.setItem("ac:report-text-size", "112.5");
   await render(call);
-
-  expect(mode().dataset.textSize).toBe("100");
-
-  const btn125 = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Text size 125%"]',
-  )!;
-  expect(btn125).not.toBeNull();
-  await act(async () => btn125.click());
-
-  expect(mode().dataset.textSize).toBe("125");
-  expect(localStorage.getItem("ac:report-text-size")).toBe("125");
-
-  const btn112 = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Text size 112.5%"]',
-  )!;
-  await act(async () => btn112.click());
   expect(mode().dataset.textSize).toBe("112.5");
-  expect(localStorage.getItem("ac:report-text-size")).toBe("112.5");
-
-  const btn100 = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Text size 100%"]',
-  )!;
-  await act(async () => btn100.click());
-  expect(mode().dataset.textSize).toBe("100");
-  expect(localStorage.getItem("ac:report-text-size")).toBe("100");
+  expect(container.querySelector('[aria-label^="Text size"]')).toBeNull();
+  localStorage.removeItem("ac:report-text-size");
 });
 
 it("opens every top-level section as a chapter in Reading mode", async () => {
@@ -1209,11 +1195,6 @@ it("hydrates a returning viewer's saved text size without retaining default attr
     root = hydrateRoot(container, element);
   });
   expect(mode().dataset.textSize).toBe("125");
-  expect(
-    container
-      .querySelector('[aria-label="Text size 125%"]')
-      ?.getAttribute("aria-pressed"),
-  ).toBe("true");
   expect(consoleError.mock.calls.flat().join(" ")).not.toMatch(
     /hydrat|didn't match/i,
   );
@@ -1337,7 +1318,7 @@ it("passes supplied report metadata to the generated-file preview", async () => 
         panels={panels()}
         boundCallId={call}
         documentData={{
-          report: syntheticReport,
+          report: legacyReport,
           title: "Bound call",
           analysisBasis: { transcriptRevision: "fixture-r2" },
         }}
@@ -1362,7 +1343,7 @@ it("does not inject document metadata into HTML or CSS", async () => {
         panels={panels()}
         boundCallId={call}
         documentData={{
-          report: syntheticReport,
+          report: legacyReport,
           title: 'Seller "</style><script>example</script>',
         }}
       />,
@@ -1433,42 +1414,83 @@ it("keeps the same mounted panel state across all three report views", async () 
   }
 });
 
-it("adds Story with the six pillars while keeping the current tabs and default", async () => {
-  window.history.replaceState(
-    null,
-    "",
-    `/?call=${call}&view=tabs&section=overview`,
+it("opens on the six-pillar Report and keeps every original section under Details", async () => {
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ report: syntheticReport }}
+      />,
+    ),
   );
-  await render(call);
-  expect(mode().dataset.view).toBe("tabs");
-  expect(container.textContent).toContain("Summary point");
-  const tabsBefore = [...container.querySelectorAll('[role="tab"]')].map(
-    (tab) => tab.textContent,
-  );
-  const story = container.querySelector<HTMLButtonElement>(
-    'button[title="Story view"]',
-  )!;
-  await act(async () => story.click());
   expect(mode().dataset.view).toBe("story");
-  expect(window.location.search).toContain("view=story");
   expect(
-    container.querySelectorAll('[data-pulse-adapted="true"]'),
-  ).toHaveLength(6);
+    [...container.querySelectorAll("[data-report-mode-section]")].map((e) =>
+      e.getAttribute("data-report-mode-section"),
+    ),
+  ).toEqual(["overview", "coaching", "moments", "missed", "skills", "facts"]);
+  expect(
+    [...container.querySelectorAll("h2")].map((h) => h.textContent),
+  ).toEqual([
+    "The Big Picture",
+    "How the Call Played Out",
+    "What Worked — & What Didn't",
+    "Moments That Mattered",
+    "Your Skills on This Call",
+    "Where the Deal Stands",
+  ]);
   expect(
     container.querySelectorAll('a[href^="/coaching?focus="]'),
   ).toHaveLength(8);
   expect(container.textContent).not.toContain("Summary point");
+  expect(
+    [
+      ...container.querySelectorAll("[data-report-nav] [role=group] button"),
+    ].map((b) => b.textContent),
+  ).toEqual(["Report", "Coaching", "Details", "Document"]);
+  // No text-size control: browser zoom does that job.
+  expect(container.querySelector('[aria-label^="Text size"]')).toBeNull();
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[title="Tabbed view"]')!
+      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
       .click(),
   );
+  expect(mode().dataset.view).toBe("tabs");
+  expect(window.location.search).toContain("view=tabs");
   expect(
     [...container.querySelectorAll('[role="tab"]')].map(
       (tab) => tab.textContent,
     ),
-  ).toEqual(tabsBefore);
+  ).toEqual([
+    "Overview",
+    "Prospect",
+    "Moments",
+    "Sales skills",
+    "Next-call plan",
+    "Transcript",
+  ]);
   expect(container.textContent).toContain("Summary point");
+});
+
+it("opens Coaching from the deal pillar's button", async () => {
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ report: syntheticReport }}
+      />,
+    ),
+  );
+  const open = [...container.querySelectorAll("button")].find(
+    (b) => b.textContent === "Coaching for this call",
+  )!;
+  await act(async () => open.click());
+  expect(mode().dataset.view).toBe("coaching");
+  expect(window.location.search).toContain("view=coaching");
 });
 
 it("remembers the chosen view per person and workspace, with explicit URLs taking priority", async () => {
@@ -1495,17 +1517,17 @@ it("remembers the chosen view per person and workspace, with explicit URLs takin
   await show("first", "first");
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[title="Story view"]')!
+      .querySelector<HTMLButtonElement>('button[title="Details view"]')!
       .click(),
   );
-  expect(localStorage.getItem("ac:report-view:tenant-one:first")).toBe("story");
+  expect(localStorage.getItem("ac:report-view2:tenant-one:first")).toBe("tabs");
   window.history.replaceState(null, "", `/?call=${call}`);
   await show("first", "reopened");
-  expect(mode().dataset.view).toBe("story");
-  await show("second", "second");
-  expect(mode().dataset.view).toBe("reading");
-  window.history.replaceState(null, "", `/?call=${call}&view=tabs`);
-  await show("first", "explicit");
   expect(mode().dataset.view).toBe("tabs");
-  localStorage.removeItem("ac:report-view:tenant-one:first");
+  await show("second", "second");
+  expect(mode().dataset.view).toBe("story");
+  window.history.replaceState(null, "", `/?call=${call}&view=document`);
+  await show("first", "explicit");
+  expect(mode().dataset.view).toBe("document");
+  localStorage.removeItem("ac:report-view2:tenant-one:first");
 });

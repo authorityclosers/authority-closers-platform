@@ -40,7 +40,8 @@ describe("dashboard greeting", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(2026, 8, 29, 9, 0));
+    // 09:00 in India (the greeting follows India time, like the dashboard).
+    vi.setSystemTime(new Date(Date.UTC(2026, 8, 29, 3, 30)));
     host = document.createElement("div");
     document.body.append(host);
   });
@@ -92,11 +93,11 @@ describe("dashboard greeting", () => {
     expect(title()).toBe("Good morning");
   });
 
-  it("keeps the fallback greeting through hydration, then uses local time", async () => {
+  it("says the same on the server and in the browser (India time), so nothing swaps", async () => {
     host.innerHTML = renderToString(
       <DashboardGreeting subtitle="Last 30 days" />,
     );
-    expect(title()).toBe("Welcome back");
+    expect(title()).toBe("Good morning");
 
     await act(async () => {
       const hydratedRoot = hydrateRoot(

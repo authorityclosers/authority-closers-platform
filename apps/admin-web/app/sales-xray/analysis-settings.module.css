@@ -1,129 +1,84 @@
-.panel {
+/* Analysis settings: only what the kit doesn't draw. Tokens only. */
+
+.body {
   display: grid;
-  gap: 1rem;
-  padding: 1.5rem;
-  border: 1px solid #d8e0e9;
-  border-radius: 1rem;
-  background: #fff;
-  color: #1c2a39;
+  gap: 12px;
+  padding: 14px;
+  font-size: var(--sx-text-sm);
 }
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.header h2 {
-  margin: 0.4rem 0 0;
-  font-size: 1.35rem;
-}
-.eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+
+.body p {
   margin: 0;
-  color: #526579;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
-.copy,
+
 .hint {
-  margin: 0;
-  color: #526579;
-  line-height: 1.55;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
-.hint {
-  font-size: 0.86rem;
-}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 14px 16px;
+  align-items: start;
 }
-.field {
-  display: grid;
-  gap: 0.4rem;
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
-.field span {
-  font-weight: 650;
-}
-.field input,
-.field select {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #bac7d8;
-  border-radius: 0.55rem;
-  padding: 0.72rem 0.8rem;
-  background: #fff;
-  color: #1c2a39;
-  font: inherit;
-}
-.field small {
-  color: #526579;
-  line-height: 1.4;
-}
-.iconButton,
-.primary {
+
+.iconButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border: 1px solid #bac7d8;
-  border-radius: 0.55rem;
-  padding: 0.7rem 0.9rem;
-  cursor: pointer;
-  background: #fff;
-  color: #203c65;
+  gap: 6px;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
   font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
 }
-.iconButton:focus-visible,
-.primary:focus-visible,
-.field input:focus-visible,
-.field select:focus-visible {
-  outline: 3px solid #9eaefa;
-  outline-offset: 3px;
+
+.iconButton:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
-.iconButton:disabled,
-.primary:disabled {
-  cursor: wait;
-  opacity: 0.65;
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
 }
-.primary {
-  background: #203c65;
-  color: #fff;
-}
-.actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.8rem;
-}
-.actions > span {
-  color: #526579;
-  font-size: 0.86rem;
-}
+
 .error,
 .success {
-  margin: 0;
-  padding: 0.8rem 1rem;
-  border-left: 3px solid;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
 }
+
 .error {
-  border-color: #b42318;
-  background: #fff1f0;
-  color: #7a271a;
+  border-color: color-mix(in oklab, var(--sx-warn) 35%, var(--sx-line));
+  background: color-mix(in oklab, var(--sx-warn) 8%, var(--sx-surface));
+  color: var(--sx-ink-2);
 }
+
 .success {
-  border-color: #087443;
-  background: #edfcf2;
-  color: #095c37;
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink-2);
 }
+
 .history {
   display: grid;
   gap: 1rem;
-  border-top: 1px solid #d8e0e9;
+  border-top: 1px solid var(--sx-line);
   padding-top: 1rem;
   min-width: 0;
 }
@@ -138,15 +93,15 @@
 }
 .revisions li {
   padding: 1rem;
-  border: 1px solid #d8e0e9;
-  border-radius: 0.6rem;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
   overflow-wrap: anywhere;
 }
 .revisions time {
   display: block;
   margin-top: 0.3rem;
-  font-size: 0.85rem;
-  color: #526579;
+  font-size: var(--sx-text-md);
+  color: var(--sx-muted);
 }
 .revisions dl {
   display: grid;
@@ -155,8 +110,8 @@
   margin-bottom: 0;
 }
 .revisions dt {
-  font-size: 0.82rem;
-  color: #526579;
+  font-size: var(--sx-text-sm);
+  color: var(--sx-muted);
 }
 .revisions dd {
   margin: 0.2rem 0 0;

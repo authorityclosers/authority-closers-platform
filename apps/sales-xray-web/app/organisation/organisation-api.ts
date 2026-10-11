@@ -1,5 +1,6 @@
 /** Organisation reads and changes against the selected session workspace. */
 import { acquisition, AcquisitionError } from "../acquisition-client";
+import { earlyFetch } from "../early-reads";
 import type { ActivityDay } from "../dashboard/dashboard-data";
 
 export type OrgRole = "owner" | "admin" | "member";
@@ -106,7 +107,8 @@ async function call(
     headers.set("Content-Type", "application/json");
   if (init.method && init.method !== "GET")
     headers.set("Idempotency-Key", requestKey ?? crypto.randomUUID());
-  const response = await fetch(`/v1/organisation${path}`, {
+  // A page's first GETs may already have been started with the HTML.
+  const response = await earlyFetch(`/v1/organisation${path}`, {
     credentials: "same-origin",
     cache: "no-store",
     redirect: "error",
@@ -349,7 +351,21 @@ const counts = (item: Record<string, unknown>): ActivityCounts => ({
 });
 
 export async function readActivity(signal?: AbortSignal): Promise<OrgActivity> {
-  const data = obj(await call("/activity?days=30", { signal }));
+  return parseActivity(await call("/activity?days=30", { signal }));
+}
+
+/** The activity over the last `days` (the server takes 1-90). */
+export async function readActivityDays(
+  days: number,
+  signal?: AbortSignal,
+): Promise<OrgActivity> {
+  const window = Math.min(90, Math.max(1, Math.round(days)));
+  return parseActivity(await call(`/activity?days=${window}`, { signal }));
+}
+
+/** The 30-day activity answer, tolerant of missing fields (see readActivity). */
+export function parseActivity(value: unknown): OrgActivity {
+  const data = obj(value);
   return {
     perDay: list(data.per_day).map((raw) => {
       const item = obj(raw);

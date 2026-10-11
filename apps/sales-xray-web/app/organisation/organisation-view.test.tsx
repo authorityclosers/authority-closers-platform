@@ -2,6 +2,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import { resetInvitesForTests } from "../shell/invites-store";
 import { CREATE_ORGANISATION_EVENT } from "../shell/shell-store";
 import { WorkspaceAccessContext } from "../workspace-access";
@@ -306,6 +307,38 @@ it.each([
       ).toBeGreaterThan(1);
   },
 );
+it("starts from the app's workspace directory, so its own reads start at once", async () => {
+  const directory = routes["/v1/me/sales-xray-workspaces"] as {
+    workspaces: SalesXrayWorkspace[];
+  };
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider
+        value={{
+          status: "ready",
+          authenticated: true,
+          context: { personId: ownerId, sessionId: "s-1", tenantId },
+          workspaces: directory.workspaces,
+          retry: accessRetry,
+        }}
+      >
+        <OrganisationView />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const paths = fetchMock.mock.calls.map(([path]) => path);
+  // No second directory read before the organisation's own reads.
+  expect(paths).not.toContain("/v1/me/sales-xray-workspaces");
+  expect(paths).toEqual(
+    expect.arrayContaining([
+      "/v1/organisation",
+      "/v1/organisation/members",
+      "/v1/organisation/activity?days=30",
+    ]),
+  );
+  expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
+});
+
 it("cancels a role change without writing", async () => {
   await render();
   await click("Members");
@@ -353,6 +386,16 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
   expect(button("Remove Admin")).toBeUndefined();
   expect(button("Remove Dipak").disabled).toBe(false);
   expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+  // Every row opens that person's profile (an invitation by its id).
+  expect(
+    [...host.querySelectorAll('a[href^="/organisation/people/"]')].map((link) =>
+      link.getAttribute("href"),
+    ),
+  ).toEqual([
+    `/organisation/people/${ownerId}`,
+    `/organisation/people/${inviteId}`,
+    `/organisation/people/${memberId}`,
+  ]);
 });
 it("uses the API role and shows members only their own row read-only", async () => {
   org().role = "member";
@@ -626,8 +669,11 @@ it("reconciles every Overview figure with the calls it lists", async () => {
     /^Sales call · \S/,
   );
   expect(rows[0].textContent).toContain("Report ready");
-  // One sparse day is not a trend in the figure strip.
-  expect(host.querySelector('dl [role="img"]')).toBeNull();
+  // One sparse day is not a trend in the figure strip (share bars stay).
+  expect(host.querySelector('dl [aria-label^="Calls per day"]')).toBeNull();
+  expect(
+    host.querySelector('dl [aria-label="100% of calls have a ready report"]'),
+  ).not.toBeNull();
 });
 
 it("lists active people first and folds quiet and test accounts away", async () => {
@@ -639,6 +685,12 @@ it("lists active people first and folds quiet and test accounts away", async () 
     );
   expect(people()).toHaveLength(1);
   expect(people()[0]).toContain("1 call");
+  // The whole row opens the person's profile.
+  expect(
+    host
+      .querySelector('[aria-labelledby="org-people"] li a')
+      ?.getAttribute("href"),
+  ).toMatch(/^\/organisation\/people\/[0-9a-f-]{36}$/);
   // Two people share a name, so each shows the email that tells them apart.
   expect(people()[0]).toContain("admin@fictional-studio.in");
   expect(host.textContent).not.toContain("Dipak");
@@ -649,13 +701,15 @@ it("lists active people first and folds quiet and test accounts away", async () 
   expect(host.textContent).toContain("No calls");
 });
 
-it("draws a 30-day bar only with at least three active days", async () => {
+it("draws a 14-day sparkline only with at least three active days", async () => {
   activityRoutes([0, 3, 9]);
   await render();
-  expect(
-    host.querySelector('[aria-label="Calls per day over the last 30 days"]')
-      ?.children,
-  ).toHaveLength(30);
+  const spark = host.querySelector(
+    'dl [aria-label^="Calls per day, last 14 days"]',
+  );
+  expect(spark?.children).toHaveLength(14);
+  // Today is the lit column, as on the Dashboard.
+  expect(spark?.lastElementChild?.hasAttribute("data-on")).toBe(true);
   expect(kpi("Reports ready")).toBe("Reports ready1of 3 calls");
   expect(host.textContent).toContain("Analysis in progress");
 });

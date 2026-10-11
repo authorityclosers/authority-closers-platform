@@ -153,7 +153,11 @@ export function EvidencePlayer({
   );
 }
 
-/** The moments behind a focus, every one inspectable (spec 5.5). */
+/**
+ * The moments behind a focus, every one inspectable (spec 5.5). Wide screens
+ * open with two moments and one-column screens with one; the rest stay one
+ * tap away (spec 9, 12.7).
+ */
 export function MomentList({
   evidence,
   showCall = true,
@@ -176,14 +180,15 @@ export function MomentList({
             key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}
             evidence={moment}
             showCall={showCall}
-            extra={index >= 2}
+            extra={index >= 1}
           />
         ))}
       </ul>
-      {evidence.length > 2 && !expanded ? (
+      {evidence.length > 1 && !expanded ? (
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreMoments}`}
+          data-many={evidence.length > 2 ? "" : undefined}
           onClick={() => setExpanded(true)}
         >
           Show all {evidence.length} moments

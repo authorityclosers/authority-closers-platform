@@ -1,0 +1,49 @@
+/* Usage: the journey bars. Tokens only. */
+
+.journey {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+}
+
+.journey li {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) 3rem;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  font-size: var(--sx-text-sm);
+}
+
+.journey strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+@media (max-width: 760px) {
+  .journey li {
+    grid-template-columns: minmax(0, 1fr) 3rem;
+    gap: 4px 12px;
+  }
+
+  .track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

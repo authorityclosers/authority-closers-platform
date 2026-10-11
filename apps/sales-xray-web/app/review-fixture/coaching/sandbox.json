@@ -129,70 +129,84 @@
     },
     "media_clips": [
       {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "topic_id": "syn-coach-video-008",
+        "revision": "96ed3b428aac14cd09a55133e8e8b0177c53d503f7ea80693665818f4f3ad16a",
+        "review_id": "11b807ad-6f2a-542a-b321-7968f7d2eb76",
+        "title": "Objection: Answer Nahi, Diagnose",
+        "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "kind": "audio",
-        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33542,
+        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "takeaways": [
+          "Clarify what the buyer means.",
+          "Respond to the blocker and check resolution."
+        ],
+        "transcript_excerpt": "Prospect: “Mujhe sochna hai.” Bad: “Sure sir, kab call karun?” But “think” could mean price, value, spouse, fear, comparison, self-doubt, implementation, genuine processing, polite rejection. “Of course. Exactly kis part ke baare mein aapko sochna hai?” If prospect identifies something: diagnose it. If they genuinely need space: respect it. “Diagnosis ka goal har objection ko destroy karna nahi. Goal clarity create karna hai.”",
         "slides": [
           {
-            "segment_id": "hook",
-            "title": "Diagnose first",
+            "segment_id": "syn-coach-video-008-S01",
+            "title": "Diagnose the objection",
             "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
+              "Clarify what the buyer means.",
+              "Respond to the blocker and check resolution."
             ]
           }
         ],
-        "topic_id": "syn-coach-audio-001",
-        "review_id": "5a0d0000-0000-4000-8000-000000000301",
-        "title": "Diagnose before you discount",
-        "access": "preview",
-        "entitlement_policy": "sandbox-preview-plan",
+        "offer": null
+      },
+      {
+        "topic_id": "syn-coach-video-010",
+        "revision": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
+        "review_id": "af074c4f-e8ff-5ce7-b4bd-4b9cca30046e",
+        "title": "“Too Expensive” ke Different Meanings",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "locked",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 171000,
-        "preview_end_ms": 3000,
+        "end_ms": 49451,
+        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
         "takeaways": [
-          "Treat “price is high” as a symptom.",
-          "Ask one question about the real concern before any number.",
-          "Name the concern, then show the value."
+          "Ask what the buyer is comparing with.",
+          "Separate budget, value and payment timing."
         ],
+        "transcript_excerpt": "1. CANNOT AFFORD Money genuinely unavailable. This is a capacity issue. 2. EXPECTED LOWER PRICE Prospect expected ₹30–35K. Money may exist. Problem is anchor…",
+        "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
           "academy": {
-            "href": "https://learn.authorityclosers.com/courses/diagnosis",
-            "label": "Diagnose before you discount"
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
           }
         }
-      },
-      {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "placeholder": true,
-        "voice": "neutral",
-        "kind": "audio",
-        "reason": "A short follow-on for when the buyer does ask for a discount.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
-        "slides": [
-          {
-            "segment_id": "hook",
-            "title": "Diagnose first",
-            "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
-            ]
-          }
-        ],
-        "topic_id": "syn-coach-audio-014",
-        "review_id": "5a0d0000-0000-4000-8000-000000000302",
-        "title": "Trade, never give: handling a discount request",
-        "access": "locked",
-        "entitlement_policy": "sandbox-preview-plan",
-        "start_ms": 0,
-        "end_ms": 204000,
-        "takeaways": ["Every concession buys a commitment."]
       }
     ],
+    "strength": {
+      "title": "Asked for a recent example and consequence",
+      "explanation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000200",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-07-27T11:00:00+05:30",
+          "call_label": "ArthaPath · Kunal K. · Scope call",
+          "segment_id": "L004",
+          "quote": "Could you walk me through one recent example, and what happened because of it?",
+          "start_ms": 38947,
+          "end_ms": 44904,
+          "observation": "You asked for a recent example and its consequence. It made the buyer’s operational problem specific.",
+          "playable": true
+        }
+      ]
+    },
+    "other_suggestions": 0,
     "limitations": ["Synthetic sandbox call."],
     "recommended_media": null
   },
@@ -354,72 +368,85 @@
     },
     "media_clips": [
       {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "topic_id": "syn-coach-video-008",
+        "revision": "96ed3b428aac14cd09a55133e8e8b0177c53d503f7ea80693665818f4f3ad16a",
+        "review_id": "11b807ad-6f2a-542a-b321-7968f7d2eb76",
+        "title": "Objection: Answer Nahi, Diagnose",
+        "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "kind": "audio",
-        "reason": "Your calls move to a discount before the buyer’s concern is clear. This lesson shows how to diagnose first.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
+        "access": "full",
+        "entitlement_policy": "AUT-1678-open-access",
+        "start_ms": 0,
+        "end_ms": 33542,
+        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "takeaways": [
+          "Clarify what the buyer means.",
+          "Respond to the blocker and check resolution."
+        ],
+        "transcript_excerpt": "Prospect: “Mujhe sochna hai.” Bad: “Sure sir, kab call karun?” But “think” could mean price, value, spouse, fear, comparison, self-doubt, implementation, genuine processing, polite rejection. “Of course. Exactly kis part ke baare mein aapko sochna hai?” If prospect identifies something: diagnose it. If they genuinely need space: respect it. “Diagnosis ka goal har objection ko destroy karna nahi. Goal clarity create karna hai.”",
         "slides": [
           {
-            "segment_id": "hook",
-            "title": "Diagnose first",
+            "segment_id": "syn-coach-video-008-S01",
+            "title": "Diagnose the objection",
             "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
+              "Clarify what the buyer means.",
+              "Respond to the blocker and check resolution."
             ]
           }
         ],
-        "topic_id": "syn-coach-audio-001",
-        "review_id": "5a0d0000-0000-4000-8000-000000000301",
-        "title": "Diagnose before you discount",
-        "access": "preview",
-        "entitlement_policy": "sandbox-preview-plan",
+        "offer": null
+      },
+      {
+        "topic_id": "syn-coach-video-010",
+        "revision": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
+        "review_id": "af074c4f-e8ff-5ce7-b4bd-4b9cca30046e",
+        "title": "“Too Expensive” ke Different Meanings",
+        "kind": "video",
+        "placeholder": true,
+        "voice": "neutral",
+        "access": "locked",
+        "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 171000,
-        "preview_end_ms": 3000,
+        "end_ms": 49451,
+        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
         "takeaways": [
-          "Treat “price is high” as a symptom.",
-          "Ask one question about the real concern before any number.",
-          "Name the concern, then show the value."
+          "Ask what the buyer is comparing with.",
+          "Separate budget, value and payment timing."
         ],
+        "transcript_excerpt": "1. CANNOT AFFORD Money genuinely unavailable. This is a capacity issue. 2. EXPECTED LOWER PRICE Prospect expected ₹30–35K. Money may exist. Problem is anchor…",
+        "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
           "academy": {
-            "href": "https://learn.authorityclosers.com/courses/diagnosis",
-            "label": "Diagnose before you discount"
+            "href": "https://learner.authorityclosers.com/",
+            "label": "Dipak's courses on the Learner's Academy"
           }
         }
-      },
-      {
-        "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "placeholder": true,
-        "voice": "neutral",
-        "kind": "audio",
-        "reason": "A short follow-on for when the buyer does ask for a discount.",
-        "transcript_excerpt": "Placeholder narration. “Price high है” सुनते ही discount मत दीजिए. पहले पूछिए: असली concern क्या है?",
-        "slides": [
-          {
-            "segment_id": "hook",
-            "title": "Diagnose first",
-            "bullets": [
-              "Ask what is true before you answer.",
-              "A price objection is a symptom, not the diagnosis."
-            ]
-          }
-        ],
-        "topic_id": "syn-coach-audio-014",
-        "review_id": "5a0d0000-0000-4000-8000-000000000302",
-        "title": "Trade, never give: handling a discount request",
-        "access": "locked",
-        "entitlement_policy": "sandbox-preview-plan",
-        "start_ms": 0,
-        "end_ms": 204000,
-        "takeaways": ["Every concession buys a commitment."]
       }
     ],
     "recommended_media": null,
     "other_format": null,
+    "strength": {
+      "title": "Answered a scope question with a clear limit",
+      "explanation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+      "evidence": [
+        {
+          "submission_id": "5a0d0000-0000-4000-8000-000000000106",
+          "recording_id": "5a0d0000-0000-4000-8000-000000000206",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "transcript_revision": "synthetic-v1",
+          "created_at": "2026-09-07T12:00:00+05:30",
+          "call_label": "ArthaPath · Chennai clinic · Close",
+          "segment_id": "L018",
+          "quote": "That is for your own accounts adviser to decide. The commercial quote will name the purchaser and service clearly. I should not infer tax treatment from the account used for payment.",
+          "start_ms": 181063,
+          "end_ms": 194254,
+          "observation": "You answered a specific scope question with an explicit limit. It made the comparison more concrete.",
+          "playable": true
+        }
+      ]
+    },
     "calls": [
       {
         "submission_id": "5a0d0000-0000-4000-8000-000000000150",
@@ -546,6 +573,7 @@
     "scope": "anonymous",
     "named_rep_details": false,
     "analysed_calls": 40,
+    "rep_count": 6,
     "pending_calls": 2,
     "unavailable_calls": 1,
     "history_limited": true,

@@ -2,11 +2,8 @@ import Link from "next/link";
 import { Clapperboard } from "lucide-react";
 
 import { CallTable } from "@/app/calls/call-table";
-import {
-  CALL_STATUSES,
-  STATUS_LABEL,
-  normalizeQueue,
-} from "@/app/calls/call-data";
+import { normalizeQueue } from "@/app/calls/call-data";
+import { REVIEW_LABEL, REVIEW_STATES } from "@/app/calls/labels-data";
 import { QueueFilters } from "@/app/calls/queue-filters";
 import { QueueKeys } from "@/app/calls/queue-keys";
 import {
@@ -34,6 +31,7 @@ const EMPTY_FACETS = {
   reps: [],
   languages: [],
   providers: [],
+  prompts: [],
 };
 
 export default async function CallsPage({
@@ -45,7 +43,7 @@ export default async function CallsPage({
   const queue = await adminRead(queueApiPath(filters), normalizeQueue);
   const data = queue.ok ? queue.data : null;
   const all = data
-    ? CALL_STATUSES.reduce((sum, status) => sum + data.counts[status], 0)
+    ? REVIEW_STATES.reduce((sum, state) => sum + data.reviewCounts[state], 0)
     : undefined;
   const back = filterQuery(filters);
   return (
@@ -67,15 +65,15 @@ export default async function CallsPage({
       <QueueFilters filters={filters} facets={data?.facets ?? EMPTY_FACETS} />
       <QueryTabs
         base="/calls"
-        param="status"
-        keep={filterQuery(filters, ["status", "cursor"])}
-        current={filters.status ?? "all"}
+        param="review"
+        keep={filterQuery(filters, ["review", "cursor"])}
+        current={filters.review ?? "all"}
         items={[
           { key: "all", label: "All", count: all },
-          ...CALL_STATUSES.map((status) => ({
-            key: status,
-            label: STATUS_LABEL[status],
-            count: data?.counts[status],
+          ...REVIEW_STATES.map((state) => ({
+            key: state,
+            label: REVIEW_LABEL[state],
+            count: data?.reviewCounts[state],
           })),
         ]}
       />

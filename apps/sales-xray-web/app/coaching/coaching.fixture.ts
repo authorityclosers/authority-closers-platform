@@ -161,6 +161,7 @@ export const fictionalTeamCoaching: TeamCoaching & {
   scope: "anonymous",
   named_rep_details: false,
   analysed_calls: 3,
+  rep_count: 2,
   pending_calls: 0,
   unavailable_calls: 0,
   history_limited: false,

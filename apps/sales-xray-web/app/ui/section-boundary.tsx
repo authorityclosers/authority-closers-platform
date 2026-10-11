@@ -1,5 +1,6 @@
 "use client";
 
+import { track } from "../telemetry";
 import { RefreshCw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
@@ -37,6 +38,11 @@ export class SectionBoundary extends Component<Props, State> {
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error(`[${this.props.name}] could not be shown`, error, info);
+    // Analytics only: which section failed, never what it said.
+    track("sx.error_shown", {
+      surface: surfaceOf(this.props.name),
+      code: "section_failed",
+    });
   }
 
   render() {
@@ -69,4 +75,15 @@ export class SectionBoundary extends Component<Props, State> {
       </div>
     );
   }
+}
+
+/** "The daily chart" -> "the_daily_chart": a section's name as a short code. */
+function surfaceOf(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, 48) || "section"
+  );
 }

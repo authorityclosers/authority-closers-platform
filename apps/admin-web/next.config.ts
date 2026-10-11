@@ -2,7 +2,14 @@ import path from "node:path";
 
 import type { NextConfig } from "next";
 
+// next dev behind admin-dev (AUT-1798): the public host may load dev resources.
+const devAllowedOrigins = (process.env.AC_ADMIN_DEV_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
+  ...(devAllowedOrigins.length ? { allowedDevOrigins: devAllowedOrigins } : {}),
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,

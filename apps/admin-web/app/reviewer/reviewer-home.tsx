@@ -1,7 +1,22 @@
 "use client";
 
-import Link from "next/link";
+import { Inbox, LogIn } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { istStamp } from "../lib/time";
+import {
+  Badge,
+  Button,
+  Empty,
+  List,
+  Page,
+  PageHeader,
+  Panel,
+  Row,
+  Skeleton,
+  Unavailable,
+  kitStyles,
+} from "../ui/kit";
 
 import {
   createReviewerAssignmentApi,
@@ -12,8 +27,27 @@ import {
 import { useReviewerSession } from "./reviewer-session";
 import styles from "./reviewer-home.module.css";
 
-function stateLabel(value: ReviewerAssignmentSummary["state"]) {
-  return value === "in_progress" ? "In progress" : value.replaceAll("_", " ");
+type State = ReviewerAssignmentSummary["state"];
+const STATE_TONE: Record<State, "accent" | "warn" | "good" | "neutral"> = {
+  assigned: "accent",
+  in_progress: "warn",
+  submitted: "good",
+  revoked: "neutral",
+  expired: "neutral",
+};
+const LENS: Record<
+  ReviewerAssignmentSummary["allowed_lenses"][number],
+  string
+> = {
+  sales: "Sales expert",
+  technical: "Developer",
+  ux: "Experience reviewer",
+};
+
+function stateLabel(value: State) {
+  return value === "in_progress"
+    ? "In progress"
+    : value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export function ReviewerHome() {
@@ -51,131 +85,94 @@ export function ReviewerHome() {
 
   return (
     <main id="admin-content" className={styles.main} tabIndex={-1}>
-      <div className={styles.container}>
-        <span className={styles.eyebrow}>Dedicated reviewer access</span>
-        <div className={styles.hero}>
-          <div>
-            <h1>Review the calls assigned to you.</h1>
-            <p>
-              Every assignment carries its own source, transcript and allowed
-              feedback lenses. Your reviewer session is independent from Academy
-              learner access.
-            </p>
-          </div>
-          {session ? (
-            <div className={styles.identity}>
-              <span>Signed in as</span>
-              <strong>{session.display_name || session.email}</strong>
-              <small>{session.email}</small>
+      <Page>
+        <PageHeader
+          title="Your review assignments"
+          context={[
+            session ? session.display_name || session.email : null,
+            "Each assignment has its own call, transcript and feedback lenses",
+          ]}
+        />
+        {status === "loading" ||
+        (status === "ready" && queueState === "loading") ? (
+          <Panel title="Assignments">
+            <div className={styles.loading}>
+              <p role="status" className={kitStyles.srOnly}>
+                {status === "loading"
+                  ? "Checking your reviewer session…"
+                  : "Loading your assignments…"}
+              </p>
+              {[0, 1, 2].map((row) => (
+                <Skeleton key={row} height={36} />
+              ))}
             </div>
-          ) : null}
-        </div>
-        {status === "loading" ? (
-          <section className={styles.stateCard}>
-            <p role="status">Checking your reviewer session…</p>
-          </section>
+          </Panel>
         ) : null}
         {status === "signed_out" ? (
-          <section className={styles.stateCard}>
-            <h2>Sign in to see assignments</h2>
-            <p>Use the one-time link sent to your reviewer email.</p>
-            <Link className={styles.primaryButton} href="/reviewer/login">
-              Sign in to review
-            </Link>
-          </section>
+          <Panel title="Assignments">
+            <Empty
+              icon={LogIn}
+              title="Sign in to see assignments"
+              text="Use the one-time link sent to your reviewer email."
+              action={{ href: "/reviewer/login", label: "Sign in to review" }}
+            />
+          </Panel>
         ) : null}
         {status === "error" ? (
-          <section className={styles.stateCard}>
-            <h2>Reviewer session unavailable</h2>
-            <p role="alert">
-              The workspace could not verify your dedicated session. Refresh to
-              try again.
-            </p>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => window.location.reload()}
-            >
+          <div className={styles.retry}>
+            <Unavailable
+              title="Your reviewer session"
+              reason="The workspace could not verify your dedicated session. Refresh to try again."
+            />
+            <Button onClick={() => window.location.reload()}>
               Refresh workspace
-            </button>
-          </section>
-        ) : null}
-        {status === "ready" && queueState === "loading" ? (
-          <p className={styles.status} role="status">
-            Loading your assignments…
-          </p>
+            </Button>
+          </div>
         ) : null}
         {status === "ready" && queueState === "error" ? (
-          <section className={styles.stateCard}>
-            <h2>Assignments unavailable</h2>
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => window.location.reload()}
-            >
+          <div className={styles.retry}>
+            <Unavailable title="Your assignment list" reason={error} />
+            <Button onClick={() => window.location.reload()}>
               Retry assignments
-            </button>
-          </section>
+            </Button>
+          </div>
         ) : null}
         {status === "ready" && queueState === "ready" ? (
-          <section className={styles.queue} aria-labelledby="assignments-title">
-            <div className={styles.queueHeading}>
-              <div>
-                <span className={styles.eyebrow}>Your queue</span>
-                <h2 id="assignments-title">Assigned conversations</h2>
-              </div>
-              <span className={styles.countPill}>
-                {items.length}
-                {truncated ? "+" : ""}
-              </span>
-            </div>
+          <Panel
+            title="Assignments"
+            sub={`${items.length}${truncated ? "+" : ""}`}
+            foot={truncated ? "Showing the first 50 assignments." : undefined}
+          >
             {items.length === 0 ? (
-              <p className={styles.empty}>
-                There are no active reviewer assignments for this session.
-              </p>
+              <Empty
+                icon={Inbox}
+                title="No assignments right now"
+                text="There are no active reviewer assignments for this session."
+              />
             ) : (
-              <div className={styles.cards}>
+              <List label="Assignments">
                 {items.map((item) => (
-                  <Link
-                    className={styles.assignmentCard}
-                    href={`/reviewer/review/${encodeURIComponent(item.id)}`}
+                  <Row
                     key={item.id}
-                  >
-                    <div className={styles.cardTop}>
-                      <span
-                        className={styles.statePill}
-                        data-state={item.state}
-                      >
+                    href={`/reviewer/review/${encodeURIComponent(item.id)}`}
+                    title="Conversation review"
+                    meta={[
+                      item.allowed_lenses.map((lens) => LENS[lens]).join(" · "),
+                      `Open until ${istStamp(new Date(item.expires_at_epoch * 1000))}`,
+                      `Run ${item.run_id.slice(0, 8)}…`,
+                    ]}
+                    end={
+                      <Badge tone={STATE_TONE[item.state]}>
                         {stateLabel(item.state)}
-                      </span>
-                      <span>
-                        {new Date(
-                          item.expires_at_epoch * 1000,
-                        ).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3>Conversation review</h3>
-                    <p>
-                      Run {item.run_id.slice(0, 8)}… · generation{" "}
-                      {item.run_generation}
-                    </p>
-                    <div className={styles.cardBottom}>
-                      <span>{item.allowed_lenses.join(" · ")}</span>
-                      <span>Open review →</span>
-                    </div>
-                  </Link>
+                      </Badge>
+                    }
+                  />
                 ))}
-              </div>
+              </List>
             )}
-            {truncated ? (
-              <p className={styles.note}>Showing the first 50 assignments.</p>
-            ) : null}
-          </section>
+          </Panel>
         ) : null}
-      </div>
+      </Page>
     </main>
   );
 }

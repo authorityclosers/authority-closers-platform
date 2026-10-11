@@ -63,6 +63,7 @@
   font-size: 12px;
 }
 .error {
+  box-sizing: border-box;
   position: fixed;
   right: 16px;
   bottom: 24px;
@@ -76,6 +77,10 @@
   align-items: center;
   gap: 8px;
   z-index: 50;
+}
+.error button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 @media (max-width: 600px) {
   .outcome button,

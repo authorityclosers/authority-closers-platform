@@ -26,6 +26,9 @@ const SHELL_ROUTES = new Set([
   "/analysis",
   "/analysis/new",
   "/analysis/calls",
+  // Coaching keeps the signed-in session across navigation, so it opens
+  // without re-checking the account (AUT-1678).
+  "/coaching",
 ]);
 
 function isShellRoute(pathname: string | null) {
@@ -33,10 +36,12 @@ function isShellRoute(pathname: string | null) {
   // Static exports use trailing slashes for the same application pages.
   const route = pathname.replace(/\/$/, "") || "/";
   const prospectId = route.match(/^\/prospects\/([^/]+)$/)?.[1];
+  const personId = route.match(/^\/organisation\/people\/([^/]+)$/)?.[1];
   return (
     SHELL_ROUTES.has(route) ||
     callIdFromPath(route) !== null ||
-    (prospectId !== undefined && UUID_RE.test(prospectId))
+    (prospectId !== undefined && UUID_RE.test(prospectId)) ||
+    (personId !== undefined && UUID_RE.test(personId))
   );
 }
 

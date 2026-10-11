@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.acquisition_usage import (
     LONGEST_CALL_SECONDS,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
 )
+from ac_platform.conversation_intelligence.activation_contract import InternalTesterApproval
 from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -291,14 +292,15 @@ class AcquisitionSessions:
             "committed_seconds": projected.committed_seconds,
             "available_seconds": projected.available_seconds,
         }
-        tester = (
-            None
-            if self.tester_policy is None or actor is None
-            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
-        )
+        tester = await self._account_tester(actor)
         if tester is not None:
             value["unlimited"] = True
         return value
+
+    async def _account_tester(self, actor: ActorContext | None) -> InternalTesterApproval | None:
+        if self.tester_policy is None or actor is None:
+            return None
+        return await self.tester_policy.for_actor(self.database, actor, "account_minutes")
 
     async def reserve(
         self,
@@ -313,11 +315,7 @@ class AcquisitionSessions:
             await ConversationApplication(self.database, clock=self.clock).admit(actor)
         now = await self._admit(mutation=True)
         visitor_id, person_id = await self._owner(token, actor, now)
-        tester = (
-            None
-            if self.tester_policy is None or actor is None
-            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
-        )
+        tester = await self._account_tester(actor)
         previous = await self.database.scalar(
             select(ConversationAcquisitionUsage).where(
                 ConversationAcquisitionUsage.tenant_id == self.tenant_id,
@@ -398,11 +396,7 @@ class AcquisitionSessions:
         if not permitted:
             raise ConversationDenied("This upload is unavailable.")
         projected = await self._project(visitor_id, person_id, now, mirror=True)
-        tester = (
-            None
-            if self.tester_policy is None or actor is None
-            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
-        )
+        tester = await self._account_tester(actor)
         await ReportMinutes(self.database).reserve_retry(
             usage.id,
             self.tenant_id,

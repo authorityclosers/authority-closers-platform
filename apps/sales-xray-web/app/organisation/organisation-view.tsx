@@ -13,10 +13,12 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -27,6 +29,13 @@ import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { unnamedCallName } from "../call-label";
 import { AcquisitionShell } from "../acquisition-shell";
 import { callDate, callTone, submissionState } from "../call-status";
+import { useDisplayDates } from "../display-clock";
+import { useServerSeedAllowed } from "../initial-session";
+import { personHref } from "./people/person-data";
+import {
+  seededOrganisation,
+  type ServerOrganisation,
+} from "./organisation-seed";
 import { formatClock } from "../lightbox/time";
 import { newCallHref } from "../new-call-navigation";
 import { dismissNotice, notify } from "../notice-center";
@@ -35,6 +44,7 @@ import {
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace as Workspace,
 } from "../sales-xray-workspaces";
+import { Meter, Spark } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import { useBranding } from "../shell/branding-store";
@@ -141,11 +151,20 @@ async function readBase(signal: AbortSignal): Promise<Base> {
 function useLive<T>(
   read: (signal: AbortSignal) => Promise<T>,
   enabled: boolean,
+  /** The value the server read for this page (dev): no first read here. */
+  seeded?: T,
 ): [Live<T>, () => void, () => void] {
-  const [state, setState] = useState<Live<T>>({ status: "loading" });
+  const [state, setState] = useState<Live<T>>(() =>
+    seeded === undefined
+      ? { status: "loading" }
+      : { status: "ready", value: seeded },
+  );
   const [attempt, setAttempt] = useState(0);
+  // The seed answers this read only (a retry or another read reads again).
+  const [seededRead] = useState(() => (seeded === undefined ? null : read));
   useEffect(() => {
     if (!enabled) return;
+    if (attempt === 0 && read === seededRead) return;
     const controller = new AbortController();
     read(controller.signal)
       .then((value) => {
@@ -162,7 +181,7 @@ function useLive<T>(
         });
       });
     return () => controller.abort();
-  }, [read, enabled, attempt]);
+  }, [read, enabled, attempt, seededRead]);
   return [
     state,
     useCallback(() => {
@@ -173,20 +192,47 @@ function useLive<T>(
   ];
 }
 
-function initialTab(): Tab {
-  if (typeof window === "undefined") return "overview";
-  const value = new URLSearchParams(window.location.search).get("tab");
-  return isTab(value) ? value : "overview";
-}
-
 /** Company, members and the organisation's calls in the last 30 days. */
-export function OrganisationView() {
+export function OrganisationView({
+  initial = null,
+}: {
+  /** The page's first reads made on the server (dev), or null. */
+  initial?: ServerOrganisation | null;
+}) {
   const access = useWorkspaceAccess();
+  // The section in the address, the same on the server and in the browser.
+  const searchParams = useSearchParams() as URLSearchParams | null;
+  const context = access?.context;
+  const seedAllowed = useServerSeedAllowed(
+    context
+      ? JSON.stringify([context.personId, context.sessionId, context.tenantId])
+      : null,
+  );
+  const [seed] = useState(() =>
+    seedAllowed ? seededOrganisation(initial) : {},
+  );
   const authenticated = access?.authenticated === true;
   const branding = useBranding();
-  const [base, setBase] = useState<Base>({ status: "loading" });
+  // The app's session check has just read the workspace directory: start
+  // from it, so the organisation's own reads start at once instead of after
+  // a second directory read (a client waterfall).
+  const [base, setBase] = useState<Base>(() =>
+    authenticated && access.workspaces && access.context
+      ? {
+          status: "ready",
+          workspaces: access.workspaces,
+          selected: access.context.tenantId,
+        }
+      : { status: "loading" },
+  );
+  const seededBase = useRef(
+    base.status === "ready" ? access?.context?.tenantId : undefined,
+  );
   const [baseAttempt, setBaseAttempt] = useState(0);
-  const [tab, setTabState] = useState<Tab>(initialTab);
+  const [tab, setTabState] = useState<Tab>(() => {
+    const value = searchParams?.get("tab") ?? null;
+    return isTab(value) ? value : "overview";
+  });
   const [missing, setMissing] = useState(false);
 
   const setTab = useCallback((next: Tab) => {
@@ -199,6 +245,16 @@ export function OrganisationView() {
 
   useEffect(() => {
     if (!authenticated) return;
+    // Started from the app's directory for this workspace: no second read
+    // (a retry, or another workspace, reads again).
+    const seeded = seededBase.current;
+    seededBase.current = undefined;
+    if (
+      seeded !== undefined &&
+      seeded === access?.context?.tenantId &&
+      baseAttempt === 0
+    )
+      return;
     const controller = new AbortController();
     readBase(controller.signal)
       .then((value) => {
@@ -239,11 +295,17 @@ export function OrganisationView() {
   const [org, reloadOrg, refreshOrganisation] = useLive(
     readCurrentOrganisation,
     isOrganisation && tenantId !== null,
+    seed.organisation?.tenantId === tenantId ? seed.organisation : undefined,
   );
-  const [members, reloadMembers] = useLive(readMembers, isOrganisation);
+  const [members, reloadMembers] = useLive(
+    readMembers,
+    isOrganisation,
+    isOrganisation ? seed.members : undefined,
+  );
   const [readActivityState, reloadActivity] = useLive(
     readActivity,
     isOrganisation,
+    isOrganisation ? seed.activity : undefined,
   );
   // A rename in the sidebar or a report shows here at once.
   const [renamed, setRenamed] = useState(
@@ -621,55 +683,46 @@ function summarise(activity: OrgActivity) {
     perRep.length > 0
       ? perRep.filter((rep) => rep.calls > 0).length
       : new Set(calls.map((call) => call.ownerPersonId)).size;
-  const byDay = new Map(perDay.map((day) => [day.date, day.calls]));
+  const byDay = new Map(perDay.map((day) => [day.date, day]));
   const today = new Date();
-  const series = Array.from({ length: 30 }, (_, index) => {
+  // The last 14 days, oldest first (today last): the tiles' sparklines.
+  const days = Array.from({ length: 14 }, (_, index) => {
     const day = new Date(
       Date.UTC(
         today.getUTCFullYear(),
         today.getUTCMonth(),
-        today.getUTCDate() - (29 - index),
+        today.getUTCDate() - (13 - index),
       ),
     );
-    return byDay.get(day.toISOString().slice(0, 10)) ?? 0;
+    return byDay.get(day.toISOString().slice(0, 10));
   });
-  return { ...total, people, series };
+  return {
+    ...total,
+    people,
+    series: days.map((day) => day?.calls ?? 0),
+    minuteSeries: days.map((day) => Math.round(day?.recordedMinutes ?? 0)),
+  };
 }
 
+/** A tile as on the Dashboard: label, value, then a sparkline or share bar. */
 function Kpi({
   label,
   value,
   context,
-  series,
+  accessory,
 }: {
   label: string;
   value: ReactNode;
   context: ReactNode;
-  series?: number[];
+  accessory?: ReactNode;
 }) {
-  // One or two busy days do not make a trend: show the number alone.
-  const spark =
-    series && series.filter((count) => count > 0).length >= 3 ? series : null;
-  const top = spark ? Math.max(...spark) : 1;
   return (
     <div className={styles.kpi}>
       <dt>{label}</dt>
       <dd>
         <b>{value}</b>
-        {spark ? (
-          <span
-            className={styles.spark}
-            role="img"
-            aria-label={`${label} per day over the last 30 days`}
-          >
-            {spark.map((count, index) => (
-              <i
-                key={index}
-                data-empty={count === 0 ? "" : undefined}
-                style={{ height: `${Math.max(8, (count / top) * 100)}%` }}
-              />
-            ))}
-          </span>
+        {accessory ? (
+          <span className={styles.kpiAccessory}>{accessory}</span>
         ) : null}
       </dd>
       <dd className={styles.kpiContext}>{context}</dd>
@@ -800,17 +853,39 @@ function PeriodStrip({
           label="Calls"
           value={totals.calls}
           context={totals.calls === 1 ? "call saved" : "calls saved"}
-          series={totals.series}
+          accessory={
+            <Spark
+              values={totals.series}
+              label={`Calls per day, last 14 days: ${totals.series.join(", ")}`}
+            />
+          }
         />
         <Kpi
           label="Minutes recorded"
           value={minutes(totals.minutes)}
           context="length of those calls"
+          accessory={
+            <Spark
+              values={totals.minuteSeries}
+              label={`Minutes recorded per day, last 14 days: ${totals.minuteSeries.join(", ")}`}
+            />
+          }
         />
         <Kpi
           label="Reports ready"
           value={totals.reports}
           context={`of ${totals.calls} ${totals.calls === 1 ? "call" : "calls"}`}
+          accessory={
+            totals.calls > 0 ? (
+              <span className={styles.kpiShare}>
+                <Meter
+                  value={totals.reports}
+                  max={totals.calls}
+                  label={`${Math.round((totals.reports / totals.calls) * 100)}% of calls have a ready report`}
+                />
+              </span>
+            ) : null
+          }
         />
         {team ? (
           <Kpi
@@ -820,6 +895,17 @@ function PeriodStrip({
               memberCount !== null
                 ? `of ${memberCount} ${memberCount === 1 ? "member" : "members"}`
                 : "members"
+            }
+            accessory={
+              memberCount ? (
+                <span className={styles.kpiShare}>
+                  <Meter
+                    value={totals.people}
+                    max={memberCount}
+                    label={`${totals.people} of ${memberCount} members made calls`}
+                  />
+                </span>
+              ) : null
             }
           />
         ) : null}
@@ -838,6 +924,7 @@ function CallsTable({
   team: boolean;
 }) {
   const [all, setAll] = useState(false);
+  const dates = useDisplayDates();
   const shown = all ? calls : calls.slice(0, CALLS_SHOWN);
   const title = team ? "Team calls" : "Your calls";
   return (
@@ -903,11 +990,13 @@ function CallsTable({
                     {call.label ? (
                       <b>{call.label}</b>
                     ) : (
-                      <b data-unnamed="">{unnamedCallName(call.createdAt)}</b>
+                      <b data-unnamed="">
+                        {unnamedCallName(call.createdAt, dates)}
+                      </b>
                     )}
                     <small className={styles.callMeta}>
                       {team ? `${person} · ` : ""}
-                      {callDate(call.createdAt)}
+                      {callDate(call.createdAt, undefined, dates)}
                       {call.durationSeconds > 0
                         ? ` · ${formatClock(call.durationSeconds * 1000)}`
                         : ""}
@@ -922,9 +1011,13 @@ function CallsTable({
                   <span
                     role="cell"
                     className={styles.callDate}
-                    title={new Date(call.createdAt).toLocaleString()}
+                    title={new Intl.DateTimeFormat(dates.locale, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                      timeZone: dates.timeZone,
+                    }).format(new Date(call.createdAt))}
                   >
-                    {callDate(call.createdAt)}
+                    {callDate(call.createdAt, undefined, dates)}
                   </span>
                   <span
                     role="cell"
@@ -1056,37 +1149,47 @@ function PeopleActivity({
         <ul className={styles.people}>
           {shown.map((row) => (
             <li key={row.id} data-quiet={row.calls === 0 ? "" : undefined}>
-              <i className={styles.avatar} aria-hidden="true">
-                {initials(row.name)}
-              </i>
-              <span className={styles.personName}>
-                <b>
-                  <span className={styles.nameText}>{row.name}</span>
-                  {row.test ? <span className={styles.tag}>Test</span> : null}
-                </b>
-                {row.duplicate && row.email ? <small>{row.email}</small> : null}
-              </span>
-              {complete ? (
-                <WeekBars
-                  name={row.name}
-                  weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
-                  top={topWeek}
-                />
-              ) : (
-                <span className={styles.personBar} aria-hidden="true">
-                  <i style={{ width: `${(row.calls / top) * 100}%` }} />
+              <Link
+                href={personHref(row.id)}
+                prefetch={false}
+                className={styles.personRow}
+              >
+                <i className={styles.avatar} aria-hidden="true">
+                  {initials(row.name)}
+                </i>
+                <span className={styles.personName}>
+                  <b>
+                    <span className={styles.nameText} title={row.name}>
+                      {row.name}
+                    </span>
+                    {row.test ? <span className={styles.tag}>Test</span> : null}
+                  </b>
+                  {row.duplicate && row.email ? (
+                    <small>{row.email}</small>
+                  ) : null}
                 </span>
-              )}
-              <span className={styles.personFigures}>
-                <b>
-                  {row.calls} {row.calls === 1 ? "call" : "calls"}
-                </b>
-                <small>
-                  {row.calls > 0
-                    ? `${minutes(row.minutes)} min · ${row.reports} ${row.reports === 1 ? "report" : "reports"}`
-                    : "No calls"}
-                </small>
-              </span>
+                {complete ? (
+                  <WeekBars
+                    name={row.name}
+                    weeks={weekly.get(row.id) ?? [0, 0, 0, 0]}
+                    top={topWeek}
+                  />
+                ) : (
+                  <span className={styles.personBar} aria-hidden="true">
+                    <i style={{ width: `${(row.calls / top) * 100}%` }} />
+                  </span>
+                )}
+                <span className={styles.personFigures}>
+                  <b>
+                    {row.calls} {row.calls === 1 ? "call" : "calls"}
+                  </b>
+                  <small>
+                    {row.calls > 0
+                      ? `${minutes(row.minutes)} min · ${row.reports} ${row.reports === 1 ? "report" : "reports"}`
+                      : "No calls"}
+                  </small>
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -1164,6 +1267,7 @@ function MembersPanel({
   onMissing: () => void;
 }) {
   const [email, setEmail] = useState("");
+  const dates = useDisplayDates();
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState("");
@@ -1391,7 +1495,13 @@ function MembersPanel({
                   </i>
                   <span className={styles.personName}>
                     <b>
-                      <span className={styles.nameText}>{name}</span>
+                      <Link
+                        href={personHref(member.personId ?? member.inviteId)}
+                        prefetch={false}
+                        className={`${styles.nameText} ${styles.memberLink}`}
+                      >
+                        {name}
+                      </Link>
                       {isYou ? (
                         <span className={styles.you}> (you)</span>
                       ) : null}
@@ -1447,11 +1557,15 @@ function MembersPanel({
                 </span>
                 <span role="cell" className={styles.dateCell}>
                   <span className={styles.cellLabel}>Joined </span>
-                  {member.joinedAt ? callDate(member.joinedAt) : "—"}
+                  {member.joinedAt
+                    ? callDate(member.joinedAt, undefined, dates)
+                    : "—"}
                 </span>
                 <span role="cell" className={styles.dateCell}>
                   <span className={styles.cellLabel}>Last active </span>
-                  {member.lastActiveAt ? callDate(member.lastActiveAt) : "—"}
+                  {member.lastActiveAt
+                    ? callDate(member.lastActiveAt, undefined, dates)
+                    : "—"}
                 </span>
                 <span role="cell" className={styles.rowActions}>
                   {isYou ? (

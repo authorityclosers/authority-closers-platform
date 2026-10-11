@@ -27,6 +27,7 @@ export function waveformBars(
 }
 
 export type ReviewTab =
+  | "review"
   | "report"
   | "pillars"
   | "coaching"
@@ -40,6 +41,7 @@ export type ReviewAction =
   | { kind: "tab"; tab: ReviewTab }
   | { kind: "call"; step: 1 | -1 }
   | { kind: "help" }
+  | { kind: "link" }
   | { kind: "close" };
 
 /** The review screen's keys. Single keys only act outside text fields (the caller checks). */
@@ -80,10 +82,14 @@ export function keyAction(event: {
       return { kind: "tab", tab: "runs" };
     case "t":
       return { kind: "tab", tab: "transcript" };
+    case "v":
+      return { kind: "tab", tab: "review" };
     case "n":
       return { kind: "call", step: 1 };
     case "p":
       return { kind: "call", step: -1 };
+    case "y":
+      return { kind: "link" };
     case "?":
       return { kind: "help" };
     case "Escape":
@@ -91,6 +97,13 @@ export function keyAction(event: {
     default:
       return null;
   }
+}
+
+/** A shared link's moment (?at=, in ms): a whole number within a day, else none. */
+export function startAt(value: string | undefined): number | null {
+  if (!value || !/^\d{1,8}$/.test(value)) return null;
+  const ms = Number(value);
+  return ms < 86_400_000 ? ms : null;
 }
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
@@ -104,9 +117,17 @@ export const SHORTCUTS: readonly [string, string][] = [
   ["Space / K", "Play or pause"],
   ["← / J · → / L", "Back or forward 5 s (Shift: 15 s)"],
   [", / .", "Slower or faster"],
-  ["R · S · C · M · U", "Report · Six pillars · Coaching · Metrics · Runs"],
+  [
+    "V · R · S · C · M · U",
+    "Review · Report · Six pillars · Coaching · Metrics · Runs",
+  ],
+  [
+    "↑ ↓ then 1 · 2 · 3",
+    "In Review: choose a section, then correct · partly · wrong",
+  ],
   ["T", "Transcript (phones)"],
   ["N / P", "Next or previous call in the queue"],
+  ["Y", "Copy a link to this moment of the call"],
   ["?", "Show or hide these keys"],
 ];
 
@@ -123,6 +144,49 @@ const titles = (items: { title: string }[]) =>
   items.map((item) => item.title).join(" · ") || "None";
 
 /** Field-by-field differences between two runs' reports, in reading order. */
+export type DiffPart = { text: string; changed: boolean };
+
+/**
+ * The words of two texts, each marked when the other text lacks it (longest
+ * common subsequence over words). Null when the texts are too long to compare
+ * quickly; the caller then shows them unmarked.
+ */
+export function wordDiff(
+  a: string,
+  b: string,
+  limit = 250_000,
+): { left: DiffPart[]; right: DiffPart[] } | null {
+  const x = a.match(/\S+\s*/g) ?? [];
+  const y = b.match(/\S+\s*/g) ?? [];
+  if ((x.length + 1) * (y.length + 1) > limit) return null;
+  const width = y.length + 1;
+  const table = new Uint16Array((x.length + 1) * width);
+  for (let i = x.length - 1; i >= 0; i--)
+    for (let j = y.length - 1; j >= 0; j--)
+      table[i * width + j] =
+        x[i]!.trim() === y[j]!.trim()
+          ? table[(i + 1) * width + j + 1]! + 1
+          : Math.max(table[(i + 1) * width + j]!, table[i * width + j + 1]!);
+  const keptX = new Array<boolean>(x.length).fill(false);
+  const keptY = new Array<boolean>(y.length).fill(false);
+  for (let i = 0, j = 0; i < x.length && j < y.length; ) {
+    if (x[i]!.trim() === y[j]!.trim()) {
+      keptX[i++] = true;
+      keptY[j++] = true;
+    } else if (table[(i + 1) * width + j]! >= table[i * width + j + 1]!) i++;
+    else j++;
+  }
+  const parts = (words: string[], kept: boolean[]) =>
+    words.reduce<DiffPart[]>((list, word, index) => {
+      const changed = !kept[index];
+      const last = list.at(-1);
+      if (last && last.changed === changed) last.text += word;
+      else list.push({ text: word, changed });
+      return list;
+    }, []);
+  return { left: parts(x, keptX), right: parts(y, keptY) };
+}
+
 export function compareReports(left: Report, right: Report): CompareRow[] {
   const row = (label: string, a: string, b: string): CompareRow => ({
     label,

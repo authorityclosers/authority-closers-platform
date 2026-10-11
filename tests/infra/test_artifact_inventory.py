@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import runpy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -293,3 +293,147 @@ def test_only_diagnostic_retention_changes() -> None:
     for name, days in uploads.items():
         # The reduction belongs to the ordered follow-up after #442 and #437.
         assert days == (1 if name.startswith("ac-application-") else 14)
+
+
+@pytest.mark.parametrize("expiry", ["expired", "past", "margin"])
+def test_known_expiry_reconciles_a_smaller_complete_retry(expiry: str) -> None:
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    removed = older[0]
+    if expiry == "expired":
+        removed["expired"] = True
+    else:
+        removed["expires_at"] = (
+            START + timedelta(seconds=300 if expiry == "margin" else -1)
+        ).isoformat()
+    state = snapshot()
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](
+            json.dumps(complete_pages(older)[:1]), snapshot=state, now=START
+        )
+    items, pages = READER["validate_inventory"](
+        json.dumps(complete_pages(older[1:])), snapshot=state, now=START
+    )
+    assert pages == 1
+    assert {item["id"] for item in items} == set(range(1, 101))
+    assert sum(item["size_in_bytes"] for item in items) == 1000
+    assert state.expected_count == 101
+
+
+@pytest.mark.parametrize("expiry", [None, "invalid", 1, "2026-10-11T00:00:00", "future"])
+def test_nonexpiring_or_invalid_expiry_disappearance_is_refused(expiry: object) -> None:
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    older[0]["expires_at"] = (
+        (START + timedelta(seconds=301)).isoformat() if expiry == "future" else expiry
+    )
+    # A reclaimable name is not proof that another reclaimer deleted it.
+    older[0]["name"] = "ac-sales-xray-web-" + "a" * 40
+    state = snapshot()
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](
+            json.dumps(complete_pages(older)[:1]), snapshot=state, now=START
+        )
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](
+            json.dumps(complete_pages(older[1:])), snapshot=state, now=START
+        )
+
+
+def test_expiry_does_not_explain_an_unobserved_older_removal() -> None:
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    older[-1]["expired"] = True
+    state = snapshot()
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](json.dumps(complete_pages(older)[:1]), snapshot=state)
+    with pytest.raises(ValueError, match="older artifact count changed"):
+        READER["validate_inventory"](json.dumps(complete_pages(older[:-1])), snapshot=state)
+
+
+def test_expiry_between_pages_requires_retry_then_recovers_all_live_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    older = [artifact(identity) for identity in range(201, 0, -1)]
+    older[0]["expires_at"] = "2026-10-11T00:00:00Z"
+    # Expiry before page two shifts a still-live row (ID 101) into page one.
+    interrupted = [
+        {"total_count": 201, "artifacts": older[:100]},
+        {"total_count": 200, "artifacts": older[101:]},
+    ]
+    responses = iter([interrupted, complete_pages(older[1:])])
+    sleeps = []
+    monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
+    items = READER["read_inventory"](
+        "/fixture/gh",
+        "fixture/repository",
+        "admission",
+        fetch=lambda: json.dumps(next(responses)),
+    )
+    assert {item["id"] for item in items} == set(range(1, 201))
+    assert sum(item["size_in_bytes"] for item in items) == 2000
+    assert sleeps == [2]
+
+
+def test_expiry_cannot_hide_a_nonexpiring_loss_or_an_old_size_change() -> None:
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    older[0]["expired"] = True
+    state = snapshot()
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](json.dumps(complete_pages(older)[:1]), snapshot=state)
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](json.dumps(complete_pages(older[2:])), snapshot=state)
+    changed = [{**older[1], "size_in_bytes": 1}, *older[2:]]
+    with pytest.raises(READER["SnapshotChanged"], match="size changed"):
+        READER["validate_inventory"](json.dumps(complete_pages(changed)), snapshot=state)
+
+
+def test_known_expiry_does_not_let_unobserved_uploads_escape_the_pool_bound() -> None:
+    older = [artifact(identity) for identity in range(201, 0, -1)]
+    older[0]["expired"] = True
+    state = snapshot()
+    with pytest.raises(ValueError, match="incomplete inventory"):
+        READER["validate_inventory"](json.dumps(complete_pages(older)[:1]), snapshot=state)
+    # Complete older coverage, but page two reports one unseen recent upload.
+    live = older[1:]
+    pages = [
+        {"total_count": 200, "artifacts": live[:100]},
+        {"total_count": 201, "artifacts": live[99:199]},
+        {"total_count": 201, "artifacts": live[-1:]},
+    ]
+    with pytest.raises(ValueError, match="unobserved artifacts"):
+        READER["validate_inventory"](json.dumps(pages), snapshot=state)
+    items, _ = READER["validate_inventory"](
+        json.dumps(complete_pages([artifact(202, recent=True, size=5000), *live])),
+        snapshot=state,
+    )
+    assert len(items) == 201
+    assert RECLAIMER["projection"](items, 100, None) == 7100
+
+
+def test_release_reclaimers_share_one_cross_workflow_lock() -> None:
+    # GitHub concurrency groups are repository-wide; both the inventory and
+    # deletion steps must stay inside this same job lock, including recovery.
+    jobs = [
+        ("application.yml", "package-release-images"),
+        ("application-recovery.yml", "package-release-images"),
+        ("sales-xray-web-image.yml", "build-sales-xray-web"),
+        ("sales-xray-native-image.yml", "build-native-image"),
+    ]
+    for filename, job_name in jobs:
+        workflow = yaml.safe_load((ROOT / ".github/workflows" / filename).read_text())
+        job = workflow["jobs"][job_name]
+        assert job["concurrency"] == {
+            "group": "application-release-packaging",
+            "cancel-in-progress": False,
+        }
+        assert any("reclaim-artifact-pool.py" in step.get("run", "") for step in job["steps"])
+
+
+def test_reclaimer_reader_recovers_known_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+    github = RECLAIMER["GitHub"]("fixture/repository")
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    older[0]["expired"] = True
+    responses = iter([complete_pages(older)[:1], complete_pages(older[1:])])
+    monkeypatch.setattr(github, "api", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(RECLAIMER["INVENTORY"]["time"], "sleep", lambda _: None)
+    items = github.artifacts()
+    assert {item["id"] for item in items} == set(range(1, 101))
+    assert RECLAIMER["projection"](items, 100, None) == 1100

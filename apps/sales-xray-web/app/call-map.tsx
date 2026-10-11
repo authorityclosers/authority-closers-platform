@@ -13,6 +13,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
@@ -79,6 +80,23 @@ const LENSES: Array<{ key: Lens; label: string; short: string }> = [
   { key: "talk-share", label: "Talk share by minute", short: "Talk share" },
 ];
 const LENS_KEY = "ac.xray.map-lens";
+const LENS_CHANGE = "ac.xray.map-lens-change";
+
+function subscribeLens(notify: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === LENS_KEY) notify();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(LENS_CHANGE, notify);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LENS_CHANGE, notify);
+  };
+}
+
+function serverLens(): Lens {
+  return "who";
+}
 
 function readLens(): Lens {
   try {
@@ -311,7 +329,9 @@ export function CallMap({
     anchor: HTMLElement;
   } | null>(null);
   const [declined, setDeclined] = useState<string[]>([]);
-  const [lens, setLens] = useState<Lens>(readLens);
+  const savedLens = useSyncExternalStore(subscribeLens, readLens, serverLens);
+  const [localLens, setLocalLens] = useState<Lens | null>(null);
+  const lens = localLens ?? savedLens;
   const {
     profiles,
     drafts,
@@ -383,9 +403,10 @@ export function CallMap({
   );
 
   function chooseLens(next: Lens) {
-    setLens(next);
+    setLocalLens(next);
     try {
       localStorage.setItem(LENS_KEY, next);
+      window.dispatchEvent(new Event(LENS_CHANGE));
     } catch {
       // A remembered view is a convenience only.
     }
@@ -552,6 +573,7 @@ export function CallMap({
               <button
                 key={option.key}
                 type="button"
+                aria-label={option.label}
                 aria-pressed={activeLens === option.key}
                 data-short={option.short}
                 onClick={() => chooseLens(option.key)}

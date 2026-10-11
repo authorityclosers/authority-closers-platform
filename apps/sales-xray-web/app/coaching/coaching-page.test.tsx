@@ -4,7 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceAccessValue } from "../workspace-access";
 import { CoachingPage, CoachingSkeleton, CoachingStory } from "./coaching-page";
-import { fictionalCoaching, fictionalCallCoaching } from "./coaching.fixture";
+import {
+  fictionalCallCoaching,
+  fictionalClip,
+  fictionalCoaching,
+} from "./coaching.fixture";
 import { CallCoachingStory } from "./call-coaching";
 import { requestedSkill } from "./focus-request";
 
@@ -163,9 +167,124 @@ describe("Coaching story", () => {
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
     expect(html).toContain("कामाला");
+    // No dead controls: feedback buttons appear only once saving works.
+    expect(html).not.toContain("Not completely");
     expect(html).toContain(
-      "Saving agreement, disagreement and reflection is not available yet.",
+      "Saving your agreement, disagreement and reflection comes with sharing.",
     );
+  });
+  it("teaches in the spec's order and keeps the text short beside a clip", () => {
+    const position = (html: string, text: string) => {
+      const at = html.indexOf(text);
+      expect(at).toBeGreaterThan(-1);
+      return at;
+    };
+    const wording = fictionalCoaching.lesson!.example_wording[0];
+    const withClip = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{ ...fictionalCoaching, media_clips: [fictionalClip] }}
+      />,
+    );
+    const order = [
+      fictionalCoaching.lesson!.quick_idea,
+      'aria-label="Framework"',
+      "Better direction",
+      fictionalClip.title,
+      "Read the full lesson",
+      wording,
+    ].map((text) => position(withClip, text));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    const textOnly = renderToStaticMarkup(
+      <CoachingStory coaching={fictionalCoaching} />,
+    );
+    // The full lesson ends with the same active mission (spec 6.6).
+    expect(position(textOnly, "Your next-call mission")).toBeGreaterThan(
+      position(textOnly, "Quick checklist"),
+    );
+    expect(position(textOnly, wording)).toBeLessThan(
+      position(textOnly, "Read the full lesson"),
+    );
+  });
+  it("offers this call's quoted strength last in the lesson, playable", () => {
+    const moment = fictionalCallCoaching.evidence[0];
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{
+          ...fictionalCallCoaching,
+          strength: {
+            title: "Asked for a consequence",
+            explanation: "It made the problem specific.",
+            evidence: [{ ...moment, quote: "What happened because of it?" }],
+          },
+        }}
+      />,
+    );
+    const at = (text: string) => html.indexOf(text);
+    expect(at("Use your strength")).toBeGreaterThan(at("Better direction"));
+    expect(at("Use your strength")).toBeLessThan(at("Read the full lesson"));
+    expect(html).toContain("What happened because of it?");
+    expect(html).not.toContain("<audio");
+    expect(
+      renderToStaticMarkup(
+        <CallCoachingStory coaching={fictionalCallCoaching} />,
+      ),
+    ).not.toContain("Use your strength");
+  });
+  it("names the call a My coaching strength came from, never a trait", () => {
+    const moment = fictionalCoaching.evidence[0];
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          strength: {
+            title: "Asked a follow-up",
+            explanation: "It made the problem specific.",
+            evidence: [moment],
+          },
+        }}
+      />,
+    );
+    expect(html).toContain("Use your strength");
+    expect(html).toContain("One call is not an established strength.");
+    expect(html.lastIndexOf(moment.call_label)).toBeGreaterThan(
+      html.indexOf("Use your strength"),
+    );
+  });
+  it("says the report holds more suggestions while coaching keeps one", () => {
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{ ...fictionalCallCoaching, other_suggestions: 2 }}
+      />,
+    );
+    expect(html).toContain(
+      "2 more suggestions there; Coaching keeps one focus",
+    );
+    expect(
+      renderToStaticMarkup(
+        <CallCoachingStory coaching={fictionalCallCoaching} />,
+      ),
+    ).not.toContain("more suggestion");
+  });
+  it("opens with the three newest calls on one column until asked", async () => {
+    const calls = Array.from({ length: 5 }, (_, index) => ({
+      submission_id: `00000000-0000-0000-0000-00000000009${index}`,
+      call_label: `Call ${index + 1}`,
+      created_at: `2026-10-0${index + 1}T10:00:00Z`,
+      state: "ready" as const,
+      focus_label: null,
+    }));
+    await act(async () =>
+      root.render(<CoachingStory coaching={{ ...fictionalCoaching, calls }} />),
+    );
+    const list = host.querySelector('[aria-label="Your recent calls"]')!;
+    expect(list.querySelectorAll("li")).toHaveLength(5);
+    expect(list.parentElement!.hasAttribute("data-expanded")).toBe(false);
+    const more = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent === "Show all 5 calls",
+    )!;
+    await act(async () => more.click());
+    expect(list.parentElement!.hasAttribute("data-expanded")).toBe(true);
+    expect(host.textContent).not.toContain("Show all 5 calls");
   });
   it("shows what comparable calls said since the mission, never success", () => {
     const html = renderToStaticMarkup(

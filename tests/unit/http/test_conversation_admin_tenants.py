@@ -311,3 +311,74 @@ async def test_analysis_health_route_bounds_the_window(admin_client, monkeypatch
     assert set(seen["scope"]) == {PERSONAL, ORGANISATION}
     for params in ({"days": "0"}, {"days": "31"}, {"days": "7", "other": "1"}):
         assert (await client.get("/v1/admin/conversation/health", params=params)).status_code == 422
+
+
+async def test_usage_route_bounds_the_window(admin_client, monkeypatch) -> None:
+    from ac_platform.conversation_intelligence.admin_usage import AdminUsage
+
+    client, _database = admin_client
+    seen: dict[str, Any] = {}
+
+    async def summary(service, actor, *, days):
+        seen.update(days=days, scope=service.tenant_ids)
+        return {"events": 0}
+
+    monkeypatch.setattr(AdminUsage, "summary", summary)
+    assert (
+        await client.get("/v1/admin/conversation/usage", params={"days": "90"})
+    ).status_code == 200
+    assert seen["days"] == 90 and set(seen["scope"]) == {PERSONAL, ORGANISATION}
+    for params in ({"days": "0"}, {"days": "91"}, {"q": "x"}):
+        assert (await client.get("/v1/admin/conversation/usage", params=params)).status_code == 422
+
+
+async def test_product_updates_route_is_read_only_and_admitted(admin_client) -> None:
+    client, _database = admin_client
+    response = await client.get("/v1/admin/conversation/product-updates")
+    assert response.status_code == 200 and response.json() == {"notes": []}
+    assert (
+        await client.get("/v1/admin/conversation/product-updates", params={"x": "1"})
+    ).status_code == 422
+    assert (await client.post("/v1/admin/conversation/product-updates", json={})).status_code == 405
+
+
+async def test_label_routes_need_an_idempotency_key_and_the_admin_origin(
+    admin_client, monkeypatch
+) -> None:
+    from ac_platform.conversation_intelligence.review_labels import ReviewLabels
+
+    client, database = admin_client
+    recording = database.recordings[0]
+    seen: dict[str, Any] = {}
+
+    async def add(service, actor, recording_id, intent, *, key):
+        seen.update(recording_id=recording_id, kind=intent.kind, key=key)
+        return {"id": "label"}
+
+    async def read(service, actor, recording_id):
+        return {"recording_id": str(recording_id), "review_state": "new"}
+
+    monkeypatch.setattr(ReviewLabels, "add", add)
+    monkeypatch.setattr(ReviewLabels, "read", read)
+    path = f"/v1/admin/conversation/calls/{recording.id}/labels"
+    body = {"kind": "note", "value": {"text": "Check the close"}}
+    assert (await client.get(path)).json()["review_state"] == "new"
+    assert (
+        await client.post(path, json=body, headers={"Origin": "https://admin.test"})
+    ).status_code == 422
+    missing_origin = await client.post(path, json=body, headers={"Idempotency-Key": "k-1"})
+    assert missing_origin.status_code == 403
+    created = await client.post(
+        path, json=body, headers={"Origin": "https://admin.test", "Idempotency-Key": "k-1"}
+    )
+    assert created.status_code == 201, created.text
+    assert seen == {"recording_id": recording.id, "kind": "note", "key": "k-1"}
+    bad = await client.post(
+        path,
+        json={"kind": "verdict", "section": "../x", "value": {}},
+        headers={"Origin": "https://admin.test", "Idempotency-Key": "k-2"},
+    )
+    assert bad.status_code == 422
+    assert (
+        await client.get("/v1/admin/conversation/calls", params={"review": "x"})
+    ).status_code == 422

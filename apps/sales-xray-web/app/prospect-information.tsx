@@ -1,36 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { LockKeyhole } from "lucide-react";
 import { InlineEdit } from "./ui/kit";
 import { formatClock } from "./lightbox/time";
 import type { ProspectCall, ProspectSummary } from "./prospects-client";
 import { confirmDetectedProspect, editProspectField } from "./prospects-client";
 import { dismissNotice, notify } from "./notice-center";
+import type { Transcript } from "./report-contract";
+import { useReportPeople } from "./report-kit";
 import {
-  PROSPECT_FIELD_LABELS,
   profileValueText,
   type FactLabel,
   type ProfileField,
   type ProfileKey,
 } from "./prospect-profile-contract";
+import {
+  BRIEF_SECTIONS,
+  prospectBrief,
+  type BriefFact,
+  type BriefSection,
+  type BriefSource,
+  type LatestCall,
+} from "./prospect-brief-model";
 import styles from "./prospect-information.module.css";
 
-export const PROSPECT_SECTIONS = [
-  [
-    "What You Need to Know Now",
-    "The most important information before the next call.",
-  ],
-  [
-    "What They Want — & Why",
-    "Problems, impact, goals and what matters to them.",
-  ],
-  ["Can & Will They Buy?", "Qualification without guessing."],
-  ["How They'll Decide", "People, approvals and decision process."],
-  ["What's Holding Them Back", "Blockers, concerns and certainty."],
-  ["What Happens Next", "Commitments, next action and next event."],
-] as const;
+export const PROSPECT_SECTIONS = BRIEF_SECTIONS.map(
+  ({ title, subtitle }) => [title, subtitle] as const,
+);
 
 function Field({
   label,
@@ -130,21 +128,186 @@ function Field({
 /** Shared presentation only; callers supply authorised, entity-specific facts. */
 export { Field as ProfileFact };
 
+type BriefState = "none" | "loading" | "ready" | "unavailable";
+
+const NO_TRANSCRIPT = {
+  revision: "",
+  timebase_id: "",
+  duration_ms: 0,
+  segments: [],
+} as unknown as Transcript;
+
+function SourceLink({ source }: { source?: BriefSource }) {
+  if (!source) return null;
+  const at = formatClock(source.start_ms);
+  return source.callId ? (
+    <Link
+      className={styles.briefSource}
+      href={`/analysis/calls/${source.callId}?section=transcript`}
+      title={`“${source.quote}”`}
+    >
+      Heard · {at}
+    </Link>
+  ) : (
+    <span className={styles.briefSource} title={`“${source.quote}”`}>
+      Heard · {at}
+    </span>
+  );
+}
+
+function BriefFactRow({
+  fact,
+  canEdit,
+  saving,
+  save,
+}: {
+  fact: BriefFact;
+  canEdit: boolean;
+  saving: boolean;
+  save: (key: ProfileKey, value: string) => Promise<void>;
+}) {
+  const editable = canEdit && fact.editKey;
+  return (
+    <div className={styles.briefFact} data-fact-label={fact.fact}>
+      <dt>
+        <span>{fact.label}</span>
+        <small className={styles.factChip} data-fact={fact.fact}>
+          {fact.fact}
+        </small>
+        {fact.basis === "person" ? (
+          <small className={styles.lock} title="A person set this; it wins">
+            <LockKeyhole size={12} aria-hidden="true" /> Set by a person
+          </small>
+        ) : null}
+      </dt>
+      <dd>
+        {fact.list ? (
+          <ul className={styles.briefList}>
+            {fact.list.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : editable ? (
+          <InlineEdit
+            label={fact.label}
+            value={fact.value}
+            disabled={saving}
+            onSave={(value) => save(fact.editKey!, value)}
+          />
+        ) : (
+          fact.value
+        )}
+        <SourceLink source={fact.source} />
+        {fact.earlier ? (
+          <span className={styles.briefNote}>
+            Earlier: {fact.earlier.value}
+          </span>
+        ) : null}
+        {fact.differs?.map((item, index) => (
+          <span key={index} className={styles.briefNote}>
+            A later call heard: {item.value} · your edit still wins
+          </span>
+        ))}
+      </dd>
+    </div>
+  );
+}
+
+function BriefUnknown({
+  items,
+  canEdit,
+  saving,
+  save,
+}: {
+  items: BriefSection["unknown"];
+  canEdit: boolean;
+  saving: boolean;
+  save: (key: ProfileKey, value: string) => Promise<void>;
+}) {
+  if (!items.length) return null;
+  const plain = items.filter((item) => !(canEdit && item.editKey));
+  const addable = items.filter((item) => canEdit && item.editKey);
+  return (
+    <div className={styles.briefUnknown}>
+      <span className={styles.factChip} data-fact="Unknown">
+        Unknown
+      </span>
+      {plain.map((item, index) => (
+        <span key={item.label} data-unknown-locked={item.locked || undefined}>
+          {index > 0 ? "· " : ""}
+          {item.locked ? (
+            <LockKeyhole
+              size={12}
+              aria-label="Set to Unknown by a person"
+              role="img"
+            />
+          ) : null}
+          {item.label}
+        </span>
+      ))}
+      {addable.map((item) => (
+        <span
+          key={item.label}
+          className={styles.briefAdd}
+          data-unknown-locked={item.locked || undefined}
+        >
+          {item.locked ? (
+            <LockKeyhole
+              size={12}
+              aria-label="Set to Unknown by a person"
+              role="img"
+            />
+          ) : null}
+          <InlineEdit
+            label={item.label}
+            value=""
+            placeholder={`+ ${item.label}`}
+            disabled={saving}
+            onSave={(value) => save(item.editKey!, value)}
+          />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Six buyer-focused sections. No opportunity/qualification state is inferred. */
 export function ProspectInformation({
   prospect,
   calls = [],
   onSaved,
+  latest,
+  latestState = latest ? "ready" : "none",
 }: {
   prospect: ProspectSummary;
   calls?: ProspectCall[];
   onSaved?: () => void;
+  /** The latest analysed call's Report, when it could be read. */
+  latest?: LatestCall;
+  latestState?: BriefState;
 }) {
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
-  const fields = prospect.profile_fields ?? {};
   const canEdit =
     !!prospect.profile_fields && prospect.can_edit !== false && !!onSaved;
+  // Own words need confirmed speaker roles; never guessed from text.
+  const people = useReportPeople(
+    latest?.callId ?? null,
+    latest?.transcript ?? NO_TRANSCRIPT,
+  );
+  const seller = people.roles?.seller ?? null;
+  const prospectVoice = people.roles?.prospect ?? null;
+  const brief = useMemo(
+    () =>
+      prospectBrief(
+        prospect,
+        calls,
+        latest
+          ? { ...latest, roles: { seller, prospect: prospectVoice } }
+          : undefined,
+      ),
+    [prospect, calls, latest, seller, prospectVoice],
+  );
   async function save(key: ProfileKey, value: string) {
     if (pending.current)
       throw new Error("Another field is being saved. Try again.");
@@ -173,158 +336,14 @@ export function ProspectInformation({
       setSaving(false);
     }
   }
-  const field = (
-    key: ProfileKey,
-    label: string = PROSPECT_FIELD_LABELS[key],
-  ) => (
-    <Field
-      key={key}
-      label={label}
-      field={fields[key]}
-      disabled={saving}
-      onSave={canEdit ? (value) => save(key, value) : undefined}
-    />
-  );
-  const unknowns = (labels: string[]) =>
-    labels.map((label) => <Field key={label} label={label} />);
-  const content = [
-    <dl key="now" className={styles.facts}>
-      <Field
-        label="Name"
-        field={fields.name}
-        text={prospect.profile_fields ? null : prospect.name}
-        state="Observed"
-        disabled={saving}
-        onSave={canEdit ? (value) => save("name", value) : undefined}
-      />
-      {field("role")}
-      {field("business")}
-      {field("main_pain")}
-      {unknowns(["Main goal", "Current blocker"])}
-      {field("decision_maker")}
-      <Field label="Deal stage" text={prospect.stage} state="Observed" />
-      {field("next_step")}
-      {unknowns([
-        "Follow-up date and time",
-        "Who acts next",
-        "Biggest unanswered question",
-        "Fit",
-        "Urgency",
-      ])}
-    </dl>,
-    <dl key="want" className={styles.facts}>
-      {field("industry")}
-      {field("city")}
-      {field("team_size")}
-      {field("turnover")}
-      {field("main_pain")}
-      {field("timeline")}
-      {unknowns([
-        "Current process",
-        "Secondary problems",
-        "Impact",
-        "Desired outcome",
-        "Why it matters",
-      ])}
-    </dl>,
-    <div key="buy">
-      <p className={styles.note}>
-        A discussed amount does not confirm ability or willingness to invest.
-      </p>
-      <dl className={styles.facts}>
-        {field("budget")}
-        {unknowns([
-          "Need",
-          "Desire",
-          "Ability to invest",
-          "Willingness to invest",
-          "Authority",
-          "Urgency",
-          "Timing",
-          "Fit",
-          "Implementation readiness",
-        ])}
-      </dl>
-    </div>,
-    <dl key="decide" className={styles.facts}>
-      {field("decision_maker")}
-      {unknowns([
-        "Other stakeholders",
-        "Stakeholder roles",
-        "Approval process",
-        "Decision process",
-        "Decision criteria",
-        "Important decision event",
-      ])}
-    </dl>,
-    <div key="blockers">
-      <dl className={styles.facts}>
-        {unknowns([
-          "Current blocker",
-          "Objections and resolution",
-          "Trust in seller",
-          "Solution certainty",
-          "Self certainty",
-          "Outcome certainty",
-          "Decision certainty",
-          "Previous attempts",
-          "Alternatives",
-        ])}
-      </dl>
-      {calls
-        .flatMap((call) =>
-          (call.snapshot?.interpretations ?? []).map((interpretation, i) => (
-            <div
-              key={`${call.submission_id}-${i}`}
-              className={styles.inference}
-              data-fact-label="Inferred"
-            >
-              <small>Inferred · needs confirmation</small>
-              <p>{interpretation.possible_concern}</p>
-              <details className={styles.evidence}>
-                <summary>What was said</summary>
-                {interpretation.source.evidence.map((source, j) => (
-                  <blockquote key={j}>
-                    {source.quote}
-                    <br />
-                    <Link href={call.call_url}>
-                      Source call · {formatClock(source.start_ms)}
-                    </Link>
-                  </blockquote>
-                ))}
-              </details>
-            </div>
-          )),
-        )
-        .slice(0, 3)}
-    </div>,
-    <dl key="next" className={styles.facts}>
-      {field("next_step", "Next action")}
-      <Field
-        label="Recorded commitment"
-        text={prospect.last_promise}
-        state="Observed"
-      />
-      {unknowns([
-        "Current blocker",
-        "Next event",
-        "Date and time",
-        "Owner",
-        "Prospect commitment",
-        "Seller commitment",
-        "Status",
-        "What still needs clarity",
-        "Recommended deal action",
-      ])}
-    </dl>,
-  ];
+  const fields = prospect.profile_fields ?? {};
   return (
     <div className={styles.information} aria-label="Prospect's Information">
       {prospect.origin === "detected" &&
         !prospect.confirmed_at &&
         prospect.can_confirm !== false &&
         onSaved && (
-          <div className={styles.edit}>
+          <div className={styles.detected}>
             <span>Detected from a call · not yet confirmed</span>
             <button
               type="button"
@@ -357,41 +376,83 @@ export function ProspectInformation({
             </button>
           </div>
         )}
-      {PROSPECT_SECTIONS.map(([title, subtitle], i) =>
-        i === 0 ? (
+      <p className={styles.briefBasis} data-brief-state={latestState}>
+        {latestState === "ready" && brief.basedOn
+          ? `Call facts from your latest analysed call: ${brief.basedOn.label}.`
+          : latestState === "loading"
+            ? "Reading the latest analysed call…"
+            : latestState === "unavailable"
+              ? "The latest call's report couldn't be read; only saved facts are shown."
+              : "No analysed call yet; only saved facts are shown."}
+      </p>
+      {BRIEF_SECTIONS.map(({ title, subtitle }, index) => {
+        const part = brief.sections[index];
+        return (
           <section
             key={title}
-            className={styles.section}
-            data-prospect-section={i + 1}
+            className={styles.briefSection}
+            data-prospect-section={index + 1}
+            data-brief-lead={index === 0 || undefined}
+            aria-labelledby={`brief-${index + 1}`}
           >
-            <h2>{title}</h2>
-            <p className={styles.note}>{subtitle}</p>
-            {content[i]}
-          </section>
-        ) : (
-          <details
-            key={title}
-            className={styles.section}
-            data-prospect-section={i + 1}
-          >
-            <summary>
-              <span>
-                {i + 1}. {title}
+            <header className={styles.briefHead}>
+              <span className={styles.briefNumber} aria-hidden="true">
+                {index + 1}
               </span>
-              <small>{subtitle}</small>
-            </summary>
-            {content[i]}
-          </details>
-        ),
-      )}
-      <details className={styles.section}>
-        <summary>Contact details & tags</summary>
+              <div>
+                <h2 id={`brief-${index + 1}`}>{title}</h2>
+                <p>{subtitle}</p>
+              </div>
+            </header>
+            {index === 2 && fields.budget?.state === "known" ? (
+              <p className={styles.note}>
+                A discussed amount does not confirm ability or willingness to
+                invest.
+              </p>
+            ) : null}
+            {part.facts.length ? (
+              <dl className={styles.briefFacts}>
+                {part.facts.map((fact, i) => (
+                  <BriefFactRow
+                    key={`${fact.label}-${i}`}
+                    fact={fact}
+                    canEdit={canEdit}
+                    saving={saving}
+                    save={save}
+                  />
+                ))}
+              </dl>
+            ) : null}
+            {latestState === "loading" ? (
+              <span className={styles.briefSkeleton} aria-hidden="true" />
+            ) : null}
+            <BriefUnknown
+              items={part.unknown}
+              canEdit={canEdit}
+              saving={saving}
+              save={save}
+            />
+          </section>
+        );
+      })}
+      <details className={styles.briefMore}>
+        <summary>Contact details &amp; tags</summary>
         <p className={styles.note}>
           Phone and email are entered by people only.
         </p>
         <dl className={styles.facts}>
-          {field("phone")}
-          {field("email")}
+          <Field
+            label="Phone"
+            field={fields.phone}
+            disabled={saving}
+            onSave={canEdit ? (value) => save("phone", value) : undefined}
+          />
+          <Field
+            label="Email"
+            field={fields.email}
+            disabled={saving}
+            onSave={canEdit ? (value) => save("email", value) : undefined}
+          />
           <Field
             label="Tags"
             text={prospect.tags.length ? prospect.tags.join(", ") : null}

@@ -240,7 +240,9 @@ export function ReportCallCoaching(props: Props) {
         from the call list.
       </p>
     );
-  return <RetainedCallCoaching {...props} />;
+  return (
+    <RetainedCallCoaching {...props} callId={permitted ? callId : undefined} />
+  );
 }
 
 function CanonicalCallCoaching({
@@ -392,6 +394,12 @@ function CanonicalCallCoaching({
       <div className={styles.links}>
         <Link
           prefetch={false}
+          href={`/coaching?call=${coaching.submission_id}`}
+        >
+          Open full coaching for this call
+        </Link>
+        <Link
+          prefetch={false}
           href={skill ? `/coaching?focus=${skill}` : "/coaching"}
         >
           My coaching across calls
@@ -403,6 +411,7 @@ function CanonicalCallCoaching({
 
 function RetainedCallCoaching({
   data,
+  callId,
   onSelectEvidence,
   onSelectContextualPlayback,
 }: Props) {
@@ -527,6 +536,14 @@ function RetainedCallCoaching({
         </p>
       )}
       <div className={styles.links}>
+        {callId &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+            callId,
+          ) && (
+            <Link prefetch={false} href={`/coaching?call=${callId}`}>
+              Open full coaching for this call
+            </Link>
+          )}
         <Link
           prefetch={false}
           href={

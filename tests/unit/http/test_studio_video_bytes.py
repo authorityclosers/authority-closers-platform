@@ -761,21 +761,27 @@ async def test_cancel_after_final_authority_can_commit_private_bytes_but_drains_
                 inventory_locks += 1
                 if inventory_locks == 2:
                     entered.set()  # Final authorization has passed; publish is in flight.
-                    assert release.wait(timeout=5)
+                    # CI shares CPU with the other Python shards. The event is
+                    # the synchronization boundary, not a two-second speed test.
+                    assert release.wait(timeout=20)
             yield
 
     monkeypatch.setattr(state.byte_storage, "_lock", paused_lock)
     task = asyncio.create_task(_asgi_request(state, upload_id=upload.upload_id))
     try:
-        assert await asyncio.to_thread(entered.wait, 2)
+        assert await asyncio.to_thread(entered.wait, 10)
         task.cancel()
         await asyncio.sleep(0.03)
         assert not task.done()
         assert state.transport.limiter.borrowed_tokens == 1
     finally:
+        # Also drain the request if readiness itself times out, preserving the
+        # original failure instead of leaving a writer alive during teardown.
+        if not task.done() and not task.cancelling():
+            task.cancel()
         release.set()
         with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(task, 3)
+            await asyncio.wait_for(task, 10)
 
     assert state.byte_storage.read(upload.object_key) == DATA
     assert not tuple(state.byte_storage.root.glob("*.part"))

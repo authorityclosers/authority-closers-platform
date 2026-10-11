@@ -73,6 +73,38 @@
   min-height: 32px;
 }
 
+/* The value with its change beside it (kit Delta); the accessory sits at the end. */
+.valueLine {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.figureSpark {
+  display: inline-flex;
+  flex: none;
+  margin-bottom: 4px;
+}
+
+.figureShare {
+  display: block;
+  width: 72px;
+  flex: none;
+  margin-bottom: 9px;
+}
+
+/* Needs attention: a quiet warning dot while something waits. */
+.warnDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--lx-warning);
+  vertical-align: 1px;
+}
+
 .kpi dd b {
   font-size: 24px;
   font-weight: 700;
@@ -97,14 +129,6 @@
   white-space: nowrap;
 }
 
-.kpiContext[data-tone="up"] {
-  color: var(--lx-teal);
-}
-
-.kpiContext[data-tone="down"] {
-  color: var(--lx-warning);
-}
-
 .skeletonValue,
 .skeletonContext {
   display: block;
@@ -116,6 +140,18 @@
 .skeletonValue {
   width: 56px;
   height: 28px;
+}
+
+/* A word-shaped placeholder inside a line of text: the line keeps its box. */
+.ph {
+  display: inline-block;
+  width: var(--w, 8em);
+  max-width: 100%;
+  height: 0.8em;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  vertical-align: -0.05em;
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
 .skeletonContext {
@@ -398,6 +434,12 @@
     font-size: 20px;
   }
 
+  /* Two tiles across: a shorter sparkline beside the value and its change. */
+  .figureSpark :global(span[role="img"]),
+  .figureShare {
+    width: 48px;
+  }
+
   .kpiContext {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -424,6 +466,11 @@
     min-height: 44px;
   }
 
+  /* Review's 44 px tap area takes 20 px of the line: every tile keeps it. */
+  .kpiContext {
+    min-height: 20px;
+  }
+
   /* A 44 px tap area that keeps the line height of the text around it. */
   .textLink {
     display: inline-flex;
@@ -435,7 +482,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .skeletonValue,
-  .skeletonContext {
+  .skeletonContext,
+  .ph {
     animation: none;
   }
 }

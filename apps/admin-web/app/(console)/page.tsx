@@ -1,8 +1,22 @@
 import { ChevronRight, Compass } from "lucide-react";
 
+import { normalizeQueue } from "@/app/calls/call-data";
+import { CourseActivity } from "@/app/components/admin-dashboard";
+import { normalizeHealth } from "@/app/health/health-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { visibleNavigation } from "@/app/lib/nav";
-import { Empty, List, Page, PageHeader, Panel, Row } from "@/app/ui/kit";
+import { adminRead } from "@/app/lib/server-api";
+import {
+  Empty,
+  Kpi,
+  List,
+  Page,
+  PageHeader,
+  Panel,
+  Row,
+  Tiles,
+  Unavailable,
+} from "@/app/ui/kit";
 
 const PURPOSE: Record<string, string> = {
   "/calls": "Listen, read and judge each analysed call, side by side",
@@ -27,10 +41,84 @@ const PURPOSE: Record<string, string> = {
   "/studio": "Courses and lessons, in the coach workspace",
 };
 
+/** Today at a glance, for the accounts that review calls: both reads go together. */
+const loadToday = () =>
+  Promise.all([
+    adminRead("/v1/admin/conversation/calls?limit=1", normalizeQueue),
+    adminRead("/v1/admin/conversation/health?days=1", normalizeHealth),
+  ]);
+
+function Today({
+  data: [queue, health],
+}: {
+  data: Awaited<ReturnType<typeof loadToday>>;
+}) {
+  if (!queue.ok && !health.ok)
+    return <Unavailable title="Today's calls" reason={queue.error} />;
+  return (
+    <Tiles label="Today">
+      {queue.ok ? (
+        <>
+          <Kpi
+            label="New"
+            value={queue.data.reviewCounts.new}
+            note={
+              queue.data.truncated
+                ? "Among the newest 500 calls"
+                : "Not yet reviewed"
+            }
+            href="/calls?review=new"
+          />
+          <Kpi
+            label="Needs review"
+            value={queue.data.reviewCounts.needs_review}
+            href="/calls?review=needs_review"
+          />
+          <Kpi
+            label="Disputed"
+            value={queue.data.reviewCounts.disputed}
+            tone={queue.data.reviewCounts.disputed ? "warn" : "good"}
+            href="/calls?review=disputed"
+          />
+          <Kpi
+            label="Failed calls"
+            value={queue.data.counts.failed}
+            tone={queue.data.counts.failed ? "bad" : "good"}
+            href="/calls?status=failed"
+          />
+        </>
+      ) : null}
+      {health.ok ? (
+        <>
+          <Kpi
+            label="Reports, last 24 h"
+            value={
+              health.data.byStage.find((row) => row.stage === "C5")?.counts
+                .succeeded ?? 0
+            }
+            href="/health?days=1"
+          />
+          <Kpi
+            label="Stuck now"
+            value={health.data.stuck.length}
+            tone={health.data.stuck.length ? "warn" : "good"}
+            href="/health?days=1"
+          />
+        </>
+      ) : null}
+    </Tiles>
+  );
+}
+
 export default async function HomePage() {
   const access = await loadConsoleAccess();
   const groups = visibleNavigation(access).filter((group) => group.label);
   const name = access.displayName?.split(/\s+/)[0];
+  const today = groups.some((group) =>
+    group.items.some((item) => item.href === "/calls"),
+  )
+    ? await loadToday()
+    : null;
   return (
     <Page>
       <PageHeader
@@ -41,6 +129,7 @@ export default async function HomePage() {
             : (access.email ?? "Session not confirmed"),
         ]}
       />
+      {today ? <Today data={today} /> : null}
       {groups.length === 0 ? (
         <Panel title="Nothing to open yet">
           <Empty
@@ -66,6 +155,7 @@ export default async function HomePage() {
           </Panel>
         ))
       )}
+      <CourseActivity />
     </Page>
   );
 }

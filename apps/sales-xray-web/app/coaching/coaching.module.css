@@ -60,8 +60,105 @@
 
   /* The rail already shows the mission beside the focus. */
   .hero .nextCall,
-  .root .moreMoments {
+  .root .moreMoments:not([data-many]),
+  .root .moreCalls:not([data-many]) {
     display: none;
+  }
+
+  .moments:not([data-expanded]) > [data-extra]:nth-child(n + 3),
+  .callList:not([data-expanded]) li:nth-child(n + 9) {
+    display: none;
+  }
+}
+
+/* One conversation: the pillars read in spec order in one column. On wide
+   screens the next-call mission sits beside them for the whole story,
+   instead of a stack of side panels (spec 3 and 9). */
+.conversation {
+  display: grid;
+  gap: var(--sx-gap);
+  align-items: start;
+  min-width: 0;
+}
+
+.conversation > * {
+  min-width: 0;
+}
+
+.conversationRail {
+  display: grid;
+  align-content: start;
+  gap: var(--sx-gap);
+}
+
+@container (min-width: 900px) {
+  .conversation {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-rows: repeat(8, auto);
+  }
+
+  .conversation > * {
+    grid-column: 1;
+  }
+
+  .conversation > .conversationRail {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    align-self: start;
+  }
+
+  .conversationRail .nextCall,
+  .conversation .hero .nextCall {
+    display: none;
+  }
+
+  @media (min-height: 760px) {
+    .conversationRail {
+      position: sticky;
+      top: 16px;
+    }
+  }
+}
+
+.route {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route li {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.route li[data-now] {
+  border-color: color-mix(in oklab, var(--sx-accent) 45%, var(--sx-line));
+  background: var(--sx-accent-soft);
+}
+
+.route li > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.eyebrow > .stepper {
+  flex: 1 1 120px;
+  min-width: 120px;
+}
+
+@container (max-width: 560px) {
+  .route {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -76,7 +173,7 @@
 }
 
 /* One column: pillars keep their order, the call list goes last, and only
-   the first two moments show until asked (spec 9, mobile). */
+   the first moment and three newest calls show until asked (spec 9, 12.7). */
 @container (max-width: 899.98px) {
   .main,
   .rail {
@@ -87,7 +184,8 @@
     order: 1;
   }
 
-  .moments:not([data-expanded]) > [data-extra] {
+  .moments:not([data-expanded]) > [data-extra],
+  .callList:not([data-expanded]) li:nth-child(n + 4) {
     display: none;
   }
 }
@@ -251,6 +349,10 @@
 }
 
 .momentMeta a {
+  /* A taller tap area for a small inline link, without moving the line. */
+  display: inline-block;
+  margin-block: -4px;
+  padding-block: 4px;
   color: var(--sx-accent);
   text-decoration: none;
 }
@@ -293,9 +395,14 @@
   cursor: default;
 }
 
-.moreMoments {
+.moreMoments,
+.moreCalls {
   justify-self: start;
   margin: 0 14px 12px;
+}
+
+.moreCalls {
+  margin-top: 8px;
 }
 
 .status {
@@ -375,6 +482,24 @@
 .compare > div[data-kind="better"] {
   border-color: color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
   background: var(--sx-accent-soft);
+}
+
+/* Spec 3.6: a quoted strength from this call, to build the mission on. */
+.strength {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+}
+
+.strengthTitle {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.strength .moment {
+  padding: 6px 0;
 }
 
 .wording {
@@ -825,6 +950,17 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+}
+
+/* Narrow columns: panel titles keep one line; subtitles are secondary. */
+@container (max-width: 560px) {
+  .root h2 > small {
+    display: none;
+  }
+
+  .share {
+    width: 92px;
+  }
 }
 
 @media (max-width: 760px) {

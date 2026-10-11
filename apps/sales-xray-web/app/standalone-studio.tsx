@@ -20,7 +20,20 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
+import {
+  allowEarlyConversationReads,
+  dropEarlyReads,
+  earlyFetch,
+} from "./early-reads";
+import { telemetry } from "./telemetry";
+import { useInitialSession } from "./initial-session";
+import type { InitialSession } from "./server-reads";
+import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
+import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
+import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
+import { CoachingSkeleton } from "./coaching/coaching-skeleton";
+import { PersonSkeleton } from "./organisation/people/person-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
 import { ConnectionNotice } from "./connection-notice";
 import {
@@ -33,6 +46,7 @@ import {
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
 import {
+  parseSalesXrayWorkspaces,
   readSalesXrayWorkspaces,
   type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
@@ -162,7 +176,9 @@ async function readWorkspaceChoices(
   signal: AbortSignal,
   standalone: boolean,
 ): Promise<WorkspaceChoices | null> {
-  const response = await fetch("/v1/me/workspaces", {
+  // On a full load both reads were started by the page's early reads, so
+  // reading them in turn costs no extra round trip.
+  const response = await earlyFetch("/v1/me/workspaces", {
     method: "GET",
     credentials: "same-origin",
     cache: "no-store",
@@ -170,7 +186,13 @@ async function readWorkspaceChoices(
     signal,
     headers: { accept: "application/json" },
   });
-  if (response.status === 401) return null;
+  if (response.status === 401) {
+    // Signed out: nothing read early for this page is current (a sign-in on
+    // the page would otherwise meet the signed-out answers).
+    dropEarlyReads();
+    allowEarlyConversationReads(false);
+    return null;
+  }
   if (!response.ok) throw new Error("workspace_read_rejected");
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
@@ -184,6 +206,8 @@ async function readWorkspaceChoices(
   );
   let selected = directory.selected_tenant_id;
   if (selected === null && personal) {
+    // Reads started before a workspace was chosen must not be used.
+    dropEarlyReads();
     await selectWorkspace(personal.tenant_id, signal);
     selected = personal.tenant_id;
   }
@@ -193,6 +217,27 @@ async function readWorkspaceChoices(
     ...directory,
     salesXrayWorkspaces: directory.workspaces,
     selected_tenant_id: selected,
+  };
+}
+
+/**
+ * The session the server read for this page (dev), in the same shape as the
+ * browser's own check; null unless it names a selected workspace.
+ */
+export function seededChoices(
+  initial: InitialSession | null | undefined,
+): WorkspaceChoices | null {
+  if (!initial) return null;
+  const identity = parseWorkspaceChoices(initial.identity);
+  const directory = parseSalesXrayWorkspaces(initial.directory);
+  if (!identity || !directory || directory.selected_tenant_id === null)
+    return null;
+  return {
+    person_id: identity.person_id,
+    session_id: identity.session_id,
+    ...directory,
+    salesXrayWorkspaces: directory.workspaces,
+    selected_tenant_id: directory.selected_tenant_id,
   };
 }
 
@@ -270,7 +315,7 @@ function StandaloneStudioView({
     path: string,
   ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
     if (path === "/dashboard") return "dashboard";
-    if (path === "/organisation" || path === "/organisation/invites")
+    if (path === "/organisation" || path.startsWith("/organisation/"))
       return "organisation";
     if (
       path === "/calls" ||
@@ -287,15 +332,29 @@ function StandaloneStudioView({
   ): "dashboard" | "list" | "account" | "studio" | "call" => {
     if (path === "/dashboard") return "dashboard";
     if (callIdFromPath(path) !== null) return "call";
-    if (path === "/calls" || path === "/analysis" || path === "/analysis/calls")
-      return "list";
     if (path === "/account") return "account";
+    if (path === "/prospects") return "list";
     return "studio";
   };
+  // New analysis and a saved call: the studio's own outline in its shell.
+  const callPath = openingExistingCall || callIdFromPath(pathname) !== null;
+  const studioPath =
+    !callPath && (pathname === "/" || pathname === "/analysis/new");
+  const callsPath =
+    pathname === "/calls" ||
+    pathname === "/analysis" ||
+    pathname === "/analysis/calls";
   const [attempt, setAttempt] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
-  const [view, setView] = useState<ViewState>({ kind: "loading" });
+  // A server-read session (dev) starts the page ready; the browser's check
+  // below still runs and confirms it, so the page never trusts it alone.
+  // The server's session for a server-rendered page (dev), never for embeds.
+  const initialSession = useInitialSession(embedded ? null : pathname);
+  const [view, setView] = useState<ViewState>(() => {
+    const seeded = seededChoices(initialSession);
+    return seeded ? { kind: "ready", choices: seeded } : { kind: "loading" };
+  });
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
     string | null
@@ -386,6 +445,8 @@ function StandaloneStudioView({
     activeController.current?.abort();
     activeController.current = controller;
     setView({ kind: "selecting", choices, selectedTenantId: tenantId });
+    // Reads started before a workspace was chosen must not be used.
+    dropEarlyReads();
     try {
       await selectWorkspace(tenantId, controller.signal);
       if (controller.signal.aborted || generation.current !== requestGeneration)
@@ -480,6 +541,26 @@ function StandaloneStudioView({
     openProfileGate(selected.intentId);
     return false;
   };
+  // Conversation reads start early on later loads only where Sales Xray is
+  // on for the selected workspace (fail closed everywhere else).
+  const earlyConversation =
+    view.kind === "ready" &&
+    view.choices.selected_tenant_id !== null &&
+    view.choices.salesXrayWorkspaces?.find(
+      (item) => item.tenant_id === view.choices.selected_tenant_id,
+    )?.sales_xray_enabled === true;
+  useEffect(() => {
+    if (view.kind === "loading") return;
+    allowEarlyConversationReads(earlyConversation);
+  }, [view.kind, earlyConversation]);
+  // Telemetry events carry the signed-in session; the server checks it.
+  const telemetrySession =
+    view.kind === "ready" && view.choices.selected_tenant_id
+      ? view.choices.session_id
+      : null;
+  useEffect(() => {
+    telemetry.setSession(telemetrySession);
+  }, [telemetrySession]);
   useEffect(() => {
     if (view.kind !== "ready" || !view.choices.selected_tenant_id) return;
     pending?.bindContext({
@@ -665,14 +746,26 @@ function StandaloneStudioView({
             authenticated={false}
             loading
             active={activeFor(pathname)}
+            mobileFit={studioPath || callPath}
+            heroStage={studioPath ? "welcome" : undefined}
           >
             {/* The page's own skeleton where it has one, so nothing moves. */}
             {pathname === "/organisation" ? (
               <OrganisationPageSkeleton />
             ) : pathname === "/organisation/invites" ? (
               <InvitesSkeleton />
+            ) : pathname?.startsWith("/organisation/people/") ? (
+              <PersonSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
+            ) : pathname === "/coaching" ? (
+              <CoachingSkeleton />
+            ) : studioPath ? (
+              <NewAnalysisSkeletonContent />
+            ) : callPath ? (
+              <CallOpeningSkeletonContent />
+            ) : callsPath ? (
+              <CallsSkeleton />
             ) : (
               <PageSkeleton variant={skeletonVariant(pathname)} />
             )}

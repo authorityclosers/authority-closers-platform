@@ -10,8 +10,15 @@ import {
   type SavedReview,
   type Transcript,
 } from "../reviewer-api";
+import { istStamp } from "../../lib/time";
 import { registerReviewerNavigationGuard } from "./reviewer-navigation";
 import styles from "./reviewer-workspace.module.css";
+
+const LENS_LABEL = {
+  sales: "Sales expert",
+  technical: "Developer",
+  ux: "Experience reviewer",
+} as const;
 
 function formatTime(milliseconds: number) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -183,14 +190,16 @@ function ReviewerAssignmentSession({ assignmentId }: { assignmentId: string }) {
                 <div>
                   <dt>Expires</dt>
                   <dd>
-                    {new Date(
-                      loaded.binding.expires_at_epoch * 1000,
-                    ).toLocaleString()}
+                    {istStamp(new Date(loaded.binding.expires_at_epoch * 1000))}
                   </dd>
                 </div>
                 <div>
                   <dt>Lenses</dt>
-                  <dd>{loaded.binding.allowed_lenses.join(" · ")}</dd>
+                  <dd>
+                    {loaded.binding.allowed_lenses
+                      .map((lens) => LENS_LABEL[lens])
+                      .join(" · ")}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -265,7 +274,7 @@ function ReviewerAssignmentSession({ assignmentId }: { assignmentId: string }) {
                     </strong>
                     <span>
                       {item.confidence} confidence ·{" "}
-                      {new Date(item.created_at_epoch * 1000).toLocaleString()}
+                      {istStamp(new Date(item.created_at_epoch * 1000))}
                     </span>
                   </div>
                   <p>{item.feedback}</p>

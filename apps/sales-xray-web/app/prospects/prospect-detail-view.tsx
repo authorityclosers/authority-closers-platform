@@ -6,7 +6,6 @@ import {
   Clock,
   ExternalLink,
   FileText,
-  HelpCircle,
   Phone,
   RefreshCw,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { formatClock } from "../lightbox/time";
 import { initials } from "../speaker-profiles";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
@@ -26,6 +24,8 @@ import styles from "./prospects.module.css";
 import { ProspectInformation } from "../prospect-information";
 import { PageSkeleton } from "../shell/page-skeleton";
 import informationStyles from "../prospect-information.module.css";
+import { ProspectsAccessState } from "./prospects-access-state";
+import { useLatestCallReport } from "../prospect-latest-call";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Never";
@@ -65,6 +65,11 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
   const pagination = useRef<AbortController | null>(null);
 
   const [attempt, setAttempt] = useState(0);
+  // Call facts (blocker, commitments, next event) come from the latest Report.
+  const latestCall = useLatestCallReport(
+    calls,
+    authenticated && loadedContext === contextKey,
+  );
 
   useEffect(() => {
     if (!authenticated) return;
@@ -154,6 +159,23 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
     authenticated &&
     (loading || (loadedContext !== contextKey && !visibleError));
 
+  if (!authenticated)
+    return (
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        loading={
+          !access ||
+          access.authenticated === null ||
+          access.status === "loading"
+        }
+        active="prospects"
+      >
+        <div className={styles.root}>
+          <ProspectsAccessState access={access} />
+        </div>
+      </AcquisitionShell>
+    );
+
   return (
     <AcquisitionShell
       authenticated={authenticated}
@@ -212,6 +234,8 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
               key={contextKey}
               prospect={prospect}
               calls={calls}
+              latest={latestCall.latest}
+              latestState={latestCall.state}
               onSaved={() => setAttempt((a) => a + 1)}
             />
 
@@ -221,10 +245,6 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                 <Phone size={18} aria-hidden="true" />
                 Opportunity history ({prospect.call_count} visible calls)
               </summary>
-              <p className={informationStyles.note}>
-                <HelpCircle size={14} aria-hidden="true" /> Call interpretations
-                are Inferred. Confirm them with the prospect.
-              </p>
 
               {calls.length === 0 ? (
                 <div className={styles.listPanel}>
@@ -254,10 +274,14 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                             <span>•</span>
                             <Clock size={13} aria-hidden="true" />
                             <span>{formatDuration(call.duration_seconds)}</span>
-                            <span>•</span>
-                            <span className={styles.badge}>
-                              State: {call.state}
-                            </span>
+                            {call.has_report ? null : (
+                              <>
+                                <span>•</span>
+                                <span className={styles.badge}>
+                                  Report not ready
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -282,59 +306,6 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
                           ) : null}
                         </div>
                       </div>
-
-                      {/* Snapshot interpretations if present */}
-                      {call.snapshot ? (
-                        <div
-                          className={styles.snapshotBox}
-                          data-testid={`call-snapshot-${call.snapshot.snapshot_id}`}
-                        >
-                          <div className={styles.snapshotBoxHeader}>
-                            <span className={styles.snapshotBoxTitle}>
-                              Per-call hypothesis ({call.snapshot.snapshot_kind}
-                              )
-                            </span>
-                            <span className={styles.snapshotProvenance}>
-                              rev {call.snapshot.source_revision} •{" "}
-                              {call.snapshot.transcript_revision} •{" "}
-                              {call.snapshot.source_sha256.slice(0, 8)}
-                            </span>
-                          </div>
-
-                          {call.snapshot.interpretations.map((interp, idx) => (
-                            <div
-                              key={idx}
-                              className={styles.interpretationItem}
-                            >
-                              <span className={styles.interpretationKind}>
-                                {interp.interpretation_kind}
-                              </span>
-                              <p className={styles.interpretationText}>
-                                {interp.source.text}
-                              </p>
-                              <p className={styles.interpretationConcern}>
-                                Meaning: {interp.possible_concern}
-                              </p>
-
-                              {interp.source.evidence.map((ev) => (
-                                <div
-                                  key={`${ev.segment_id}-${ev.start_ms}`}
-                                  className={styles.evidenceClip}
-                                >
-                                  <div className={styles.evidenceQuote}>
-                                    &ldquo;{ev.quote}&rdquo;
-                                  </div>
-                                  <div className={styles.evidenceMeta}>
-                                    Segment {ev.segment_id} •{" "}
-                                    {formatClock(ev.start_ms)} –{" "}
-                                    {formatClock(ev.end_ms)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
                   ))}
 

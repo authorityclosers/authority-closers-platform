@@ -27,7 +27,10 @@ def main():
         browser = runtime.chromium.launch(headless=True)
         for width, height in [(390, 844), (1440, 900)]:
             page = browser.new_page(
-                viewport={"width": width, "height": height}, reduced_motion="reduce"
+                viewport={"width": width, "height": height},
+                reduced_motion="reduce",
+                is_mobile=width == 390,
+                has_touch=width == 390,
             )
             page.on("pageerror", lambda e: failures.append(str(e)))
 
@@ -127,6 +130,42 @@ def main():
                 )
                 page.screenshot(path=str(OUT / f"prospect-flat-{width}-{theme}.png"))
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+            page.goto(f"{BASE}/review-fixture/report/pillars", wait_until="networkidle")
+            for kind in ["won", "lost"]:
+                page.get_by_role("button", name=f"Simulate {kind} analysis", exact=True).click()
+                picture = page.locator('[data-report-pillar="overview"]')
+                expect(picture).to_contain_text("Call outcome")
+                expect(picture.locator('[data-gap="true"]').first).to_contain_text("Unknown")
+                expect(picture).to_contain_text("Closing evidence")
+                expect(picture.get_by_text("Won", exact=True)).to_have_count(0)
+                expect(picture.get_by_text("Lost", exact=True)).to_have_count(0)
+                status = page.locator('[data-report-pillar="facts"] [data-gap="true"]').first
+                expect(status).to_contain_text("Current status")
+                expect(status).to_contain_text("Unknown")
+                closing = (
+                    picture.locator("div")
+                    .filter(has=page.get_by_role("heading", name="Closing evidence", exact=True))
+                    .first
+                )
+                disclosure = closing.locator("details")
+                if disclosure.get_attribute("open") is None:
+                    disclosure.locator("summary").click()
+                expect(closing.locator("blockquote")).to_have_text(
+                    "Understood. I won't schedule a follow-up."
+                )
+                expect(disclosure.locator("summary")).to_contain_text("00:31")
+                closing.get_by_role("button").click()
+                expect(page.get_by_role("status")).to_contain_text(
+                    "Understood. I won't schedule a follow-up."
+                )
+                page.evaluate("window.scrollTo(0, 0)")
+                for theme in ["light", "dark"]:
+                    page.locator("html").evaluate(
+                        "(element, theme) => element.setAttribute('data-theme', theme)", theme
+                    )
+                    page.screenshot(path=str(OUT / f"analysis-{kind}-{width}-{theme}.png"))
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+            proof[-1]["human_outcome_boundary"] = True
             page.close()
         browser.close()
     assert not failures, failures

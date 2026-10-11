@@ -1,5 +1,6 @@
 "use client";
 
+import { audioFormat, sizeBand, track } from "../telemetry";
 import {
   createContext,
   useContext,
@@ -263,6 +264,17 @@ export class UploadSessionStore {
     this.retainedFile = { intentId: meta.intentId, file };
     this.publish({ ...meta, phase: "preparing" });
     this.guardUnload(true);
+    // Analytics only: the file's size band and format, never its name.
+    const began = Date.now();
+    track("sx.upload_started", {
+      size_band: sizeBand(meta.totalBytes),
+      format: audioFormat(meta.fileName),
+    });
+    const ended = (outcome: "saved" | "interrupted" | "cancelled") =>
+      track("sx.upload_finished", {
+        outcome,
+        seconds: Math.round((Date.now() - began) / 1000),
+      });
     const live = Promise.resolve()
       .then(() => {
         if (controller.signal.aborted) throw new UploadCancelledError();
@@ -270,6 +282,7 @@ export class UploadSessionStore {
       })
       .then(
         (result) => {
+          ended("saved");
           if (this.controller === controller) {
             this.retainedFile = null;
             this.finish({
@@ -287,6 +300,7 @@ export class UploadSessionStore {
         },
         (error: unknown) => {
           const cancelled = controller.signal.aborted;
+          ended(cancelled ? "cancelled" : "interrupted");
           if (this.controller === controller)
             this.finish({
               ...this.latestMeta(meta),

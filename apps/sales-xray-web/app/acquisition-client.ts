@@ -1,3 +1,4 @@
+import { earlyFetch } from "./early-reads";
 import {
   callIdFromPath,
   callPath,
@@ -178,13 +179,18 @@ export async function acquisition(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
-  const response = await fetch(ACQUISITION + path, {
+  const request: RequestInit = {
     ...init,
     credentials: "same-origin",
     cache: "no-store",
     redirect: "error",
     headers: { accept: "application/json", ...init.headers },
-  });
+  };
+  // A plain GET may already be answered by the page's early reads.
+  const plain = !init.headers && !init.body && !init.method;
+  const response = plain
+    ? await earlyFetch(ACQUISITION + path, request)
+    : await fetch(ACQUISITION + path, request);
   if (!response.ok) {
     const requestId = response.headers.get("x-request-id") || undefined;
     if (response.status === 503) {
