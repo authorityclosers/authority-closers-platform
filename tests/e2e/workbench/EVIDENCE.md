@@ -1,6 +1,33 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Latest strengthened dev matrix: **8 PASS / 8 FAIL**, 19:03:00–19:06:28 UTC,
+Latest strengthened dev matrix: **16/16 PASS**, 19:29:57–19:33:48 UTC,
+recorded start/end HEAD `f373b4e8f70bfd451075a619a7f5e71908769762`.
+G's `2101a87c` repair clears all eight prior Document-name failures; exact
+short names/order pass in Document and Word section 5 across all four pairs.
+Report retains thirteen observations, independent Document seven (top + all
+six sections), Coaching thirteen and fixture outcome formats ten per pair.
+Won / Lost / Follow-up Set / Decision Pending, required reason/date, optional
+25000 INR, human attribution and Deal/Document/Word 1.1 agreement all pass.
+B's `bc2e4cea` phone notice/nav clearance and target reachability pass again.
+
+Independently inspected all four Document skill captures, both phone validation
+states and current phone/dark + desktop/light My coaching: readable, short names
+consistent, navigation clear. Runtime/server/font/overflow errors and fixture
+outcome API requests: **0**. JUnit: 16 cases, zero failures/errors/skips;
+background launcher exit 0, exited. API readiness at 19:23:42 UTC: 200.
+
+This is mutable shared-dev fixture/rendering acceptance. Uncommitted source
+paths at both boundaries are recorded; equal HEAD does not mean unchanged
+rendering. Refresh counts: Report desktop/light 2, phone/light 2, phone/dark 4;
+Document desktop/light 2; Coaching desktop/light 1, phone/light 2; outcome
+desktop/light 4, phone/dark 3; other pairs 0. Canonical reload verified: **false**.
+Shared-dev persistence and authenticated staging smoke remain **NOT RUN**;
+compiled canonical CI execution and release-operator staging evidence pending.
+Independent disposable PG persistence remains PASS below. Receipt/screenshots:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-skill-name-readback/`.
+Next dev wave starts no earlier than 19:44:58 UTC and requires new relevant work.
+
+Superseded strengthened dev matrix: **8 PASS / 8 FAIL**, 19:03:00–19:06:28 UTC,
 `975c8eeb` → `847f748a`. All four outcome-format cases pass, including phone
 notice/nav geometry and every navigation target reachable, after B's
 `bc2e4cea`. Cards end at y=776, navigation begins at y=788: 12 px clear.
@@ -8,12 +35,13 @@ Inspected light/dark notices are readable. Coaching is 4/4 PASS, thirteen
 observations each; current desktop/dark focus and phone/dark mission inspected.
 No runtime/server/font/overflow errors or outcome API requests.
 
-The eight failures are the same unresolved Document-name defect: each Report
-journey completes six pillars/eight Report skills/four deeper groups, then its
-Document row-name check fails; each independent Document journey fails its
-section-5 row names. G owns the exact request/earlier section-5 screenshot.
-This is a copy mismatch, not a page crash. Word section-5 names remain unverified
-because the Report stops at Document names before that download. Canonical
+Those eight failures were the same Document-name defect, now cleared above:
+each Report journey completed six pillars/eight Report skills/four deeper
+groups, then its Document row-name check failed; independent Document journeys
+failed the section-5 row names. The exact request and screenshot went to G.
+It was a copy mismatch, not a page crash. Word section-5 names were unverified
+in that run because it stopped before the download; the latest run checks them.
+Canonical
 shared-dev persistence and staging smoke remain **NOT RUN**. Receipt:
 `/home/acdev/strikes/1694/shots/2026-10-11-workbench-visual-repair-readback/receipt.json`.
 
