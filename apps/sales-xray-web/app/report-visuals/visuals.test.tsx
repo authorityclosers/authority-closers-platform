@@ -10,6 +10,7 @@ import {
   MomentTag,
   OutcomeBadge,
   PillarHeading,
+  PossibleTag,
   PlayChip,
   Quote,
   ShareDial,
@@ -188,4 +189,10 @@ it("lays out the switch, commitment, facts and the end strip", () => {
   expect(
     html(<SummaryStrip cells={[{ label: "Only one", value: "x" }]} />),
   ).toBe("");
+});
+
+it("marks Sales Xray's own reading as Possible, in the copy module's words", () => {
+  const markup = html(<PossibleTag />);
+  expect(markup).toContain(">Possible<");
+  expect(markup).toContain("Nobody said this in so many words.");
 });

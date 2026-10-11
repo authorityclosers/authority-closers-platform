@@ -11,7 +11,7 @@
   "prospects/prospects.module.css": 2,
   "provider-review/provider-review.module.css": 19,
   "recording-measurements.module.css": 17,
-  "report-document.module.css": 8,
+  "report-document.module.css": 0,
   "report-entities.module.css": 2,
   "report-factors.module.css": 2,
   "review-dialog.module.css": 33,

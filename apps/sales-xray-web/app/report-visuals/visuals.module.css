@@ -556,7 +556,7 @@
   align-content: start;
   gap: 6px;
   flex-basis: 0;
-  min-width: 64px;
+  min-width: 84px;
 }
 
 .timeline[data-single] .block {
@@ -732,9 +732,13 @@ button.pin:focus-visible {
   padding-right: 4px;
 }
 
+/* Whole words only; a word longer than its block is hyphenated, never cut. */
 .stageText strong {
   color: var(--sx-ink);
   font: 600 var(--sx-text-sm) / 1.3 var(--lx-font-ui);
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: auto;
 }
 
 .stageText > span {
@@ -761,7 +765,7 @@ button.pin:focus-visible {
 }
 
 /* Narrow: the stages stack as rows, each with its own stretch of the wave. */
-@container (max-width: 559px) {
+@container (max-width: 679px) {
   .timeline:not([data-single]) .blocks {
     --wave-h: 36px;
     flex-direction: column;

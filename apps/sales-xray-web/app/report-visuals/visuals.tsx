@@ -36,6 +36,7 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 
 import { formatClock } from "../lightbox/time";
+import { COMMON } from "../report-copy";
 import type { ReportEvidence } from "../report-contract";
 import {
   ClipPlayIcon,
@@ -211,17 +212,20 @@ export function PlayChip({
   );
 }
 
-/** "Inferred": the analysis suggests this; nobody confirmed it. */
-export function InferredTag() {
+/**
+ * "Possible": Sales Xray's reading of the call, not something said (the copy
+ * module's words, the same on screen, in the Document and in Word).
+ */
+export function PossibleTag() {
   return (
-    <span
-      className={styles.inferred}
-      title="The analysis suggests this; it is not confirmed."
-    >
-      Inferred
+    <span className={styles.inferred} title={COMMON.possibleHint}>
+      {COMMON.possible}
     </span>
   );
 }
+
+/** The earlier name, kept for the sections that import it. */
+export const InferredTag = PossibleTag;
 
 /**
  * Someone's own words: the quote first, then who said it and when. UI face,
@@ -700,7 +704,10 @@ export function CallTimeline({
               ) : null}
               <span className={styles.stageBar} aria-hidden="true" />
               {stages.length ? (
-                <span className={styles.stageText}>
+                <span
+                  className={styles.stageText}
+                  title={`${block.label} · ${formatClock(block.start_ms)}–${formatClock(block.end_ms)}`}
+                >
                   <strong>{block.label}</strong>
                   <span>
                     {formatClock(block.start_ms)}
