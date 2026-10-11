@@ -883,6 +883,12 @@ a.rowTitle:hover {
   gap: 14px;
 }
 
+/* showModal() focuses the dialog itself; its controls show focus instead. */
+.dialog:focus,
+.dialog:focus-visible {
+  outline: none;
+}
+
 .dialogTitle {
   margin: 0;
   font: var(--sx-text-panel);
