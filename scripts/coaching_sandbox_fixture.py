@@ -63,12 +63,16 @@ earlier = {
     if k in payloads
 }
 rep = rep_view(mine, latest, earlier, person_id=rep_uuid(TENANT, best), tenant_id=TENANT)
-clips = placeholder.clips_for(rep.focus.skill_id) if rep.focus else ()
+clips = (
+    placeholder.clips_for(rep.focus.skill_id, gap_type=rep.root_cause.gap_type) if rep.focus else ()
+)
 rep = rep.model_copy(update={"media_clips": clips, "session_id": SESSION})
 one = call_view(mine[0], latest, person_id=VIEWER, tenant_id=TENANT)
 one = one.model_copy(
     update={
-        "media_clips": placeholder.clips_for(one.focus.skill_id) if one.focus else (),
+        "media_clips": placeholder.clips_for(one.focus.skill_id, gap_type=one.root_cause.gap_type)
+        if one.focus
+        else (),
         "session_id": SESSION,
     }
 )

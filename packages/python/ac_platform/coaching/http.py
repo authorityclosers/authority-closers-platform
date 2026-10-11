@@ -81,7 +81,9 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
         topics = await asyncio.to_thread(read_topics)
         clips = suggestions(
             topics, skill_id=view.focus.skill_id, gap_type=view.root_cause.gap_type
-        ) or await asyncio.to_thread(placeholder.clips_for, view.focus.skill_id)
+        ) or await asyncio.to_thread(
+            placeholder.clips_for, view.focus.skill_id, gap_type=view.root_cause.gap_type
+        )
         limitations = view.limitations
         if clips:
             limitations = tuple(

@@ -771,7 +771,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on.",
+        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on. It addresses a judgment gap (recognising the moment), the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."
@@ -790,23 +790,23 @@
         "offer": null
       },
       {
-        "topic_id": "syn-coach-video-002",
-        "revision": "1f8fa54b53e108dfcfb6578cc0d96fd2acd39e160598274312c2f4c4ea2a577b",
-        "review_id": "8afbe3d6-b48b-5a15-920a-df8a1691b4c9",
-        "title": "Listening → Right Follow-up",
-        "kind": "video",
+        "topic_id": "syn-coach-audio-001",
+        "revision": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
+        "review_id": "bc642753-2bb5-5588-95d2-0e35c6d7a5c9",
+        "title": "Sales Is Diagnosis, Not Persuasion",
+        "kind": "audio",
         "placeholder": true,
         "voice": "neutral",
         "access": "locked",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 27612,
-        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching.",
+        "end_ms": 35763,
+        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching. It addresses a judgment gap (recognising the moment), the likely reason here.",
         "takeaways": [
-          "Use the buyer’s words in your follow-up.",
-          "Acknowledge, then ask a connected question."
+          "One objection can describe several realities.",
+          "Clarify the meaning before choosing a response."
         ],
-        "transcript_excerpt": "Same situation: Prospect: “Humne agency hire ki thi, but result nahi aaya.” “Got it. Agency exactly kya handle kar rahi thi?” “Aur aapko expected kya tha…",
+        "transcript_excerpt": "“Price high है” का मतलब हो सकता है: budget नहीं है, expected price कम था, value clear नहीं हुई, competitor cheaper है, या prospect खुद implementation को लेकर…",
         "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
@@ -1485,7 +1485,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on.",
+        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on. It addresses a judgment gap (recognising the moment), the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."
@@ -1504,23 +1504,23 @@
         "offer": null
       },
       {
-        "topic_id": "syn-coach-video-002",
-        "revision": "1f8fa54b53e108dfcfb6578cc0d96fd2acd39e160598274312c2f4c4ea2a577b",
-        "review_id": "8afbe3d6-b48b-5a15-920a-df8a1691b4c9",
-        "title": "Listening → Right Follow-up",
-        "kind": "video",
+        "topic_id": "syn-coach-audio-001",
+        "revision": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
+        "review_id": "bc642753-2bb5-5588-95d2-0e35c6d7a5c9",
+        "title": "Sales Is Diagnosis, Not Persuasion",
+        "kind": "audio",
         "placeholder": true,
         "voice": "neutral",
         "access": "locked",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
-        "end_ms": 27612,
-        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching.",
+        "end_ms": 35763,
+        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching. It addresses a judgment gap (recognising the moment), the likely reason here.",
         "takeaways": [
-          "Use the buyer’s words in your follow-up.",
-          "Acknowledge, then ask a connected question."
+          "One objection can describe several realities.",
+          "Clarify the meaning before choosing a response."
         ],
-        "transcript_excerpt": "Same situation: Prospect: “Humne agency hire ki thi, but result nahi aaya.” “Got it. Agency exactly kya handle kar rahi thi?” “Aur aapko expected kya tha…",
+        "transcript_excerpt": "“Price high है” का मतलब हो सकता है: budget नहीं है, expected price कम था, value clear नहीं हुई, competitor cheaper है, या prospect खुद implementation को लेकर…",
         "slides": [],
         "offer": {
           "full_coaching_href": "/plans",
