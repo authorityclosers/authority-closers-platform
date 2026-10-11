@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence import (
     source_object_models,
     speaker_map_models,
     submission_label_models,
+    synthetic_import_models,
 )
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
@@ -65,6 +66,7 @@ MODEL_MODULES = (
     conversation_models,
     acquisition_models,
     bulk_import_models,
+    synthetic_import_models,
     call_metrics_models,
     canary_models,
     guest_models,

@@ -1302,6 +1302,17 @@ def install_submission_http(
             headers=headers,
         )
 
+    if settings.environment != "production":
+        from ac_platform.http.conversation_synthetic_imports import install_synthetic_import_http
+
+        install_synthetic_import_http(
+            router,
+            current_owner=current_owner,
+            read_only_owner=read_only_owner,
+            guard=guard,
+            fail=fail,
+        )
+
     install_import_http(
         router,
         current_owner=current_owner,

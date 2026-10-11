@@ -42,3 +42,13 @@ formatter collapses that opening to one line. This changes only whitespace;
 the existing 36 cases and production screenshots exercise identical JSX.
 CI's Python gates and acquisition browser also passed at 8f0f42a. The unrelated
 shared-migration slot with #442 remains recorded separately.
+
+The composed member-import PostgreSQL regression passes (13.93s). A real cookie
+confirms the member and uploads a native WAV through the ordinary intake. The
+call keeps that member as canonical owner and the organisation's processing
+principal. Fresh local/provider workers and the plan scheduler deliver C6 without
+browser polling; the saved report is source-bound and the customer journal records
+delivery once. Repeating acceptance and uploading the same hash in a fresh batch
+retains one usage, one completed one-second settlement, the original member and
+call ID, one native decode and three fictional broker calls. The initial ordinary
+usage hold has no completion settlement. No live provider is contacted.

@@ -74,11 +74,23 @@ def postgres_harness(monkeypatch):
     yield from _postgres_harness.__wrapped__()
 
 
-async def setup_import(postgres_harness: Any, tmp_path: Any) -> Any:
-    setup = await _setup(postgres_harness, tmp_path, separate_operations=True)
+async def setup_import(postgres_harness: Any, tmp_path: Any, *, gemini: bool = False) -> Any:
+    setup = await _setup(postgres_harness, tmp_path, separate_operations=True, gemini=gemini)
     organisation = await seed(setup.engine, role="owner")
     member = await seed(setup.engine, tenant_id=organisation.tenant_id, role="member")
     principal = await _provision(setup.engine, organisation)
+    if gemini:
+        # Explicit fictional approval for this exact organisation/processor;
+        # no production approval, provider send or settings change is inferred.
+        bundle = setup.bundle_box["bundle"]
+        bundle = bundle.model_copy(
+            update={
+                "acquisition_policy": bundle.acquisition_policy.model_copy(
+                    update={"tenant_id": organisation.tenant_id, "processing_person_id": principal}
+                )
+            }
+        )
+        setup.bundle_box["bundle"] = type(bundle).model_validate_json(bundle.model_dump_json())
     async with setup.sessions() as db, db.begin():
         db.add(
             Organisation(

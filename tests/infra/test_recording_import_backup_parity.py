@@ -13,3 +13,13 @@ def test_recording_import_state_is_in_all_consumers() -> None:
             "conversation_recording_imports",
             "conversation_recording_import_items",
         )
+
+
+def test_sandbox_content_and_explicit_flag_survive_all_restore_paths() -> None:
+    for module in (backup, proof, drill):
+        assert module.parity_contract_for_head("20261011_0082") == "ac-postgres-parity-v53"
+        assert module.parity_tables_for_head("20261011_0082") == (
+            *module.parity_tables_for_head("20261011_0081"),
+            "conversation_sandbox_organisations",
+            "conversation_synthetic_records",
+        )
