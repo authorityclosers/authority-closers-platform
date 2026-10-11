@@ -101,7 +101,12 @@ function luminance([r, g, b]: Rgba) {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
-function contrast(set: Tokens, foreground: string, background: string) {
+function contrast(
+  set: Tokens,
+  foreground: string,
+  background: string,
+  opacity = 1,
+) {
   const value = (name: string) => {
     const raw = set.get(name);
     if (!raw) throw new Error(`missing --lx-${name}`);
@@ -109,7 +114,9 @@ function contrast(set: Tokens, foreground: string, background: string) {
   };
   const surface = value("surface");
   const bg = composite(value(background), surface);
-  const fg = composite(value(foreground), bg);
+  const color = value(foreground);
+  color[3] *= opacity;
+  const fg = composite(color, bg);
   const [light, dark] = [luminance(fg), luminance(bg)].sort((a, b) => b - a);
   return (light + 0.05) / (dark + 0.05);
 }
@@ -247,6 +254,22 @@ describe("Lightbox token derivative", () => {
       expect(failures).toEqual([]);
     },
   );
+
+  it("keeps a pulsing in-progress dot at 3:1 even at its dimmest point", () => {
+    const css = readFileSync(join(appDir, "calls-library.module.css"), "utf8");
+    const pulse = withoutComments(css).match(
+      /@keyframes pulse\s*\{\s*50%\s*\{\s*opacity:\s*([\d.]+)/,
+    );
+    expect(pulse).not.toBeNull();
+    const opacity = Number(pulse?.[1]);
+    for (const set of [appLight, appDark]) {
+      for (const background of ["surface", "paper", "paper-2", "sunken"]) {
+        expect(
+          contrast(set, "info", background, opacity),
+        ).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
 
   it("mirrors the light tokens into an embed scope the standalone root skips", () => {
     const start = styles.indexOf("/* lightbox-embed-tokens:start");
