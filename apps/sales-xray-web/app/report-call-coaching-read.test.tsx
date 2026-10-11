@@ -278,6 +278,10 @@ it("shows the report's own coaching, with no error, for a call that isn't the vi
   expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();
   expect(notices.notify).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("private error");
+  // No link the admin can't open, and no "your report brought you here".
+  expect(container.querySelector('a[href^="/coaching?call="]')).toBeNull();
+  expect(container.querySelector('a[href^="/coaching?focus="]')).toBeNull();
+  expect(container.querySelector('a[href="/coaching"]')).not.toBeNull();
 });
 it("keeps the report focus and offers Try again when the read fails", async () => {
   vi.stubGlobal(

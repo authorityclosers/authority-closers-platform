@@ -501,6 +501,19 @@ export const CALL = {
   mineAcross: "My coaching across calls",
 } as const;
 
+/** This call's coaching inside the Report (its tab and states). */
+export const REPORT_COACHING = {
+  failed: "Coaching didn’t load",
+  failedText: "Your report is fine.",
+  retry: "Try again",
+  chooseWorkspace:
+    "Choose your signed-in workspace to see this call’s coaching.",
+  unavailable: "This call’s coaching isn’t available right now.",
+  otherWorkspace:
+    "Coaching is unavailable in this workspace. Your report can be reopened from the call list.",
+  openFull: "Open full coaching for this call",
+} as const;
+
 /** A moment's play control (spec 5.5: every moment inspectable). */
 export const MOMENT = {
   withContext: "With context",

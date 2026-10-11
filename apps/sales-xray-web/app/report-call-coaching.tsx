@@ -8,9 +8,11 @@ import type { ReportEvidence, SalesReport } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 import { basisChip } from "./coaching/call-coaching";
 import {
+  CALL,
   CALL_PILLARS,
   FOCUS,
   NEXT,
+  REPORT_COACHING,
   RETAINED,
   WHY,
 } from "./coaching/coaching-copy";
@@ -142,6 +144,8 @@ export function ReportCallCoaching(props: Props) {
   const baseScope = `${identity}:${callId}:${report?.source_sha256}:${report?.transcript_revision}:${data.recordingId}:${data.reportRevision}`;
   const [attempt, setAttempt] = useState(0);
   const [withheldScope, setWithheldScope] = useState<string | null>(null);
+  // A call that isn't the viewer's (an admin reading a teammate's report).
+  const [foreignScope, setForeignScope] = useState<string | null>(null);
   const authorisedScope = useRef<string | null>(null);
   const scope = `${baseScope}:${attempt}`;
   const [loaded, setLoaded] = useState<{
@@ -216,13 +220,19 @@ export function ReportCallCoaching(props: Props) {
         // Not one of the viewer's own calls (an admin reading a teammate's
         // report): Coaching stays private to the rep, so the report's own
         // coaching is the whole answer, not a failure to retry.
-        if (status === 404 && authorisedScope.current !== baseScope) return;
+        if (status === 404 && authorisedScope.current !== baseScope) {
+          setForeignScope(baseScope);
+          return;
+        }
         notify({
           id: "report-call-coaching",
           tone: "error",
-          title: "Coaching didn’t load",
-          message: "Your report is fine.",
-          action: { label: "Try again", run: () => setAttempt((n) => n + 1) },
+          title: REPORT_COACHING.failed,
+          message: REPORT_COACHING.failedText,
+          action: {
+            label: REPORT_COACHING.retry,
+            run: () => setAttempt((n) => n + 1),
+          },
         });
       });
     return () => {
@@ -244,11 +254,7 @@ export function ReportCallCoaching(props: Props) {
   ]);
   if (!report || report.preview) return null;
   if (access && callId && !permitted)
-    return (
-      <p className={styles.context}>
-        Choose your signed-in workspace to see this call’s coaching.
-      </p>
-    );
+    return <p className={styles.context}>{REPORT_COACHING.chooseWorkspace}</p>;
   // Withholding remains in force while a retry is pending; old report quotes cannot reappear.
   const current =
     (attempt === 0 ? bootstrap : null) ??
@@ -263,9 +269,9 @@ export function ReportCallCoaching(props: Props) {
         data-call-coaching
         data-state="unavailable"
       >
-        <p>This call’s coaching isn’t available right now.</p>
+        <p>{REPORT_COACHING.unavailable}</p>
         <button type="button" onClick={() => setAttempt((n) => n + 1)}>
-          Try again
+          {REPORT_COACHING.retry}
         </button>
       </div>
     );
@@ -278,14 +284,14 @@ export function ReportCallCoaching(props: Props) {
       />
     );
   if (access && identity !== initialIdentity)
-    return (
-      <p className={styles.context}>
-        Coaching is unavailable in this workspace. Your report can be reopened
-        from the call list.
-      </p>
-    );
+    return <p className={styles.context}>{REPORT_COACHING.otherWorkspace}</p>;
+  const foreign = foreignScope === baseScope;
   return (
-    <RetainedCallCoaching {...props} callId={permitted ? callId : undefined} />
+    <RetainedCallCoaching
+      {...props}
+      callId={permitted && !foreign ? callId : undefined}
+      foreign={foreign}
+    />
   );
 }
 
@@ -326,7 +332,7 @@ function CanonicalCallCoaching({
                 evidence={coaching.evidence}
                 showCall={false}
                 heading={WHY.callEvidence}
-                label="Moments from this call"
+                label={CALL.moments}
                 onPlay={onSelectEvidence}
                 contextFor={(source) => {
                   const playback =
@@ -341,10 +347,7 @@ function CanonicalCallCoaching({
                     ? {
                         range: playback.playback_range,
                         play: () =>
-                          onSelectContextualPlayback!(
-                            playback,
-                            "Coaching for this call",
-                          ),
+                          onSelectContextualPlayback!(playback, CALL.title),
                       }
                     : null;
                 }}
@@ -379,14 +382,14 @@ function CanonicalCallCoaching({
             data-variant="primary"
             href={`/coaching?call=${coaching.submission_id}`}
           >
-            Open full coaching for this call
+            {REPORT_COACHING.openFull}
           </Link>
           <Link
             prefetch={false}
             className={kitStyles.button}
             href={skill ? `/coaching?focus=${skill}` : "/coaching"}
           >
-            My coaching across calls
+            {CALL.mineAcross}
           </Link>
         </div>
       </div>
@@ -398,7 +401,15 @@ function CanonicalCallCoaching({
  * The fallback when this call's coaching can't be read: the report's own
  * retained suggestion in the same pillars, never a new diagnosis.
  */
-function RetainedCallCoaching({ data, callId, onSelectEvidence }: Props) {
+function RetainedCallCoaching({
+  data,
+  callId,
+  onSelectEvidence,
+  foreign = false,
+}: Props & {
+  /** Not the viewer's call: their own Coaching has no focus from it. */
+  foreign?: boolean;
+}) {
   const report = data.report;
   if (!report || report.preview) return null;
   const focus = callCoachingFocus(report);
@@ -416,15 +427,19 @@ function RetainedCallCoaching({ data, callId, onSelectEvidence }: Props) {
           data-variant="primary"
           href={`/coaching?call=${callId}`}
         >
-          Open full coaching for this call
+          {REPORT_COACHING.openFull}
         </Link>
       ) : null}
       <Link
         prefetch={false}
         className={kitStyles.button}
-        href={focus?.skillId ? `/coaching?focus=${focus.skillId}` : "/coaching"}
+        href={
+          focus?.skillId && !foreign
+            ? `/coaching?focus=${focus.skillId}`
+            : "/coaching"
+        }
       >
-        My coaching across calls
+        {CALL.mineAcross}
       </Link>
     </div>
   );
@@ -481,7 +496,7 @@ function RetainedCallCoaching({ data, callId, onSelectEvidence }: Props) {
                 key={index}
                 text={source.quote}
                 source={source}
-                title="Coaching for this call"
+                title={CALL.title}
                 onSelect={onSelectEvidence}
               />
             ))}
