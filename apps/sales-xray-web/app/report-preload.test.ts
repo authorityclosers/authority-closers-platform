@@ -29,6 +29,36 @@ const read = (objects: Record<string, unknown> = {}) =>
   });
 afterEach(() => vi.useRealTimers());
 
+it.each(["matches", "changed"])(
+  "opens the retained Report and checks the optional Coaching report pin when it %s",
+  async (kind) => {
+    const payload = fictionalCallCoaching();
+    const reportRevision = "b".repeat(64);
+    payload.report_revision =
+      kind === "matches" ? reportRevision : "c".repeat(64);
+    const port: SavedReportRead = async (path) => {
+      if (path.includes("/me/coaching/")) return payload;
+      return read({ report: { ...envelope, report_revision: reportRevision } })(
+        path,
+      );
+    };
+    const view = await preloadSavedReport(submissionId, port, undefined, {
+      coachingActor: {
+        personId: callCoachingBinding.personId,
+        tenantId: callCoachingBinding.tenantId,
+        sessionId: callCoachingBinding.sessionId,
+      },
+    });
+    expect(view.state).toBe("ready");
+    if (view.state === "ready") {
+      expect(view.result.reportRevision).toBe(reportRevision);
+      if (kind === "matches")
+        expect(view.result.callCoaching?.state).toBe("ready");
+      else expect(view.result.callCoaching).toBeUndefined();
+    }
+  },
+);
+
 it("loads optional own-call coaching in parallel with C2/C5 under the route's actor", async () => {
   const pending: Array<() => void> = [];
   const payload = fictionalCallCoaching();
@@ -51,6 +81,7 @@ it("loads optional own-call coaching in parallel with C2/C5 under the route's ac
     coachingActor: {
       personId: callCoachingBinding.personId,
       tenantId: callCoachingBinding.tenantId,
+      sessionId: callCoachingBinding.sessionId,
     },
   });
   await vi.waitFor(() => expect(pending).toHaveLength(3));
@@ -81,6 +112,7 @@ it.each(["missing", "wrong person", "wrong source"])(
       coachingActor: {
         personId: callCoachingBinding.personId,
         tenantId: callCoachingBinding.tenantId,
+        sessionId: callCoachingBinding.sessionId,
       },
     });
     expect(view.state).toBe("ready");
@@ -102,6 +134,7 @@ it("does not wait for a stalled optional Coaching service to open the Report", a
     coachingActor: {
       personId: callCoachingBinding.personId,
       tenantId: callCoachingBinding.tenantId,
+      sessionId: callCoachingBinding.sessionId,
     },
   });
   expect(view.state).toBe("ready");
@@ -162,6 +195,10 @@ it.each([
     { report: { ...envelope, transcript_revision: "stale-revision" } },
   ],
   ["C5 content", { report: { ...envelope, report: {} } }],
+  [
+    "C5 report revision",
+    { report: { ...envelope, report_revision: "invalid-digest" } },
+  ],
 ])(
   "returns an unavailable state rather than throwing or showing mismatched %s",
   async (_, objects) => {

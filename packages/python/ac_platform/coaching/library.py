@@ -4,15 +4,15 @@ Private views never widen to an administrator's readable teammates. Reading this
 projection does not renew a claim, write progress, charge credits or call AI.
 """
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
 
 from ac_platform.coaching.call import CallCoachingCache, CallCoachingView
-from ac_platform.coaching.contracts import CallHistory, CoachingView
+from ac_platform.coaching.contracts import CallHistory, CallSummary, CoachingView
 from ac_platform.coaching.learner import build_learner
-from ac_platform.coaching.report_adapter import from_report
+from ac_platform.coaching.report_adapter import _text, from_report
 from ac_platform.coaching.team import TeamCoachingView, summarize_team
 from ac_platform.conversation_intelligence.acquisition_library import (
     _account_library_query,
@@ -32,6 +32,9 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationReportDraft,
     ConversationRun,
+)
+from ac_platform.conversation_intelligence.submission_label_models import (
+    ConversationSubmissionLabelRevision as LabelRevision,
 )
 from ac_platform.kernel.authz import ActorContext
 
@@ -148,11 +151,33 @@ class CoachingLibrary:
         ).all()
         reports = AcquisitionReports(self.ownership)
         history: list[CallHistory] = []
+        summaries: list[CallSummary] = []
         pending, unavailable = 0, 0
+        names = await self._display_names(
+            [usage.submission_id for usage, *_ in rows[:HISTORY_LIMIT]]
+        )
+
+        def summary(
+            usage: Any,
+            state: Literal["ready", "pending", "unavailable"],
+            label: str | None = None,
+            focus: str | None = None,
+        ) -> None:
+            summaries.append(
+                CallSummary(
+                    submission_id=usage.submission_id,
+                    call_label=names.get(usage.submission_id) or label or "Sales call",
+                    created_at=usage.created_at,
+                    state=state,
+                    focus_label=focus,
+                )
+            )
+
         for usage, ready, plan_state in reversed(rows[:HISTORY_LIMIT]):
             if not ready:
                 pending += int(plan_state == "active")
                 unavailable += int(plan_state != "active")
+                summary(usage, "pending" if plan_state == "active" else "unavailable")
                 continue
             try:
                 envelope = await reports.report(
@@ -217,9 +242,18 @@ class CoachingLibrary:
                     unavailable += 1
                 else:
                     history.append(call)
+                # A readable report always has its own call coaching, even
+                # when it adds nothing comparable to the learner history.
+                summary(
+                    usage,
+                    "ready",
+                    _text(envelope.get("source_label"), 256),
+                    next((row.label for row in call.skills if row.mission), None) if call else None,
+                )
             except (ConversationError, ValueError, KeyError):
                 unavailable += 1
-        return build_learner(
+                summary(usage, "unavailable")
+        view = build_learner(
             tuple(history),
             person_id=actor.person_id,
             tenant_id=self.ownership.tenant_id,
@@ -227,6 +261,32 @@ class CoachingLibrary:
             unavailable_calls=unavailable,
             history_limited=len(rows) > HISTORY_LIMIT,
         )
+        return view.model_copy(update={"calls": tuple(reversed(summaries))})
+
+    async def _display_names(self, submission_ids: list[UUID]) -> dict[UUID, str]:
+        """Owner-chosen call names in one query, for rows already in library scope."""
+        if not submission_ids:
+            return {}
+        rows = (
+            await self.database.execute(
+                select(LabelRevision.submission_id, LabelRevision.display_name)
+                .where(
+                    LabelRevision.tenant_id == self.ownership.tenant_id,
+                    LabelRevision.submission_id.in_(submission_ids),
+                )
+                .order_by(LabelRevision.submission_id, LabelRevision.revision.desc())
+            )
+        ).all()
+        names: dict[UUID, str] = {}
+        seen: set[UUID] = set()
+        for submission_id, display_name in rows:
+            if submission_id in seen:
+                continue
+            seen.add(submission_id)
+            # The latest revision wins; a cleared name falls back to the report.
+            if display_name:
+                names[submission_id] = display_name
+        return names
 
 
 def evaluator_key(manifest: dict[str, Any], recipe: str) -> str:

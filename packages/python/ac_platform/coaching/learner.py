@@ -16,6 +16,7 @@ from ac_platform.coaching.contracts import (
     Path,
     Pattern,
     Practice,
+    ProgressPoint,
     SkillObservation,
 )
 from ac_platform.coaching.lessons import lesson_for
@@ -138,6 +139,29 @@ def build_learner(
         status="active" if recurring else "provisional",
         verdict=mission.behavior,
     )
+    # One point per comparable call; other evaluator versions are not compared.
+    # Report suggestions without an assessed skill stay a single call.
+    progress = tuple(
+        ProgressPoint(
+            submission_id=call.submission_id,
+            created_at=call.created_at,
+            state=(
+                "not_covered"
+                if row is None
+                else "suggested"
+                if row.improvement is not None
+                else "no_suggestion"
+            ),
+            after_mission=call.created_at > mission.active_since,
+        )
+        for call in calls
+        if (
+            call.comparison_key == selected[0]
+            if not suggestion
+            else str(call.submission_id) == selected[0]
+        )
+        for row in (next((s for s in call.skills if s.skill_id == selected[1]), None),)
+    )
     # A dynamic shortlist, not a rigid curriculum or an inferred core strength.
     candidates = [
         rows[-1].label
@@ -161,6 +185,7 @@ def build_learner(
             ),
         ),
         evidence=evidence,
+        progress=progress[-40:],
         mission=mission,
         practice=origin.practice
         or Practice(

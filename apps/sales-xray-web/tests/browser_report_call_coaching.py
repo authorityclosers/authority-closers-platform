@@ -13,7 +13,7 @@ OUT = Path(os.environ["SALES_XRAY_UX_EVIDENCE_DIR"])
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    errors, outside, api, proof = [], [], [], []
+    errors, outside, api, media, proof = [], [], [], [], []
     with sync_playwright() as runtime:
         browser = runtime.chromium.launch(headless=True)
         for width, height in [(390, 844), (1440, 900)]:
@@ -27,6 +27,9 @@ def main():
                 if address.netloc != urlsplit(BASE).netloc:
                     outside.append(address.netloc)
                     route.abort()
+                elif address.path.startswith("/v1/me/coaching/media/fictional-impact/"):
+                    media.append(address.path)
+                    route.fulfill(status=503, content_type="text/plain", body="Unavailable")
                 elif address.path.startswith("/v1/"):
                     api.append(address.path)
                     route.abort()
@@ -44,6 +47,22 @@ def main():
             expect(page.get_by_role("status")).to_contain_text("ms ·")
             lesson = coaching.locator("details").first
             lesson.locator("summary").click()
+            example = coaching.get_by_role("region", name="Coaching example for this focus")
+            expect(example).to_contain_text("Placeholder · neutral narration")
+            expect(example.locator("audio")).to_have_count(0)
+            assert len(media) == (0 if width == 390 else 2)
+            example.get_by_role("button", name="Next slide", exact=True).click()
+            expect(example).to_contain_text("Wait for their answer.")
+            example.get_by_role("button", name="Previous slide", exact=True).click()
+            example.locator("details summary").click()
+            expect(example).to_contain_text("समस्या का असर क्या है?")
+            example.get_by_role("button", name="Play coaching clip", exact=True).click()
+            expect(example.get_by_role("status")).to_contain_text("Narration is unavailable")
+            example.get_by_role("button", name="Try clip again", exact=True).click()
+            expect(example.get_by_role("status")).to_contain_text("Narration is unavailable")
+            expect(coaching).to_contain_text("Your next-call mission")
+            expect(lesson).to_contain_text("not words from the call")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
             expect(lesson).to_contain_text("not words from the call")
             expect(lesson.locator("ol li").first).to_be_visible()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
@@ -58,13 +77,26 @@ def main():
                 )
                 page.evaluate("window.scrollTo(0, 0)")
                 page.screenshot(path=str(OUT / f"call-coaching-{width}-{theme}.png"))
-            proof.append({"width": width, "bootstrap": True, "source": True, "lesson": True})
+                example.screenshot(path=str(OUT / f"call-coaching-media-{width}-{theme}.png"))
+            proof.append(
+                {
+                    "width": width,
+                    "bootstrap": True,
+                    "source": True,
+                    "lesson": True,
+                    "media_click_retry": True,
+                }
+            )
             page.close()
         browser.close()
     assert not errors, errors
     assert not outside, outside
     assert not api, api
-    (OUT / "browser-proof.json").write_text(json.dumps({"checks": proof, "api_reads": 0}))
+    assert len(media) == 4, media
+    assert all(path.startswith("/v1/me/coaching/media/fictional-impact/") for path in media)
+    (OUT / "browser-proof.json").write_text(
+        json.dumps({"checks": proof, "api_reads": 0, "fictional_media_requests": len(media)})
+    )
     print(json.dumps(proof))
 
 

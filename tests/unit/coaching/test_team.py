@@ -13,6 +13,7 @@ def test_team_counts_only_source_linked_suggestions_and_never_serializes_reps() 
     rep = UUID(int=999)
     view = summarize_team(((rep, call), (rep, call)), person_id=UUID(int=1), tenant_id=UUID(int=2))
     assert view.analysed_calls == 1 and view.suggestions[0].suggestion_calls == 1
+    assert view.latest_call_at == NOW
     raw = view.model_dump_json()
     for private in (str(rep), str(CALL), "Handover takes time.", "Ask one impact question."):
         assert private not in raw
@@ -40,3 +41,8 @@ def test_unclassified_legacy_suggestion_is_not_guessed_from_its_title_or_prose()
     assert view.suggestions[0].label == "Other call report suggestions"
     assert "private name" not in view.model_dump_json()
     assert "40" in view.limitations[-1]
+
+
+def test_an_empty_team_has_no_latest_call_date() -> None:
+    view = summarize_team((), person_id=UUID(int=1), tenant_id=UUID(int=2))
+    assert view.analysed_calls == 0 and view.latest_call_at is None

@@ -1743,7 +1743,10 @@ html:has(> body.sales-xray-document) {
     display: flex;
     background: var(--canvas);
     color: var(--text);
-    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    /* The app's own type (Plus Jakarta Sans + Noto Devanagari), not Segoe UI:
+       New analysis and the progress screen match every other page, and Hindi
+       and Marathi render (r17 S5/S6). The report keeps its own font. */
+    font-family: var(--lx-font-ui);
     font-size: 14px;
     line-height: 1.55;
     color-scheme: light;

@@ -20,6 +20,39 @@ vi.mock("next/link", () => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+it("shows the lock beside a human Unknown without showing the old value or a call source", async () => {
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <ProspectInformation
+          prospect={{
+            ...syntheticProspect,
+            profile_fields: {
+              business: {
+                state: "unknown",
+                reason: "not_asked",
+                basis: "person",
+                locked: true,
+                set_at: "2026-10-11T00:00:00Z",
+              },
+            },
+          }}
+        />,
+      ),
+    );
+    const fact = [
+      ...host.querySelectorAll('[data-prospect-section="1"] dt'),
+    ].find((item) => item.textContent?.startsWith("Company"))?.parentElement;
+    expect(fact?.getAttribute("data-fact-label")).toBe("Unknown");
+    expect(fact?.textContent).toContain("Person edit · locked");
+    expect(fact?.querySelector("blockquote, details")).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
 it("prioritizes six sections, keeps missing qualification unknown and the person value visible through a contradiction", async () => {
   const host = document.createElement("div"),
     root = createRoot(host);

@@ -1,21 +1,16 @@
 "use client";
 
-import {
-  ArrowRight,
-  Info,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-  Users,
-} from "lucide-react";
+import { ArrowRight, Info, RefreshCw, Search, Users } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { useWorkspaceAccess } from "../workspace-access";
 import { initials } from "../speaker-profiles";
 import { fetchProspectsList, type ProspectSummary } from "../prospects-client";
 import styles from "./prospects.module.css";
+import informationStyles from "../prospect-information.module.css";
+import { PageSkeleton } from "../shell/page-skeleton";
 
 function formatCreatedDate(createdAt: string | null) {
   if (!createdAt) return "Not available";
@@ -30,7 +25,10 @@ function formatCreatedDate(createdAt: string | null) {
 
 export function ProspectsListView() {
   const access = useWorkspaceAccess();
-  const authenticated = access?.authenticated === true;
+  const authenticated =
+    access?.authenticated === true &&
+    access.status === "ready" &&
+    !!access.context;
 
   const [prospects, setProspects] = useState<ProspectSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -45,6 +43,10 @@ export function ProspectsListView() {
     null,
   );
   const [attempt, setAttempt] = useState(0);
+  const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}:${access?.context?.sessionId}:${searchQuery}:${stageFilter}`;
+  const [loadedContext, setLoadedContext] = useState<string | null>(null);
+  const [errorContext, setErrorContext] = useState<string | null>(null);
+  const pagination = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -61,8 +63,10 @@ export function ProspectsListView() {
         setProspects(page.prospects);
         setTotal(page.total);
         setNextOffset(page.next_offset);
+        setLoadedContext(contextKey);
         setError(null);
         setLoading(false);
+        setLoadingMore(false);
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
@@ -71,13 +75,15 @@ export function ProspectsListView() {
             ? err.message
             : "Prospects could not be loaded. Try again; your completed work remains private.";
         setError(msg);
+        setErrorContext(contextKey);
         setLoading(false);
       });
 
     return () => {
       controller.abort();
+      pagination.current?.abort();
     };
-  }, [authenticated, searchQuery, stageFilter, attempt]);
+  }, [authenticated, searchQuery, stageFilter, attempt, contextKey]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -90,30 +96,46 @@ export function ProspectsListView() {
   };
 
   const handleLoadMore = () => {
-    if (nextOffset === null || loadingMore) return;
+    if (
+      !authenticated ||
+      loadedContext !== contextKey ||
+      nextOffset === null ||
+      loadingMore
+    )
+      return;
     setLoadingMore(true);
+    const controller = new AbortController();
+    pagination.current = controller;
     void fetchProspectsList({
       search: searchQuery,
       stage: stageFilter,
       offset: nextOffset,
+      signal: controller.signal,
     })
       .then((page) => {
+        if (controller.signal.aborted) return;
         setProspects((prev) => [...prev, ...page.prospects]);
         setNextOffset(page.next_offset);
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
         const msg =
           err instanceof Error
             ? err.message
             : "Prospects could not be loaded. Try again; your completed work remains private.";
         setError(msg);
+        setErrorContext(contextKey);
       })
       .finally(() => {
-        setLoadingMore(false);
+        if (!controller.signal.aborted) setLoadingMore(false);
       });
   };
 
-  const showLoading = authenticated && loading;
+  const current = authenticated && loadedContext === contextKey;
+  const visibleError =
+    authenticated && errorContext === contextKey ? error : null;
+  const visibleProspects = current && !visibleError ? prospects : [];
+  const showLoading = authenticated && (loading || (!current && !visibleError));
 
   return (
     <AcquisitionShell
@@ -127,14 +149,16 @@ export function ProspectsListView() {
             <h1 className={styles.title}>Prospects</h1>
             <p className={styles.summary}>
               Cross-call prospect intelligence and conversation history.
-              {total > 0 ? ` (${total} recorded)` : ""}
+              {current && !visibleError && total > 0
+                ? ` (${total} recorded)`
+                : ""}
             </p>
           </div>
         </div>
 
-        {error ? (
-          <div className={styles.errorBanner} role="alert">
-            <span>{error}</span>
+        {visibleError ? (
+          <div className={informationStyles.cornerError} role="alert">
+            <span>{visibleError}</span>
             <button
               type="button"
               className={styles.retryBtn}
@@ -193,19 +217,18 @@ export function ProspectsListView() {
           </div>
 
           {showLoading ? (
-            <div className={styles.empty}>
-              <LoaderCircle
-                size={24}
-                className="animate-spin"
-                style={{
-                  animation: "spin 1s linear infinite",
-                  margin: "0 auto 12px",
-                }}
-                aria-hidden="true"
-              />
-              <p className={styles.emptyText}>Loading prospects...</p>
+            <div aria-busy="true" aria-label="Loading prospects">
+              <PageSkeleton variant="list" />
             </div>
-          ) : prospects.length === 0 ? (
+          ) : !authenticated ? (
+            <p className={styles.emptyText}>
+              Choose your signed-in workspace to see prospects.
+            </p>
+          ) : visibleError ? (
+            <p className={styles.emptyText}>
+              Prospects are unavailable. Try again.
+            </p>
+          ) : visibleProspects.length === 0 ? (
             <div className={styles.empty} data-testid="empty-prospects">
               <Users
                 size={32}
@@ -229,7 +252,7 @@ export function ProspectsListView() {
               role="feed"
               aria-label="Prospects list"
             >
-              {prospects.map((prospect) => (
+              {visibleProspects.map((prospect) => (
                 <div
                   key={prospect.prospect_id}
                   className={styles.prospectRow}
@@ -348,7 +371,7 @@ export function ProspectsListView() {
             </div>
           )}
 
-          {nextOffset !== null ? (
+          {current && !visibleError && !showLoading && nextOffset !== null ? (
             <div className={styles.loadMoreContainer}>
               <button
                 type="button"

@@ -49,6 +49,11 @@ export function InvitesView({ inviteId }: { inviteId: string | null }) {
   const state = useInvites(signedIn);
   const profile = useShellProfile(signedIn);
   const [joining, setJoining] = useState<string | null>(null);
+  // Accepted: the shell moves into it; if that move fails, open it from here.
+  const [joined, setJoined] = useState<{
+    tenantId: string;
+    name: string;
+  } | null>(null);
   const keys = useRef(new Map<string, string>());
 
   const join = async (invite: PendingInvite) => {
@@ -57,11 +62,13 @@ export function InvitesView({ inviteId }: { inviteId: string | null }) {
     const key = keys.current.get(invite.inviteId) ?? crypto.randomUUID();
     keys.current.set(invite.inviteId, key);
     try {
-      const joined = await acceptInvite(invite.inviteId, key);
+      const accepted = await acceptInvite(invite.inviteId, key);
       dropInvite(invite.inviteId);
-      // The shell moves into the organisation; Joining… stays until it does.
-      requestWorkspace(joined.tenantId, "/organisation");
-      return;
+      setJoined({
+        tenantId: accepted.tenantId,
+        name: invite.organisationName,
+      });
+      requestWorkspace(accepted.tenantId, "/organisation");
     } catch (error) {
       const closed =
         error instanceof OrgApiError && [404, 409].includes(error.status);
@@ -91,7 +98,19 @@ export function InvitesView({ inviteId }: { inviteId: string | null }) {
     : state.invites;
 
   let body;
-  if (access?.authenticated === false)
+  if (joined)
+    body = (
+      <Empty
+        icon={Building2}
+        title={`You joined ${joined.name}`}
+        text="Opening it now."
+        action={{
+          label: `Open ${joined.name}`,
+          onClick: () => requestWorkspace(joined.tenantId, "/organisation"),
+        }}
+      />
+    );
+  else if (access?.authenticated === false)
     body = (
       <Empty
         icon={MailOpen}
