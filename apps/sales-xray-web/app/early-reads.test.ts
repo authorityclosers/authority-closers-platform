@@ -50,6 +50,8 @@ it("names each page's first reads, exactly as the page asks for them", () => {
   expect(earlyReadsFor(`/analysis/calls/${id}`)).toEqual([
     "/v1/me/workspaces",
     "/v1/me/sales-xray-workspaces",
+    `${A}/entry`,
+    `${A}/session`,
     `${A}/submissions/${id.toLowerCase()}`,
   ]);
   // Public pages and unknown addresses start nothing.
@@ -58,6 +60,12 @@ it("names each page's first reads, exactly as the page asks for them", () => {
 });
 
 it("starts the reads from the inline script with the browser's own session", async () => {
+  const id = "00000000-0000-4000-8000-000000000500";
+  boot(`/analysis/calls/${id}/`);
+  expect(network.mock.calls.map(([url]) => url)).toEqual(
+    earlyReadsFor(`/analysis/calls/${id}`),
+  );
+  network.mockClear();
   boot("/dashboard");
   expect(network).toHaveBeenCalledTimes(6);
   for (const [, init] of network.mock.calls)

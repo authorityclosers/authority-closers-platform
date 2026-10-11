@@ -50,15 +50,20 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   "/prospects": [...SESSION],
 };
 
-/** A saved call: the session, then the call itself. */
+/** A saved call: the session, the studio's entry and allowance, the call. */
 const CALL_PAGE = /^\/analysis\/calls\/([0-9a-f-]{36})$/i;
+const CALL_READS = [
+  ...SESSION,
+  `${ACQUISITION}/entry`,
+  `${ACQUISITION}/session`,
+];
 
 /** The early reads for an address (trailing slash ignored), or none. */
 export function earlyReadsFor(pathname: string): readonly string[] {
   const route = pathname.replace(/\/$/, "") || "/";
   const call = CALL_PAGE.exec(route)?.[1];
   if (call)
-    return [...SESSION, `${ACQUISITION}/submissions/${call.toLowerCase()}`];
+    return [...CALL_READS, `${ACQUISITION}/submissions/${call.toLowerCase()}`];
   return EARLY_READS[route] ?? [];
 }
 
@@ -74,9 +79,9 @@ type EarlyWindow = Window & { __sxEarly?: EarlyStore };
 export function earlyReadsScript(): string {
   const table = JSON.stringify(EARLY_READS);
   const call = JSON.stringify(CALL_PAGE.source);
-  const session = JSON.stringify(SESSION);
+  const callReads = JSON.stringify(CALL_READS);
   const acquisition = JSON.stringify(ACQUISITION);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${session}.concat([${acquisition}+"/submissions/"+m[1].toLowerCase()]):t[r];if(!l||!l.length)return;var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReads}.concat([${acquisition}+"/submissions/"+m[1].toLowerCase()]):t[r];if(!l||!l.length)return;var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
