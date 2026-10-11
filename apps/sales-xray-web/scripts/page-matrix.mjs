@@ -120,7 +120,9 @@ export function measureSideways() {
   // from the person; it never excuses an element that is too wide.
   const appClip = (node) =>
     node === document.body ||
-    node.matches("[data-lightbox-shell], main, .studio-main");
+    node.matches(
+      "[data-lightbox-shell], [data-shell-content], main, .studio-main",
+    );
   const width = window.innerWidth;
   const scrollers = [];
   const outside = [];

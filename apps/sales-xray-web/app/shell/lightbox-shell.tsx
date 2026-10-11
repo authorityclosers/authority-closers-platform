@@ -1073,7 +1073,7 @@ function LightboxShellFrame({
           <div className={styles.panelSpacer} />
         </div>
       </aside>
-      <div className={styles.content}>
+      <div className={styles.content} data-shell-content="">
         <header className={styles.mobileBar}>
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
