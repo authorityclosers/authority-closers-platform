@@ -926,6 +926,7 @@
 }
 
 .cue > span {
+  margin-inline-end: 6px;
   color: var(--sx-muted);
   font-size: 12px;
   font-weight: 600;
