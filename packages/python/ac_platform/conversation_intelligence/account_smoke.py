@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.canary_cli import (
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 
 ORIGINS = {
+    "development": "https://salesxray-dev.authorityclosers.com",
     "production": "https://salesxray.authorityclosers.com",
     "staging": "https://salesxray-staging.authorityclosers.com",
 }
@@ -65,14 +66,23 @@ async def account_smoke(
         return SmokeFailure(code, submission_id=submission_id)
 
     origin = ORIGINS.get(environment)
+    qa_identity = (
+        email == "devlive-qa+20261011@example.com"
+        if environment == "development"
+        else email.endswith(f"+ac-qa-{environment}@authorityclosers.com")
+    )
     if (
         origin is None
         or str(client.base_url).rstrip("/") != origin
-        or not email.endswith(f"+ac-qa-{environment}@authorityclosers.com")
+        or not qa_identity
         or not password
         or not 1 <= timeout_seconds <= 1800
     ):
         raise failure("qa_runtime_refused")
+    if environment == "development":
+        # The edge may temporarily default to staging during dev repairs.
+        # Keep this credential/upload journey on its explicitly selected live DB.
+        client.cookies.set("ac_backend", "live", domain=client.base_url.host, path="/")
     started = time.monotonic()
 
     async def request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:

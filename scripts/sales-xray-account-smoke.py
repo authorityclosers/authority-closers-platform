@@ -85,7 +85,9 @@ async def smoke(args):
 
 def main(argv=None):
     parser = _Parser(description=__doc__, allow_abbrev=False)
-    parser.add_argument("--environment", required=True, choices=("staging", "production"))
+    parser.add_argument(
+        "--environment", required=True, choices=("development", "staging", "production")
+    )
     parser.add_argument("--allow-production", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--browser", action="store_true")

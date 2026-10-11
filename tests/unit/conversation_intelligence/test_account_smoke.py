@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 from tests.conversation_overview_fixtures import overview_for
 
 
+@pytest.mark.parametrize("environment", ["staging", "development"])
 @pytest.mark.parametrize(
     "scenario",
     [
@@ -32,7 +33,9 @@ from tests.conversation_overview_fixtures import overview_for
         "held",
     ],
 )
-def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkeypatch, scenario):
+def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(
+    monkeypatch, scenario, environment
+):
     async def exercise():
         person, tenant, recording, run_id = (str(uuid4()) for _ in range(4))
         shown_recording = str(uuid4()) if scenario == "stale_report_recording" else recording
@@ -54,7 +57,9 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
             nonlocal submission, polls
             path = request.url.path
             calls.append((request.method, path))
-            assert request.headers["Origin"] == ORIGINS["staging"]
+            assert request.headers["Origin"] == ORIGINS[environment]
+            if environment == "development":
+                assert "ac_backend=live" in request.headers["Cookie"]
             if path == "/v1/auth/password/login":
                 return response(200, {"authenticated": True})
             if path == "/v1/me/workspaces":
@@ -128,13 +133,17 @@ def test_qa_smoke_binds_call_coaching_and_never_retries_an_uncertain_send(monkey
             pytest.fail("Unexpected smoke route")
 
         async with httpx.AsyncClient(
-            base_url=ORIGINS["staging"], transport=httpx.MockTransport(handler)
+            base_url=ORIGINS[environment], transport=httpx.MockTransport(handler)
         ) as client:
             kwargs = dict(
-                environment="staging",
-                email="fictional+ac-qa-staging@authorityclosers.com",
+                environment=environment,
+                email="devlive-qa+20261011@example.com"
+                if environment == "development"
+                else "fictional+ac-qa-staging@authorityclosers.com",
                 password="fictional-placeholder",  # noqa: S106 -- fictional MockTransport only
             )
+            if environment == "development":
+                client.cookies.set("ac_backend", "staging", domain=client.base_url.host, path="/")
             if scenario == "success":
                 result = await account_smoke(client, **kwargs)
                 assert result["report_present"] and result["per_call_coaching_present"]
@@ -163,7 +172,8 @@ async def _no_wait():
     return None
 
 
-def test_qa_credentials_cannot_be_sent_to_an_arbitrary_origin():
+@pytest.mark.parametrize("environment", ["staging", "development"])
+def test_qa_credentials_cannot_be_sent_to_an_arbitrary_origin(environment):
     async def exercise():
         async with httpx.AsyncClient(
             base_url="https://invalid.example.test",
@@ -172,8 +182,28 @@ def test_qa_credentials_cannot_be_sent_to_an_arbitrary_origin():
             with pytest.raises(SmokeFailure, match="qa_runtime_refused"):
                 await account_smoke(
                     client,
-                    environment="staging",
-                    email="fictional+ac-qa-staging@authorityclosers.com",
+                    environment=environment,
+                    email="devlive-qa+20261011@example.com"
+                    if environment == "development"
+                    else "fictional+ac-qa-staging@authorityclosers.com",
+                    password="fictional-placeholder",  # noqa: S106 -- no network permitted
+                )
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("environment", ["staging", "development"])
+def test_non_qa_identity_is_refused_before_any_request(environment):
+    async def exercise():
+        async with httpx.AsyncClient(
+            base_url=ORIGINS[environment],
+            transport=httpx.MockTransport(lambda request: pytest.fail("credentials sent")),
+        ) as client:
+            with pytest.raises(SmokeFailure, match="qa_runtime_refused"):
+                await account_smoke(
+                    client,
+                    environment=environment,
+                    email="someone@example.com",
                     password="fictional-placeholder",  # noqa: S106 -- no network permitted
                 )
 
