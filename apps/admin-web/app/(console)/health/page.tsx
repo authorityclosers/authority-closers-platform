@@ -187,7 +187,10 @@ export default async function HealthPage({
                     <strong>{STAGE_LABEL[job.stage] ?? job.stage}</strong>
                     <span className={styles.code}>{job.code}</span>
                     <span>
-                      {job.attempts} attempts · failed {when(job.failedAt)}
+                      {job.attempts === 1
+                        ? "1 attempt"
+                        : `${job.attempts} attempts`}{" "}
+                      · failed {when(job.failedAt)}
                       {job.recordingId ? (
                         <>
                           {" · "}
@@ -248,9 +251,8 @@ export default async function HealthPage({
 
           <Panel
             title="By prompt version"
-            sub="by prompt and Report model"
             tools={
-              <Why detail="Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
+              <Why detail="Analyses in this window, grouped by coaching prompt and Report model. Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
             }
           >
             {health.versions.length ? (
