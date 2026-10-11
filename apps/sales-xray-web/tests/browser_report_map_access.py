@@ -57,6 +57,13 @@ def main():
                     controls = call_map.get_by_role("group", name="What the map shows")
                     expect(controls).to_be_visible()
                     assert controls.get_by_role("button").count() == 3
+                    expect(
+                        controls.get_by_role(
+                            "button",
+                            name="Who talked" if theme == "light" else "Talk share by minute",
+                            exact=True,
+                        )
+                    ).to_have_attribute("aria-pressed", "true")
                     for label, name in LENSES:
                         button = controls.get_by_role("button", name=label, exact=True)
                         expect(button).to_be_visible()
@@ -85,6 +92,7 @@ def main():
                             "theme": theme,
                             "exact_accessible_names": [label for label, _ in LENSES],
                             "keyboard_lens_selection": True,
+                            "remembered_view_restored_on_reload": theme == "dark",
                             "one_selected_lens": True,
                             "minimum_control_height": 44 if width == 390 else 32,
                             "source_seek_callback": True,
