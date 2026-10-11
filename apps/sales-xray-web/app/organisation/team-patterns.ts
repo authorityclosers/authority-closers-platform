@@ -39,12 +39,50 @@ export type SkillTally = {
   assessed: number;
 };
 
+/** One first fix, with every call whose report gave it (newest first). */
+export type FixFirstGroup = { text: string; calls: PatternCall[] };
+
 export type TeamPatterns = {
   reports: number;
   outcomes: { kind: OutcomeKind; label: string; calls: number }[];
   skills: SkillTally[];
-  fixFirst: { call: PatternCall; text: string }[];
+  /** The same words in several reports count once, most repeated first. */
+  fixFirst: FixFirstGroup[];
 };
+
+/** Same words, ignoring case, spacing and the closing full stop. */
+const sameWords = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.!?।]+$/u, "")
+    .trim();
+
+const newest = (a: PatternCall, b: PatternCall) =>
+  Date.parse(b.createdAt) - Date.parse(a.createdAt) || 0;
+
+function groupFixes(
+  fixes: { call: PatternCall; text: string }[],
+): FixFirstGroup[] {
+  const groups = new Map<string, FixFirstGroup>();
+  for (const { call, text } of fixes) {
+    const key = sameWords(text);
+    const group = groups.get(key) ?? { text, calls: [] };
+    group.calls.push(call);
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const calls = [...group.calls].sort(newest);
+      // The newest report's own words stand for the group.
+      const lead = fixes.find((fix) => fix.call === calls[0]);
+      return { text: lead?.text ?? group.text, calls };
+    })
+    .sort(
+      (a, b) =>
+        b.calls.length - a.calls.length || newest(a.calls[0], b.calls[0]),
+    );
+}
 
 const obj = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -122,9 +160,14 @@ export function tallyPatterns(
         b.gaps / b.assessed - a.gaps / a.assessed ||
         a.label.localeCompare(b.label),
     ),
-    fixFirst: reads
-      .filter(({ pattern }) => pattern.fixFirst)
-      .map(({ call, pattern }) => ({ call, text: pattern.fixFirst as string })),
+    fixFirst: groupFixes(
+      reads
+        .filter(({ pattern }) => pattern.fixFirst)
+        .map(({ call, pattern }) => ({
+          call,
+          text: pattern.fixFirst as string,
+        })),
+    ),
   };
 }
 

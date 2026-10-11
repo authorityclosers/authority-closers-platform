@@ -1,8 +1,16 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, LogIn } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ChevronsUpDown,
+  LogIn,
+  MailOpen,
+  Plus,
+} from "lucide-react";
 import Link from "next/link";
 import type { MouseEvent, RefObject } from "react";
+import type { PendingInvite } from "../organisation/organisation-api";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import type { Branding } from "./branding-store";
 import { OrgLogo } from "./org-logo";
@@ -32,6 +40,10 @@ export function WorkspaceSwitcher({
   setOpen,
   containerRef,
   onSelect,
+  invites = [],
+  joining = null,
+  onJoin,
+  onCreate,
 }: {
   workspaces: readonly Workspace[];
   currentId: string | null;
@@ -43,6 +55,13 @@ export function WorkspaceSwitcher({
   setOpen: (next: boolean) => void;
   containerRef: RefObject<HTMLDivElement | null>;
   onSelect: (tenantId: string) => void;
+  /** Invitations waiting for you; each joins in one step. */
+  invites?: readonly PendingInvite[];
+  /** The invitation being accepted now. */
+  joining?: string | null;
+  onJoin?: (invite: PendingInvite) => void;
+  /** Offered only where the server can create organisations. */
+  onCreate?: () => void;
 }) {
   const current =
     workspaces.find((workspace) => workspace.tenant_id === currentId) ??
@@ -59,6 +78,7 @@ export function WorkspaceSwitcher({
     (workspace) => workspace.kind === "organisation",
   );
 
+  const waiting = invites.length;
   const logoFor = (tenantId: string | undefined) =>
     branding && branding.tenantId === tenantId ? branding.logoUrl : null;
 
@@ -109,7 +129,11 @@ export function WorkspaceSwitcher({
         onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Current workspace: ${title}`}
+        aria-label={`Current workspace: ${title}${
+          waiting
+            ? ` · ${waiting} ${waiting === 1 ? "invitation" : "invitations"} waiting`
+            : ""
+        }`}
         title={title}
       >
         <span className={styles.tile} data-kind={kind} aria-hidden="true">
@@ -123,6 +147,7 @@ export function WorkspaceSwitcher({
               )
             }
           />
+          {waiting ? <i className={styles.dot} /> : null}
         </span>
         <span className={styles.copy}>
           <b>{title}</b>
@@ -146,11 +171,68 @@ export function WorkspaceSwitcher({
           <p className={styles.group}>Organisations</p>
           {organisations.length > 0 ? (
             organisations.map((workspace) => item(workspace, "organisation"))
-          ) : (
+          ) : waiting ? null : (
             <p className={styles.empty}>You are not in an organisation yet.</p>
           )}
-          {/* Create and join appear when the server can do them (AUT-1694);
-              the menu never shows a promise it cannot keep. */}
+          {waiting > 0 && onJoin ? (
+            <>
+              <p className={styles.group}>Invitations</p>
+              {invites.map((invite) => (
+                <button
+                  key={invite.inviteId}
+                  type="button"
+                  role="menuitem"
+                  className={styles.item}
+                  disabled={joining !== null}
+                  aria-label={`Join ${invite.organisationName} as ${
+                    invite.role === "admin" ? "an admin" : "a member"
+                  }`}
+                  onClick={() => onJoin(invite)}
+                >
+                  <span
+                    className={styles.tile}
+                    data-kind="invite"
+                    aria-hidden="true"
+                  >
+                    <MailOpen size={14} />
+                  </span>
+                  <span className={styles.itemCopy}>
+                    <b>{invite.organisationName}</b>
+                    <small>
+                      Invited as {invite.role === "admin" ? "admin" : "member"}
+                    </small>
+                  </span>
+                  <span className={styles.join} aria-hidden="true">
+                    {joining === invite.inviteId ? "Joining…" : "Join"}
+                  </span>
+                </button>
+              ))}
+            </>
+          ) : null}
+          {/* Create appears only where the server can do it (AUT-1694): the
+              menu never shows a promise it cannot keep. */}
+          {onCreate ? (
+            <>
+              <hr className={styles.divider} />
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.item}
+                onClick={onCreate}
+              >
+                <span
+                  className={styles.tile}
+                  data-kind="action"
+                  aria-hidden="true"
+                >
+                  <Plus size={14} />
+                </span>
+                <span className={styles.itemCopy}>
+                  <b>Create an organisation</b>
+                </span>
+              </button>
+            </>
+          ) : null}
         </div>
       )}
     </div>

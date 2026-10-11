@@ -74,7 +74,57 @@ export type Progress = {
   run_state?: "queued" | "working" | "retrying" | "failed" | "done";
   minute_state?: "reserved" | "released" | "delivered" | null;
   retry_available?: boolean;
+  /** The server's own clock for each stage, C0–C6 (Strike C); absent on older servers. */
+  stage_progress?: StageProgress[];
+  current_stage?: string | null;
+  terminal_state?: "done" | "failed" | null;
 };
+export type StageProgress = {
+  stage: string;
+  state: string;
+  /** Committed dispatch time; null when no start was recorded. */
+  started_at: string | null;
+  finished_at: string | null;
+};
+const STAGE_ID = /^C[0-6]$/;
+const instant = (value: unknown) =>
+  typeof value === "string" && Number.isFinite(Date.parse(value))
+    ? value
+    : null;
+/** Additive live fields: kept when well formed, dropped (never thrown) otherwise. */
+function liveProgress(
+  item: Record<string, unknown>,
+): Pick<Progress, "stage_progress" | "current_stage" | "terminal_state"> {
+  const live: Pick<
+    Progress,
+    "stage_progress" | "current_stage" | "terminal_state"
+  > = {};
+  const stage = item.current_stage;
+  if (stage === null || (typeof stage === "string" && STAGE_ID.test(stage)))
+    live.current_stage = stage;
+  const terminal = item.terminal_state;
+  if (terminal === null || terminal === "done" || terminal === "failed")
+    live.terminal_state = terminal;
+  if (Array.isArray(item.stage_progress) && item.stage_progress.length <= 7)
+    live.stage_progress = item.stage_progress.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return [];
+      const row = value as Record<string, unknown>;
+      return typeof row.stage === "string" &&
+        STAGE_ID.test(row.stage) &&
+        typeof row.state === "string"
+        ? [
+            {
+              stage: row.stage,
+              state: row.state,
+              started_at: instant(row.started_at),
+              finished_at: instant(row.finished_at),
+            },
+          ]
+        : [];
+    });
+  return live;
+}
 
 export class AcquisitionError extends Error {
   constructor(
@@ -538,6 +588,7 @@ export function parseProgress(
           retry_available: item.retry_available as boolean,
         }
       : {}),
+    ...liveProgress(item),
   };
 }
 export const submissionPath = (id: string) => {

@@ -26,6 +26,11 @@
   min-width: 0;
 }
 
+/* A longer status (failed, paused) reads from the top, beside its sign. */
+.panel[data-phase="attention"] .head {
+  align-items: flex-start;
+}
+
 .signal {
   display: grid;
   width: 32px;
@@ -248,6 +253,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* The page's own buttons at the panel's one control height; deletion quiet. */
+.actions :global(:is(.primary-button, .secondary-button)) {
+  min-height: var(--sx-control-h);
+  padding-block: 0;
+}
+
+.actions :global(.text-button) {
+  color: var(--sx-muted);
 }
 
 .confirm {

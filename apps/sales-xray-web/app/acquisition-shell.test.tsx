@@ -156,6 +156,10 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   ).toBe("Analysing your call");
   expect(processing.textContent).not.toMatch(/few minutes|We're processing/);
 
+  // A failed or paused call: the panel says what happened; the bar names the call.
+  const attention = heading({ heroStage: "attention" });
+  expect(attention.querySelector("h1")?.textContent).toBe("Your call");
+
   const ready = heading({ heroStage: "ready" });
   expect(ready.querySelector('[data-hero-stage="ready"] h1')?.textContent).toBe(
     "Ready to analyse",

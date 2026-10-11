@@ -80,9 +80,12 @@ it("keeps the account menu inside the mobile viewport by the active trigger", as
   const menu = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Account menu"]',
   )!;
-  expect(menu.style.left).toBe("45px");
-  expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
-  expect(Number.parseFloat(menu.style.bottom)).toBeLessThan(800);
+  expect(menu.style.getPropertyValue("--card-left")).toBe("45px");
+  const bottom = Number.parseFloat(
+    menu.style.getPropertyValue("--card-bottom"),
+  );
+  expect(bottom).toBeGreaterThan(0);
+  expect(bottom).toBeLessThan(800);
 });
 
 it.each<[Allowance, string | null]>([
@@ -354,4 +357,46 @@ it("switches workspace from the account menu, where phones have no sidebar", asy
   await act(async () => rows[1].click());
   expect(onClose).toHaveBeenCalled();
   expect(onSelectWorkspace).toHaveBeenCalledWith("personal-one");
+});
+
+it("offers phones the invitations and Create, even with one workspace", async () => {
+  const onCreateOrganisation = vi.fn();
+  const onClose = vi.fn();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <SettingsMenu
+        open
+        anchorRef={{ current: document.createElement("button") }}
+        onClose={onClose}
+        name="Fictional User"
+        email="fictional@example.test"
+        allowance={null}
+        workspaces={[
+          { tenant_id: "personal-one", kind: "personal", name: "Fictional" },
+        ]}
+        currentWorkspaceId="personal-one"
+        onSelectWorkspace={() => {}}
+        invitesWaiting={2}
+        onCreateOrganisation={onCreateOrganisation}
+      />,
+    ),
+  );
+  const group = document.querySelector(
+    '[role="group"][aria-label="Workspace"]',
+  )!;
+  // One workspace is not a choice: no row for it.
+  expect(group.textContent).not.toContain("Personal");
+  const invitations = group.querySelector<HTMLAnchorElement>(
+    'a[href="/organisation/invites"]',
+  )!;
+  expect(invitations.textContent).toBe("Invitations2");
+  const create = [...group.querySelectorAll("button")].find(
+    (row) => row.textContent === "Create an organisation",
+  )!;
+  await act(async () => create.click());
+  expect(onClose).toHaveBeenCalled();
+  expect(onCreateOrganisation).toHaveBeenCalledTimes(1);
 });

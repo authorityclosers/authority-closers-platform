@@ -24,8 +24,11 @@ export function ownerLabel(
 /** Fired to switch workspace from outside the sidebar (the shell owns it). */
 export const SELECT_WORKSPACE_EVENT = "sales-xray:select-workspace";
 
-export function requestWorkspace(tenantId: string) {
+/** `next` lands on that page of the workspace instead of reloading this one. */
+export function requestWorkspace(tenantId: string, next?: string) {
   window.dispatchEvent(
-    new CustomEvent<string>(SELECT_WORKSPACE_EVENT, { detail: tenantId }),
+    new CustomEvent(SELECT_WORKSPACE_EVENT, {
+      detail: next ? { tenantId, next } : tenantId,
+    }),
   );
 }

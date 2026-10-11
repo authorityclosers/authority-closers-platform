@@ -1,13 +1,14 @@
+/* Under the status it belongs to: left-aligned, one control height. */
 .actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   margin-top: 12px;
   min-width: 0;
 }
 .button {
-  min-height: 44px;
+  min-height: var(--sx-control-h);
   max-width: 100%;
-  padding: 10px 17px;
+  padding: 6px 14px;
   border: 0;
   border-radius: var(--lx-radius-sm, 6px);
   background: var(--lx-teal);

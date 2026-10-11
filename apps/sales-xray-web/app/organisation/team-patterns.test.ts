@@ -86,8 +86,30 @@ it("counts each label once per call and never counts unassessed skills", () => {
     { id: "discovery", label: "Discovery", gaps: 2, assessed: 3 },
     { id: "closing", label: "Closing", gaps: 1, assessed: 2 },
   ]);
-  expect(tally.fixFirst.map((item) => [item.call.id, item.text])).toEqual([
-    [call(1).id, "A"],
-    [call(3).id, "C"],
+  // One report each: newest first.
+  expect(
+    tally.fixFirst.map((item) => [item.calls.map((c) => c.id), item.text]),
+  ).toEqual([
+    [[call(3).id], "C"],
+    [[call(1).id], "A"],
+  ]);
+});
+
+it("counts the same first fix once, most repeated first, in the newest report's words", () => {
+  const reads = [
+    [1, "Ask what the budget is."],
+    [2, "Slow down."],
+    [3, "ask what the  budget is"],
+    [4, "Ask what the budget is!"],
+  ].map(([n, fix]) => ({
+    call: call(n as number),
+    pattern: extractPattern(report("follow_up", {}, fix as string))!,
+  }));
+  const tally = tallyPatterns(reads);
+  expect(
+    tally.fixFirst.map((item) => [item.text, item.calls.map((c) => c.id)]),
+  ).toEqual([
+    ["Ask what the budget is!", [call(4).id, call(3).id, call(1).id]],
+    ["Slow down.", [call(2).id]],
   ]);
 });

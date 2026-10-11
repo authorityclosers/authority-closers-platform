@@ -4,6 +4,7 @@
  * (C2, C4, C5) are the fallback when a server has no plan for the call.
  * Nothing here advances on a timer.
  */
+import type { Progress, StageProgress } from "./acquisition-client";
 import type { AcquisitionProcessingStageRow } from "./acquisition-processing-panel";
 
 export const PROCESSING_STEPS = [
@@ -112,4 +113,54 @@ export function formatElapsed(ms: number): string {
   return hours
     ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
     : `${minutes}:${seconds}`;
+}
+
+/** The plan as the progress read reports it (newer servers), else null. */
+export function livePlanFromProgress(
+  progress: Progress | null | undefined,
+): LivePlan | null {
+  if (!progress || progress.current_stage === undefined) return null;
+  return {
+    state: progress.run_state === "failed" ? "failed" : progress.state,
+    stage: progress.current_stage,
+    reportReady: progress.has_report || progress.terminal_state === "done",
+  };
+}
+
+/** C0–C2 → Listening, C3–C4 → Understanding, C5–C6 → Preparing. */
+const STEP_STAGES = [
+  ["C0", "C1", "C2"],
+  ["C3", "C4"],
+  ["C5", "C6"],
+] as const;
+
+const times = (rows: readonly StageProgress[], key: keyof StageProgress) =>
+  rows
+    .map((row) => (row[key] ? Date.parse(row[key] as string) : NaN))
+    .filter(Number.isFinite);
+
+/**
+ * A step's length by the server's clock: its first recorded start to its
+ * last recorded finish. Null unless both were recorded (C0, C3 and C6 never
+ * record a start, so a step is timed by the stages that do).
+ */
+export function serverStepDuration(
+  rows: readonly StageProgress[] | undefined,
+  step: number,
+): number | null {
+  const group: readonly string[] = STEP_STAGES[step] ?? [];
+  const mine = (rows ?? []).filter((row) => group.includes(row.stage));
+  const starts = times(mine, "started_at");
+  const ends = times(mine, "finished_at");
+  if (!starts.length || !ends.length) return null;
+  const length = Math.max(...ends) - Math.min(...starts);
+  return length >= 0 ? length : null;
+}
+
+/** When the analysis first started by the server's clock, else null. */
+export function serverStartedAt(
+  rows: readonly StageProgress[] | undefined,
+): number | null {
+  const starts = times(rows ?? [], "started_at");
+  return starts.length ? Math.min(...starts) : null;
 }

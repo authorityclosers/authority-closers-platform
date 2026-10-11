@@ -10,7 +10,7 @@
   border: 1px solid var(--lx-line);
   border-radius: 999px;
   background: var(--lx-surface);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .ring {

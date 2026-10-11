@@ -92,6 +92,7 @@ import { ReportRawData } from "./report-raw-data";
 import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { planView } from "./plan-view";
 import { useProcessingReview } from "./processing-review-port";
 import { clearCallFacts } from "./call-facts";
 import { clearSpeakerProfiles } from "./speaker-profiles";
@@ -2038,6 +2039,7 @@ export function AcquisitionStudio({
       progress,
       waitingForApproval,
     );
+    const { consent, showProgress } = planView(plan, progress);
     const visibleError =
       error ||
       (statusCard ? statusIssue : "") ||
@@ -3157,7 +3159,7 @@ export function AcquisitionStudio({
                       </div>
                     </div>
                   )}
-                {submission && !report && plan && !plan.accepted && (
+                {submission && !report && plan && consent && (
                   <div className="studio-consent">
                     <h3>Ready to continue</h3>
                     {plan.report_language && (
@@ -3217,7 +3219,7 @@ export function AcquisitionStudio({
                     )}
                   </div>
                 )}
-                {submission && !report && (!plan || plan.accepted) && (
+                {submission && !report && showProgress && (
                   <AcquisitionProcessingPanel
                     submissionId={submission.id}
                     progress={progress}
@@ -3315,7 +3317,7 @@ export function AcquisitionStudio({
                 )}
                 {/* The progress screen keeps deletion in its ⋯ menu. */}
                 {(deletionOnlyId ||
-                  (submission && (report || (plan && !plan.accepted)))) && (
+                  (submission && (report || (plan && consent)))) && (
                   <div className={styles.callActions}>
                     <details className={styles.privacyActions}>
                       <summary>Privacy &amp; support</summary>
@@ -3722,9 +3724,11 @@ export function AcquisitionStudio({
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission
-              ? waitingForApproval && !plan?.accepted
-                ? "ready"
-                : "processing"
+              ? processingNeedsAttention || progress?.run_state === "failed"
+                ? "attention"
+                : waitingForApproval && !plan?.accepted
+                  ? "ready"
+                  : "processing"
               : "welcome"
             : undefined
         }
