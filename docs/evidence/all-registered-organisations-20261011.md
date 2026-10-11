@@ -69,3 +69,14 @@ dev/live acceptance the delivery target.
 
 No live approval, staging/production data, host service, provider credential,
 manual merge or deployment was changed. No UI file changed or screenshot build ran.
+
+Final correction proof: 38 default/exact-policy/PostgreSQL cases passed in
+55.51s, 60 authority/broker cases in 5.49s, 24 relational workspace cases in
+41.49s, and two actual full-application construction cases (with and without
+fictional intake) in 25.42s. These are 124 focused cases for the correction,
+not an inflated count of unique cases across earlier runs. Ruff and targeted
+mypy for eight source files pass. The combined latest-main source import and
+app construction pass. Direct dev health returns `0dd837653abe`, whose Git
+ancestry contains committed correction `63b5fac3`. Authenticated real-data
+organisation acceptance and G's request-time Insights scope remain separate
+unfinished proof; the compatibility snapshot is startup-only.
