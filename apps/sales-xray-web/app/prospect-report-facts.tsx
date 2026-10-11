@@ -231,7 +231,7 @@ export function ProspectReportFacts({
                   value || "Unknown"
                 )}
               </dd>
-              {known?.locked && (
+              {field?.locked && (
                 <small className={styles.lock}>
                   <LockKeyhole size={12} aria-hidden="true" /> Person edit ·
                   locked

@@ -136,6 +136,15 @@ it("joins the invitation from the email link and opens the organisation", async 
     tenantId,
     next: "/organisation",
   });
+  // While the shell moves (or if its move fails), the page says so and
+  // offers the organisation again; nothing is left spinning.
+  expect(host.textContent).toContain("You joined Brightline Coaching");
+  await act(async () =>
+    buttons()
+      .find((button) => button.textContent === "Open Brightline Coaching")!
+      .click(),
+  );
+  expect(moved).toHaveBeenCalledTimes(2);
   window.removeEventListener(SELECT_WORKSPACE_EVENT, moved);
 });
 

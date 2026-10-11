@@ -1,0 +1,63 @@
+/* Call review console: queue table and the one-screen review. Tokens only. */
+
+.rowLink {
+  color: var(--sx-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rowLink:hover,
+.rowLink:focus-visible {
+  color: var(--sx-accent);
+}
+
+.rowLink:focus-visible,
+.cardLink:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.clip {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardLink {
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cardLink strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.hint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

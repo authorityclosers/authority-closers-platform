@@ -19,7 +19,7 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 
 
 class MediaSource(Model):
-    origin: Literal["drive", "owner_upload"]
+    origin: Literal["drive", "owner_upload", "dataset"]
     source_id: str = Field(min_length=1, max_length=200)
     source_revision: str = Field(min_length=1, max_length=256)
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -30,14 +30,26 @@ class MediaSource(Model):
     # References to actual review/rights records, not proof inferred from a name.
     dipak_provenance_reference: str = Field(min_length=1, max_length=256)
     permission_reference: str = Field(min_length=1, max_length=256)
+    placeholder: bool = Field(default=False, strict=True)
+    voice: Literal["neutral"] | None = None
 
     @model_validator(mode="after")
     def stable_identity(self) -> "MediaSource":
         if self.origin == "drive":
             if re.fullmatch(r"[A-Za-z0-9_-]{10,200}", self.source_id) is None:
                 raise ValueError("Media needs an exact Drive identity.")
-        else:
+        elif self.origin == "owner_upload":
             UUID(self.source_id)
+        elif (
+            re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,99}", self.source_id) is None
+            or not self.placeholder
+            or self.voice != "neutral"
+        ):
+            raise ValueError(
+                "Dataset narration must have a stable topic ID and neutral placeholder label."
+            )
+        if self.placeholder != (self.voice == "neutral"):
+            raise ValueError("Placeholder narration must preserve its neutral voice label.")
         return self
 
     @property

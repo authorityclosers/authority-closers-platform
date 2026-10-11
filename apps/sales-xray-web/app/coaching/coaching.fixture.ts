@@ -1,4 +1,7 @@
+import type { CoachingClip } from "./media-contract";
 import type { Coaching } from "./coaching-client";
+import type { CallCoaching } from "./coaching-read";
+import type { TeamCoaching } from "./team-contract";
 
 /** Invented contract fixture. Never a substitute for a real learner's history. */
 export const fictionalCoaching: Coaching & {
@@ -112,4 +115,96 @@ fictionalCoaching.lesson = {
   source: "Owner's binding Coaching specification",
   own_call: fictionalCoaching.evidence[0],
   next_call_connection: "Ask one impact question.",
+};
+
+export const fictionalCallCoaching: CallCoaching & {
+  authority: "provisional";
+  entitlement: "coaching";
+  entitlement_policy: "AUT-1678-open-access";
+  recommended_media: null;
+} = {
+  schema: "ac.sales-xray.call-coaching/1",
+  authority: "provisional",
+  entitlement: "coaching",
+  entitlement_policy: "AUT-1678-open-access",
+  person_id: fictionalCoaching.person_id,
+  tenant_id: fictionalCoaching.tenant_id,
+  submission_id: fictionalCoaching.evidence[0].submission_id,
+  recording_id: fictionalCoaching.evidence[0].recording_id,
+  source_sha256: fictionalCoaching.evidence[0].source_sha256,
+  transcript_revision: fictionalCoaching.evidence[0].transcript_revision,
+  report_revision: "b".repeat(64),
+  call_label: "Fictional call 1",
+  state: "ready",
+  basis: "skill_evidence",
+  focus: {
+    ...fictionalCoaching.focus!,
+    status: "provisional",
+    selected_reason: "Selected from this call’s report.",
+  },
+  evidence: [fictionalCoaching.evidence[0]],
+  root_cause: fictionalCoaching.root_cause,
+  lesson: fictionalCoaching.lesson,
+  practice: fictionalCoaching.practice,
+  mission: fictionalCoaching.mission,
+  limitations: ["This coaching belongs to one fictional call."],
+  recommended_media: null,
+};
+
+export const fictionalTeamCoaching: TeamCoaching & {
+  entitlement: "coaching";
+  entitlement_policy: "AUT-1678-open-access";
+} = {
+  schema: "ac.sales-xray.team-coaching/1",
+  person_id: fictionalCoaching.person_id,
+  tenant_id: fictionalCoaching.tenant_id,
+  scope: "anonymous",
+  named_rep_details: false,
+  analysed_calls: 3,
+  pending_calls: 0,
+  unavailable_calls: 0,
+  history_limited: false,
+  latest_call_at: "2026-10-09T10:00:00Z",
+  suggestions: [
+    {
+      skill_id: "problem_impact_desire",
+      label: "Problem, Impact & Desire Clarity",
+      suggestion_calls: 2,
+    },
+    {
+      skill_id: "report_next_step",
+      label: "Other call report suggestions",
+      suggestion_calls: 1,
+    },
+  ],
+  limitations: ["Fictional anonymous counts, no private rep data."],
+  entitlement: "coaching",
+  entitlement_policy: "AUT-1678-open-access",
+};
+
+export const fictionalClip: CoachingClip = {
+  topic_id: "fictional-impact",
+  revision: "a".repeat(64),
+  review_id: "00000000-0000-0000-0000-000000000065",
+  title: "Fictional impact lesson",
+  kind: "video",
+  placeholder: true,
+  voice: "neutral",
+  access: "full",
+  entitlement_policy: "AUT-1678-open-access",
+  start_ms: 1000,
+  end_ms: 5000,
+  preview_end_ms: null,
+  offer: null,
+  reason: "This fictional reviewed cut shows one consequence question.",
+  takeaways: ["Check the buyer’s consequence."],
+  transcript_excerpt: "समस्या का असर क्या है?",
+  slides: [
+    {
+      segment_id: "a",
+      title: "Find the consequence",
+      bullets: ["Ask one question."],
+    },
+    { segment_id: "b", title: "Listen", bullets: ["Wait for their answer."] },
+  ],
 };

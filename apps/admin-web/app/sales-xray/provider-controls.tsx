@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { z } from "zod";
 
 import { newIdempotencyKey } from "@ac/operations-web/api";
 
-import { AdminShell } from "../components/admin-shell";
-import { SalesXrayNavigation } from "./sales-xray-navigation";
-import { ExecutionControlsPanel } from "./execution-controls";
-import { AnalysisSettingsPanel } from "./analysis-settings";
 import styles from "./provider-controls.module.css";
 
 const TASK_NAMES = [
@@ -2198,25 +2194,5 @@ export function ProviderControlsPanel() {
         </div>
       </section>
     </div>
-  );
-}
-
-export function ProviderControls({ children }: { children?: ReactNode }) {
-  return (
-    <AdminShell
-      active="sales-xray"
-      surface="operations"
-      eyebrow="Conversation intelligence / provider settings"
-      title="Provider settings"
-      description="Choose providers, map analysis tasks, and save reviewable settings."
-    >
-      <div className={styles.page}>
-        <SalesXrayNavigation active="settings" />
-        <ExecutionControlsPanel />
-        <AnalysisSettingsPanel />
-        <ProviderControlsPanel />
-        {children}
-      </div>
-    </AdminShell>
   );
 }

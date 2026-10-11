@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { AdminShell } from "../components/admin-shell";
 import {
   loadProviderControls,
   type ProviderControlsPayload,
 } from "./provider-controls";
-import { SalesXrayNavigation } from "./sales-xray-navigation";
 import styles from "./control-center.module.css";
 
 type LoadState =
@@ -130,7 +128,6 @@ export function ControlCenterPanel() {
 
   return (
     <div className={styles.page}>
-      <SalesXrayNavigation active="overview" />
       <section className={styles.statusPanel} role="status">
         <div>
           <h2>Your calls, coaching and provider settings.</h2>
@@ -139,12 +136,12 @@ export function ControlCenterPanel() {
             for future analyses. Each call keeps its own processing history.
           </p>
           <div className={styles.buttonRow}>
-            <Link className="button button-primary" href="/sales-xray/review">
+            <Link className="button button-primary" href="/calls">
               Open call inventory
             </Link>
             <Link
               className="button button-secondary"
-              href="/sales-xray/settings"
+              href="/sales-xray/providers?tab=providers"
             >
               Providers and models
             </Link>
@@ -214,7 +211,9 @@ export function ControlCenterPanel() {
             Save model and task settings, then select an approved revision for
             new plans. Calls already in progress keep their original setup.
           </p>
-          <Link href="/sales-xray/settings">Open provider settings →</Link>
+          <Link href="/sales-xray/providers?tab=providers">
+            Open provider settings →
+          </Link>
         </article>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Reports and usage</span>
@@ -224,9 +223,7 @@ export function ControlCenterPanel() {
             inspect usage. Estimates and reserved amounts remain separate from
             confirmed provider charges.
           </p>
-          <Link href="/sales-xray/review#recordings-title">
-            Browse calls and costs →
-          </Link>
+          <Link href="/calls">Browse calls and costs →</Link>
         </article>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Reviewer entrypoint</span>
@@ -235,7 +232,7 @@ export function ControlCenterPanel() {
             Choose a saved report, invite a reviewer and collect feedback from
             sales, development or user-experience perspectives.
           </p>
-          <Link href="/sales-xray/review">Open reviewer queue →</Link>
+          <Link href="/calls">Open reviewer queue →</Link>
         </article>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Benchmark / test runs</span>
@@ -244,7 +241,9 @@ export function ControlCenterPanel() {
             Test runs are not available from Admin yet. Configure providers and
             invite reviewers while run controls are connected.
           </p>
-          <Link href="/sales-xray/benchmark">See benchmark readiness →</Link>
+          <Link href="/sales-xray/providers?tab=benchmark">
+            See benchmark readiness →
+          </Link>
         </article>
       </div>
 
@@ -272,19 +271,5 @@ export function ControlCenterPanel() {
         </ul>
       </section>
     </div>
-  );
-}
-
-export function SalesXrayControlCenter() {
-  return (
-    <AdminShell
-      active="sales-xray"
-      surface="operations"
-      eyebrow="Conversation intelligence / control center"
-      title="Sales Xray control center"
-      description="Review setup, manage provider settings, and enter human review."
-    >
-      <ControlCenterPanel />
-    </AdminShell>
   );
 }

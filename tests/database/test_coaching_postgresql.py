@@ -255,6 +255,7 @@ def test_coaching_own_report_withholding_and_revocation(
                 client.cookies.set(setup.settings.session_cookie_name, other_token)
                 other = (await client.get(PATH)).json()
                 assert other["analysed_calls"] == 0 and other["evidence"] == []
+                assert other["calls"] == []
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 result = await client.get(PATH)
                 assert result.status_code == 200, result.text
@@ -266,6 +267,10 @@ def test_coaching_own_report_withholding_and_revocation(
                 assert data["evidence"][0]["submission_id"] == str(call)
                 assert data["mastery"]["state"] == "not_enough_evidence"
                 assert data["mission"]["behavior"] == "Ask before presenting."
+                # Each own call links to its own coaching, newest first.
+                assert [row["submission_id"] for row in data["calls"]] == [str(call)]
+                assert data["calls"][0]["state"] == "ready"
+                assert data["calls"][0]["focus_label"] == data["focus"]["label"]
                 async with setup.sessions() as db, db.begin():
                     await SensitiveSegmentsStore(db).mark(
                         setup.state.actor,
@@ -277,6 +282,7 @@ def test_coaching_own_report_withholding_and_revocation(
                     )
                 withheld = (await client.get(PATH)).json()
                 assert withheld["focus"] is None and withheld["evidence"] == []
+                assert [row["focus_label"] for row in withheld["calls"]] == [None]
                 assert "buyer asks" not in str(withheld)
                 async with setup.sessions() as db, db.begin():
                     recording = await db.get(ConversationRecording, recording_id)
@@ -284,6 +290,7 @@ def test_coaching_own_report_withholding_and_revocation(
                     permission.revoked_at = setup.clock[0]
                 revoked = (await client.get(PATH)).json()
                 assert revoked["analysed_calls"] == 0 and revoked["evidence"] == []
+                assert revoked["calls"] == []
         finally:
             await setup.engine.dispose()
 

@@ -12,6 +12,7 @@ import {
 import { syntheticProspect } from "./review-fixture/prospects/synthetic-prospect";
 import * as client from "./prospects-client";
 import * as notices from "./notice-center";
+import { PROSPECT_FIELD_LABELS } from "./prospect-profile-contract";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -103,6 +104,32 @@ it("reads server fields and their sources without using or changing legacy devic
   );
   expect(fetcher.mock.calls[0][0]).toContain(`/calls/${CALL}/suggestions`);
   expect(localStorage.getItem(`ac.xray.facts.v1:${CALL}`)).toBe(legacy);
+});
+it("shows a human Unknown as locked without an old value or source", async () => {
+  vi.mocked(client.fetchProspectDetail).mockResolvedValue(
+    detail({
+      ...syntheticProspect,
+      profile_fields: {
+        business: {
+          state: "unknown",
+          reason: "not_asked",
+          basis: "person",
+          locked: true,
+          set_at: "2026-10-10T12:00:00Z",
+        },
+      },
+    }),
+  );
+  await render();
+  const fact = [
+    ...host.querySelectorAll("[data-server-prospect-facts] dt"),
+  ].find((label) =>
+    label.textContent?.startsWith(PROSPECT_FIELD_LABELS.business),
+  )?.parentElement;
+  expect(fact?.textContent).toContain("Unknown");
+  expect(fact?.textContent).toContain("Person edit · locked");
+  expect(fact?.textContent).not.toContain("Example company");
+  expect(fact?.querySelector("blockquote, details")).toBeNull();
 });
 it("Enter writes the locked field API, then reads back the server revision", async () => {
   const edit = vi.spyOn(client, "editProspectField").mockResolvedValue();

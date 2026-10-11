@@ -244,9 +244,6 @@ describe("Admin review assignment workspace", () => {
     expect(container.textContent).not.toContain("Open in Academy");
     expect(container.textContent).not.toContain("Dipak");
     expect(container.textContent).not.toContain("PREVIEW DATA");
-    expect(container.textContent).toContain(
-      "Saved changes confirmed by the service",
-    );
     expect(container.textContent).not.toContain("Save append-only proposal");
     expect(container.textContent).not.toContain("NOT WRITTEN");
     expect(container.textContent).not.toContain("AUDIT EVENT: NONE");

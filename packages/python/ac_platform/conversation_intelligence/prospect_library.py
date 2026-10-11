@@ -60,6 +60,13 @@ def profile(
             }
         elif current.value["kind"] == "unknown":
             fields[key] = {"state": "unknown", "reason": current.value["reason"]}
+            if person:
+                fields[key].update(
+                    basis="person",
+                    locked=True,
+                    set_at=person.created_at.isoformat(),
+                    set_by=str(person.created_by_person_id),
+                )
         else:
             fields[key] = {
                 "state": "known",

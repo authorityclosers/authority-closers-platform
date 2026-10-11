@@ -34,8 +34,9 @@ from ac_platform.conversation_intelligence.prospect_report_context import previo
 from ac_platform.conversation_intelligence.prospect_store import ProspectStore
 from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.db.models import model_metadata
+from tests.database.prospect_legacy_fixtures import legacy_person_projection
+from tests.database.test_conversation_postgresql import _migration_head, run, seed
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
-from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import _setup
 from tests.database.test_prospect_library_postgresql import snapshot
 from tests.database.test_prospect_profile_edit_postgresql import PREFIX, client_for, private
@@ -341,6 +342,34 @@ def test_detected_person_lock_disagreement_source_and_history_guards(
                 locked = (await client.get(path)).json()["prospect"]["profile_fields"]["business"]
                 assert locked["value"] == value("Person Example") and locked["locked"]
                 assert locked["heard_differently"][0]["value"] == value("Heard Differently")
+                # A human Unknown is also an override, never an invitation for AI to refill it.
+                revision = (await client.get(path)).json()["prospect"]["revision"]
+                private(
+                    await client.put(
+                        path + "/fields",
+                        json={
+                            "expected_revision": revision,
+                            "fields": {"city": {"kind": "unknown", "reason": "not_asked"}},
+                        },
+                    ),
+                    200,
+                )
+                setup.clock[0] += timedelta(seconds=1)
+                async with setup.sessions() as db, db.begin():
+                    await store(setup, db).record_detected(
+                        setup.state.actor,
+                        identifier,
+                        submission_id=call,
+                        fields={"city": value("Later Heard City")},
+                        evidence={"city": ref},
+                        extractor_revision="prospect-profile/1",
+                    )
+                unknown = (await client.get(path)).json()["prospect"]["profile_fields"]["city"]
+                assert unknown["state"] == "unknown" and unknown["reason"] == "not_asked"
+                assert unknown["basis"] == "person" and unknown["locked"]
+                assert unknown["set_by"] == str(setup.state.actor.person_id)
+                assert unknown["set_at"]
+                assert not {"value", "evidence", "heard_differently", "changed_from"} & set(unknown)
                 for kwargs in (
                     {"fields": {"phone": value("private")}, "evidence": {"phone": ref}},
                     {
@@ -484,6 +513,7 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
 
     try:
         with monkeypatch.context() as patch:
+            legacy_person_projection(engine, legacy_registry, patch)
             patch.setattr(guest_models, "ConversationGuestSubmission", LegacySubmission)
             patch.setattr(guest_ownership, "ConversationGuestSubmission", LegacySubmission)
             # Seed the real 0077 schema using its pre-journal projections.
@@ -503,7 +533,7 @@ def test_populated_0077_upgrade_preserves_prospects_links_tags_and_audit(
                 "Isolated prior-schema upgrade failed; environment/output withheld.", pytrace=False
             )
         with engine.connect() as db:
-            assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261010_0080"
+            assert db.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
             assert compare_metadata(MigrationContext.configure(db), model_metadata()) == []
             row = dict(
                 db.execute(
