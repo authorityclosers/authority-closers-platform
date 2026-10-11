@@ -137,9 +137,9 @@ def test_a_lesson_for_the_likely_gap_comes_first_and_says_so_only_when_true() ->
     judgment = placeholder.clips_for("closing_decision_management", gap_type="judgment")
     assert execution[1].topic_id == "syn-coach-video-012"
     assert judgment[1].topic_id == "syn-coach-video-015"
-    assert "execution gap" in execution[1].reason
+    assert "saying it smoothly" in execution[1].reason
     # The free lesson is tagged judgment: no claim when the gap differs.
     assert "gap" not in execution[0].reason
-    assert "judgment gap" in judgment[0].reason
+    assert "spotting the moment live" in judgment[0].reason
     unknown = placeholder.clips_for("closing_decision_management", gap_type="uncertain")
     assert all("gap" not in clip.reason for clip in unknown)

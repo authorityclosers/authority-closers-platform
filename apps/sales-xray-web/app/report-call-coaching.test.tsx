@@ -120,7 +120,7 @@ it("offers explicit skill choices when the report has no supported focus", () =>
   };
   const html = renderToStaticMarkup(<ReportCallCoaching data={{ report }} />);
   expect(callCoachingFocus(report)).toBeNull();
-  expect(html).toContain("Choose a skill to work on below");
+  expect(html).toContain("Pick a skill below to work on");
   expect(html.match(/href="\/coaching\?focus=/g)).toHaveLength(8);
   expect(html).not.toContain("Your next-call mission");
 });

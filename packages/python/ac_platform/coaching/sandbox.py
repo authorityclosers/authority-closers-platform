@@ -54,9 +54,9 @@ SKILL_IDS = (
     "communication_tonality",
 )
 NAMESPACE = UUID("6f1d0c47-5a7e-4f43-9a55-1d3c0e0b8a21")
-FICTIONAL = "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call."
+FICTIONAL = "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis."
 IMPORTER_ONLY = "Only the person who imported these sandbox calls sees their coaching."
-SOURCE = "Fictional AC Sandbox lesson, authored with the dataset"
+SOURCE = "Fictional AC Sandbox lesson, written with the calls"
 HISTORY_LIMIT = 40
 MAX_MOMENTS = 4
 
@@ -334,7 +334,7 @@ def authored(
     mission = Mission(
         skill_id=skill,
         behavior=behavior,
-        context=_text(mission_raw.get("context")) or "Your next comparable moment.",
+        context=_text(mission_raw.get("context")) or "The next time this kind of moment comes up.",
         done_when=done_when,
         cue=_text(mission_raw.get("cue"), 240) or label,
         active_since=_when(mission_raw.get("active_since")) or call.occurred_at,

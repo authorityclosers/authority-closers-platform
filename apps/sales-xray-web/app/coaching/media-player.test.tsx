@@ -49,7 +49,7 @@ describe("reviewed placeholder clips", () => {
     await act(async () =>
       root.render(<CoachingMedia clips={[fictionalClip]} />),
     );
-    expect(host.textContent).toContain("Read by a stand-in voice");
+    expect(host.textContent).toContain("A stand-in voice reads Dipak’s words");
     expect(host.querySelector("audio")).toBeNull();
     expect(host.textContent).toContain("Find the consequence");
     await act(async () => button("Next slide").click());

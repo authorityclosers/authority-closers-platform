@@ -91,7 +91,7 @@ export const FOCUS = {
   onNextCall: "On your next call",
   seeMission: "See the mission",
   take: "Hear Dipak’s take",
-  active: "Active focus",
+  active: "Current focus",
   provisional: "From one call so far",
   fromReport: "From this call’s report",
   fromSkills: "From this call’s skill check",
@@ -110,8 +110,7 @@ export const WHY = {
   callEvidence: "From this call",
   yourContext: "Your context",
   theirContext: "Their context",
-  noTimestamp:
-    "This report kept no time for this suggestion. Open the report to read it in context.",
+  noTimestamp: "No time was saved for this moment. Read it in the report.",
 } as const;
 
 /**
@@ -140,23 +139,23 @@ export const GAP_COPY: Record<string, { name: string; line: string }> = {
     line: "You avoid the question because it feels uncomfortable.",
   },
   cognitive_load: {
-    name: "Cognitive load",
+    name: "Too much at once",
     line: "The skill drops when several things happen at once.",
   },
   belief_buy_in: {
-    name: "Belief / Buy-in",
+    name: "Not convinced yet",
     line: "You understand the advice but don’t yet believe it helps the call.",
   },
   adherence: {
-    name: "Adherence",
+    name: "Not tried yet",
     line: "The issue is trying it on calls, not knowing it.",
   },
   skill_dependency: {
-    name: "Skill dependency",
+    name: "Earlier step",
     line: "An earlier part of the call is causing this.",
   },
   context_specific: {
-    name: "Context-specific",
+    name: "Only in some calls",
     line: "This happens mainly in certain situations.",
   },
   uncertain: {
@@ -187,7 +186,7 @@ export const BETTER = {
   wording: "Possible wording, in your own style",
   strength: "Use your strength",
   strengthAcross:
-    "From your latest call where the report noted one. One call doesn’t make it a proven strength yet.",
+    "From your latest call. One call doesn’t prove a strength yet.",
   strengthCall: "You already did this on the call.",
   strengthKeep: "Keep it while you practise the mission.",
   fullLesson: "Read the full lesson",
@@ -205,13 +204,13 @@ export const MEDIA = {
   other: "Also relevant",
   why: "Why this is recommended",
   takeaways: "Read key takeaways",
-  kind: (video: boolean) => (video ? "video lesson" : "audio lesson"),
-  byline: "Dipak’s script",
-  voice: "stand-in voice",
+  kind: (video: boolean) => (video ? "Video" : "Audio"),
+  byline: "Dipak’s words",
+  voice: "read by a stand-in",
   freePreview: "Free preview",
   locked: "Full coaching",
   narrationNote:
-    "Read by a stand-in voice; the words are Dipak’s script. Listening doesn’t complete your mission.",
+    "A stand-in voice reads Dipak’s words. Listening alone doesn’t finish your mission.",
 } as const;
 
 export const NEXT = {
@@ -282,9 +281,9 @@ export const PROGRESS = {
   callsLabel: "Your calls on this skill",
   oldestFirst: "oldest first",
   correct: (correct: number, relevant: number) =>
-    `Done well in ${correct} of ${relevant} relevant moments`,
+    `Done well in ${correct} of ${relevant} chances`,
   sinceMission: (quiet: number, after: number) =>
-    `Since your mission started: ${quiet} of ${after} call${after === 1 ? "" : "s"} used this skill with nothing to fix. Not proof of change yet.`,
+    `Since your mission started: ${quiet} of ${after} call${after === 1 ? "" : "s"} on this skill needed no fix. Too early to call it a change.`,
   noCallSince:
     "No call on this skill since your mission started. Your next call is the first check.",
   how: "How progress is measured",
@@ -326,7 +325,7 @@ export const CALLS = {
   recent: (count: number) => `${count} recent`,
   label: "Your recent calls",
   analysing: "Analysing…",
-  unavailable: "No usable report",
+  unavailable: "Report couldn’t be read",
   fallback: "One practice for your next call",
   recurring: "Also on other calls",
   showAll: (count: number) => `Show all ${count} calls`,
@@ -340,11 +339,10 @@ export const RETAINED = {
   reason: "From this call’s report. One call is a suggestion, not a pattern.",
   tryNext: "Try this next time",
   carry: "Carry this into the next call",
-  suggested:
-    "Suggested wording or behaviour from the report, not a quote from the call.",
+  suggested: "The report’s suggestion, not words from your call.",
   noCheck:
-    "This report didn’t give a success check. Decide what you’ll look for before your next call.",
-  none: "This report has no suggestion backed by a moment from the call. Choose a skill to work on below.",
+    "The report didn’t say how to check it. Before your next call, decide what “done” looks like.",
+  none: "This report has no suggestion tied to a moment in the call. Pick a skill below to work on.",
 } as const;
 
 /** Team coaching for owners and admins: totals, objections, shared reps. */
@@ -362,19 +360,19 @@ export const TEAM = {
   practise: "What the team should work on",
   practiseSub: "Share of calls",
   practiseNote:
-    "How many calls had a report suggestion in each skill. Not a score and not mastery. Updates after every call.",
+    "How many calls had a suggestion in each skill. Not a score. Updates after every call.",
   sandboxNote:
-    "Each fictional call carries one authored focus. Counts are those focuses, not measured mistakes or mastery.",
+    "Each fictional call comes with one written focus. The counts are those focuses, not real mistakes.",
   emptyTitle: "No team suggestions yet",
   emptyText:
-    "Each analysed report can add one. A skill with no evidence never counts as a team weakness.",
+    "Each analysed call can add one. A skill with nothing to show never counts against the team.",
   objections: "Objections your team hears",
   objectionsSub: (calls: number) =>
-    `In ${calls} mapped call${calls === 1 ? "" : "s"}`,
+    `From ${calls} call${calls === 1 ? "" : "s"}`,
   objectionsNote:
     "Left open: the reply dodged or skipped it. Counts only — never the words or who said them.",
   noObjections: "No objections in these calls",
-  noObjectionsText: "Each analysed call’s map lists the buyer’s objections.",
+  noObjectionsText: "Buyers’ objections show here as calls are analysed.",
   who: "Who needs help with what",
   sharedSub: (count: number) => `${count} shared with you`,
   fictionalSub: (count: number) =>
@@ -384,7 +382,7 @@ export const TEAM = {
   namedText:
     "Each rep’s focus, reason and mission stay private until they share them with one tap. They can stop sharing at any time.",
   privateTitle: "Private by default",
-  privateBadge: "Anonymous",
+  privateBadge: "No names",
   privateWho: "Owners and admins see these totals",
   privateText:
     "Totals never name a rep or show their calls, quotes, focus or mission. Owners and admins follow the same rule as everyone else.",
@@ -393,7 +391,7 @@ export const TEAM = {
   sandboxTitle: "Fictional AC Sandbox",
   sandboxWho: "Only you see these reps",
   sandboxText:
-    "These reps, calls and coaching are fictional records you imported. Each call carries one authored focus.",
+    "You imported these fictional reps, calls and coaching. Each call comes with one written focus.",
   sandboxPrivate:
     "Real reps’ coaching stays private until they share it; their totals never name anyone.",
   insightsTitle: "Every call, over time",

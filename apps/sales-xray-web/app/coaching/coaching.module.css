@@ -966,10 +966,11 @@
   content: "";
 }
 
-/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold. */
+/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold.
+   Each step is at least as wide as its name, so names show whole. */
 .stepper {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(min-content, 1fr));
   gap: 4px;
   margin: 0;
   padding: 0;
@@ -1001,9 +1002,22 @@
 }
 
 .stepper li > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 400px) {
+  .stepper {
+    gap: 2px;
+  }
+}
+
+/* Too narrow for five names: only the current one shows, or the two ends
+   while there is none (all stay readable to screen readers and in tooltips). */
+@media (max-width: 352px) {
+  .stepper:has([aria-current]) li:not([aria-current]) > span,
+  .stepper:not(:has([aria-current])) li:not(:first-child, :last-child) > span {
+    font-size: 0;
+  }
 }
 
 .reflection {

@@ -183,7 +183,7 @@ export function EvidencePlayer({
               ? `Pause moment ${span}`
               : state === "failed"
                 ? `Try audio again ${span}`
-                : `Play evidence ${span}`
+                : `Play moment ${span}`
           }
         >
           <Icon size={13} aria-hidden="true" />
@@ -216,7 +216,7 @@ export function EvidencePlayer({
             <span>
               {fictional
                 ? "Fictional call text; no audio."
-                : "Audio alignment is uncertain; read the quote."}
+                : "We couldn’t match this to the audio. Read the quote."}
             </span>
           ) : null}
         </span>
@@ -232,7 +232,7 @@ export function EvidencePlayer({
           ref={audio}
           src={source}
           preload="metadata"
-          aria-label={`Call evidence from ${timeLabel(evidence.start_ms)}`}
+          aria-label={`Moment from ${timeLabel(evidence.start_ms)}`}
           onLoadedMetadata={() => {
             if (audio.current && active.current) start(audio.current);
           }}

@@ -593,7 +593,7 @@
     ],
     "reps_basis": "fictional",
     "limitations": [
-      "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call.",
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
       "Only the person who imported these sandbox calls sees their coaching.",
       "Counts are each fictional call's one authored focus, not measured mistakes."
     ]
@@ -725,7 +725,7 @@
     },
     "regression": {
       "state": "unknown",
-      "action": "More comparable behavior evidence is needed to assess regression.",
+      "action": "We need more calls on this skill to tell whether it is slipping.",
       "evidence": []
     },
     "lesson": {
@@ -741,7 +741,7 @@
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
       ],
-      "source": "Fictional AC Sandbox lesson, authored with the dataset",
+      "source": "Fictional AC Sandbox lesson, written with the calls",
       "own_call": {
         "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
         "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
@@ -771,7 +771,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on. It addresses a judgment gap (recognising the moment), the likely reason here.",
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill you’re working on. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."
@@ -787,7 +787,8 @@
             ]
           }
         ],
-        "offer": null
+        "offer": null,
+        "preview_end_ms": null
       },
       {
         "topic_id": "syn-coach-audio-001",
@@ -797,11 +798,11 @@
         "kind": "audio",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 35763,
-        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching. It addresses a judgment gap (recognising the moment), the likely reason here.",
+        "reason": "Another lesson on Discovery & Deep Understanding, from Dipak’s full coaching. The first 15 seconds are free. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "One objection can describe several realities.",
           "Clarify the meaning before choosing a response."
@@ -814,7 +815,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "recommended_media": null,
@@ -826,280 +828,320 @@
         "call_label": "Edtech · Viren Nivantakar · call 5",
         "created_at": "2026-08-28T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "0adb514a-b084-545f-a2e6-0e39b4f01034",
         "call_label": "Edtech · Viren Nivantakar · call 4",
         "created_at": "2026-08-25T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "ecd73b45-7e68-522c-bd86-5b03b9fcb150",
         "call_label": "Edtech · Viren Nivantakar · call 3",
         "created_at": "2026-08-19T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "6c68759e-8c1a-5294-9b5c-05c478733977",
         "call_label": "Edtech · Viren Nivantakar · call 2",
         "created_at": "2026-08-14T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "adfbc4d2-eb79-5a70-89ea-69658447af50",
         "call_label": "Edtech · Viren Nivantakar · call 1",
         "created_at": "2026-08-10T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "4f9b61cf-6da8-5bb2-9fea-bcc40d2c9530",
         "call_label": "Edtech · Mihir Mathew · call 3",
         "created_at": "2026-08-03T14:48:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "623e2a0c-b47e-5dcb-bd48-06a00792869e",
         "call_label": "Edtech · Mihir Mathew · call 2",
         "created_at": "2026-07-30T14:48:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "08e6d13e-afe6-50b3-a45a-c649d2d6b913",
         "call_label": "Edtech · Darshan Nivantakar · call 2",
         "created_at": "2026-07-29T13:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "6781d179-5586-58fc-be54-f73083d362e2",
         "call_label": "Edtech · Mihir Mathew · call 1",
         "created_at": "2026-07-27T14:48:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "182482d6-98bd-544b-8928-9d9aefedd9c7",
         "call_label": "Edtech · Darshan Nivantakar · call 1",
         "created_at": "2026-07-23T13:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "10140de3-8c9d-53d1-b918-266b8409d3b8",
         "call_label": "Edtech · Debashish Soman · call 3",
         "created_at": "2026-06-22T14:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "7d64d171-2b16-5584-9129-01824c56c641",
         "call_label": "Edtech · Debashish Soman · call 2",
         "created_at": "2026-06-18T14:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "45fe0a59-c4cf-5c7f-9a40-52a1fd959499",
         "call_label": "Edtech · Debashish Soman · call 1",
         "created_at": "2026-06-15T14:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "8dfe2f81-bd17-56ce-82d0-6c739ac40eea",
         "call_label": "Edtech · Srinivas Khanna · call 3",
         "created_at": "2026-04-29T14:34:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "680c01d4-a52d-54d8-872b-47513c5e8eb5",
         "call_label": "Edtech · Srinivas Khanna · call 2",
         "created_at": "2026-04-27T14:34:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "b8bc0e13-512b-5655-a29b-cc06622c5a95",
         "call_label": "Edtech · Srinivas Khanna · call 1",
         "created_at": "2026-04-22T14:34:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "a20b3be7-d1c1-5ba2-8639-785548cf5016",
         "call_label": "Edtech · Ira Ananth · call 3",
         "created_at": "2026-04-20T10:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "bbc60bc2-62b6-5d1f-b66a-48023496ad0d",
         "call_label": "Edtech · Ira Ananth · call 2",
         "created_at": "2026-04-16T10:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "4b778c94-a003-5f07-bbbc-c77912362f21",
         "call_label": "Edtech · Anjali Narayanan · call 3",
         "created_at": "2026-04-15T11:33:00+05:30",
         "state": "ready",
-        "focus_label": "Ask about the manager’s real work and practice time before presenting"
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
       },
       {
         "submission_id": "03d436a9-4440-518e-beeb-a0a809c4dd50",
         "call_label": "Edtech · Anjali Narayanan · call 2",
         "created_at": "2026-04-13T11:33:00+05:30",
         "state": "ready",
-        "focus_label": "Ask about the manager’s real work and practice time before presenting"
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
       },
       {
         "submission_id": "47f88c90-0cbf-5d5d-b24b-9b4b33957b31",
         "call_label": "Edtech · Ira Ananth · call 1",
         "created_at": "2026-04-13T10:36:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "e93404af-6ff5-5810-83ad-8c8974fda61e",
         "call_label": "Edtech · Anjali Narayanan · call 1",
         "created_at": "2026-04-08T11:33:00+05:30",
         "state": "ready",
-        "focus_label": "Ask about the manager’s real work and practice time before presenting"
+        "focus_label": "Ask about the manager’s real work and practice time before presenting",
+        "recurring": true
       },
       {
         "submission_id": "ce2141cb-a213-5060-8e66-424ebc3cd05d",
         "call_label": "Edtech · Kabir Bapat · call 3",
         "created_at": "2026-03-30T11:19:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "e2069953-73d1-51cf-96c1-fddbc16c9e5c",
         "call_label": "Edtech · Kabir Bapat · call 2",
         "created_at": "2026-03-26T11:19:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "57e795fd-cd0f-5bdb-8059-4bd50d3d3b1c",
         "call_label": "Edtech · Deepa Kale · call 3",
         "created_at": "2026-03-24T14:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "c420ff7e-964e-5e76-8ca9-cd752ec1b88a",
         "call_label": "Edtech · Kabir Bapat · call 1",
         "created_at": "2026-03-23T11:19:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "063f3c38-8393-5c13-b402-611a7ba9fa32",
         "call_label": "Edtech · Deepa Kale · call 2",
         "created_at": "2026-03-20T14:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "751ce4ae-6bd5-51ad-be34-e8b19fde9306",
         "call_label": "Edtech · Soumitra Bhatt · call 3",
         "created_at": "2026-03-18T10:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "4cfdf745-3b39-5d21-a20a-1b5e4013ee44",
         "call_label": "Edtech · Deepa Kale · call 1",
         "created_at": "2026-03-17T14:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "b8590397-275b-5807-ab1b-15050ff824e2",
         "call_label": "Edtech · Parth Hebbar · call 3",
         "created_at": "2026-03-16T12:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "efb89e43-1ed4-5849-8297-940724d54012",
         "call_label": "Edtech · Soumitra Bhatt · call 2",
         "created_at": "2026-03-16T10:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "52e0c94b-a7e4-5ed3-a758-cd4984c0d484",
         "call_label": "Edtech · Parth Hebbar · call 2",
         "created_at": "2026-03-12T12:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "2f16b8ef-473f-5a63-bcf8-6383ea9f1ff5",
         "call_label": "Edtech · Soumitra Bhatt · call 1",
         "created_at": "2026-03-11T10:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "d54208b2-8dda-5b08-8e73-db3c624905e1",
         "call_label": "Edtech · Prakash Bedi · call 3",
         "created_at": "2026-03-10T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "78fca8f2-a8d2-56a6-a1cc-bf0c987be09f",
         "call_label": "Edtech · Parth Hebbar · call 1",
         "created_at": "2026-03-09T12:38:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "b1f49132-6cb2-5dbf-a58f-07f33236f303",
         "call_label": "Edtech · Prakash Bedi · call 2",
         "created_at": "2026-03-06T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "3364a65f-065c-54f5-9f69-763ef31bb3ae",
         "call_label": "Edtech · Prakash Bedi · call 1",
         "created_at": "2026-03-03T14:00:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "e6558a3e-3154-5dca-8709-ed0b43d4a434",
         "call_label": "Edtech · Ritvik Ganguly · call 3",
         "created_at": "2026-03-02T12:42:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "25a903b5-0015-5563-9f10-2c00bdb37fd2",
         "call_label": "Edtech · Ritvik Ganguly · call 2",
         "created_at": "2026-02-26T12:42:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       },
       {
         "submission_id": "a56acfd8-99db-5fc7-8b03-68583369fb38",
         "call_label": "Edtech · Ritvik Ganguly · call 1",
         "created_at": "2026-02-23T12:42:00+05:30",
         "state": "ready",
-        "focus_label": "Diagnose before prescribing"
+        "focus_label": "Diagnose before prescribing",
+        "recurring": true
       }
     ],
     "progress": [
@@ -1357,7 +1399,7 @@
     "person_name": "Rohan Kendrekar",
     "sandbox_reps": 0,
     "limitations": [
-      "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call.",
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
       "Only the person who imported these sandbox calls sees their coaching."
     ]
   },
@@ -1439,7 +1481,7 @@
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
       ],
-      "source": "Fictional AC Sandbox lesson, authored with the dataset",
+      "source": "Fictional AC Sandbox lesson, written with the calls",
       "own_call": {
         "submission_id": "a83281fd-8613-557f-9f2a-6b2cad7cf62b",
         "recording_id": "4ab017ee-2cb6-560a-ad92-c73490e852d6",
@@ -1485,7 +1527,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33046,
-        "reason": "Dipak's lesson for Discovery & Deep Understanding, the skill this coaching focuses on. It addresses a judgment gap (recognising the moment), the likely reason here.",
+        "reason": "Dipak’s lesson on Discovery & Deep Understanding, the skill you’re working on. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "Ask for the last concrete example.",
           "Reflect the answer before going deeper."
@@ -1501,7 +1543,8 @@
             ]
           }
         ],
-        "offer": null
+        "offer": null,
+        "preview_end_ms": null
       },
       {
         "topic_id": "syn-coach-audio-001",
@@ -1511,11 +1554,11 @@
         "kind": "audio",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 35763,
-        "reason": "A further lesson for Discovery & Deep Understanding in Dipak's full coaching. It addresses a judgment gap (recognising the moment), the likely reason here.",
+        "reason": "Another lesson on Discovery & Deep Understanding, from Dipak’s full coaching. The first 15 seconds are free. It helps with spotting the moment live, the likely reason here.",
         "takeaways": [
           "One objection can describe several realities.",
           "Clarify the meaning before choosing a response."
@@ -1528,7 +1571,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "recommended_media": null,
@@ -1538,7 +1582,7 @@
     "rep_person_id": "7a885030-b03f-5d40-9e87-e5c6fcd47e7c",
     "rep_name": "Rohan Kendrekar",
     "limitations": [
-      "Fictional AC Sandbox data: coaching authored with the dataset, not an analysed call.",
+      "Fictional AC Sandbox call. Its coaching was written with it, not from an analysis.",
       "Only the person who imported these sandbox calls sees their coaching."
     ]
   }

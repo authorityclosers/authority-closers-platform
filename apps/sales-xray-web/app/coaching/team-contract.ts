@@ -121,9 +121,7 @@ export function parseTeamCoaching(raw: unknown): TeamCoaching | null {
     // Server labels are discarded: only the approved taxonomy reaches the UI.
     suggestions.push({
       skill_id: id,
-      label: skill
-        ? requestedSkillLabel(skill)
-        : "Other call report suggestions",
+      label: skill ? requestedSkillLabel(skill) : "Other suggestions",
       suggestion_calls: calls,
     });
   }

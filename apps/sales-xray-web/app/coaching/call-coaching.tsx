@@ -47,8 +47,8 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
       <Panel title="Coaching for this call">
         <Empty
           icon={FileSearch}
-          title="This call’s coaching is unavailable"
-          text="Its evidence is withheld or not ready. The report shows what is available."
+          title="This call’s coaching isn’t ready"
+          text="Its moments are hidden or not ready yet. The report shows what’s there."
           action={{
             href: report.href,
             label: coaching.sandbox ? "Open team coaching" : "Open the report",

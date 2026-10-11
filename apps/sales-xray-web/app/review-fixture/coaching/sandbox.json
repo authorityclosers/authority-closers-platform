@@ -140,7 +140,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33542,
-        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
         "takeaways": [
           "Clarify what the buyer means.",
           "Respond to the blocker and check resolution."
@@ -170,7 +170,7 @@
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching. The first 15 seconds are free.",
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -229,7 +229,7 @@
       "label": "Explain value before trading price",
       "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
       "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
-      "selected_reason": "Your reports flagged it in 5 of your last 7 calls that checked this skill.",
+      "selected_reason": "It came up in 5 of your last 7 calls on this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
@@ -237,7 +237,7 @@
     "pattern": {
       "relevant_call_count": 7,
       "attention_call_count": 5,
-      "summary": "It came up on 4 different calls, not just one. Replay the moments below and compare what happened each time."
+      "summary": "It came up on 4 different calls. Replay the moments below and see what you did each time."
     },
     "root_cause": {
       "hypothesis": "You may treat any hesitation as a price objection and reach for a discount to keep momentum.",
@@ -380,7 +380,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33542,
-        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
         "takeaways": [
           "Clarify what the buyer means.",
           "Respond to the blocker and check resolution."
@@ -410,7 +410,7 @@
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching. The first 15 seconds are free.",
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -607,7 +607,7 @@
       }
     ],
     "limitations": [
-      "Counts are report suggestions, not proof of a repeated mistake or of mastery.",
+      "Counts are report suggestions. They don’t prove a repeated mistake.",
       "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
       "Synthetic sandbox team (synthetic-v1)."
     ],

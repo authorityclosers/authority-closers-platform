@@ -99,8 +99,8 @@ export function SharePanel({
               </Button>
             </div>
             <p className={styles.note}>
-              Sharing adds your Coaching view to what your admins can already
-              open in your calls. You can stop sharing at any time.
+              Your admins can already open your calls. Sharing also shows them
+              this page. You can stop any time.
             </p>
             {failed || error ? (
               <p role="status" className={styles.status}>
@@ -338,8 +338,8 @@ export function FocusFeedback({
       </div>
       <p role="status" className={styles.note}>
         {done
-          ? "Recorded. It does not change your mission or any score."
-          : (error ?? "Tell us whether this focus fits, or add context.")}
+          ? "Noted. Your mission stays the same."
+          : (error ?? "Does this focus fit you? Tell us, or add context.")}
       </p>
     </>
   );

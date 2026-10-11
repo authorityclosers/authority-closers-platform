@@ -39,7 +39,7 @@ def test_unclassified_legacy_suggestion_is_not_guessed_from_its_title_or_prose()
         ((UUID(int=9), call),), person_id=UUID(int=1), tenant_id=UUID(int=2), history_limited=True
     )
     assert view.suggestions[0].skill_id == "report_next_step"
-    assert view.suggestions[0].label == "Other call report suggestions"
+    assert view.suggestions[0].label == "Other suggestions"
     assert "private name" not in view.model_dump_json()
     assert "40" in view.limitations[-1]
 

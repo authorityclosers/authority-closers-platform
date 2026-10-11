@@ -20,7 +20,7 @@ LABELS = {
     "certainty_objection_intelligence": "Certainty & Objection Intelligence",
     "closing_decision_management": "Closing & Decision Management",
     "communication_tonality": "Communication & Tonality",
-    "report_next_step": "Other call report suggestions",
+    "report_next_step": "Other suggestions",
 }
 
 
@@ -204,7 +204,7 @@ def summarize_team(
             for skill, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
         ),
         limitations=(
-            "Counts are report suggestions, not proof of a repeated mistake or of mastery.",
+            "Counts are report suggestions. They don’t prove a repeated mistake.",
             "Totals never name a rep or show their calls, quotes, focus or mission.",
             "A rep appears by name, with their current focus, only after they share. "
             "They can stop at any time, and any change to their membership ends it.",

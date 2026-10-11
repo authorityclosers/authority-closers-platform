@@ -57,7 +57,7 @@ describe("anonymous Team coaching", () => {
     expect(html).not.toContain("/analysis/calls/");
     // Every call over time lives in Insights, not recounted here.
     expect(html).toContain('href="/organisation/insights"');
-    expect(html).not.toContain("Play evidence");
+    expect(html).not.toContain("Play moment");
     expect(html).not.toContain("<audio");
   });
   it("defaults absent counts and rows and discards source-supplied labels", () => {
@@ -233,7 +233,7 @@ describe("anonymous Team coaching", () => {
     );
     expect((await readCoaching(`person:${person}`)).data).toBeNull();
     expect((await readCoaching("person:not-a-person")).error).toContain(
-      "invalid",
+      "doesn’t work",
     );
   });
   it("loads the team projection in one same-account request", async () => {

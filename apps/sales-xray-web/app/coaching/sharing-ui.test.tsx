@@ -120,7 +120,7 @@ describe("Focus feedback", () => {
         fictionalCoaching.mission!.origin_submission_id,
     });
     expect(body.command_id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(host.textContent).toContain("Recorded.");
+    expect(host.textContent).toContain("Noted.");
     expect(button("Not completely").disabled).toBe(true);
   });
   it("answers the reflection question with one tap, kept as context", async () => {
@@ -226,7 +226,7 @@ describe("Focus feedback", () => {
       (call) => JSON.parse(call[1].body).command_id,
     );
     expect(first).not.toBe(second);
-    expect(host.textContent).toContain("Recorded.");
+    expect(host.textContent).toContain("Noted.");
   });
 });
 

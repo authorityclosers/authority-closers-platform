@@ -161,8 +161,8 @@ def build_learner(
     suggestion = origin.basis == "report_suggestion"
     if suggestion:
         limitations.append(
-            "This focus comes from one report's suggestion, not a skill check. "
-            "It isn't a pattern and doesn't measure progress."
+            "This focus comes from one report’s suggestion. "
+            "It isn’t a pattern yet and doesn’t show progress."
         )
         common["limitations"] = tuple(limitations)
     focus = Focus(
@@ -173,8 +173,7 @@ def build_learner(
         selected_reason=(
             "Your call's report suggested this."
             if suggestion
-            else f"Your reports flagged it in {count} of your last {total} calls "
-            "that checked this skill."
+            else f"It came up in {count} of your last {total} calls on this skill."
             if recurring
             else "One call suggested this. We're still learning your pattern."
         ),
@@ -221,8 +220,8 @@ def build_learner(
             relevant_call_count=total,
             attention_call_count=count,
             summary=(
-                f"It came up on {count} different calls, not just one. "
-                "Replay the moments below and compare what happened each time."
+                f"It came up on {count} different calls. "
+                "Replay the moments below and see what you did each time."
                 if recurring
                 else "So far this comes from one call. It isn't a pattern yet."
             ),
@@ -245,5 +244,5 @@ def build_learner(
                 "Your next focus depends on your next calls. Your current mission stays until then."
             ),
         ),
-        reflection_question="What made you respond that way in this moment?",
+        reflection_question="What stopped you here?",
     )

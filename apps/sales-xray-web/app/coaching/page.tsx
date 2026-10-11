@@ -22,12 +22,12 @@ export default async function Page({
     query.call !== undefined && !callId
       ? ({
           data: null,
-          error: "This call link is invalid. Open the call’s report again.",
+          error: "This link doesn’t work. Open the call’s report again.",
         } as const)
       : !callId && query.person !== undefined && !person
         ? ({
             data: null,
-            error: "This link is invalid. Open Team coaching again.",
+            error: "This link doesn’t work. Open Team coaching again.",
           } as const)
         : await loadServerCoaching(
             team ? "team" : person ? `person:${person}` : callId,

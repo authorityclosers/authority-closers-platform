@@ -215,8 +215,8 @@ export function ReportCallCoaching(props: Props) {
         notify({
           id: "report-call-coaching",
           tone: "error",
-          title: "Call coaching unavailable",
-          message: "Your report is still available.",
+          title: "Coaching didn’t load",
+          message: "Your report is fine.",
           action: { label: "Try again", run: () => setAttempt((n) => n + 1) },
         });
       });

@@ -86,7 +86,7 @@ describe("Coaching story", () => {
       root.render(
         <CoachingPage
           invalidCall
-          initialResult={{ data: null, error: "This call link is invalid." }}
+          initialResult={{ data: null, error: "This link doesn’t work." }}
         />,
       ),
     );
@@ -95,7 +95,7 @@ describe("Coaching story", () => {
     )!;
     await act(async () => retry.click());
     expect(fetch).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("This call link is invalid.");
+    expect(host.textContent).toContain("This link doesn’t work.");
   });
   it("points an AC Sandbox importer with no own calls to the fictional team", () => {
     const empty = {
@@ -347,7 +347,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain("Use your strength");
-    expect(html).toContain("One call doesn’t make it a proven strength yet.");
+    expect(html).toContain("One call doesn’t prove a strength yet.");
     expect(html.lastIndexOf(moment.call_label)).toBeGreaterThan(
       html.indexOf("Use your strength"),
     );
@@ -434,7 +434,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain(
-      "Since your mission started: 1 of 1 call used this skill with nothing to fix. Not proof of change yet.",
+      "Since your mission started: 1 of 1 call on this skill needed no fix. Too early to call it a change.",
     );
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");

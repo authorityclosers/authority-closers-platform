@@ -213,7 +213,7 @@ function StartCoaching({
           </p>
           <p className={styles.lead}>
             {coaching.analysed_calls
-              ? "Your calls don’t show one skill to work on across calls yet. Each analysed call below already has its own focus and next-call mission."
+              ? "No one skill stands out across your calls yet. Each call below has its own focus and mission."
               : "Coaching follows your own calls. Your first report brings one focus and one mission for your next call."}
           </p>
           {coaching.pending_calls > 0 ? (

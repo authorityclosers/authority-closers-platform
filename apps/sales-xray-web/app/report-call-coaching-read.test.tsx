@@ -152,7 +152,9 @@ it("renders reviewed examples from the call read without eager audio and keeps t
   const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   await render();
-  expect(container.textContent).toContain("Read by a stand-in voice");
+  expect(container.textContent).toContain(
+    "A stand-in voice reads Dipak’s words",
+  );
   expect(container.querySelector("audio")).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(1);
   const button = (label: string) =>
@@ -274,7 +276,7 @@ it("keeps the report focus available if this API has not deployed", async () => 
   await render();
   expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();
   expect(notices.notify).toHaveBeenCalledWith(
-    expect.objectContaining({ title: "Call coaching unavailable" }),
+    expect.objectContaining({ title: "Coaching didn’t load" }),
   );
   expect(container.textContent).not.toContain("private error");
 });

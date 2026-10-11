@@ -112,11 +112,11 @@ def topics(root: Path = MEDIA) -> tuple[PlaceholderTopic, ...]:
 
 
 GAP_WORDS = {
-    "knowledge": "a knowledge gap",
-    "judgment": "a judgment gap (recognising the moment)",
-    "execution": "an execution gap (doing it in the moment)",
-    "habit_recall": "a habit gap",
-    "confidence": "a confidence gap",
+    "knowledge": "knowing what to ask",
+    "judgment": "spotting the moment live",
+    "execution": "saying it smoothly",
+    "habit_recall": "remembering it live",
+    "confidence": "asking without holding back",
 }
 
 
@@ -125,7 +125,7 @@ def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestio
     # Say why only with facts on both sides: the lesson's tag and this coaching's
     # likely reason. A guessed match is never claimed.
     gap = (
-        f" It addresses {GAP_WORDS[topic.gap_type]}, the likely reason here."
+        f" It helps with {GAP_WORDS[topic.gap_type]}, the likely reason here."
         if gap_type == topic.gap_type and topic.gap_type in GAP_WORDS
         else ""
     )
@@ -151,9 +151,9 @@ def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestio
         start_ms=topic.start_ms,
         end_ms=topic.end_ms,
         reason=(
-            f"Dipak's lesson for {label}, the skill this coaching focuses on.{gap}"
+            f"Dipak’s lesson on {label}, the skill you’re working on.{gap}"
             if topic.free
-            else f"A further lesson for {label} in Dipak's full coaching.{free_part}{gap}"
+            else f"Another lesson on {label}, from Dipak’s full coaching.{free_part}{gap}"
         ),
         takeaways=topic.takeaways,
         transcript_excerpt=topic.narration,

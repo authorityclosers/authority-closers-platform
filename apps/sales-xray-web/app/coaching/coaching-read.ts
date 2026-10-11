@@ -296,7 +296,7 @@ export async function readCoaching(
   if (callId?.startsWith("person:") && person !== callId.slice(7))
     return {
       data: null,
-      error: "This link is invalid. Open Team coaching again.",
+      error: "This link doesn’t work. Open Team coaching again.",
     };
   if (
     callId !== null &&
@@ -306,7 +306,7 @@ export async function readCoaching(
   )
     return {
       data: null,
-      error: "This call link is invalid. Open the call's report again.",
+      error: "This link doesn’t work. Open the call’s report again.",
     };
   try {
     const readHeaders = new Headers(init.headers);

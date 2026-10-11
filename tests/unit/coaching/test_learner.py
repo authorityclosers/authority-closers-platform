@@ -151,7 +151,7 @@ def test_unclassified_report_suggestions_do_not_become_a_repeated_skill_pattern(
     assert result.pattern.relevant_call_count == 1
     assert result.mastery.trend == "not_enough_evidence"
     assert result.root_cause.gap_type == "uncertain"
-    assert any("not a skill check" in row for row in result.limitations)
+    assert any("one report’s suggestion" in row for row in result.limitations)
 
 
 def test_progress_strip_reports_what_comparable_calls_said_never_success() -> None:

@@ -65,8 +65,8 @@ function CoachingResultBody({
         <Panel title="Coaching">
           <Empty
             icon={FileSearch}
-            title="Coaching is temporarily unavailable"
-            text="Your calls and reports are unaffected. Open the call to check its report and analysis status."
+            title="Coaching didn’t load"
+            text="Your calls and reports are fine. Open a call to see its report."
             action={{
               href: callId ? `/analysis/calls/${callId}` : "/analysis/calls",
               label: callId ? "Open the call" : "Open calls",
@@ -245,7 +245,7 @@ export function CoachingPage({
                         "Fictional AC Sandbox reps and calls",
                         "Only you see them",
                       ]
-                    : ["Anonymous totals from your team’s analysed calls"]
+                    : ["Team totals from analysed calls, with no names"]
                   : ["Your focus, mission and progress across calls"]
           }
           back={
@@ -344,8 +344,8 @@ export function CoachingRoute({
     ? ({
         data: null,
         error: query.has("call")
-          ? "This call link is invalid. Open the call’s report again."
-          : "This link is invalid. Open Team coaching again.",
+          ? "This link doesn’t work. Open the call’s report again."
+          : "This link doesn’t work. Open Team coaching again.",
       } as const)
     : callId === initialCallId &&
         team === initialTeam &&
