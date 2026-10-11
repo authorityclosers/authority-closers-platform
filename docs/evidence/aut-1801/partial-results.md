@@ -26,3 +26,5 @@ keep repeated progress reads bounded on long calls.
 Strike A can show transcript and moments from this additive response as their
 validated checkpoints arrive, and keep the existing C0–C6 state display. This is
 checkpoint-driven progress, not unvalidated provider token streaming.
+The existing `GET /submissions/{id}/transcript` route provides the full retained
+transcript after C2 when the preview's total count exceeds its 24-segment cap.
