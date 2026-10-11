@@ -6,7 +6,7 @@
  * is scored or ranked (AC-SVAL).
  */
 import { submissionState, callTone, type CallTone } from "../../call-status";
-import type { OrgActivity, OrgMember } from "../organisation-api";
+import type { OrgActivity, OrgMember, PersonWeeks } from "../organisation-api";
 import type { ReportPattern } from "../team-patterns";
 
 /** Twelve 7-day weeks, within the activity read's 90-day limit. */
@@ -95,6 +95,44 @@ export function weeklyTotals(
     week.minutes += call.durationSeconds / 60;
   }
   return out.map((week) => ({ ...week, minutes: Math.round(week.minutes) }));
+}
+
+/** What the profile draws: the figures, the listed calls and the weeks. */
+export type PersonSummary = { data: PersonActivity; weeks: Week[] };
+
+/**
+ * From the per-person read: weeks and totals count every call; the newest
+ * calls (up to 50) are listed.
+ */
+export function fromPersonWeeks(read: PersonWeeks): PersonSummary {
+  const listed = [...read.calls].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+  return {
+    data: {
+      calls: read.totals.calls,
+      minutes: read.totals.recordedMinutes,
+      reportsReady: read.totals.reportsReady,
+      listed,
+      complete: listed.length >= read.totals.calls,
+      lastCallAt: listed[0]?.createdAt ?? null,
+    },
+    weeks: read.weeks.map((week) => ({
+      start: Date.parse(week.start),
+      calls: week.calls,
+      minutes: Math.round(week.recordedMinutes),
+    })),
+  };
+}
+
+/** From the organisation's read (servers without the per-person one). */
+export function fromOrganisation(
+  activity: OrgActivity,
+  personId: string,
+  now = Date.now(),
+): PersonSummary {
+  const data = personActivity(activity, personId);
+  return { data, weeks: weeklyTotals(data.listed, now) };
 }
 
 /** The call-status helpers take a library row; the activity row has its parts. */

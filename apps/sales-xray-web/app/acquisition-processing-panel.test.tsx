@@ -8,6 +8,14 @@ import type { Progress } from "./acquisition-client";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
+// The measured waveform has its own tests (analysis-wave.test.tsx); here it
+// stays out of the fetch sequence the plan polls use.
+const wave = vi.hoisted(() => ({ measured: null as unknown }));
+vi.mock("./analysis-wave", async (original) => ({
+  ...(await original<typeof import("./analysis-wave")>()),
+  useMeasuredWave: () => wave.measured,
+}));
+
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,7 +108,7 @@ it("says one true thing and moves the steps with the plan's live stage", async (
     `/v1/conversation/acquisition/submissions/${callId}/plan`,
   );
   expect(host.querySelector("h2")?.textContent).toBe("Analysing your call");
-  expect(host.textContent).toContain("Usually about 2–4 minutes");
+  expect(host.textContent).toContain("Usually 2–3 minutes");
   expect([stepState("C2"), stepState("C4"), stepState("C5")]).toEqual([
     "active",
     "waiting",
@@ -306,4 +314,16 @@ it("renders a static example with no live claim, read or action", () => {
   expect(markup).not.toContain("Delete this call");
   expect(markup).not.toContain("You can leave this page");
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("adds the call's measured length to its file line once the server has it", async () => {
+  wave.measured = {
+    schema: "ac.sales-xray.waveform/1",
+    kind: "rms_envelope",
+    duration_ms: 1_520_000,
+    points: [{ start_ms: 0, level: 0.5 }],
+  };
+  await mount();
+  expect(host.textContent).toContain("12.4 MB · 25:20");
+  wave.measured = null;
 });

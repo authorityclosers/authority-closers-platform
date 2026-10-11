@@ -19,6 +19,7 @@ from ac_platform.identity.services import TenantScopeDeniedError, normalize_emai
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
 from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.invitations import invitation_policies
+from ac_platform.organisations.person_activity import person_activity
 from ac_platform.organisations.seats import seat_exempt
 from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows, organisation_pool, organisation_seats
@@ -159,6 +160,18 @@ class ActivityResponse(BaseModel):
     calls: list[ActivityCallResponse]
     per_day: list[DailyActivityResponse]
     per_rep: list[RepActivityResponse]
+
+
+class WeekActivityResponse(ActivityCountsResponse):
+    start: datetime
+
+
+class PersonActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    person_id: UUID
+    weeks: list[WeekActivityResponse]
+    totals: ActivityCountsResponse
+    calls: list[ActivityCallResponse]
 
 
 class AddMemberRequest(BaseModel):
@@ -412,6 +425,24 @@ def install_organisation_http(
             every_member=auth.resolved.membership_role != "member",
         )
         return ActivityResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/members/{person_id}/activity", response_model=PersonActivityResponse)
+    async def member_activity(
+        person_id: UUID,
+        weeks: Annotated[int, Query(ge=1, le=13)] = 12,
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> PersonActivityResponse:
+        """One person's calls, week by week (the people pages)."""
+        body = await person_activity(
+            auth.database,
+            auth.resolved.actor,
+            person_id=person_id,
+            weeks=weeks,
+            every_member=auth.resolved.membership_role != "member",
+        )
+        if body is None:
+            raise ResourceNotFound("Person not found.")
+        return PersonActivityResponse.model_validate_json(json.dumps(body))
 
     @router.get("/usage", response_model=OrganisationUsageResponse)
     async def usage(
