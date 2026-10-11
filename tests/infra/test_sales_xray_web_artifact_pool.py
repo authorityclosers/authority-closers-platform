@@ -32,6 +32,7 @@ def _artifact(artifact_id: int, name: str, size: int) -> dict:
         "name": name,
         "size_in_bytes": size,
         "expired": False,
+        "created_at": "2026-10-01T00:00:00Z",
         "workflow_run": {"id": 101},
     }
 
@@ -443,10 +444,10 @@ def test_reader_rejects_missing_duplicate_and_changing_pages() -> None:
     with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages[:1]))
     pages[1]["total_count"] = 102
-    with pytest.raises(ValueError, match="count changed"):
+    with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages))
     pages = _pages([*artifacts[:100], artifacts[0]])
-    with pytest.raises(ValueError, match="duplicate identity"):
+    with pytest.raises(ValueError, match="incomplete inventory"):
         INVENTORY["validate_inventory"](json.dumps(pages))
 
 

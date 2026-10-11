@@ -151,7 +151,7 @@ jobs:
             ${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}/proof.json
             ${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}/acquisition-browser.junit.xml
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 2
 
   validate-python-tests:
     runs-on: ubuntu-latest
@@ -260,7 +260,7 @@ jobs:
           name: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 2
 
   validate-python-gates:
     runs-on: ubuntu-latest
@@ -338,7 +338,7 @@ jobs:
           name: hosted-activation-root-${{ github.sha }}
           path: ${{ runner.temp }}/hosted-activation-root.xml
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 2
       - name: Require codec, filesystem and locked browser prerequisites
         timeout-minutes: 13
         run: uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser
