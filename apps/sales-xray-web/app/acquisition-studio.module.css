@@ -85,9 +85,6 @@
   min-height: 0;
   margin: 0;
 }
-.app[data-stage="upload"] .expect {
-  display: none;
-}
 .app[data-stage="upload"] .upload {
   display: block;
   padding: 0;
@@ -136,16 +133,6 @@
   background: #def6ed;
   color: #007d79;
 }
-.app[data-stage="upload"] .audioCue {
-  position: absolute;
-  animation: audioCuePulse 4.4s ease-in-out infinite;
-}
-.app[data-stage="upload"] .uploadCue {
-  position: absolute;
-  color: #007d79;
-  opacity: 0;
-  animation: uploadCuePulse 4.4s ease-in-out infinite;
-}
 .app[data-stage="upload"] .dropTitle {
   margin: 0;
   color: #10243d;
@@ -191,71 +178,6 @@
   color: #60738f;
   font-size: 12px;
 }
-.uploadAtmosphere {
-  order: 2;
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 84px;
-  display: grid;
-  align-items: center;
-  padding-block: 6px;
-}
-.signalOrbit,
-.signalWave {
-  display: none;
-}
-.uploadAtmosphereSignals {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.signalChip {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: clamp(10px, 1.2vw, 20px);
-}
-.signalChip > svg {
-  box-sizing: content-box;
-  width: 27px;
-  height: 27px;
-  flex: 0 0 27px;
-  padding: 17px;
-  border-radius: 50%;
-}
-.signalUpload > svg {
-  color: #007d79;
-  background: #def6ed;
-}
-.signalEvidence > svg {
-  color: #6739ed;
-  background: #efe8ff;
-}
-.signalCoaching > svg {
-  color: #ed770b;
-  background: #fff0df;
-}
-.signalCopy {
-  display: grid;
-  gap: 6px;
-}
-.signalCopy strong {
-  color: #10243d;
-  font-size: 16px;
-  font-weight: 750;
-}
-.signalCopy small {
-  color: #60738f;
-  font-size: 12px;
-  line-height: 1.45;
-}
-.signalConnector {
-  color: #93a2b7;
-  font-size: 22px;
-}
-.app[data-stage="upload"][data-selected="true"] .uploadAtmosphere,
 .app[data-stage="upload"][data-selected="true"] .previewHint,
 .app[data-stage="upload"][data-selected="true"] .allowance {
   display: none;
@@ -435,55 +357,9 @@
   font-size: 16px;
   font-weight: 750;
 }
-.app[data-stage="upload"][data-selected="true"] .expect {
-  display: block;
-  min-height: 0;
-  padding: 22px;
-  overflow: auto;
-  border: 1px solid #dce4f0;
-  border-radius: 16px;
-  background: #f8faff;
-}
-.app[data-stage="upload"] .expect h2 {
-  font:
-    750 22px/1.25 var(--font-sans, "Segoe UI"),
-    sans-serif;
-}
-.app[data-stage="upload"] .expect li {
-  padding: 15px 0;
-  gap: 12px;
-  border: 0;
-}
-.app[data-stage="upload"] .expect li > svg {
-  box-sizing: content-box;
-  padding: 12px;
-  flex: 0 0 22px;
-  border-radius: 14px;
-  color: #6739ed;
-  background: #eee8ff;
-}
-.app[data-stage="upload"] .expect li:nth-child(2) > svg {
-  color: #007d79;
-  background: #def6ed;
-}
-.app[data-stage="upload"] .expect li:nth-child(3) > svg {
-  color: #3157d5;
-  background: #e8efff;
-}
-.app[data-stage="upload"] .expect li h3 {
-  font-size: 15px;
-}
-.app[data-stage="upload"] .expect li p,
-.app[data-stage="upload"] .draftNote {
-  font-size: 12px;
-  line-height: 1.5;
-}
 @media (max-width: 1100px) {
   .app[data-stage="upload"][data-selected="true"] .layout {
     grid-template-columns: 1fr;
-  }
-  .app[data-stage="upload"][data-selected="true"] .expect {
-    display: none;
   }
 }
 @media (max-width: 620px) {
@@ -504,29 +380,6 @@
   .app[data-stage="upload"] .formatFacts {
     gap: 8px;
     font-size: 11px;
-  }
-  .uploadAtmosphereSignals {
-    gap: 8px;
-  }
-  .signalChip {
-    flex-direction: column;
-    text-align: center;
-    gap: 10px;
-  }
-  .signalChip > svg {
-    width: 25px;
-    height: 25px;
-    flex-basis: 25px;
-    padding: 14px;
-  }
-  .signalCopy strong {
-    font-size: 12px;
-  }
-  .signalCopy small {
-    font-size: 11px;
-  }
-  .signalConnector {
-    display: none;
   }
   .app[data-stage="upload"][data-selected="true"] .upload {
     padding: 16px;
@@ -565,9 +418,6 @@
   .verifyHeading {
     margin-bottom: 8px;
   }
-  .signalChip > svg {
-    padding: 12px;
-  }
 }
 .app[data-variant="standalone"] {
   min-height: auto;
@@ -587,16 +437,6 @@
 }
 .app[data-variant="standalone"] :global(.studio-intro h1) {
   font-size: clamp(34px, 4vw, 50px);
-}
-.header {
-  justify-content: space-between;
-  gap: 18px;
-}
-.header > :last-child {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
 }
 .layout {
   display: grid;
@@ -649,12 +489,6 @@
   color: var(--muted);
   font-size: 12px;
 }
-.dropHint {
-  margin: 11px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
 .freeBadge {
   display: inline-flex;
   align-items: center;
@@ -702,45 +536,6 @@
 .upload audio {
   width: 100%;
 }
-.expect {
-  padding: 36px;
-  background: var(--surface);
-}
-.expect h2 {
-  font-size: clamp(22px, 2.2vw, 29px);
-  line-height: 1.35;
-  letter-spacing: -0.6px;
-}
-.expect ol {
-  list-style: none;
-  padding: 10px 0;
-  margin: 0;
-}
-.expect li {
-  display: flex;
-  gap: 16px;
-  padding: 22px 0;
-  border-bottom: 1px solid var(--border);
-}
-.expect li > b {
-  color: var(--mint);
-  font-size: 13px;
-  padding-top: 4px;
-}
-.expect h3 {
-  margin: 0 0 7px;
-  font-size: 16px;
-}
-.expect li p,
-.draftNote {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-  margin: 0;
-}
-.draftNote {
-  padding-top: 18px;
-}
 .allowance {
   display: flex;
   justify-content: center;
@@ -755,25 +550,6 @@
 .disabled {
   pointer-events: none;
   opacity: 0.5;
-}
-.providers {
-  list-style: none;
-  padding: 0 !important;
-  display: grid;
-  gap: 14px;
-}
-.providers li {
-  border-left: 2px solid var(--border);
-  padding-left: 12px;
-  font-size: 12px;
-}
-.providers strong,
-.providers span {
-  display: block;
-  margin-bottom: 5px;
-}
-.providers p {
-  margin: 0;
 }
 .processingPanel {
   position: relative;
@@ -797,18 +573,11 @@
   max-width: 960px;
   margin-inline: auto;
 }
-.withBusy .expect {
-  display: none;
-}
 .withBusy .upload {
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
-}
-.uploadProgress {
-  grid-column: 1 / -1;
-  min-height: 0;
 }
 .progressCopy {
   min-width: 0;
@@ -828,116 +597,6 @@
   color: #60738f;
   font-size: 14px;
   line-height: 1.6;
-}
-.progressUpdateMessage {
-  display: grid;
-}
-.progressUpdateMessage > span {
-  grid-area: 1 / 1;
-}
-.progressUpdateMessage > [data-visible="false"] {
-  visibility: hidden;
-}
-.progressRail {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-column: 1 / -1;
-  gap: 12px;
-}
-.progressRail > div {
-  --stage-color: #315cdb;
-  --stage-soft: #e8efff;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 84px;
-  padding: 14px 12px;
-  border: 1px solid #dfe6ee;
-  border-radius: 13px;
-  background: #fafbfd;
-  transition:
-    background-color 240ms,
-    border-color 240ms;
-}
-.progressRail > div:nth-child(2) {
-  --stage-color: #713ee9;
-  --stage-soft: #f0eaff;
-}
-.progressRail > div:nth-child(3) {
-  --stage-color: #dd7108;
-  --stage-soft: #fff0dc;
-}
-.progressRail > div[data-state="running"] {
-  border-color: var(--stage-color);
-  background: var(--stage-soft);
-}
-.progressRail > div[data-state="completed"] {
-  border-color: #b7e5d1;
-  background: #edf9f2;
-}
-.progressRail > div[data-state="uncertain"],
-.progressRail > div[data-state="failed"],
-.progressRail > div[data-state="held"] {
-  border-color: #e7b879;
-  background: #fff5e8;
-}
-.progressRail > div > span {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  border-radius: 10px;
-  color: var(--stage-color);
-  background: var(--stage-soft);
-  font-size: 12px;
-  font-weight: 750;
-}
-.progressRail > div[data-state="running"] > span {
-  color: #fff;
-  background: var(--stage-color);
-}
-.progressRail > div[data-state="completed"] > span {
-  background: #008b69;
-  color: #fff;
-}
-.progressRail p {
-  margin: 0;
-  color: #183148;
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-.progressRail small {
-  display: block;
-  color: #60738f;
-  margin-top: 5px;
-  font-size: 11px;
-  font-weight: 400;
-}
-.progressGuidance {
-  grid-column: 1 / -1;
-  padding-top: 16px;
-  border-top: 1px solid #e3eaf2;
-}
-.progressGuidance :global(.eyebrow) {
-  display: none;
-}
-.progressGuidance ul {
-  margin: 0 0 12px;
-  padding: 0;
-  list-style: none;
-  color: #60738f;
-  font-size: 12px;
-  line-height: 1.55;
-}
-.progressGuidance :global(.secondary-button) {
-  min-height: 42px;
-  margin: 0 8px 0 0;
-  font-size: 12px;
-}
-.coachingCopy {
-  display: none;
 }
 @keyframes badge-pop {
   0% {
@@ -1069,9 +728,6 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--action) 4%, var(--canvas));
 }
-.app :global(.studio-file) .icon-button {
-  flex: 0 0 auto;
-}
 .app :global(.studio-consent) {
   margin-top: 18px;
   padding: 18px 16px 2px;
@@ -1105,9 +761,6 @@
 .uploadActions > :first-child {
   min-width: 0;
 }
-.uploadActions .studio-wide {
-  margin-top: 0;
-}
 .withReport {
   grid-template-columns: 1fr;
 }
@@ -1133,8 +786,7 @@
 .app[data-stage="uploading"] :global(.studio-steps),
 .app[data-stage="processing"] .stepHeader,
 .app[data-stage="uploading"] .stepHeader,
-.app[data-stage="uploading"] :global(.studio-intro),
-.app[data-stage="uploading"] .uploadAtmosphere {
+.app[data-stage="uploading"] :global(.studio-intro) {
   display: none;
 }
 .app[data-stage="processing"] .upload {
@@ -1386,13 +1038,6 @@
 .reportMetadata svg {
   flex: none;
 }
-.reportDraft {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #fff3e4;
-  color: #8a4b12;
-  font-size: 12px;
-}
 .reportMore {
   position: relative;
 }
@@ -1524,22 +1169,6 @@
   color: #183d68;
 }
 
-.reportActionPrimary {
-  border-color: #087e79;
-  background: #087e79;
-  color: #fff;
-}
-
-.reportActionPrimary:hover:not(:disabled) {
-  border-color: #066c67;
-  background: #066c67;
-  color: #fff;
-}
-
-.reportActionSupport {
-  color: #7a4b3f;
-}
-
 .reportActionDanger {
   border-color: #b94336;
   background: #b94336;
@@ -1554,55 +1183,6 @@
 .reportAction:focus-visible {
   outline: 3px solid #aebff6;
   outline-offset: 3px;
-}
-
-.reportDisclosure {
-  margin: 0 0 14px;
-  color: #687b94;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.reportDisclosure > summary {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 6px;
-  color: #536783;
-  font-weight: 650;
-  cursor: pointer;
-  list-style: none;
-}
-
-.reportDisclosure > summary::-webkit-details-marker {
-  display: none;
-}
-
-.reportDisclosure > summary svg {
-  color: #087e79;
-}
-
-.reportDisclosure > summary:focus-visible {
-  border-radius: 6px;
-  outline: 2px solid #aebff6;
-  outline-offset: 2px;
-}
-
-.reportDisclosure[open] {
-  max-width: 78ch;
-  padding: 8px 12px 10px;
-  border: 1px solid #e3eaf3;
-  border-radius: 10px;
-  background: #fbfcfe;
-}
-
-.reportDisclosure > p {
-  margin: 4px 0 0;
-}
-
-.reportDisclosure a {
-  color: #2754bd;
-  text-underline-offset: 2px;
 }
 
 .reportDeleteConfirm {
@@ -1627,11 +1207,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-}
-.loading {
-  display: flex;
-  gap: 10px;
-  align-items: center;
 }
 /* Page problems float as a small card in the corner, never a banner. */
 .error.error:global(.notice) {
@@ -1823,15 +1398,6 @@
     outline: 3px solid #6d7ce0;
     outline-offset: 2px;
   }
-  .app[data-stage="report"] .reportTitle,
-  .app[data-stage="report"] .printLabel {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
   .app[data-variant="standalone"]:not([data-stage="report"])
     :global(.studio-main) {
     padding: 18px 16px 12px;
@@ -1859,9 +1425,6 @@
   .withProcessing .upload {
     padding: 18px;
   }
-  .withProcessing .progressRail {
-    grid-template-columns: 1fr;
-  }
   .app[data-stage="processing"] .withProcessing .upload {
     padding: 12px 12px 10px;
   }
@@ -1872,14 +1435,8 @@
     font-size: 16px;
     line-height: 1.45;
   }
-  .app[data-stage="processing"] .progressRail > div {
-    min-height: 42px;
-  }
   .app[data-stage="uploading"] .withBusy .upload {
     padding: 12px;
-  }
-  .app[data-stage="uploading"] .uploadProgress {
-    padding: 20px;
   }
   .withBusy {
     grid-template-columns: 1fr;
@@ -1899,12 +1456,6 @@
   .layout {
     grid-template-columns: 1fr;
     gap: 16px;
-  }
-  .expect {
-    padding: 24px;
-  }
-  .header {
-    flex-wrap: wrap;
   }
   .claim {
     flex-wrap: wrap;
@@ -1948,10 +1499,6 @@
   .processingPanel {
     grid-template-columns: minmax(104px, 0.34fr) minmax(0, 1fr);
     padding: 22px 18px;
-  }
-  .progressRail > div {
-    min-height: 44px;
-    padding: 7px 9px;
   }
 }
 @keyframes atmosphereBreathe {
@@ -2040,26 +1587,15 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .upload,
-  .audioCue,
-  .uploadCue,
-  .signalChip,
-  .signalOrbit,
-  .signalWave,
-  .uploadAtmosphere::before,
   .dropZone::after {
     transition: none;
     animation: none;
-  }
-  .progressRail > div[data-state="running"]::after {
-    animation: none;
-    transform: none;
   }
   .freeBadge span {
     animation: none;
   }
 }
 @media print {
-  .header,
   .layout,
   .claim,
   .error,
@@ -2085,9 +1621,7 @@
   align-items: start;
   gap: 16px;
 }
-.app[data-stage="upload"][data-selected="false"] .upload,
-.startGuide,
-.overviewCard {
+.app[data-stage="upload"][data-selected="false"] .upload {
   border: 1px solid #dbe5f6;
   border-radius: 14px;
   background: #fff;
@@ -2171,153 +1705,9 @@
 .app[data-stage="upload"][data-selected="false"] .allowance {
   display: none;
 }
-.startGuide {
-  min-width: 0;
-  padding: 20px 18px;
-}
-.startGuideHeading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #e2eaf7;
-  color: #6351cf;
-}
-.startGuideHeading h2 {
-  margin: 0;
-  color: #14233c;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-.startGuide ol {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.startGuide li {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 10px;
-  padding: 13px 0;
-  border-bottom: 1px solid #e2eaf7;
-}
-.startGuide li > span {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  border: 1px solid #b9d3e4;
-  border-radius: 50%;
-  color: #087d78;
-  font-size: 12px;
-  font-weight: 800;
-}
-.startGuide li strong {
-  color: #14233c;
-  font-size: 13px;
-}
-.startGuide li p {
-  margin: 2px 0 0;
-  color: #617592;
-  font-size: 11px;
-  line-height: 1.45;
-}
-.startGuideHelp {
-  margin-top: 15px;
-  padding: 14px;
-  border: 1px solid #cae7e2;
-  border-radius: 11px;
-  background: linear-gradient(125deg, #edfcf8, #f6fbff);
-}
-.startGuideHelp h3 {
-  margin: 0;
-  color: #14233c;
-  font-size: 15px;
-}
-.startGuideHelp p {
-  margin: 4px 0 10px;
-  color: #526985;
-  font-size: 11px;
-  line-height: 1.45;
-}
-.startGuideHelp a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  color: #007d79;
-  font-size: 12px;
-  font-weight: 750;
-  text-decoration: none;
-}
-.startGuideHelp a:hover {
-  text-decoration: underline;
-}
-.startGuideHelp a:focus-visible,
-.overviewCard:focus-visible {
-  outline: 3px solid #aebff6;
-  outline-offset: 3px;
-}
-.overviewCards {
-  flex: 0 0 auto;
-  order: 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-.overviewCard {
-  display: flex;
-  min-width: 0;
-  min-height: 105px;
-  align-items: flex-start;
-  gap: 13px;
-  padding: 18px;
-  color: inherit;
-  text-decoration: none;
-}
-a.overviewCard:hover {
-  border-color: #96cdc9;
-  background: #fcfffe;
-}
-.overviewIcon {
-  display: grid;
-  flex: 0 0 35px;
-  width: 35px;
-  height: 35px;
-  place-items: center;
-  border-radius: 10px;
-  background: #e9faf6;
-  color: #00877f;
-}
-.overviewCard > span:nth-child(2) {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.overviewCard strong {
-  color: #14233c;
-  font-size: 15px;
-  line-height: 1.3;
-}
-.overviewCard small {
-  color: #617592;
-  font-size: 12px;
-  line-height: 1.45;
-}
-.overviewCard > svg:last-child {
-  flex: 0 0 18px;
-  margin-left: auto;
-  color: #00877f;
-}
 @media (max-width: 760px) {
   .app[data-stage="upload"][data-selected="false"] .layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .startGuide {
-    padding: 18px;
   }
 }
 @media (max-width: 620px) {
@@ -2332,9 +1722,6 @@ a.overviewCard:hover {
   }
   .app[data-stage="upload"][data-selected="false"] .dropZone {
     min-height: 240px;
-  }
-  .overviewCards {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -2354,37 +1741,6 @@ a.overviewCard:hover {
 .app[data-stage="processing"] .processingPanel,
 .app[data-stage="uploading"] .processingPanel {
   margin: 0;
-}
-.progressGuidance > div > p {
-  margin: 10px 0;
-  color: #60738f;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.progressActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.progressActions :global(.secondary-button) {
-  margin: 0;
-}
-.progressActions > button:last-child:not(:first-child) {
-  border-color: #007d79;
-  color: #007d79;
-}
-.resumeNotice {
-  margin: 8px 0 0;
-  color: #60738f;
-  font-size: 11px;
-  line-height: 1.45;
-}
-.progressGuidance li:empty {
-  display: none;
-}
-.progressGuidance a,
-.progressGuidance button {
-  white-space: normal;
 }
 .app[data-stage="processing"] :global(.studio-consent) h3 {
   margin: 0 0 8px;
@@ -2417,47 +1773,6 @@ a.overviewCard:hover {
     font-size: 13px;
     line-height: 1.5;
   }
-  .app[data-stage="processing"] .progressRail,
-  .app[data-stage="uploading"] .progressRail {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-  }
-  .app[data-stage="processing"] .progressRail > div,
-  .app[data-stage="uploading"] .progressRail > div {
-    min-height: 94px;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 7px;
-    padding: 10px 3px;
-    text-align: center;
-  }
-  .progressRail p {
-    font-size: 11px;
-  }
-  .progressRail small {
-    display: block;
-    margin: 4px 0 0;
-    font-size: 10px;
-  }
-  .progressGuidance {
-    padding-top: 12px;
-  }
-  .progressGuidance ul {
-    margin-bottom: 8px;
-    font-size: 12px;
-  }
-  .progressGuidance :global(.secondary-button) {
-    min-height: 44px;
-    margin: 0;
-    padding: 8px 10px;
-  }
-  .progressActions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .progressActions > :last-child:nth-child(3) {
-    grid-column: 1 / -1;
-  }
 }
 @media (max-height: 720px) and (min-width: 621px) {
   .app[data-stage="processing"] :global(.studio-main),
@@ -2474,10 +1789,6 @@ a.overviewCard:hover {
   .processingPanel > :first-child {
     width: 112px;
     height: 112px;
-  }
-  .progressRail > div {
-    min-height: 68px;
-    padding: 10px;
   }
 }
 @media (max-width: 620px) and (max-height: 720px) {
@@ -2529,13 +1840,6 @@ a.overviewCard:hover {
   .app[data-stage="processing"] .callActions {
     margin-top: 6px;
   }
-  .app[data-stage="processing"] .progressGuidance {
-    padding-top: 8px;
-  }
-  .app[data-stage="processing"] .progressRail > div {
-    gap: 5px;
-    padding-block: 8px;
-  }
   .progressCopy h3 {
     font-size: 21px;
   }
@@ -2544,14 +1848,6 @@ a.overviewCard:hover {
   }
   .processingPanel[data-paused="true"] > :first-child {
     display: none;
-  }
-  .progressGuidance ul {
-    margin-bottom: 4px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .progressRail > div {
-    transition: none;
   }
 }
 
@@ -2987,7 +2283,6 @@ a.overviewCard:hover {
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
-.app[data-stage="upload"][data-theme="dark"] .uploadCue,
 .app[data-stage="upload"][data-theme="dark"] .dropSelect {
   color: var(--lx-teal);
 }
@@ -3026,22 +2321,6 @@ a.overviewCard:hover {
   :global(.studio-wide) {
   background: var(--lx-teal);
   color: var(--lx-on-teal);
-}
-.app[data-stage="upload"][data-theme="dark"][data-selected="true"] .expect {
-  border-color: var(--lx-line);
-  background: var(--lx-sunken);
-}
-.app[data-stage="upload"][data-theme="dark"] .expect li > svg {
-  background: var(--lx-missed-soft);
-  color: var(--lx-missed);
-}
-.app[data-stage="upload"][data-theme="dark"] .expect li:nth-child(2) > svg {
-  background: var(--lx-teal-soft);
-  color: var(--lx-teal);
-}
-.app[data-stage="upload"][data-theme="dark"] .expect li:nth-child(3) > svg {
-  background: var(--lx-closing-soft);
-  color: var(--lx-closing);
 }
 .app[data-stage="upload"][data-theme="dark"] .stepNumber {
   background: var(--lx-closing-soft);
@@ -3373,116 +2652,6 @@ a.overviewCard:hover {
 }
 
 /* Uploading: the same calm composition as processing. */
-.app.app[data-stage="uploading"] .uploadProgress {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: none;
-  grid-auto-flow: row;
-  justify-items: center;
-  align-content: center;
-  gap: 0;
-  width: 100%;
-  min-height: calc(100dvh - var(--lx-topbar-h, 64px) - 150px);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--lx-ink);
-  text-align: center;
-}
-.app.app[data-stage="uploading"] .uploadProgress > * {
-  grid-area: auto;
-  grid-column: 1;
-}
-.app.app[data-stage="uploading"] .uploadProgress > :first-child {
-  width: min(100%, 1040px);
-  height: auto;
-  margin: clamp(22px, 4vh, 44px) 0 clamp(18px, 3vh, 32px);
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressCopy {
-  order: -1;
-  width: min(100%, 720px);
-  animation: progress-sheet-in var(--lx-dur-reveal) var(--lx-ease-move) both;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressCopy h3 {
-  margin: 0 0 8px;
-  color: var(--lx-ink);
-  font: 800 clamp(28px, 2.7vw, 42px) / 1.08 var(--lx-font-display);
-  letter-spacing: -0.035em;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressCopy > p:last-child {
-  max-width: 58ch;
-  margin: 0 auto;
-  color: var(--lx-muted);
-  font-size: 15px;
-  line-height: 1.55;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  width: min(100%, 720px);
-  margin: 0;
-  text-align: left;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail > div {
-  position: relative;
-  display: block;
-  min-width: 0;
-  padding: 14px 0 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail > div::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--lx-line);
-}
-.app.app[data-stage="uploading"]
-  .uploadProgress
-  .progressRail
-  > div[data-state="running"]::before {
-  background: linear-gradient(
-    90deg,
-    var(--lx-teal) 0%,
-    color-mix(in srgb, var(--lx-teal) 30%, var(--lx-line)) 50%,
-    var(--lx-teal) 100%
-  );
-  background-size: 200% 100%;
-  animation: progress-flow 1.6s linear infinite;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail span {
-  display: none;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail p {
-  margin: 0;
-  color: var(--lx-ink);
-  font-size: 13.5px;
-  font-weight: 650;
-  line-height: 1.3;
-}
-.app.app[data-stage="uploading"] .uploadProgress .progressRail small {
-  display: block;
-  margin-top: 2px;
-  color: var(--lx-muted-2);
-  font-size: 12px;
-  font-weight: 500;
-}
-.app.app[data-stage="uploading"]
-  .uploadProgress
-  .progressRail
-  > div[data-state="running"]
-  small {
-  color: var(--lx-teal);
-}
 @keyframes progress-sheet-in {
   from {
     opacity: 0;
@@ -3495,15 +2664,6 @@ a.overviewCard:hover {
   }
   to {
     background-position: -100% 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .app.app[data-stage="uploading"] .uploadProgress .progressCopy,
-  .app.app[data-stage="uploading"]
-    .uploadProgress
-    .progressRail
-    > div[data-state="running"]::before {
-    animation: none;
   }
 }
 
@@ -3802,14 +2962,6 @@ a.overviewCard:hover {
   color: var(--lx-muted);
   font-size: 13px;
 }
-.app.app[data-stage="report"] .reportDraft {
-  padding: 3px 9px;
-  border-radius: var(--lx-radius-pill);
-  background: var(--lx-warning-soft);
-  color: var(--lx-warning);
-  font-size: 12px;
-  font-weight: 650;
-}
 .app.app[data-stage="report"] .reportActions {
   gap: 8px;
 }
@@ -4012,9 +3164,6 @@ a.overviewCard:hover {
 }
 .app.app[data-stage="report"] .reportMetadata {
   margin-top: 6px;
-}
-.app.app[data-stage="report"] .reportDisclosure {
-  margin-top: 2px;
 }
 
 /* Report header: title · call map · menu on one calm row. */
