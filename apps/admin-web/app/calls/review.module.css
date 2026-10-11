@@ -709,6 +709,31 @@
   font-weight: 600;
 }
 
+.compareBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.compareBar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Words one compared run has and the other doesn't. */
+.diff {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--sx-warn) 22%, transparent);
+  color: inherit;
+}
+
 .compare tr[data-changed] td {
   background: color-mix(in oklab, var(--sx-warn) 6%, transparent);
 }

@@ -11,7 +11,7 @@ import {
   when,
 } from "./call-data";
 import { filterQuery, queueApiPath, queueFilters } from "./queue-query";
-import { startAt } from "./review-logic";
+import { startAt, wordDiff } from "./review-logic";
 import { reportPillars, REPORT_PILLARS } from "./report-pillars";
 import {
   compareReports,
@@ -407,5 +407,33 @@ describe("shared moment", () => {
     expect(startAt("1.5")).toBeNull();
     expect(startAt("99999999")).toBeNull();
     expect(startAt("12abc")).toBeNull();
+  });
+});
+
+describe("compared runs", () => {
+  it("marks the words each side has that the other lacks, Devanagari too", () => {
+    const diff = wordDiff(
+      "Buyer has not committed to a meeting",
+      "Buyer has committed to a dated meeting",
+    )!;
+    expect(diff.left).toEqual([
+      { text: "Buyer has ", changed: false },
+      { text: "not ", changed: true },
+      { text: "committed to a meeting", changed: false },
+    ]);
+    expect(diff.right.filter((part) => part.changed)).toEqual([
+      { text: "dated ", changed: true },
+    ]);
+    const hindi = wordDiff("कितने का पड़ेगा?", "कितने का होगा?")!;
+    expect(hindi.left.filter((part) => part.changed)[0]!.text).toBe("पड़ेगा?");
+    // The words always add back up to the original text.
+    expect(diff.right.map((part) => part.text).join("")).toBe(
+      "Buyer has committed to a dated meeting",
+    );
+  });
+
+  it("gives up on very long texts instead of slowing the screen", () => {
+    expect(wordDiff("a b c", "a b d", 10)).toBeNull();
+    expect(wordDiff("", "")).toEqual({ left: [], right: [] });
   });
 });

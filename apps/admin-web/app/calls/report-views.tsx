@@ -7,7 +7,7 @@
  */
 import Link from "next/link";
 import { Play } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Badge } from "../ui/kit";
 import { DEVANAGARI } from "../lib/script";
@@ -28,7 +28,7 @@ import {
   type ReportPillar,
 } from "./report-pillars";
 import { FailedSteps } from "./failed-steps";
-import { compareReports } from "./review-logic";
+import { compareReports, wordDiff, type DiffPart } from "./review-logic";
 import styles from "./review.module.css";
 
 type OnEvidence = (evidence: Evidence) => void;
@@ -517,6 +517,23 @@ export function Metrics({
   );
 }
 
+/** One side of a compared field, with the words the other side lacks marked. */
+function Marked({ parts }: { parts: DiffPart[] }) {
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.changed ? (
+          <mark key={index} className={styles.diff}>
+            {part.text}
+          </mark>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 /** Every analysis of this call; open one, or compare two side by side. */
 export function Runs({
   call,
@@ -531,9 +548,11 @@ export function Runs({
   compareBundle: Bundle | null;
   baseHref: (query: Record<string, string | null>) => string;
 }) {
+  const [onlyChanged, setOnlyChanged] = useState(false);
   const rows = compareBundle
     ? compareReports(current.report, compareBundle.report)
     : [];
+  const changed = rows.filter((row) => !row.same).length;
   return (
     <div className={styles.reading}>
       {call.failedJobs.length ? (
@@ -602,27 +621,52 @@ export function Runs({
         })}
       </ul>
       {compareBundle ? (
-        <table className={styles.compare} aria-label="Run comparison">
-          <thead>
-            <tr>
-              <th scope="col">Field</th>
-              <th scope="col">Open run</th>
-              <th scope="col">Compared run</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.label} data-changed={row.same ? undefined : ""}>
-                <th scope="row">
-                  {row.label}
-                  {row.same ? null : <Badge tone="warn">Changed</Badge>}
-                </th>
-                <td>{row.left}</td>
-                <td>{row.right}</td>
+        <>
+          <div className={styles.compareBar}>
+            <span role="status">
+              {changed} of {rows.length} fields changed
+            </span>
+            <label>
+              <input
+                type="checkbox"
+                checked={onlyChanged}
+                onChange={(event) => setOnlyChanged(event.target.checked)}
+              />
+              Only changed fields
+            </label>
+          </div>
+          <table className={styles.compare} aria-label="Run comparison">
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Open run</th>
+                <th scope="col">Compared run</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows
+                .filter((row) => !onlyChanged || !row.same)
+                .map((row) => {
+                  const diff = row.same ? null : wordDiff(row.left, row.right);
+                  return (
+                    <tr
+                      key={row.label}
+                      data-changed={row.same ? undefined : ""}
+                    >
+                      <th scope="row">
+                        {row.label}
+                        {row.same ? null : <Badge tone="warn">Changed</Badge>}
+                      </th>
+                      <td>{diff ? <Marked parts={diff.left} /> : row.left}</td>
+                      <td>
+                        {diff ? <Marked parts={diff.right} /> : row.right}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </>
       ) : compare ? (
         <p className={styles.gap}>
           The compared run&rsquo;s report couldn&rsquo;t be loaded.

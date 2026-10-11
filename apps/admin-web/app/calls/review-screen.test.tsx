@@ -308,3 +308,41 @@ it("shows talk share as one bar, named by role, with the numbers beside it", asy
       ?.getAttribute("aria-label"),
   ).toBe("Talk share: Rep 67%, Prospect 33%");
 });
+
+it("compares two runs word by word and can show only what changed", async () => {
+  const older = normalizeBundle({
+    run_id: "run-0",
+    report: {
+      summary: "Opened coldly; no dated next step.",
+      verdict: "Follow-up without a date.",
+    },
+    transcript: { segments: [] },
+  });
+  await act(async () =>
+    root.render(
+      <ReviewScreen
+        call={call}
+        bundle={bundle}
+        compare="run-0"
+        compareBundle={older}
+        back=""
+        neighbours={{ previous: null, next: null }}
+      />,
+    ),
+  );
+  const table = host.querySelector('[aria-label="Run comparison"]')!;
+  expect(
+    [...table.querySelectorAll("mark")].map((mark) => mark.textContent),
+  ).toEqual(["warmly; ", "coldly; "]);
+  expect(host.textContent).toMatch(/\d+ of \d+ fields changed/);
+  const rowsBefore = table.querySelectorAll("tbody tr").length;
+  const only = [...host.querySelectorAll("label")]
+    .find((label) => label.textContent?.includes("Only changed fields"))!
+    .querySelector("input")!;
+  await act(async () => only.click());
+  const rowsAfter = table.querySelectorAll("tbody tr");
+  expect(rowsAfter.length).toBeLessThan(rowsBefore);
+  expect([...rowsAfter].every((row) => row.hasAttribute("data-changed"))).toBe(
+    true,
+  );
+});
