@@ -164,8 +164,8 @@ export function ProspectsListView() {
           <div>
             <h1 className={styles.title}>Prospects</h1>
             <p className={styles.summary}>
-              Everyone you're selling to, their main problem and what happens
-              next.
+              Everyone you&apos;re selling to, their main problem and what
+              happens next.
               {current && !visibleError && total > 0
                 ? ` (${total} recorded)`
                 : ""}
