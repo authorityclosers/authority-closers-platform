@@ -166,11 +166,11 @@
         "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
+        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -183,7 +183,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "strength": {
@@ -405,11 +406,11 @@
         "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
+        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -422,7 +423,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "recommended_media": null,
