@@ -229,7 +229,8 @@ def install_coaching_http(application: FastAPI, ctx: RouteContext) -> None:
                 else None
             )
             view = fictional or await library.read_call(actor, submission_id, call_cache)
-            view = await with_media(view)
+            # A fictional call is a sandbox rep's, read by the person who imported it.
+            view = await with_media(view, their=fictional is not None)
             return CallCoachingView.model_validate(
                 view.model_copy(update={"session_id": actor.session_id})
             )

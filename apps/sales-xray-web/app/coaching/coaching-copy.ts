@@ -107,6 +107,14 @@ export const THEIR_PILLARS: Record<CoachingPillarId, CoachingPillarCopy> = {
   },
 };
 
+/** A fictional AC Sandbox rep's call, read by the person who imported it. */
+export const THEIR_CALL_PILLARS: typeof CALL_PILLARS = {
+  focus: { ...CALL_PILLARS.focus, label: THEIR_PILLARS.focus.label },
+  why: CALL_PILLARS.why,
+  better: THEIR_PILLARS.better,
+  next: THEIR_PILLARS.next,
+};
+
 export const FOCUS = {
   current: "Current focus",
   status: "Status",
@@ -384,6 +392,7 @@ export const THEIR = {
   strength: "Their strength",
   strengthAcross:
     "From their latest call. One call doesn’t prove a strength yet.",
+  strengthCall: "They already did this on the call.",
   strengthKeep: "Keep it while they practise the mission.",
   mission: "Their next-call mission",
   recommended: "Recommended for their current focus",
@@ -401,6 +410,8 @@ export const THEIR = {
   laterFallback: "Their future calls will guide this",
   recentCalls: "Their recent calls",
   callFallback: "One practice for their next call",
+  oneCall: (name: string | null) =>
+    `One call gives a suggestion, not a pattern. ${name ? `${name}’s` : "Their"} coaching follows all their calls.`,
   gapLine: (gap: string) => THEIR_GAP_LINES[gap] ?? gapCopy(gap).line,
 } as const;
 

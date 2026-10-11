@@ -127,6 +127,9 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                 assert body["state"] == "ready" and body["person_id"] == str(owner)
                 assert body["mission"]["origin_submission_id"] == str(newest)
                 assert not any(moment["playable"] for moment in body["evidence"])
+                # A fictional rep's lessons are "the skill they're working on" (call and rep).
+                for clips in (body["media_clips"], view["media_clips"]):
+                    assert clips and "they’re working on" in clips[0]["reason"]
                 # The dev loader's real call and member ids open the same authored coaching.
                 loaded = loaded_uuid(tenant, "submission", "syn-fixture-J03-C-01")
                 loaded_rep = loaded_uuid(tenant, "person", "syn-fixture-R1")

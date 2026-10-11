@@ -192,6 +192,14 @@ describe("Coaching story", () => {
       />,
     );
     expect(withRep).toContain("Rohan Kendrekar’s coaching across calls");
+    // A fictional rep's call says "their"; the importer's own calls say "your".
+    expect(withRep).toContain("What They Should Work On Now");
+    expect(withRep).toContain("Their next-call mission");
+    expect(withRep).toContain(
+      "Rohan Kendrekar’s coaching follows all their calls.",
+    );
+    expect(withRep).not.toContain("My coaching follows all your calls");
+    expect(withRep).not.toContain("On your next call");
     expect(withRep).toContain(
       "/coaching?person=00000000-0000-4000-8000-0000000000aa",
     );

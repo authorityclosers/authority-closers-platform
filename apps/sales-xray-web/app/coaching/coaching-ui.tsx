@@ -266,7 +266,9 @@ export function LessonPanel({
               ? they
                 ? THEIR.strengthAcross
                 : BETTER.strengthAcross
-              : BETTER.strengthCall}{" "}
+              : they
+                ? THEIR.strengthCall
+                : BETTER.strengthCall}{" "}
             {they ? THEIR.strengthKeep : BETTER.strengthKeep}
           </p>
         </StoryCard>
