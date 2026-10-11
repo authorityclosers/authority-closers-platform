@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from ac_platform.audit.service import verify_audit_chain
 from ac_platform.coaching.report_adapter import from_report
+from ac_platform.coaching.sandbox import SandboxCoaching, call_uuid, rep_uuid
 from ac_platform.conversation_intelligence.acquisition_library import account_library
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
@@ -144,6 +145,26 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                     comparison_key=f"unlinked:{submission}",
                 )
                 assert coaching is not None
+                sandbox = SandboxCoaching(db, module.TARGET)
+                assert await sandbox.flagged()
+                team = await sandbox.read_team(owner.person_id)
+                assert team.scope == "sandbox" and team.sandbox
+                assert (team.analysed_calls, team.rep_count) == (1, 1)
+                assert team.reps[0].name == "Synthetic Rep 1"
+                assert team.reps[0].focus_label == source.coaching["current_focus"]["label"]
+                rep_id = rep_uuid(module.TARGET, source.metadata["rep_id"])
+                rep = await sandbox.read_rep(owner.person_id, rep_id)
+                assert rep is not None and rep.state == "ready" and rep.analysed_calls == 1
+                authored_call_id = call_uuid(module.TARGET, source.metadata["call_id"])
+                call = await sandbox.read_call(owner.person_id, authored_call_id)
+                assert call is not None and call.state == "ready"
+                assert call.mission.behavior == source.coaching["action"]["mission"]["behaviour"]
+                assert call.lesson.own_call.quote == source.transcript["lines"][0]["text"]
+                assert not any(moment.playable for moment in call.evidence)
+                other_viewer = uuid4()
+                assert (await sandbox.read_team(other_viewer)).analysed_calls == 0
+                assert await sandbox.read_rep(other_viewer, rep_id) is None
+                assert await sandbox.read_call(other_viewer, authored_call_id) is None
                 assert (
                     await db.scalar(
                         select(func.sum(ConversationAcquisitionSettlement.charged_seconds))

@@ -47,8 +47,11 @@ Hosted acceptance is complete only after these reads succeed on dev.
 
 The focused PostgreSQL acceptance test exercises normal library/report/progress
 reads, two concurrent imports, exact history replay, changed-content refusal,
-atomic rollback, the audit chain and zero-charge accounting. Run only these
-loader checks with the existing test database injection:
+atomic rollback, the audit chain and zero-charge accounting. It also reads the
+preserved authored Team, representative and call Coaching, checks the exact
+mission and transcript quote, refuses another viewer's private coaching and
+keeps text-only moments nonplayable. Run only these loader checks with the
+existing test database injection:
 
 ```sh
 ac-heavy uv run pytest \

@@ -24,11 +24,20 @@ def authored_bundle():
     data["metadata"]["rep_id"] = "syn-fixture-R1"
     data["transcript"]["rep_id"] = "syn-fixture-R1"
     data["answer_key"]["rep_id"] = "syn-fixture-R1"
-    data["transcript"]["participants"][0]["person_id"] = "syn-fixture-R1"
+    data["transcript"]["participants"][0].update(
+        person_id="syn-fixture-R1", name="Synthetic Rep 1", speaker="rep"
+    )
     line = data["transcript"]["lines"][0]
     line.update(person_id="syn-fixture-R1", speaker="rep")
     data["transcript"]["timing_source"] = "estimated"
-    evidence = {"line_ids": [line["line_id"]], "quote": line["text"]}
+    evidence = {
+        "line_ids": [line["line_id"]],
+        "quote": line["text"],
+        "start_ms": line["start_ms"],
+        "end_ms": line["end_ms"],
+        "playable": False,
+        "timing_source": "estimated",
+    }
     positive = {
         "action": "Asked for context",
         "why_it_helped": "The buyer gave context.",
@@ -53,9 +62,21 @@ def authored_bundle():
         ],
     )
     data["coaching"].update(
-        current_focus={"label": "Agree a date"},
+        current_focus={"label": "Agree a date", "skill_id": "skill-7"},
         diagnosis={"playable_moments": [evidence]},
-        teaching={"text_lesson": {"quick_idea": "Ask which date works."}},
+        teaching={
+            "text_lesson": {
+                "quick_idea": "Ask which date works.",
+                "own_call_example": evidence,
+            }
+        },
+        action={
+            "mission": {
+                "behaviour": "Ask which date works.",
+                "done_when": "The buyer confirms a date.",
+            },
+            "practice": {"exercise": "Rehearse asking for a date."},
+        },
     )
     data["answer_key"]["report"] = {k: v for k, v in data["report"].items() if k != "call_id"}
     data["answer_key"]["per_call_coaching"] = {
