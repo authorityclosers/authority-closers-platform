@@ -72,6 +72,50 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it.each(["summary_evidence", "verdict_evidence", "overview", "story"])(
+    "opens older reports with null %s as an honest absent optional field",
+    (field) => {
+      const parsed = parseJobResponse(
+        job({ ...validReport(), [field]: null }),
+        { ...binding, transcript: parseTranscript(transcript, sourceSha256) },
+      );
+      expect(parsed.report).toEqual(validReport());
+      expect(Object.hasOwn(parsed.report!, field)).toBe(false);
+    },
+  );
+
+  it("normalizes nullable dimension metadata without assigning a skill state", () => {
+    const report = validReport();
+    const parsed = parseJobResponse(
+      job({
+        ...report,
+        dimensions: report.dimensions.map((dimension) => ({
+          ...dimension,
+          evidence: null,
+          call_state: null,
+        })),
+      }),
+      binding,
+    );
+    expect(parsed.report).toEqual(report);
+    expect(
+      parsed.report?.dimensions.every((d) => !Object.hasOwn(d, "call_state")),
+    ).toBe(true);
+  });
+
+  it("still requires literal evidence for a positive call state beside null metadata", () => {
+    const report = validReport();
+    const dimensions = report.dimensions.map((dimension) => ({
+      ...dimension,
+      status: "observed",
+      evidence: null,
+      call_state: "strongly_demonstrated",
+    }));
+    expect(() =>
+      parseJobResponse(job({ ...report, dimensions }), binding),
+    ).toThrow("report_call_state_invalid");
+  });
+
   it.each(["summary_evidence", "verdict_evidence"] as const)(
     "accepts 1–3 source-bound %s refs and leaves legacy reports unchanged",
     (field) => {
@@ -100,7 +144,6 @@ describe("CallStudio report contract", () => {
       for (const refs of [
         [],
         Array(4).fill(evidence),
-        null,
         [{ ...evidence, start_ms: -1 }],
         [{ ...evidence, end_ms: binding.durationMs + 1 }],
         [{ ...evidence, segment_id: "missing" }],
@@ -141,6 +184,25 @@ describe("CallStudio report contract", () => {
     expect(() => parseJobResponse(job(report), source)).toThrow(
       "report_dimension_0_evidence_required",
     );
+  });
+
+  it("does not default required content or source pins alongside null optional metadata", () => {
+    const report = {
+      ...validReport(),
+      summary_evidence: null,
+      verdict_evidence: null,
+      story: null,
+    };
+    for (const field of [
+      "summary",
+      "verdict",
+      "source_sha256",
+      "transcript_revision",
+    ]) {
+      expect(() =>
+        parseJobResponse(job({ ...report, [field]: null }), binding),
+      ).toThrow(ReportContractError);
+    }
   });
 
   it("accepts a v7 conflicted dimension with cited transcript evidence", () => {

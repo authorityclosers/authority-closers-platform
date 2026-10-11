@@ -168,6 +168,44 @@ it("loads a finished saved call in one status read plus parallel source-verified
   });
 });
 
+it("opens a completed older report with nullable optional metadata and keeps source fences", async () => {
+  const report = {
+    ...envelope,
+    report: {
+      ...envelope.report,
+      content: {
+        ...envelope.report.content,
+        summary_evidence: null,
+        verdict_evidence: null,
+        overview: null,
+        story: null,
+        dimensions: envelope.report.content.dimensions.map((dimension) => ({
+          ...dimension,
+          evidence: null,
+          call_state: null,
+        })),
+      },
+    },
+  };
+  const view = await preloadSavedReport(submissionId, read({ report }));
+  expect(view.state).toBe("ready");
+  if (view.state === "ready") {
+    expect(view.result.report.story).toBeUndefined();
+    expect(view.result.report.summary_evidence).toBeUndefined();
+    expect(
+      view.result.report.dimensions.every((d) => d.call_state === undefined),
+    ).toBe(true);
+  }
+  expect(
+    (
+      await preloadSavedReport(
+        submissionId,
+        read({ report: { ...report, transcript_revision: "stale" } }),
+      )
+    ).state,
+  ).toBe("unavailable");
+});
+
 it("keeps queued/working calls in their canonical state without requesting nonexistent output", async () => {
   const queued = { ...progress, state: "queued", local_state: "queued" };
   const port = read({ [submissionId]: queued });

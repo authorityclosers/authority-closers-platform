@@ -381,8 +381,10 @@ function parseDimensions(
     );
     if (!DIMENSION_STATES.has(status))
       throw new ReportContractError(`report_dimension_${index}_status_invalid`);
+    // Canonical optional metadata may be absent or explicitly null on older
+    // serializers. Neither supplies evidence or establishes a call state.
     const evidence =
-      dimension.evidence === undefined
+      dimension.evidence === undefined || dimension.evidence === null
         ? undefined
         : array(
             dimension.evidence,
@@ -444,7 +446,7 @@ function parseDimensions(
         ),
       ),
     };
-    if (dimension.call_state !== undefined) {
+    if (dimension.call_state !== undefined && dimension.call_state !== null) {
       const state = text(dimension.call_state, "report_call_state", 32);
       if (
         ![
@@ -680,7 +682,7 @@ function parseReport(
     ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
-  if (report.story !== undefined) {
+  if (report.story !== undefined && report.story !== null) {
     if (!binding.transcript)
       throw new ReportContractError("report_story_source_required");
     try {
@@ -690,7 +692,7 @@ function parseReport(
     }
   }
   for (const field of ["summary_evidence", "verdict_evidence"] as const) {
-    if (Object.hasOwn(report, field)) {
+    if (Object.hasOwn(report, field) && report[field] !== null) {
       parsed[field] = array(report[field], `report_${field}`, 1, 3).map(
         (entry, index) =>
           parseEvidence(
