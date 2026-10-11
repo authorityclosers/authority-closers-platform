@@ -61,6 +61,7 @@
   gap: 8px;
 }
 .cornerError {
+  box-sizing: border-box;
   position: fixed;
   right: 16px;
   bottom: 24px;
@@ -76,6 +77,14 @@
   background: var(--lx-surface);
   box-shadow: var(--lx-shadow-md);
   font-size: 13px;
+}
+.cornerError > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cornerError button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .section {
   background: var(--lx-surface);

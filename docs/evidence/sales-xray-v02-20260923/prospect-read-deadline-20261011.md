@@ -49,3 +49,9 @@ access for the same already-loaded profile retains that view's data. The
 corrected runner unmounts the profile through the list before stalling a fresh
 profile GET. The partial attempt is preserved separately and is not a complete
 browser pass. Final committed-source verification remains required.
+
+Inspection of those partial desktop screenshots also found that Try again
+wrapped and the corner card's maximum width excluded padding. The existing
+owned Prospect corner-card style now includes padding in its width, lets the
+message wrap and keeps its action on one line. The browser proof checks actual
+card insets/width and non-wrapping action text at both viewports and themes.

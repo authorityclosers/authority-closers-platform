@@ -115,6 +115,17 @@ def main():
                         expect(populated).to_have_count(0)
                         assert state["reads"] == before + 1, "No automatic retry."
                         retry = corner.get_by_role("button", name="Try again", exact=True)
+                        assert corner.evaluate(
+                            "el => { const r = el.getBoundingClientRect(); "
+                            "return r.left >= 15 && r.right <= innerWidth - 15 "
+                            "&& r.width <= Math.min(360, innerWidth - 32) + 1; }"
+                        )
+                        assert retry.evaluate(
+                            "el => { const text = [...el.childNodes].find(n => "
+                            "n.nodeType === Node.TEXT_NODE && n.textContent.includes('Try again')); "
+                            "if (!text) return false; const range = document.createRange(); "
+                            "range.selectNodeContents(text); return range.getClientRects().length === 1; }"
+                        )
                         if width == 390:
                             assert retry.evaluate("el => el.getBoundingClientRect().height >= 44")
                         shot(f"prospect-timeout-{kind}", theme)
@@ -139,6 +150,7 @@ def main():
                                 "loading_cleared": True,
                                 "explicit_retry_restores_populated_data": True,
                                 "no_automatic_retry": True,
+                                "corner_card_insets_and_single_line_retry": True,
                                 "no_overflow": True,
                             }
                         )
