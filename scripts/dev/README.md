@@ -60,3 +60,43 @@ The 3,360 full calls have authored transcripts and reports. The 177,615 historic
 summaries remain summaries and appear in Insights; they are not completed report
 records. The seven verified audio examples use the separate existing media import
 path. Loading authored text alone does not make playback available.
+
+## Owner's Drive recordings on dev
+
+`import-sales-xray-drive.py` runs the existing ordinary recording importer with
+the exact live-dev Host and Origin. It refuses other destinations, redirects and
+requests outside acquisition routes. The existing session, current member checks,
+recording rights, plan acceptance, source replay and progress handling still apply.
+Inject `AC_RECORDING_IMPORT_COOKIE` from a current **dev** AC organisation session;
+never put it in an argument or receipt. Confirm Swamini, Ankita and the owner's
+member IDs using `--preview` before applying.
+
+The original 89-file manifest stays at
+`/home/acdev/imports/drive-calls-20261011/manifest.json`. Four oversized WAVs have
+complete lossless FLAC copies in `drive-calls-20261011-compressed`; their original
+and derived hashes and decoded-PCM equality are in `PREPARATION-RECEIPT.json`.
+The complete 3,628.14-second recording remains over the native one-hour limit.
+The private `dev-ready-88-manifest.json` in that folder includes the other 88
+complete recordings so the long call can remain held while they advance.
+Per-call native checks still verify actual duration at upload.
+
+Run offline first, then the named operator previews the exact dev organisation:
+
+```sh
+ac-heavy uv run python scripts/dev/import-sales-xray-drive.py \
+  --manifest /home/acdev/imports/drive-calls-20261011-compressed/dev-ready-88-manifest.json
+
+uv run python scripts/dev/import-sales-xray-drive.py \
+  --manifest /home/acdev/imports/drive-calls-20261011-compressed/dev-ready-88-manifest.json \
+  --base-url http://127.0.0.1:8101 \
+  --tenant-id "$AC_RECORDING_IMPORT_TENANT_ID" --preview
+```
+
+Save confirmed current dev assignments separately as `member-assignments-dev.json`
+in the original import folder. Repeat the offline command with `--members-file`
+pointing there. Then use the same manifest/assignments with `--base-url`,
+`--tenant-id`, `--apply --confirm-recording-rights --accept-analysis-plans` and a
+finite `--max-wait-seconds` window. Repeat the identical command to resume.
+`--read-back <batch UUID>` reads its normal status. Failed/held/waiting calls
+remain incomplete; keep their IDs and the untouched full long recording for the
+owning pipeline work. Do not call a partial import 89 completed reports.
