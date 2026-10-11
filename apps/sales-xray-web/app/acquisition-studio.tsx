@@ -339,9 +339,8 @@ export function AcquisitionStudio({
     submission && !result?.report && planView(plan, progress).showProgress
       ? submission.id
       : null;
-  useEffect(() => {
-    if (watchingId) setWatchedId(watchingId);
-  }, [watchingId]);
+  // Remembered as it renders (React's "adjust state on change" pattern).
+  if (watchingId && watchingId !== watchedId) setWatchedId(watchingId);
   // A new call or a finished report shows up in Recents straight away.
   const recentsCallId = submission?.id ?? null;
   const recentsRunId = result?.runId ?? null;
