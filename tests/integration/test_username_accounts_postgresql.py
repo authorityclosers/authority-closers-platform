@@ -14,12 +14,15 @@ from sqlalchemy.orm import Session
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
+from ac_platform.authorization.application import CapabilityApplication
+from ac_platform.authorization.policy import CapabilityScope
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationDenied,
 )
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.organisation import install_organisation_http
+from ac_platform.http.platform_organisations import install_platform_organisations_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.email_login import EmailLoginCodeService
@@ -112,6 +115,7 @@ async def account(harness, *, email=None):
         register_problem_handlers(app)
         actor = install_identity_http(app, settings=settings, sessions=sessions)
         install_organisation_http(app, settings=settings, require_actor=actor)
+        install_platform_organisations_http(app, settings=settings, require_actor=actor)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url=ORIGIN
         ) as client:
@@ -125,6 +129,132 @@ def test_username_normalization_is_bounded():
     for invalid in ("ab", "a" * 61, "a@b.test", "a/b", "a\nb", ".abc", "abc.", "अमित"):
         with pytest.raises(ValueError):
             normalize_username(invalid)
+
+
+def test_admin_http_issuance_first_change_and_member_revocation(postgres_harness):
+    """The once-copy Admin response must work through the actual member HTTP journey."""
+
+    async def run():
+        async with account(postgres_harness) as (
+            client,
+            sessions,
+            settings,
+            tenant,
+            _created,
+            operator,
+            _key,
+        ):
+            manager = uuid4()
+            async with sessions() as db, db.begin():
+                db.add(
+                    Person(
+                        id=manager,
+                        email=f"manager-{manager}@example.test",
+                        email_verified_at=datetime.now(UTC),
+                    )
+                )
+                await db.flush()
+                db.add(
+                    Membership(
+                        tenant_id=settings.operations_tenant_id, person_id=manager, role="owner"
+                    )
+                )
+                await db.flush()
+                identity = AsyncIdentityApplication(
+                    db, token_pepper=settings.session_token_pepper.get_secret_value()
+                )
+                manager_session = await identity.issue_authenticated_session(manager)
+                operator_session = await identity.issue_authenticated_session(operator)
+                capabilities = CapabilityApplication(
+                    db, operations_tenant_id=settings.operations_tenant_id
+                )
+                await capabilities.bootstrap_first_manager(
+                    person_id=manager, command_id=uuid4(), reason="Fictional username journey"
+                )
+                manager_actor = (await identity.resolve_actor(manager_session.token)).actor
+                await capabilities.grant(
+                    manager_actor,
+                    command_id=uuid4(),
+                    subject_person_id=operator,
+                    permission="platform_organisations_manage",
+                    scope=CapabilityScope("platform"),
+                    reason="Fictional account issuer",
+                )
+            admin_origin = str(settings.admin_app_url).rstrip("/")
+            path = f"{admin_origin}/v1/platform/organisations/{tenant}"
+            headers = {
+                "Origin": admin_origin,
+                "Cookie": f"ac_session={operator_session.token}",
+                "Idempotency-Key": str(uuid4()),
+            }
+            body = {
+                "username": f"http.rep.{uuid4().hex}",
+                "display_name": "Fictional HTTP Rep",
+                "reason": "Fictional Admin once-copy journey",
+            }
+            issued = await client.post(f"{path}/accounts", headers=headers, json=body)
+            assert issued.status_code == 201
+            assert issued.headers["cache-control"] == "private, no-store"
+            created = issued.json()
+            assert created["temporary_password"] and created["email"] is None
+            replay = await client.post(f"{path}/accounts", headers=headers, json=body)
+            assert replay.status_code == 201 and replay.json()["temporary_password"] is None
+            login_body = {
+                "email": created["username"],
+                "password": created["temporary_password"],
+            }
+            login = await client.post(
+                "/v1/auth/password/login", headers={"Origin": ORIGIN}, json=login_body
+            )
+            assert login.status_code == 200
+            assert login.json() == {"authenticated": False, "password_change_required": True}
+            assert client.cookies.get("ac_session") is None
+            assert (await client.get("/v1/me")).status_code == 401
+            changed = await client.post(
+                "/v1/auth/password/first-change",
+                headers={"Origin": ORIGIN},
+                json={
+                    **login_body,
+                    "new_password": PERSONAL_PASSWORD,
+                    "consent": True,
+                    "age_attested": True,
+                    "consent_version": CONSENT,
+                },
+            )
+            assert changed.status_code == 200
+            me = await client.get("/v1/me")
+            assert me.status_code == 200
+            assert me.json()["selected_tenant_id"] == str(tenant)
+            assert me.json()["email"] is None and me.json()["email_verified_at"] is None
+            assert (await client.get("/v1/organisation/members")).status_code == 200
+            async with sessions() as db, db.begin():
+                identity = AsyncIdentityApplication(
+                    db, token_pepper=settings.session_token_pepper.get_secret_value()
+                )
+                actor = (await identity.resolve_actor(client.cookies.get("ac_session"))).actor
+                await ConversationApplication(db).admit(actor)
+            removed = await client.request(
+                "DELETE",
+                f"{path}/members/{created['person_id']}",
+                headers={**headers, "Idempotency-Key": str(uuid4())},
+                json={"reason": "Fictional member revocation"},
+            )
+            assert removed.status_code == 204
+            assert (await client.get("/v1/organisation/members")).status_code == 404
+            after_removal = await client.post(f"{path}/accounts", headers=headers, json=body)
+            assert after_removal.status_code == 201
+            assert after_removal.json()["temporary_password"] is None
+            assert after_removal.json()["membership_status"] == "inactive"
+            assert after_removal.json()["password_change_required"] is False
+            with Session(postgres_harness.engine) as db:
+                assert verify_audit_chain_sync(db, tenant_id=tenant).valid
+                for event in db.scalars(
+                    select(AuditEvent).where(AuditEvent.resource_id == created["person_id"])
+                ):
+                    assert created["temporary_password"] not in str(event.payload)
+                    assert PERSONAL_PASSWORD not in str(event.payload)
+
+    asyncio.run(run())
 
 
 def test_changed_username_account_has_current_call_authority(postgres_harness):
