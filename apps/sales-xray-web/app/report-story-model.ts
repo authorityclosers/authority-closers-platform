@@ -307,12 +307,20 @@ function metricsFor(
       note: names,
     });
   }
-  const longest = Math.max(
-    0,
-    ...ids.map((id) => measured.speakers[id].longest_monologue_ms),
-  );
+  // With confirmed roles this is the seller's own longest turn (spec 2.1).
+  const seller =
+    roles?.seller && ids.includes(roles.seller) ? roles.seller : null;
+  const longest = seller
+    ? measured.speakers[seller].longest_monologue_ms
+    : Math.max(
+        0,
+        ...ids.map((id) => measured.speakers[id].longest_monologue_ms),
+      );
   if (longest > 0)
-    metrics.push({ label: "Longest turn", value: formatDuration(longest) });
+    metrics.push({
+      label: seller ? "Longest seller turn" : "Longest turn",
+      value: formatDuration(longest),
+    });
   metrics.push({
     label: "Talk-overs",
     value: String(measured.cut_ins.length),
@@ -472,15 +480,60 @@ function missingInputs(report: SalesReport) {
   return [...new Set(items)].slice(0, 6);
 }
 
+const findings = (list: Finding[] | null | undefined): Finding[] =>
+  (Array.isArray(list) ? list : [])
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      ...item,
+      title: item.title ?? "",
+      explanation: item.explanation ?? "",
+      evidence: Array.isArray(item.evidence) ? item.evidence : [],
+    }));
+
+/**
+ * Lists default to empty and findings always carry an evidence list, so a
+ * report from any era opens; missing parts become honest gaps.
+ */
+function normalized(report: SalesReport): SalesReport {
+  const overview = report.overview;
+  return {
+    ...report,
+    strengths: findings(report.strengths),
+    improvements: findings(report.improvements),
+    missed_opportunities: findings(report.missed_opportunities),
+    objection_analysis: findings(report.objection_analysis),
+    closing_analysis: findings(report.closing_analysis),
+    dimensions: Array.isArray(report.dimensions) ? report.dimensions : [],
+    overview: overview
+      ? {
+          ...overview,
+          strength_details: overview.strength_details ?? [],
+          improvement_details: overview.improvement_details ?? [],
+          golden_moments: overview.golden_moments ?? [],
+          missed_details: overview.missed_details ?? [],
+          prospect_interpretations: overview.prospect_interpretations ?? [],
+          rewatch: overview.rewatch ?? [],
+          final_assessment: overview.final_assessment ?? {
+            repeat: "",
+            fix_first: "",
+            next_focus: "",
+            assessment: "",
+          },
+        }
+      : undefined,
+  };
+}
+
 /** Builds every pillar from one saved report; older reports simply say less. */
 export function reportStoryModel(
-  report: SalesReport,
+  input: SalesReport,
   transcript?: Transcript,
   options: {
     roles?: { seller?: string | null; prospect?: string | null };
     recorded?: { status: OutcomeStatus; note?: string | null } | null;
   } = {},
 ): StoryModel {
+  const report = normalized(input);
   const overview = report.overview;
   const story = report.story;
   const outcome = callOutcome(report, options.recorded);

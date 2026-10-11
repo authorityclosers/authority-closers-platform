@@ -175,8 +175,9 @@ function BriefFactRow({
           {fact.fact}
         </small>
         {fact.basis === "person" ? (
-          <small className={styles.lock} title="A person set this; it wins">
-            <LockKeyhole size={12} aria-hidden="true" /> Set by a person
+          <small className={styles.lock} title="Set by a person; it wins">
+            <LockKeyhole size={12} aria-hidden="true" />
+            <span className={styles.srOnly}>Set by a person</span>
           </small>
         ) : null}
       </dt>
@@ -297,17 +298,20 @@ export function ProspectInformation({
   );
   const seller = people.roles?.seller ?? null;
   const prospectVoice = people.roles?.prospect ?? null;
-  const brief = useMemo(
-    () =>
-      prospectBrief(
+  const brief = useMemo(() => {
+    try {
+      return prospectBrief(
         prospect,
         calls,
         latest
           ? { ...latest, roles: { seller, prospect: prospectVoice } }
           : undefined,
-      ),
-    [prospect, calls, latest, seller, prospectVoice],
-  );
+      );
+    } catch {
+      // An unreadable call report never hides the saved facts.
+      return prospectBrief(prospect, calls);
+    }
+  }, [prospect, calls, latest, seller, prospectVoice]);
   async function save(key: ProfileKey, value: string) {
     if (pending.current)
       throw new Error("Another field is being saved. Try again.");
