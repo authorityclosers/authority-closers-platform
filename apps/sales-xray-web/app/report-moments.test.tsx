@@ -183,8 +183,9 @@ it("keeps every nearby clip reachable on separate rows at desktop and touch size
         expect(left + controlSize).toBeLessThanOrEqual(width);
         for (const other of layout.positions.slice(index + 1)) {
           if (position.row === other.row) {
-            expect(Math.abs(position.x - other.x) * (width - controlSize))
-              .toBeGreaterThanOrEqual(controlSize + 4);
+            expect(
+              Math.abs(position.x - other.x) * (width - controlSize),
+            ).toBeGreaterThanOrEqual(controlSize + 4);
           }
         }
       }
@@ -203,7 +204,10 @@ it("stacks coincident pins and places selected rewatch evidence at its own time"
   }));
   const layout = momentMapPositions(moments, 25_000, 240, 44);
   expect(layout.positions.slice(0, 4).map(({ x, row }) => [x, row])).toEqual([
-    [0, 0], [0, 1], [0, 2], [0, 3],
+    [0, 0],
+    [0, 1],
+    [0, 2],
+    [0, 3],
   ]);
   expect(layout.positions[4]).toMatchObject({ x: 1, row: 0 });
 });
@@ -226,7 +230,9 @@ it("opens each clustered standalone listen clip and plays its exact source", asy
     const pin = container.querySelector<HTMLButtonElement>(
       `[data-map-moment="rewatch:${index}"]`,
     )!;
-    expect(pin.getAttribute("aria-label")).toContain(`Standalone listen ${index}`);
+    expect(pin.getAttribute("aria-label")).toContain(
+      `Standalone listen ${index}`,
+    );
     await act(async () => {
       pin.click();
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -235,11 +241,15 @@ it("opens each clustered standalone listen clip and plays its exact source", asy
       `[data-moment="rewatch:${index}"]`,
     )!;
     expect(row.hasAttribute("data-open")).toBe(true);
-    await act(async () => row.querySelector<HTMLButtonElement>(
-      'button[aria-label^="Play"]',
-    )!.click());
+    await act(async () =>
+      row
+        .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+        .click(),
+    );
     expect(onSelectEvidence).toHaveBeenNthCalledWith(
-      index + 1, clip, `Standalone listen ${index}`,
+      index + 1,
+      clip,
+      `Standalone listen ${index}`,
     );
   }
 });

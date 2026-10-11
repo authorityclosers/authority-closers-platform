@@ -407,8 +407,9 @@ export function ReportMoments({
     const measure = () => {
       const width = element.getBoundingClientRect().width;
       const controlSize =
-        parseFloat(getComputedStyle(element).getPropertyValue("--sx-control-h")) ||
-        44;
+        parseFloat(
+          getComputedStyle(element).getPropertyValue("--sx-control-h"),
+        ) || 44;
       setMapSize((current) =>
         current.width === width && current.controlSize === controlSize
           ? current
@@ -417,7 +418,9 @@ export function ReportMoments({
     };
     measure();
     const observer =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
     observer?.observe(element);
     window.addEventListener("resize", measure);
     return () => {
