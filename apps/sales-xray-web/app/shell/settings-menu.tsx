@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Building2,
   Check,
   ChevronLeft,
@@ -133,6 +134,7 @@ export function SettingsMenu({
   photoUrl,
   allowance,
   organisation = false,
+  insights = false,
   workspaces = [],
   currentWorkspaceId = null,
   onSelectWorkspace,
@@ -143,6 +145,8 @@ export function SettingsMenu({
   initialView?: View;
   /** An organisation is selected: phones reach its page from here. */
   organisation?: boolean;
+  /** The selected organisation's owner or admin: phones reach Insights here. */
+  insights?: boolean;
   /** Where your calls live; phones switch here (desktop also has the sidebar). */
   workspaces?: readonly { tenant_id: string; kind: string; name: string }[];
   currentWorkspaceId?: string | null;
@@ -396,6 +400,23 @@ export function SettingsMenu({
                     <Building2 size={16} />
                   </span>
                   <span className={styles.rowLabel}>Organisation</span>
+                  <ChevronRight
+                    size={15}
+                    className={styles.chev}
+                    aria-hidden="true"
+                  />
+                </Link>
+              ) : null}
+              {organisation && insights ? (
+                <Link
+                  href="/organisation/insights"
+                  className={styles.row}
+                  onClick={onClose}
+                >
+                  <span className={styles.rowIcon} aria-hidden="true">
+                    <BarChart3 size={16} />
+                  </span>
+                  <span className={styles.rowLabel}>Insights</span>
                   <ChevronRight
                     size={15}
                     className={styles.chev}

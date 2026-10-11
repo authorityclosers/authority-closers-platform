@@ -33,6 +33,7 @@ import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
 import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { InvitesSkeleton } from "./organisation/invites/invites-view";
+import { InsightsSkeleton } from "./organisation/insights/insights-view";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -311,8 +312,15 @@ function StandaloneStudioView({
   const pathname = usePathname();
   const activeFor = (
     path: string,
-  ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
+  ):
+    | "dashboard"
+    | "analyse"
+    | "calls"
+    | "account"
+    | "organisation"
+    | "insights" => {
     if (path === "/dashboard") return "dashboard";
+    if (path === "/organisation/insights") return "insights";
     if (path === "/organisation" || path === "/organisation/invites")
       return "organisation";
     if (
@@ -752,6 +760,8 @@ function StandaloneStudioView({
               <OrganisationPageSkeleton />
             ) : pathname === "/organisation/invites" ? (
               <InvitesSkeleton />
+            ) : pathname === "/organisation/insights" ? (
+              <InsightsSkeleton />
             ) : pathname === "/dashboard" ? (
               <DashboardSkeleton />
             ) : studioPath ? (

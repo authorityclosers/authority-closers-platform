@@ -1152,8 +1152,13 @@ class OrganisationInsights:
         if not wanted:
             return {}
         if await self.source() == "synthetic":
+            teams = await self._team_names()
             return {
-                key: {"name": value["name"], "team": value["team"]}
+                key: {
+                    "name": value["name"],
+                    "team": teams.get(value["team"] or "", value["team"]),
+                    "team_key": value["team"],
+                }
                 for key, value in (await self._synthetic_people()).items()
                 if key in wanted
             }
