@@ -68,6 +68,114 @@ def dataset(root):
     return data
 
 
+def delivery_response(request, *, created=True):
+    result = {"synthetic": True, "state": "done", "created": created}
+    if request.url.path.endswith("/records"):
+        total = len(json.loads(request.content)["records"])
+        result.update(created=total if created else 0, skipped=0 if created else total)
+    return httpx.Response(201, json=result)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"synthetic": True, "state": "done", "created": -1, "skipped": 4},
+        {"synthetic": True, "state": "done", "created": True, "skipped": 2},
+        {"synthetic": True, "state": "done", "created": 1, "skipped": "2"},
+        {"synthetic": True, "state": "done", "created": 1.5, "skipped": 1.5},
+        {"synthetic": True, "state": "done", "created": 1, "skipped": 0},
+        {"synthetic": True, "state": "done", "created": 3},
+        {"synthetic": True, "state": "done"},
+        [],
+        "invalid_json",
+    ],
+)
+def test_operator_stops_on_invalid_record_delivery_receipt_before_the_next_write(
+    tmp_path, monkeypatch, payload
+):
+    dataset(tmp_path)
+    receipt = validate_dataset(tmp_path)
+    real_client = httpx.Client
+    writes = []
+
+    def respond(request):
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "synthetic": True,
+                    "sandbox": True,
+                    "tenant_id": str(AC_SANDBOX),
+                    "records": [
+                        {"kind": kind, "count": count} for kind, count in receipt["counts"].items()
+                    ],
+                },
+            )
+        writes.append(request.url.path)
+        if request.url.path.endswith("/records"):
+            if payload == "invalid_json":
+                return httpx.Response(201, content=b"fictional non-JSON response")
+            return httpx.Response(201, json=payload)
+        return delivery_response(request)
+
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(respond)),
+    )
+    with pytest.raises(ValueError, match="delivery receipt"):
+        apply_dataset(
+            tmp_path,
+            origin="http://127.0.0.1:1234",
+            tenant=AC_SANDBOX,
+            cookie="fictional-test-session",
+            receipt=receipt,
+        )
+    assert len(writes) == 1
+    assert writes[0].endswith("/records")
+
+
+@pytest.mark.parametrize("created", [1, 0, None, "true"])
+def test_operator_requires_an_explicit_call_delivery_or_replay_result(
+    tmp_path, monkeypatch, created
+):
+    dataset(tmp_path)
+    receipt = validate_dataset(tmp_path)
+    real_client = httpx.Client
+    reads = []
+
+    def respond(request):
+        if request.method == "GET":
+            reads.append(request.url.path)
+            return httpx.Response(
+                200,
+                json={
+                    "synthetic": True,
+                    "sandbox": True,
+                    "tenant_id": str(AC_SANDBOX),
+                    "records": [
+                        {"kind": kind, "count": count} for kind, count in receipt["counts"].items()
+                    ],
+                },
+            )
+        return delivery_response(request, created=created)
+
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(respond)),
+    )
+    with pytest.raises(ValueError, match="item delivery receipt"):
+        apply_dataset(
+            tmp_path,
+            origin="http://127.0.0.1:1234",
+            tenant=AC_SANDBOX,
+            cookie="fictional-test-session",
+            receipt=receipt,
+        )
+    assert len(reads) == 1
+
+
 def test_offline_dry_run_preserves_unique_corpus_fingerprint_without_network(tmp_path, monkeypatch):
     dataset(tmp_path)
 
@@ -173,8 +281,12 @@ def test_dry_run_rejects_repeated_identity_across_separate_request_batches(tmp_p
         validate_dataset(tmp_path)
 
 
+@pytest.mark.parametrize(
+    "created, refused_stage",
+    [(True, None), (False, None), (True, "manifest"), (True, "audio")],
+)
 def test_verified_media_is_source_pinned_sent_in_bounded_transport_and_read_back(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, created, refused_stage
 ):
     dataset(tmp_path)
     payload = b"fictional-mp3-transport"
@@ -221,22 +333,37 @@ def test_verified_media_is_source_pinned_sent_in_bounded_transport_and_read_back
             assert request.content == payload
             assert request.headers["content-length"] == str(len(payload))
             assert "transfer-encoding" not in request.headers
-            return httpx.Response(201, json={"synthetic": True, "state": "done", "created": True})
-        return httpx.Response(201, json={"synthetic": True, "state": "done", "created": 1})
+            if refused_stage == "audio":
+                return httpx.Response(201, json=[])
+        if request.url.path.endswith("/audio") and refused_stage == "manifest":
+            return delivery_response(request, created=1)
+        return delivery_response(request, created=created)
 
     monkeypatch.setattr(
         httpx,
         "Client",
         lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(respond)),
     )
-    result = apply_dataset(
-        tmp_path,
-        origin="http://127.0.0.1:1234",
-        tenant=AC_SANDBOX,
-        cookie="fictional-test-session",
-        receipt=receipt,
-    )
+    kwargs = {
+        "origin": "http://127.0.0.1:1234",
+        "tenant": AC_SANDBOX,
+        "cookie": "fictional-test-session",
+        "receipt": receipt,
+    }
+    if refused_stage is not None:
+        with pytest.raises(ValueError, match="delivery receipt"):
+            apply_dataset(tmp_path, **kwargs)
+        assert sum(request.method == "GET" for request in sent) == 1
+        assert sum(request.method == "PUT" for request in sent) == int(refused_stage == "audio")
+        return
+    result = apply_dataset(tmp_path, **kwargs)
     assert result["dataset_sha256"] == receipt["dataset_sha256"]
+    assert result["receipts"] == {
+        "created": 5 if created else 0,
+        "skipped": 0 if created else 5,
+        "audio_created": int(created),
+        "audio_skipped": int(not created),
+    }
     assert sum(request.method == "PUT" for request in sent) == 1
     (folder / "audio.mp3").write_bytes(b"x" * len(payload))
     with pytest.raises(ValueError):
@@ -270,7 +397,7 @@ def test_operator_does_not_claim_verification_when_authored_source_changes_after
             data["answer_key"]["report"]["the_big_picture"] = section
             for key in ("report", "answer_key"):
                 (tmp_path / f"import_ready/{call}/{key}.json").write_text(json.dumps(data[key]))
-        return httpx.Response(201, json={"synthetic": True, "state": "done", "created": 1})
+        return delivery_response(request)
 
     monkeypatch.setattr(
         httpx,
@@ -311,7 +438,7 @@ def test_operator_requires_the_same_explicit_sandbox_before_writes_and_final_rea
     def respond(request):
         if request.method != "GET":
             writes.append(request.url.path)
-            return httpx.Response(201, json={"synthetic": True, "state": "done", "created": 1})
+            return delivery_response(request)
         reads.append(request.url.path)
         result = {
             "synthetic": True,

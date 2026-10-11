@@ -95,6 +95,39 @@ def sandbox_progress(client: httpx.Client, tenant: UUID) -> dict[str, Any]:
     return result
 
 
+def delivery_receipt(response: httpx.Response, *, records: int | None = None) -> tuple[int, int]:
+    if response.status_code != 201:
+        # Do not print application bodies, cookies or request objects.
+        raise ValueError(
+            f"Sandbox import refused a request (HTTP {response.status_code}). "
+            "Rerun safely after correction."
+        )
+    try:
+        result = response.json()
+    except ValueError:
+        result = None
+    if (
+        not isinstance(result, dict)
+        or result.get("synthetic") is not True
+        or result.get("state") != "done"
+    ):
+        raise ValueError("The sandbox API returned an unavailable delivery receipt.")
+    created, skipped = result.get("created"), result.get("skipped")
+    if records is None:
+        if type(created) is not bool:
+            raise ValueError("The sandbox item delivery receipt requires an explicit result.")
+        return int(created), int(not created)
+    if (
+        type(created) is not int
+        or type(skipped) is not int
+        or created < 0
+        or skipped < 0
+        or created + skipped != records
+    ):
+        raise ValueError("The sandbox record delivery receipt does not account for this batch.")
+    return created, skipped
+
+
 def apply_dataset(
     root: Path, *, origin: str, tenant: UUID, cookie: str, receipt: dict[str, Any]
 ) -> dict[str, Any]:
@@ -108,30 +141,22 @@ def apply_dataset(
         trust_env=False,
     ) as client:
 
-        def send(path: str, body: dict[str, Any]) -> None:
+        def send(path: str, body: dict[str, Any], *, records: int | None = None) -> None:
             digest = content_hash(body)
             response = client.post(
                 PREFIX + path, json=body, headers={"Idempotency-Key": "sandbox:" + digest}
             )
-            if response.status_code != 201:
-                # Do not print provider/application bodies, cookies or request objects.
-                raise ValueError(
-                    f"Sandbox import refused a request (HTTP {response.status_code}). "
-                    "Rerun safely after correction."
-                )
-            result = response.json()
-            if result.get("synthetic") is not True or result.get("state") != "done":
-                raise ValueError(
-                    "The sandbox API did not return an explicit synthetic delivery receipt."
-                )
-            counts["created"] += result.get("created", 0)
-            counts["skipped"] += result.get("skipped", int(result.get("created") is False))
+            created, skipped = delivery_receipt(response, records=records)
+            counts["created"] += created
+            counts["skipped"] += skipped
 
         before = sandbox_progress(client, tenant)
         for batch in record_batches(chain(master_records(root), summaries(root))):
             for row in batch.records:
                 fingerprint.update(content_hash(row.model_dump(mode="json")).encode())
-            send("/records", batch.model_dump(mode="json", by_alias=True))
+            send(
+                "/records", batch.model_dump(mode="json", by_alias=True), records=len(batch.records)
+            )
         for call in bundles(root):
             fingerprint.update(content_hash(call.model_dump(by_alias=True)).encode())
             send("/calls", call.model_dump(by_alias=True))
@@ -149,15 +174,9 @@ def apply_dataset(
                         "Idempotency-Key": "sandbox-audio:" + content_hash(manifest),
                     },
                 )
-            if (
-                response.status_code != 201
-                or response.json().get("synthetic") is not True
-                or response.json().get("state") != "done"
-                or type(response.json().get("created")) is not bool
-            ):
-                raise ValueError("The verified sandbox audio was not retained. Rerun safely.")
-            counts["audio_created"] += int(response.json()["created"])
-            counts["audio_skipped"] += int(not response.json()["created"])
+            created, skipped = delivery_receipt(response)
+            counts["audio_created"] += created
+            counts["audio_skipped"] += skipped
         if fingerprint.hexdigest() != receipt["dataset_sha256"]:
             raise ValueError("The authored dataset changed after its dry-run source pin.")
         after = sandbox_progress(client, tenant)

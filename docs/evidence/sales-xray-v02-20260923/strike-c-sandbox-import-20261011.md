@@ -226,3 +226,29 @@ records. Receipts: `logs/sandbox-target-prefx-unit.log`,
 `logs/sandbox-target-final-checks-second.log` in the strike folder. No staging or
 production import, deployment, service change or manual merge is claimed. #437
 remains closed under the recorded #446 -> #442 -> #437 serialization order.
+
+## Operator delivery-receipt validation
+
+A focused transport regression reproduced a false applied receipt on the previous
+CLI: a records response claiming `created=-1` and `skipped=4` was accepted even
+though the three-record request had no valid delivery accounting. Missing counts,
+boolean/fractional counts and partial totals could likewise pass; object-shaped
+responses were assumed.
+
+The CLI now validates each successful write before proceeding. Record batches
+require nonnegative integer created/skipped counts that sum to that exact request.
+Call, media-manifest and retained-audio responses require an explicit boolean
+created result, matching the existing server contract. Unavailable, non-object
+or non-JSON receipts fail with a sanitized ValueError, which the operator command
+handles as exit 2. Interrupted runs retain their content-derived replay keys.
+No success receipt or further write follows invalid delivery accounting.
+
+All 40 focused adapter/operator cases pass (2.40s). They cover refusal before the
+next record write, invalid single-call results, manifest/audio refusal, exact
+first-import counts and all-skipped replay counts, as well as the existing target,
+source-pin and bounded-media tests. The negative-count regression fails on the
+prior source. This follow-up changes only the local operator and its transport
+tests; schema, HTTP authority, provider and minute behavior are unchanged.
+The frozen buyer-tests/1 input and its complete offline proof remain valid.
+Reviewed-main migration integration, sensitive review, A's mount and the named
+staging operator remain required; no hosted import or release is claimed.
