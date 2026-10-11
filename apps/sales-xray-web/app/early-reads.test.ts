@@ -56,6 +56,8 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `${A}/entry`,
     `${A}/session`,
     `${A}/submissions/${id.toLowerCase()}`,
+    `${A}/submissions/${id.toLowerCase()}/transcript`,
+    `${A}/submissions/${id.toLowerCase()}/report`,
   ]);
   // Public pages and unknown addresses start nothing.
   expect(earlyReadsFor("/pricing")).toEqual([]);

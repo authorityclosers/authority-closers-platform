@@ -78,12 +78,22 @@ const CALL_READS = [
   `${ACQUISITION}/session`,
 ];
 
+/**
+ * A saved call's own reads: the call, then (when it has a report, which the
+ * page learns from the call) its transcript and report. Asked together; for
+ * a call without a report the last two simply go unused.
+ */
+const callReads = (id: string) => [
+  `${ACQUISITION}/submissions/${id}`,
+  `${ACQUISITION}/submissions/${id}/transcript`,
+  `${ACQUISITION}/submissions/${id}/report`,
+];
+
 /** The early reads for an address (trailing slash ignored), or none. */
 export function earlyReadsFor(pathname: string): readonly string[] {
   const route = pathname.replace(/\/$/, "") || "/";
   const call = CALL_PAGE.exec(route)?.[1];
-  if (call)
-    return [...CALL_READS, `${ACQUISITION}/submissions/${call.toLowerCase()}`];
+  if (call) return [...CALL_READS, ...callReads(call.toLowerCase())];
   return EARLY_READS[route] ?? [];
 }
 
@@ -99,10 +109,10 @@ type EarlyWindow = Window & { __sxEarly?: EarlyStore };
 export function earlyReadsScript(): string {
   const table = JSON.stringify(EARLY_READS);
   const call = JSON.stringify(CALL_PAGE.source);
-  const callReads = JSON.stringify(CALL_READS);
+  const callReadsJson = JSON.stringify(CALL_READS);
   const acquisition = JSON.stringify(ACQUISITION);
   const key = JSON.stringify(EARLY_CONVERSATION_KEY);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReads}.concat([${acquisition}+"/submissions/"+m[1].toLowerCase()]):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).catch(function(){return null})}})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
