@@ -182,8 +182,8 @@ export function ProspectSnapshot({
             </div>
           ) : (
             <Empty icon={Quote}>
-              The prospect didn’t describe their problem in their own words on
-              this call.
+              This report didn’t pick out the prospect’s own words about their
+              problem.
             </Empty>
           )}
         </KitSection>

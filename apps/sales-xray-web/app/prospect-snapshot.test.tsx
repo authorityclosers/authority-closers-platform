@@ -113,6 +113,8 @@ it("separates the report observation, exact source words, and hypothesis", async
   const hypothesis = card.querySelector('[data-prospect-part="hypothesis"]')!;
   expect(hypothesis.textContent).toContain("A guess, not a fact");
   expect(container.textContent).toContain("From this call only");
+  // An empty list is the report's gap, never a claim about the call.
+  expect(container.textContent).not.toContain("didn’t describe");
   expect(container.textContent).not.toMatch(/supported|ongoing profile/);
   expect(hypothesis.textContent).toContain(interpretation.possible_concern);
   expect(hypothesis.textContent).not.toContain(
