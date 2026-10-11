@@ -34,7 +34,7 @@ class Snapshot:
         )
 
 
-def node_source_hook(workbench: Path, snapshot: Path) -> Path:
+def node_source_hook(workbench: Path, snapshot: Path, packages: set[str]) -> Path:
     """Redirect workspace source without duplicating third-party module identities."""
     hook = snapshot / ".ac-fast-node-source.cjs"
     hook.write_text(
@@ -43,6 +43,7 @@ const { fileURLToPath, pathToFileURL } = require('node:url');
 const path = require('node:path');
 const workbench = __WORKBENCH__;
 const snapshot = __SNAPSHOT__;
+const packages = __PACKAGES__;
 function exported(value, dependencies = false) {
   if (typeof value !== 'string') return value;
   const isURL = value.startsWith('file:');
@@ -55,9 +56,15 @@ function exported(value, dependencies = false) {
 }
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    const pinned = { ...context, parentURL: exported(context.parentURL, true) };
     const required = context.conditions.includes('require');
-    const name = exported(specifier);
+    const value = specifier.startsWith('.') && context.parentURL?.startsWith('file:')
+      ? new URL(specifier, context.parentURL).href : specifier;
+    const redirected = exported(value);
+    const workspace = packages.some(name => specifier === name || specifier.startsWith(name + '/'));
+    if (!workspace && redirected === value) return nextResolve(specifier, context);
+    const name = required && redirected.startsWith('file:')
+      ? fileURLToPath(redirected) : redirected;
+    const pinned = { ...context, parentURL: exported(context.parentURL, true) };
     const target = required && pinned.parentURL !== context.parentURL && !isBuiltin(name)
       ? createRequire(pinned.parentURL).resolve(name) : name;
     const result = nextResolve(target, pinned);
@@ -69,9 +76,9 @@ registerHooks({
     return nextLoad(exported(url), context);
   }
 });
-""".replace("__WORKBENCH__", json.dumps(str(workbench))).replace(
-            "__SNAPSHOT__", json.dumps(str(snapshot))
-        ),
+""".replace("__WORKBENCH__", json.dumps(str(workbench)))
+        .replace("__SNAPSHOT__", json.dumps(str(snapshot)))
+        .replace("__PACKAGES__", json.dumps(sorted(packages))),
         encoding="utf-8",
     )
     return hook
@@ -90,7 +97,9 @@ def source_digest(root: Path, sources: tuple[str, ...]) -> str:
     return digest.hexdigest()
 
 
-def dependency_link(source: Path, target: Path, workbench: Path, snapshot: Path) -> None:
+def dependency_link(
+    source: Path, target: Path, workbench: Path, snapshot: Path, packages: set[str]
+) -> None:
     resolved = source.resolve()
     if resolved.is_relative_to(workbench):
         relative = resolved.relative_to(workbench)
@@ -98,10 +107,17 @@ def dependency_link(source: Path, target: Path, workbench: Path, snapshot: Path)
             resolved = snapshot / relative
             if not resolved.exists():
                 raise SnapshotError("An installed workspace link has no committed source")
+            if resolved.is_dir():
+                name = source.name
+                if source.parent.name.startswith("@"):
+                    name = source.parent.name + "/" + name
+                packages.add(name)
     target.symlink_to(resolved, target_is_directory=resolved.is_dir())
 
 
-def installed_node_modules(source: Path, target: Path, workbench: Path, snapshot: Path) -> None:
+def installed_node_modules(
+    source: Path, target: Path, workbench: Path, snapshot: Path, packages: set[str]
+) -> None:
     """Keep package links, wrapper paths and writable caches inside the export."""
     target.mkdir(parents=True, exist_ok=True)
     for entry in sorted(source.iterdir()):
@@ -114,7 +130,9 @@ def installed_node_modules(source: Path, target: Path, workbench: Path, snapshot
                 try:
                     text = binary.read_text(encoding="utf-8")
                 except UnicodeError:
-                    dependency_link(binary, destination / binary.name, workbench, snapshot)
+                    dependency_link(
+                        binary, destination / binary.name, workbench, snapshot, packages
+                    )
                     continue
                 wrapper = destination / binary.name
                 wrapper.write_text(text.replace(str(workbench), str(snapshot)), encoding="utf-8")
@@ -124,22 +142,24 @@ def installed_node_modules(source: Path, target: Path, workbench: Path, snapshot
             for package in sorted(entry.iterdir()):
                 package_target = destination / package.name
                 if package.name == "node_modules":
-                    installed_node_modules(package, package_target, workbench, snapshot)
+                    installed_node_modules(package, package_target, workbench, snapshot, packages)
                 elif package.is_dir() and not package.is_symlink():
                     package_target.mkdir()
                     for child in sorted(package.iterdir()):
                         if child.name == "node_modules" and child.is_dir():
                             installed_node_modules(
-                                child, package_target / child.name, workbench, snapshot
+                                child, package_target / child.name, workbench, snapshot, packages
                             )
                         else:
-                            dependency_link(child, package_target / child.name, workbench, snapshot)
+                            dependency_link(
+                                child, package_target / child.name, workbench, snapshot, packages
+                            )
                 else:
-                    dependency_link(package, package_target, workbench, snapshot)
+                    dependency_link(package, package_target, workbench, snapshot, packages)
         elif entry.name.startswith("@") and entry.is_dir() and not entry.is_symlink():
-            installed_node_modules(entry, destination, workbench, snapshot)
+            installed_node_modules(entry, destination, workbench, snapshot, packages)
         else:
-            dependency_link(entry, destination, workbench, snapshot)
+            dependency_link(entry, destination, workbench, snapshot, packages)
 
 
 @contextmanager
@@ -180,14 +200,15 @@ def committed_snapshot(workbench: Path, commit: str) -> Iterator[Snapshot]:
                 *(root / "apps").glob("*-web"),
                 *(root / "packages/typescript").glob("*"),
             ]
+            packages: set[str] = set()
             for directory_path in directories:
                 relative_directory = directory_path.relative_to(root)
                 installed = workbench / relative_directory / "node_modules"
                 if directory_path.is_dir() and installed.is_dir():
                     installed_node_modules(
-                        installed, directory_path / "node_modules", workbench, root
+                        installed, directory_path / "node_modules", workbench, root, packages
                     )
-            hook = node_source_hook(workbench, root)
+            hook = node_source_hook(workbench, root, packages)
             yield Snapshot(root, sources, sha256, hashlib.sha256(hook.read_bytes()).hexdigest())
         except (OSError, tarfile.TarError) as error:
             raise SnapshotError(

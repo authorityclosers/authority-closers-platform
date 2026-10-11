@@ -100,6 +100,47 @@ def test_vitest_receipts_distinguish_executed_from_missing_coverage(
     assert "fixture-private-output" not in json.dumps(result) + capsys.readouterr().out
 
 
+@pytest.mark.parametrize("malformed_suites", (False, True))
+def test_failed_vitest_receipt_keeps_only_committed_suite_paths(
+    tmp_path: Path, malformed_suites: bool
+) -> None:
+    write(tmp_path, "fixture.test.ts", "// committed test fixture\n")
+    document = json.loads(vitest_evidence(failed=1))
+    document["testResults"] = (
+        None
+        if malformed_suites
+        else [
+            {
+                "name": str(tmp_path / "fixture.test.ts"),
+                "status": "failed",
+                "message": "fixture-private-output",
+                "assertionResults": [
+                    {
+                        "title": "fixture-private-output",
+                        "failureMessages": ["fixture-private-output"],
+                    }
+                ],
+            },
+            {"name": "../external.test.ts", "status": "failed"},
+        ]
+    )
+    script = (
+        "import pathlib, sys\n"
+        "report = next(value for value in sys.argv if value.startswith('--outputFile='))\n"
+        f"pathlib.Path(report.split('=', 1)[1]).write_text({json.dumps(document)!r})\n"
+        "print('fixture-private-output'); sys.exit(1)\n"
+    )
+    check = FAST.Check(
+        "vitest:fixture", (sys.executable, "-c", script), tmp_path, ("fixture.test.ts",)
+    )
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == "failed"
+    assert result["diagnostics"] == (
+        [] if malformed_suites else ["fixture.test.ts: Vitest suite failed"]
+    )
+    assert "fixture-private-output" not in json.dumps(result)
+
+
 @pytest.mark.parametrize(
     "evidence",
     [
@@ -327,7 +368,9 @@ def test_python_plan_checks_changed_module_and_related_tests(tmp_path: Path) -> 
     checks, _ = FAST.plan(tmp_path, (source,), 12)
     assert [check.name for check in checks] == ["ruff", "mypy", "pytest"]
     assert checks[0].scope == (source,)
-    assert checks[1].scope == (source,)
+    assert checks[1].scope == ("packages/python",)
+    assert checks[1].argv[-1] == "packages/python"
+    assert "--follow-imports=silent" not in checks[1].argv
     assert checks[2].scope == ("tests/test_related.py",)
     assert all("-m" in check.argv for check in checks)
 
@@ -477,7 +520,7 @@ def test_direct_app_tests_cannot_pass_when_nothing_is_collected(tmp_path: Path) 
     assert "--passWithNoTests" not in check.argv
 
 
-def test_changed_infrastructure_module_is_linted_and_typed_with_partial_graph(
+def test_changed_infrastructure_module_is_linted_with_partial_graph(
     tmp_path: Path,
 ) -> None:
     (tmp_path / ".venv/bin").mkdir(parents=True)
@@ -485,8 +528,22 @@ def test_changed_infrastructure_module_is_linted_and_typed_with_partial_graph(
     source = "infra/release/reader.py"
     write(tmp_path, source, "VALUE = 1\n")
     checks, metadata = FAST.plan(tmp_path, (source,), 12)
-    assert [check.name for check in checks] == ["ruff", "mypy"]
+    assert [check.name for check in checks] == ["ruff"]
     assert metadata["unmapped_python_sources"] == [source]
+
+
+def test_infrastructure_changes_keep_mypy_at_the_hosted_packages_scope(tmp_path: Path) -> None:
+    (tmp_path / ".venv/bin").mkdir(parents=True)
+    (tmp_path / ".venv/bin/python").symlink_to(sys.executable)
+    write(tmp_path, "packages/python/ac_platform/value.py", "VALUE = 1\n")
+    source = "infra/release/legacy.py"
+    write(tmp_path, source, "def legacy(): return 'untyped'\n")
+    checks, _ = FAST.plan(tmp_path, (source,), 12)
+    assert [check.name for check in checks] == ["ruff", "mypy"]
+    assert checks[0].scope == (source,)
+    assert checks[1].scope == ("packages/python",)
+    assert checks[1].argv[-1] == "packages/python"
+    assert source not in checks[1].argv
 
 
 def git(root: Path, *args: str) -> str:
@@ -705,6 +762,80 @@ def test_runner_does_not_echo_child_output_or_environment(
     assert result["status"] == "passed"
     assert "fixture-private-output" not in json.dumps(result)
     assert "fixture-private-output" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("name", "output", "expected"),
+    (
+        (
+            "mypy",
+            'module.py:12: error: Secret "fixture-private-output" [assignment]',
+            "module.py:12: mypy error [assignment]",
+        ),
+        (
+            "tsc:fixture",
+            "module.py(2,3): error TS2345: fixture-private-output",
+            "module.py:2:3: TypeScript error TS2345",
+        ),
+        ("prettier:fixture", "[warn] module.py", "module.py: formatting differs"),
+        (
+            "ruff",
+            "F401 fixture-private-output\n --> module.py:5:2",
+            "module.py:5:2: Ruff error F401",
+        ),
+        (
+            "eslint:fixture",
+            "module.py\n 5:2 error fixture-private-output no-unused-vars",
+            "module.py:5:2: ESLint error no-unused-vars",
+        ),
+        (
+            "pytest",
+            "FAILED module.py::test_value[fixture-private-output] - AssertionError",
+            "module.py::test_value: failed",
+        ),
+    ),
+)
+def test_failure_details_keep_locations_and_codes_without_payloads(
+    tmp_path: Path, name: str, output: str, expected: str
+) -> None:
+    write(tmp_path, "module.py", "VALUE = 1\n")
+    check = FAST.Check(name, (), tmp_path, ("module.py",))
+    assert FAST.failure_diagnostics(check, output + "\nfixture-private-output") == [expected]
+
+
+def test_failure_details_refuse_external_paths_and_bound_repeated_errors(tmp_path: Path) -> None:
+    write(tmp_path, "module.py", "VALUE = 1\n")
+    outside = tmp_path.parent / (tmp_path.name + "-private.py")
+    outside.write_text("VALUE = 'fixture-private-output'\n")
+    check = FAST.Check("mypy", (), tmp_path, ("module.py",))
+    output = f"{outside}:1: error: fixture-private-output [assignment]\n"
+    output += "\n".join(
+        f"module.py:{line}: error: fixture-private-output [assignment]" for line in range(50)
+    )
+    details = FAST.failure_diagnostics(check, output)
+    assert len(details) == 40
+    assert details[0] == "module.py:0: mypy error [assignment]"
+    assert "fixture-private-output" not in json.dumps(details)
+    assert str(outside) not in json.dumps(details)
+
+
+def test_failed_runner_drains_verbose_output_and_keeps_only_safe_details(tmp_path: Path) -> None:
+    write(tmp_path, "module.py", "VALUE = 1\n")
+    check = FAST.Check(
+        "mypy",
+        (
+            sys.executable,
+            "-c",
+            "import sys; print('module.py:9: error: fixture-private-output [assignment]'); "
+            "print('fixture-private-output' * 60000); sys.exit(1)",
+        ),
+        tmp_path,
+        ("module.py",),
+    )
+    result = FAST.run_check(check, 30, 5)
+    assert result["status"] == "failed"
+    assert result["diagnostics"] == ["module.py:9: mypy error [assignment]"]
+    assert "fixture-private-output" not in json.dumps(result)
 
 
 def test_runner_requires_explicit_lane_database_for_pytest(
@@ -1059,6 +1190,22 @@ def test_builder_commit_during_checks_keeps_the_original_snapshot(
     assert data["status"] == "passed" and data["commit"] == sha
     assert git(repository, "rev-parse", "HEAD") != sha
     assert exported_paths and not exported_paths[0].parent.exists()
+
+
+def test_nested_checks_respect_an_inherited_cpu_hard_limit(tmp_path: Path) -> None:
+    root = Path(FAST.__file__).resolve().parents[2]
+    script = (
+        "import pathlib, resource, sys\n"
+        f"sys.path.insert(0, {str(root)!r})\n"
+        "from scripts.ci import ac_fast_check as fast\n"
+        "resource.setrlimit(resource.RLIMIT_CPU, (3, 3))\n"
+        f"directory = pathlib.Path({str(tmp_path)!r})\n"
+        "check = fast.Check('nested', (sys.executable, '-c', 'pass'), directory, ())\n"
+        "assert fast.run_check(check, 10, 30)['status'] == 'passed'\n"
+        "assert resource.getrlimit(resource.RLIMIT_CPU) == (3, 3)\n"
+    )
+    check = FAST.Check("synthetic", (sys.executable, "-c", script), tmp_path, ())
+    assert FAST.run_check(check, 30, 5)["status"] == "passed"
 
 
 def test_timeout_stops_a_child_without_claiming_success(tmp_path: Path) -> None:

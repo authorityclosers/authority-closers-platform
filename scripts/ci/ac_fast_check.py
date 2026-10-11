@@ -9,12 +9,14 @@ import hashlib
 import json
 import math
 import os
+import re
 import resource
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import xml.etree.ElementTree as element_tree
 from collections import defaultdict, deque
@@ -306,8 +308,9 @@ def plan(
         checks.append(
             Check("ruff", (str(python), "-m", "ruff", "check", "--", *pyfiles), root, pyfiles)
         )
-        modules = tuple(path for path in pyfiles if not path.startswith("tests/"))
-        if modules:
+        # Match the hosted static gate; infrastructure scripts and migrations
+        # are linted/tested here but are not in CI's mypy contract.
+        if (root / "packages/python").is_dir():
             checks.append(
                 Check(
                     "mypy",
@@ -316,11 +319,10 @@ def plan(
                         "-m",
                         "mypy",
                         "--incremental",
-                        "--follow-imports=silent",
-                        *modules,
+                        "packages/python",
                     ),
                     root,
-                    modules,
+                    ("packages/python",),
                 )
             )
     if selected:
@@ -670,6 +672,20 @@ def run_vitest_check(check: Check, seconds: float, cpu_remaining: float) -> dict
         result["vitest_summary"] = counts
         if not success or counts["failed"] or counts["failed_suites"]:
             result["status"] = "failed"
+            document = json.loads(report.read_text(encoding="utf-8"))
+            details = result.setdefault("diagnostics", [])
+            suites = document.get("testResults", [])
+            for suite in suites if isinstance(suites, list) else []:
+                if not isinstance(suite, dict) or suite.get("status") != "failed":
+                    continue
+                name = suite.get("name")
+                if isinstance(name, str) and (path := diagnostic_path(check, name)):
+                    detail = f"{path}: Vitest suite failed"
+                    if detail not in details and len(details) < 40:
+                        details.append(detail)
+            result["diagnostics_policy"] = (
+                "First 40 recognized locations/codes; runtime payload suppressed"
+            )
         elif result["status"] == "passed":
             if not any(counts.values()) and check.name.startswith("vitest:"):
                 result.update({"status": "failed", "reason": "No selected Vitest tests collected"})
@@ -703,6 +719,64 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
         elif result["status"] == "passed" and counts["skipped"]:
             result["status"] = "partial"
         return result
+
+
+def diagnostic_path(check: Check, value: str) -> str | None:
+    """Accept committed file identities, never arbitrary strings from tool output."""
+    root = check.source_root or check.cwd
+    path = Path(value)
+    candidate = path if path.is_absolute() else check.cwd / path
+    try:
+        relative = candidate.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_./@()\[\]-]+", relative) or not candidate.is_file():
+        return None
+    return relative
+
+
+def failure_diagnostics(check: Check, output: str) -> list[str]:
+    """Keep up to 40 locations/codes; suppress payloads, quotes and runtime output."""
+    lines: list[str] = []
+    current: str | None = None
+    rule: str | None = None
+    for raw in output.splitlines():
+        line = re.sub(r"\x1b\[[0-9;]*m", "", raw).strip()
+        detail: str | None = None
+        if check.name == "mypy":
+            match = re.fullmatch(r"(.+?):(\d+)(?::(\d+))?: error: .*\[([a-z-]+)\]", line)
+            if match and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}: mypy error [{match[4]}]"
+        elif check.name.startswith("tsc:"):
+            match = re.match(r"(.+?)\((\d+),(\d+)\): error (TS\d+):", line)
+            if match and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}:{match[3]}: TypeScript error {match[4]}"
+        elif check.name.startswith("prettier:"):
+            if line.startswith("[warn] ") and (path := diagnostic_path(check, line[7:])):
+                detail = f"{path}: formatting differs"
+        elif check.name == "ruff":
+            code = re.match(r"([A-Z]+\d+)\b", line)
+            if code:
+                rule = code[1]
+            match = re.match(r"(?:--> )?(.+?):(\d+):(\d+):?", line)
+            if match and rule and (path := diagnostic_path(check, match[1])):
+                detail = f"{path}:{match[2]}:{match[3]}: Ruff error {rule}"
+                rule = None
+        elif check.name.startswith(("eslint:", "eslint-shared:")):
+            if path := diagnostic_path(check, line):
+                current = path
+            match = re.fullmatch(r"(\d+):(\d+)\s+(error|warning)\s+.*\s+([A-Za-z0-9_@/-]+)", line)
+            if current and match:
+                detail = f"{current}:{match[1]}:{match[2]}: ESLint {match[3]} {match[4]}"
+        elif check.name == "pytest":
+            match = re.match(r"(FAILED|ERROR) (.+?\.py)::(test_[A-Za-z0-9_]+)(?:\[|\s|$)", line)
+            if match and (path := diagnostic_path(check, match[2])):
+                detail = f"{path}::{match[3]}: {match[1].lower()}"
+        if detail and detail not in lines:
+            lines.append(detail)
+            if len(lines) == 40:
+                break
+    return lines
 
 
 def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, Any]:
@@ -750,17 +824,29 @@ def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, 
 
     def limit_cpu() -> None:
         limit = max(1, math.ceil(cpu_remaining))
-        resource.setrlimit(resource.RLIMIT_CPU, (limit, limit + 1))
+        inherited = resource.getrlimit(resource.RLIMIT_CPU)[1]
+        hard = limit + 1 if inherited == resource.RLIM_INFINITY else min(limit + 1, inherited)
+        resource.setrlimit(resource.RLIMIT_CPU, (min(limit, hard), hard))
 
     process = subprocess.Popen(  # noqa: S603 - selected local tool argument arrays, no shell
         command,
         cwd=check.cwd,
         env=environment,
         start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         preexec_fn=limit_cpu,
     )
+    captured = bytearray()
+
+    def drain_output() -> None:
+        assert process.stdout is not None
+        while chunk := process.stdout.read(8192):
+            # Drain beyond the bound so verbose failures cannot block the child.
+            captured.extend(chunk[: max(0, 262144 - len(captured))])
+
+    reader = threading.Thread(target=drain_output, daemon=True)
+    reader.start()
     owned: dict[int, int] = {}
     while True:
         family = process_family(process.pid)
@@ -781,7 +867,8 @@ def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, 
     # A successful tool can still leave a server or browser descendant behind.
     # Reclaim observed children on every exit, with the same PID/start-time guard.
     signal_owned(owned, signal.SIGKILL)
-    return {
+    reader.join(timeout=2)
+    result: dict[str, Any] = {
         "name": check.name,
         "status": status,
         "returncode": returncode,
@@ -789,6 +876,14 @@ def _run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, 
         "cpu_seconds": round(cpu_seconds() - cpu_start, 3),
         "scope": list(check.scope),
     }
+    if status != "passed":
+        result["diagnostics"] = failure_diagnostics(
+            check, captured.decode("utf-8", errors="replace")
+        )
+        result["diagnostics_policy"] = (
+            "First 40 recognized locations/codes; runtime payload suppressed"
+        )
+    return result
 
 
 def main(argv: Sequence[str] | None = None) -> int:
