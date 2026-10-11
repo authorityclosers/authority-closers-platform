@@ -77,7 +77,7 @@ export function reportPillars(
       ? [
           sourced(
             "Closing evidence",
-            "Review the closing moment before recording the deal outcome.",
+            "Review the closing moment before entering the deal outcome.",
             story.outcome.evidence,
           ),
         ]

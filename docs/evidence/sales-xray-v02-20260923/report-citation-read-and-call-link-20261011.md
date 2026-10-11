@@ -96,3 +96,10 @@ presentation guard, not a provider-quality or persisted-outcome receipt.
 Focused verification: all 25 pillar/screen/Word/withholding cases pass;
 incremental app typecheck, cached changed-file ESLint and browser-script
 Ruff/format pass. Final shared-dev receipts follow the committed refresh.
+
+The older native Story regression now explicitly keeps Call outcome and Current
+status unknown while retaining the original closing references and literal
+Friday-at-four timing. The shared-browser check preserves the source disclosure
+when switching won to lost, checking the exact quote, 00:31 timestamp and source
+callback in both cases. Closing guidance uses "entering" so the rich-text entity
+renderer does not label the human outcome as a video recording.

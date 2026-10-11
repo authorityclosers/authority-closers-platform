@@ -147,7 +147,13 @@ def main():
                     .filter(has=page.get_by_role("heading", name="Closing evidence", exact=True))
                     .first
                 )
-                closing.locator("summary").click()
+                disclosure = closing.locator("details")
+                if disclosure.get_attribute("open") is None:
+                    disclosure.locator("summary").click()
+                expect(closing.locator("blockquote")).to_have_text(
+                    "Understood. I won't schedule a follow-up."
+                )
+                expect(disclosure.locator("summary")).to_contain_text("00:31")
                 closing.get_by_role("button").click()
                 expect(page.get_by_role("status")).to_contain_text(
                     "Understood. I won't schedule a follow-up."
