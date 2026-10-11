@@ -10,6 +10,7 @@ import {
 } from "@/app/calls/call-data";
 import { queueApiPath, queueFilters } from "@/app/calls/queue-query";
 import { ReviewScreen } from "@/app/calls/review-screen";
+import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
 import { Empty, Page, PageHeader, Panel, Unavailable } from "@/app/ui/kit";
 
@@ -54,7 +55,7 @@ export default async function CallReviewPage({
   const compareRun = compareId
     ? call.data.runs.find((item) => item.id === compareId && item.reportId)
     : undefined;
-  const [bundle, compared, queue] = await Promise.all([
+  const [bundle, compared, queue, access] = await Promise.all([
     run
       ? adminRead(
           `/v1/admin/conversation/runs/${run.id}/review`,
@@ -68,6 +69,7 @@ export default async function CallReviewPage({
         )
       : null,
     back ? adminRead(queueApiPath(backFilters, 100), normalizeQueue) : null,
+    loadConsoleAccess(),
   ]);
 
   if (!run || !bundle?.ok)
@@ -111,6 +113,7 @@ export default async function CallReviewPage({
       compare={compareRun && compareRun.id !== run.id ? compareRun.id : null}
       compareBundle={compared?.ok ? compared.data : null}
       back={back}
+      safety={access.platform.includes("platform_content_safety_manage")}
       neighbours={{
         previous: at > 0 ? (ids[at - 1] ?? null) : null,
         next: at >= 0 ? (ids[at + 1] ?? null) : null,

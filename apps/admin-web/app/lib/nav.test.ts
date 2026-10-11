@@ -74,7 +74,6 @@ describe("console navigation", () => {
   it("never lists a section before its screen exists", () => {
     const everything = hrefs({ ...base, state: "preview" });
     expect(everything).not.toContain("/gold");
-    expect(everything).not.toContain("/releases");
   });
 
   it("marks the most specific matching section, including query-addressed tabs", () => {

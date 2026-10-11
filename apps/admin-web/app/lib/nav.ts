@@ -127,14 +127,12 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/usage",
-        soon: true,
         label: "Usage",
         icon: "usage",
         need: { kind: "salesXray" },
       },
       {
         href: "/outcomes",
-        soon: true,
         label: "Deal outcomes",
         icon: "outcomes",
         need: { kind: "salesXray" },
@@ -211,21 +209,18 @@ export const NAVIGATION: readonly NavGroup[] = [
     items: [
       {
         href: "/releases",
-        soon: true,
         label: "Releases & status",
         icon: "releases",
         need: { kind: "platform", any: ["platform_release_manage"] },
       },
       {
         href: "/updates",
-        soon: true,
         label: "Product updates",
         icon: "updates",
         need: { kind: "salesXray" },
       },
       {
         href: "/safety",
-        soon: true,
         label: "Safety",
         icon: "safety",
         need: { kind: "platform", any: ["platform_content_safety_manage"] },

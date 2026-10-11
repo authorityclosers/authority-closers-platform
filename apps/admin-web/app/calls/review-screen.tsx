@@ -14,6 +14,7 @@ import {
   FlaskConical,
   Keyboard,
   RefreshCcw,
+  ShieldCheck,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -73,7 +74,10 @@ export function ReviewScreen({
   compareBundle,
   back,
   neighbours,
+  safety = false,
 }: {
+  /** The operator may withhold passages (platform_content_safety_manage). */
+  safety?: boolean;
   call: Call;
   bundle: Bundle;
   compare: string | null;
@@ -224,6 +228,16 @@ export function ReviewScreen({
             <RefreshCcw size={14} aria-hidden="true" />
             Re-run
           </button>
+          {safety ? (
+            <Link
+              href={`/safety?recording=${call.recordingId}`}
+              className={kitStyles.button}
+              title="Withhold sensitive passages of this call"
+            >
+              <ShieldCheck size={14} aria-hidden="true" />
+              Safety
+            </Link>
+          ) : null}
           <button
             type="button"
             className={kitStyles.button}

@@ -92,6 +92,7 @@ export function TranscriptPane({
                 className={styles.line}
                 onClick={() => onSeek(segment.startMs)}
                 aria-label={`${speaker} at ${clock(segment.startMs)}. Play from here`}
+                title={`Segment ${segment.id}`}
               >
                 <span className={styles.lineMeta}>
                   <span className={styles.speaker}>{speaker}</span>

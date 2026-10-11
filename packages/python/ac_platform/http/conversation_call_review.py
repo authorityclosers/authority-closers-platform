@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.admin_call_review import (
     STATUSES,
     AdminCallReview,
 )
+from ac_platform.conversation_intelligence.admin_usage import AdminUsage
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -36,6 +37,7 @@ from ac_platform.conversation_intelligence.storage import (
 from ac_platform.conversation_intelligence.synthetic_dataset import SyntheticDataset
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
+from ac_platform.product_updates.admin_reading import latest_notes
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _QUEUE_PARAMS = {
@@ -139,6 +141,42 @@ def install_call_review_routes(
             ).summary(auth.resolved.actor, days=days)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/usage")
+    async def usage(
+        request: Request,
+        response: Response,
+        days: Annotated[int, Query(ge=1, le=90)] = 7,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Product event counts for the served organisations; never payloads."""
+
+        scope(request, response, {"days"})
+        if settings.operations_tenant_id is None:
+            raise HTTPException(503, "Usage is not configured.")
+        try:
+            return await AdminUsage(
+                ConversationApplication(auth.database),
+                settings.operations_tenant_id,
+                recording_tenant_ids=recording_tenant_ids,
+            ).summary(auth.resolved.actor, days=days)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/product-updates")
+    async def product_updates(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """The newest version of each product note users see as "What's new"."""
+
+        scope(request, response)
+        try:
+            await service(auth)._admit(auth.resolved.actor)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+        return await latest_notes(auth.database)
 
     synthetic = SyntheticDataset(settings.sales_xray_synthetic_dataset_root)
 
