@@ -1,3 +1,41 @@
+# WORKBENCH MODE (owner order, 11 Oct 2026, about 19:00 IST)
+
+This order supersedes delivery rules below about branches, pull requests, task
+gates, lanes, worktrees, merge trains and single-track. The owner's instruction:
+"Whatever is live on dev, every agent is working on that ... no branching, no
+bullshit. Everything just builds up in here itself."
+
+- Everyone uses `/home/acdev/src/dev-live/authority-closers-platform`, branch
+  `dev/live`. Sales Xray dev hot-reloads this checkout; Python and migration
+  commits redeploy the live API with health checks and rollback.
+- Do not create branches, PRs, lanes or worktrees, or run `ac_task.py`.
+  `git checkout/switch/reset/stash/rebase/pull/merge/push` and plain `git commit`
+  are blocked in the workbench. The authorized release tool owns release PRs.
+- Claim files and folders under `## Claimed paths` in your strike's `NOTES.md`.
+  Edit only those paths. Ask another file's owner through
+  `/home/acdev/strikes/<card>/INBOX.md`, with an exact, testable request.
+- Commit only your own paths, small and often, through
+  `wb-commit -m "what the owner can now see" -- <your paths>`. It serializes
+  commits so another agent's unfinished edits are preserved.
+- Keep shared dev shippable. Before committing Python, run
+  `uv run python -c "import ac_platform.http"`. Before committing TypeScript,
+  run a typecheck covering the touched files. Run focused checks and retain
+  implementation evidence. Fix a dev regression promptly or revert your own file.
+- Focus on the Report's structure, UI and plain sales language per Dipak's
+  `/home/acdev/scratch/specs/final-xray-structure-2026-10-09.md`, then Coaching.
+  Start other product work only on the owner's instruction.
+- Shipping belongs to the owner's operator or coordinator, through `ac-ship`:
+  version checkpoint, CI, staging and tests, then production. Builders do not
+  deploy or start competing ships. Never edit staging or production by hand.
+- Read your INBOX first and after each commit; retain completed requests and
+  source pins in NOTES. Preserve other agents' edits across session restarts.
+- Use subscriptions only and stop at limits. The owner switched these server
+  seats to Codex / Sol 6.1 on 12 Oct at about 04:10 IST; do not silently fall back
+  to Claude Opus or paid API credits.
+
+Protected business semantics, secrets, data-change and deletion approvals,
+evidence provenance, provider activation and AC-SVAL requirements still apply.
+
 # CODEX NON-NEGOTIABLE GUARDRAILS
 
 - Do not infer protected business semantics.
@@ -17,7 +55,6 @@
 - Do not build full B2B/native/WhatsApp/voice merely because the architecture preserves those futures.
 - A P0 blocks its capability, not the whole project.
 - Every code change must leave tests and implementation evidence.
-
 
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
@@ -123,6 +160,7 @@ one-small-change limit for strikes. They were recorded on [AUT-1701](/AUT/issues
   - the Telegram Approve button.
 
   `Owner: hold PR #n` stops it.
+
 - **Sign-off deadline:** a green PR that needs a sign-off goes to its reviewer.
   After 30 minutes without a verdict, the watchdog sends it to the owner on
   Telegram with Approve and Hold buttons. Silence never blocks for longer.
@@ -147,6 +185,7 @@ Purpose: make urgent account, workspace and access changes in minutes, without
 waiting for a feature release.
 
 Allowed kinds (dev, staging, production):
+
 - memberships and roles (owner, admin, member), ownership transfer
 - permission grants and product switches per workspace (e.g. Sales Xray on)
 - workspace create/rename and verified email domains
@@ -155,12 +194,14 @@ Allowed kinds (dev, staging, production):
 - permanent deletion, only as set out in OWNER-APPROVED DELETIONS
 
 Never through this path:
+
 - rewriting audit history (supersede instead)
 - payments, billing, credit balances, plan prices
 - secrets or credentials (Infisical only)
 - schema changes (migrations only)
 
 How:
+
 1. Approval: the owner writes "approve data change: <what>, <environment>" in
    chat or on the issue. The owner may pre-approve a repeatable kind once (e.g.
    "add @authorityclosers.com staff to the AC organisation"); every run is
@@ -182,6 +223,7 @@ Claude session), never during a release.
 
 Permanent deletion (users, calls, recordings, reports, duplicates, files) is
 allowed once the owner approves that exact request:
+
 1. The agent first shows the exact list (ids, names, environment, count) and
    what cannot be recovered.
 2. The owner answers "approve delete: <that list>, <environment>" (or "go
@@ -196,6 +238,7 @@ allowed once the owner approves that exact request:
 When the owner asks, an agent may copy a password, token or API key from where
 it is created (e.g. a provider console) into Infisical or the team password
 manager, and read it from there to configure a service.
+
 - Use methods that do not print the value: clipboard paste into the target
   field, `infisical secrets set` from stdin, or injection at runtime.
 - Never repeat the value in chat, logs, task comments, commits, pull requests
@@ -210,6 +253,7 @@ manager, and read it from there to configure a service.
 Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
 
 ## Required first
+
 1. Master Index
 2. BRD
 3. AC-IMP-00
@@ -219,15 +263,18 @@ Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
 7. AC-IMP-05
 
 ## Required before first-slice code
+
 PRD, IA, UX Research, UX States, UI System, SRS, Data/Tenancy, API/MCP, Security, QA, DevOps, Admin, Telemetry, ADR/Risk.
 
 ## Assurance as relevant
+
 AC-UXA-01 for learner/admin/recovery/accessibility work.
 AC-SVAL-01 before any scoring/evaluation work.
 AC-GOV-AUD-001 before provider/store/recording/AI data activation.
 Hostile audit findings are normalized into AC-IMP-03; do not invent original missing issue text.
 
 ## Raw founder evidence
+
 Use only for context and to verify intent. Controlled docs win.
 
 ## Cloud research orchestration
