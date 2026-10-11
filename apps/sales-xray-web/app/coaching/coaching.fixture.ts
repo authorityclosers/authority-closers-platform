@@ -164,6 +164,7 @@ export const fictionalTeamCoaching: TeamCoaching & {
   pending_calls: 0,
   unavailable_calls: 0,
   history_limited: false,
+  latest_call_at: "2026-10-09T10:00:00Z",
   suggestions: [
     {
       skill_id: "problem_impact_desire",
@@ -193,6 +194,8 @@ export const fictionalClip: CoachingClip = {
   entitlement_policy: "AUT-1678-open-access",
   start_ms: 1000,
   end_ms: 5000,
+  preview_end_ms: null,
+  offer: null,
   reason: "This fictional reviewed cut shows one consequence question.",
   takeaways: ["Check the buyer’s consequence."],
   transcript_excerpt: "समस्या का असर क्या है?",
