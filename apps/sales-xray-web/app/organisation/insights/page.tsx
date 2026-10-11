@@ -1,5 +1,10 @@
 import { serverReads } from "../../server-reads";
-import { INSIGHTS_PATH, filtersFrom, queryOf } from "./insights-data";
+import {
+  DEFAULT_FILTERS,
+  INSIGHTS_PATH,
+  filtersFrom,
+  queryOf,
+} from "./insights-data";
 import { InsightsPage } from "./insights-page";
 
 /**
@@ -12,7 +17,12 @@ export default async function Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const filters = filtersFrom(await searchParams);
+  // A static preview build has no request: it starts on the default filters
+  // and the browser reads the address.
+  const staticPreview = process.env.AC_SALES_XRAY_STATIC_PREVIEW === "1";
+  const filters = staticPreview
+    ? DEFAULT_FILTERS
+    : filtersFrom(await searchParams);
   const query = queryOf(filters);
   const paths = [INSIGHTS_PATH + query, `${INSIGHTS_PATH}/calls${query}`];
   const reads = await serverReads(paths, 2500);

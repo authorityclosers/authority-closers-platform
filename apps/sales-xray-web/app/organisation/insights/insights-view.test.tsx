@@ -69,7 +69,10 @@ it("renders a seeded sandbox page whole, labelled synthetic, without reading", a
   expect(host.querySelector('select[aria-label="Team"]')).not.toBeNull();
 });
 
-it("puts a chosen filter in the address", async () => {
+it("puts a chosen filter in the address and reads it", async () => {
+  fetchMock.mockImplementation(async (path: string) =>
+    json(path.includes("/calls") ? fixture.calls : fixture.overview),
+  );
   await render(
     <InsightsView
       filters={DEFAULT_FILTERS}
@@ -77,6 +80,7 @@ it("puts a chosen filter in the address", async () => {
       initialCalls={{ status: 200, body: fixture.calls }}
     />,
   );
+  expect(fetchMock).not.toHaveBeenCalled();
   const outcome = host.querySelector<HTMLSelectElement>(
     'select[aria-label="Outcome"]',
   );
@@ -85,9 +89,14 @@ it("puts a chosen filter in the address", async () => {
     outcome!.value = "won";
     outcome!.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  expect(replace).toHaveBeenCalledWith("/organisation/insights?outcome=won", {
-    scroll: false,
-  });
+  expect(`${window.location.pathname}${window.location.search}`).toBe(
+    "/organisation/insights?outcome=won",
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/v1/conversation/acquisition/insights?outcome=won",
+    expect.objectContaining({ credentials: "same-origin" }),
+  );
+  expect(replace).not.toHaveBeenCalled();
 });
 
 it("reads in the browser when the server could not, and links real calls", async () => {

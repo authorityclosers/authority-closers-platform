@@ -9,7 +9,7 @@
  */
 import { BarChart3, Lock, RotateCw, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -112,7 +112,7 @@ const RANGE_TEXT: Record<RangeKey, string> = {
 };
 
 export function InsightsView({
-  filters,
+  filters: initialFilters,
   initial,
   initialCalls,
   callHref = callPath,
@@ -126,8 +126,10 @@ export function InsightsView({
   /** Review fixtures: never read or refresh. */
   fixture?: boolean;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
+  // Filters are the page's own state, written to the address as they change
+  // (no server round trip); a reload starts from the address again.
+  const [filters, setFilters] = useState<Filters>(initialFilters);
   const query = queryOf(filters);
   const [read, setRead] = useState<Read>(
     () => seedOf(initial) ?? { status: "loading" },
@@ -222,10 +224,11 @@ export function InsightsView({
 
   const go = useCallback(
     (next: Partial<Filters>) => {
-      const target = queryOf({ ...filters, ...next });
-      router.replace(`${pathname}${target}`, { scroll: false });
+      const merged = { ...filters, ...next };
+      setFilters(merged);
+      window.history.replaceState(null, "", `${pathname}${queryOf(merged)}`);
     },
-    [filters, pathname, router],
+    [filters, pathname],
   );
 
   async function more() {
