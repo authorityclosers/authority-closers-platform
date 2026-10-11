@@ -88,6 +88,7 @@ describe("report document model", () => {
     expect(deal[0]).toBe("6.1 Current Status");
     expect(deal).toContain("6.4 Prospect Commitment");
     expect(deal).toContain("6.9 Recommended Deal Action");
+    expect(textOf(doc)).toContain("Clear because Friday · 4:00 PM is agreed.");
   });
 
   it("puts the call's own words, names and play times in the page", () => {

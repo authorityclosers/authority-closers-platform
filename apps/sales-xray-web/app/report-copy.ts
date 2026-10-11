@@ -389,6 +389,10 @@ export const prospectAgreed = (name?: string | null) =>
 export const commitmentIs = (quality: CommitmentQuality) =>
   `${DEAL.quality.label}: ${quality}`;
 
+/** Spec 6.7: "Clear because Friday · 4:00 PM is agreed." */
+export const clearBecause = (when: string) =>
+  `Clear because ${when} is agreed.`;
+
 /** "12 prospect insights captured" */
 export const prospectInsights = (count: number) =>
   `${count} prospect ${count === 1 ? "insight" : "insights"} captured`;

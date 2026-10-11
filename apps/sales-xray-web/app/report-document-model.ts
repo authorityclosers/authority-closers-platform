@@ -14,6 +14,7 @@ import {
   SKILL_STATE_MEANING,
   WORKED_DIDNT,
   changedAt,
+  clearBecause,
   followUpOn,
   momentHead,
   partHeading,
@@ -660,7 +661,14 @@ export function reportDocumentModel(
       ]),
       deal.quality
         ? partOf(DEAL.quality, [
-            { type: "text", text: deal.quality, strong: true },
+            {
+              type: "text",
+              text:
+                deal.quality === "Clear" && deal.nextEvent
+                  ? clearBecause(deal.nextEvent.text)
+                  : deal.quality,
+              strong: true,
+            },
             { type: "text", text: COMMITMENT_MEANING[deal.quality] },
           ])
         : null,
