@@ -154,6 +154,7 @@ export function StoryShellPreview({
         <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
           <AcquisitionShell
             authenticated
+            pageName="Report"
             homeHref="/review-fixture/report/story"
             active="analyse"
             mobileFit

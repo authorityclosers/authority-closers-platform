@@ -94,6 +94,7 @@ export function FullShellPreview() {
       <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
         <AcquisitionShell
           authenticated
+          pageName="Report"
           homeHref="/review-fixture/shell"
           active="analyse"
           mobileFit

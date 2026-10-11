@@ -30,6 +30,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { VIEWS as VIEWS_COPY } from "./report-copy";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -1116,14 +1117,35 @@ export function ReportModes({
   type ViewChoice = readonly [View, string, string, LucideIcon];
   const primaryViews: ViewChoice[] = storyPanels.length
     ? [
-        ["story", "Report", "Report view", FileText],
+        ["story", VIEWS_COPY.report.text, VIEWS_COPY.report.hint, FileText],
         ...(coachingPanels.length
-          ? [["coaching", "Coaching", "Coaching view", Lightbulb] as const]
+          ? [
+              [
+                "coaching",
+                VIEWS_COPY.coaching.text,
+                VIEWS_COPY.coaching.hint,
+                Lightbulb,
+              ] as const,
+            ]
           : []),
         ...(view === "tabs"
-          ? [["tabs", "Details", "Details view", PanelsTopLeft] as const]
+          ? [
+              [
+                "tabs",
+                VIEWS_COPY.details.text,
+                VIEWS_COPY.details.hint,
+                PanelsTopLeft,
+              ] as const,
+            ]
           : view === "document"
-            ? [["document", "Document", "Document view", BookOpen] as const]
+            ? [
+                [
+                  "document",
+                  VIEWS_COPY.document.text,
+                  VIEWS_COPY.document.hint,
+                  BookOpen,
+                ] as const,
+              ]
             : []),
       ]
     : [
@@ -1134,8 +1156,18 @@ export function ReportModes({
   const moreViews: ViewChoice[] = storyPanels.length
     ? (
         [
-          ["document", "Document · print or Word", "Document view", BookOpen],
-          ["tabs", "All analysis details", "Details view", PanelsTopLeft],
+          [
+            "document",
+            VIEWS_COPY.document.menu,
+            VIEWS_COPY.document.hint,
+            BookOpen,
+          ],
+          [
+            "tabs",
+            VIEWS_COPY.details.menu,
+            VIEWS_COPY.details.hint,
+            PanelsTopLeft,
+          ],
         ] as const
       ).filter(([value]) => value !== view)
     : [];
@@ -1268,7 +1300,7 @@ export function ReportModes({
               event.currentTarget.querySelector("summary")?.focus();
             }}
           >
-            <summary aria-label="More views" title="More views">
+            <summary aria-label={VIEWS_COPY.more} title={VIEWS_COPY.more}>
               <Ellipsis aria-hidden="true" />
             </summary>
             <div className={styles.moreViewsMenu}>
