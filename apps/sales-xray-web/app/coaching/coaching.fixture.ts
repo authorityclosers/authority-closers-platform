@@ -164,6 +164,7 @@ export const fictionalTeamCoaching: TeamCoaching & {
   pending_calls: 0,
   unavailable_calls: 0,
   history_limited: false,
+  latest_call_at: "2026-10-09T10:00:00Z",
   suggestions: [
     {
       skill_id: "problem_impact_desire",

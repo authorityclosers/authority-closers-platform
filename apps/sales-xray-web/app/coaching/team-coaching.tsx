@@ -2,6 +2,7 @@
 
 import { FileSearch, Lock, Users } from "lucide-react";
 import { Badge, Empty, Kpi, List, Meter, Panel, Row, Tiles } from "../ui/kit";
+import { callDate } from "./coaching-format";
 import type { TeamCoaching } from "./team-contract";
 import styles from "./coaching.module.css";
 
@@ -32,7 +33,13 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
         <Kpi
           label="Analysed calls"
           value={analysed}
-          note={coaching.history_limited ? "Most recent 40" : "In this view"}
+          note={
+            coaching.latest_call_at
+              ? `Updated ${callDate(coaching.latest_call_at)}${coaching.history_limited ? " · last 40" : ""}`
+              : coaching.history_limited
+                ? "Most recent 40"
+                : "In this view"
+          }
         />
         <Kpi
           label="Top coaching area"

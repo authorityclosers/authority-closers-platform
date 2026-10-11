@@ -12,6 +12,7 @@ describe("anonymous Team coaching", () => {
       <TeamCoachingStory coaching={fictionalTeamCoaching} />,
     );
     expect(html).toContain("Analysed calls");
+    expect(html).toContain("Updated 9 Oct 2026");
     expect(html).toContain("2 of 3 calls");
     expect(html).toContain("67%");
     expect(html).toContain("Private by default");
