@@ -269,6 +269,7 @@ details[open] > summary .chevron {
 }
 .facts > .field {
   grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  align-items: start;
   gap: 4px 16px;
   padding-top: 14px;
   border-top: 1px solid var(--sx-line);
