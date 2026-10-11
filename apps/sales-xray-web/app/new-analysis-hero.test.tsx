@@ -48,14 +48,14 @@ it("welcomes the person by first name", async () => {
   await readShellProfile("document");
   await act(async () => root.render(<NewAnalysisHero />));
   expect(host.querySelector("h2")?.textContent).toBe(
-    "Let's analyse your next call, Suyash🎧",
+    "Let's analyse your next call, Suyash",
   );
 });
 
 it("leaves the name out when the profile has none", async () => {
   await act(async () => root.render(<NewAnalysisHero />));
   expect(host.querySelector("h2")?.textContent).toBe(
-    "Let's analyse your next call🎧",
+    "Let's analyse your next call",
   );
 });
 

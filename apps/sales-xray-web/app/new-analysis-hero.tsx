@@ -19,9 +19,6 @@ export function NewAnalysisHero() {
             </>
           ) : null}
         </span>
-        <span className={styles.mark} aria-hidden="true">
-          🎧
-        </span>
       </h2>
       <p className={styles.subtitle}>
         Bring your conversation. Leave with a clearer next step.
