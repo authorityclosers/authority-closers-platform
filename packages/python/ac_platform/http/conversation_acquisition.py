@@ -32,7 +32,7 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     CLAIM_PERSONAL_ONLY_MESSAGE,
     WORKSPACE_UNAVAILABLE_MESSAGE,
-    sales_xray_served_tenant_ids,
+    sales_xray_workspace_served,
 )
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -73,7 +73,6 @@ def install_acquisition_http(
     me_router = APIRouter(prefix="/v1/me", tags=["conversation-acquisition"])
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
     public = settings.public_learner_tenant_id
-    served = sales_xray_served_tenant_ids(settings, intake)
 
     def service(database: AsyncSession, tenant_id: UUID = public) -> AcquisitionSessions:
         """Guest paths stay on Personal; account paths use the selected workspace."""
@@ -85,10 +84,11 @@ def install_acquisition_http(
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
 
-    def workspace(actor: ActorContext) -> UUID:
+    async def workspace(database: AsyncSession, actor: ActorContext) -> UUID:
         """The selected tenant, when Sales Xray serves it; operations never qualifies."""
-        if actor.tenant_id is None or actor.tenant_id not in served:
+        if not await sales_xray_workspace_served(database, settings, actor.tenant_id):
             raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
+        assert actor.tenant_id is not None
         return actor.tenant_id
 
     def surface(request: Request) -> str | None:
@@ -120,7 +120,7 @@ def install_acquisition_http(
     async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
-                workspace(auth.resolved.actor)
+                await workspace(auth.database, auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -134,7 +134,7 @@ def install_acquisition_http(
     async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(read_require_actor)(request) as auth:
-                workspace(auth.resolved.actor)
+                await workspace(auth.database, auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -210,7 +210,7 @@ def install_acquisition_http(
             async with learner_read_account(request) as auth:
                 actor = auth.resolved.actor
                 allowance = await result(
-                    service(auth.database, workspace(actor)).allowance(
+                    service(auth.database, await workspace(auth.database, actor)).allowance(
                         actor=actor,
                         shared_identity_locks=True,
                     )
@@ -224,7 +224,7 @@ def install_acquisition_http(
         if account_token is not None:
             async with asynccontextmanager(read_require_actor)(request) as auth:
                 actor = auth.resolved.actor
-                app = service(auth.database, workspace(actor))
+                app = service(auth.database, await workspace(auth.database, actor))
                 if current is None:
                     allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
                     return {"state": "account", "allowance": allowance}
@@ -278,7 +278,7 @@ def install_acquisition_http(
             raise fail(404, "Upload entry not found.")
         async with asynccontextmanager(require_actor)(request) as auth:
             actor = auth.resolved.actor
-            tenant_id = workspace(actor)
+            tenant_id = await workspace(auth.database, actor)
             current = token(request)
             if current is None:
                 raise fail(401, "This upload session is unavailable.")
@@ -297,7 +297,7 @@ def install_acquisition_http(
         admit(request, response)
         async with learner_read_account(request) as auth:
             actor = auth.resolved.actor
-            app = service(auth.database, workspace(actor))
+            app = service(auth.database, await workspace(auth.database, actor))
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
         return {
             "plan": (
@@ -314,7 +314,7 @@ def install_acquisition_http(
         admit(request, response)
         async with learner_read_account(request) as auth:
             actor = auth.resolved.actor
-            app = service(auth.database, workspace(actor))
+            app = service(auth.database, await workspace(auth.database, actor))
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
             usage = await account_usage(
                 auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()

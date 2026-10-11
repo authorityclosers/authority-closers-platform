@@ -30,6 +30,7 @@ from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Organisation
 
 OPS, PERSONAL, ORGANISATION, UNAPPROVED = (UUID(int=index) for index in range(1, 5))
 NOW = datetime(2026, 10, 4, tzinfo=UTC)
@@ -89,6 +90,8 @@ class _Database:
         return rows
 
     async def scalars(self, statement: Any) -> Any:
+        if statement.column_descriptions[0]["entity"] is Organisation:
+            return SimpleNamespace(all=lambda: [ORGANISATION])
         return SimpleNamespace(all=lambda: self.rows(statement))
 
     async def scalar(self, statement: Any) -> Any:

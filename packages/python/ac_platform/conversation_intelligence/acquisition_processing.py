@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from sqlalchemy import select
+
 from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpload
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.checkpoints import content_hash
@@ -15,6 +17,7 @@ from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.conversation_intelligence.signals import MAX_SECONDS
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Organisation
 
 if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
@@ -68,6 +71,27 @@ class AcquisitionProcessing:
         if policy_sha256 != upload_policy(self.runtime.policy)["policy_sha256"]:
             raise ConversationConflict("The upload terms changed. Review them and try again.")
         usage_id = await self.sessions.reserve(upload.source, token=token, actor=actor)
+        # Reserve already fences the real owner and serializes tenant admission.
+        # First use creates the same non-login principal/empty ledger as the
+        # existing operator path, inside this upload's transaction.
+        authority = self.runtime.authority
+        if (
+            actor is not None
+            and authority is not None
+            and self.runtime.policy.registered_organisations
+        ):
+            organisation = await self.database.scalar(
+                select(Organisation.tenant_id).where(Organisation.tenant_id == actor.tenant_id)
+            )
+            if organisation is not None and organisation != authority.operations_tenant_id:
+                bundle = authority.current(self.ownership.clock())
+                policy = bundle.acquisition_policy_for(organisation, registered_organisation=True)
+                if policy is not None:
+                    await self.ownership.provision(
+                        operator_reference="ref:approval:AUT-1701:AUT-1694:all-organisations",
+                        reason="Owner-approved default organisation processing on first upload.",
+                        processing_person_id=policy.processing_person_id,
+                    )
         processing = await self.ownership.resolve_processing_actor(
             upload.source.submission_id, token=token, actor=actor
         )

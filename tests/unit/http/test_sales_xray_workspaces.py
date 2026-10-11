@@ -14,6 +14,10 @@ from pydantic import ValidationError
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    sales_xray_served_tenant_ids,
+    sales_xray_workspace_served,
+)
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.sales_xray_workspaces import (
@@ -100,14 +104,14 @@ async def test_exact_directory_is_read_only_and_hides_operations(state, selected
                 "kind": "personal",
                 "name": "Personal",
                 "role": None,
-                "sales_xray_enabled": state.configured,
+                "sales_xray_enabled": True,
             },
             {
                 "tenant_id": str(state.tenants["Alpha"]),
                 "kind": "organisation",
                 "name": "Alpha",
                 "role": "admin",
-                "sales_xray_enabled": state.configured,
+                "sales_xray_enabled": True,
             },
         ],
     }
@@ -120,13 +124,13 @@ async def test_exact_directory_is_read_only_and_hides_operations(state, selected
 
 
 @pytest.mark.parametrize("role", ["owner", "admin", "member", "learner", "support"])
-async def test_approved_role_mapping_and_unapproved_organisation(state, role):
+async def test_role_mapping_for_organisation_without_an_explicit_policy(state, role):
     state.intake.policy.tenant_ids = frozenset({state.tenants["Other"]})
     with Session(state.engine) as db, db.begin():
         db.get(Membership, (state.tenants["Alpha"], state.person)).role = role
     choice = (await get(state)).json()["workspaces"][1]
     assert choice["role"] == (role if role in {"owner", "admin"} else "member")
-    assert choice["sales_xray_enabled"] is False
+    assert choice["sales_xray_enabled"] is True
 
 
 @pytest.mark.parametrize("excluded", ["inactive", "ended", "processing", "unregistered", "tenant"])
@@ -162,3 +166,31 @@ async def test_strict_response(state):
         with pytest.raises(ValidationError):
             SalesXrayWorkspacesResponse.model_validate_json(json.dumps(body))
         del target["extra"]
+
+
+async def test_live_registry_is_the_served_set_and_new_organisations_need_no_restart(state):
+    with Session(state.engine) as db:
+        served = await sales_xray_served_tenant_ids(state.settings, None, HttpDatabase(db))
+        assert served == frozenset(state.tenants[n] for n in ("Beta", "Alpha", "Inactive"))
+        for name in ("Other", "Suspended", "Deleted"):
+            assert not await sales_xray_workspace_served(
+                HttpDatabase(db), state.settings, state.tenants[name]
+            )
+    new_id = uuid4()
+    with Session(state.engine) as db, db.begin():
+        db.add(Tenant(id=new_id, name="Created after API startup", slug=new_id.hex))
+        db.flush()
+        db.add(
+            Organisation(
+                tenant_id=new_id, creation_command_id=uuid4(), domain_verification_token="f" * 43
+            )
+        )
+        db.add(Membership(tenant_id=new_id, person_id=state.person, role="owner"))
+    body = (await get(state)).json()
+    assert (
+        next(w for w in body["workspaces"] if w["tenant_id"] == str(new_id))["sales_xray_enabled"]
+        is True
+    )
+    with Session(state.engine) as db, db.begin():
+        db.get(Tenant, new_id).status = "suspended"
+    assert str(new_id) not in {w["tenant_id"] for w in (await get(state)).json()["workspaces"]}

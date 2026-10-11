@@ -194,7 +194,9 @@ class FixedProviderRouter:
         # This keeps a reservation payload from selecting a wildcard provider
         # route or borrowing a different source's stage.
         try:
-            policy = bundle.acquisition_policy_for(UUID(quote.source.tenant_id))
+            policy = bundle.acquisition_policy_for(
+                UUID(quote.source.tenant_id), registered_organisation=True
+            )
         except (TypeError, ValueError):
             policy = None
         if policy is not None:

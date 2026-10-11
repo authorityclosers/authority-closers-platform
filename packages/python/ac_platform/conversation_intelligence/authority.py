@@ -117,7 +117,7 @@ from ac_platform.conversation_intelligence.stage_supplements import (
 from ac_platform.identity.models import Person
 from ac_platform.outbox.models import Job, JobStatus
 from ac_platform.outbox.repository import canonical_receipt_digest
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
 
@@ -192,7 +192,7 @@ class ConversationAuthority:
 
     def recipient(self, bundle: HostedApprovalBundle, actor: ConversationActor) -> None:
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(actor.tenant_id, registered_organisation=True)
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition provider policy."
@@ -208,6 +208,17 @@ class ConversationAuthority:
         self, app: ConversationApplication, actor: ConversationActor
     ) -> HostedApprovalBundle:
         bundle = self.current(await app.admit(actor))
+        if (
+            isinstance(actor, ProcessingActor)
+            and actor.tenant_id not in bundle.acquisition_tenant_ids()
+        ):
+            organisation = await app.database.scalar(
+                select(Organisation.tenant_id)
+                .join(Tenant, Tenant.id == Organisation.tenant_id)
+                .where(Organisation.tenant_id == actor.tenant_id, Tenant.status == "active")
+            )
+            if organisation is None or actor.tenant_id == self.operations_tenant_id:
+                raise ConversationDenied("An active registered organisation is required.")
         if isinstance(actor, ProcessingActor) or any(
             item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
             for item in bundle.allowances
@@ -435,7 +446,7 @@ class ConversationAuthority:
         if intent.source_bytes > MAX_AUDIO_BYTES:
             raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(actor.tenant_id, registered_organisation=True)
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition upload policy."
@@ -758,7 +769,7 @@ class ConversationAuthority:
         """
 
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy_for(actor.tenant_id)
+            policy = bundle.acquisition_policy_for(actor.tenant_id, registered_organisation=True)
             if policy is None or not policy.matches_actor(actor):
                 return None
             candidates = tuple(
@@ -796,7 +807,7 @@ class ConversationAuthority:
 
         if isinstance(actor, ProcessingActor):
             policy: AcquisitionProviderPolicy | None = bundle.acquisition_policy_for(
-                actor.tenant_id
+                actor.tenant_id, registered_organisation=True
             )
             if policy is None or not policy.matches_actor(actor):
                 return None
@@ -1564,7 +1575,12 @@ class ConversationAuthority:
             return candidates[0].configuration_sha256
         if (
             isinstance(actor, ProcessingActor)
-            and (policy := bundle.acquisition_policy_for(actor.tenant_id)) is not None
+            and (
+                policy := bundle.acquisition_policy_for(
+                    actor.tenant_id, registered_organisation=True
+                )
+            )
+            is not None
         ):
             for configuration_sha256 in policy.configuration_digests():
                 try:

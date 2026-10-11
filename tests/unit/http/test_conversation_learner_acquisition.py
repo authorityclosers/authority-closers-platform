@@ -93,6 +93,11 @@ def test_submission_install_requires_hosted_native_socket(tmp_path, environment)
 
 
 class _Database:
+    async def scalar(self, statement):
+        # A real registry query, represented by one active fictional organisation.
+        tenant = statement.compile().params.get("tenant_id_1")
+        return ORGANISATION_TENANT if tenant == ORGANISATION_TENANT else None
+
     def begin(self) -> _TransactionScope:
         return _TransactionScope(self)
 
@@ -459,7 +464,7 @@ _SELECTED_TENANTS = {
 async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unlisted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """AUT-436: Personal and an approved organisation are served; nothing else is."""
+    """Registered organisations are served even outside the provider list."""
 
     settings = _settings()
     database = _Database()
@@ -518,7 +523,7 @@ async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unl
             runtime.intake,
             policy=replace(
                 runtime.intake.policy,
-                tenant_ids=frozenset({PUBLIC_TENANT, ORGANISATION_TENANT, OTHER_TENANT}),
+                tenant_ids=frozenset({PUBLIC_TENANT, OTHER_TENANT}),
             ),
         ),
     )
