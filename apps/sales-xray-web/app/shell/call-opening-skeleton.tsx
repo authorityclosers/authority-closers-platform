@@ -11,7 +11,11 @@ import styles from "./page-skeleton.module.css";
  */
 export function CallOpeningSkeletonContent() {
   return (
-    <div className={`xray-app simple-app ${styles.frame}`} data-stage="opening">
+    <div
+      className={`xray-app simple-app ${styles.frame}`}
+      data-stage="opening"
+      aria-busy="true"
+    >
       <div className={`studio-main ${styles.frame}`}>
         <p className="visually-hidden" role="status" aria-live="polite">
           Opening your saved call

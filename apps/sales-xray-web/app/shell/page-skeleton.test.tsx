@@ -8,6 +8,7 @@ it("opens a saved call in the Report's outline, not the analysis panel's", () =>
   const markup = renderToStaticMarkup(<CallOpeningSkeletonContent />);
   expect(markup).toContain('data-variant="report"');
   expect(markup).toContain("Opening your saved call");
+  expect(markup).toContain('aria-busy="true"');
   // Title, the first pillar's heading, the Big Picture card, then a pair.
   const report = renderToStaticMarkup(<PageSkeleton variant="report" />);
   expect(report.match(/reportCard/g)?.length).toBe(4);
