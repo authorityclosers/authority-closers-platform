@@ -1716,6 +1716,8 @@ function CallsLibraryContent({
                 role="group"
                 aria-label="Filter loaded calls by status"
                 data-chips=""
+                // Phones scroll the chips sideways on purpose (faded edge).
+                data-scroll-x=""
               >
                 {FILTERS.map((option) => {
                   const count =

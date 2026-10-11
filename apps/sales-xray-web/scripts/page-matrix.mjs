@@ -8,10 +8,14 @@
 //   - keeps a skeleton (aria-busy="true") that never clears;
 //   - lets a guest see a signed-in page without a way to sign in, or shows a
 //     member company details meant for owners and admins;
-//   - scrolls sideways by more than 1 px.
+//   - scrolls sideways by more than 1 px, has a box wider than its scroll
+//     area (a hidden or clipped sideways scrollbar), or draws anything past
+//     the window's edge (the shell clips sideways overflow, so this is how a
+//     clipped layout bug still fails). Sideways scrollers on purpose carry
+//     data-scroll-x. The "widths" pass checks this at 360-1280 px too.
 //
 //   node apps/sales-xray-web/scripts/page-matrix.mjs --origin http://127.0.0.1:3016 \
-//     --out "$RUNNER_TEMP/page-matrix" [--pass roles|screens|all] [--only /dashboard]
+//     --out "$RUNNER_TEMP/page-matrix" [--pass roles|screens|widths|all] [--only /dashboard]
 import { readdirSync, statSync } from "node:fs";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
@@ -39,6 +43,9 @@ export const PROTECTED = [
 ];
 
 const PARAMS = { callId: CALL_ID, prospectId: PROSPECT_ID };
+
+/** The signed-in app pages the "widths" pass checks for sideways scrolling. */
+export const WIDTH_ROUTES = [...PROTECTED, "/analysis/new", "/coaching"];
 
 /** Every app/**\/page.tsx as a URL; dynamic segments get fixture ids. */
 export function discoverRoutes(root = APP) {
@@ -87,6 +94,100 @@ const VIEWS = {
 
 const SNAG =
   /This screen hit a snag|Application error: a client-side exception/;
+
+/** Extra widths for the sideways check, on the signed-in app pages. */
+export const SIDEWAYS_WIDTHS = [
+  [360, 780],
+  [768, 1024],
+  [1024, 768],
+  [1280, 800],
+];
+
+/**
+ * Runs in the page: the document's width, every scroll box that is wider
+ * inside than out, and elements drawn past the window's edges (unless an
+ * ancestor inside the window clips them, they are fixed, or visually hidden).
+ */
+export function measureSideways() {
+  const name = (node) =>
+    `${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""}${[
+      ...node.classList,
+    ]
+      .slice(0, 2)
+      .map((value) => `.${value.replace(/^.*module__\w+__/, "")}`)
+      .join("")}`;
+  // The app's own sideways clip (shell, main, studio column) hides overflow
+  // from the person; it never excuses an element that is too wide.
+  const appClip = (node) =>
+    node === document.body ||
+    node.matches("[data-lightbox-shell], main, .studio-main");
+  const width = window.innerWidth;
+  const scrollers = [];
+  const outside = [];
+  for (const node of document.body.querySelectorAll("*")) {
+    const style = getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") continue;
+    const box = node.getBoundingClientRect();
+    if (box.width <= 1 || box.height <= 1) continue;
+    const scrolls = ["auto", "scroll"].includes(style.overflowX);
+    if (
+      (scrolls || appClip(node)) &&
+      node.clientWidth > 0 &&
+      node.scrollWidth > node.clientWidth + 1
+    )
+      scrollers.push({
+        name: name(node),
+        by: node.scrollWidth - node.clientWidth,
+        intended: node.closest("[data-scroll-x]") !== null,
+        overflowX: style.overflowX,
+      });
+    if (box.right <= width + 1 && box.left >= -1) continue;
+    if (style.position === "fixed") continue;
+    let clipped = false;
+    for (let up = node.parentElement; up; up = up.parentElement) {
+      const upStyle = getComputedStyle(up);
+      if (upStyle.position === "fixed") {
+        clipped = true;
+        break;
+      }
+      if (upStyle.overflowX === "visible" || appClip(up)) continue;
+      const upBox = up.getBoundingClientRect();
+      if (upBox.right <= width + 1 && upBox.left >= -1) {
+        clipped = true;
+        break;
+      }
+    }
+    if (!clipped)
+      outside.push({
+        name: name(node),
+        left: Math.round(box.left),
+        right: Math.round(box.right),
+      });
+  }
+  return {
+    width,
+    document: document.documentElement.scrollWidth,
+    scrollers,
+    outside: outside.slice(0, 5),
+  };
+}
+
+/** The problems a sideways measurement shows (pure, so it is unit tested). */
+export function sidewaysProblems(measured) {
+  const problems = [];
+  const by = measured.document - measured.width;
+  if (by > 1) problems.push(`scrolls sideways by ${by} px`);
+  for (const box of measured.scrollers)
+    if (!box.intended)
+      problems.push(
+        `${box.name} is ${box.by} px wider inside than its box (overflow-x: ${box.overflowX})`,
+      );
+  for (const node of measured.outside)
+    problems.push(
+      `${node.name} is drawn past the window edge (${node.left}..${node.right} of ${measured.width} px)`,
+    );
+  return problems;
+}
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -187,10 +288,7 @@ async function visitOnce(
       if (await page.locator('form[aria-label="Company details"]').count())
         problems.push("a member sees the company details form");
     }
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth,
-    );
-    if (overflow > 1) problems.push(`scrolls sideways by ${overflow} px`);
+    problems.push(...sidewaysProblems(await page.evaluate(measureSideways)));
     if (out)
       await page.screenshot({ path: out, fullPage: false }).catch(() => {});
   } catch (error) {
@@ -269,6 +367,20 @@ async function main() {
               }),
             );
           }
+    if (pass === "widths" || pass === "all")
+      for (const route of routes.filter((route) =>
+        WIDTH_ROUTES.includes(route.split("?")[0]),
+      ))
+        for (const [width, height] of SIDEWAYS_WIDTHS)
+          log(
+            await visit(browser, origin, {
+              route,
+              role: "owner",
+              width,
+              height,
+              scheme: "light",
+            }),
+          );
   } finally {
     await browser.close();
   }
