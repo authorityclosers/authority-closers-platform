@@ -196,6 +196,7 @@ def test_unproven_inventory_refuses_before_deleting(
     monkeypatch: pytest.MonkeyPatch, response: object
 ) -> None:
     github = POOL.GitHub("fixture/repository")
+    monkeypatch.setattr(POOL.INVENTORY["time"], "sleep", lambda _: None)
     monkeypatch.setattr(github, "api", lambda *args, **kwargs: response)
     with pytest.raises((ValueError, TypeError, KeyError)):
         POOL.reclaim(github, CEILING, CEILING, None)
