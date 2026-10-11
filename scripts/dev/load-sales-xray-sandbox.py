@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from collections import Counter
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationReportMinuteEvent,
 )
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
+from ac_platform.conversation_intelligence.dipak_report import normalize_pillars
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
     ConversationProcessingLease,
@@ -105,6 +107,224 @@ def representatives(root: Path) -> list[dict[str, Any]]:
         if not person["fields"]["email"].endswith("@example.invalid"):
             raise ValueError("Synthetic members must use the reserved invalid email domain.")
     return result
+
+
+def authored_pillars(
+    bundle: SyntheticCallBundle, transcript: dict, evidence: Callable[[Any], list[dict]]
+) -> dict | None:
+    """Copy authored report parts; omit unsupported claims rather than complete them."""
+    report = bundle.report
+    picture = report["the_big_picture"]
+    worked = report["what_worked_and_what_didnt"]
+    deal = report["where_the_deal_stands"]
+    if (
+        not isinstance(report["how_the_call_played_out"], dict)
+        or not isinstance(report["moments_that_mattered"], list)
+        or not isinstance(deal, dict)
+    ):
+        return None
+
+    def text(value: Any, limit: int = 150) -> str:
+        return value.strip()[:limit].rstrip() if isinstance(value, str) else ""
+
+    def refs(value: Any) -> list[dict]:
+        return evidence(value)[:2]
+
+    def highlight(value: Any, *, positive: bool) -> dict | None:
+        if not isinstance(value, dict) or not (cited := refs(value.get("evidence"))):
+            return None
+        label = value.get("action" if positive else "what_it_affected")
+        short = text(" ".join(text(label).split()[:8]), 48)
+        observation = (
+            text(value.get("action")) + ". " + text(value.get("why_it_helped"))
+            if positive
+            else text(value.get("what_happened"))
+        )
+        return {"text": text(observation), "short": short, "evidence": cited} if short else None
+
+    def findings(rows: list, *, positive: bool) -> list[dict]:
+        result = []
+        for row in rows:
+            if not isinstance(row, dict) or not (cited := refs(row.get("evidence"))):
+                continue
+            what = text(row.get("action" if positive else "what_happened"))
+            effect = text(row.get("why_it_helped" if positive else "what_it_affected"))
+            if what and effect:
+                result.append(
+                    {
+                        "title": text(what, 48),
+                        "what": what,
+                        "evidence": cited,
+                        **(
+                            {"why_it_helped": effect}
+                            if positive
+                            else {"what_it_affected": effect, "possible_areas": []}
+                        ),
+                    }
+                )
+        return result[:3]
+
+    try:
+        timeline = []
+        for phase in report["how_the_call_played_out"].get("timeline", []):
+            if not isinstance(phase, dict):
+                continue
+            cited = refs({"line_ids": [phase.get("line_id")]})
+            start = cited[0]["start_ms"]
+            if (
+                text(phase.get("phase"), 48)
+                and phase.get("start_ms") == start
+                and start < transcript["duration_ms"]
+                and (not timeline or start > timeline[-1]["start_ms"])
+            ):
+                timeline.append(
+                    {"label": text(phase["phase"], 48), "start_ms": start, "evidence": cited[:1]}
+                )
+        moments = []
+        kinds = {
+            "Strong Moment",
+            "Turning Point",
+            "Buying Signal",
+            "Important Miss",
+            "Objection",
+            "Price Moment",
+            "Decision Moment",
+            "Trust Moment",
+            "Commitment",
+            "Risk",
+        }
+        for row in report["moments_that_mattered"]:
+            if not isinstance(row, dict) or row.get("category") not in kinds:
+                continue
+            # The publication usually has no opening/response explanation for a miss.
+            # Its authored concern is still shown under What Didn't.
+            moved = text(row.get("moved_toward")) or None
+            missed = text(row.get("what_was_missed")) or None
+            if row["category"] == "Important Miss" and (not moved or not missed):
+                continue
+            cited = refs(row.get("evidence"))
+            title, why = text(row.get("title"), 48), text(row.get("why_it_mattered"))
+            if cited and title and why:
+                moments.append(
+                    {
+                        "kind": row["category"],
+                        "title": title,
+                        "evidence": cited,
+                        "why": why,
+                        "moved_toward": moved,
+                        "what_was_missed": missed,
+                        "price_stated": None,
+                        "prospect_response": None,
+                    }
+                )
+        moments = moments[:5]
+
+        next_event = None
+        event = deal.get("next_event")
+        if isinstance(event, dict) and event.get("agreed") is True and event.get("at"):
+            at = datetime.fromisoformat(event["at"])
+            # Only an exact spoken form of the authored date may be a replay label.
+            suffix = (
+                "th"
+                if 10 <= at.day % 100 <= 20
+                else {1: "st", 2: "nd", 3: "rd"}.get(at.day % 10, "th")
+            )
+            dates = [
+                at.strftime("%d %B %Y at %I:%M %p, India time"),
+                f"{at.day}{suffix} {at.strftime('%B')} at "
+                f"{at.hour % 12 or 12}:{at.minute:02d} {at.strftime('%p').lower()}",
+            ]
+            if at.utcoffset() != timedelta(hours=5, minutes=30):
+                dates = []
+            for line in bundle.transcript["lines"]:
+                if "next_step" not in line.get("annotations", []):
+                    continue
+                when = next((d for d in dates if d in line["text"] and len(d) <= 60), None)
+                if when and text(event.get("type")):
+                    next_event = {
+                        "text": text(event["type"]),
+                        "when": when,
+                        "evidence": refs({"line_ids": [line["line_id"]]}),
+                    }
+                    break
+
+        outcome = None
+        status = picture.get("call_outcome")
+        if status in {
+            "Follow-up Set",
+            "Decision Pending",
+            "Deferred",
+            "Meeting Booked",
+            "Disqualified",
+            "No Clear Next Step",
+            "Still Open",
+        }:
+            # The authored closing markers bind the report's status to its ending.
+            ending = next(
+                (
+                    line
+                    for line in reversed(bundle.transcript["lines"])
+                    if {"terminal", "commitment", "soft_end"}.intersection(
+                        line.get("annotations", [])
+                    )
+                ),
+                None,
+            )
+            if ending and text(deal.get("prospects_position")):
+                outcome = {
+                    "status": status,
+                    "line": text(deal["prospects_position"]),
+                    "evidence": refs({"line_ids": [ending["line_id"]]}),
+                }
+
+        quality = deal.get("commitment_quality")
+        deal_part = None
+        if quality == "Unclear" or (quality in {"Clear", "Soft"} and next_event):
+            deal_part = {
+                "position": None,
+                "blocker": None,
+                "prospect_commitments": [],
+                "seller_commitments": [],
+                "next_event": next_event,
+                "commitment_quality": quality,
+                "still_unclear": [
+                    text(q, 120)
+                    for q in deal.get("what_still_needs_to_become_clear", [])
+                    if text(q, 120)
+                ][:4],
+                "deal_action": text(deal.get("recommended_deal_action")) or None,
+                "coaching_mission": None,
+            }
+        candidate = {
+            "version": "report-pillars/1",
+            "outcome": outcome,
+            "summary": text(" ".join(picture["executive_summary"]), 600),
+            "biggest_influence": None,
+            "strongest_part": highlight(picture.get("strongest_part"), positive=True),
+            "biggest_concern": highlight(picture.get("biggest_concern"), positive=False),
+            "next_step": next_event if picture.get("next_agreed_step") == event else None,
+            "timeline": timeline[:8],
+            "key_change": None,
+            "worked": findings(worked["what_worked"], positive=True),
+            "didnt": findings(worked["what_didnt"], positive=False),
+            "moments": moments,
+            "deeper": None,
+            "deal": deal_part,
+            "most_important_moment": next(
+                (i for i, m in enumerate(moments) if m["kind"] == "Turning Point"),
+                0 if moments else None,
+            ),
+        }
+        return normalize_pillars(
+            candidate,
+            transcript=transcript,
+            speaker_roles=None,
+            normalize_evidence=lambda ref: ref,
+            canonical_read=True,
+        ).model_dump(mode="json")
+    except (ValueError, KeyError, TypeError):
+        # Optional presentation never prevents the accepted canonical call import.
+        return None
 
 
 def adapted_report(bundle: SyntheticCallBundle) -> tuple[dict, dict, dict, str]:
@@ -232,6 +452,19 @@ def adapted_report(bundle: SyntheticCallBundle) -> tuple[dict, dict, dict, str]:
         source_label="Synthetic · " + bundle.metadata["call_id"],
         canonical_read=True,
     ).model_dump(mode="json")
+    pillars = authored_pillars(bundle, transcript, evidence)
+    if pillars is not None:
+        try:
+            enriched = parse_report_draft(
+                {**payload, "pillars": pillars},
+                transcript,
+                source_label=payload["source_label"],
+                canonical_read=True,
+            )
+            if enriched.pillars is not None:
+                payload = enriched.model_dump(mode="json")
+        except ValueError:
+            pass
     receipt = {
         "schema_id": "ac.sales-xray.private-proof-reference/1",
         "approval_receipt_sha256": content_hash({"issue": "AUT-1676", "order": "AUT-1701"}),
@@ -336,6 +569,8 @@ async def load(
             "members_created": 0,
             "calls_created": 0,
             "calls_skipped": 0,
+            "reports_with_pillars": 0,
+            "reports_without_pillars": 0,
             "summaries_created": 0,
             "summaries_skipped": 0,
             "summaries_validated": 0,
@@ -455,6 +690,7 @@ async def load(
         if bundle.metadata["rep_id"] not in rep_keys:
             raise ValueError("Every call must belong to an exact published initial representative.")
         payload, transcript, receipt, digest = adapted_report(bundle)
+        counts["reports_with_pillars" if "pillars" in payload else "reports_without_pillars"] += 1
         source_hashes.append(content_hash(bundle.model_dump(mode="json", by_alias=True)))
         binding = dict(tenant_id=TARGET, person_id=principal.person_id)
         recording_id, run, submission = (

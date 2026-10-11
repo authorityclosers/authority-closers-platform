@@ -37,7 +37,7 @@ from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
-from tests.unit.conversation_intelligence.test_dev_sandbox_loader import authored_bundle, loader
+from tests.unit.conversation_intelligence.test_dev_sandbox_loader import dated_bundle, loader
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +48,7 @@ def postgres_harness():
 def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
     async def scenario():
         module = loader()
-        source = authored_bundle()
+        source = dated_bundle()
         reps = [
             {
                 "synthetic": True,
@@ -114,6 +114,8 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 )
             first, second = await asyncio.gather(load(), load())
             assert sorted([first["calls_created"], second["calls_created"]]) == [0, 1]
+            assert first["reports_with_pillars"] == second["reports_with_pillars"] == 1
+            assert first["reports_without_pillars"] == second["reports_without_pillars"] == 0
             async with AsyncSession(engine) as db, db.begin():
                 ownership = GuestOwnership(
                     AcquisitionSessions(
@@ -141,6 +143,23 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert progress["run_state"] == "done"
                 assert not progress["retry_available"]
                 assert report["report"]["content"]["summary"].startswith("Synthetic test call.")
+                pillars = report["report"]["content"]["pillars"]
+                assert pillars["outcome"]["status"] == "Follow-up Set"
+                assert pillars["next_step"] == pillars["deal"]["next_event"]
+                assert pillars["next_step"]["when"] == "05 January 2027 at 10:00 AM, India time"
+                assert (
+                    pillars["next_step"]["evidence"][0]["quote"]
+                    == (source.transcript["lines"][1]["text"])
+                )
+                assert pillars["timeline"] == [{"label": "Opening", "start_ms": 0}]
+                assert pillars["moments"][0]["kind"] == "Turning Point"
+                assert pillars["deal"]["position"] is None
+                stored_report = await db.get(
+                    ConversationReportDraft, module.identifier("report", source.metadata["call_id"])
+                )
+                assert stored_report.payload["pillars"]["summary"] == "A fictional discovery call."
+                assert stored_report.payload["improvements"][0]["title"] == "Agree a date"
+                assert stored_report.payload["dimensions"][0]["call_state"] == "observed"
                 coaching = from_report(
                     report,
                     submission_id=submission,

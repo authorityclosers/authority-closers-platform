@@ -29,6 +29,19 @@ Every source and label says synthetic. The exact authored report, coaching,
 transcript and answer key remain preserved in sandbox records; the normal report
 adapter copies only authored findings and their quoted transcript evidence.
 
+The optional `report-pillars/1` presentation carries the authored summary,
+highlights, call stages, supported moments and deal guidance alongside the
+unchanged legacy report and coaching findings. Every copied citation uses its
+exact published transcript line and timing. Closing annotations bind the
+authored outcome to the end of the call; Won/Lost remain absent from that
+presentation. A dated next event needs an explicitly agreed source event and
+an exact spoken date/time with the same India-time offset. Uncited deal
+sentences and incomplete missed-chance explanations are omitted. A failed
+optional validation falls back to the existing report without blocking import;
+the dry-run receipt counts `reports_with_pillars` and `reports_without_pillars`.
+Previously loaded report payloads remain immutable: a replay with a different
+report hash refuses the change rather than updating it in place.
+
 Synthetic usage is released immediately and has a zero-second no-work settlement.
 Completed local jobs cannot enter the provider queue. Member identities have no
 password, provider identity or verified-email assertion. Replays skip identical
