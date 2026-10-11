@@ -82,15 +82,14 @@
 }
 
 .pillarIndex {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  margin-top: 1px;
-  padding: 0 7px;
-  border-radius: var(--lx-radius-pill);
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
-  font: 650 12px / 1 var(--lx-font-ui);
+  font: 700 13px / 1 var(--lx-font-ui);
   font-variant-numeric: tabular-nums;
 }
 

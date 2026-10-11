@@ -36,7 +36,7 @@ it("names the pillar with its number and promise", () => {
       subtitle="See how the conversation moved."
     />,
   );
-  expect(markup).toContain(">02<");
+  expect(markup).toContain(">2<");
   expect(markup).toContain("<h2");
   expect(markup).toContain("See how the conversation moved.");
 });

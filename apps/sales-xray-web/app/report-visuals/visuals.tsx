@@ -87,7 +87,11 @@ const cx = (...names: (string | false | null | undefined)[]) =>
 
 /* ---------- Pillars ---------- */
 
-/** A pillar's heading: its number, name and one-line promise. */
+/**
+ * A pillar's heading: its number, name and one-line promise. The number sits
+ * in the same 28 px circle as the Report's section headings, so the Report and
+ * Coaching read as one product.
+ */
 export function PillarHeading({
   index,
   title,
@@ -107,7 +111,7 @@ export function PillarHeading({
   return (
     <header className={styles.pillarHead}>
       <span className={styles.pillarIndex} aria-hidden="true">
-        {String(index).padStart(2, "0")}
+        {index}
       </span>
       <div className={styles.pillarText}>
         <Title className={styles.pillarTitle} id={id}>
