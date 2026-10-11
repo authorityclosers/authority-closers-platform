@@ -196,6 +196,11 @@ export function LessonPanel({
                 </ul>
               </div>
             ) : null}
+            {/* Spec 6.6: the full lesson ends with the same active mission. */}
+            <p>
+              <span className={styles.label}>Your next-call mission</span>
+              {lesson.next_call_connection}
+            </p>
             <p className={styles.note}>{lesson.source}</p>
           </div>
         </details>

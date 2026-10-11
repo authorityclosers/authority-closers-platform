@@ -195,6 +195,10 @@ describe("Coaching story", () => {
     const textOnly = renderToStaticMarkup(
       <CoachingStory coaching={fictionalCoaching} />,
     );
+    // The full lesson ends with the same active mission (spec 6.6).
+    expect(position(textOnly, "Your next-call mission")).toBeGreaterThan(
+      position(textOnly, "Quick checklist"),
+    );
     expect(position(textOnly, wording)).toBeLessThan(
       position(textOnly, "Read the full lesson"),
     );
