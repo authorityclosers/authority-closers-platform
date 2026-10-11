@@ -107,6 +107,8 @@ export type ReportPillars = {
     still_unclear: string[];
     deal_action: string | null;
     coaching_mission: string | null;
+    /** Which "What Didn't" item the coaching mission practises (index). */
+    coaching_mission_for: number | null;
   };
   most_important_moment?: number;
 };
@@ -400,6 +402,12 @@ export function parseReportPillars(
       still_unclear: strings(item.still_unclear, 6),
       deal_action: str(item.deal_action),
       coaching_mission: str(item.coaching_mission, 500),
+      coaching_mission_for:
+        Number.isInteger(item.coaching_mission_for) &&
+        (item.coaching_mission_for as number) >= 0 &&
+        (item.coaching_mission_for as number) <= 2
+          ? (item.coaching_mission_for as number)
+          : null,
     };
   });
   pillars.most_important_moment = part(() =>

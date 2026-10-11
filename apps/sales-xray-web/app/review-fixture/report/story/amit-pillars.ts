@@ -280,5 +280,6 @@ export const AMIT_PILLARS: ReportPillars = {
       "On Friday, first understand what came out of the partner discussion before presenting more information.",
     coaching_mission:
       "Before explaining a solution, diagnose one level deeper.",
+    coaching_mission_for: 0,
   },
 };
