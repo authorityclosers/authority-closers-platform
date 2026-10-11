@@ -53,7 +53,9 @@ def test_migration_defaults_preserve_legacy_email_and_enforce_new_bindings(postg
 
 
 def test_username_migration_is_classified_additive_without_runtime_helpers():
-    from scripts.ops.migration_safety import classify_source
+    import runpy
 
-    path = Path(__file__).parents[2] / "db/migrations/versions/20261010_0081_username_accounts.py"
-    assert classify_source(path.read_text(), str(path)).verdict == "additive"
+    root = Path(__file__).parents[2]
+    classifier = runpy.run_path(str(root / "scripts/ops/migration_safety.py"))
+    path = root / "db/migrations/versions/20261010_0081_username_accounts.py"
+    assert classifier["classify_source"](path.read_text(), str(path)).verdict == "additive"
