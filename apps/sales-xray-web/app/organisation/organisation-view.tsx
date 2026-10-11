@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AudioLines,
   Building2,
   ChevronDown,
   Crown,
@@ -405,6 +406,7 @@ export function OrganisationView() {
                   members={members}
                   memberCount={memberCount}
                   team={canManage}
+                  onInvite={() => setTab("members")}
                   retry={reloadActivity}
                   analysed={
                     canManage && tenantId !== null ? (
@@ -547,6 +549,47 @@ function PersonalState({ organisations }: { organisations: Workspace[] }) {
   );
 }
 
+/** A new or quiet organisation: the one next step, nothing else. */
+function GetStarted({
+  team,
+  alone,
+  onInvite,
+}: {
+  team: boolean;
+  alone: boolean;
+  onInvite: () => void;
+}) {
+  const invite = team && alone;
+  return (
+    <section className={styles.getStarted} aria-labelledby="org-get-started">
+      <span className={styles.stateIcon} aria-hidden="true">
+        {invite ? <UserPlus size={18} /> : <AudioLines size={18} />}
+      </span>
+      <h2 id="org-get-started">
+        {invite ? "Bring your team in" : "No calls in the last 30 days"}
+      </h2>
+      <p>
+        {invite
+          ? "Invite your sales team. Their calls, who made them and each report’s status appear here."
+          : team
+            ? "When anyone here saves a call, it appears with who made it and its report status."
+            : "Calls you save in this organisation appear here with their report status."}
+      </p>
+      {invite ? (
+        <button type="button" className={styles.primary} onClick={onInvite}>
+          <UserPlus size={14} aria-hidden="true" />
+          Invite people
+        </button>
+      ) : (
+        <Link className={styles.primary} href={newCallHref("/")}>
+          <Plus size={14} aria-hidden="true" />
+          Analyse a call
+        </Link>
+      )}
+    </section>
+  );
+}
+
 type ActivityCall = OrgActivity["calls"][number];
 
 /** Calls in the period: the server's daily counts, else the calls listed. */
@@ -641,6 +684,7 @@ function OverviewPanel({
   team,
   retry,
   analysed,
+  onInvite,
 }: {
   activity: Live<OrgActivity>;
   members: Live<OrgMember[]>;
@@ -649,6 +693,8 @@ function OverviewPanel({
   retry: () => void;
   /** Calls analysed across the organisation; owners and admins only. */
   analysed: ReactNode;
+  /** Opens Members, where owners and admins invite people. */
+  onInvite: () => void;
 }) {
   if (activity.status === "loading")
     return (
@@ -678,6 +724,19 @@ function OverviewPanel({
             </button>
           ) : null}
         </section>
+        {analysed}
+      </div>
+    );
+
+  // Nothing yet: one Get started panel instead of zero tiles and empty tables.
+  if (totalCalls(activity.value) === 0)
+    return (
+      <div className={styles.overview}>
+        <GetStarted
+          team={team}
+          alone={memberCount !== null && memberCount <= 1}
+          onInvite={onInvite}
+        />
         {analysed}
       </div>
     );
