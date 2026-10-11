@@ -27,16 +27,17 @@ listing; it refuses to guess when a complete first page of post-boundary uploads
 hides the boundary. API reference:
 <https://docs.github.com/en/rest/actions/artifacts>.
 
-Diagnostic Python-shard, acquisition-browser and hosted-activation receipts
-retain for two days instead of fourteen. Visual evidence already retains for
-one day. Release artifact retention and reclamation eligibility are unchanged.
-Retention applies to future uploads; this change does not delete existing
-diagnostic artifacts or relax the ceiling.
+Per the 11 October shared-file order, this repair leaves application.yml exactly
+as on main. The diagnostic retention reduction (fourteen to two days) is saved
+for a separate small follow-up after PRs #442 and #437 merge. Visual evidence
+and release artifact retention remain unchanged. This inventory repair does
+not delete existing diagnostic artifacts or relax the ceiling.
 
 Validation on the AC server:
 
 - `ac-heavy uv run --offline --frozen pytest tests/infra/test_artifact_inventory.py tests/infra/test_sales_xray_web_artifact_pool.py tests/infra/test_reclaim_artifact_pool.py tests/infra/test_release_artifact_pool.py -q -x`: **118 passed in 21.79 s**.
 - Focused Ruff/format checks, incremental mypy on both readers (`--follow-imports=silent`) and `git diff --check`: passed. The dynamic shared-reader return has an explicit type annotation; runtime inventory behavior is unchanged.
+- Retention deferral: 12 focused workflow/retention contracts passed in 2.38 s; Prettier passed; application.yml is byte-for-byte identical to fetched main. The PR has no shared-file diff.
 - Read-only live admission inventory: **attempt 1/3**, **92 pages**, **9,154
   unique artifacts**, **2,244,516,417 bytes**. No artifact deletion was invoked.
 - Open PR file inventory: no overlap with the six implementation/test files.
