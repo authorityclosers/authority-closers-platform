@@ -607,6 +607,10 @@
 .foot p {
   margin: 0 0 8px;
 }
+/* On screen the two buttons say it; paper and Word keep the sentence. */
+.closing {
+  display: none;
+}
 .links {
   display: flex;
   flex-wrap: wrap;
@@ -681,6 +685,9 @@
   .actions,
   .links {
     display: none !important;
+  }
+  .closing {
+    display: block;
   }
   .canvas {
     padding: 0;

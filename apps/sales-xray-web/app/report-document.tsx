@@ -410,7 +410,7 @@ export function ReportDocumentSheet({
         </section>
       ) : null}
       <footer className={styles.foot}>
-        <p>{doc.closing}</p>
+        <p className={styles.closing}>{doc.closing}</p>
         <p className={styles.links}>
           <Link href="/prospects">{DEAL.viewProspect}</Link>
           <Link href="/coaching">{DEAL.viewCoaching}</Link>
