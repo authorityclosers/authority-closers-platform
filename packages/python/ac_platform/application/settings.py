@@ -179,6 +179,9 @@ class Settings(BaseSettings):
     sales_xray_approval_sha256: str | None = None
     sales_xray_storage_root: str | None = None
     sales_xray_scratch_root: str | None = None
+    # Read-only folder of the fictional synthetic-v1 dataset for the Admin
+    # browser (AUT-1798). Unset means the browser says it isn't mounted.
+    sales_xray_synthetic_dataset_root: str | None = None
     # Guest admission is a separate release-owned capability. The file contains
     # only the challenge credential; inference credentials remain broker-only.
     sales_xray_acquisition_enabled: bool = False

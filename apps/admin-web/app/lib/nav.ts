@@ -170,7 +170,6 @@ export const NAVIGATION: readonly NavGroup[] = [
       },
       {
         href: "/synthetic",
-        soon: true,
         label: "Synthetic data",
         icon: "synthetic",
         need: { kind: "salesXray" },
