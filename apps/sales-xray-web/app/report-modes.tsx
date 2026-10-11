@@ -871,6 +871,21 @@ export function ReportModes({
       }
       list.style.setProperty("--pill-x", `${current.offsetLeft}px`);
       list.style.setProperty("--pill-w", `${current.offsetWidth}px`);
+      // On narrow screens the row scrolls sideways: keep the current one in view.
+      if (list.scrollWidth > list.clientWidth + 1) {
+        const left =
+          current.offsetParent === list
+            ? current.offsetLeft
+            : current.offsetLeft - list.offsetLeft;
+        if (
+          left < list.scrollLeft ||
+          left + current.offsetWidth > list.scrollLeft + list.clientWidth
+        )
+          list.scrollTo?.({
+            left: Math.max(0, left - 16),
+            behavior: scrollBehavior(),
+          });
+      }
     };
     place();
     if (typeof ResizeObserver === "undefined") return;
@@ -1221,6 +1236,8 @@ export function ReportModes({
           inline
           navigate={navigateToReport}
         >
+          {/* Coaching is one focused page: the header's call map waits here, hidden. */}
+          {view === "coaching" ? <div data-report-map-slot hidden /> : null}
           <div data-reading-panels hidden={view === "document"}>
             {renderReportPanels(
               view === "document" ? `${id}-source` : id,

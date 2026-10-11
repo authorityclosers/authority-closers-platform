@@ -40,6 +40,7 @@ export type NavIcon =
   | "reviewers"
   | "health"
   | "usage"
+  | "company"
   | "outcomes"
   | "providers"
   | "analysis"
@@ -120,6 +121,13 @@ export const NAVIGATION: readonly NavGroup[] = [
   {
     label: "Insights",
     items: [
+      {
+        href: "/company",
+        label: "Company",
+        icon: "company",
+        need: { kind: "salesXray" },
+        phone: true,
+      },
       {
         href: "/health",
         label: "Analysis health",

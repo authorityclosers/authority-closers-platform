@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Building2,
   ChevronDown,
   Ellipsis,
@@ -107,7 +108,8 @@ export type LightboxShellProps = {
     | "account"
     | "organisation"
     | "prospects"
-    | "coaching";
+    | "coaching"
+    | "insights";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -157,6 +159,7 @@ function resolvePageTitle(
   if (active === "coaching") return "Coaching";
   if (active === "account") return "Account";
   if (active === "organisation") return "Organisation";
+  if (active === "insights") return "Insights";
   // The studio names its stage once it loads; until then (and while a route
   // loads) the bar already says where you are, so nothing swaps in later.
   if (active === "analyse") return "New analysis";
@@ -651,6 +654,13 @@ function LightboxShellFrame({
       workspace.tenant_id === effectiveTenantId &&
       workspace.kind === "organisation",
   );
+  // The company view (Insights) is for the organisation's owners and admins.
+  const orgAdmin = workspaces.some(
+    (workspace) =>
+      workspace.tenant_id === effectiveTenantId &&
+      workspace.kind === "organisation" &&
+      (workspace.role === "owner" || workspace.role === "admin"),
+  );
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -876,6 +886,19 @@ function LightboxShellFrame({
               >
                 <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span style={RAIL_NAME_STYLE}>Organisation</span>
+              </Link>
+            ) : null}
+            {orgAdmin || place === "insights" ? (
+              <Link
+                className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/organisation/insights"
+                prefetch={false}
+                aria-label="Insights"
+                data-rail-tip="Insights"
+                aria-current={place === "insights" ? "page" : undefined}
+              >
+                <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Insights</span>
               </Link>
             ) : null}
           </div>
@@ -1285,6 +1308,7 @@ function LightboxShellFrame({
           photoUrl={profile?.photo_url}
           allowance={shownAllowance}
           organisation={inOrganisation}
+          insights={orgAdmin}
           workspaces={workspaces.filter(
             (workspace) => workspace.sales_xray_enabled,
           )}
