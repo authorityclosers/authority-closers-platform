@@ -163,7 +163,11 @@ class ConversationApplication:
         if (
             person is None
             or person.status != "active"
-            or person.email_verified_at is None
+            or person.password_change_required
+            or (
+                person.email_verified_at is None
+                and (person.username is None or person.username_verified_at is None)
+            )
             or session is None
             or session.revoked_at is not None
             or utc(session.expires_at) <= now

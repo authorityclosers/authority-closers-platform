@@ -1,6 +1,6 @@
 # AUT-1694: additive username identity schema candidate
 
-Sensitive identity/migration change. Local source pin: `243947186621fd5e36a3920e00959e7c022bc112`, based on main `43d6eafd7c6f9c58df89903a1873ebb107c14d23` (migration `20261010_0080`). Not published or deployed.
+Sensitive identity/migration change. The schema was originally prepared on `243947186621fd5e36a3920e00959e7c022bc112`, based on main `43d6eafd7c6f9c58df89903a1873ebb107c14d23` (migration `20261010_0080`). Gate rollover restored it unchanged onto main `a5c71f86`; it is published for review in PR #442. No environment schema application or deployment is claimed.
 
 The owner requested optional-email username accounts, one-time Admin temporary passwords and mandatory first change. Four person columns separate username possession proof, forced password change and temporary expiry from existing mailbox proof. The username index is case insensitive; normalized length, verification binding and forced-change expiry constraints are enforced. Existing identities default to no forced change. This adds no new table, account, entitlement or processing approval. Recovery is forward only.
 

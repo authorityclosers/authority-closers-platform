@@ -14,6 +14,10 @@ from sqlalchemy.orm import Session
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
+from ac_platform.conversation_intelligence.application import (
+    ConversationApplication,
+    ConversationDenied,
+)
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.problem import register_problem_handlers
@@ -121,6 +125,84 @@ def test_username_normalization_is_bounded():
     for invalid in ("ab", "a" * 61, "a@b.test", "a/b", "a\nb", ".abc", "abc.", "अमित"):
         with pytest.raises(ValueError):
             normalize_username(invalid)
+
+
+def test_changed_username_account_has_current_call_authority(postgres_harness):
+    """Login must reach call access while all current authority fences still apply."""
+
+    async def run():
+        async with account(postgres_harness) as (
+            client,
+            sessions,
+            settings,
+            tenant,
+            created,
+            _operator,
+            _key,
+        ):
+            changed = await client.post(
+                "/v1/auth/password/first-change",
+                headers={"Origin": ORIGIN},
+                json={
+                    "email": created["username"],
+                    "password": created["temporary_password"],
+                    "new_password": PERSONAL_PASSWORD,
+                    "consent": True,
+                    "age_attested": True,
+                    "consent_version": CONSENT,
+                },
+            )
+            assert changed.status_code == 200
+            async with sessions() as db, db.begin():
+                identity = AsyncIdentityApplication(
+                    db, token_pepper=settings.session_token_pepper.get_secret_value()
+                )
+                resolved = await identity.resolve_actor(client.cookies.get("ac_session"))
+                actor = resolved.actor
+                app = ConversationApplication(db)
+                await app.admit(actor)
+                for model, key, changes in (
+                    (Person, actor.person_id, {"username_verified_at": None}),
+                    (Person, actor.person_id, {"status": "suspended"}),
+                    (
+                        Person,
+                        actor.person_id,
+                        {
+                            "password_change_required": True,
+                            "temporary_password_expires_at": datetime.now(UTC) + timedelta(days=1),
+                            "email_verified_at": datetime.now(UTC),
+                        },
+                    ),
+                    (
+                        Membership,
+                        (tenant, actor.person_id),
+                        {"status": "inactive", "ended_at": datetime.now(UTC)},
+                    ),
+                    (Tenant, tenant, {"status": "suspended"}),
+                    (
+                        IdentitySession,
+                        actor.session_id,
+                        {
+                            "revoked_at": datetime.now(UTC),
+                            "revocation_reason": "fixture_revocation",
+                        },
+                    ),
+                    (
+                        IdentitySession,
+                        actor.session_id,
+                        {"selected_tenant_id": None},
+                    ),
+                ):
+                    async with db.begin_nested() as mutation:
+                        row = await db.get(model, key)
+                        for field, value in changes.items():
+                            setattr(row, field, value)
+                        await db.flush()
+                        with pytest.raises(ConversationDenied):
+                            await app.admit(actor)
+                        await mutation.rollback()
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("with_email", [False, True])
