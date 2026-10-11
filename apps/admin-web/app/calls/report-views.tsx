@@ -10,7 +10,7 @@ import { Play } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Badge } from "../ui/kit";
-import { DEVANAGARI } from "./transcript-pane";
+import { DEVANAGARI } from "../lib/script";
 import {
   clock,
   languageLabel,

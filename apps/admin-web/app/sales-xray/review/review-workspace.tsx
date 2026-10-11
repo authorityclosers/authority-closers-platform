@@ -500,12 +500,8 @@ export function ReviewWorkspace({
       active="sales-xray"
       surface="operations"
       eyebrow="Sales Xray / Review team"
-      title={
-        assignmentId
-          ? "Review assignment"
-          : "Better analysis starts with your team."
-      }
-      description="Invite reviewers, choose their perspective, and manage access to each conversation."
+      title={assignmentId ? "Review assignment" : "Reviewers"}
+      description="Invite outside reviewers to one saved analysis, choose what they review, and manage their access."
       footerText="Review assignments · Saved changes confirmed by the service"
     >
       <div className={styles.workspace}>

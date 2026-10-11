@@ -16,15 +16,17 @@
 }
 
 .day {
-  display: grid;
+  display: flex;
   flex: 1;
-  align-content: end;
+  flex-direction: column;
+  justify-content: flex-end;
   min-width: 0;
   height: 100%;
 }
 
 .day i {
   display: block;
+  flex: none;
   border-radius: 3px 3px 0 0;
   background: var(--sx-accent);
 }

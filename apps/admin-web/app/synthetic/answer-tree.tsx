@@ -1,4 +1,4 @@
-import { DEVANAGARI } from "../calls/transcript-pane";
+import { DEVANAGARI } from "../lib/script";
 import { QUIET_KEYS, humanKey } from "./synthetic-data";
 import styles from "./synthetic.module.css";
 

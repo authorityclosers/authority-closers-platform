@@ -2,7 +2,7 @@ import { FlaskConical } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { clock, languageLabel } from "@/app/calls/call-data";
-import { DEVANAGARI } from "@/app/calls/transcript-pane";
+import { DEVANAGARI } from "@/app/lib/script";
 import { adminRead } from "@/app/lib/server-api";
 import { AnswerTree } from "@/app/synthetic/answer-tree";
 import {

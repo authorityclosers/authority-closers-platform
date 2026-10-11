@@ -9,9 +9,8 @@ import { LocateFixed } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { clock, type Segment } from "./call-data";
+import { DEVANAGARI } from "../lib/script";
 import styles from "./review.module.css";
-
-export const DEVANAGARI = /[\u0900-\u097F]/;
 
 export function TranscriptPane({
   segments,
