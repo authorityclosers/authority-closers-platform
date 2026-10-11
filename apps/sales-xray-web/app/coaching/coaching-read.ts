@@ -333,10 +333,10 @@ export async function readCoaching(
                 ? "This coaching is not shared with you."
                 : response.status === 404 || response.status === 409
                   ? "This call’s coaching isn’t ready. Open the call to see its report."
-                  : "Coaching could not be loaded. Try again.",
+                  : "Coaching didn’t load. Try again.",
       };
     if (!response.headers.get("content-type")?.includes("application/json"))
-      return { data: null, error: "Coaching could not be read. Try again." };
+      return { data: null, error: "Coaching didn’t load. Try again." };
     const raw: unknown = await response.json();
     const data =
       callId === "team"
@@ -348,8 +348,8 @@ export async function readCoaching(
             : parseCoaching(raw);
     return data
       ? { data, error: null }
-      : { data: null, error: "Coaching could not be read. Try again." };
+      : { data: null, error: "Coaching didn’t load. Try again." };
   } catch {
-    return { data: null, error: "Coaching could not be loaded. Try again." };
+    return { data: null, error: "Coaching didn’t load. Try again." };
   }
 }

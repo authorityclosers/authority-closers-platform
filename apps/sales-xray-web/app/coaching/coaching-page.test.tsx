@@ -439,6 +439,59 @@ describe("Coaching story", () => {
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");
   });
+  it("leaves the loading frame once access settles: ready reads once, signed out asks to sign in", async () => {
+    const loading = {
+      status: "loading",
+      authenticated: null,
+      context: null,
+      retry: vi.fn(),
+    } as WorkspaceAccessValue;
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(fictionalCoaching), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const coachingReads = () =>
+      fetch.mock.calls.filter(([url]) =>
+        String(url).endsWith("/v1/me/coaching"),
+      ).length;
+    // Loading: the skeleton, and no read before the account is confirmed.
+    mocks.access = loading;
+    await act(async () => root.render(<CoachingPage />));
+    expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+    // Ready: one read, then the learner's six pillars and no skeleton.
+    mocks.access = {
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "session-a",
+      },
+      retry: vi.fn(),
+    };
+    await act(async () => root.render(<CoachingPage />));
+    await act(async () => {});
+    expect(coachingReads()).toBe(1);
+    expect(host.querySelectorAll("section[data-coaching-pillar]")).toHaveLength(
+      6,
+    );
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    // Loading again, then signed out: the sign-in card, never skeletons.
+    mocks.access = loading;
+    await act(async () => root.render(<CoachingPage key="signed-out" />));
+    mocks.access = {
+      ...loading,
+      status: "unauthenticated",
+      authenticated: false,
+    };
+    await act(async () => root.render(<CoachingPage key="signed-out" />));
+    expect(host.textContent).toContain("Sign in for your Coaching");
+    expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(coachingReads()).toBe(1);
+  });
   it("ends a failed or missing read on the unavailable card, never on skeletons", async () => {
     mocks.access = {
       status: "ready",

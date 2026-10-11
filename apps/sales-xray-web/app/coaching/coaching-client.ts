@@ -157,7 +157,7 @@ export type Strength = {
 };
 
 function invalid(): never {
-  throw new CoachingReadError("Coaching could not be read. Try again.");
+  throw new CoachingReadError("Coaching didn’t load. Try again.");
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -433,7 +433,7 @@ export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
         ? "Sign in to see your Coaching."
         : response.status === 403
           ? "Coaching is unavailable in this workspace."
-          : "Coaching could not be loaded. Try again.",
+          : "Coaching didn’t load. Try again.",
     );
   }
   if (!response.headers.get("content-type")?.includes("application/json"))
