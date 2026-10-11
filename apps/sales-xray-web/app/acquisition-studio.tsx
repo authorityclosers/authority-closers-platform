@@ -2160,7 +2160,7 @@ export function AcquisitionStudio({
                 <p className="visually-hidden" role="status" aria-live="polite">
                   Opening your saved call
                 </p>
-                <PageSkeleton variant="call" />
+                <PageSkeleton variant="report" />
               </>
             ) : (
               <section

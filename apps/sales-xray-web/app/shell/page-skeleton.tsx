@@ -9,7 +9,8 @@ export type SkeletonVariant =
   | "list"
   | "account"
   | "studio"
-  | "call";
+  | "call"
+  | "report";
 
 // Fixed heights so server and client render the same placeholder wave.
 const WAVE = Array.from({ length: 64 }, (_, index) => {
@@ -111,6 +112,45 @@ export function PageSkeleton({ variant }: { variant: SkeletonVariant }) {
               <div key={index} className={styles.settingRow}>
                 <Bar w="26%" h={13} />
                 <Bar w={140} h={32} r={8} className={styles.pushRight} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : variant === "report" ? (
+        // A saved call opens as its Report: title, the first pillar's heading,
+        // the Big Picture card and the cards under it, where they will be.
+        <div className={styles.report}>
+          <div className={styles.reportHead}>
+            <div className={styles.stack}>
+              <Bar w="min(360px, 70%)" h={30} r={8} />
+              <Bar w={96} h={12} />
+            </div>
+            <Bar w={104} h={40} r={10} className={styles.pushRight} />
+            <Bar w={40} h={40} r={999} />
+          </div>
+          <div className={styles.pillarHead}>
+            <Bar w={28} h={28} r={999} />
+            <div className={styles.stack}>
+              <Bar w={190} h={22} r={7} />
+              <Bar w="min(230px, 60vw)" h={12} />
+            </div>
+          </div>
+          <div className={`${styles.reportCard} ${styles.reportHero}`}>
+            <Bar w={150} h={32} r={999} />
+            <Bar w="100%" h={14} />
+            <Bar w="94%" h={14} />
+            <Bar w="68%" h={14} />
+          </div>
+          <div className={styles.reportCard}>
+            <Bar w={170} h={12} />
+            <Bar w="86%" h={14} />
+          </div>
+          <div className={styles.reportPair}>
+            {Array.from({ length: 2 }, (_, index) => (
+              <div key={index} className={styles.reportCard}>
+                <Bar w={120} h={12} />
+                <Bar w="92%" h={14} />
+                <Bar w="58%" h={14} />
               </div>
             ))}
           </div>
