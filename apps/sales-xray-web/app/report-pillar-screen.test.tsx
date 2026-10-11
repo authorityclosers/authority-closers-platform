@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: signIn, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 import { LinkedProspectContext } from "./prospect-link-control";
+import { BIG_PICTURE } from "./report-copy";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
 import {
@@ -140,8 +141,8 @@ it("ends where the deal stands, with links to the prospect and Coaching", async 
 it("opens a sparse older report with honest, one-line gaps", async () => {
   const { host } = await mount(syntheticReport);
   const picture = pillar(host, "overview");
-  expect(picture.textContent).toContain("Outcome not recorded");
-  expect(picture.textContent).toContain("Only a person records won or lost");
+  expect(picture.textContent).toContain(BIG_PICTURE.outcomeNotSet);
+  expect(picture.textContent).toContain(BIG_PICTURE.outcomeOnlyPerson);
   expect(picture.textContent).toContain("This report doesn't cover:");
   expect(
     pillar(host, "skills").querySelectorAll("details > summary").length,
