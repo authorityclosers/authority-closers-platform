@@ -70,6 +70,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
             evidence={evidence}
             showCall={false}
             label="Moments from this call"
+            fictional={coaching.sandbox}
           />
         ) : (
           <div className={styles.body}>

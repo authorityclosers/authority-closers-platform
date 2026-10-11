@@ -107,7 +107,7 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                 data = team.json()
                 assert data["scope"] == "sandbox" and data["sandbox"] is True
                 assert (data["analysed_calls"], data["rep_count"]) == (3, 2)
-                assert [row["name"] for row in data["reps"]] == ["Asha Rao", "Nikhil Nivsekar"]
+                assert [row["name"] for row in data["reps"]] == ["Nikhil Nivsekar", "Asha Rao"]
                 person = await client.get(f"/v1/me/coaching/people/{rep}")
                 assert person.status_code == 200, person.text
                 view = person.json()

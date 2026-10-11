@@ -178,6 +178,7 @@ def test_call_view_carries_the_authored_coaching_bound_to_its_fictional_call() -
     assert view.focus and view.focus.skill_id == "closing_decision_management"
     assert view.mission and view.mission.origin_submission_id == view.submission_id
     assert view.lesson and view.lesson.framework == ("Action", "Owner", "Date", "Confirmation")
+    assert view.lesson.own_call and view.lesson.own_call.observation.startswith("“Sure, we")
     assert view.root_cause.gap_type == "judgment" and view.root_cause.confidence == "low"
     assert [moment.observation for moment in view.evidence] == [
         "Said by Nikhil Nivsekar, the seller.",
@@ -242,6 +243,7 @@ def test_team_names_fictional_reps_with_their_newest_focus() -> None:
                 rep_name="Asha Rao",
                 skill="skill-2",
                 label="Diagnose before prescribing",
+                at="2026-07-22T10:00:00+05:30",
             )
         ),
         indexed(sandbox_bundle("syn-fixture-J01-C-01", at="2026-07-21T10:00:00+05:30")),
@@ -253,11 +255,12 @@ def test_team_names_fictional_reps_with_their_newest_focus() -> None:
         ("closing_decision_management", 2),
         ("discovery_deep_understanding", 1),
     ]
+    # Most recently active first.
     assert [(rep.name, rep.calls) for rep in view.reps] == [
-        ("Asha Rao", 1),
         ("Nikhil Nivsekar", 2),
+        ("Asha Rao", 1),
     ]
-    assert view.reps[1].latest_call_at == datetime(2026, 7, 24, 4, 30, tzinfo=UTC)
+    assert view.reps[0].latest_call_at == datetime(2026, 7, 24, 4, 30, tzinfo=UTC)
 
 
 def test_real_team_totals_cannot_carry_names() -> None:

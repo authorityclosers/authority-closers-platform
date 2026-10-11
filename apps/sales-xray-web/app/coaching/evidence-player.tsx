@@ -26,10 +26,13 @@ export function EvidencePlayer({
   evidence,
   showCall = true,
   extra = false,
+  fictional = false,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
   showCall?: boolean;
+  /** A fictional AC Sandbox call: text with estimated timing, no audio. */
+  fictional?: boolean;
   /** Folded on one-column screens until the learner asks for all moments. */
   extra?: boolean;
 }) {
@@ -137,7 +140,11 @@ export function EvidencePlayer({
           </span>
           {state === "loading" ? <span>Loading audio…</span> : null}
           {!evidence.playable ? (
-            <span>Audio alignment is uncertain; read the quote.</span>
+            <span>
+              {fictional
+                ? "Fictional call text; no audio."
+                : "Audio alignment is uncertain; read the quote."}
+            </span>
           ) : null}
         </span>
         {state === "failed" ? (
@@ -185,10 +192,12 @@ export function MomentList({
   evidence,
   showCall = true,
   label = "Moments from your calls",
+  fictional = false,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
   label?: string;
+  fictional?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -204,6 +213,7 @@ export function MomentList({
             evidence={moment}
             showCall={showCall}
             extra={index >= 1}
+            fictional={fictional}
           />
         ))}
       </ul>

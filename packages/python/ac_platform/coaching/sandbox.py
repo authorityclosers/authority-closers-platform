@@ -281,7 +281,11 @@ def authored(call: SandboxCall, payload: dict[str, Any]) -> Authored | None:
         origin_submission_id=call.submission_id,
     )
     evidence = tuple(_moments(call, payload, diagnosis.get("playable_moments"))[:MAX_MOMENTS])
-    own = _moments(call, payload, lesson.get("own_call_example"))
+    # The lesson's "Your call" box shows the moment's words, not a speaker tag.
+    own = [
+        moment.model_copy(update={"observation": f"“{moment.quote}”"[:4000]})
+        for moment in _moments(call, payload, lesson.get("own_call_example"))
+    ]
     pattern = _text(diagnosis.get("pattern")) or "This call's authored focus."
     why = _text(lesson.get("why_it_matters")) or pattern
     better = _text(lesson.get("better_direction")) or behavior
@@ -528,10 +532,8 @@ def team_view(
             counts[call.skill_id] = counts.get(call.skill_id, 0) + 1
         newest.setdefault(call.rep_key, call)
         per_rep[call.rep_key] = per_rep.get(call.rep_key, 0) + 1
-    reps = sorted(
-        newest.values(),
-        key=lambda call: (SKILL_IDS.index(call.skill_id) if call.skill_id else 99, call.rep_name),
-    )
+    # Most recently active first; the area filter groups them by "what".
+    reps = sorted(newest.values(), key=lambda call: (-call.occurred_at.timestamp(), call.rep_name))
     return TeamCoachingView(
         person_id=person_id,
         tenant_id=tenant_id,

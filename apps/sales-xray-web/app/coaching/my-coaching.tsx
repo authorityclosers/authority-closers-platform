@@ -257,7 +257,7 @@ export function CoachingStory({
             {coaching.root_cause.hypothesis}
           </p>
         </div>
-        <MomentList evidence={evidence} />
+        <MomentList evidence={evidence} fictional={coaching.sandbox} />
       </Panel>
       <LessonPanel
         lesson={lesson}

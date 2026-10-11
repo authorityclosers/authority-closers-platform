@@ -147,15 +147,23 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           value={rows.length}
           note="With suggestions"
         />
-        <Kpi
-          label="Awaiting a report"
-          value={coaching.pending_calls}
-          note={
-            coaching.unavailable_calls
-              ? `${coaching.unavailable_calls} unusable`
-              : "Being analysed"
-          }
-        />
+        {coaching.sandbox ? (
+          <Kpi
+            label="Fictional reps"
+            value={coaching.rep_count}
+            note="AC Sandbox, only you"
+          />
+        ) : (
+          <Kpi
+            label="Awaiting a report"
+            value={coaching.pending_calls}
+            note={
+              coaching.unavailable_calls
+                ? `${coaching.unavailable_calls} unusable`
+                : "Being analysed"
+            }
+          />
+        )}
       </Tiles>
       <div className={styles.layout}>
         <div className={styles.main}>
@@ -193,9 +201,9 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
             )}
             <p className={styles.body}>
               <span className={styles.note}>
-                Counts describe report suggestions. They do not measure
-                recurring mistakes, successful execution or mastery. They update
-                after every analysed call.
+                {coaching.sandbox
+                  ? "Each fictional call carries one authored focus. Counts are those focuses, not measured mistakes or mastery."
+                  : "Counts describe report suggestions. They do not measure recurring mistakes, successful execution or mastery. They update after every analysed call."}
               </span>
             </p>
           </Panel>
