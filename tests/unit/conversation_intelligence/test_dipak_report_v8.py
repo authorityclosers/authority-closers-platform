@@ -416,6 +416,78 @@ def test_deeper_prospect_response_can_include_seller_context(case):
     assert parse(case, payload).pillars.deeper.prospect_response is not None
 
 
+@pytest.mark.parametrize("field", ["moment", "deeper"])
+def test_prospect_budget_cannot_establish_the_sellers_price(case, field):
+    payload = deepcopy(case[3])
+    if field == "moment":
+        payload["pillars"]["moments"][0]["price_stated"] = "one hundred twenty"
+    else:
+        payload["pillars"]["deeper"]["price"] = note("The budget was 120 credits.", "s6")
+    with pytest.raises(ReportError, match="report_payload_invalid"):
+        parse(case, payload)
+
+
+@pytest.mark.parametrize("field", ["moment", "deeper"])
+def test_price_abstains_without_frozen_seller_roles(case, field):
+    payload = deepcopy(case[3])
+    moment = payload["pillars"]["moments"][0]
+    moment.update(kind="Price Moment", evidence=refs("s5", "s6"))
+    if field == "moment":
+        moment["price_stated"] = "one hundred eighty credits monthly"
+    else:
+        payload["pillars"]["deeper"]["price"] = note("The price was 180 credits.", "s5")
+    with pytest.raises(ReportError, match="report_payload_invalid"):
+        parse_report_draft(payload, case[0], coaching_prompt_revision="coaching-v8")
+
+
+def test_price_phrase_must_match_seller_evidence_not_only_prospect_context(case):
+    payload = deepcopy(case[3])
+    payload["pillars"]["moments"][0].update(
+        kind="Price Moment", evidence=refs("s5", "s6"), price_stated="one hundred twenty"
+    )
+    with pytest.raises(ReportError, match="report_payload_invalid"):
+        parse(case, payload)
+
+
+def test_public_price_and_response_are_source_bound_notes(case):
+    payload = deepcopy(case[3])
+    moment = payload["pillars"]["moments"][0]
+    moment.update(
+        kind="Price Moment",
+        evidence=refs("s6", "s5"),
+        price_stated="one hundred eighty credits monthly",
+        prospect_response="above our one hundred twenty budget",
+    )
+    payload["pillars"]["deeper"]["price"] = note(
+        "The price was 180 credits monthly for eight seats.", "s6", "s5"
+    )
+    draft = parse(case, payload)
+    public = project_pillars(draft.pillars)
+    for field, index in (("price_stated", 4), ("prospect_response", 5)):
+        source = case[0]["segments"][index]
+        assert public["moments"][0][field] == {
+            "text": moment[field],
+            "evidence": [
+                {
+                    "segment_id": source["id"],
+                    "quote": source["text"],
+                    "start_ms": source["start_ms"],
+                    "end_ms": source["end_ms"],
+                }
+            ],
+        }
+    assert draft.pillars.moments[0].price_stated == moment["price_stated"]
+    assert parse(case, draft.model_dump(mode="json"), canonical_read=True) == draft
+
+
+def test_saved_price_fields_keep_canonical_read_compatibility(case):
+    payload = deepcopy(case[3])
+    payload["pillars"]["moments"][0]["price_stated"] = "one hundred twenty"
+    payload["pillars"]["deeper"]["price"] = note("The budget was 120 credits.", "s6")
+    saved = parse(case, payload, canonical_read=True)
+    assert parse(case, saved.model_dump(mode="json"), canonical_read=True) == saved
+
+
 @pytest.mark.parametrize("link", ["absent", None])
 def test_existing_or_unlinked_mission_stays_readable(case, link):
     payload = deepcopy(case[3])

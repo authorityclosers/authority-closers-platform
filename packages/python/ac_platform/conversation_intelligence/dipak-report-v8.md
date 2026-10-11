@@ -32,6 +32,9 @@ overlapping turns and selector order remain valid. A quoted prospect response
 must come from prospect-role evidence; deeper response notes must include that
 role's evidence, with optional seller context. These checks apply at new-output
 admission; existing canonical reads retain their saved-report behavior.
+Price phrases require matching frozen seller-role evidence; deeper price notes
+must include the seller's speech, with optional prospect context. A prospect's
+budget or unknown speaker role cannot establish the seller's stated price.
 Only people record Won/Lost. Suggestions are distinct from agreed next events.
 Skills are observations on this call, with evidence ceilings and no numeric score.
 
@@ -50,6 +53,10 @@ It preserves the exact legacy `story` shape and the existing guest boundary.
 Before/after and timeline keep their source evidence privately in saved C5.
 Public deeper analysis uses B's strings/enums. Privacy withholding still applies
 recursively; the saved source/report is not rewritten by presentation.
+Public moment `price_stated` and `prospect_response` are `{text, evidence}` notes
+as B's committed parser expects. Only native references containing the exact
+phrase accompany each note. Provider and saved moment fields keep compact strings;
+projection never changes saved report hashes or source quotes.
 Canonical legacy reads also admit optional native pillars without copying them
 over the original summary, findings, dimensions or overview. Private-proof
 imports select the legacy parser; pillars alone do not promote them to v8.

@@ -82,6 +82,8 @@ COACHING_PROMPT_V8_INSTRUCTION = (
     "opening is not a chance to respond to it. No generic missing textbook question. "
     "An implementation question is a possible Buying Signal, never a purchase commitment. "
     "price_stated and prospect_response, if present, are exact source phrases in evidence. "
+    "price_stated and deeper.price cite the seller's frozen-role speech; the prospect's "
+    "budget is not the seller's stated price. Missing roles: abstain from price. "
     "Each prospect_response cites the prospect's frozen-role speech; do not label seller "
     "words as a prospect response. Missing roles: abstain from prospect_response. "
     "YOUR SKILLS ON THIS CALL: all eight domains with status, observation, evidence and "
@@ -396,6 +398,16 @@ def normalize_pillars(
                 raise ValueError("report_pillars_quote_invalid")
         if (
             not canonical_read
+            and moment.price_stated
+            and not any(
+                moment.price_stated in e.quote
+                and roles.get(segments[e.segment_id]["speaker_id"]) == "seller"
+                for e in moment.evidence
+            )
+        ):
+            raise ValueError("report_pillars_price_role_invalid")
+        if (
+            not canonical_read
             and moment.prospect_response
             and not any(
                 moment.prospect_response in e.quote
@@ -404,16 +416,19 @@ def normalize_pillars(
             )
         ):
             raise ValueError("report_pillars_response_role_invalid")
-    if (
-        not canonical_read
-        and pillars.deeper
-        and pillars.deeper.prospect_response
-        and not any(
-            roles.get(segments[e.segment_id]["speaker_id"]) == "prospect"
-            for e in pillars.deeper.prospect_response.evidence
-        )
-    ):
-        raise ValueError("report_pillars_response_role_invalid")
+    if not canonical_read and pillars.deeper:
+        for note, expected, error in (
+            (pillars.deeper.price, "seller", "report_pillars_price_role_invalid"),
+            (
+                pillars.deeper.prospect_response,
+                "prospect",
+                "report_pillars_response_role_invalid",
+            ),
+        ):
+            if note and not any(
+                roles.get(segments[e.segment_id]["speaker_id"]) == expected for e in note.evidence
+            ):
+                raise ValueError(error)
     if pillars.deal:
         deal = pillars.deal
         if deal.commitment_quality != "Unclear" and deal.next_event is None:
@@ -483,6 +498,17 @@ def legacy_pillars_payload(pillars: ReportPillars, raw: Mapping[str, Any]) -> di
 def project_pillars(pillars: ReportPillars) -> dict[str, Any]:
     """B's optional public contract; internal grounding stays in the saved C5."""
     result = pillars.model_dump(mode="json")
+    for moment in result["moments"]:
+        for field in ("price_stated", "prospect_response"):
+            phrase = moment[field]
+            moment[field] = (
+                {
+                    "text": phrase,
+                    "evidence": [ref for ref in moment["evidence"] if phrase in ref["quote"]],
+                }
+                if phrase
+                else None
+            )
     for phase in result["timeline"]:
         phase.pop("evidence")
     if result["key_change"]:
