@@ -155,6 +155,8 @@ export class TelemetryClient {
   private queue: Queued[] = [];
   private session: string | null = null;
   private accepted: Promise<Set<string> | null> | null = null;
+  /** The server's list once read (undefined until the read has ended). */
+  private known: Set<string> | null | undefined = undefined;
   private off = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private seen = new Set<string>();
@@ -240,13 +242,20 @@ export class TelemetryClient {
             .filter(Boolean),
         );
       })
-      .catch(() => null);
+      .catch(() => null)
+      .then((events) => {
+        this.known = events;
+        return events;
+      });
     return this.accepted;
   }
 
   /** Send what is queued for the current session; `keepalive` on page exit. */
   async flush(keepalive = false) {
     if (this.off || !this.session || !this.queue.length) return;
+    // Leaving the page starts no read (the browser would cancel it): events
+    // go out on exit only once the server's list is known.
+    if (keepalive && this.known === undefined) return;
     const accepted = await this.taxonomy();
     if (!accepted) {
       this.off = true;

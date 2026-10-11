@@ -106,6 +106,21 @@ it("sends only what the server lists, and nothing when it lists nothing", async 
   expect(calls.filter((call) => call.url.endsWith("taxonomy"))).toHaveLength(1);
 });
 
+it("starts no read while the page is being left; sends on exit once the list is known", async () => {
+  const telemetry = client();
+  telemetry.setSession(SESSION);
+  telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  expect(calls).toEqual([]);
+  await vi.runAllTimersAsync();
+  expect(sent().map((event) => event.event_name)).toEqual(["sx.sign_out"]);
+
+  calls = [];
+  telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  expect(calls.map((call) => call.url)).toEqual(["/v1/telemetry/events"]);
+});
+
 it("switches off for the page when the server refuses a batch (no consent policy yet)", async () => {
   ingestStatus = 503;
   const telemetry = client();
