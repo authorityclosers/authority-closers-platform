@@ -417,6 +417,40 @@ it.each(["/v1/organisation", "/v1/organisation/members"])(
     expect(host.querySelector('[role="alert"]')).toBeNull();
   },
 );
+it("gives a new organisation one next step instead of zero tiles", async () => {
+  (routes["/v1/organisation"] as { member_count: number }).member_count = 1;
+  routes["/v1/organisation/activity?days=30"] = {
+    members: [],
+    calls: [],
+    per_day: [],
+    per_rep: [],
+  };
+  await render();
+  expect(host.textContent).toContain("Bring your team in");
+  expect(host.textContent).not.toContain("Minutes recorded");
+  expect(host.textContent).not.toContain("Calls by person");
+  await click("Invite people");
+  expect(
+    host
+      .querySelector('button[aria-label="Members"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(
+    host.querySelector('input[aria-label="Email to invite"]'),
+  ).not.toBeNull();
+
+  // With a team but no calls yet: the next step is a call, not an invite.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  window.history.replaceState(null, "", "/organisation");
+  (routes["/v1/organisation"] as { member_count: number }).member_count = 3;
+  await render();
+  expect(host.textContent).toContain("No calls in the last 30 days");
+  expect(
+    host.querySelector('a[href*="/analysis/new"], a[href*="new=1"]'),
+  ).not.toBeNull();
+  expect(host.textContent).not.toContain("Invite people");
+});
 it("lets everyone open their own profile from their row, and no one else's", async () => {
   await render();
   await click("Members");

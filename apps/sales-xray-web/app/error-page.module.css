@@ -14,7 +14,7 @@
   border: 1px solid var(--lx-line);
   border-radius: 20px;
   background: var(--lx-surface);
-  box-shadow: 0 18px 48px rgb(15 27 51 / 12%);
+  box-shadow: var(--sx-shadow-float);
   text-align: center;
   animation: rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }

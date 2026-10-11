@@ -11,7 +11,7 @@
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-md);
   background: var(--lx-surface);
-  box-shadow: 0 1px 3px rgba(15, 27, 51, 0.04);
+  box-shadow: var(--lx-shadow-1);
 }
 
 .cardHeader {
