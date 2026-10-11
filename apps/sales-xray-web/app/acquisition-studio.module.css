@@ -3283,31 +3283,25 @@ a.overviewCard:hover {
 .app.app[data-stage="upload"][data-selected="true"]
   .uploadActions
   :global(.studio-wide) {
+  /* The one teal action, flat (r17: one accent, no glow or lift). */
   display: inline-flex;
   width: 100%;
-  min-height: 48px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   border: 0;
-  border-radius: 12px;
-  background: var(--lx-gradient-primary);
-  box-shadow: var(--lx-shadow-cta);
+  border-radius: 10px;
+  background: var(--lx-teal);
+  box-shadow: none;
   color: var(--lx-on-teal);
-  font: 700 15px/1 var(--lx-font-ui);
-  transition:
-    transform var(--lx-dur-quick) var(--lx-ease-quick),
-    box-shadow var(--lx-dur-move) var(--lx-ease-quick);
+  font: 650 14px/1 var(--lx-font-ui);
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
 .app.app[data-stage="upload"][data-selected="true"]
   .uploadActions
   :global(.studio-wide):hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-.app.app[data-stage="upload"][data-selected="true"]
-  .uploadActions
-  :global(.studio-wide):active:not(:disabled) {
-  transform: scale(0.99);
+  background: var(--lx-teal-hover);
 }
 .app.app[data-stage="upload"][data-selected="true"]
   .uploadActions
