@@ -99,8 +99,9 @@ function RepList({
     <Panel
       title="Who needs help with what"
       sub={`${reps.length} fictional ${reps.length === 1 ? "rep" : "reps"}`}
-      tools={
-        areas.length > 1 ? (
+    >
+      {areas.length > 1 ? (
+        <div className={styles.repFilter}>
           <span className={kitStyles.field}>
             <select
               aria-label="Coaching area"
@@ -118,9 +119,11 @@ function RepList({
               ))}
             </select>
           </span>
-        ) : null
-      }
-    >
+          <span className={styles.note}>
+            {shown.length} {shown.length === 1 ? "rep" : "reps"}
+          </span>
+        </div>
+      ) : null}
       <List label="Reps and their current focus">
         {visible.map((rep) => (
           <Row
@@ -145,6 +148,7 @@ function RepList({
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreCalls}`}
+          data-many=""
           onClick={() => setAll(true)}
         >
           Show all {shown.length} people

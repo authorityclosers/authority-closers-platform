@@ -419,6 +419,18 @@
   margin-top: 8px;
 }
 
+/* Team: the area filter above the named sandbox reps. */
+.repFilter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 4px;
+}
+
+.repFilter > span:first-child {
+  width: min(220px, 60%);
+}
+
 .status {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
