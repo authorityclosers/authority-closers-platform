@@ -689,11 +689,16 @@ button.pin {
   cursor: pointer;
 }
 
-/* A 32 px tap target around the 10 px dot (Pulse floor). */
+/* A 32 px tap target around the 10 px dot (Pulse floor), whatever the box
+   sizing of the page around it. */
 button.pin::after {
   position: absolute;
-  inset: -11px;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
   content: "";
+  transform: translate(-50%, -50%);
 }
 
 button.pin:hover {
