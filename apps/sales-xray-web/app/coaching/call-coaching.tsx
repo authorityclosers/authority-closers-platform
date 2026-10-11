@@ -6,7 +6,13 @@ import { StoryCard } from "../report-visuals/visuals";
 import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
 import { CALL_PILLARS, FOCUS, NEXT, WHY } from "./coaching-copy";
-import { FocusHero, LessonPanel, MissionPanel, Pillar } from "./coaching-ui";
+import {
+  FocusHero,
+  LessonPanel,
+  MissionPanel,
+  Pillar,
+  type Chip,
+} from "./coaching-ui";
 import { MomentList } from "./evidence-player";
 import styles from "./coaching.module.css";
 
@@ -16,6 +22,14 @@ const BASIS = {
   general_practice: FOCUS.general,
   unavailable: "Unavailable",
 } as const;
+
+/** Where one call's focus came from, as the chip on its focus card. */
+export function basisChip(basis: keyof typeof BASIS): Chip {
+  return {
+    text: BASIS[basis],
+    tone: basis === "general_practice" ? "neutral" : "accent",
+  };
+}
 
 /** Level 1: one call → one focus, its moments, a lesson and one mission. */
 export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
@@ -47,11 +61,7 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
         <FocusHero
           label={focus.label}
           chips={[
-            {
-              text: BASIS[coaching.basis],
-              tone:
-                coaching.basis === "general_practice" ? "neutral" : "accent",
-            },
+            basisChip(coaching.basis),
             ...(coaching.sandbox ? [{ text: FOCUS.sandbox }] : []),
           ]}
           explanation={focus.explanation}

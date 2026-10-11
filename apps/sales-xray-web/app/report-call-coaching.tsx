@@ -7,7 +7,18 @@ import type { ReportEvidence, SalesReport } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
 import { RichText } from "./report-entities";
 import { Clip } from "./report-kit";
-import { CoachingMedia } from "./coaching/media-player";
+import { basisChip } from "./coaching/call-coaching";
+import { CALL_PILLARS, NEXT, WHY } from "./coaching/coaching-copy";
+import {
+  FocusHero,
+  LessonPanel,
+  MissionPanel,
+  Pillar,
+} from "./coaching/coaching-ui";
+import coachingStyles from "./coaching/coaching.module.css";
+import { MomentList } from "./coaching/evidence-player";
+import { StoryCard } from "./report-visuals/visuals";
+import { kitStyles } from "./ui/kit";
 import { formatClock } from "./lightbox/time";
 import {
   buildContextualSourcePlayback,
@@ -219,7 +230,7 @@ export function ReportCallCoaching(props: Props) {
         data-call-coaching
         data-state="unavailable"
       >
-        <p>This call’s coaching evidence is unavailable.</p>
+        <p>This call’s coaching isn’t available right now.</p>
         <button type="button" onClick={() => setAttempt((n) => n + 1)}>
           Try again
         </button>
@@ -245,11 +256,14 @@ export function ReportCallCoaching(props: Props) {
   );
 }
 
+/**
+ * This call's coaching inside the Report, in the same four pillars and cards
+ * as the Coaching page; moments play in the Report's own player.
+ */
 function CanonicalCallCoaching({
   data,
   coaching,
   onSelectEvidence,
-  onSelectContextualPlayback,
 }: Props & { coaching: CallCoaching }) {
   const { focus, lesson, mission, practice } = coaching;
   if (!focus || !lesson || !mission || !practice || !data.report) return null;
@@ -258,152 +272,68 @@ function CanonicalCallCoaching({
     : null;
   return (
     <div className={styles.coaching} data-call-coaching data-state="ready">
-      <p className={styles.context}>
-        {coaching.basis === "general_practice"
-          ? "General practice from approved guidance; no assessed weakness is inferred from this call."
-          : "Coaching specific to this call. One call does not establish a recurring pattern."}
-      </p>
-      <section aria-label="Focus for this call">
-        <h3>One focus · {focus.label}</h3>
-        <p className={styles.focus}>
-          <RichText text={focus.explanation} />
-        </p>
-      </section>
-      <section aria-label="Why this focus">
-        <h3>Why this focus</h3>
-        <p>
-          <RichText text={focus.why_it_matters} />
-        </p>
-        <div className={styles.sources}>
-          {coaching.evidence.map((source, index) => {
-            const playback =
-              data.transcript && onSelectContextualPlayback
-                ? buildContextualSourcePlayback(
-                    data.report!,
-                    data.transcript,
-                    source,
-                  )
-                : null;
-            return source.playable && onSelectEvidence ? (
-              <Clip
-                key={index}
-                evidence={source}
-                title="Coaching for this call"
+      <div className={coachingStyles.conversation}>
+        <Pillar id="report-coaching-focus" copy={CALL_PILLARS.focus} level={3}>
+          <FocusHero
+            label={focus.label}
+            chips={[basisChip(coaching.basis)]}
+            explanation={focus.explanation}
+            why={focus.why_it_matters}
+            reason={focus.selected_reason}
+            mission={mission.behavior}
+            missionAnchor="report-coaching-mission"
+          />
+        </Pillar>
+        <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
+          {coaching.evidence.length ? (
+            <div className={coachingStyles.card} data-flush="">
+              <MomentList
+                evidence={coaching.evidence}
+                showCall={false}
+                heading={WHY.callEvidence}
+                label="Moments from this call"
                 onPlay={onSelectEvidence}
-                context={
-                  playback && onSelectContextualPlayback
-                    ? { playback, onPlay: onSelectContextualPlayback }
-                    : null
-                }
               />
-            ) : (
-              <figure key={index}>
-                <figcaption>
-                  {formatClock(source.start_ms)}–{formatClock(source.end_ms)}
-                </figcaption>
-                <blockquote>
-                  <RichText text={source.quote} />
-                </blockquote>
-              </figure>
-            );
-          })}
+            </div>
+          ) : (
+            <StoryCard>
+              <p>{WHY.noTimestamp}</p>
+            </StoryCard>
+          )}
+        </Pillar>
+        <LessonPanel
+          id="report-coaching-better"
+          level={3}
+          copy={CALL_PILLARS.better}
+          lesson={lesson}
+          clips={coaching.media_clips}
+          fallbackObservation={focus.explanation}
+        />
+        <MissionPanel
+          id="report-coaching-mission"
+          level={3}
+          copy={CALL_PILLARS.next}
+          mission={mission}
+          practice={practice}
+          foot={NEXT.oneCall}
+        />
+        <div className={styles.links}>
+          <Link
+            prefetch={false}
+            className={kitStyles.button}
+            data-variant="primary"
+            href={`/coaching?call=${coaching.submission_id}`}
+          >
+            Open full coaching for this call
+          </Link>
+          <Link
+            prefetch={false}
+            className={kitStyles.button}
+            href={skill ? `/coaching?focus=${skill}` : "/coaching"}
+          >
+            My coaching across calls
+          </Link>
         </div>
-        {!coaching.evidence.length && (
-          <p className={styles.context}>
-            This report did not retain a timestamped moment for this suggestion.
-          </p>
-        )}
-      </section>
-      <section aria-label="What better sounds like">
-        <h3>{lesson.title}</h3>
-        <p>
-          <RichText text={lesson.quick_idea} />
-        </p>
-        <details>
-          <summary>What better sounds like</summary>
-          <div className={styles.lesson}>
-            <p>
-              <RichText text={lesson.good_looks_like} />
-            </p>
-            <p>
-              <RichText text={lesson.better_direction} />
-            </p>
-            <ol>
-              {lesson.framework.map((step, index) => (
-                <li key={index}>
-                  <RichText text={step} />
-                </li>
-              ))}
-            </ol>
-            <p className={styles.context}>
-              Suggested examples from guidance; not words from the call.
-            </p>
-            {lesson.example_wording.map((words, index) => (
-              <p key={index}>
-                <RichText text={words} />
-              </p>
-            ))}
-            <p>
-              <span className={styles.label}>When to use it · </span>
-              <RichText text={lesson.when_to_use} />
-            </p>
-            <p>
-              <span className={styles.label}>When to avoid it · </span>
-              <RichText text={lesson.when_not} />
-            </p>
-            <ul>
-              {lesson.checklist.map((item, index) => (
-                <li key={index}>
-                  <RichText text={item} />
-                </li>
-              ))}
-            </ul>
-            <p className={styles.context}>
-              <RichText text={lesson.source} />
-            </p>
-          </div>
-        </details>
-      </section>
-      {coaching.media_clips?.length ? (
-        <section aria-label="Coaching example for this focus">
-          <h3>See this focus in practice</h3>
-          <CoachingMedia clips={coaching.media_clips} />
-        </section>
-      ) : null}
-      <section aria-label="Next-call mission">
-        <h3>Your next-call mission</h3>
-        <p>
-          <RichText text={mission.behavior} />
-        </p>
-        <p>
-          <span className={styles.label}>Done when · </span>
-          <RichText text={mission.done_when} />
-        </p>
-        <details>
-          <summary>Practise once</summary>
-          <div className={styles.lesson}>
-            <p>
-              <RichText text={practice.exercise} />
-            </p>
-            <p>
-              <RichText text={practice.success_condition} />
-            </p>
-          </div>
-        </details>
-      </section>
-      <div className={styles.links}>
-        <Link
-          prefetch={false}
-          href={`/coaching?call=${coaching.submission_id}`}
-        >
-          Open full coaching for this call
-        </Link>
-        <Link
-          prefetch={false}
-          href={skill ? `/coaching?focus=${skill}` : "/coaching"}
-        >
-          My coaching across calls
-        </Link>
       </div>
     </div>
   );

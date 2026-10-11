@@ -376,6 +376,11 @@
   padding: 12px 14px;
 }
 
+/* Moments inside a padded card (the strength) need no own inset. */
+.inset > .moment {
+  padding: 6px 0;
+}
+
 .moment + .moment {
   border-top: 1px solid var(--lx-line-soft);
 }

@@ -1,3 +1,6 @@
+/* This call's coaching inside the Report. The ready state is the Coaching
+   page's own pillars (coaching.module.css + Strike A's primitives); these
+   rules dress only the report-focus fallback and the unavailable note. */
 .coaching {
   display: grid;
   gap: 16px;
@@ -6,23 +9,16 @@
   font: 400 14px/1.6 var(--lx-font-ui);
   overflow-wrap: anywhere;
 }
-.coaching p,
-.coaching h3,
-.coaching h4,
-.coaching blockquote {
+.coaching:not([data-state="ready"]) :is(p, h3, h4, blockquote, figure) {
   margin: 0;
 }
-.coaching figure {
-  margin: 0;
-}
-.coaching section {
+.coaching:not([data-state="ready"]) section {
   display: grid;
   gap: 8px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--lx-line-soft);
 }
-.coaching h3,
-.coaching h4,
+.coaching:not([data-state="ready"]) :is(h3, h4),
 .label {
   font-size: 14px;
   font-weight: 600;
@@ -31,7 +27,7 @@
   font-weight: 600;
 }
 .context,
-.coaching small {
+.coaching:not([data-state="ready"]) small {
   color: var(--lx-muted);
   font-size: 12px;
 }
@@ -44,8 +40,7 @@
 .lesson {
   padding-top: 8px;
 }
-.coaching summary,
-.coaching button {
+.coaching:not([data-state="ready"]) :is(summary, button) {
   min-height: 32px;
   cursor: pointer;
 }
@@ -63,12 +58,15 @@
   flex-wrap: wrap;
   gap: 8px 16px;
 }
-.links a {
+.coaching:not([data-state="ready"]) .links a {
   display: inline-flex;
   align-items: center;
   min-height: 32px;
   color: var(--lx-teal);
   text-underline-offset: 3px;
+}
+.coaching[data-state="ready"] .links {
+  gap: 8px;
 }
 @media (max-width: 600px) {
   .links a {
@@ -77,11 +75,10 @@
   .sources button {
     min-height: 44px;
   }
-  .coaching summary,
-  .coaching button {
+  .coaching:not([data-state="ready"]) :is(summary, button) {
     min-height: 44px;
   }
-  .coaching button {
+  .coaching:not([data-state="ready"]) button {
     min-width: 44px;
   }
 }

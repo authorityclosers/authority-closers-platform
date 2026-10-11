@@ -32,12 +32,15 @@ export function Pillar({
   id,
   copy,
   label,
+  level = 2,
   children,
 }: {
   id: string;
   copy: CoachingPillarCopy;
   /** Another rep's view words the title for "them". */
   label?: string;
+  /** 3 inside a page that already has its own section heading (the Report). */
+  level?: 2 | 3;
   children: ReactNode;
 }) {
   const heading = `${id}-heading`;
@@ -50,6 +53,7 @@ export function Pillar({
     >
       <PillarHeading
         index={copy.number}
+        level={level}
         id={heading}
         title={label ?? copy.label}
         subtitle={copy.subtitle}
@@ -135,6 +139,8 @@ type Lesson = Omit<TextLesson, "own_call"> & { own_call: Evidence | null };
  * summary; without one it is the complete lesson. Never an empty state.
  */
 export function LessonPanel({
+  id = "coaching-better",
+  level,
   copy,
   lesson,
   clips,
@@ -142,6 +148,8 @@ export function LessonPanel({
   strength,
   acrossCalls = false,
 }: {
+  id?: string;
+  level?: 2 | 3;
   copy: CoachingPillarCopy;
   lesson: Lesson;
   clips?: CoachingClip[];
@@ -162,7 +170,7 @@ export function LessonPanel({
     </div>
   ) : null;
   return (
-    <Pillar id="coaching-better" copy={copy}>
+    <Pillar id={id} copy={copy} level={level}>
       <StoryCard label={media ? BETTER.dipak : BETTER.textLesson} tone="accent">
         <h3 className={styles.lessonTitle}>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
@@ -197,7 +205,10 @@ export function LessonPanel({
       {strength ? (
         <StoryCard label={BETTER.strength} tone="good" icon={Sparkles}>
           <p className={styles.strengthTitle}>{strength.title}</p>
-          <ul className={styles.moments} aria-label="What worked on this call">
+          <ul
+            className={`${styles.moments} ${styles.inset}`}
+            aria-label="What worked on this call"
+          >
             {strength.evidence.map((moment) => (
               <EvidencePlayer
                 key={`${moment.segment_id}:${moment.start_ms}`}
@@ -257,6 +268,7 @@ export function LessonPanel({
 /** Pillar 4: one practice and exactly one observable next-call mission. */
 export function MissionPanel({
   id,
+  level,
   copy,
   mission,
   practice,
@@ -264,14 +276,18 @@ export function MissionPanel({
   foot,
 }: {
   id: string;
+  level?: 2 | 3;
   copy: CoachingPillarCopy;
   mission: NonNullable<Coaching["mission"]>;
-  practice: NonNullable<Coaching["practice"]>;
+  practice: Pick<
+    NonNullable<Coaching["practice"]>,
+    "exercise" | "success_condition"
+  > & { estimated_minutes?: number | null };
   since?: string;
   foot?: ReactNode;
 }) {
   return (
-    <Pillar id={id} copy={copy}>
+    <Pillar id={id} copy={copy} level={level}>
       <StoryCard
         label={NEXT.mission}
         tone="accent"

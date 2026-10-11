@@ -4,6 +4,7 @@ import { Pause, Play, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 
+import { ClipPlayState } from "../source-waveform";
 import { kitStyles } from "../ui/kit";
 import type { Evidence } from "./coaching-client";
 import { callDate, timeLabel } from "./coaching-format";
@@ -21,12 +22,49 @@ export function clipLength(ms: number) {
     : `${seconds / 60} min`;
 }
 
+/** Plays a moment in the Report's own player, where the call is already open. */
+export type PlayInReport = (evidence: Evidence, title: string) => void;
+
+/** The play pill when the Report's player plays the moment. */
+function ReportPlay({
+  evidence,
+  span,
+  onPlay,
+}: {
+  evidence: Evidence;
+  span: string;
+  onPlay: PlayInReport;
+}) {
+  return (
+    <ClipPlayState startMs={evidence.start_ms} endMs={evidence.end_ms}>
+      {(playing) => (
+        <button
+          type="button"
+          className={styles.time}
+          data-state={playing ? "playing" : "idle"}
+          aria-pressed={playing}
+          aria-label={`${playing ? "Pause" : "Play"} moment ${span}`}
+          onClick={() => onPlay(evidence, "Coaching for this call")}
+        >
+          {playing ? (
+            <Pause size={13} aria-hidden="true" />
+          ) : (
+            <Play size={13} aria-hidden="true" />
+          )}
+          {timeLabel(evidence.start_ms)}
+        </button>
+      )}
+    </ClipPlayState>
+  );
+}
+
 /** One playable moment from the learner's own call, as a compact row. */
 export function EvidencePlayer({
   evidence,
   showCall = true,
   extra = false,
   fictional = false,
+  onPlay,
 }: {
   evidence: Evidence;
   /** Off when every moment on the page belongs to the same call. */
@@ -35,6 +73,8 @@ export function EvidencePlayer({
   fictional?: boolean;
   /** Folded on one-column screens until the learner asks for all moments. */
   extra?: boolean;
+  /** Inside a Report: play in its player instead of a separate audio. */
+  onPlay?: PlayInReport;
 }) {
   const identity = useId();
   const audio = useRef<HTMLAudioElement>(null);
@@ -92,7 +132,9 @@ export function EvidencePlayer({
     state === "playing" ? Pause : state === "failed" ? RefreshCw : Play;
   return (
     <li className={styles.moment} data-extra={extra ? "" : undefined}>
-      {evidence.playable ? (
+      {evidence.playable && onPlay ? (
+        <ReportPlay evidence={evidence} span={span} onPlay={onPlay} />
+      ) : evidence.playable ? (
         <button
           type="button"
           className={styles.time}
@@ -194,6 +236,7 @@ export function MomentList({
   label = "Moments from your calls",
   heading,
   fictional = false,
+  onPlay,
 }: {
   evidence: Evidence[];
   showCall?: boolean;
@@ -201,6 +244,7 @@ export function MomentList({
   /** A visible label line above the list, with the moment count. */
   heading?: string;
   fictional?: boolean;
+  onPlay?: PlayInReport;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -225,6 +269,7 @@ export function MomentList({
             showCall={showCall}
             extra={index >= 1}
             fictional={fictional}
+            onPlay={onPlay}
           />
         ))}
       </ul>
