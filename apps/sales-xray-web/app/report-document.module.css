@@ -87,14 +87,6 @@
   background: var(--sx-sunken);
 }
 
-/* In the dark app the paper sits on a dark desk, like a PDF viewer. */
-:global(html[data-theme="dark"]) .canvas {
-  background: color-mix(in oklab, var(--lx-film) 70%, transparent);
-}
-:global(html[data-theme="dark"]) .sheet {
-  border-color: transparent;
-}
-
 .unavailable {
   margin: 0 auto;
   max-width: 794px;
