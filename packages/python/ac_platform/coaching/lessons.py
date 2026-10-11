@@ -11,7 +11,7 @@ from ac_platform.coaching.contracts import Mission, Moment, TextLesson
 SOURCE = "Owner's Sales Xray specification, 9 Oct 2026 · Coaching §3 and §5.6"
 
 
-def lesson_for(skill_id: str, moment: Moment, mission: Mission) -> TextLesson:
+def lesson_for(skill_id: str, moment: Moment | None, mission: Mission) -> TextLesson:
     impact = skill_id in {"discovery_deep_understanding", "problem_impact_desire"}
     if impact:
         return TextLesson(
@@ -69,7 +69,12 @@ def lesson_for(skill_id: str, moment: Moment, mission: Mission) -> TextLesson:
             "Choose one response",
             "Check the result",
         ),
-        why_it_matters=moment.observation,
+        why_it_matters=(
+            moment.observation
+            if moment is not None
+            else "One observable change makes the next call easier to review. "
+            "This is general practice, not an assessed weakness in this call."
+        ),
         good_looks_like=(
             "Listen to the evidence in context, including what the prospect already answered. "
             "Describe the change in observable terms. Practise it in words that feel natural "

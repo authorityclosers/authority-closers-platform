@@ -1,3 +1,5 @@
+import { parseClips, type CoachingClip } from "./media-contract";
+
 export const COACHING_API = "/v1/me/coaching";
 export class CoachingReadError extends Error {}
 const UUID_RE =
@@ -57,6 +59,7 @@ export type Coaching = {
   schema: "ac.sales-xray.coaching/1";
   person_id: string;
   tenant_id: string;
+  session_id?: string | null;
   authority: "provisional";
   entitlement: "coaching";
   state: "not_enough_evidence" | "ready";
@@ -100,6 +103,7 @@ export type Coaching = {
   };
   regression: { state: string; action: string };
   lesson: TextLesson | null;
+  media_clips?: CoachingClip[];
   development_path: {
     current: string | null;
     likely_next: string | null;
@@ -179,6 +183,7 @@ export function parseCoaching(value: unknown): Coaching {
     return invalid();
   uuid(item.person_id);
   uuid(item.tenant_id);
+  if (item.session_id != null) uuid(item.session_id);
   count(item.analysed_calls);
   count(item.pending_calls);
   count(item.unavailable_calls);
@@ -273,7 +278,7 @@ export function parseCoaching(value: unknown): Coaching {
   // Catalogue access/review is pending. Never expose an unparsed media URL.
   if (item.recommended_media !== null || item.other_format !== null)
     return invalid();
-  return item as Coaching;
+  return { ...item, media_clips: parseClips(item.media_clips) } as Coaching;
 }
 
 export async function fetchCoaching(signal: AbortSignal): Promise<Coaching> {
