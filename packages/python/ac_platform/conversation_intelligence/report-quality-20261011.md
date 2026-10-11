@@ -150,3 +150,62 @@ Final private count-only receipt SHA256:
 Dev API health is 200 at `28cd3de229e0af0a5146103468ab3ddeea02e60b`;
 all three Python source pins above match that serving Git source (22:41 UTC).
 No authenticated hosted Report was read by this session.
+
+## Returned mapping fixes and outcome wording check, 23:51 UTC
+
+B's `09a60321` fixes both mapping findings above. A focused independent rerun
+of its three fictional regression cases passes: matching summary text keeps
+its existing citations, unrelated text receives none, and assigned tasks stay
+outside prospect commitments both with and without optional pillars. Twenty-one
+unrelated cases were deliberately skipped. The original retained-corpus counts
+above remain historical; they were not recounted for this continuation.
+
+The offline v8 prompt says that people record Won/Lost, and the wire outcome
+enum excludes both labels. Two fictional new-output admission probes confirm
+that `outcome.status` rejects them. However, **the free-text summary still
+admits both exact `The conversation ended as Won: ` / `Lost: ` prefixes** and
+preserves them on canonical round trip. This is a validator coverage gap,
+not an observed provider output or a claim that v8 passes the human-only rule
+in every sentence. An ordinary observational summary remains valid. The
+AC-SVAL-01 Gate 2 runtime block is still present. This requested bounded check
+changes no prompt, schema, runtime policy or saved report.
+
+C's synthetic source finding reports 827 affected summaries among 3,360
+authored reports (391 Won, 436 Lost). Those totals are C's pinned attestation;
+this continuation independently checks one exact synthetic sample. Removing
+its one exact prefix retains the complete buyer-position sentence and all
+other summary sentences. The source file stays unchanged, and C's dry-run
+plan remains unapplied. The newer operator handoff records person-entered
+synthetic outcomes, so the earlier unset-badge capture cannot establish the
+current same-call state. Ordinary Report/outcome/badge readback remains an
+operator prerequisite before any published source supersession.
+
+Private count-only evidence:
+
+- `candidate-outcome-boundary-20261011T235056Z.json`, SHA256
+  `0089d6a10442ac21c0f2a929fa7e2d432364d3ce8485f84793dede3c3be6dc8b`.
+  The private `check_candidate_outcome_boundary.py` reproduces existing
+  admission with fictional inputs and reads one exact synthetic source.
+- `returned-b-mapping-check-20261011T235115Z.json`, SHA256
+  `f3103b14b8ec0350b21054a8af09916b83188db8c9aca857c9e0d7cceccda7f8`.
+  Run the existing `report-story-model.test.ts` with the test-name filter
+  `keeps a matching pillar|does not turn an assigned task` through `ac-heavy`.
+
+From the shared workbench, reproduce the candidate check with a fresh receipt:
+
+```sh
+ac-heavy .venv/bin/python \
+  /home/acdev/strikes/1801/check_candidate_outcome_boundary.py \
+  <new-private-receipt-path>
+```
+
+Current source pins: browser model
+`5fa3cf6cb0d805551eb6d3efb581d84b14b1e1e334092ea46b28cfb7a2dd59b6`,
+browser test
+`9bdc0af48c2fc6b7a84847d2c7f0d3096526c9b221946d84346e2b76315e864f`,
+v8 prompt/adapter
+`796eb857bfa36bb205330f952e60f5ee534c6cd90c63bdb6b4d8b978e33faa60`.
+The private probe retains all eight input/source hashes and verifies they stay
+stable. Dev readiness is 200 at `09a60321ef2376ff6f9646901579cb639c5d54b3`.
+Current-dev timing exports and independent Gate 2 artifacts have not returned;
+no fresh replay, provider call, hosted write or 20-minute latency claim was made.
