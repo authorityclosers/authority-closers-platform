@@ -11,7 +11,7 @@ The binding source is
 `a464e69123f9a649f5f038e464d6086c6d52220b09e3e50eb24b44c6769e3110`.
 The spec-to-component-to-field map is retained in
 `/home/acdev/strikes/1677/NOTES.md`. This checkpoint reconciles completed local
-checks and shared-dev receipts on 11 Oct at 23:18 UTC; it does not represent a
+checks and shared-dev receipts on 11 Oct; it does not represent a
 new execution of those checks.
 
 ## Implementation
