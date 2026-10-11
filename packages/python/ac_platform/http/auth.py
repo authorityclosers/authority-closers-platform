@@ -1982,6 +1982,7 @@ def install_identity_http(
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
                 )
+                username = getattr(person, "username", None)
                 selected_tenant = None
                 tenant_id = settings.public_learner_tenant_id
                 if tenant_id is not None:
@@ -1996,7 +1997,7 @@ def install_identity_http(
                     if membership is not None:
                         await identity.select_tenant(issued.token, tenant_id)
                         selected_tenant = tenant_id
-                if person.username is not None and selected_tenant is None:
+                if username is not None and selected_tenant is None:
                     memberships = list(
                         await database.scalars(
                             select(Membership)
@@ -2028,7 +2029,7 @@ def install_identity_http(
             person_id=person.id,
             email=person.email,
             display_name=person.display_name,
-            **({"username": person.username} if person.username is not None else {}),
+            **({"username": username} if username is not None else {}),
         )
 
     @router.post(
