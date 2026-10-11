@@ -30,7 +30,10 @@ import {
   PillarHeading,
   PlayChip,
   Quote,
+  ShareDial,
   SkillRow,
+  SkillStateMark,
+  MomentTag,
   SplitBar,
   StoryCard,
   SummaryStrip,
@@ -539,7 +542,165 @@ export function VisualsGallery() {
           ]}
         />
       </section>
+      <EdgeCases onSelect={select} />
     </main>
+  );
+}
+
+const minute = (m: number, sec = 0) => (m * 60 + sec) * 1000;
+
+/** Fictional stress data: many short stages, many moments, Hindi words. */
+const EDGE_PHASES = [
+  ["Opening", 0],
+  ["Business Context", 1.5],
+  ["Problems & Goals", 4],
+  ["Decision & Next Step", 6.2],
+  ["Price", 7],
+  ["Partner Objection", 7.6],
+  ["Program Discussion", 9],
+  ["Decision & Next Step", 15],
+  ["Close", 16.2],
+].map(([label, at], index, all) => ({
+  label: label as string,
+  start_ms: minute(at as number),
+  end_ms: minute((all[index + 1]?.[1] as number) ?? 17),
+}));
+
+const EDGE_KINDS = [
+  "Strong Moment",
+  "Turning Point",
+  "Buying Signal",
+  "Important Miss",
+  "Objection",
+  "Price Moment",
+  "Decision Moment",
+  "Trust Moment",
+  "Commitment",
+  "Risk",
+  "Worth Replaying",
+];
+
+const hindi = {
+  segment_id: "h1",
+  quote:
+    "सच कहूँ तो कीमत ठीक है, पर मुझे अपने पार्टनर से एक बार बात करनी होगी।",
+  start_ms: minute(7, 40),
+  end_ms: minute(7, 52),
+};
+
+function EdgeCases({
+  onSelect,
+}: {
+  onSelect: (evidence: ReportEvidence, title: string) => void;
+}) {
+  // A monologue-heavy seller: long turns, short replies (fictional).
+  const speech = {
+    top: Array.from({ length: 34 }, (_, index) => ({
+      start_ms: index * 30_000,
+      end_ms: index * 30_000 + 24_000,
+    })),
+    bottom: Array.from({ length: 34 }, (_, index) => ({
+      start_ms: index * 30_000 + 24_500,
+      end_ms: index * 30_000 + 29_000,
+    })),
+  };
+  return (
+    <section className={styles.pillar} aria-labelledby="edge">
+      <PillarHeading
+        index={7}
+        id="edge"
+        title="Edge cases"
+        subtitle="Not a pillar: how the blocks hold up with messy, long and Hindi content."
+      />
+      <StoryCard label="Nine short stages, eleven moments">
+        <CallTimeline
+          durationMs={minute(17)}
+          speech={speech}
+          names={{ top: "राहुल (You)", bottom: "समीर जोशी" }}
+          phases={EDGE_PHASES}
+          moments={EDGE_KINDS.map((kind, index) => ({
+            key: kind,
+            kind,
+            title: `${kind} example`,
+            at_ms: minute(0.6 + index * 1.5),
+            source: { ...hindi, start_ms: minute(0.6 + index * 1.5) },
+          }))}
+          change={{ at_ms: minute(7, 2), label: "The call changed" }}
+          onSelect={onSelect}
+        />
+      </StoryCard>
+      <StoryCard label="One speaker only, no stages">
+        <CallTimeline
+          durationMs={minute(3)}
+          speech={{
+            top: [{ start_ms: 0, end_ms: minute(2, 50) }],
+            bottom: [],
+          }}
+          names={{ top: "Voice note", bottom: "" }}
+        />
+      </StoryCard>
+      <div className={styles.trio}>
+        <StoryCard label="Hindi quote">
+          <Quote
+            text={hindi.quote}
+            speaker={{ name: "समीर जोशी", role: "prospect" }}
+            source={hindi}
+            onSelect={onSelect}
+          />
+        </StoryCard>
+        <StoryCard label="Every outcome">
+          <div className={styles.wrapRow}>
+            {Object.keys(OUTCOME_TONE).map((status) => (
+              <OutcomeBadge key={status} status={status} />
+            ))}
+            <OutcomeBadge status={null} />
+          </div>
+        </StoryCard>
+        <StoryCard label="Every skill state and commitment">
+          <div className={styles.stackTight}>
+            {[
+              "Strongly Demonstrated",
+              "Observed",
+              "Needs Attention",
+              "Not Enough Evidence",
+              "Not Applicable",
+              null,
+            ].map((state) => (
+              <SkillStateMark key={String(state)} state={state} />
+            ))}
+            {(["Clear", "Soft", "Unclear"] as const).map((quality) => (
+              <CommitmentQuality key={quality} quality={quality} />
+            ))}
+          </div>
+        </StoryCard>
+      </div>
+      <StoryCard label="Every moment kind">
+        <div className={styles.wrapRow}>
+          {EDGE_KINDS.map((kind, index) => (
+            <MomentTag key={kind} kind={kind} atMs={minute(index)} />
+          ))}
+        </div>
+      </StoryCard>
+      <MetricRow
+        items={[
+          { label: "Call length", value: "1:02:41" },
+          {
+            label: "Talk share",
+            value: "88 : 12",
+            visual: (
+              <ShareDial
+                value={88}
+                total={100}
+                label="You talked 88% of the time"
+              />
+            ),
+          },
+          { label: "Questions asked", value: "0 : 14" },
+          { label: "Longest seller turn", value: "11:07" },
+          { label: "Talk-overs", value: "27" },
+        ]}
+      />
+    </section>
   );
 }
 

@@ -164,3 +164,15 @@
   border: 1px solid var(--sx-line-strong);
   color: var(--sx-ink);
 }
+
+.wrapRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.stackTight {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
