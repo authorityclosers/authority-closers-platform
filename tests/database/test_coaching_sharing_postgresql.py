@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -16,8 +16,15 @@ from ac_platform.coaching.models import (
     CoachingLearnerContext,
     CoachingShareRevision,
 )
-from ac_platform.coaching.sharing_store import erase_coaching_context_for_person
+from ac_platform.coaching.sharing_store import (
+    erase_coaching_context_for_person,
+    record_context,
+    record_feedback,
+)
+from ac_platform.conversation_intelligence.application import ConversationConflict
+from ac_platform.conversation_intelligence.sensitive_segments_store import SensitiveSegmentsStore
 from ac_platform.tenancy.models import Membership, Organisation
+from tests.database import test_prospect_store_postgresql as call_fixtures
 from tests.database.test_coaching_postgresql import draft_for, install
 from tests.database.test_coaching_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_account_library_postgresql import _session
@@ -279,6 +286,253 @@ def test_share_reaches_admins_only_and_revocation_is_immediate(
             assert removed == 1
             async with setup.sessions() as db:
                 assert (await db.scalars(select(CoachingLearnerContext))).all() == []
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+async def _withhold(setup: Any, recording_id: Any, revision: str, key: str) -> None:
+    """Mark the fictional call's only line sensitive: still owned, no coaching."""
+    async with setup.sessions() as db, db.begin():
+        await SensitiveSegmentsStore(db).mark(
+            setup.state.actor,
+            recording_id=recording_id,
+            transcript_revision=revision,
+            segments=[("s1", "SENSITIVE_FINANCIAL")],
+            reason_ref="AUT-1678",
+            idempotency_key=key,
+        )
+
+
+def test_feedback_names_the_current_focus_and_a_retry_survives_its_change(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CTO f70dc356 scenarios 1-6 through the handler, on two fictional calls."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        install(setup)
+        try:
+            first = await direct_call(setup)
+            first_recording, first_revision = await draft_for(setup, first)
+            audio = call_fixtures._wav_one_second_48k()
+            # A second fictional source: one sample differs, so it is another call.
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    call_fixtures, "_wav_one_second_48k", lambda: audio[:-2] + b"\x01\x00"
+                )
+                second = await direct_call(setup)
+            second_recording, second_revision = await draft_for(
+                setup, second, line="Fictional line: the buyer asks about the delivery date."
+            )
+            recordings = {
+                str(first): (first_recording, first_revision),
+                str(second): (second_recording, second_revision),
+            }
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                # Authenticate first: a signed-out write is 401 whatever its body.
+                for path in (FEEDBACK, CONTEXT):
+                    for headers, content in (
+                        (WRITE, b"{"),
+                        ({"Origin": ORIGIN, "Content-Type": "text/plain"}, b"x"),
+                        (WRITE, b"x" * 5000),
+                    ):
+                        signed_out = await client.post(path, content=content, headers=headers)
+                        assert signed_out.status_code == 401, (path, signed_out.text)
+
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                own = (await client.get("/v1/me/coaching")).json()
+                assert len(own["calls"]) == 2
+                focus, origin = own["focus"]["skill_id"], own["mission"]["origin_submission_id"]
+                stale = next(call for call in recordings if call != origin)
+                valid = {
+                    "command_id": str(uuid4()),
+                    "agreement": "agree",
+                    "focus_skill_id": focus,
+                    "mission_origin_submission_id": origin,
+                }
+
+                async def post(body: dict[str, str]) -> int:
+                    return (await client.post(FEEDBACK, json=body, headers=WRITE)).status_code
+
+                # (1) a different supported skill on the current mission.
+                assert (
+                    await post(
+                        {**valid, "command_id": str(uuid4()), "focus_skill_id": "qualification"}
+                    )
+                    == 409
+                )
+                # (2) the learner's other, still-owned call is not the mission's origin.
+                assert (
+                    await post(
+                        {**valid, "command_id": str(uuid4()), "mission_origin_submission_id": stale}
+                    )
+                    == 409
+                )
+                # (4) the current pair is accepted.
+                assert await post(valid) == 204
+
+                # The focus advances: the origin call's line becomes sensitive.
+                await _withhold(setup, *recordings[origin], "fictional-advance")
+                moved = (await client.get("/v1/me/coaching")).json()
+                assert moved["mission"]["origin_submission_id"] == stale
+                # (5) the identical command still answers 204, without another append.
+                assert await post(valid) == 204
+                # (6) an altered retry conflicts, even when it names the new focus.
+                assert await post({**valid, "agreement": "not_completely"}) == 409
+                assert await post({**valid, "mission_origin_submission_id": stale}) == 409
+                # (2) again: the old, still-owned origin is now stale for a new command.
+                assert await post({**valid, "command_id": str(uuid4())}) == 409
+                # Context notes follow the same rule.
+                note = {
+                    "command_id": str(uuid4()),
+                    "focus_skill_id": focus,
+                    "mission_origin_submission_id": origin,
+                    "context": "Fictional: the buyer had to leave early.",
+                }
+                assert (await client.post(CONTEXT, json=note, headers=WRITE)).status_code == 409
+                current_note = {**note, "mission_origin_submission_id": stale}
+                assert (
+                    await client.post(CONTEXT, json=current_note, headers=WRITE)
+                ).status_code == 204
+
+                # (3) no current pair: both calls withheld, both still owned.
+                await _withhold(setup, *recordings[stale], "fictional-none")
+                empty = (await client.get("/v1/me/coaching")).json()
+                assert empty["focus"] is None and len(empty["calls"]) == 2
+                for owned in (origin, stale):
+                    body = {
+                        **valid,
+                        "command_id": str(uuid4()),
+                        "mission_origin_submission_id": owned,
+                    }
+                    assert await post(body) == 409
+                assert await post(valid) == 204  # the recorded command still retries
+                assert (
+                    await client.post(CONTEXT, json=current_note, headers=WRITE)
+                ).status_code == 204
+
+            async with setup.sessions() as db:
+                feedback = (await db.scalars(select(CoachingFeedback))).all()
+                assert [(row.command_id, row.agreement) for row in feedback] == [
+                    (UUID(valid["command_id"]), "agree")
+                ]
+                assert len((await db.scalars(select(CoachingLearnerContext))).all()) == 1
+                actions = (
+                    await db.scalars(
+                        select(AuditEvent.action).where(AuditEvent.action.like("coaching.%"))
+                    )
+                ).all()
+                assert sorted(actions) == ["coaching.context_added", "coaching.feedback_recorded"]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_storage_checks_the_current_pair_before_any_append(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The same rules at the storage boundary: nothing is appended on a conflict."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        actor, tenant = setup.state.actor, setup.state.tenant_id
+        origin, other_origin = uuid4(), uuid4()
+        asked: list[str] = []
+
+        def current(pair: tuple[str, Any] | None) -> Any:
+            async def read() -> tuple[str, Any] | None:
+                asked.append("current")
+                return pair
+
+            return read
+
+        async def never() -> None:
+            raise AssertionError("a retry must not need the current focus")
+
+        async def feedback(
+            command: Any,
+            focus: Any,
+            *,
+            skill: str = "qualification",
+            where: Any = origin,
+            agreement: Any = "agree",
+        ) -> None:
+            async with setup.sessions() as db, db.begin():
+                await record_feedback(
+                    db,
+                    actor=actor,
+                    tenant_id=tenant,
+                    command_id=command,
+                    agreement=agreement,
+                    focus_skill_id=skill,
+                    mission_origin_submission_id=where,
+                    current_focus=focus,
+                )
+
+        async def context(
+            command: Any, focus: Any, *, where: Any = origin, text: str = "Fictional note."
+        ) -> None:
+            async with setup.sessions() as db, db.begin():
+                await record_context(
+                    db,
+                    actor=actor,
+                    tenant_id=tenant,
+                    command_id=command,
+                    focus_skill_id="qualification",
+                    mission_origin_submission_id=where,
+                    context=text,
+                    current_focus=focus,
+                )
+
+        async def appended() -> tuple[int, int, int]:
+            async with setup.sessions() as db:
+                return (
+                    len((await db.scalars(select(CoachingFeedback))).all()),
+                    len((await db.scalars(select(CoachingLearnerContext))).all()),
+                    len(
+                        (
+                            await db.scalars(
+                                select(AuditEvent).where(AuditEvent.action.like("coaching.%"))
+                            )
+                        ).all()
+                    ),
+                )
+
+        try:
+            command = uuid4()
+            for mismatch in (
+                None,  # (3) no current pair
+                ("problem_impact_desire", origin),  # (1) another supported skill
+                ("qualification", other_origin),  # (2) a stale origin
+            ):
+                with pytest.raises(ConversationConflict, match="Your focus changed"):
+                    await feedback(command, current(mismatch))
+                with pytest.raises(ConversationConflict, match="Your focus changed"):
+                    await context(command, current(mismatch))
+                assert await appended() == (0, 0, 0)
+            # (4) the current pair is recorded once, with one audit event each.
+            await feedback(command, current(("qualification", origin)))
+            await context(command, current(("qualification", origin)))
+            assert await appended() == (1, 1, 2)
+            asked.clear()
+            # (5) identical retries never ask for the (since moved) focus.
+            await feedback(command, never)
+            await context(command, never)
+            assert asked == [] and await appended() == (1, 1, 2)
+            # (6) altered retries conflict, even naming a now-current pair.
+            for altered in (
+                feedback(command, never, agreement="not_completely"),
+                feedback(command, never, where=other_origin),
+                context(command, never, text="Another note."),
+            ):
+                with pytest.raises(ConversationConflict, match="differently"):
+                    await altered
+            assert await appended() == (1, 1, 2)
         finally:
             await setup.engine.dispose()
 
