@@ -9,6 +9,8 @@ Call stages, or Talk share by minute. The visible phone labels and all three
 existing map views remain. Controls meet the owner's 32px desktop/44px phone
 height requirement, using existing semantic styles and no new colors. Source
 selection, confirmed speaker roles and report content are unchanged.
+The map's existing legends, times and statistics also use at least 12px text,
+including phone styles, without changing their values or color system.
 
 The first post-commit browser run then found a separate returning-view defect:
 the server rendered Who talked, while hydration read a saved Talk share view
@@ -22,8 +24,11 @@ The bounded browser journey uses the existing populated fictional full-shell
 fixture on shared dev, without editing shell files or starting a server/build.
 Its exact accessible-name lookup failed on the original phone UI. After the
 committed refresh it checks all three buttons, keyboard activation, one pressed
-view, desktop/phone heights, source seek callback, theme, overflow, errors and
-unexpected API/external requests. Screenshots and exact source receipts are
+view, desktop/phone heights, visible map text sizes, source seek callback,
+theme, overflow, errors and unexpected API/external requests. The existing full
+shell's six known GET routes are intercepted with fictional unavailable replies;
+no API request is forwarded, and writes or unexpected routes fail the proof.
+Screenshots and exact source receipts are
 retained in strike NOTES.md; no authenticated production acceptance is claimed.
 
 All 21 focused CallMap cases pass. New server-render/hydration cases cover

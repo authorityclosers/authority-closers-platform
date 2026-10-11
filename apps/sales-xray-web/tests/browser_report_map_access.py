@@ -14,11 +14,19 @@ LENSES = [
     ("Call stages", "stages"),
     ("Talk share by minute", "talk-share"),
 ]
+SHELL_READS = {
+    "/v1/me/sales-xray-profile",
+    "/v1/updates",
+    "/v1/notifications",
+    "/v1/conversation/acquisition/submissions",
+    "/v1/conversation/acquisition/submissions/summary",
+    "/v1/organisation/invites",
+}
 
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    failures, external, api_reads, proof = [], [], [], []
+    failures, external, shell_reads, unexpected, proof = [], [], [], [], []
     expect.set_options(timeout=10000)
     with sync_playwright() as runtime:
         browser = runtime.chromium.launch(headless=True)
@@ -38,8 +46,12 @@ def main():
                         external.append(url.netloc)
                         route.abort()
                     elif url.path.startswith(("/api/", "/v1/")):
-                        api_reads.append(url.path)
-                        route.abort()
+                        if route.request.method == "GET" and url.path in SHELL_READS:
+                            shell_reads.append(url.path)
+                            route.fulfill(status=401, json={"detail": "Fictional fixture only."})
+                        else:
+                            unexpected.append({"method": route.request.method, "path": url.path})
+                            route.abort()
                     else:
                         route.continue_()
 
@@ -77,6 +89,24 @@ def main():
                         assert page.evaluate(
                             "document.documentElement.scrollWidth <= innerWidth + 1"
                         )
+                        small_text = call_map.evaluate("""map => {
+                            const walker = document.createTreeWalker(map, NodeFilter.SHOW_TEXT);
+                            const small = [];
+                            let node;
+                            while ((node = walker.nextNode())) {
+                                if (!node.textContent.trim()) continue;
+                                const range = document.createRange();
+                                range.selectNodeContents(node);
+                                const box = range.getBoundingClientRect();
+                                const style = getComputedStyle(node.parentElement);
+                                const size = parseFloat(style.fontSize);
+                                if (box.width > 0 && box.height > 0 && size < 12) {
+                                    small.push({text: node.textContent.trim(), size});
+                                }
+                            }
+                            return small;
+                        }""")
+                        assert not small_text, small_text
                         page.screenshot(path=str(OUT / f"report-map-{name}-{width}-{theme}.png"))
                     slider = call_map.get_by_role(
                         "slider", name="Play the call from a point in time", exact=True
@@ -95,6 +125,7 @@ def main():
                             "remembered_view_restored_on_reload": theme == "dark",
                             "one_selected_lens": True,
                             "minimum_control_height": 44 if width == 390 else 32,
+                            "minimum_visible_map_text": 12,
                             "source_seek_callback": True,
                             "no_overflow": True,
                         }
@@ -104,13 +135,15 @@ def main():
             browser.close()
     assert not failures, failures
     assert not external, external
-    assert not api_reads, api_reads
+    assert not unexpected, unexpected
     receipt = {
         "origin": BASE,
         "proof": proof,
         "page_errors": failures,
         "external_requests": external,
-        "api_reads": api_reads,
+        "intercepted_shell_gets": shell_reads,
+        "unexpected_requests": unexpected,
+        "api_requests_forwarded": False,
     }
     (OUT / "report-map-access-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt))
