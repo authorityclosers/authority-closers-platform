@@ -33,7 +33,8 @@ export function MinutesMeter({
         title={text}
       >
         <span className={styles.value} aria-hidden="true">
-          {formatAnalysisTime(allowance.available_seconds)} left
+          {formatAnalysisTime(allowance.available_seconds)}
+          <span className={styles.unit}> left</span>
         </span>
         <span className={styles.visuallyHidden}>{text}</span>
       </p>
