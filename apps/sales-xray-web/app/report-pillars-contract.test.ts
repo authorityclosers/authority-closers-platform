@@ -194,3 +194,50 @@ describe("reportStoryModel with pillars", () => {
     });
   });
 });
+
+describe("Dipak's own example as pillars (spec-example fixture)", () => {
+  it("binds every quote to the Amit call and reads like the document", async () => {
+    const { AMIT_PILLARS } = await import(
+      "./review-fixture/report/story/amit-pillars"
+    );
+    let refs = 0;
+    const parsed = parseReportPillars(AMIT_PILLARS, (value) => {
+      refs++;
+      return evidence(value);
+    })!;
+    // Nothing dropped: the strict check accepts every part and every quote.
+    expect(Object.keys(parsed).sort()).toEqual(
+      Object.keys(AMIT_PILLARS).sort(),
+    );
+    expect(refs).toBeGreaterThanOrEqual(30);
+    const model = reportStoryModel(
+      { ...amitReport, pillars: parsed },
+      amitTranscript,
+      { roles: AMIT_SPEAKERS },
+    );
+    expect(model.picture.outcome.status).toBe("Decision Pending");
+    expect(model.flow.phases?.map((p) => p.label)).toEqual([
+      "Opening",
+      "Business Context",
+      "Problems & Goals",
+      "Program Discussion",
+      "Price & Decision",
+      "Partner Objection",
+      "Next Step",
+    ]);
+    expect(model.topMoments.map((m) => m.kind)).toEqual([
+      "Strong Moment",
+      "Important Miss",
+      "Buying Signal",
+      "Price Moment",
+      "Decision Moment",
+    ]);
+    expect(model.end).toMatchObject({
+      strongest: "Value connected to founder dependency",
+      issue: "Root sales problem only partly diagnosed",
+      nextEvent: "Friday · 4:00 PM",
+    });
+    expect(model.end.moment?.title).toBe("Partner discussion");
+    expect(model.missing.flat()).toEqual([]);
+  });
+});

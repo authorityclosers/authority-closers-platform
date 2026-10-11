@@ -34,6 +34,7 @@ import { SourceWaveformProvider } from "../../../source-waveform";
 import { WorkspaceAccessProvider } from "../../../workspace-access";
 import { SpeakerProfilesContext } from "../../../speaker-profiles";
 import { AMIT_SPEAKERS, amitReport, amitTranscript } from "./amit-call";
+import { AMIT_PILLARS } from "./amit-pillars";
 import acquisitionStyles from "../../../acquisition-studio.module.css";
 import styles from "../../shell/full-shell-preview.module.css";
 
@@ -74,7 +75,8 @@ export type StoryFixture = {
 };
 
 export const AMIT_FIXTURE: StoryFixture = {
-  report: amitReport,
+  // Dipak's own example words, as the analysis would supply them.
+  report: { ...amitReport, pillars: AMIT_PILLARS },
   transcript: amitTranscript,
   title: "Amit Sharma · discovery call",
   language: "English",

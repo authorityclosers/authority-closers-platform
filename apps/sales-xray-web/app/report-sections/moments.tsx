@@ -45,10 +45,17 @@ function MomentRow({
       {price ? (
         <>
           <Field label={MOMENTS.priceStated}>
-            <Quote
-              text={<Text text={price.text} />}
-              speaker={speakerOf(people, price.sources[0])}
-            />
+            {/* Their exact words, or the figure the analysis names. */}
+            {price.text === price.sources[0]?.quote ? (
+              <Quote
+                text={<Text text={price.text} />}
+                speaker={speakerOf(people, price.sources[0])}
+              />
+            ) : (
+              <p className={styles.strong}>
+                <Text text={price.text} />
+              </p>
+            )}
           </Field>
           {moment.prospectResponse ? (
             <Field label={MOMENTS.prospectResponse}>

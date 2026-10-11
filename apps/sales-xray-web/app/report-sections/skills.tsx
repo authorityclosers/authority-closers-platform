@@ -62,7 +62,10 @@ function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
         ) : null}
       </section>
     ) : null,
-    decision.price || decision.likely.length || findings.length ? (
+    decision.price ||
+    decision.likely.length ||
+    decision.likelyStatus?.length ||
+    findings.length ? (
       <section key="decision" className={styles.group}>
         <h4>{SKILLS.deeperDecision}</h4>
         {decision.price ? (
@@ -81,6 +84,11 @@ function Deeper({ model, onSelect }: { model: StoryModel; onSelect?: Select }) {
               title={SKILLS.prospectResponse}
               onSelect={onSelect}
             />
+          </Field>
+        ) : null}
+        {decision.likelyStatus?.length ? (
+          <Field label={SKILLS.likelyStatus}>
+            <Bullets items={decision.likelyStatus} />
           </Field>
         ) : null}
         {decision.likely.length ? (

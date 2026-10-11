@@ -150,6 +150,8 @@ export type StoryModel = {
       price: Line | null;
       response: Line | null;
       likely: Line[];
+      /** What the decision answer may mean, when the analysis lists it. */
+      likelyStatus?: string[];
     };
     communication: {
       longest: string | null;
@@ -996,13 +998,8 @@ function withPillars(
         decision: {
           price: note(d.price) ?? base.deeper.decision.price,
           response: note(d.prospect_response) ?? base.deeper.decision.response,
-          likely: d.likely_status.length
-            ? d.likely_status.map((text) => ({
-                text,
-                sources: [],
-                inferred: true,
-              }))
-            : base.deeper.decision.likely,
+          likely: base.deeper.decision.likely,
+          likelyStatus: d.likely_status,
         },
         communication: {
           ...base.deeper.communication,
