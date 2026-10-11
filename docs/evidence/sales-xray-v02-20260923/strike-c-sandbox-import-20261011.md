@@ -142,3 +142,48 @@ prospect assertion still expecting 0080 rather than 0082. Strike B already fixes
 that assertion with _migration_head() at #439 / 7995d9c; C does not edit its owned
 file. Reviewed main integration is required for final combined-tree CI. The
 shared migration-slot hold remains separate. No hosted sandbox data was loaded.
+
+## Regional corpus and operator read-back continuation
+
+Strike F published `regional-journeys/1` after the independent/language revisions.
+The new private, read-only frozen input is
+`/home/acdev/strikes/1676/sandbox-source-20261011-0344`, SHA256
+`623324255bfe70af237bc62d541f50d0d988a019625054fb3f2518bb4ff3e3d2`.
+All 16,807 published bundle hashes and 16,968 copied files were checked against
+the live source at freeze completion. Its current/regional/independent/evaluation
+verification receipts are pinned and report PASS with no errors. Native fluency
+remains unverified. Earlier immutable copies and operator guides remain historical.
+
+Complete offline validation passes through the unchanged dataset adapter and
+validation function: 875,550 master/history records, 177,615 summaries, 3,360
+full report/coaching bundles, seven audio manifests and seven full decoded media
+files. Every actual request batch and exact text/speaker/timing binding validates;
+no HTTP session or hosted write is used. Source receipts are in Strike C's
+`sandbox-source-0344-copy-receipt.json`, `sandbox-source-0344-validation.json`,
+`sandbox-source-0344-assurance-receipt.json` and
+`logs/sandbox-regional-frozen-proof.log`. The named operator guide now uses 0344.
+
+An operator regression reproduced a false verification on the previous CLI: the
+final response could contain a different tenant's otherwise equal counts. Initial
+and final progress reads now require the same exact tenant and explicit
+`synthetic=true`, `sandbox=true` markers. Malformed objects, boolean counts and
+repeated record kinds fail cleanly. Initial refusal sends no write; final refusal
+never returns an applied receipt. Intermediate writes still follow the ordinary
+selected organisation, so the sole operator must keep that session selected to
+AC Sandbox throughout the run. This change does not claim a target lock or
+introduce another trust path.
+
+Shared dev `/review-fixture/bulk-import` returned 404 on this continuation. No
+private Next server or additional production build was started. The previous
+standalone fixture screenshots remain historical; populated shared-dev proof
+still needs Strike A's bulk-island mount. Migration serialization, sensitive
+review, Root's served-organisation update and Claude's staged import/read-back
+remain required. No staged data loading or complete delivery is claimed.
+
+Focused final verification: all 24 adapter/operator tests pass (5.88s), including
+12 initial/final target and malformed-receipt cases. Changed-file Ruff/format,
+one-source mypy and diff whitespace pass. The pre-fix wrong-tenant regression
+failed as expected (5.65s). Logs are `sandbox-target-readback-before.log` and
+`sandbox-target-readback-verified.log` in the strike folder. No database/runtime,
+ledger, HTTP route, UI, dependency or foreign strike file is changed by this
+follow-up; final-head CI remains required after publication.

@@ -67,6 +67,34 @@ def validate_dataset(root: Path) -> dict[str, Any]:
     return {"synthetic": True, "counts": dict(counts), "dataset_sha256": fingerprint.hexdigest()}
 
 
+def sandbox_progress(client: httpx.Client, tenant: UUID) -> dict[str, Any]:
+    response = client.get(PREFIX)
+    try:
+        result = response.json() if response.status_code == 200 else None
+    except ValueError:
+        result = None
+    if (
+        not isinstance(result, dict)
+        or result.get("tenant_id") != str(tenant)
+        or result.get("synthetic") is not True
+        or result.get("sandbox") is not True
+    ):
+        raise ValueError("Read-back requires the exact selected, explicitly flagged sandbox.")
+    records = result.get("records")
+    if not isinstance(records, list) or any(
+        not isinstance(row, dict)
+        or not isinstance(row.get("kind"), str)
+        or not row["kind"]
+        or type(row.get("count")) is not int
+        or row["count"] < 0
+        for row in records
+    ):
+        raise ValueError("The sandbox record counts are unavailable.")
+    if len({row["kind"] for row in records}) != len(records):
+        raise ValueError("The sandbox record counts contain repeated kinds.")
+    return result
+
+
 def apply_dataset(
     root: Path, *, origin: str, tenant: UUID, cookie: str, receipt: dict[str, Any]
 ) -> dict[str, Any]:
@@ -99,12 +127,7 @@ def apply_dataset(
             counts["created"] += result.get("created", 0)
             counts["skipped"] += result.get("skipped", int(result.get("created") is False))
 
-        response = client.get(PREFIX)
-        if response.status_code != 200 or response.json().get("tenant_id") != str(tenant):
-            raise ValueError(
-                "The signed-in selected organisation is not the exact flagged sandbox target."
-            )
-        before = response.json()
+        before = sandbox_progress(client, tenant)
         for batch in record_batches(chain(master_records(root), summaries(root))):
             for row in batch.records:
                 fingerprint.update(content_hash(row.model_dump(mode="json")).encode())
@@ -137,13 +160,8 @@ def apply_dataset(
             counts["audio_skipped"] += int(not response.json()["created"])
         if fingerprint.hexdigest() != receipt["dataset_sha256"]:
             raise ValueError("The authored dataset changed after its dry-run source pin.")
-        response = client.get(PREFIX)
-        if response.status_code != 200:
-            raise ValueError(
-                "The sandbox read-back is unavailable; retain the receipts and rerun safely."
-            )
-        after = response.json()
-        actual = {row["kind"]: row["count"] for row in after.get("records", [])}
+        after = sandbox_progress(client, tenant)
+        actual = {row["kind"]: row["count"] for row in after["records"]}
         if actual != receipt["counts"]:
             raise ValueError("Sandbox read-back counts differ from the exact dry-run dataset.")
         return {

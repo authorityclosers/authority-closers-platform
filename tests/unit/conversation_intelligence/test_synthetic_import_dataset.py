@@ -208,6 +208,8 @@ def test_verified_media_is_source_pinned_sent_in_bounded_transport_and_read_back
             return httpx.Response(
                 200,
                 json={
+                    "synthetic": True,
+                    "sandbox": True,
                     "tenant_id": str(AC_SANDBOX),
                     "records": [
                         {"kind": kind, "count": count} for kind, count in receipt["counts"].items()
@@ -251,7 +253,15 @@ def test_operator_does_not_claim_verification_when_authored_source_changes_after
     def respond(request):
         if request.method == "GET":
             reads.append(request.url.path)
-            return httpx.Response(200, json={"tenant_id": str(AC_SANDBOX)})
+            return httpx.Response(
+                200,
+                json={
+                    "synthetic": True,
+                    "sandbox": True,
+                    "tenant_id": str(AC_SANDBOX),
+                    "records": [],
+                },
+            )
         if request.url.path.endswith("/records"):
             call = data["metadata"]["call_id"]
             section = {"authored": "changed after the dry-run"}
@@ -275,3 +285,67 @@ def test_operator_does_not_claim_verification_when_authored_source_changes_after
             receipt=receipt,
         )
     assert len(reads) == 1
+
+
+@pytest.mark.parametrize(
+    "readback",
+    [
+        "wrong_tenant",
+        "missing_synthetic",
+        "missing_sandbox",
+        "not_object",
+        "duplicate_counts",
+        "boolean_count",
+    ],
+)
+@pytest.mark.parametrize("stage", ["before", "after"])
+def test_operator_requires_the_same_explicit_sandbox_before_writes_and_final_readback(
+    tmp_path, monkeypatch, readback, stage
+):
+    dataset(tmp_path)
+    receipt = validate_dataset(tmp_path)
+    real_client = httpx.Client
+    reads, writes = [], []
+
+    def respond(request):
+        if request.method != "GET":
+            writes.append(request.url.path)
+            return httpx.Response(201, json={"synthetic": True, "state": "done", "created": 1})
+        reads.append(request.url.path)
+        result = {
+            "synthetic": True,
+            "sandbox": True,
+            "tenant_id": str(AC_SANDBOX),
+            "records": [
+                {"kind": kind, "count": count} for kind, count in receipt["counts"].items()
+            ],
+        }
+        if len(reads) == (1 if stage == "before" else 2):
+            if readback == "duplicate_counts":
+                result["records"].append(result["records"][0])
+            elif readback == "boolean_count":
+                result["records"][0]["count"] = True
+            elif readback == "wrong_tenant":
+                result["tenant_id"] = str(uuid4())
+            elif readback == "not_object":
+                result = []
+            else:
+                result.pop(readback.removeprefix("missing_"))
+        return httpx.Response(200, json=result)
+
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        lambda **kwargs: real_client(**kwargs, transport=httpx.MockTransport(respond)),
+    )
+    with pytest.raises(ValueError, match="sandbox"):
+        apply_dataset(
+            tmp_path,
+            origin="http://127.0.0.1:1234",
+            tenant=AC_SANDBOX,
+            cookie="fictional-test-session",
+            receipt=receipt,
+        )
+    assert len(reads) == (1 if stage == "before" else 2)
+    if stage == "before":
+        assert writes == []
