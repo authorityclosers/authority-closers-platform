@@ -2,13 +2,19 @@
 
 import { ArrowDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { Badge, Panel, type Tone } from "../ui/kit";
 import type {
   Coaching,
   Evidence,
   Strength,
   TextLesson,
 } from "./coaching-client";
+import {
+  BETTER,
+  FOCUS,
+  NEXT,
+  gapCopy,
+  type CoachingPillarCopy,
+} from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import { EvidencePlayer } from "./evidence-player";
 import { CoachingMedia } from "./media-player";
@@ -17,11 +23,61 @@ import styles from "./coaching.module.css";
 
 export { callDate } from "./coaching-format";
 
+/**
+ * One numbered pillar, headed the way the Report heads its six parts: the
+ * number, Dipak's title and his subtitle, then the content (spec 2, 7, 9).
+ */
+export function Pillar({
+  id,
+  copy,
+  label,
+  aside,
+  children,
+}: {
+  id: string;
+  copy: CoachingPillarCopy;
+  /** Another rep's view words the title for "them". */
+  label?: string;
+  /** A quiet count beside the title, e.g. "4 moments". */
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  const heading = `coaching-${id}-heading`;
+  return (
+    <section
+      id={id}
+      className={styles.pillar}
+      aria-labelledby={heading}
+      data-coaching-pillar={copy.number}
+    >
+      <header className={styles.pillarHead}>
+        <span className={styles.pillarNumber} aria-hidden="true">
+          {copy.number}
+        </span>
+        <div>
+          <h2 id={heading} className={styles.pillarTitle}>
+            {label ?? copy.label}
+          </h2>
+          <p className={styles.pillarSubtitle}>{copy.subtitle}</p>
+        </div>
+        {aside ? <span className={styles.pillarAside}>{aside}</span> : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** A small uppercase label, as the Report's cards carry. */
+export function CardLabel({ children }: { children: ReactNode }) {
+  return <span className={styles.cardLabel}>{children}</span>;
+}
+
+export type Chip = { text: string; tone?: "accent" | "good" | "neutral" };
+
 /** Pillar 1: the one focus, readable in a few seconds. */
 export function FocusHero({
-  heading,
   label,
-  badges,
+  chips,
   explanation,
   why,
   reason,
@@ -29,9 +85,8 @@ export function FocusHero({
   missionAnchor,
   children,
 }: {
-  heading: string;
   label: string;
-  badges: { text: string; tone?: Tone }[];
+  chips: Chip[];
   explanation: string;
   why: string;
   reason: string;
@@ -40,40 +95,43 @@ export function FocusHero({
   children?: ReactNode;
 }) {
   return (
-    <section className={styles.hero} aria-labelledby="coaching-focus">
-      <div className={styles.eyebrow}>
-        <h2 id="coaching-focus" className={styles.label}>
-          {heading}
-        </h2>
-        {badges.map((badge) => (
-          <Badge key={badge.text} tone={badge.tone}>
-            {badge.text}
-          </Badge>
-        ))}
-      </div>
+    <div className={styles.hero}>
+      {chips.length ? (
+        <p className={styles.chips}>
+          {chips.map((chip) => (
+            <span
+              key={chip.text}
+              className={styles.chip}
+              data-tone={chip.tone ?? "neutral"}
+            >
+              {chip.text}
+            </span>
+          ))}
+        </p>
+      ) : null}
       <p className={styles.focusTitle}>{label}</p>
       <p className={styles.lead}>{explanation}</p>
       {children}
-      <dl className={styles.facts}>
-        <div>
-          <dt className={styles.label}>Why it matters</dt>
-          <dd>{why}</dd>
+      <div className={styles.pair}>
+        <div className={styles.callout}>
+          <CardLabel>{FOCUS.whyMatters}</CardLabel>
+          <p>{why}</p>
         </div>
-        <div>
-          <dt className={styles.label}>Why this focus</dt>
-          <dd>{reason}</dd>
+        <div className={styles.callout}>
+          <CardLabel>{FOCUS.whyFocus}</CardLabel>
+          <p>{reason}</p>
         </div>
-      </dl>
+      </div>
       <div className={styles.nextCall}>
         <p>
-          <span>On your next call</span>
+          <span>{FOCUS.onNextCall}</span>
           <span>{mission}</span>
         </p>
         <a className={styles.jump} href={`#${missionAnchor}`}>
-          See the mission <ArrowDown size={13} aria-hidden="true" />
+          {FOCUS.seeMission} <ArrowDown size={13} aria-hidden="true" />
         </a>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -85,12 +143,14 @@ type Lesson = Omit<TextLesson, "own_call"> & { own_call: Evidence | null };
  * summary; without one it is the complete lesson. Never an empty state.
  */
 export function LessonPanel({
+  copy,
   lesson,
   clips,
   fallbackObservation,
   strength,
   acrossCalls = false,
 }: {
+  copy: CoachingPillarCopy;
   lesson: Lesson;
   clips?: CoachingClip[];
   fallbackObservation: string;
@@ -101,7 +161,7 @@ export function LessonPanel({
   const media = Boolean(clips?.length);
   const wording = lesson.example_wording.length ? (
     <div>
-      <span className={styles.label}>Optional wording, in your own style</span>
+      <CardLabel>{BETTER.wording}</CardLabel>
       <ul className={styles.wording}>
         {lesson.example_wording.map((line) => (
           <li key={line}>{line}</li>
@@ -110,173 +170,169 @@ export function LessonPanel({
     </div>
   ) : null;
   return (
-    <Panel
-      title="Here’s What Better Looks Like"
-      sub={media ? "Dipak’s coaching" : "Text lesson"}
+    <Pillar
+      id="coaching-better"
+      copy={copy}
+      aside={media ? BETTER.dipak : BETTER.textLesson}
     >
-      <div className={styles.body}>
+      <div className={styles.card}>
         <h3 className={styles.lessonTitle}>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
         {lesson.framework.length ? (
-          <ol className={styles.steps} aria-label="Framework">
-            {lesson.framework.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
+          <div className={styles.framework}>
+            <ol className={styles.steps} aria-label={BETTER.framework}>
+              {lesson.framework.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <p className={styles.note}>{BETTER.frameworkNote}</p>
+          </div>
         ) : null}
         <div className={styles.compare}>
           <div>
-            {/* The quote itself is the first moment in Pillar 2, just above. */}
-            <span className={styles.label}>
-              Your call
+            {/* The quote itself is the first moment in pillar 2, just above. */}
+            <CardLabel>
               {lesson.own_call
-                ? ` · at ${timeLabel(lesson.own_call.start_ms)}`
-                : ""}
-            </span>
+                ? BETTER.yourCallAt(timeLabel(lesson.own_call.start_ms))
+                : BETTER.yourCall}
+            </CardLabel>
             <p>{lesson.own_call?.observation ?? fallbackObservation}</p>
           </div>
           <div data-kind="better">
-            <span className={styles.label}>Better direction</span>
+            <CardLabel>{BETTER.betterDirection}</CardLabel>
             <p>{lesson.better_direction}</p>
           </div>
         </div>
-        <CoachingMedia clips={clips} />
-        {media ? null : wording}
-        {strength ? (
-          <section className={styles.strength} aria-label="Use your strength">
-            <span className={styles.label}>Use your strength</span>
-            <p className={styles.strengthTitle}>{strength.title}</p>
-            <ul
-              className={styles.moments}
-              aria-label="What worked on this call"
-            >
-              {strength.evidence.map((moment) => (
-                <EvidencePlayer
-                  key={`${moment.segment_id}:${moment.start_ms}`}
-                  evidence={moment}
-                  showCall={acrossCalls}
-                />
-              ))}
-            </ul>
-            <p className={styles.note}>
-              {acrossCalls
-                ? "From your latest call where the report noted one. One call is not an established strength."
-                : "You already did this on the call."}{" "}
-              Keep it while you practise the mission.
-            </p>
-          </section>
-        ) : null}
-        <details className={styles.more}>
-          <summary>Read the full lesson</summary>
-          <div className={styles.moreBody}>
-            {media ? wording : null}
-            <p>
-              <span className={styles.label}>Why this matters</span>
-              {lesson.why_it_matters}
-            </p>
-            <p>
-              <span className={styles.label}>What good looks like</span>
-              {lesson.good_looks_like}
-            </p>
-            <p>
-              <span className={styles.label}>When to use it</span>
-              {lesson.when_to_use}
-            </p>
-            <p>
-              <span className={styles.label}>When to use another approach</span>
-              {lesson.when_not}
-            </p>
-            {lesson.checklist.length ? (
-              <div>
-                <span className={styles.label}>Quick checklist</span>
-                <ul>
-                  {lesson.checklist.map((check) => (
-                    <li key={check}>{check}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {/* Spec 6.6: the full lesson ends with the same active mission. */}
-            <p>
-              <span className={styles.label}>Your next-call mission</span>
-              {lesson.next_call_connection}
-            </p>
-            <p className={styles.note}>{lesson.source}</p>
-          </div>
-        </details>
       </div>
-    </Panel>
+      <CoachingMedia clips={clips} />
+      {media ? null : wording ? (
+        <div className={styles.card}>{wording}</div>
+      ) : null}
+      {strength ? (
+        <section
+          className={styles.callout}
+          data-tone="good"
+          aria-label={BETTER.strength}
+        >
+          <CardLabel>{BETTER.strength}</CardLabel>
+          <p className={styles.strengthTitle}>{strength.title}</p>
+          <ul className={styles.moments} aria-label="What worked on this call">
+            {strength.evidence.map((moment) => (
+              <EvidencePlayer
+                key={`${moment.segment_id}:${moment.start_ms}`}
+                evidence={moment}
+                showCall={acrossCalls}
+              />
+            ))}
+          </ul>
+          <p className={styles.note}>
+            {acrossCalls ? BETTER.strengthAcross : BETTER.strengthCall}{" "}
+            {BETTER.strengthKeep}
+          </p>
+        </section>
+      ) : null}
+      <details className={styles.more}>
+        <summary>{BETTER.fullLesson}</summary>
+        <div className={styles.moreBody}>
+          {media ? wording : null}
+          <p>
+            <CardLabel>{BETTER.whyMatters}</CardLabel>
+            {lesson.why_it_matters}
+          </p>
+          <p>
+            <CardLabel>{BETTER.good}</CardLabel>
+            {lesson.good_looks_like}
+          </p>
+          <p>
+            <CardLabel>{BETTER.whenUse}</CardLabel>
+            {lesson.when_to_use}
+          </p>
+          <p>
+            <CardLabel>{BETTER.whenNot}</CardLabel>
+            {lesson.when_not}
+          </p>
+          {lesson.checklist.length ? (
+            <div>
+              <CardLabel>{BETTER.checklist}</CardLabel>
+              <ul>
+                {lesson.checklist.map((check) => (
+                  <li key={check}>{check}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {/* Spec 6.6: the full lesson ends with the same active mission. */}
+          <p>
+            <CardLabel>{BETTER.mission}</CardLabel>
+            {lesson.next_call_connection}
+          </p>
+          <p className={styles.note}>{lesson.source}</p>
+        </div>
+      </details>
+    </Pillar>
   );
 }
 
 /** Pillar 4: one practice and exactly one observable next-call mission. */
 export function MissionPanel({
   id,
+  copy,
   mission,
   practice,
   since,
   foot,
 }: {
   id: string;
+  copy: CoachingPillarCopy;
   mission: NonNullable<Coaching["mission"]>;
   practice: NonNullable<Coaching["practice"]>;
   since?: string;
   foot?: ReactNode;
 }) {
   return (
-    <div id={id} className={styles.section}>
-      <Panel title="Try This on Your Next Call" foot={foot}>
-        <div className={styles.mission}>
-          <span className={styles.eyebrow}>
-            Active mission{since ? ` · since ${since}` : ""}
-          </span>
-          <p className={styles.missionBehavior}>{mission.behavior}</p>
-          <dl className={styles.terms}>
-            <div>
-              <dt className={styles.label}>Use it when</dt>
-              <dd>{mission.context}</dd>
-            </div>
-            <div>
-              <dt className={styles.label}>Done when</dt>
-              <dd>{mission.done_when}</dd>
-            </div>
-          </dl>
-          <p className={styles.cue} title="Pre-call cue">
-            {mission.cue}
-          </p>
-        </div>
-        <div className={styles.practice}>
-          <span className={styles.eyebrow}>
-            Practise once
-            {practice.estimated_minutes
-              ? ` · ${practice.estimated_minutes} min`
-              : ""}
-          </span>
-          <p>{practice.exercise}</p>
-          <p className={styles.momentNote}>
-            <span className={styles.label}>Check your practice</span>
-            {practice.success_condition}
-          </p>
-        </div>
-      </Panel>
-    </div>
+    <Pillar id={id} copy={copy}>
+      <div className={styles.callout} data-tone="accent" data-active-mission="">
+        <CardLabel>
+          {NEXT.mission}
+          {since ? (
+            <span className={styles.cardLabelMuted}>{NEXT.since(since)}</span>
+          ) : null}
+        </CardLabel>
+        <p className={styles.missionBehavior}>{mission.behavior}</p>
+        <dl className={styles.terms}>
+          <div>
+            <dt>{NEXT.useWhen}</dt>
+            <dd>{mission.context}</dd>
+          </div>
+          <div>
+            <dt>{NEXT.doneWhen}</dt>
+            <dd>{mission.done_when}</dd>
+          </div>
+        </dl>
+        <p className={styles.cue}>
+          <span>{NEXT.cue}</span> {mission.cue}
+        </p>
+      </div>
+      <div className={styles.callout}>
+        <CardLabel>
+          {NEXT.practice}
+          {practice.estimated_minutes ? (
+            <span className={styles.cardLabelMuted}>
+              {NEXT.minutes(practice.estimated_minutes)}
+            </span>
+          ) : null}
+        </CardLabel>
+        <p>{practice.exercise}</p>
+        <p className={styles.momentNote}>
+          <strong>{NEXT.success}:</strong> {practice.success_condition}
+        </p>
+      </div>
+      {foot ? <p className={styles.note}>{foot}</p> : null}
+    </Pillar>
   );
 }
 
-const GAP_LABELS: Record<string, string> = {
-  knowledge: "Knowledge",
-  judgment: "Judgment",
-  execution: "Execution",
-  habit_recall: "Habit / recall",
-  confidence: "Confidence",
-  cognitive_load: "Cognitive load",
-  belief_buy_in: "Belief / buy-in",
-  adherence: "Adherence",
-  skill_dependency: "Skill dependency",
-  context_specific: "Context-specific",
-  uncertain: "Unknown / Uncertain",
-};
-
+/** Dipak's name for a gap type (spec pillar 2 table). */
 export function gapLabel(gap: string) {
-  return GAP_LABELS[gap] ?? GAP_LABELS.uncertain;
+  return gapCopy(gap).name;
 }

@@ -4,14 +4,15 @@ import Link from "next/link";
 import { FileSearch, FileText, GraduationCap, Users } from "lucide-react";
 import { Empty, List, Panel, Row } from "../ui/kit";
 import type { CallCoaching } from "./coaching-read";
-import { FocusHero, LessonPanel, MissionPanel } from "./coaching-ui";
+import { CALL_PILLARS, FOCUS, NEXT, WHY } from "./coaching-copy";
+import { FocusHero, LessonPanel, MissionPanel, Pillar } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
 import styles from "./coaching.module.css";
 
 const BASIS = {
-  skill_evidence: "From this call’s skill evidence",
-  report_suggestion: "From this call’s report",
-  general_practice: "General practice",
+  skill_evidence: FOCUS.fromSkills,
+  report_suggestion: FOCUS.fromReport,
+  general_practice: FOCUS.general,
   unavailable: "Unavailable",
 } as const;
 
@@ -41,96 +42,99 @@ export function CallCoachingStory({ coaching }: { coaching: CallCoaching }) {
     );
   return (
     <div className={styles.conversation}>
-      <FocusHero
-        heading="One focus for this call"
-        label={focus.label}
-        badges={[
-          {
-            text: BASIS[coaching.basis],
-            tone: coaching.basis === "general_practice" ? "neutral" : "accent",
-          },
-          ...(coaching.sandbox ? [{ text: "Fictional AC Sandbox" }] : []),
-        ]}
-        explanation={focus.explanation}
-        why={focus.why_it_matters}
-        reason={focus.selected_reason}
-        mission={mission.behavior}
-        missionAnchor="call-mission"
-      />
-      <Panel
-        title="Why this is the focus for this call"
-        sub={
+      <Pillar id="coaching-focus" copy={CALL_PILLARS.focus}>
+        <FocusHero
+          label={focus.label}
+          chips={[
+            {
+              text: BASIS[coaching.basis],
+              tone:
+                coaching.basis === "general_practice" ? "neutral" : "accent",
+            },
+            ...(coaching.sandbox ? [{ text: FOCUS.sandbox }] : []),
+          ]}
+          explanation={focus.explanation}
+          why={focus.why_it_matters}
+          reason={focus.selected_reason}
+          mission={mission.behavior}
+          missionAnchor="call-mission"
+        />
+      </Pillar>
+      <Pillar
+        id="coaching-why"
+        copy={CALL_PILLARS.why}
+        aside={
           evidence.length
             ? `${evidence.length} moment${evidence.length === 1 ? "" : "s"}`
             : undefined
         }
       >
         {evidence.length ? (
-          <MomentList
-            evidence={evidence}
-            showCall={false}
-            label="Moments from this call"
-            fictional={coaching.sandbox}
-          />
+          <div className={styles.card} data-flush="">
+            <MomentList
+              evidence={evidence}
+              showCall={false}
+              label="Moments from this call"
+              fictional={coaching.sandbox}
+            />
+          </div>
         ) : (
-          <div className={styles.body}>
+          <div className={styles.card}>
             <p className={styles.momentNote}>
-              This report kept no timestamp for this suggestion.{" "}
-              <Link href={report.href}>Open the report</Link> to read it in
-              context.
+              {WHY.noTimestamp} <Link href={report.href}>Open the report</Link>
             </p>
           </div>
         )}
-      </Panel>
+      </Pillar>
       <LessonPanel
+        copy={CALL_PILLARS.better}
         lesson={lesson}
         clips={coaching.media_clips}
         fallbackObservation={focus.explanation}
         strength={coaching.strength}
       />
-      <aside className={styles.conversationRail} aria-label="Your next call">
-        <MissionPanel
-          id="call-mission"
-          mission={mission}
-          practice={practice}
-          foot="One call gives a suggestion, not a pattern; My coaching follows your calls."
-        />
-        <Panel title="Keep going">
-          <List label="Keep going">
+      <MissionPanel
+        id="call-mission"
+        copy={CALL_PILLARS.next}
+        mission={mission}
+        practice={practice}
+        foot={NEXT.oneCall}
+      />
+      <Panel title="Keep going">
+        <List label="Keep going">
+          <Row
+            icon={
+              coaching.sandbox ? (
+                <Users size={15} aria-hidden="true" />
+              ) : (
+                <FileText size={15} aria-hidden="true" />
+              )
+            }
+            title={report.title}
+            href={report.href}
+            meta={
+              coaching.other_suggestions
+                ? [
+                    `${coaching.other_suggestions} more suggestion${coaching.other_suggestions === 1 ? "" : "s"} there; Coaching keeps one focus`,
+                  ]
+                : undefined
+            }
+          />
+          {coaching.sandbox && coaching.rep_person_id ? (
             <Row
-              icon={
-                coaching.sandbox ? (
-                  <Users size={15} aria-hidden="true" />
-                ) : (
-                  <FileText size={15} aria-hidden="true" />
-                )
-              }
-              title={report.title}
-              href={report.href}
-              meta={
-                coaching.other_suggestions
-                  ? [
-                      `${coaching.other_suggestions} more suggestion${coaching.other_suggestions === 1 ? "" : "s"} there; Coaching keeps one focus`,
-                    ]
-                  : undefined
-              }
+              icon={<GraduationCap size={15} aria-hidden="true" />}
+              title={`${coaching.rep_name ?? "This rep"}’s coaching across calls`}
+              href={`/coaching?person=${coaching.rep_person_id}`}
             />
-            {coaching.sandbox && coaching.rep_person_id ? (
-              <Row
-                icon={<GraduationCap size={15} aria-hidden="true" />}
-                title={`${coaching.rep_name ?? "This rep"}’s coaching across calls`}
-                href={`/coaching?person=${coaching.rep_person_id}`}
-              />
-            ) : (
-              <Row
-                icon={<GraduationCap size={15} aria-hidden="true" />}
-                title="My coaching across calls"
-                href="/coaching"
-              />
-            )}
-          </List>
-        </Panel>
-      </aside>
+          ) : (
+            <Row
+              icon={<GraduationCap size={15} aria-hidden="true" />}
+              title="My coaching across calls"
+              href="/coaching"
+            />
+          )}
+        </List>
+      </Panel>
     </div>
   );
 }

@@ -58,8 +58,7 @@
     grid-template-columns: minmax(0, 1fr) 336px;
   }
 
-  /* The rail already shows the mission beside the focus. */
-  .hero .nextCall,
+  /* Wide screens already open with two moments and eight calls. */
   .root .moreMoments:not([data-many]),
   .root .moreCalls:not([data-many]) {
     display: none;
@@ -71,53 +70,199 @@
   }
 }
 
-/* One conversation: the pillars read in spec order in one column. On wide
-   screens the next-call mission sits beside them for the whole story,
-   instead of a stack of side panels (spec 3 and 9). */
+/* One conversation: the six pillars read top to bottom in Dipak's order,
+   one column like the Report (spec 3, 7, 9). */
 .conversation {
   display: grid;
-  gap: var(--sx-gap);
+  gap: 28px;
   align-items: start;
   min-width: 0;
+  max-width: 980px;
 }
 
 .conversation > * {
   min-width: 0;
 }
 
-.conversationRail {
+/* ---------- Pillars: headed the way the Report heads its six parts ---------- */
+
+.pillar {
   display: grid;
-  align-content: start;
-  gap: var(--sx-gap);
+  gap: 12px;
+  min-width: 0;
+  scroll-margin-top: 72px;
 }
 
-@container (min-width: 900px) {
-  .conversation {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    grid-template-rows: repeat(8, auto);
-  }
+.pillarHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
 
-  .conversation > * {
-    grid-column: 1;
-  }
+.pillarHead > div {
+  flex: 1;
+  min-width: 0;
+}
 
-  .conversation > .conversationRail {
-    grid-column: 2;
-    grid-row: 1 / -1;
-    align-self: start;
-  }
+.pillarNumber {
+  display: inline-grid;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--lx-teal) 12%, var(--lx-surface));
+  color: var(--lx-teal);
+  font: 700 13px/1 var(--lx-font-ui);
+}
 
-  .conversationRail .nextCall,
-  .conversation .hero .nextCall {
-    display: none;
-  }
+.pillarTitle {
+  color: var(--sx-ink);
+  font: 650 20px/1.25 var(--lx-font-ui);
+}
 
-  @media (min-height: 760px) {
-    .conversationRail {
-      position: sticky;
-      top: 16px;
-    }
+.pillarSubtitle {
+  margin-top: 2px;
+  color: var(--sx-muted);
+  font-size: 13px;
+}
+
+.pillarAside {
+  flex: none;
+  padding-top: 5px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* A plain card, and the Report's callout with its coloured left edge. */
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.card[data-flush] {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.card[data-flush] > .moreMoments {
+  margin: 0 16px 12px;
+}
+
+.callout {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--sx-line);
+  border-left: 3px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.callout[data-tone="accent"],
+.callout[data-tone="good"] {
+  border-left-color: var(--lx-teal);
+}
+
+.cardLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.callout[data-tone] .cardLabel {
+  color: var(--lx-teal);
+}
+
+.cardLabelMuted {
+  color: var(--sx-muted);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chip[data-tone="accent"],
+.chip[data-tone="good"] {
+  background: color-mix(in oklab, var(--lx-teal) 10%, var(--lx-surface));
+  color: var(--lx-teal);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+
+/* Label-value lines, as Dipak writes them ("Pattern: …", "Status: …"). */
+.diagnosis {
+  display: grid;
+  gap: 10px;
+}
+
+.diagnosis > div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 2px 12px;
+}
+
+.diagnosis dt {
+  padding-top: 2px;
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diagnosis dd {
+  color: var(--sx-ink);
+}
+
+@container (max-width: 560px) {
+  .diagnosis > div {
+    grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.framework {
+  display: grid;
+  gap: 6px;
 }
 
 .route {
@@ -151,11 +296,6 @@
   font-weight: 600;
 }
 
-.eyebrow > .stepper {
-  flex: 1 1 120px;
-  min-width: 120px;
-}
-
 @container (max-width: 560px) {
   .route {
     grid-template-columns: minmax(0, 1fr);
@@ -178,10 +318,6 @@
   .main,
   .rail {
     display: contents;
-  }
-
-  .late {
-    order: 1;
   }
 
   .moments:not([data-expanded]) > [data-extra],
@@ -227,11 +363,10 @@
 .hero {
   display: grid;
   gap: 12px;
-  padding: 16px 18px;
+  padding: 18px 20px;
   border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
+  border-radius: var(--lx-radius-lg);
   background: var(--sx-surface);
-  box-shadow: inset 3px 0 0 var(--sx-accent);
 }
 
 .focusTitle {
@@ -368,9 +503,9 @@
   min-height: var(--sx-control-h);
   box-sizing: border-box;
   padding: 0 10px;
-  border: 1px solid var(--sx-line);
+  border: 1px solid color-mix(in oklab, var(--lx-teal) 30%, transparent);
   border-radius: 999px;
-  background: var(--sx-surface);
+  background: color-mix(in oklab, var(--lx-teal) 8%, transparent);
   color: var(--sx-accent);
   font: inherit;
   font-size: var(--sx-text-xs);
@@ -381,7 +516,7 @@
 }
 
 .time:hover:not(:disabled) {
-  background: var(--sx-accent-soft);
+  background: color-mix(in oklab, var(--lx-teal) 16%, transparent);
 }
 
 .time[data-state="playing"] {
@@ -778,7 +913,14 @@
 
 .terms {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px 20px;
+}
+
+.terms dt {
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .terms dd {
@@ -787,12 +929,20 @@
 
 .cue {
   justify-self: start;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px dashed color-mix(in oklab, var(--sx-accent) 60%, transparent);
   border-radius: 999px;
   color: var(--sx-accent);
-  font-size: var(--sx-text-xs);
+  font-size: 13px;
   font-weight: 600;
+}
+
+.cue > span {
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .practice {
@@ -885,23 +1035,44 @@
   content: "";
 }
 
+/* Dipak's mastery journey: Emerging → … → Mastered, the current step bold. */
 .stepper {
-  display: flex;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .stepper li {
-  flex: 1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: 12px;
+}
+
+.stepper li::before {
   height: 6px;
   border-radius: 999px;
   background: var(--sx-line);
+  content: "";
 }
 
-.stepper li[data-on] {
+.stepper li[data-on]::before {
   background: var(--sx-accent);
+}
+
+.stepper li[aria-current] {
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+
+.stepper li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .path {

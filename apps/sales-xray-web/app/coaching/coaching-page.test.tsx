@@ -194,11 +194,11 @@ describe("Coaching story", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory coaching={fictionalCallCoaching} />,
     );
-    expect(html).toContain("One focus for this call");
-    expect(html).toContain("Why this is the focus for this call");
+    expect(html).toContain("What You Should Work On Now");
+    expect(html).toContain("What Happened on This Call");
     expect(html).toContain("Here’s What Better Looks Like");
     expect(html).toContain("Try This on Your Next Call");
-    expect(html.match(/Active mission/g)).toHaveLength(1);
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(html).not.toContain("Not Enough Evidence");
     expect(html).not.toContain("Compare one more evidence moment");
     expect(html).not.toContain("<audio");
@@ -253,8 +253,8 @@ describe("Coaching story", () => {
       expect(position).toBeGreaterThan(previous);
       previous = position;
     }
-    expect(html.match(/Active mission/g)).toHaveLength(1);
-    expect(html).toContain("Unknown / Uncertain");
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
+    expect(html).toContain("Not clear yet");
     expect(html).toContain("Not Enough Evidence");
     expect(html).not.toContain("autoplay");
     expect(html).not.toContain("<audio");
@@ -344,7 +344,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain("Use your strength");
-    expect(html).toContain("One call is not an established strength.");
+    expect(html).toContain("One call doesn’t make it a proven strength yet.");
     expect(html.lastIndexOf(moment.call_label)).toBeGreaterThan(
       html.indexOf("Use your strength"),
     );
@@ -385,7 +385,7 @@ describe("Coaching story", () => {
     expect(list.parentElement!.hasAttribute("data-expanded")).toBe(true);
     expect(host.textContent).not.toContain("Show all 5 calls");
   });
-  it("shows what comparable calls said since the mission, never success", () => {
+  it("shows what this skill's calls said since the mission, never success", () => {
     const html = renderToStaticMarkup(
       <CoachingStory
         coaching={{
@@ -408,7 +408,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain(
-      "Since your mission started: 1 of 1 comparable call had evidence for this skill and no suggestion. That is not proof of change yet.",
+      "Since your mission started: 1 of 1 call used this skill with nothing to fix. Not proof of change yet.",
     );
     expect(html.match(/data-mission-start/g)).toHaveLength(1);
     expect(html).toContain("Not Enough Evidence");
@@ -435,7 +435,7 @@ describe("Coaching story", () => {
       />,
     );
     expect(html).toContain("Your report brought you here for Qualification");
-    expect(html.match(/Active mission/g)).toHaveLength(1);
+    expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(fictionalCoaching.mission).toEqual(before);
     for (const input of [
       "unknown",
