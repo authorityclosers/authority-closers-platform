@@ -104,3 +104,10 @@ PR #442 currently holds the shared migration slot and introduces another 0081
 successor to main's 0080. The combined linear chain and parity must be checked
 after source integration. No final CI/deployed/sandbox-loading claim is made by
 this local evidence.
+
+After integrating main bcd4e40, all five sandbox/member-delivery PostgreSQL cases
+passed together (73.48s). Dev/live then reported an add/add conflict: Admin's
+unpublished 3d6e89b introduces a read-only `synthetic_dataset.py` and same-named
+test. C's ingest adapter is renamed `synthetic_import_dataset.py` and its test
+`test_synthetic_import_dataset.py`; CLI references follow the new name. The
+adapter body and pinned dataset are unchanged, and no Admin file is edited.

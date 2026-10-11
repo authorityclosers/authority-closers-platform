@@ -17,7 +17,7 @@ from uuid import UUID
 import httpx
 
 from ac_platform.conversation_intelligence.checkpoints import content_hash
-from ac_platform.conversation_intelligence.synthetic_dataset import (
+from ac_platform.conversation_intelligence.synthetic_import_dataset import (
     bundles,
     master_records,
     record_batches,

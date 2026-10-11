@@ -7,12 +7,6 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from ac_platform.conversation_intelligence.synthetic_dataset import (
-    OPERATIONS,
-    bundles,
-    exact_file,
-    record_batches,
-)
 from ac_platform.conversation_intelligence.synthetic_import_cli import (
     AC_SANDBOX,
     allowed_origin,
@@ -20,6 +14,12 @@ from ac_platform.conversation_intelligence.synthetic_import_cli import (
     validate_dataset,
 )
 from ac_platform.conversation_intelligence.synthetic_import_contracts import SyntheticRecordInput
+from ac_platform.conversation_intelligence.synthetic_import_dataset import (
+    OPERATIONS,
+    bundles,
+    exact_file,
+    record_batches,
+)
 from tests.unit.conversation_intelligence.test_synthetic_import_contracts import bundle
 
 
