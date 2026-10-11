@@ -26,7 +26,12 @@ import {
 } from "../ui/kit";
 import { StandaloneStudio } from "../standalone-studio";
 import { useWorkspaceAccess } from "../workspace-access";
-import type { CallSummary, Coaching, MasteryState } from "./coaching-client";
+import type {
+  CallSummary,
+  Coaching,
+  MasteryState,
+  ProgressPoint,
+} from "./coaching-client";
 import { CallCoachingStory } from "./call-coaching";
 import {
   isCallCoaching,
@@ -91,6 +96,53 @@ export function CoachingSkeleton() {
           <span className={styles.skeletonBlock} style={{ height: 160 }} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const POINT: Record<ProgressPoint["state"], string> = {
+  suggested: "Suggested again",
+  no_suggestion: "Evidence, no suggestion",
+  not_covered: "Not covered",
+};
+
+/** Comparable calls, oldest first. Reports say what they saw, never success. */
+function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
+  if (!points?.length) return null;
+  const after = points.filter((point) => point.after_mission);
+  const quiet = after.filter((point) => point.state === "no_suggestion");
+  const firstAfter = points.findIndex((point) => point.after_mission);
+  return (
+    <div className={styles.progress}>
+      <ol
+        className={styles.timeline}
+        aria-label="Comparable calls, oldest first"
+      >
+        {points.map((point, index) => (
+          <li
+            key={point.submission_id}
+            data-state={point.state}
+            data-mission-start={index === firstAfter ? "" : undefined}
+            title={`${callDate(point.created_at)} · ${POINT[point.state]}`}
+          >
+            <span className={styles.srOnly}>
+              {callDate(point.created_at)}: {POINT[point.state]}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className={styles.legend} aria-hidden="true">
+        {(Object.keys(POINT) as ProgressPoint["state"][]).map((state) => (
+          <span key={state} data-state={state}>
+            {POINT[state]}
+          </span>
+        ))}
+      </p>
+      <p>
+        {after.length
+          ? `Since your mission started: ${quiet.length} of ${after.length} comparable call${after.length === 1 ? "" : "s"} had evidence for this skill and no suggestion. That is not proof of change yet.`
+          : "No comparable call since your mission started. Your next call is the first check."}
+      </p>
     </div>
   );
 }
@@ -287,7 +339,8 @@ export function CoachingStory({
                 </li>
               ))}
             </ol>
-            <p>{mastery.explanation}</p>
+            <ProgressStrip points={coaching.progress} />
+            <p className={styles.note}>{mastery.explanation}</p>
             {mastery.relevant_count !== null ? (
               <p>
                 {mastery.correct_count} successful executions in{" "}

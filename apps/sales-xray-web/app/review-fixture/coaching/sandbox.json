@@ -478,6 +478,50 @@
         "focus_label": "Explain value before trading price"
       }
     ],
+    "progress": [
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000100",
+        "created_at": "2026-07-27T11:00:00+05:30",
+        "state": "suggested",
+        "after_mission": false
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000101",
+        "created_at": "2026-07-31T11:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000102",
+        "created_at": "2026-08-05T11:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000103",
+        "created_at": "2026-08-23T12:00:00+05:30",
+        "state": "no_suggestion",
+        "after_mission": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000104",
+        "created_at": "2026-08-27T12:00:00+05:30",
+        "state": "suggested",
+        "after_mission": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000105",
+        "created_at": "2026-09-01T12:00:00+05:30",
+        "state": "no_suggestion",
+        "after_mission": true
+      },
+      {
+        "submission_id": "5a0d0000-0000-4000-8000-000000000106",
+        "created_at": "2026-09-07T12:00:00+05:30",
+        "state": "not_covered",
+        "after_mission": true
+      }
+    ],
     "development_path": {
       "current": "Explain value before trading price",
       "likely_next": "Discovery & Deep Understanding",

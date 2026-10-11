@@ -249,6 +249,19 @@ class ClipSuggestion(Model):
         return self
 
 
+class ProgressPoint(Model):
+    """What one comparable call's report said about the focus skill.
+
+    `no_suggestion` means the report had evidence for the skill and suggested
+    nothing; it is never counted as successful execution or mastery.
+    """
+
+    submission_id: UUID
+    created_at: datetime
+    state: Literal["suggested", "no_suggestion", "not_covered"]
+    after_mission: bool
+
+
 class CallSummary(Model):
     """One of the learner's own retained calls, linking to that call's coaching."""
 
@@ -290,6 +303,7 @@ class CoachingView(Model):
     recommended_media: LearningAsset | None = None
     other_format: LearningAsset | None = None
     calls: tuple[CallSummary, ...] = Field(default=(), max_length=40)
+    progress: tuple[ProgressPoint, ...] = Field(default=(), max_length=40)
     development_path: Path
     reflection_question: str | None
     feedback_available: Literal[False] = False

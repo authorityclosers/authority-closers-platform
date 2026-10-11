@@ -167,6 +167,34 @@ describe("Coaching story", () => {
       "Saving agreement, disagreement and reflection is not available yet.",
     );
   });
+  it("shows what comparable calls said since the mission, never success", () => {
+    const html = renderToStaticMarkup(
+      <CoachingStory
+        coaching={{
+          ...fictionalCoaching,
+          progress: [
+            {
+              submission_id: fictionalCoaching.evidence[0].submission_id,
+              created_at: "2026-10-09T10:00:00Z",
+              state: "suggested",
+              after_mission: false,
+            },
+            {
+              submission_id: fictionalCoaching.evidence[1].submission_id,
+              created_at: "2026-10-10T10:00:00Z",
+              state: "no_suggestion",
+              after_mission: true,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(html).toContain(
+      "Since your mission started: 1 of 1 comparable call had evidence for this skill and no suggestion. That is not proof of change yet.",
+    );
+    expect(html.match(/data-mission-start/g)).toHaveLength(1);
+    expect(html).toContain("Not Enough Evidence");
+  });
   it("has a loading skeleton and makes no request without a confirmed account", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

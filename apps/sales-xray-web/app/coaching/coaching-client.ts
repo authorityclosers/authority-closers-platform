@@ -63,6 +63,13 @@ export type CallSummary = {
   state: "ready" | "pending" | "unavailable";
   focus_label: string | null;
 };
+/** What one comparable call's report said about the focus skill. */
+export type ProgressPoint = {
+  submission_id: string;
+  created_at: string;
+  state: "suggested" | "no_suggestion" | "not_covered";
+  after_mission: boolean;
+};
 export type Coaching = {
   schema: "ac.sales-xray.coaching/1";
   person_id: string;
@@ -113,6 +120,7 @@ export type Coaching = {
   lesson: TextLesson | null;
   media_clips?: CoachingClip[];
   calls?: CallSummary[];
+  progress?: ProgressPoint[];
   development_path: {
     current: string | null;
     likely_next: string | null;
@@ -291,7 +299,36 @@ export function parseCoaching(value: unknown): Coaching {
     ...item,
     media_clips: parseClips(item.media_clips),
     calls: parseCallSummaries(item.calls),
+    progress: parseProgress(item.progress),
   } as Coaching;
+}
+
+/** Optional strip: a malformed point is dropped, never fatal to the page. */
+export function parseProgress(value: unknown): ProgressPoint[] {
+  if (!Array.isArray(value)) return [];
+  const points: ProgressPoint[] = [];
+  for (const raw of value.slice(-40)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    if (
+      typeof row.submission_id !== "string" ||
+      !UUID_RE.test(row.submission_id) ||
+      typeof row.created_at !== "string" ||
+      !Number.isFinite(Date.parse(row.created_at)) ||
+      !["suggested", "no_suggestion", "not_covered"].includes(
+        String(row.state),
+      ) ||
+      typeof row.after_mission !== "boolean"
+    )
+      continue;
+    points.push({
+      submission_id: row.submission_id,
+      created_at: row.created_at,
+      state: row.state as ProgressPoint["state"],
+      after_mission: row.after_mission,
+    });
+  }
+  return points;
 }
 
 /** Optional list: a malformed row is dropped, never fatal to the page. */

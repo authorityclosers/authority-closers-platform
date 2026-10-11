@@ -60,7 +60,7 @@
 
   /* The rail already shows the mission beside the focus. */
   .hero .nextCall,
-  .moreMoments {
+  .root .moreMoments {
     display: none;
   }
 }
@@ -639,6 +639,86 @@
 }
 
 /* ---------- Progress and path (pillars 5 and 6) ---------- */
+
+.progress {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline li,
+.legend span::before {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--sx-line-strong);
+  border-radius: 50%;
+}
+
+.timeline [data-state="suggested"],
+.legend [data-state="suggested"]::before {
+  border-color: transparent;
+  background: var(--sx-warn);
+}
+
+.timeline [data-state="no_suggestion"],
+.legend [data-state="no_suggestion"]::before {
+  border-color: var(--sx-accent);
+}
+
+.timeline [data-state="not_covered"],
+.legend [data-state="not_covered"]::before {
+  border-style: dotted;
+}
+
+.timeline li {
+  position: relative;
+}
+
+/* A thin bar marks where the current mission started. */
+.timeline [data-mission-start] {
+  margin-left: 9px;
+}
+
+.timeline [data-mission-start]::before {
+  position: absolute;
+  top: -4px;
+  left: -9px;
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--sx-ink-2);
+  content: "";
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend span::before {
+  width: 10px;
+  height: 10px;
+  content: "";
+}
 
 .stepper {
   display: flex;
