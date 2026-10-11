@@ -45,16 +45,23 @@ Dipak Report/Document/Coaching staging smoke.
 Coordinator's 17:03 UTC handoff reports green v0.40.0 release CI at `f0437c9` /
 main `a775389`; staging images are building. QA has no staging verdict yet.
 
-Latest Coaching repeat (17:27:44–17:28:18 UTC) at recorded start/end `4b32a9ce`
-passes **3/4** (both desktop themes and phone/dark, all 13 observations). On
-phone/light the journey times out before the second personal pillar. Its
-inspected failure screenshot shows This call selected / My coaching unselected,
-after the existing My coaching click. No refresh/runtime/server/visual errors;
-cause unconfirmed. D has the exact screenshot and receipt in
-`shots/2026-10-11-workbench-current-coaching-repeat/`. QA now explicitly checks
-the selected button after the same single click, without retrying a lost click
-or weakening any pillar check. Phone/light acceptance remains pending a bounded
-repeat at the 15-minute interval.
+Latest Coaching coverage is **PASS across four pairs**, all 13 observations.
+The 17:27 run at recorded start/end `4b32a9ce` passes both desktop themes and
+phone/dark. Its phone/light failure is superseded by the bounded 17:43:27–17:43:38
+repeat at `c3ebfde1` → `28c9cebd`: My coaching is selected after the same single
+click, all six personal pillars complete, both real mission taps are reachable
+and 106 × 44 px, and Team/Sandbox/rep views pass. Phone/light focus and mission
+screenshots were inspected and are readable. Runtime/server/visual errors and
+refresh notices are zero; main-navigation count is 10. This is mutable-dev
+coverage across bounded runs, not one immutable twelve-case release run.
+
+Earlier phone/light timed out before personal pillar 2 and showed This call
+selected / My coaching unselected. Cause remains unconfirmed; no persistent
+defect claim or product fix is inferred from the passing repeat. D received both
+the exact failure and its supersession. QA now checks the selected button after
+the same single click without retrying a lost click or weakening any pillar.
+Receipts: `shots/2026-10-11-workbench-current-coaching-repeat/` and
+`shots/2026-10-11-workbench-coaching-phone-selection-repeat/`.
 
 Latest shared-dev Report/Document readback (17:11:43–17:13:28 UTC) passes **8/8**
 at recorded start/end HEAD `67feed3e`. Each Report pair completes all 13 steps:
@@ -77,8 +84,8 @@ focus screenshots were inspected and are readable. Later Report batch at
 the inspected image shows "This report didn't load. Please try again.", disabled
 Word export and zero sections. B/G received the exact capture. These older
 failures are retained as history and did not reproduce in the completed 17:11
-readback above. The newer Coaching repeat above supersedes this older baseline;
-three pairs pass and phone/light remains unverified.
+readback above. The newer completed Coaching coverage above supersedes this
+older baseline.
 
 The 16 opt-in cases cover 1440/390, light/dark, dashboard-to-report, all six
 Report sections in Dipak's order, their required example blocks, eight skills,
