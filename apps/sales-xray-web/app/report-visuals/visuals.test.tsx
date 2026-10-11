@@ -196,3 +196,10 @@ it("marks Sales Xray's own reading as Possible, in the copy module's words", () 
   expect(markup).toContain(">Possible<");
   expect(markup).toContain("Nobody said this in so many words.");
 });
+
+it("draws figures without a second frame inside a card", () => {
+  const markup = html(
+    <MetricRow bare items={[{ label: "Call length", value: "25:08" }]} />,
+  );
+  expect(markup).toContain("data-bare");
+});

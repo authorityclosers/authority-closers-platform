@@ -343,13 +343,20 @@ export type MetricItem = {
 export function MetricRow({
   items,
   label = "Call figures",
+  bare,
 }: {
   items: MetricItem[];
   label?: string;
+  /** Inside a card: drop the row's own frame. */
+  bare?: boolean;
 }) {
   if (!items.length) return null;
   return (
-    <dl className={styles.metrics} aria-label={label}>
+    <dl
+      className={styles.metrics}
+      aria-label={label}
+      data-bare={bare ? "" : undefined}
+    >
       {items.map((item) => (
         <div key={item.label} className={styles.metric}>
           <dt className={styles.metricLabel}>{item.label}</dt>

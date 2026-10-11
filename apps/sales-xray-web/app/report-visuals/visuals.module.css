@@ -256,8 +256,11 @@
   background: color-mix(in oklab, var(--sx-ink) 3.5%, transparent);
 }
 
+/* Resets the studio's legacy blockquote (serif, cobalt rule, margins). */
 .quoteText {
   margin: 0;
+  padding: 0;
+  border: 0;
   color: var(--sx-ink);
   font: 400 var(--sx-text-md) / 1.55 var(--lx-font-ui);
   overflow-wrap: anywhere;
@@ -336,6 +339,13 @@
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
+}
+
+/* Inside a card: no second frame, only the dividers between figures. */
+.metrics[data-bare] {
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 
 .metric {
