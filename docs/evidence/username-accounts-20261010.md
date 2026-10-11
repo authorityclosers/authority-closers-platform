@@ -1,6 +1,6 @@
 # AUT-1694: Admin-issued username account candidate
 
-Sensitive sign-in/identity change; requires CTO/CEO review and the owner's one-tap approval. Local candidate only. Remote PR #438 remains the green staging-admin tool at `24394718`. The username migration/runtime are withheld while the shared slot and C's migration/backup ownership remain occupied.
+Sensitive sign-in/identity change; requires CTO/CEO review and the owner's one-tap approval. PR #438 is merged as `b09b3de6`. The owner's 11 Oct unblock requests publication of this username migration/runtime for review after #436 closed. Final migration-chain and backup compatibility still depend on the nonconflicting C source integration; publication is not shipment.
 
 Admin can create a new username person with optional email and active member membership using `POST /v1/platform/organisations/{tenant_id}/accounts`. It reuses `platform_organisations_manage`, canonical authentication, the Admin surface/origin guard, an exact UUIDv4 Idempotency-Key and a recorded reason. It refuses existing usernames/emails; it does not attach identities by name or modify roles/billing. The one-time response uses private/no-store and includes a server-generated temporary password. Only a scrypt verifier is stored; replay and append-only audits contain no password.
 
@@ -15,6 +15,7 @@ Validation on the actual combined local tree:
 - 249 focused identity, auth, profile, organisation, Admin and rate-limit checks passed in 97.26s. Includes PostgreSQL creation/change/sign-in by both identifiers, one-time replay/audit secrecy, expiry/reissue, concurrent one-success/one-refusal, session revocation, duplicate/admission denials, nullable profile and unchanged mailbox proof.
 - Five existing PostgreSQL email reclamation, password recovery/onboarding, membership isolation and concurrent Google sign-in/consent regressions passed in 20.10s.
 - Targeted mypy passed in 12 source files; Ruff check/format passed in all 19 changed/new Python files; diff and API task check passed. Final schema classification/default proof is recorded separately.
+- On the rollover tree based on main `a5c71f86`, 33 focused username schema/HTTP/PostgreSQL/session/rate-limit cases passed in 39.44s, including the real predecessor-upgrade preservation of existing identity, consent, password verifier, provider binding and session rows. Earlier broader proof remains historical; final-head CI is still required.
 
 No UI file, real account/password, live approval, staging/production data, provider, service, release or deployment was changed. No browser/server was started. A owns Sales Xray login/change UI and G owns Admin's one-time copy panel. The final fixture tests do not replace authenticated hosted acceptance or release compatibility. Full create/invite/accept/upload/owner-read/Personal placement remains subject to the recorded C/B/Root boundaries.
 
