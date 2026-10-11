@@ -15,6 +15,7 @@ from ac_platform.coaching.contracts import (
     CallHistory,
     Mission,
     Moment,
+    ObjectionSeen,
     Practice,
     SkillObservation,
     Strength,
@@ -223,6 +224,21 @@ def _call_suggestion(
     return None
 
 
+def objections_seen(report: dict[str, Any]) -> tuple[ObjectionSeen, ...]:
+    """Kinds and handling from a v7 call map; withheld or unknown ones are skipped."""
+    call_map = report.get("call_map")
+    rows = call_map.get("objections") if isinstance(call_map, dict) else None
+    seen: list[ObjectionSeen] = []
+    for row in rows if isinstance(rows, list) else ():
+        if not isinstance(row, dict) or WITHHELD_MARKER in str(row):
+            continue
+        try:
+            seen.append(ObjectionSeen(kind=row.get("kind"), handling=row.get("handling")))
+        except ValidationError:
+            continue
+    return tuple(seen[:6])
+
+
 def from_report(
     envelope: dict[str, Any],
     *,
@@ -343,6 +359,8 @@ def from_report(
             comparison_key=comparison_key,
             skills=tuple(rows),
             strength=quoted_strength(report, envelope, submission_id, created_at),
+            objections=objections_seen(report),
+            has_call_map=isinstance(report.get("call_map"), dict),
         )
     except (KeyError, TypeError, ValueError, ValidationError):
         # Withheld or incompatible content must not create a fallback diagnosis.

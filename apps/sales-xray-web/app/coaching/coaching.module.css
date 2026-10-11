@@ -385,9 +385,23 @@
 }
 
 .time[data-state="playing"] {
+  position: relative;
+  overflow: hidden;
   border-color: transparent;
   background: var(--sx-accent);
   color: var(--sx-accent-ink);
+}
+
+/* How far into this clip of the call playback is, inside the pill. */
+.time[data-state="playing"]::after {
+  content: "";
+  position: absolute;
+  inset: auto auto 0 0;
+  width: var(--clip, 0%);
+  height: 3px;
+  background: var(--sx-accent-ink);
+  opacity: 0.7;
+  transition: width 0.25s linear;
 }
 
 .time:disabled {
@@ -403,6 +417,32 @@
 
 .moreCalls {
   margin-top: 8px;
+}
+
+/* "Add context": the learner's own words about the focus. */
+.contextForm {
+  display: grid;
+  flex-basis: 100%;
+  gap: 8px;
+}
+
+.learnerContext {
+  display: block;
+  margin-top: 4px;
+  color: var(--sx-ink-2);
+  font-style: italic;
+}
+
+/* Team: the area filter above the named sandbox reps. */
+.repFilter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 4px;
+}
+
+.repFilter > span:first-child {
+  width: min(220px, 60%);
 }
 
 .status {

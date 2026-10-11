@@ -94,8 +94,24 @@ def topics(root: Path = MEDIA) -> tuple[PlaceholderTopic, ...]:
     return tuple(parsed)
 
 
-def _clip(topic: PlaceholderTopic) -> ClipSuggestion:
+GAP_WORDS = {
+    "knowledge": "a knowledge gap",
+    "judgment": "a judgment gap (recognising the moment)",
+    "execution": "an execution gap (doing it in the moment)",
+    "habit_recall": "a habit gap",
+    "confidence": "a confidence gap",
+}
+
+
+def _clip(topic: PlaceholderTopic, gap_type: str | None = None) -> ClipSuggestion:
     label = SKILL_LABELS[topic.skill_id]
+    # Say why only with facts on both sides: the lesson's tag and this coaching's
+    # likely reason. A guessed match is never claimed.
+    gap = (
+        f" It addresses {GAP_WORDS[topic.gap_type]}, the likely reason here."
+        if gap_type == topic.gap_type and topic.gap_type in GAP_WORDS
+        else ""
+    )
     return ClipSuggestion(
         topic_id=topic.topic_id,
         revision=topic.audio_sha256,
@@ -107,9 +123,9 @@ def _clip(topic: PlaceholderTopic) -> ClipSuggestion:
         start_ms=topic.start_ms,
         end_ms=topic.end_ms,
         reason=(
-            f"Dipak's lesson for {label}, the skill this coaching focuses on."
+            f"Dipak's lesson for {label}, the skill this coaching focuses on.{gap}"
             if topic.free
-            else f"A further lesson for {label} in Dipak's full coaching."
+            else f"A further lesson for {label} in Dipak's full coaching.{gap}"
         ),
         takeaways=topic.takeaways,
         transcript_excerpt=topic.narration,
@@ -118,15 +134,20 @@ def _clip(topic: PlaceholderTopic) -> ClipSuggestion:
     )
 
 
-def clips_for(skill_id: str, root: Path = MEDIA) -> tuple[ClipSuggestion, ...]:
+def clips_for(
+    skill_id: str, root: Path = MEDIA, *, gap_type: str | None = None
+) -> tuple[ClipSuggestion, ...]:
     """One free lesson and one locked lesson for an assessed skill; else none.
 
-    An unlinked report suggestion has no assessed skill, so no clip is guessed.
+    Among the skill's further lessons, one tagged for the likely gap comes
+    first (spec 11: the most specific asset). An unlinked report suggestion
+    has no assessed skill, so no clip is guessed.
     """
     matching = sorted((t for t in topics(root) if t.skill_id == skill_id), key=lambda t: t.priority)
     free = next((t for t in matching if t.free), None)
-    locked = next((t for t in matching if not t.free), None)
-    return tuple(_clip(t) for t in (free, locked) if t is not None)
+    further = [t for t in matching if not t.free]
+    locked = next((t for t in further if t.gap_type == gap_type), None) or next(iter(further), None)
+    return tuple(_clip(t, gap_type) for t in (free, locked) if t is not None)
 
 
 def playable(

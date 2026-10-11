@@ -19,6 +19,8 @@ import {
   MissionPanel,
 } from "./coaching-ui";
 import { MomentList } from "./evidence-player";
+import { FocusFeedback, SharePanel } from "./sharing-ui";
+import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import styles from "./coaching.module.css";
 
@@ -145,7 +147,42 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   );
 }
 
-function StartCoaching({ coaching }: { coaching: Coaching }) {
+function StartCoaching({
+  coaching,
+  readOnly = false,
+  sharing,
+}: {
+  coaching: Coaching;
+  /** Another rep's view: say "their", offer no action that is the viewer's. */
+  readOnly?: boolean;
+  sharing?: SharingView;
+}) {
+  if (readOnly)
+    return (
+      <div className={styles.layout}>
+        <div className={styles.main}>
+          <section className={styles.hero} aria-labelledby="coaching-focus">
+            <div className={styles.eyebrow}>
+              <h2 id="coaching-focus" className={styles.label}>
+                What They Should Work On Now
+              </h2>
+              <Badge>No focus yet</Badge>
+            </div>
+            <p className={styles.focusTitle}>
+              {coaching.analysed_calls
+                ? "Their calls do not yet show one focus"
+                : "No analysed calls yet"}
+            </p>
+            <p className={styles.lead}>
+              {coaching.analysed_calls
+                ? "Each analysed call below has its own focus and next-call mission."
+                : "Their coaching starts with their first analysed call."}
+            </p>
+          </section>
+          <CallsPanel calls={coaching.calls} />
+        </div>
+      </div>
+    );
   return (
     <div className={styles.layout}>
       <div className={styles.main}>
@@ -174,16 +211,38 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
             </p>
           ) : null}
           <div className={styles.actions}>
+            {coaching.sandbox_reps ? (
+              <Link
+                className={kitStyles.button}
+                data-variant="primary"
+                href="/coaching?view=team"
+              >
+                See {coaching.sandbox_reps} fictional reps’ coaching{" "}
+                <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            ) : null}
             <Link
               className={kitStyles.button}
-              data-variant={coaching.analysed_calls ? undefined : "primary"}
+              data-variant={
+                coaching.analysed_calls || coaching.sandbox_reps
+                  ? undefined
+                  : "primary"
+              }
               href="/analysis/new"
             >
               Analyse a call <ArrowRight size={14} aria-hidden="true" />
             </Link>
           </div>
+          {coaching.sandbox_reps ? (
+            <p className={styles.note}>
+              This is AC Sandbox: Team shows the coaching of the fictional reps
+              you imported. Your own coaching follows your own calls.
+            </p>
+          ) : null}
         </section>
         <CallsPanel calls={coaching.calls} />
+        {/* Sharing can always be stopped, focus or not. */}
+        <SharePanel initial={sharing} />
       </div>
     </div>
   );
@@ -192,13 +251,25 @@ function StartCoaching({ coaching }: { coaching: Coaching }) {
 export function CoachingStory({
   coaching,
   requestedFocus,
+  readOnly = false,
+  sharing,
 }: {
   coaching: Coaching;
   requestedFocus?: RequestedSkill;
+  /** A known sharing state (design review); otherwise the panel reads it. */
+  sharing?: SharingView;
+  /** Another rep's coaching (a fictional AC Sandbox rep): nothing to save here. */
+  readOnly?: boolean;
 }) {
   const { focus, mission, lesson, evidence, practice, mastery } = coaching;
   if (!focus || !mission || !lesson || !practice)
-    return <StartCoaching coaching={coaching} />;
+    return (
+      <StartCoaching
+        coaching={coaching}
+        readOnly={readOnly}
+        sharing={sharing}
+      />
+    );
   const pattern = coaching.pattern;
   const recurring = focus.status === "active";
   const step = JOURNEY.indexOf(mastery.state);
@@ -224,6 +295,7 @@ export function CoachingStory({
           ...(mastery.state !== "not_enough_evidence"
             ? [{ text: masteryLabel[mastery.state], tone: "good" as const }]
             : []),
+          ...(coaching.sandbox ? [{ text: "Fictional AC Sandbox" }] : []),
         ]}
         explanation={focus.explanation}
         why={focus.why_it_matters}
@@ -251,9 +323,15 @@ export function CoachingStory({
               <Badge>{gapLabel(coaching.root_cause.gap_type)}</Badge>
             </span>
             {coaching.root_cause.hypothesis}
+            {coaching.root_cause.learner_context ? (
+              <span className={styles.learnerContext}>
+                {readOnly ? "Their context" : "Your context"}: “
+                {coaching.root_cause.learner_context}”
+              </span>
+            ) : null}
           </p>
         </div>
-        <MomentList evidence={evidence} />
+        <MomentList evidence={evidence} fictional={coaching.sandbox} />
       </Panel>
       <LessonPanel
         lesson={lesson}
@@ -346,8 +424,15 @@ export function CoachingStory({
           {coaching.reflection_question ? (
             <p className={styles.reflection}>{coaching.reflection_question}</p>
           ) : null}
+          {readOnly ? null : (
+            <FocusFeedback
+              focusSkillId={focus.skill_id}
+              originSubmissionId={mission.origin_submission_id}
+            />
+          )}
         </div>
       </Panel>
+      {readOnly ? null : <SharePanel initial={sharing} />}
       <div className={styles.late}>
         <CallsPanel calls={coaching.calls} />
       </div>
@@ -358,10 +443,6 @@ export function CoachingStory({
           {coaching.limitations.map((limitation) => (
             <li key={limitation}>{limitation}</li>
           ))}
-          <li>
-            Saving your agreement, disagreement and reflection comes with
-            sharing.
-          </li>
         </ul>
       </details>
     </div>

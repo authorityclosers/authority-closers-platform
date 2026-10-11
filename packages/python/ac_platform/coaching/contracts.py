@@ -113,6 +113,26 @@ class Strength(Model):
     evidence: tuple[Moment, ...] = Field(min_length=1, max_length=2)
 
 
+ObjectionKind = Literal[
+    "price_concern",
+    "affordability_gap",
+    "time_constraint",
+    "stall",
+    "competitor_or_status_quo",
+    "decision_maker_absent",
+    "trust_concern",
+    "other",
+]
+
+
+class ObjectionSeen(Model):
+    """A buyer objection from the report's call map: its fixed kind and how the
+    seller handled it. Never its words or who raised it."""
+
+    kind: ObjectionKind
+    handling: Literal["answered", "deflected", "ignored", "question_back"]
+
+
 class CallHistory(Model):
     submission_id: UUID
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -120,6 +140,9 @@ class CallHistory(Model):
     comparison_key: str = Field(min_length=1, max_length=256)
     skills: tuple[SkillObservation, ...]
     strength: Strength | None = None
+    objections: tuple[ObjectionSeen, ...] = Field(default=(), max_length=6)
+    # The report has a call map (v7), so an empty objection list means none.
+    has_call_map: bool = False
 
     @model_validator(mode="after")
     def bound_evidence(self) -> "CallHistory":
@@ -347,4 +370,11 @@ class CoachingView(Model):
     development_path: Path
     reflection_question: str | None
     feedback_available: Literal[False] = False
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
+    # Whose coaching this is when it is not the viewer's own (a fictional rep).
+    person_name: str | None = Field(default=None, max_length=120)
+    # How many fictional AC Sandbox reps this viewer imported; their coaching
+    # is on Team. A count only; this view stays the viewer's own.
+    sandbox_reps: int = Field(default=0, ge=0)
     limitations: tuple[str, ...]

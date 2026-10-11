@@ -60,6 +60,11 @@ class CallCoachingView(Model):
     strength: Strength | None = None
     # Other retained report suggestions; Coaching keeps one focus (spec 12.1).
     other_suggestions: int = Field(default=0, ge=0, le=20)
+    # Fictional AC Sandbox data, read only by the person who imported it.
+    sandbox: bool = False
+    # The fictional rep whose call this is (sandbox only); the viewer is person_id.
+    rep_person_id: UUID | None = None
+    rep_name: str | None = Field(default=None, max_length=120)
     limitations: tuple[str, ...]
 
     @model_validator(mode="after")

@@ -98,6 +98,8 @@
     },
     "recommended_media": null,
     "recording_id": "00000000-0000-0000-0000-000000000014",
+    "rep_name": null,
+    "rep_person_id": null,
     "report_revision": "ae11921cee5ac25a2350e149210b0dc0f68d7bd747db297760b3ef9d1a29494f",
     "root_cause": {
       "alternatives": [],
@@ -106,6 +108,7 @@
       "hypothesis": "We do not yet have enough evidence to say why this happens.",
       "learner_context": null
     },
+    "sandbox": false,
     "schema": "ac.sales-xray.call-coaching/1",
     "session_id": "00000000-0000-0000-0000-000000000003",
     "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -262,6 +265,7 @@
     },
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
+    "person_name": null,
     "practice": {
       "estimated_minutes": null,
       "exercise": "Practise one follow-up.",
@@ -290,6 +294,8 @@
       "hypothesis": "We do not yet have enough evidence to say why this happens.",
       "learner_context": null
     },
+    "sandbox": false,
+    "sandbox_reps": 0,
     "schema": "ac.sales-xray.coaching/1",
     "session_id": "00000000-0000-0000-0000-000000000003",
     "state": "ready",
@@ -324,14 +330,27 @@
     "latest_call_at": "2026-10-10T00:00:00Z",
     "limitations": [
       "Counts describe report suggestions, not proven recurring mistakes or mastery.",
-      "No rep's focus, root cause, mission, identity or call evidence is disclosed.",
-      "Named coaching requires an explicit, revocable share; sharing is not active yet.",
+      "Totals never name a rep or show their calls, quotes, focus or mission.",
+      "A rep appears by name, with their current focus, only after they share; they can stop at any time and any change to their membership ends it.",
       "Assigned coach duties are pending. Current organisation owners/admins see aggregates."
     ],
     "named_rep_details": false,
+    "objection_calls": 1,
+    "objections": [
+      {
+        "calls": 1,
+        "handled": 1,
+        "heard": 2,
+        "kind": "price_concern",
+        "label": "Price"
+      }
+    ],
     "pending_calls": 0,
     "person_id": "00000000-0000-0000-0000-000000000001",
     "rep_count": 1,
+    "reps": [],
+    "reps_basis": "none",
+    "sandbox": false,
     "schema": "ac.sales-xray.team-coaching/1",
     "scope": "anonymous",
     "session_id": "00000000-0000-0000-0000-000000000003",

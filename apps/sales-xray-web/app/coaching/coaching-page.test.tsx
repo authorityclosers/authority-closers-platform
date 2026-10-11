@@ -97,6 +97,99 @@ describe("Coaching story", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(host.textContent).toContain("This call link is invalid.");
   });
+  it("points an AC Sandbox importer with no own calls to the fictional team", () => {
+    const empty = {
+      ...fictionalCoaching,
+      state: "not_enough_evidence" as const,
+      analysed_calls: 0,
+      focus: null,
+      mission: null,
+      practice: null,
+      lesson: null,
+      evidence: [],
+      calls: [],
+      sandbox_reps: 60,
+    };
+    const html = renderToStaticMarkup(<CoachingStory coaching={empty} />);
+    expect(html).toContain("See 60 fictional reps’ coaching");
+    expect(html).toContain('href="/coaching?view=team"');
+    expect(html).toContain("Your own coaching follows your own calls");
+    const plain = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} />,
+    );
+    expect(plain).not.toContain("fictional reps");
+    // Sharing can always be stopped, focus or not.
+    expect(plain).toContain("Who sees your coaching");
+    // Another rep's empty view speaks about them, with no action of the viewer's.
+    const theirs = renderToStaticMarkup(
+      <CoachingStory coaching={{ ...empty, sandbox_reps: 0 }} readOnly />,
+    );
+    expect(theirs).toContain("What They Should Work On Now");
+    expect(theirs).not.toContain("Analyse a call");
+    expect(theirs).not.toContain("Who sees your coaching");
+  });
+  it("labels a fictional AC Sandbox call and leads back to Team, not a report", () => {
+    const html = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{ ...fictionalCallCoaching, sandbox: true }}
+      />,
+    );
+    expect(html).toContain("Fictional AC Sandbox");
+    expect(html).toContain("Back to team coaching");
+    expect(html).not.toContain("/analysis/calls/");
+    const withRep = renderToStaticMarkup(
+      <CallCoachingStory
+        coaching={{
+          ...fictionalCallCoaching,
+          sandbox: true,
+          rep_person_id: "00000000-0000-4000-8000-0000000000aa",
+          rep_name: "Rohan Kendrekar",
+        }}
+      />,
+    );
+    expect(withRep).toContain("Rohan Kendrekar’s coaching across calls");
+    expect(withRep).toContain(
+      "/coaching?person=00000000-0000-4000-8000-0000000000aa",
+    );
+  });
+  it("opens a fictional rep's coaching under their name, read-only", async () => {
+    const person = "00000000-0000-4000-8000-0000000000aa";
+    mocks.access = {
+      status: "ready",
+      authenticated: true,
+      context: {
+        personId: fictionalCoaching.person_id,
+        tenantId: fictionalCoaching.tenant_id,
+        sessionId: "00000000-0000-4000-8000-000000000003",
+      },
+      workspaces: [],
+      retry: () => {},
+    } as unknown as WorkspaceAccessValue;
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await act(async () =>
+      root.render(
+        <CoachingPage
+          sharedPersonId={person}
+          initialResult={{
+            data: {
+              ...fictionalCoaching,
+              person_id: person,
+              session_id: null,
+              sandbox: true,
+              person_name: "Rohan Kendrekar",
+            },
+            error: null,
+          }}
+        />,
+      ),
+    );
+    expect(host.querySelector("h1")?.textContent).toBe("Rohan Kendrekar");
+    expect(host.textContent).toContain("Fictional AC Sandbox rep");
+    expect(host.textContent).toContain("Back to team");
+    expect(host.textContent).not.toContain("Saving your agreement");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("renders a single call's four pillars with no invented pattern or mastery gate", () => {
     const html = renderToStaticMarkup(
       <CallCoachingStory coaching={fictionalCallCoaching} />,
@@ -167,11 +260,17 @@ describe("Coaching story", () => {
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
     expect(html).toContain("कामाला");
-    // No dead controls: feedback buttons appear only once saving works.
-    expect(html).not.toContain("Not completely");
-    expect(html).toContain(
-      "Saving your agreement, disagreement and reflection comes with sharing.",
+    // Spec 12.6: agree / not completely, after the evidence; sharing below.
+    expect(html.indexOf("Not completely")).toBeGreaterThan(
+      html.indexOf("Where We Go From Here"),
     );
+    expect(html).toContain("Who sees your coaching");
+    // A fictional or shared rep's view is read-only: nothing to save.
+    const readOnly = renderToStaticMarkup(
+      <CoachingStory coaching={fictionalCoaching} readOnly />,
+    );
+    expect(readOnly).not.toContain("Not completely");
+    expect(readOnly).not.toContain("Who sees your coaching");
   });
   it("teaches in the spec's order and keeps the text short beside a clip", () => {
     const position = (html: string, text: string) => {
