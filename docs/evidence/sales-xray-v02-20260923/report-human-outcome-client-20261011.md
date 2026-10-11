@@ -31,6 +31,13 @@ responses return content-free states. An uncertain write has no automatic
 retry or optimistic success; the caller must reload before another command.
 Human value parsing now detaches deal amounts/currencies from mutable drafts.
 
+The matching Python `HumanOutcomeCommand` has the same closed four-field
+request. It requires the outcome revision and an explicit membership/stage
+pair, including both nulls for an unlinked call. It preserves exact values and
+canonical identifiers, rejects boolean/coerced/unsafe revisions and refuses
+caller-supplied authority or inferred-stage fields. The parsed intent is
+immutable; it does not establish permission or execute a database change.
+
 ## Validation
 
 - 108 focused Vitest cases pass across the new client, human value codec and
@@ -40,6 +47,10 @@ Human value parsing now detaches deal amounts/currencies from mutable drafts.
 - Incremental TypeScript checking, cached changed-file ESLint, Prettier and
   `git diff --check` pass. The initial test-file formatting parse error was
   corrected before tests ran; no pass is claimed for that attempt.
+- 82 focused Python value/command cases, strict source-module mypy, Ruff and
+  format checks pass. The first Ruff run found a constant `setattr` in the
+  intentional frozen-command assertion; direct assignment now makes that
+  assertion explicit and passes lint. No database or provider was used.
 - No displayed component, route or styling changed. Existing screenshot proof
   remains historical; this change adds no browser, build or production claim.
 
