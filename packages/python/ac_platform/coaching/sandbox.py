@@ -7,6 +7,7 @@ fictional. Nothing here analyses, scores, writes or calls a provider. A field
 the dataset did not author makes that call unreadable; it is never guessed.
 """
 
+import re
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
@@ -59,6 +60,57 @@ IMPORTER_ONLY = "Only the person who imported these sandbox calls sees their coa
 SOURCE = "Fictional AC Sandbox lesson, written with the calls"
 HISTORY_LIMIT = 40
 MAX_MOMENTS = 4
+# The dataset repeats a few authoring templates in system words. Show them in
+# the plain sales words the rest of Coaching uses, with the same meaning; every
+# other authored line passes through unchanged.
+_ONE_CALL = (
+    "From this one call. Earlier calls show whether it repeats; a won or lost deal doesn’t "
+    "prove why."
+)
+PLAIN = {
+    "The labelled behaviour occurs in this call.": "It came up on this call.",
+    "Keep the same focus; this call alone cannot establish mastery.": (
+        "Keep the same focus. One call can’t show it’s mastered."
+    ),
+    "The cited response or commitment is observed here; maintain it on the next relevant "
+    "opportunity without inferring mastery.": (
+        "It was done well on this call. Keep doing it next time; one call doesn’t prove it yet."
+    ),
+    "One-call evidence only; use the linked rep history for longitudinal claims.": (
+        "From this one call. Earlier calls show whether it repeats."
+    ),
+    "One-call evidence only. Linked history can be reviewed separately; a win or loss does not "
+    "prove causation.": _ONE_CALL,
+    "This key uses only this call. Linked earlier calls may be examined separately; the final "
+    "outcome is not proof of causation.": _ONE_CALL,
+    "One-call evidence only; linked history can be examined separately, and the final outcome "
+    "is not proof of causation.": _ONE_CALL,
+    "Time pressure or missing context could also explain the behaviour.": (
+        "Time pressure or missing context could also explain it."
+    ),
+    "The buyer needs decision clarity and a relevant response.": (
+        "The buyer needs a clear way to decide and an answer that fits what they asked."
+    ),
+    "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.": (
+        "Rewrite what was said in the moment above, the better way. Then say it out loud once, "
+        "with a pause."
+    ),
+    "Next relevant buyer opening": "The next time a buyer gives you this opening.",
+    "Next relevant call with this buyer requirement": "Your next call where the buyer needs this.",
+    "Next relevant call in this selling context": "Your next call like this one.",
+    "Per-call observation does not establish longitudinal mastery.": (
+        "One call can’t show progress over time."
+    ),
+    "Chronological, relevant opportunities only. No future calls used; no mastery inferred from "
+    "a single success.": (
+        "Counted in call order, only where the skill applied. One good call doesn’t mean it’s "
+        "mastered."
+    ),
+}
+_MISSED = re.compile(
+    r"The focus behaviour was missed in (\d+) of the last (\d+) relevant calls"
+    r"(?: available as of this call)?\."
+)
 
 
 def call_uuid(tenant_id: UUID, key: str) -> UUID:
@@ -114,6 +166,16 @@ def _text(value: Any, limit: int = 4000) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()[:limit]
     return None
+
+
+def _plain(value: Any, limit: int = 4000) -> str | None:
+    """An authored line, in plain words when it is one of the dataset's templates."""
+    text = _text(value, limit)
+    if text is None:
+        return None
+    if missed := _MISSED.fullmatch(text):
+        return f"It came up in {missed[1]} of the last {missed[2]} calls on this skill."
+    return PLAIN.get(text, text)
 
 
 def _dict(value: Any) -> dict[str, Any]:
@@ -334,7 +396,7 @@ def authored(
     mission = Mission(
         skill_id=skill,
         behavior=behavior,
-        context=_text(mission_raw.get("context")) or "The next time this kind of moment comes up.",
+        context=_plain(mission_raw.get("context")) or "The next time this kind of moment comes up.",
         done_when=done_when,
         cue=_text(mission_raw.get("cue"), 240) or label,
         active_since=_when(mission_raw.get("active_since")) or call.occurred_at,
@@ -352,15 +414,15 @@ def authored(
         # A focus needs at least one inspectable moment (spec 12.2); without
         # one the call's coaching is unavailable, never a guessed moment.
         return None
-    pattern = _text(diagnosis.get("pattern")) or "This call’s written focus."
-    why = _text(lesson.get("why_it_matters")) or pattern
+    pattern = _plain(diagnosis.get("pattern")) or "This call’s written focus."
+    why = _plain(lesson.get("why_it_matters")) or pattern
     better = _text(lesson.get("better_direction")) or behavior
     focus = Focus(
         skill_id=skill,
         label=label,
         explanation=pattern,
         why_it_matters=why,
-        selected_reason=_text(current.get("selected_reason")) or "Authored for this call.",
+        selected_reason=_plain(current.get("selected_reason")) or "Written for this call.",
         selected_at=call.occurred_at,
         status="provisional",
         verdict=behavior,
@@ -379,7 +441,7 @@ def authored(
             ),
             alternatives=tuple(
                 text
-                for text in (_text(item, 600) for item in diagnosis.get("alternatives") or ())
+                for text in (_plain(item, 600) for item in diagnosis.get("alternatives") or ())
                 if text
             )[:3],
         ),
@@ -406,7 +468,7 @@ def authored(
             next_call_connection=behavior,
         ),
         practice=Practice(
-            exercise=_text(practice_raw.get("exercise"))
+            exercise=_plain(practice_raw.get("exercise"))
             or "Replay one moment. Say one alternative response in your own words.",
             success_condition=done_when,
             gap_type=gap,
@@ -583,7 +645,7 @@ def rep_view(
                 else None
             ),
             confidence=parts.root_cause.confidence,
-            explanation=_text(progress.get("reason")) or Mastery().explanation,
+            explanation=_plain(progress.get("reason")) or Mastery().explanation,
         ),
         lesson=parts.lesson,
         progress=tuple(

@@ -614,9 +614,9 @@
     "focus": {
       "skill_id": "discovery_deep_understanding",
       "label": "Diagnose before prescribing",
-      "explanation": "The focus behaviour was missed in 6 of the last 6 relevant calls available as of this call.",
-      "why_it_matters": "The buyer needs decision clarity and a relevant response.",
-      "selected_reason": "The labelled behaviour occurs in this call.",
+      "explanation": "It came up in 6 of the last 6 calls on this skill.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "selected_reason": "It came up on this call.",
       "selected_at": "2026-07-23T13:00:00+05:30",
       "status": "active",
       "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."
@@ -624,7 +624,7 @@
     "pattern": {
       "relevant_call_count": 6,
       "attention_call_count": 6,
-      "summary": "The focus behaviour was missed in 6 of the last 6 relevant calls available as of this call.",
+      "summary": "It came up in 6 of the last 6 calls on this skill.",
       "relevant_opportunities": 6,
       "occurrence_count": 6,
       "contexts": [],
@@ -635,7 +635,7 @@
       "gap_type": "judgment",
       "confidence": "medium",
       "alternatives": [
-        "Time pressure or missing context could also explain the behaviour."
+        "Time pressure or missing context could also explain it."
       ],
       "learner_context": null
     },
@@ -698,7 +698,7 @@
       }
     ],
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "A specific example and its impact are established before the first product explanation.",
       "gap_type": "judgment",
       "estimated_minutes": 3
@@ -706,7 +706,7 @@
     "mission": {
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
-      "context": "Next relevant buyer opening",
+      "context": "The next time a buyer gives you this opening.",
       "done_when": "A specific example and its impact are established before the first product explanation.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
@@ -721,7 +721,7 @@
       "baseline": "0 of 1 before the mission",
       "confidence": "medium",
       "historical_achievement": null,
-      "explanation": "Chronological, relevant opportunities only. No future calls used; no mastery inferred from a single success."
+      "explanation": "Counted in call order, only where the skill applied. One good call doesn’t mean it’s mastered."
     },
     "regression": {
       "state": "unknown",
@@ -732,11 +732,11 @@
       "title": "Diagnose before prescribing",
       "quick_idea": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "framework": ["Problem", "Example", "Impact", "Relevant solution"],
-      "why_it_matters": "The buyer needs decision clarity and a relevant response.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
       "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "example_wording": [],
-      "when_to_use": "Next relevant buyer opening",
+      "when_to_use": "The next time a buyer gives you this opening.",
       "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
@@ -1422,9 +1422,9 @@
     "focus": {
       "skill_id": "discovery_deep_understanding",
       "label": "Diagnose before prescribing",
-      "explanation": "The focus behaviour was missed in 6 of the last 6 relevant calls available as of this call.",
-      "why_it_matters": "The buyer needs decision clarity and a relevant response.",
-      "selected_reason": "The labelled behaviour occurs in this call.",
+      "explanation": "It came up in 6 of the last 6 calls on this skill.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
+      "selected_reason": "It came up on this call.",
       "selected_at": "2026-08-28T14:00:00+05:30",
       "status": "provisional",
       "verdict": "Before describing the offer, ask for one recent example and one consequence of the problem."
@@ -1464,7 +1464,7 @@
       "gap_type": "judgment",
       "confidence": "medium",
       "alternatives": [
-        "Time pressure or missing context could also explain the behaviour."
+        "Time pressure or missing context could also explain it."
       ],
       "learner_context": null
     },
@@ -1472,11 +1472,11 @@
       "title": "Diagnose before prescribing",
       "quick_idea": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "framework": ["Problem", "Example", "Impact", "Relevant solution"],
-      "why_it_matters": "The buyer needs decision clarity and a relevant response.",
+      "why_it_matters": "The buyer needs a clear way to decide and an answer that fits what they asked.",
       "good_looks_like": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "better_direction": "Before describing the offer, ask for one recent example and one consequence of the problem.",
       "example_wording": [],
-      "when_to_use": "Next relevant buyer opening",
+      "when_to_use": "The next time a buyer gives you this opening.",
       "when_not": "Do not repeat settled discovery during a short confirmation or invoice call.",
       "checklist": [
         "A specific example and its impact are established before the first product explanation."
@@ -1499,7 +1499,7 @@
       "next_call_connection": "Before describing the offer, ask for one recent example and one consequence of the problem."
     },
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "A specific example and its impact are established before the first product explanation.",
       "gap_type": "judgment",
       "estimated_minutes": 3
@@ -1507,7 +1507,7 @@
     "mission": {
       "skill_id": "discovery_deep_understanding",
       "behavior": "Before describing the offer, ask for one recent example and one consequence of the problem.",
-      "context": "Next relevant buyer opening",
+      "context": "The next time a buyer gives you this opening.",
       "done_when": "A specific example and its impact are established before the first product explanation.",
       "cue": "Diagnose before prescribing",
       "active_since": "2026-07-23T13:00:00+05:30",
