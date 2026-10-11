@@ -4,6 +4,7 @@ import { ArrowDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge, Panel, type Tone } from "../ui/kit";
 import type { Coaching, Evidence, TextLesson } from "./coaching-client";
+import { timeLabel } from "./coaching-format";
 import { CoachingMedia } from "./media-player";
 import type { CoachingClip } from "./media-contract";
 import styles from "./coaching.module.css";
@@ -114,13 +115,14 @@ export function LessonPanel({
         ) : null}
         <div className={styles.compare}>
           <div>
-            <span className={styles.label}>Your call</span>
-            {lesson.own_call ? (
-              <p className={styles.quote}>{lesson.own_call.quote}</p>
-            ) : null}
-            <p className={styles.momentNote}>
-              {lesson.own_call?.observation ?? fallbackObservation}
-            </p>
+            {/* The quote itself is the first moment in Pillar 2, just above. */}
+            <span className={styles.label}>
+              Your call
+              {lesson.own_call
+                ? ` · at ${timeLabel(lesson.own_call.start_ms)}`
+                : ""}
+            </span>
+            <p>{lesson.own_call?.observation ?? fallbackObservation}</p>
           </div>
           <div data-kind="better">
             <span className={styles.label}>Better direction</span>
