@@ -1271,7 +1271,10 @@ function CallsLibraryContent({
           onClick={() => openSubmission(submission)}
         >
           <span className={`${styles.copy} calls-library-copy`}>
-            <strong data-unnamed={label?.displayName ? undefined : "true"}>
+            <strong
+              data-unnamed={label?.displayName ? undefined : "true"}
+              title={title}
+            >
               {title}
             </strong>
             {/* Phone: one quiet line carries what the desktop columns show. */}
@@ -1830,7 +1833,9 @@ function CallsLibraryContent({
                   <span>Call</span>
                   {showReps ? <span>Rep</span> : null}
                   <span>Date</span>
-                  <span className={styles.num}>Length</span>
+                  <span className={`${styles.num} ${styles.lengthHead}`}>
+                    Length
+                  </span>
                   <span>Status</span>
                   <span />
                 </span>

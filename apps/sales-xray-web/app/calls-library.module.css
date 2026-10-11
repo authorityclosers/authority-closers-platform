@@ -1159,6 +1159,28 @@
   }
 }
 
+/*
+ * Tablets: the call's name needs the room more than its length does (r17:
+ * names are never cut; at 820 px the Call column was 166 px). Length stays
+ * in the Call time figure, the preview and the call itself.
+ */
+@container calls-page (max-width: 960px) {
+  .headCells,
+  .item {
+    grid-template-columns: minmax(0, 1fr) 96px 132px 16px;
+  }
+
+  .page[data-reps] .headCells,
+  .page[data-reps] .item {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 132px) 96px 132px 16px;
+  }
+
+  .lengthHead,
+  .length {
+    display: none;
+  }
+}
+
 /* ---------- Phones and small tablets: inbox rows ---------- */
 
 @container calls-page (max-width: 760px) {
