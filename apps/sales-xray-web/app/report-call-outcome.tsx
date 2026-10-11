@@ -16,6 +16,8 @@ type Props = {
   value?: HumanCallOutcome | null;
   canEdit?: boolean;
   onSave?: (value: HumanCallOutcome) => Promise<void>;
+  /** Resolves only after a fresh scoped server read updates value/capability/revision. */
+  onReload?: () => Promise<void>;
 };
 
 /** Controlled human command seam. Caller saves audited revisions and reads them back. */
@@ -23,7 +25,7 @@ export function CallOutcomeEditor(props: Props) {
   return <OutcomeControls key={props.scopeKey} {...props} />;
 }
 
-function OutcomeControls({ value, canEdit = false, onSave }: Props) {
+function OutcomeControls({ value, canEdit = false, onSave, onReload }: Props) {
   const id = useId();
   const [choice, setChoice] = useState<CallOutcomeKind | null>(null);
   const [reason, setReason] = useState("");
@@ -32,11 +34,13 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
   const [currency, setCurrency] = useState("");
   const [showValue, setShowValue] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [needsReload, setNeedsReload] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const enabled = value !== undefined && canEdit && !!onSave;
   async function save(kind: CallOutcomeKind) {
-    if (!enabled || !onSave || pending.current) return;
+    if (!enabled || !onSave || pending.current || needsReload) return;
     let next: HumanCallOutcome;
     try {
       next = parseHumanCallOutcome({
@@ -67,36 +71,66 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
       // No optimistic outcome/stage or success label: the parent must read back.
       setChoice(null);
     } catch {
-      setError("Your outcome wasn't saved. Try again.");
+      setNeedsReload(true);
+      setError(
+        "Your outcome couldn't be confirmed. Reload before saving again.",
+      );
     } finally {
       pending.current = false;
       setSaving(false);
     }
   }
   function choose(kind: CallOutcomeKind) {
-    if (!enabled || saving) return;
+    if (!enabled || saving || needsReload) return;
     setError(null);
     setChoice(kind);
     if (kind === "won" || kind === "no_decision") void save(kind);
   }
+  async function reload() {
+    if (!enabled || !needsReload || pending.current) return;
+    pending.current = true;
+    setReloading(true);
+    if (!onReload) {
+      window.location.reload();
+      return;
+    }
+    try {
+      await onReload();
+      setNeedsReload(false);
+      setError(null);
+      setChoice(null);
+    } catch {
+      setError(
+        "Call outcome is still unavailable. Reload before saving again.",
+      );
+    } finally {
+      pending.current = false;
+      setReloading(false);
+    }
+  }
+  const disabled = saving || needsReload;
   return (
     <section
       className={styles.outcome}
       aria-label="Recorded call outcome"
-      aria-busy={saving}
+      aria-busy={saving || reloading}
     >
       <div className={styles.current}>
         <strong>Call outcome</strong>
         <span>
-          {value === undefined
-            ? "Unavailable"
-            : value === null
-              ? "Unrecorded"
-              : CALL_OUTCOME_LABELS[value.outcome]}
+          {needsReload
+            ? "Unconfirmed"
+            : value === undefined
+              ? "Unavailable"
+              : value === null
+                ? "Unrecorded"
+                : CALL_OUTCOME_LABELS[value.outcome]}
         </span>
-        {value?.lost_reason && <span>{value.lost_reason}</span>}
-        {value?.follow_up_on && <span>{value.follow_up_on}</span>}
-        {value?.deal_value && (
+        {!needsReload && value?.lost_reason && <span>{value.lost_reason}</span>}
+        {!needsReload && value?.follow_up_on && (
+          <span>{value.follow_up_on}</span>
+        )}
+        {!needsReload && value?.deal_value && (
           <span>
             {value.deal_value.amount} {value.deal_value.currency_code}
           </span>
@@ -114,7 +148,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                 <button
                   key={kind}
                   type="button"
-                  disabled={saving}
+                  disabled={disabled}
                   aria-pressed={choice === kind}
                   onClick={() => choose(kind)}
                 >
@@ -124,7 +158,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
             )}
             <button
               type="button"
-              disabled={saving}
+              disabled={disabled}
               onClick={() => {
                 setShowValue((shown) => !shown);
                 setAmount(value?.deal_value?.amount ?? "");
@@ -141,7 +175,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                 id={`${id}-reason`}
                 maxLength={1000}
                 value={reason}
-                disabled={saving}
+                disabled={disabled}
                 onChange={(event) => setReason(event.target.value)}
               />
             </label>
@@ -153,7 +187,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                 id={`${id}-date`}
                 type="date"
                 value={date}
-                disabled={saving}
+                disabled={disabled}
                 onChange={(event) => setDate(event.target.value)}
               />
             </label>
@@ -166,7 +200,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                   id={`${id}-amount`}
                   inputMode="decimal"
                   value={amount}
-                  disabled={saving}
+                  disabled={disabled}
                   onChange={(event) => setAmount(event.target.value)}
                 />
               </label>
@@ -177,7 +211,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                   maxLength={3}
                   placeholder="e.g. INR"
                   value={currency}
-                  disabled={saving}
+                  disabled={disabled}
                   onChange={(event) => setCurrency(event.target.value)}
                 />
               </label>
@@ -186,17 +220,26 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
           {(choice === "lost" || choice === "follow_up") && (
             <button
               type="button"
-              disabled={saving}
+              disabled={disabled}
               onClick={() => void save(choice)}
             >
               Save outcome
             </button>
           )}
           {saving && <span className={styles.state}>Saving outcome…</span>}
+          {reloading && <span className={styles.state}>Reading outcome…</span>}
           {error && (
             <div className={styles.error} role="alert">
               <span>{error}</span>
-              {choice && (
+              {needsReload ? (
+                <button
+                  type="button"
+                  disabled={reloading}
+                  onClick={() => void reload()}
+                >
+                  Reload
+                </button>
+              ) : choice ? (
                 <button
                   type="button"
                   disabled={saving}
@@ -204,7 +247,7 @@ function OutcomeControls({ value, canEdit = false, onSave }: Props) {
                 >
                   Try again
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </>
