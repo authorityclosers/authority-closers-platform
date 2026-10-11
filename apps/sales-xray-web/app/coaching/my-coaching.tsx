@@ -23,7 +23,9 @@ import {
   PATH,
   POINT_COPY,
   PROGRESS,
+  REGRESSION_COPY,
   THEIR_FOCUS,
+  TREND_COPY,
   TREND_ARROW,
   WHY,
   gapCopy,
@@ -404,6 +406,19 @@ export function CoachingStory({
                 <dd>{mastery.baseline}</dd>
               </div>
             ) : null}
+            {TREND_COPY[mastery.trend] ? (
+              <div>
+                <dt>{PROGRESS.trend}</dt>
+                <dd>{TREND_COPY[mastery.trend]}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>{PROGRESS.regression}</dt>
+              <dd>
+                {REGRESSION_COPY[coaching.regression.state] ??
+                  REGRESSION_COPY.unknown}
+              </dd>
+            </div>
           </dl>
           <ol className={styles.stepper} aria-label={PROGRESS.journey}>
             {JOURNEY.map((state, index) => (

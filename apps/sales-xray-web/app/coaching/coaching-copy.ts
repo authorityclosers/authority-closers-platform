@@ -239,8 +239,26 @@ export const POINT_COPY: Record<ProgressPoint["state"], string> = {
   not_covered: "Didn’t come up",
 };
 
+/** Trend words, only when the server knows them (spec pillar 5). */
+export const TREND_COPY: Record<string, string | undefined> = {
+  improving: "Improving ↑",
+  stable: "Stable →",
+  declining: "Declining ↓",
+};
+
+/** Regression, said gently: it never erases what was achieved (spec 5). */
+export const REGRESSION_COPY: Record<string, string> = {
+  unknown: "Not enough calls on this skill to tell yet",
+  monitor: "One unusual miss. Just watching it",
+  reminder: "Slipping a little. A short reminder helps",
+  recurring: "Coming back. Worth a second look",
+  severe: "Back as your main focus for now",
+  re_stabilizing: "Getting steady again",
+};
+
 export const PROGRESS = {
   status: "Status",
+  regression: "Regression",
   recent: "Recent",
   previous: "Previous",
   trend: "Trend",

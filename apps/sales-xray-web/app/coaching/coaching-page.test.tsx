@@ -256,6 +256,9 @@ describe("Coaching story", () => {
     expect(html.match(/data-active-mission/g)).toHaveLength(1);
     expect(html).toContain("Not clear yet");
     expect(html).toContain("Not Enough Evidence");
+    // Regression said honestly; no trend arrow without a known trend.
+    expect(html).toContain("Not enough calls on this skill to tell yet");
+    expect(html).not.toContain("Improving ↑");
     expect(html).not.toContain("autoplay");
     expect(html).not.toContain("<audio");
     expect(html).toContain("हैंडओवर");
