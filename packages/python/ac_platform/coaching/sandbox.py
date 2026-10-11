@@ -108,6 +108,18 @@ PLAIN = {
         "mastered."
     ),
 }
+# The newest call's per-call reason, as read on the rep's page across calls,
+# where "this call" would point at nothing.
+NEWEST = {
+    "The labelled behaviour occurs in this call.": "It needed work on their newest call.",
+    "Keep the same focus; this call alone cannot establish mastery.": (
+        "Their newest call keeps the same focus. One call can’t show it’s mastered."
+    ),
+    "The cited response or commitment is observed here; maintain it on the next relevant "
+    "opportunity without inferring mastery.": (
+        "It was done well on their newest call. One call doesn’t prove it yet."
+    ),
+}
 _MISSED = re.compile(
     r"The focus behaviour was missed in (\d+) of the last (\d+) relevant calls"
     r"(?: available as of this call)?\."
@@ -611,11 +623,13 @@ def rep_view(
     baseline_relevant = _int(progress.get("baseline_relevant_opportunities"))
     baseline_correct = _int(progress.get("baseline_correct_execution_count"))
     chronological = sorted(calls[:HISTORY_LIMIT], key=lambda call: call.occurred_at)
+    newest_reason = _text(_dict(coaching.get("current_focus")).get("selected_reason"))
     return CoachingView(
         **common,
         state="ready",
         focus=parts.focus.model_copy(
             update={
+                "selected_reason": NEWEST.get(newest_reason or "", parts.focus.selected_reason),
                 "selected_at": mission.active_since,
                 "status": (
                     "active"
@@ -627,7 +641,14 @@ def rep_view(
         pattern=Pattern(
             relevant_call_count=opportunities or 0,
             attention_call_count=occurrences or 0,
-            summary=parts.pattern,
+            # Pillar 1 already shows the authored count line; this one points
+            # at the moments, as a real learner's pattern does.
+            summary=(
+                f"It needed work on {occurrences} different calls. "
+                "Replay the moments below and see what they did each time."
+                if occurrences and occurrences >= 2
+                else parts.pattern
+            ),
             relevant_opportunities=opportunities,
             occurrence_count=occurrences,
         ),

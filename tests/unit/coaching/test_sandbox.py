@@ -331,8 +331,16 @@ def test_the_datasets_template_lines_read_in_plain_sales_words() -> None:
         person_id=rep_uuid(TENANT, "syn-fixture-R1"),
         tenant_id=TENANT,
     )
-    assert view.focus and view.focus.selected_reason == "It needed work on this call."
-    assert view.pattern.summary == "It needed work in 2 of the last 2 calls on this skill."
+    # The rep's page reads across calls: the reason names their newest call,
+    # pillar 1 keeps the count and the pattern points at the moments.
+    assert view.focus and view.focus.selected_reason == "It needed work on their newest call."
+    assert view.focus.explanation == "It needed work in 2 of the last 2 calls on this skill."
+    assert view.pattern.summary == (
+        "It needed work on 2 different calls. "
+        "Replay the moments below and see what they did each time."
+    )
+    one_call = call_view(indexed(bundle), bundle, person_id=VIEWER, tenant_id=TENANT)
+    assert one_call.focus and one_call.focus.selected_reason == "It needed work on this call."
     assert view.root_cause.alternatives == (
         "Time pressure or missing context could also explain it.",
     )
