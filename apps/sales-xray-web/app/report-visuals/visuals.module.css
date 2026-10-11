@@ -570,6 +570,7 @@
 }
 
 .timeline[data-single] .block {
+  grid-template-rows: auto;
   min-width: 0;
 }
 
