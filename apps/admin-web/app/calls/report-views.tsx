@@ -7,7 +7,7 @@
  */
 import Link from "next/link";
 import { Play } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Badge } from "../ui/kit";
 import { DEVANAGARI } from "../lib/script";
@@ -550,9 +550,18 @@ export function Runs({
   baseHref: (query: Record<string, string | null>) => string;
 }) {
   const [onlyChanged, setOnlyChanged] = useState(false);
-  const rows = compareBundle
-    ? compareReports(current.report, compareBundle.report)
-    : [];
+  // Diffs are computed once per pair of reports, not on every playback tick
+  // (the call screen re-renders about four times a second while playing).
+  const rows = useMemo(
+    () =>
+      compareBundle
+        ? compareReports(current.report, compareBundle.report).map((row) => ({
+            ...row,
+            diff: row.same ? null : wordDiff(row.left, row.right),
+          }))
+        : [],
+    [compareBundle, current.report],
+  );
   const changed = rows.filter((row) => !row.same).length;
   return (
     <div className={styles.reading}>
@@ -651,8 +660,7 @@ export function Runs({
             <tbody>
               {rows
                 .filter((row) => !onlyChanged || !row.same)
-                .map((row) => {
-                  const diff = row.same ? null : wordDiff(row.left, row.right);
+                .map(({ diff, ...row }) => {
                   return (
                     <tr
                       key={row.label}
