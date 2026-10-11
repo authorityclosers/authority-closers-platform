@@ -143,6 +143,9 @@ const PARTS = [
   { tone: "idle", label: "Other" },
 ] as const;
 
+/** The three statuses always shown; "Other" only when it counts a call. */
+const MAIN_PARTS = 3;
+
 /** Every saved call once: one split bar and a full-text row per status. */
 export function StatusSplit({ summary }: { summary: CallSummary }) {
   const values = [
@@ -169,18 +172,20 @@ export function StatusSplit({ summary }: { summary: CallSummary }) {
         )}
       </div>
       <ul className={styles.legend}>
-        {PARTS.map((part, index) => (
-          <li
-            key={part.tone}
-            data-tone={part.tone}
-            data-zero={values[index] === 0 ? "" : undefined}
-          >
-            <i aria-hidden="true" />
-            <span>{part.label}</span>
-            <b>{values[index]}</b>
-            <small>{Math.round((values[index] / total) * 100)}%</small>
-          </li>
-        ))}
+        {PARTS.map((part, index) =>
+          index < MAIN_PARTS || values[index] > 0 ? (
+            <li
+              key={part.tone}
+              data-tone={part.tone}
+              data-zero={values[index] === 0 ? "" : undefined}
+            >
+              <i aria-hidden="true" />
+              <span>{part.label}</span>
+              <b>{values[index]}</b>
+              <small>{Math.round((values[index] / total) * 100)}%</small>
+            </li>
+          ) : null,
+        )}
       </ul>
     </div>
   );
@@ -276,7 +281,7 @@ export function StatusSplitSkeleton() {
       </p>
       <div className={`${styles.split} ${styles.skeletonSplit}`} />
       <ul className={styles.legend}>
-        {PARTS.map((part) => (
+        {PARTS.slice(0, MAIN_PARTS).map((part) => (
           <li key={part.tone} data-skeleton="">
             <i className={styles.skeletonLine} data-w="legend" />
           </li>
