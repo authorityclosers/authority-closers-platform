@@ -1730,8 +1730,9 @@ html:has(> body.sales-xray-document) {
     --text: #152638;
     --muted: #566475;
     --border: #d7deea;
-    --action: #3155c6;
-    --action-text: #fff;
+    /* One accent: the legacy studio's actions are the Lightbox teal. */
+    --action: var(--lx-teal);
+    --action-text: var(--lx-on-teal);
     --mint: #173f43;
     --mint-bg: #edf4f2;
     --warning: #6f4b00;
@@ -1758,8 +1759,8 @@ html:has(> body.sales-xray-document) {
     --text: #edf2fb;
     --muted: #b6c0d2;
     --border: #34425a;
-    --action: #9bb3ff;
-    --action-text: #071124;
+    --action: var(--lx-teal);
+    --action-text: var(--lx-on-teal);
     --mint: #bde5d4;
     --mint-bg: #163331;
     --warning: #ffd58a;
