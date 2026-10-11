@@ -533,10 +533,7 @@ export async function fetchProspectsList({
       if (response.status === 422) {
         throw new Error(detail || "Use the prospect page's supported filters.");
       }
-      throw new Error(
-        detail ||
-          "Prospects could not be loaded. Try again; your completed work remains private.",
-      );
+      throw new Error(detail || "Prospects didn't load. Try again.");
     }
 
     const json = await response.json();
@@ -593,10 +590,7 @@ export async function fetchProspectDetail({
       if (response.status === 404) {
         throw new Error(detail || "This prospect is unavailable.");
       }
-      throw new Error(
-        detail ||
-          "Prospect could not be loaded. Try again; your completed work remains private.",
-      );
+      throw new Error(detail || "This prospect didn't load. Try again.");
     }
 
     const json = await response.json();

@@ -98,7 +98,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
           // A contract mismatch is our fault: never show its technical text.
           err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospect details could not be loaded. Try again; your completed work remains private.";
+            : "This prospect didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
         setLoadedContext(null);
@@ -144,7 +144,7 @@ export function ProspectDetailView({ prospectId }: { prospectId: string }) {
           // A contract mismatch is our fault: never show its technical text.
           err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospect details could not be loaded. Try again; your completed work remains private.";
+            : "This prospect didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
         setLoadedContext(null);

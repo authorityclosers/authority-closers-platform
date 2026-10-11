@@ -107,7 +107,7 @@ function Field({
       )}
       {known?.heard_differently?.length ? (
         <details className={styles.evidence}>
-          <summary>A later call differs · your edit still wins</summary>
+          <summary>A later call said something else · your edit stays</summary>
           {known.heard_differently.map((heard, i) => (
             <div key={i}>
               <p>{profileValueText(heard.value)}</p>
@@ -213,7 +213,7 @@ function BriefFactRow({
         ) : null}
         {fact.differs?.map((item, index) => (
           <span key={index} className={styles.briefNote}>
-            A later call heard: {item.value} · your edit still wins
+            A later call said: {item.value} · your edit stays
           </span>
         ))}
       </dd>
@@ -423,8 +423,8 @@ export function ProspectInformation({
               </header>
               {index === 2 && fields.budget?.state === "known" ? (
                 <p className={styles.note}>
-                  A discussed amount does not confirm ability or willingness to
-                  invest.
+                  Talking about an amount doesn&apos;t mean they can or will pay
+                  it.
                 </p>
               ) : null}
               {part.facts.length ? (
