@@ -150,3 +150,57 @@ The sandbox flag, separate call storage and read integration are still in
 progress. No dataset load, verified audio, inferred scoring translation or
 official AI scoring is claimed. AC-SVAL-01 was fetched by its exact manifest
 ID; synthetic answer keys do not demonstrate instrument validity.
+
+## Manifest operator continuation — 11 Oct
+
+The owner supplied `/home/acdev/imports/drive-calls-20261011/manifest.json` and asked
+for a direct operator path. `recording_import_cli` validates every exact local file,
+size and SHA256 before any HTTP session. Paths cannot escape the approved root;
+normalized duplicate paths and changed bytes are refused. File extensions and
+manifest format/duration hints grant no native processing authority. All uploads
+use ordinary octet-stream intake and its content sniffing/native validation.
+
+The real local manifest dry-run verifies all 89 recordings. Eleven are extensionless;
+85 satisfy the normal 32 MiB byte cap. Four Surendra WAVs exceed it and are held.
+The unassigned dry-run pin is
+`19eb8530d5f22b9df77f8991b77d282c9c25440826b2c9c032c3d4e68ef1b883`.
+Current member UUIDs must be confirmed explicitly through the existing organisation
+preview; no name/email/pending invite is adopted as a canonical identity. Missing
+members are held. The pipeline preserves the original member for reused hashes.
+No reassignment feature or upload/billing/provider limit is added.
+
+After explicit recording-rights and ordinary-plan confirmation, the CLI follows
+normal batch consent -> member-owned source -> quote -> fingerprint/privacy-bound
+acceptance -> canonical progress. One call advances at a time; reads use a
+60-second cadence and a bounded operator window. Interrupted commands replay the
+same content-derived keys. Failed analyses never auto-retry. Duplicate calls keep
+their canonical analysis state, including failed/working/unknown, without another
+upload or plan. Import completion is not treated as delivered-report proof.
+Operator receipts project only known identifiers and states; unknown call content
+or response fields are omitted.
+
+Each request asserts `X-Recording-Import-Tenant`. Existing cookie/profile/member/
+origin/consent authority still applies; the header cannot select an organisation
+or grant a role. The import router checks it before preview/confirmation/progress
+and the normal source/plan/retry binder checks it at its existing boundaries,
+including fresh ownership after source spooling. A changed, malformed or repeated
+target is refused. Clients without the optional header retain their existing flow.
+
+All 51 focused operator and cookie/preview cases pass (6.03s). Fictional transport
+proof covers exact normal-intake headers, bytes, quote/acceptance, replay, failure
+without automatic retry, finite windows, duplicate canonical state and sanitized
+receipts. Real-cookie SQLite HTTP proof covers correct/wrong/malformed/repeated
+targets, current-role/session gates and private response headers. This does not
+claim a deployed native journey or a new ledger proof; existing PostgreSQL bulk/
+normal-delivery tests and final-head CI provide those combined-tree checks.
+Two-source mypy, changed-file Ruff/format and whitespace pass. No real upload,
+provider call, hosted data change or staging/production execution occurred.
+
+Claude's latest owner order is #446 -> #437 -> #442. Reviewed #446 main 2e662a8
+integrated at 36e3b92 with C's feature diff unchanged; 110 focused artifact-pool
+cases pass (16.25s). C retains its linear 0081 recording -> 0082 sandbox chain.
+The older post-username rename candidate remains archived and unapplied. The
+exact operator dry-run/preview/apply/read-back commands for real recordings and
+synthetic AC Sandbox are in NOTES.md under Operator runbook. Sensitive review,
+final-head checks, served-target configuration and the named staging operator
+remain required.

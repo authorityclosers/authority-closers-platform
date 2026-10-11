@@ -302,3 +302,40 @@ async def test_cookie_http_preview_rejects_changed_workspace_and_revoked_session
         assert (
             await client.post(path, json={"files": [file()]}, headers=headers)
         ).status_code == 401
+
+
+@pytest.mark.parametrize("target", ["wrong", "malformed", "repeated"])
+async def test_cookie_preview_asserts_the_exact_operator_target_without_granting_authority(
+    state,  # noqa: F811
+    target,
+):
+    app = preview_app(state)
+    headers = [
+        ("Origin", "https://learner.authorityclosers.test"),
+        ("Cookie", f"ac_session={TOKEN}"),
+        ("X-Recording-Import-Tenant", str(state.tenant)),
+    ]
+    if target == "wrong":
+        headers[-1] = ("X-Recording-Import-Tenant", str(state.tenants["Beta"]))
+    elif target == "malformed":
+        headers[-1] = ("X-Recording-Import-Tenant", "unavailable")
+    else:
+        headers.append(headers[-1])
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://learner.authorityclosers.test"
+    ) as client:
+        path = "/v1/conversation/acquisition/imports/preview"
+        refused = await client.post(path, json={"files": [file()]}, headers=headers)
+        assert refused.status_code == 403
+        assert refused.headers["cache-control"] == "private, no-store"
+        accepted = await client.post(
+            path,
+            json={"files": [file()]},
+            headers={
+                "Origin": headers[0][1],
+                "Cookie": headers[1][1],
+                "X-Recording-Import-Tenant": str(state.tenant),
+            },
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["tenant_id"] == str(state.tenant)

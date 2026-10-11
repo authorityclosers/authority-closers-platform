@@ -26,7 +26,25 @@ class _Guard(Protocol):
     def __call__(self, request: Request, response: Response, *, write: bool = False) -> str: ...
 
 
+def assert_import_tenant(owner: _Owner, request: Request) -> None:
+    values = request.headers.getlist("x-recording-import-tenant")
+    if not values:
+        return
+    if (
+        len(values) != 1
+        or owner.actor is None
+        or values[0] != str(owner.actor.tenant_id)
+        or values[0] != str(owner.ownership.tenant_id)
+    ):
+        raise HTTPException(
+            403,
+            "The selected import organisation changed.",
+            headers={"Cache-Control": "private, no-store", "Vary": "Cookie"},
+        )
+
+
 async def bind_import_request(owner: _Owner, request: Request, *, policy_sha256: str) -> _Owner:
+    assert_import_tenant(owner, request)
     batches = request.headers.getlist("x-recording-import")
     indices = request.headers.getlist("x-recording-import-item")
     if not batches and not indices:
@@ -95,6 +113,7 @@ def install_import_http(
         guard(request, response, write=True)
         try:
             async with asynccontextmanager(current_owner)(request) as owner:
+                assert_import_tenant(owner, request)
                 return await preview_import(owner.ownership, owner.actor, manifest)
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -112,6 +131,7 @@ def install_import_http(
         guard(request, response, write=True)
         try:
             async with asynccontextmanager(current_owner)(request) as owner:
+                assert_import_tenant(owner, request)
                 if owner.actor is None:
                     raise fail(401, "Sign in to import your organisation's recording folder.")
                 await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
@@ -126,6 +146,7 @@ def install_import_http(
         guard(request, response)
         try:
             async with asynccontextmanager(read_only_owner or current_owner)(request) as owner:
+                assert_import_tenant(owner, request)
                 if owner.actor is None:
                     raise fail(401, "Sign in to view your organisation's recording import.")
                 return await RecordingImports(owner.ownership).progress(owner.actor, batch_id)
