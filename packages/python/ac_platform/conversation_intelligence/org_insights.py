@@ -168,6 +168,26 @@ class InsightFilters:
             since=until - timedelta(days=RANGES.get(span or "90d", 90)), until=until, **narrow
         )
 
+    def to_the_hour(self) -> InsightFilters:
+        """The same window ending at the next whole hour (same length).
+
+        For authored history only: every record is in the past, so the window
+        still holds every record up to now, and repeated reads within the hour
+        share one cache entry.
+        """
+        end = self.until.replace(minute=0, second=0, microsecond=0)
+        if end < self.until:
+            end += timedelta(hours=1)
+        shift = end - self.until
+        return InsightFilters(
+            since=None if self.since is None else self.since + shift,
+            until=end,
+            person=self.person,
+            team=self.team,
+            outcome=self.outcome,
+            language=self.language,
+        )
+
     def previous(self) -> InsightFilters | None:
         if self.since is None:
             return None
@@ -771,6 +791,7 @@ class OrganisationInsights:
         source = await self.source()
         if source != "synthetic":
             return {**await self._overview(filters, now=now), "pending": await self.pending()}
+        filters = filters.to_the_hour()
         count, projected = (
             await self.database.execute(
                 select(func.count(), func.max(ConversationInsightCall.projected_at)).where(

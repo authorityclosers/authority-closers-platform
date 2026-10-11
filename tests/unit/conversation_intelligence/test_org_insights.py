@@ -140,3 +140,13 @@ def test_route_filters_validate_and_use_whole_india_days() -> None:
             outcome=None,
             **{**kwargs, "start": date(2026, 10, 3), "end": date(2026, 10, 1)},
         )
+
+
+def test_authored_history_windows_end_on_the_hour_for_one_cache_entry() -> None:
+    a = InsightFilters.window(NOW.replace(minute=7), span="30d").to_the_hour()
+    b = InsightFilters.window(NOW.replace(minute=52, second=9), span="30d").to_the_hour()
+    assert a == b
+    assert a.until == NOW.replace(hour=NOW.hour + 1, minute=0)
+    assert a.since is not None and a.until - a.since == timedelta(days=30)
+    exact = InsightFilters.window(NOW, span="all").to_the_hour()
+    assert exact.until == NOW and exact.since is None
