@@ -691,7 +691,8 @@
     border: 0;
     background: none;
   }
-  .play svg {
+  .play svg,
+  .playWord {
     display: none;
   }
   .pillar,

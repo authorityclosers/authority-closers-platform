@@ -78,7 +78,8 @@ function Play({
   if (!onSelect)
     return (
       <span className={styles.time}>
-        {at} · {COMMON.play}
+        {at}
+        <span className={styles.playWord}> · {COMMON.play}</span>
       </span>
     );
   return (
@@ -92,7 +93,17 @@ function Play({
           onClick={() => onSelect(clip.source, title)}
         >
           <ClipPlayIcon playing={playing} size={9} />
-          {range ? `${COMMON.play} ${at}` : `${at} · ${COMMON.play}`}
+          {range ? (
+            <>
+              <span className={styles.playWord}>{COMMON.play} </span>
+              {at}
+            </>
+          ) : (
+            <>
+              {at}
+              <span className={styles.playWord}> · {COMMON.play}</span>
+            </>
+          )}
         </button>
       )}
     </ClipPlayState>
