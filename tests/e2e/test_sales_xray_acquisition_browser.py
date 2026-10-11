@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import re
 import secrets
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -924,6 +926,51 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         path=str(receipt / "account-library-report-playback.png"), full_page=True
                     )
                     assert broker.calls == 3
+                    # A person records the call's outcome: saved through the real
+                    # API into the disposable database, then read back after a
+                    # full reload by the Report, the Document view and Word file.
+                    await library_page.get_by_role("button", name="Report view", exact=True).click()
+                    picture = library_page.locator('[data-report-pillar="overview"]')
+                    lost = picture.get_by_role("button", name="Lost", exact=True)
+                    await expect(lost).to_be_visible(timeout=20000)
+                    await lost.click()
+                    await picture.get_by_label("Why was it lost?").fill("Chose another program.")
+                    async with library_page.expect_response(
+                        lambda response: (
+                            response.url.endswith("/outcome") and response.request.method == "PUT"
+                        )
+                    ) as saved_outcome:
+                        await picture.get_by_role("button", name="Save", exact=True).click()
+                    assert (await saved_outcome.value).status == 200
+                    await expect(picture).to_contain_text("Set by your team")
+                    await library_page.reload(wait_until="domcontentloaded")
+                    picture = library_page.locator('[data-report-pillar="overview"]')
+                    await expect(picture).to_contain_text("Chose another program.", timeout=20000)
+                    await expect(picture).to_contain_text("Set by your team")
+                    await expect(
+                        library_page.locator('[data-report-pillar="facts"]')
+                    ).to_contain_text("Set by your team")
+                    await library_page.locator('summary[aria-label="More views"]').click()
+                    await library_page.get_by_role(
+                        "button", name="Document view", exact=True
+                    ).click()
+                    await expect(
+                        library_page.get_by_role("region", name="Report document")
+                    ).to_contain_text("Chose another program.", timeout=20000)
+                    async with library_page.expect_download() as word_file:
+                        await library_page.get_by_role(
+                            "button", name=re.compile("Word")
+                        ).first.click()
+                    word_path = await (await word_file.value).path()
+
+                    def word_document_xml() -> str:
+                        with zipfile.ZipFile(io.BytesIO(Path(word_path).read_bytes())) as archive:
+                            return archive.read("word/document.xml").decode("utf-8")
+
+                    word_body = await asyncio.to_thread(word_document_xml)
+                    assert "Chose another program." in word_body
+                    assert "Set by your team" in word_body
+                    journey_checks["outcome_persisted_report_document_word"] = True
                     report_actions = library_page.get_by_role(
                         "region", name="Sales call report", exact=True
                     ).get_by_role("group", name="Report actions", exact=True)
