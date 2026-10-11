@@ -436,6 +436,11 @@
     min-height: 44px;
   }
 
+  /* Review's 44 px tap area takes 20 px of the line: every tile keeps it. */
+  .kpiContext {
+    min-height: 20px;
+  }
+
   /* A 44 px tap area that keeps the line height of the text around it. */
   .textLink {
     display: inline-flex;

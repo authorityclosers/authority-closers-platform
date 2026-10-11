@@ -259,8 +259,9 @@ export function DayBarsSkeleton() {
             </span>
           ))}
         </div>
+        {/* A line of date labels' height, as in the loaded chart. */}
         <ol className={styles.dates}>
-          <li />
+          <li>{"\u00a0"}</li>
         </ol>
       </div>
     </div>

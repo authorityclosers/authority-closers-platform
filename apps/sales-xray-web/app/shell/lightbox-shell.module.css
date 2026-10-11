@@ -1184,7 +1184,7 @@
   overflow-x: hidden;
 }
 
-/* Compact, modern title in a slimmer top bar; the page name glides in. */
+/* Compact, modern title in a slimmer top bar. */
 .topBar {
   height: 48px;
 }
@@ -1209,28 +1209,12 @@
   white-space: nowrap;
 }
 
+/* No entrance motion: loading screens and pages each mount the bar, and a
+   title that glides in twice reads as a glitch (owner, 11 Oct). */
 .titleText {
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.01em;
-  animation: title-in 360ms var(--lx-ease-move) both;
-}
-
-@keyframes title-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .titleText {
-    animation: none;
-  }
 }
 
 /* Session still loading: soft placeholders instead of guest labels. The
