@@ -311,6 +311,11 @@ a.tile:hover {
   letter-spacing: -0.02em;
 }
 
+.tileValue[data-words] {
+  font: var(--sx-text-panel);
+  letter-spacing: 0;
+}
+
 .tileValue small {
   margin-left: 3px;
   color: var(--sx-muted);
