@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { PageHeader, Segmented } from "../../ui/kit";
 import { CallCoachingStory } from "../../coaching/call-coaching";
 import { parseCoaching } from "../../coaching/coaching-client";
@@ -15,6 +15,8 @@ import acSandbox from "./sandbox-team.json";
 type View = "call" | "me" | "team";
 type Data = "review" | "sandbox";
 
+const noSubscription = () => () => {};
+
 /** Keep the chosen level in the address, so a reload or a link opens it. */
 function remember(key: "view" | "data", value: string) {
   const url = new URL(window.location.href);
@@ -28,15 +30,21 @@ function remember(key: "view" | "data", value: string) {
  * synthetic-v1 calls by the server's sandbox adapter (60 fictional reps).
  */
 export function CoachingFixture() {
-  const [view, setView] = useState<View>("call");
-  const [data, setData] = useState<Data>("review");
-  // ?view=me|team and ?data=sandbox, read once after the first render.
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const wanted = query.get("view");
-    if (wanted === "me" || wanted === "team") setView(wanted);
-    if (query.get("data") === "sandbox") setData("sandbox");
-  }, []);
+  // ?view=me|team and ?data=sandbox open a level; a tap then takes over.
+  const query = new URLSearchParams(
+    useSyncExternalStore(
+      noSubscription,
+      () => window.location.search,
+      () => "",
+    ),
+  );
+  const linked = query.get("view");
+  const [chosenView, setView] = useState<View | null>(null);
+  const [chosenData, setData] = useState<Data | null>(null);
+  const view: View =
+    chosenView ?? (linked === "me" || linked === "team" ? linked : "call");
+  const data: Data =
+    chosenData ?? (query.get("data") === "sandbox" ? "sandbox" : "review");
   const set = data === "sandbox" ? acSandbox : sandbox;
   const call = parseCallCoaching(set.call, set.call.submission_id);
   const me = parseCoaching(data === "sandbox" ? acSandbox.rep : sandbox.me);

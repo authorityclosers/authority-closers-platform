@@ -68,7 +68,9 @@ describe("Coaching review fixture", () => {
       (button) => button.textContent === "Team",
     );
     await act(async () => team?.click());
-    expect(new URLSearchParams(window.location.search).get("view")).toBe("team");
+    expect(new URLSearchParams(window.location.search).get("view")).toBe(
+      "team",
+    );
     expect(pressed()).toContain("Team");
     await act(async () => root.unmount());
     host.remove();
