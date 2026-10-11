@@ -25,6 +25,7 @@ import {
   InferredTag,
   MetricRow,
   MomentCard,
+  OUTCOME_TONE,
   OutcomeBadge,
   PillarHeading,
   PlayChip,
@@ -522,7 +523,9 @@ export function VisualsGallery() {
             {
               label: "Call outcome",
               value: deal.outcome.status ?? "Not recorded",
-              tone: "warn",
+              tone: deal.outcome.status
+                ? (OUTCOME_TONE[deal.outcome.status] ?? "neutral")
+                : "neutral",
             },
             { label: "Strongest part", value: model.worked[0]?.title ?? "—" },
             { label: "Biggest issue", value: model.didnt[0]?.title ?? "—" },

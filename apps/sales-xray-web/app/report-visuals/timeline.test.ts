@@ -8,6 +8,7 @@ import {
   shares,
   speechFromTranscript,
   splitPair,
+  voiceBars,
 } from "./timeline";
 
 const segment = (
@@ -105,4 +106,15 @@ it("places times and splits figures honestly", () => {
   expect(splitPair("62 : 38")).toEqual([62, 38]);
   expect(splitPair("17:8")).toEqual([17, 8]);
   expect(splitPair("25:08 min")).toBeNull();
+});
+
+it("shapes who talked by how loud the call was, when that was measured", () => {
+  expect(voiceBars([1, 0.5, 0], [0, 0.5, 1])).toEqual({
+    top: [1, 0.5, 0],
+    bottom: [0, 0.5, 1],
+  });
+  const shaped = voiceBars([1, 1, 0], [0, 0, 1], [0.5, null, 0.02]);
+  expect(shaped.top).toEqual([0.5, 1, 0]);
+  // A very quiet stretch with talk still shows a small bar.
+  expect(shaped.bottom).toEqual([0, 0, 0.12]);
 });

@@ -51,6 +51,7 @@ import {
   cleanPhases,
   positionIn,
   shares,
+  voiceBars,
   type Speech,
   type TimelinePhase,
 } from "./timeline";
@@ -538,7 +539,10 @@ export function CallTimeline({
   durationMs: number;
   /** Measured talk of the two people (see speechFromTranscript). */
   speech?: Speech | null;
-  /** The server's sound envelope, used when there is no speech data. */
+  /**
+   * The server's sound envelope: shapes the speech bars when both exist, and
+   * draws the call alone when there is no speech data.
+   */
   envelope?: WaveformEnvelope | null;
   phases?: TimelinePhase[] | null;
   moments?: TimelineMoment[];
@@ -598,21 +602,25 @@ export function CallTimeline({
           const inside = (atMs: number) =>
             atMs >= block.start_ms && (atMs < block.end_ms || last);
           const count = bars[index] ?? 3;
-          const top =
+          const levels = envelope
+            ? waveformBins(envelope, block.start_ms, block.end_ms, count)
+            : null;
+          const { top, bottom } =
             mode === "speech" && speech
-              ? activityBins(speech.top, block.start_ms, block.end_ms, count)
-              : mode === "level" && envelope
-                ? waveformBins(
-                    envelope,
+              ? voiceBars(
+                  activityBins(speech.top, block.start_ms, block.end_ms, count),
+                  activityBins(
+                    speech.bottom,
                     block.start_ms,
                     block.end_ms,
                     count,
-                  ).map((level) => level ?? 0)
-                : [];
-          const bottom =
-            mode === "speech" && speech
-              ? activityBins(speech.bottom, block.start_ms, block.end_ms, count)
-              : top;
+                  ),
+                  levels,
+                )
+              : {
+                  top: (levels ?? []).map((level) => level ?? 0),
+                  bottom: (levels ?? []).map((level) => level ?? 0),
+                };
           const pins = moments.filter((moment) => inside(moment.at_ms));
           const at = (ms: number) =>
             `${positionIn(ms, block.start_ms, block.end_ms) * 100}%`;

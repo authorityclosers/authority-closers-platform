@@ -153,3 +153,23 @@ export function splitPair(value: string): [number, number] | null {
   const match = /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(value);
   return match ? [Number(match[1]), Number(match[2])] : null;
 }
+
+/**
+ * Bar heights (0-1) above and below the line for one stretch: who talked
+ * (activity) shaped by how loud the call was there (the measured envelope,
+ * when the server has one). Without an envelope the activity alone.
+ */
+export function voiceBars(
+  top: number[],
+  bottom: number[],
+  levels?: (number | null)[] | null,
+): { top: number[]; bottom: number[] } {
+  const shape = (activity: number[]) =>
+    activity.map((share, index) => {
+      if (!(share > 0)) return 0;
+      const level = levels?.[index];
+      if (level == null) return share;
+      return Math.max(0.12, level) * Math.min(1, share * 1.25);
+    });
+  return { top: shape(top), bottom: shape(bottom) };
+}
