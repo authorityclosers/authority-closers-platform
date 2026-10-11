@@ -2,13 +2,14 @@
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from ac_platform.coaching.sandbox import (
     FICTIONAL,
+    SandboxIndex,
     call_uuid,
     call_view,
     index_call,
@@ -189,6 +190,50 @@ def test_call_view_carries_the_authored_coaching_bound_to_its_fictional_call() -
     # Text bundles have estimated timing: no audio is ever claimed.
     assert not any(moment.playable for moment in view.evidence)
     assert FICTIONAL in view.limitations
+
+
+def test_the_dev_loaders_call_and_member_ids_open_the_same_authored_coaching() -> None:
+    # Strike C's dev loader writes real calls and members under its own ids
+    # (scripts/dev/load-sales-xray-sandbox.py `identifier`); its fixture values.
+    tenant = UUID("90ec1979-0d85-4829-ba8d-cabde2a9a9d3")
+    canonical_call = UUID("fc52d93e-36bd-50cb-b575-92bbb599d99e")
+    canonical_rep = UUID("eb76f836-0b6b-59aa-b5e6-d80e9490a834")
+    bundle = sandbox_bundle("syn-fixture-call-1")
+    call = index_call(
+        key="syn-fixture-call-1",
+        occurred_at=datetime.fromisoformat(bundle["metadata"]["at"]),
+        payload_sha256="a" * 64,
+        metadata=bundle["metadata"],
+        participants=bundle["transcript"]["participants"],
+        focus=bundle["coaching"]["current_focus"],
+        tenant_id=tenant,
+    )
+    assert call is not None
+    assert call.submission_id == UUID("1913fb70-19f3-5576-888c-bef54be66192")
+    index = SandboxIndex((call,))
+    legacy = call_view(index.call(call.submission_id), bundle, person_id=VIEWER, tenant_id=tenant)
+    found = index.call(canonical_call)
+    assert found is not None and found.loaded
+    loaded = call_view(found, bundle, person_id=VIEWER, tenant_id=tenant)
+    # The same authored focus, mission and quotes, with timing and text-only status kept.
+    assert loaded.focus == legacy.focus and loaded.lesson and legacy.lesson
+    assert loaded.mission and legacy.mission
+    assert loaded.mission.behavior == legacy.mission.behavior
+    assert [(m.quote, m.start_ms, m.end_ms, m.playable) for m in loaded.evidence] == [
+        (m.quote, m.start_ms, m.end_ms, m.playable) for m in legacy.evidence
+    ]
+    # Every id in the view is the loader's, so the web's identity checks hold.
+    assert loaded.submission_id == canonical_call
+    assert loaded.mission.origin_submission_id == canonical_call
+    assert {m.submission_id for m in loaded.evidence} == {canonical_call}
+    assert loaded.rep_person_id == canonical_rep
+    assert legacy.rep_person_id == UUID("59ae4eb5-75bc-5264-ba66-d4d4f66f14d0")
+    # The loader's member id opens the rep, with calls linked by the loader's ids.
+    assert index.rep_calls(tenant, canonical_rep)[0].submission_id == canonical_call
+    assert index.rep_calls(tenant, legacy.rep_person_id)[0].submission_id == call.submission_id
+    assert index.call(uuid4()) is None and index.rep_calls(tenant, uuid4()) == ()
+    # Another tenant's ids never match.
+    assert index.call(call_uuid(uuid4(), "syn-fixture-call-1")) is None
 
 
 def test_incomplete_authored_coaching_is_unavailable_never_guessed() -> None:

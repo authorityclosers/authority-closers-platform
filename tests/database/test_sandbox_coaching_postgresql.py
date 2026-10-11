@@ -10,7 +10,7 @@ import httpx
 import pytest
 from sqlalchemy import update
 
-from ac_platform.coaching.sandbox import call_uuid, rep_uuid
+from ac_platform.coaching.sandbox import call_uuid, loaded_uuid, rep_uuid
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
@@ -127,11 +127,24 @@ def test_sandbox_coaching_is_the_importers_fictional_view_only(
                 assert body["state"] == "ready" and body["person_id"] == str(owner)
                 assert body["mission"]["origin_submission_id"] == str(newest)
                 assert not any(moment["playable"] for moment in body["evidence"])
+                # The dev loader's real call and member ids open the same authored coaching.
+                loaded = loaded_uuid(tenant, "submission", "syn-fixture-J03-C-01")
+                loaded_rep = loaded_uuid(tenant, "person", "syn-fixture-R1")
+                same = (await client.get(f"/v1/me/coaching/calls/{loaded}")).json()
+                assert same["submission_id"] == str(loaded) and same["focus"] == body["focus"]
+                assert same["mission"]["origin_submission_id"] == str(loaded)
+                assert [m["quote"] for m in same["evidence"]] == [
+                    m["quote"] for m in body["evidence"]
+                ]
+                assert same["rep_person_id"] == str(loaded_rep)
+                by_member = (await client.get(f"/v1/me/coaching/people/{loaded_rep}")).json()
+                assert by_member["focus"] == view["focus"]
+                assert str(loaded) in {row["submission_id"] for row in by_member["calls"]}
                 # Another admin and a member never read the importer's private coaching.
                 for token in (admin_token, member_token):
                     client.cookies.set(setup.settings.session_cookie_name, token)
-                    assert (await client.get(f"/v1/me/coaching/people/{rep}")).status_code == 404
-                    assert (await client.get(f"/v1/me/coaching/calls/{newest}")).status_code == 404
+                    for path in (f"people/{rep}", f"calls/{newest}", f"calls/{loaded}"):
+                        assert (await client.get(f"/v1/me/coaching/{path}")).status_code == 404
                 client.cookies.set(setup.settings.session_cookie_name, admin_token)
                 assert (await client.get("/v1/me/coaching")).json()["sandbox_reps"] == 0
                 anonymous = (await client.get("/v1/me/coaching/team")).json()

@@ -8,7 +8,7 @@ the dataset did not author makes that call unreadable; it is never guessed.
 """
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, get_args
 from uuid import UUID, uuid5
@@ -66,6 +66,16 @@ def call_uuid(tenant_id: UUID, key: str) -> UUID:
 
 def rep_uuid(tenant_id: UUID, key: str) -> UUID:
     return uuid5(NAMESPACE, f"{tenant_id}:rep:{key}")
+
+
+# The dev loader (scripts/dev/load-sales-xray-sandbox.py) also turns these records
+# into real calls and members under its own ids, so Calls → Report → Coaching
+# arrives with those. Either id opens the same authored coaching.
+LOADER_NAMESPACE = UUID("1dfdfac9-bfa2-49ab-b061-d98776454e0f")
+
+
+def loaded_uuid(tenant_id: UUID, kind: str, key: str) -> UUID:
+    return uuid5(LOADER_NAMESPACE, f"{tenant_id}:{kind}:{key}")
 
 
 def skill_for(value: Any) -> str | None:
@@ -139,6 +149,14 @@ class SandboxCall:
     call_label: str
     skill_id: str | None
     focus_label: str | None
+    # The dev loader's ids for this call and its rep (real call and member rows).
+    loaded_id: UUID
+    loaded_rep_id: UUID
+    # Read through the loader's ids: every id in the view is the loader's.
+    loaded: bool = False
+
+    def as_loaded(self) -> "SandboxCall":
+        return replace(self, submission_id=self.loaded_id, loaded=True)
 
 
 @dataclass(frozen=True)
@@ -146,10 +164,16 @@ class SandboxIndex:
     calls: tuple[SandboxCall, ...]  # newest first
 
     def call(self, submission_id: UUID) -> SandboxCall | None:
-        return next((c for c in self.calls if c.submission_id == submission_id), None)
+        for call in self.calls:
+            if call.submission_id == submission_id:
+                return call
+            if call.loaded_id == submission_id:
+                return call.as_loaded()
+        return None
 
     def rep_calls(self, tenant_id: UUID, person_id: UUID) -> tuple[SandboxCall, ...]:
-        return tuple(c for c in self.calls if rep_uuid(tenant_id, c.rep_key) == person_id)
+        legacy = tuple(c for c in self.calls if rep_uuid(tenant_id, c.rep_key) == person_id)
+        return legacy or tuple(c.as_loaded() for c in self.calls if c.loaded_rep_id == person_id)
 
 
 def _names(participants: Any) -> dict[str, tuple[str, str]]:
@@ -200,6 +224,8 @@ def index_call(
         call_label=label[:256],
         skill_id=skill_for(current.get("skill_id")),
         focus_label=_text(current.get("label"), 240),
+        loaded_id=loaded_uuid(tenant_id, "submission", key),
+        loaded_rep_id=loaded_uuid(tenant_id, "person", rep_key),
     )
 
 
@@ -371,7 +397,7 @@ def call_view(
         report_revision=call.payload_sha256,
         call_label=call.call_label,
         sandbox=True,
-        rep_person_id=rep_uuid(tenant_id, call.rep_key),
+        rep_person_id=call.loaded_rep_id if call.loaded else rep_uuid(tenant_id, call.rep_key),
         rep_name=call.rep_name[:120],
     )
     parts = authored(call, payload)
