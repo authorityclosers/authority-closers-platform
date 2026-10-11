@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded checks for a clean, locally available PR commit, without installs."""
+"""Run bounded checks for a clean, locally available workbench commit, without installs."""
 
 from __future__ import annotations
 
@@ -633,7 +633,7 @@ def run_check(check: Check, seconds: float, cpu_remaining: float) -> dict[str, A
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
-    parser.add_argument("--commit", required=True)
+    parser.add_argument("--commit", default="HEAD", help="Local commit to check (default: HEAD)")
     parser.add_argument("--base", default="origin/main")
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--test-file-cap", type=int, default=12)
@@ -728,6 +728,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"ac-ci/fast {receipt['status']} | {len(receipt.get('changed_files', []))} changed files | "
         f"{receipt['wall_seconds']:.1f}s wall / {receipt['cpu_seconds']:.1f}s process CPU"
     )
+    if receipt.get("reason"):
+        print(f"  reason: {receipt['reason']}")
     for result in receipt["checks"]:
         print(f"  {result['status']:16} {result['name']}")
     if receipt.get("omitted_pytest"):

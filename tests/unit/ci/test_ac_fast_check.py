@@ -300,6 +300,29 @@ def test_noop_receipt_attests_exact_clean_commit(repository: Path, tmp_path: Pat
     assert data["changed_files"] == data["checks"] == []
 
 
+@pytest.mark.parametrize("dirty", [False, True])
+def test_workbench_default_head_and_actionable_refusal(
+    repository: Path,
+    tmp_path: Path,
+    dirty: bool,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sha = git(repository, "rev-parse", "HEAD")
+    if dirty:
+        write(repository, "README.md", "builder has uncommitted edits\n")
+    receipt = tmp_path.parent / (tmp_path.name + "-workbench.json")
+    exit_code = FAST.main(["--root", str(repository), "--base", "HEAD", "--receipt", str(receipt)])
+    data = json.loads(receipt.read_text())
+    assert data["commit"] == sha
+    assert data["checks"] == []
+    if dirty:
+        assert exit_code == 1 and data["status"] == "unavailable"
+        assert "reason: The requested commit needs a clean checkout" in capsys.readouterr().out
+    else:
+        assert exit_code == 0 and data["status"] == "passed"
+        assert data["changed_files"] == []
+
+
 @pytest.mark.parametrize("target", ["new", "tracked", "symlink"])
 def test_receipt_cannot_write_into_checked_source(repository: Path, target: str) -> None:
     original = (repository / "README.md").read_bytes()
