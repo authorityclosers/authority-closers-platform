@@ -161,5 +161,10 @@ def test_analysis_health_counts_the_fixture_analysis(review_case: ReviewCase) ->
             assert health["cost"]["basis"] == "admin_pricing_estimate_not_settlement"
             for item in health["failed"]:
                 assert " " not in item["code"]
+            # Versions come only from steps linked to a processing plan; the fixture
+            # analyses through direct quotes, so only the invariants are checked here.
+            assert isinstance(health["versions"], list)
+            for row in health["versions"]:
+                assert row["completed"] + row["in_flight"] <= row["analyses"]
 
     run(exercise())

@@ -90,3 +90,8 @@
   font-family: var(--lx-font-mono);
   font-size: var(--sx-text-xs);
 }
+
+.aside {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

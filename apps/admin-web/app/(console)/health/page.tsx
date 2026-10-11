@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Layers } from "lucide-react";
 
 import { when } from "@/app/calls/call-data";
 import {
@@ -219,6 +219,75 @@ export default async function HealthPage({
               <Empty
                 icon={CheckCircle2}
                 title="No failed jobs in this window"
+              />
+            )}
+          </Panel>
+
+          <Panel
+            title="By prompt version"
+            sub="analyses in this window, by coaching prompt and Report model"
+            tools={
+              <Why detail="Operations only: how many finished, failed or are still running, how long the Report step took and the estimated cost per minute. It says nothing about report quality; that is the gold set's job." />
+            }
+          >
+            {health.versions.length ? (
+              <Table label="By prompt version">
+                <thead>
+                  <tr>
+                    <th scope="col">Prompt</th>
+                    <th scope="col">Report model</th>
+                    <th scope="col" data-num="">
+                      Analyses
+                    </th>
+                    <th scope="col" data-num="">
+                      Finished
+                    </th>
+                    <th scope="col" data-num="">
+                      Running
+                    </th>
+                    <th scope="col" data-num="">
+                      Failed steps
+                    </th>
+                    <th scope="col" data-num="">
+                      Report step
+                    </th>
+                    <th scope="col" data-num="">
+                      Cost / min
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {health.versions.map((row) => (
+                    <tr
+                      key={`${row.promptRevision}|${row.provider}|${row.model}`}
+                    >
+                      <th scope="row" className={styles.code}>
+                        {row.promptRevision ?? "Not recorded"}
+                      </th>
+                      <td>{row.model ?? row.provider ?? "Not recorded"}</td>
+                      <td data-num="">{row.analyses}</td>
+                      <td data-num="">{row.completed}</td>
+                      <td data-num="">{row.inFlight}</td>
+                      <td data-num="">
+                        {row.failedSteps}
+                        {row.retriedSteps ? (
+                          <small className={styles.aside}>
+                            {" "}
+                            · {row.retriedSteps} retried
+                          </small>
+                        ) : null}
+                      </td>
+                      <td data-num="">{span(row.reportP50)}</td>
+                      <td data-num="">{rupees(row.paisePerMinute)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <Empty
+                icon={Layers}
+                title="No planned analyses in this window"
+                text="Rows appear for analyses that ran under a processing plan, grouped by the prompt and model the plan recorded."
               />
             )}
           </Panel>

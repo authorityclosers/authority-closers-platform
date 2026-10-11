@@ -40,6 +40,20 @@ export type FailedJob = {
   failedAt: string | null;
   retryable: boolean;
 };
+/** Analyses per prompt version and Report model: operations only, never quality. */
+export type Version = {
+  promptRevision: string | null;
+  provider: string | null;
+  model: string | null;
+  analyses: number;
+  completed: number;
+  inFlight: number;
+  failedSteps: number;
+  retriedSteps: number;
+  reportP50: number | null;
+  pricedMinutes: number;
+  paisePerMinute: number | null;
+};
 export type Health = {
   days: number;
   truncated: boolean;
@@ -72,6 +86,7 @@ export type Health = {
     unpriced: number;
   };
   daily: { day: string; analysed: number; failed: number }[];
+  versions: Version[];
 };
 
 const counts = (raw: unknown) => {
@@ -176,6 +191,22 @@ export function normalizeHealth(raw: unknown): Health {
         day: read.string(row.day),
         analysed: read.number(row.analysed),
         failed: read.number(row.failed),
+      };
+    }),
+    versions: read.array(body.versions).map((item) => {
+      const row = read.object(item);
+      return {
+        promptRevision: read.optionalString(row.prompt_revision),
+        provider: read.optionalString(row.provider),
+        model: read.optionalString(row.model),
+        analyses: read.number(row.analyses),
+        completed: read.number(row.completed),
+        inFlight: read.number(row.in_flight),
+        failedSteps: read.number(row.failed_steps),
+        retriedSteps: read.number(row.retried_steps),
+        reportP50: read.optionalNumber(row.report_p50_ms),
+        pricedMinutes: read.number(row.priced_minutes),
+        paisePerMinute: read.optionalNumber(row.paise_per_minute),
       };
     }),
   };

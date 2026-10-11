@@ -63,6 +63,48 @@ describe("analysis health data", () => {
     expect(normalizeHealth(undefined).daily).toEqual([]);
   });
 
+  it("reads prompt versions with defaults, and none when the field is missing", () => {
+    expect(normalizeHealth({}).versions).toEqual([]);
+    const [row, bare] = normalizeHealth({
+      versions: [
+        {
+          prompt_revision: "coaching-v5",
+          provider: "google",
+          model: "gemini-3.8-pro",
+          analyses: 4,
+          completed: 3,
+          in_flight: 1,
+          failed_steps: 1,
+          retried_steps: 2,
+          report_p50_ms: 40_000,
+          priced_minutes: 12.5,
+          paise_per_minute: 125,
+        },
+        {},
+      ],
+    }).versions;
+    expect(row).toEqual({
+      promptRevision: "coaching-v5",
+      provider: "google",
+      model: "gemini-3.8-pro",
+      analyses: 4,
+      completed: 3,
+      inFlight: 1,
+      failedSteps: 1,
+      retriedSteps: 2,
+      reportP50: 40_000,
+      pricedMinutes: 12.5,
+      paisePerMinute: 125,
+    });
+    expect(bare).toMatchObject({
+      promptRevision: null,
+      model: null,
+      analyses: 0,
+      reportP50: null,
+      paisePerMinute: null,
+    });
+  });
+
   it("formats money in rupees and time in plain units", () => {
     expect(rupees(125)).toBe("₹1.25");
     expect(rupees(null)).toBe("–");
