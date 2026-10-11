@@ -209,10 +209,6 @@ def summarize_team(
             "A rep appears by name, with their current focus, only after they share. "
             "They can stop at any time, and any change to their membership ends it.",
             "Owners and admins of the organisation see these totals.",
-            *(
-                ("Only the team's 40 most recent calls are included.",)
-                if history_limited
-                else ()
-            ),
+            *(("Only the team's 40 most recent calls are included.",) if history_limited else ()),
         ),
     )
