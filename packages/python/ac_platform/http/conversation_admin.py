@@ -45,6 +45,7 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+from ac_platform.http.conversation_call_review import install_call_review_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 
@@ -420,4 +421,13 @@ def install_conversation_admin_http(
             except ConversationError as error:
                 raise HTTPException(error.status, str(error)) from None
 
+    # The call review console (AUT-1798) reads the same served recordings and
+    # streams their audio from the hosted composition's private storage.
+    install_call_review_routes(
+        router,
+        settings=settings,
+        require_actor=require_actor,
+        recording_tenant_ids=recording_tenant_ids,
+        storage=recovery_storage,
+    )
     app.include_router(router)

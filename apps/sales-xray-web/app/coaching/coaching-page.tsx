@@ -7,21 +7,30 @@ import { useEffect, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { OperationalEmpty, OperationalPanel } from "../ui/operational-panel";
+import { PageHeader } from "../ui/kit";
 import { StandaloneStudio } from "../standalone-studio";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
-  CoachingReadError,
-  fetchCoaching,
   MASTERY_STATES,
   type Coaching,
   type MasteryState,
 } from "./coaching-client";
+import { CallCoachingStory } from "./call-coaching";
+import {
+  isCallCoaching,
+  isTeamCoaching,
+  readCoaching,
+  requestedCall,
+  type CoachingResult,
+} from "./coaching-read";
+import { TeamCoachingStory } from "./team-coaching";
 import { EvidencePlayer } from "./evidence-player";
 import {
   requestedSkill,
   requestedSkillLabel,
   type RequestedSkill,
 } from "./focus-request";
+import { CoachingMedia } from "./media-player";
 import styles from "./coaching.module.css";
 
 const masteryLabel: Record<MasteryState, string> = {
@@ -102,7 +111,11 @@ export function CoachingStory({
       >
         <div className={styles.meta}>
           <span>One focus</span>
-          <span>{masteryLabel[coaching.mastery.state]}</span>
+          <span>
+            {coaching.mastery.state === "not_enough_evidence"
+              ? "Provisional focus"
+              : masteryLabel[coaching.mastery.state]}
+          </span>
         </div>
         <h3 className={styles.focus}>{focus.label}</h3>
         {requestedFocus && requestedFocus !== focus.skill_id ? (
@@ -168,6 +181,7 @@ export function CoachingStory({
         title="Here’s What Better Looks Like"
         headingLevel="h2"
       >
+        <CoachingMedia clips={coaching.media_clips} />
         <span className={styles.meta}>Recommended text lesson</span>
         <h3>{lesson.title}</h3>
         <p>{lesson.quick_idea}</p>
@@ -355,48 +369,37 @@ export function CoachingStory({
   );
 }
 
-function AccountCoaching({
-  personId,
-  tenantId,
+function CoachingResultBody({
+  result,
+  callId,
   requestedFocus,
+  retry,
 }: {
-  personId: string;
-  tenantId: string;
+  result: CoachingResult | null;
+  callId: string | null;
   requestedFocus?: RequestedSkill;
+  retry: () => void;
 }) {
-  const [coaching, setCoaching] = useState<Coaching | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetchCoaching(controller.signal)
-      .then((view) => {
-        if (controller.signal.aborted) return;
-        if (view.person_id !== personId || view.tenant_id !== tenantId)
-          throw new CoachingReadError("Your workspace changed. Try again.");
-        setCoaching(view);
-        setError(null);
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted)
-          setError(
-            reason instanceof CoachingReadError
-              ? reason.message
-              : "Coaching could not be loaded. Try again.",
-          );
-      });
-    return () => controller.abort();
-  }, [attempt, personId, tenantId]);
+  const data = result?.data;
   return (
     <>
-      {coaching ? (
-        <CoachingStory coaching={coaching} requestedFocus={requestedFocus} />
-      ) : error ? (
+      {data ? (
+        isCallCoaching(data) ? (
+          <CallCoachingStory coaching={data} />
+        ) : isTeamCoaching(data) ? (
+          <TeamCoachingStory coaching={data} />
+        ) : (
+          <CoachingStory coaching={data} requestedFocus={requestedFocus} />
+        )
+      ) : result?.error ? (
         <OperationalEmpty
           title="Coaching is temporarily unavailable"
-          description="Your saved calls remain available."
+          description="Open the call to check its report and analysis status."
           action={
-            <Link href="/analysis/calls" className={styles.button}>
+            <Link
+              href={callId ? `/analysis/calls/${callId}` : "/analysis/calls"}
+              className={styles.button}
+            >
               Open calls
             </Link>
           }
@@ -404,17 +407,10 @@ function AccountCoaching({
       ) : (
         <CoachingSkeleton />
       )}
-      {error ? (
+      {result?.error ? (
         <aside className={styles.error} role="alert">
-          <p>{error}</p>
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => {
-              setError(null);
-              setAttempt((value) => value + 1);
-            }}
-          >
+          <p>{result.error}</p>
+          <button type="button" className={styles.button} onClick={retry}>
             <RefreshCw size={15} aria-hidden="true" />
             Try again
           </button>
@@ -424,38 +420,167 @@ function AccountCoaching({
   );
 }
 
+function AccountCoaching({
+  personId,
+  tenantId,
+  sessionId,
+  requestedFocus,
+  callId,
+  initialResult,
+  invalidCall,
+  team,
+}: {
+  personId: string;
+  tenantId: string;
+  sessionId: string;
+  requestedFocus?: RequestedSkill;
+  callId: string | null;
+  initialResult: CoachingResult | null;
+  invalidCall: boolean;
+  team: boolean;
+}) {
+  const [result, setResult] = useState<CoachingResult | null>(initialResult);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (invalidCall) return;
+    if (attempt === 0 && initialResult !== null) return;
+    const controller = new AbortController();
+    void readCoaching(team ? "team" : callId, {
+      signal: controller.signal,
+    }).then((view) => {
+      if (controller.signal.aborted) return;
+      if (
+        view.data &&
+        (view.data.person_id !== personId ||
+          view.data.tenant_id !== tenantId ||
+          (view.data.session_id != null && view.data.session_id !== sessionId))
+      )
+        setResult({ data: null, error: "Your workspace changed. Try again." });
+      else setResult(view);
+    });
+    return () => controller.abort();
+  }, [
+    attempt,
+    personId,
+    tenantId,
+    sessionId,
+    callId,
+    initialResult,
+    invalidCall,
+    team,
+  ]);
+  return (
+    <CoachingResultBody
+      result={result}
+      callId={callId}
+      requestedFocus={requestedFocus}
+      retry={() => {
+        if (!invalidCall) setResult(null);
+        setAttempt((value) => value + 1);
+      }}
+    />
+  );
+}
+
 export function CoachingPage({
   requestedFocus,
-}: { requestedFocus?: RequestedSkill } = {}) {
+  callId = null,
+  initialResult = null,
+  invalidCall = false,
+  team = false,
+}: {
+  requestedFocus?: RequestedSkill;
+  callId?: string | null;
+  initialResult?: CoachingResult | null;
+  invalidCall?: boolean;
+  team?: boolean;
+} = {}) {
   const access = useWorkspaceAccess();
-  const authenticated = access?.authenticated === true;
-  const ready = access?.status === "ready" && authenticated && access.context;
+  const ready =
+    access?.status === "ready" && access.authenticated && access.context;
+  const scope = ready
+    ? JSON.stringify([ready.personId, ready.tenantId, ready.sessionId])
+    : null;
+  const [seedScope, setSeedScope] = useState<string | null>(scope);
+  if (scope !== null && seedScope === null) setSeedScope(scope);
+  const seed =
+    initialResult &&
+    (!seedScope || seedScope === scope) &&
+    (!ready ||
+      !initialResult.data ||
+      (initialResult.data.person_id === ready.personId &&
+        initialResult.data.tenant_id === ready.tenantId &&
+        (!initialResult.data.session_id ||
+          initialResult.data.session_id === ready.sessionId)))
+      ? initialResult
+      : null;
+  const authenticated =
+    access?.authenticated === true ||
+    ((!access || access.status === "loading") && !!seed?.data);
+  const awaitingAccess = !access || access.status === "loading";
   return (
     <AcquisitionShell
       authenticated={authenticated}
-      loading={!access || access.status === "loading"}
+      loading={awaitingAccess && !seed}
     >
       <div className={styles.root}>
-        <header className={styles.header}>
-          <div>
-            <h1>Coaching</h1>
-            <p>One focus, grounded in your saved calls.</p>
-          </div>
-          <span className={styles.meta}>Provisional</span>
-        </header>
+        <PageHeader
+          title={
+            callId
+              ? "Coaching for this call"
+              : team
+                ? "Team coaching"
+                : "My coaching"
+          }
+          context={[
+            callId
+              ? seed?.data && isCallCoaching(seed.data)
+                ? seed.data.call_label
+                : "One focus from this call’s report."
+              : team
+                ? "Anonymous suggestions from your team’s retained call reports."
+                : "Your pattern, progress and mission across calls.",
+          ]}
+          back={
+            callId
+              ? { href: `/analysis/calls/${callId}`, label: "Back to report" }
+              : undefined
+          }
+          actions={
+            callId ? (
+              <Link className={styles.button} href="/coaching">
+                My coaching
+              </Link>
+            ) : team ? (
+              <Link className={styles.button} href="/coaching">
+                My coaching
+              </Link>
+            ) : (
+              <Link className={styles.button} href="/coaching?view=team">
+                Team coaching
+              </Link>
+            )
+          }
+        />
         {ready ? (
           <AccountCoaching
-            key={JSON.stringify([
-              ready.personId,
-              access?.context?.sessionId,
-              ready.tenantId,
-            ])}
+            key={JSON.stringify([scope, callId, team, seed])}
             personId={ready.personId}
             tenantId={ready.tenantId}
+            sessionId={ready.sessionId}
             requestedFocus={requestedFocus}
+            callId={callId}
+            initialResult={seed}
+            invalidCall={invalidCall}
+            team={team}
           />
-        ) : !access || access.status === "loading" ? (
-          <CoachingSkeleton />
+        ) : awaitingAccess ? (
+          <CoachingResultBody
+            result={seed}
+            callId={callId}
+            requestedFocus={requestedFocus}
+            retry={() => access?.retry()}
+          />
         ) : (
           <OperationalEmpty
             title={
@@ -463,7 +588,7 @@ export function CoachingPage({
                 ? "Sign in for your Coaching"
                 : "Choose your workspace"
             }
-            description="Coaching follows your own retained call history in the selected workspace."
+            description="Coaching follows your own retained calls in the selected workspace."
             action={
               access.authenticated === false ? (
                 <Link href="/login" className={styles.button}>
@@ -478,16 +603,38 @@ export function CoachingPage({
   );
 }
 
-/** New routes use the existing account bootstrap until the shared shell owns them. */
-export function CoachingRoute() {
+/** Static preview and local checks use the same single read; hosted pages arrive with server data. */
+export function CoachingRoute({
+  initialResult = null,
+  initialCallId = null,
+  initialTeam = false,
+}: {
+  initialResult?: CoachingResult | null;
+  initialCallId?: string | null;
+  initialTeam?: boolean;
+} = {}) {
   const access = useWorkspaceAccess();
   const query = useSearchParams();
-  const requestedFocus = requestedSkill(query.get("focus"));
-  return access ? (
-    <CoachingPage requestedFocus={requestedFocus} />
-  ) : (
-    <StandaloneStudio>
-      <CoachingPage requestedFocus={requestedFocus} />
-    </StandaloneStudio>
+  const callId = requestedCall(query.get("call"));
+  const team = !callId && query.get("view") === "team";
+  const invalidCall =
+    query.has("call") && (!callId || query.getAll("call").length !== 1);
+  const seed = invalidCall
+    ? ({
+        data: null,
+        error: "This call link is invalid. Open the call’s report again.",
+      } as const)
+    : callId === initialCallId && team === initialTeam
+      ? initialResult
+      : null;
+  const page = (
+    <CoachingPage
+      callId={callId}
+      initialResult={seed}
+      invalidCall={invalidCall}
+      team={team}
+      requestedFocus={requestedSkill(query.get("focus"))}
+    />
   );
+  return access ? page : <StandaloneStudio>{page}</StandaloneStudio>;
 }
