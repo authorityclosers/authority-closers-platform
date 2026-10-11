@@ -199,6 +199,21 @@ export const BETTER = {
   mission: "Your next-call mission",
 } as const;
 
+/** Dipak's lesson card (spec 3.4 "Media card requirements"). */
+export const MEDIA = {
+  recommended: "Recommended for your current focus",
+  other: "Also relevant",
+  why: "Why this is recommended",
+  takeaways: "Read key takeaways",
+  kind: (video: boolean) => (video ? "video lesson" : "audio lesson"),
+  byline: "Dipak’s script",
+  voice: "stand-in voice",
+  freePreview: "Free preview",
+  locked: "Full coaching",
+  narrationNote:
+    "Read by a stand-in voice; the words are Dipak’s script. Listening doesn’t complete your mission.",
+} as const;
+
 export const NEXT = {
   mission: "Your next-call mission",
   since: (date: string) => `Active since ${date}`,

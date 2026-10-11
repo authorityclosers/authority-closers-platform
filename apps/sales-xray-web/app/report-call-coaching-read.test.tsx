@@ -126,7 +126,7 @@ it("renders reviewed examples from the call read without eager audio and keeps t
   const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   await render();
-  expect(container.textContent).toContain("Placeholder · neutral narration");
+  expect(container.textContent).toContain("Read by a stand-in voice");
   expect(container.querySelector("audio")).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(1);
   const button = (label: string) =>

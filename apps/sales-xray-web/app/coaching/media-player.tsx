@@ -15,6 +15,7 @@ import {
   FULL_COACHING_HREF,
   type CoachingClip,
 } from "./media-contract";
+import { MEDIA } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
 
@@ -275,18 +276,20 @@ function ClipCard({
         </button>
         <div className={styles.clipTitle}>
           <span className={styles.eyebrow}>
-            {recommended ? "Recommended for your focus" : "Also relevant"}
+            {recommended ? MEDIA.recommended : MEDIA.other}
           </span>
           <h3>{clip.title}</h3>
           <span className={styles.note}>
-            Dipak’s script · {clip.kind === "video" ? "video" : "audio"} lesson
-            · placeholder voice · {timeLabel(length)}
+            {MEDIA.byline} · {MEDIA.kind(clip.kind === "video")} · {MEDIA.voice}{" "}
+            · {timeLabel(length)}
           </span>
         </div>
         {clip.access === "preview" && preview ? (
-          <Badge tone="accent">Free preview · {timeLabel(preview)}</Badge>
+          <Badge tone="accent">
+            {MEDIA.freePreview} · {timeLabel(preview)}
+          </Badge>
         ) : locked ? (
-          <Badge>Full coaching</Badge>
+          <Badge>{MEDIA.locked}</Badge>
         ) : null}
       </div>
       {locked ? null : (
@@ -326,7 +329,7 @@ function ClipCard({
       ) : (
         <>
           <p>
-            <span className={styles.label}>Why this fits your focus</span>
+            <span className={styles.label}>{MEDIA.why}</span>
             {clip.reason}
           </p>
           <ul className={styles.takeaways}>
@@ -346,7 +349,7 @@ function ClipCard({
       ) : null}
       {locked ? null : (
         <details className={styles.more}>
-          <summary>Read this clip</summary>
+          <summary>{MEDIA.takeaways}</summary>
           <div className={styles.moreBody}>
             {currentSlide ? (
               <div className={styles.slide} aria-live="polite">
@@ -380,10 +383,7 @@ function ClipCard({
               </div>
             ) : null}
             <p>{clip.transcript_excerpt}</p>
-            <p className={styles.note}>
-              Placeholder · neutral narration of Dipak’s script. Listening does
-              not complete your mission.
-            </p>
+            <p className={styles.note}>{MEDIA.narrationNote}</p>
           </div>
         </details>
       )}
