@@ -1,5 +1,34 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Retained print-capture classification — bounded continuation
+
+**Capture geometry mismatch confirmed; PDF appearance unverified.** The original
+and latest phone/light PNGs are byte-identical. Reopened both and the dark-phone
+comparison: phone/light executive-summary glyphs reach the right capture edge;
+dark text wraps within the inset paper. The latest retained geometry puts
+8.0609130859375 CSS px of the sheet beyond the visual viewport (sheet right794,
+visual right785.9390869140625). Its PNG is793×1122, against requested794×1123;
+the other three PNGs are794×1123. CSS viewport units and PNG pixel dimensions
+are separate measurements, so the one-pixel size difference alone does not
+explain the clipping.
+
+This finishes the coordinator's bounded classification using retained artifacts.
+It preserves the existing8/8 machine PASS and the screenshot finding. The test
+uses a print-media page screenshot before generating the PDF; that image is not
+a raster render of the PDF. No visual-viewport scale, individual glyph bounds
+or geometry at screenshot time was retained, so the exact cause remains
+unproved. Original and latest PDFs have different hashes; G's11-page text-only
+check applies to the original PDF and cannot establish the newer PDF's pixels.
+No full visual print PASS, product CSS repair or release-wide hold is inferred.
+
+Classification receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-print-capture-classification/classification.json`
+SHA-256 `0fbb19cb79fdb61d8c32bb069654980dd3b219132ff1f123c5c51a239490d133`.
+Reconciled source75fcbdad/journeyf17c5ee4, JUnit8/0fail/0error/0skip,
+launcher/pytest exit0, all four geometry/PNG hashes and eight retained input
+pins. No new browser run, app request, install, product edit or data change.
+Hosted populated smoke and Root1855 acceptance remain separate and pending.
+
 Current QA receipt — 23:44:55–23:45:25UTC
 
 **Repaired Document/Word4 PASS + print diagnostic4 PASS**, no skips/errors.
