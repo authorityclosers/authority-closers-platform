@@ -5,10 +5,10 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Allowance, LibrarySubmission } from "../acquisition-client";
+import { Delta, Spark } from "../ui/kit";
 import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
-  analysedTrend,
   isEmptyAccount,
   minutesLeft,
   type CallActivity,
@@ -22,6 +22,7 @@ import {
   DayBarsSkeleton,
   MinutesRing,
   MinutesUsed,
+  ReadyShare,
   StatusSplit,
   StatusSplitSkeleton,
 } from "./dashboard-visuals";
@@ -118,7 +119,8 @@ export function DashboardBody({
     isEmptyAccount(summary, activity, recent);
   const activityAllZero =
     activity !== null && activity.days.every((d) => d.analysed === 0);
-  const trend = activity ? analysedTrend(activity) : null;
+  // The tile's sparkline: the last two weeks of the daily chart, today lit.
+  const lastTwoWeeks = activity?.days.slice(-14).map((day) => day.analysed);
   const label = (teamText: string, ownText: string, width: string) =>
     team === null ? <Ph w={width} /> : team ? teamText : ownText;
 
@@ -143,14 +145,34 @@ export function DashboardBody({
               label={label("Your calls analysed", "Calls analysed", "8em")}
               status={activityState.status}
               value={activity?.analysedLast30Days}
+              delta={
+                activity &&
+                (activity.analysedLast30Days ||
+                  activity.analysedPrevious30Days) ? (
+                  <Delta
+                    value={activity.analysedLast30Days}
+                    previous={activity.analysedPrevious30Days}
+                  />
+                ) : null
+              }
               context={
                 activity === null
                   ? null
-                  : trend
-                    ? trend.text
+                  : activity.analysedPrevious30Days ||
+                      activity.analysedLast30Days
+                    ? `${activity.analysedPrevious30Days} in the 30 days before`
                     : "in the last 30 days"
               }
-              tone={trend?.direction}
+              accessory={
+                lastTwoWeeks ? (
+                  <span className={styles.figureSpark}>
+                    <Spark
+                      values={lastTwoWeeks}
+                      label={`Calls analysed per day, last 14 days: ${lastTwoWeeks.join(", ")}`}
+                    />
+                  </span>
+                ) : null
+              }
             />
             <Figure
               id="metric-reports-ready"
@@ -161,6 +183,11 @@ export function DashboardBody({
                 summary === null
                   ? null
                   : `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+              }
+              accessory={
+                summary && summary.total > 0 ? (
+                  <ReadyShare ready={summary.completed} total={summary.total} />
+                ) : null
               }
             />
             <Figure
@@ -187,7 +214,16 @@ export function DashboardBody({
             />
             <Figure
               id="metric-needs-attention"
-              label="Needs attention"
+              label={
+                summary && summary.needsAttention > 0 ? (
+                  <>
+                    <span className={styles.warnDot} aria-hidden="true" />
+                    Needs attention
+                  </>
+                ) : (
+                  "Needs attention"
+                )
+              }
               status={summaryState.status}
               value={summary?.needsAttention}
               context={
@@ -318,17 +354,19 @@ function Figure({
   label,
   status,
   value,
+  delta,
   context,
   accessory,
-  tone,
 }: {
   id: string;
   label: ReactNode;
   status: "loading" | "ready" | "error";
   value: number | string | null | undefined;
+  /** Change against the period before, beside the value (kit Delta). */
+  delta?: ReactNode;
   context: ReactNode;
+  /** A sparkline, share bar or ring at the row's end. */
   accessory?: ReactNode;
-  tone?: "up" | "down" | "flat";
 }) {
   return (
     <div className={styles.kpi} id={id}>
@@ -341,11 +379,14 @@ function Figure({
         ) : value === null || value === undefined ? (
           <span className={styles.unknown}>Not available yet</span>
         ) : (
-          <b>{value}</b>
+          <span className={styles.valueLine}>
+            <b>{value}</b>
+            {delta}
+          </span>
         )}
         {status === "ready" ? accessory : null}
       </dd>
-      <dd className={styles.kpiContext} data-tone={tone}>
+      <dd className={styles.kpiContext}>
         {status === "loading" ? (
           <i className={styles.skeletonContext} aria-hidden="true" />
         ) : status === "ready" ? (

@@ -73,6 +73,31 @@
   min-height: 32px;
 }
 
+/* The value with its change beside it (kit Delta); the accessory sits at the end. */
+.valueLine {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.figureSpark {
+  display: inline-flex;
+  flex: none;
+  margin-bottom: 4px;
+}
+
+/* Needs attention: a quiet warning dot while something waits. */
+.warnDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--lx-warning);
+  vertical-align: 1px;
+}
+
 .kpi dd b {
   font-size: 24px;
   font-weight: 700;
@@ -95,14 +120,6 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.kpiContext[data-tone="up"] {
-  color: var(--lx-teal);
-}
-
-.kpiContext[data-tone="down"] {
-  color: var(--lx-warning);
 }
 
 .skeletonValue,
@@ -408,6 +425,11 @@
 
   .kpi dd b {
     font-size: 20px;
+  }
+
+  /* Two tiles across: a shorter sparkline beside the value and its change. */
+  .figureSpark :global(span[role="img"]) {
+    width: 48px;
   }
 
   .kpiContext {

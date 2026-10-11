@@ -213,6 +213,20 @@ export function MinutesRing({ allowance }: { allowance: Allowance }) {
   );
 }
 
+/** Share of saved calls with a ready report: a short bar, the tile says the numbers. */
+export function ReadyShare({ ready, total }: { ready: number; total: number }) {
+  const share = total > 0 ? Math.min(1, Math.max(0, ready / total)) : 0;
+  return (
+    <span
+      className={styles.share}
+      role="img"
+      aria-label={`${Math.round(share * 100)}% of saved calls have a ready report`}
+    >
+      <i style={{ width: `${share * 100}%` }} />
+    </span>
+  );
+}
+
 export function MinutesUsed({ allowance }: { allowance: Allowance }) {
   if (allowance.unlimited || allowance.allowance_seconds <= 0) return null;
   const used = Math.max(
