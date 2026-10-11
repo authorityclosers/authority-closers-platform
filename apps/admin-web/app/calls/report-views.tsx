@@ -471,7 +471,8 @@ export function Metrics({
           </div>
         </div>
       ) : null}
-      <table className={styles.metrics}>
+      {/* Scrolls sideways on phones, so it takes keyboard focus. */}
+      <table className={styles.metrics} tabIndex={0} aria-label="Call metrics">
         <thead>
           <tr>
             <th scope="col">Speaker</th>
@@ -635,7 +636,11 @@ export function Runs({
               Only changed fields
             </label>
           </div>
-          <table className={styles.compare} aria-label="Run comparison">
+          <table
+            className={styles.compare}
+            tabIndex={0}
+            aria-label="Run comparison"
+          >
             <thead>
               <tr>
                 <th scope="col">Field</th>

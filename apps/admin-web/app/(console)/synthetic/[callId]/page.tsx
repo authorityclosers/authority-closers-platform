@@ -80,7 +80,8 @@ export default async function SyntheticCallPage({
       </p>
       <div className={styles.grid}>
         <Panel title="Transcript" sub={`${lines.length} lines`}>
-          <ol className={styles.lines}>
+          {/* Scrolls on its own, so it takes keyboard focus. */}
+          <ol className={styles.lines} tabIndex={0} aria-label="Transcript">
             {lines.map((line) => (
               <li key={line.id} data-speaker={line.speaker}>
                 <span>
@@ -99,7 +100,12 @@ export default async function SyntheticCallPage({
           </ol>
         </Panel>
         <Panel title="Answer key" sub="what a correct report would say">
-          <div className={styles.key}>
+          <div
+            className={styles.key}
+            tabIndex={0}
+            role="region"
+            aria-label="Answer key"
+          >
             {report
               ? PILLARS.filter((key) => key in report).map((key, index) => (
                   <section key={key} aria-label={humanKey(key)}>
