@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { AdminShell } from "../components/admin-shell";
 import {
   loadProviderControls,
   type ProviderControlsPayload,
 } from "./provider-controls";
-import { SalesXrayNavigation } from "./sales-xray-navigation";
 import styles from "./benchmark-center.module.css";
 
 type LoadState =
@@ -106,7 +104,6 @@ export function BenchmarkCenterPanel() {
   const current = state.payload.current;
   return (
     <div className={styles.page}>
-      <SalesXrayNavigation active="benchmark" />
       <section className={styles.hero}>
         <span className={styles.eyebrow}>Benchmark / test runs</span>
         <h2>Prepare your first comparison</h2>
@@ -115,10 +112,13 @@ export function BenchmarkCenterPanel() {
           invite reviewers here; run controls are being connected.
         </p>
         <div className={styles.buttonRow}>
-          <Link className="button button-primary" href="/sales-xray/settings">
+          <Link
+            className="button button-primary"
+            href="/sales-xray/providers?tab=providers"
+          >
             Configure providers
           </Link>
-          <Link className="button button-secondary" href="/sales-xray/review">
+          <Link className="button button-secondary" href="/calls">
             Invite reviewers
           </Link>
         </div>
@@ -209,19 +209,5 @@ export function BenchmarkCenterPanel() {
         </section>
       </details>
     </div>
-  );
-}
-
-export function BenchmarkCenter() {
-  return (
-    <AdminShell
-      active="sales-xray"
-      surface="operations"
-      eyebrow="Conversation intelligence / benchmark readiness"
-      title="Benchmark readiness"
-      description="Prepare a comparison by configuring providers and inviting reviewers."
-    >
-      <BenchmarkCenterPanel />
-    </AdminShell>
   );
 }

@@ -13,6 +13,27 @@ const nextConfig: NextConfig = {
     "@ac/sales-xray-review-ui",
   ],
   poweredByHeader: false,
+  // Old admin addresses keep working after the console rebuild (AUT-1798).
+  async redirects() {
+    return [
+      {
+        source: "/sales-xray",
+        destination: "/sales-xray/providers",
+        permanent: false,
+      },
+      {
+        source: "/sales-xray/settings",
+        destination: "/sales-xray/providers?tab=providers",
+        permanent: false,
+      },
+      {
+        source: "/sales-xray/benchmark",
+        destination: "/sales-xray/providers?tab=benchmark",
+        permanent: false,
+      },
+      { source: "/sales-xray/review", destination: "/calls", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

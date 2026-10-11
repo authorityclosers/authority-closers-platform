@@ -240,3 +240,56 @@ async def test_retained_fix_routes_use_the_same_tenant_scope(
         assert response.status_code == (
             201 if run.tenant_id in {PERSONAL, ORGANISATION} else 404
         ), response.text
+
+
+async def test_call_review_routes_pass_filters_and_keep_the_admin_scope(
+    admin_client, monkeypatch
+) -> None:
+    from ac_platform.conversation_intelligence.admin_call_review import AdminCallReview
+
+    client, database = admin_client
+    seen: dict[str, Any] = {}
+
+    async def queue(service, actor, **filters):
+        seen.update(filters, scope=service.recording_tenant_ids)
+        return {"items": [], "total": 0}
+
+    monkeypatch.setattr(AdminCallReview, "queue", queue)
+    response = await client.get(
+        "/v1/admin/conversation/calls",
+        params={
+            "organisation": str(ORGANISATION),
+            "status": "ready",
+            "language": "hi-Deva+en",
+            "since": "2026-10-01",
+            "until": "2026-10-10",
+            "limit": "20",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store"
+    assert seen["organisation"] == ORGANISATION
+    assert seen["status"] == "ready" and seen["limit"] == 20
+    assert str(seen["since"]) == "2026-10-01"
+    assert set(seen["scope"]) == {PERSONAL, ORGANISATION}
+
+    for params in ({"bogus": "1"}, {"status": "weird"}, {"language": "fr"}):
+        assert (await client.get("/v1/admin/conversation/calls", params=params)).status_code == 422
+    repeated = await client.get("/v1/admin/conversation/calls?status=ready&status=failed")
+    assert repeated.status_code == 422
+    other_host = await client.get(
+        "https://learner.test/v1/admin/conversation/calls", headers={"host": "learner.test"}
+    )
+    assert other_host.status_code == 403
+
+    for run in database.runs:
+        if run.tenant_id in {OPS, UNAPPROVED}:
+            review = await client.get(f"/v1/admin/conversation/runs/{run.id}/review")
+            assert review.status_code == 404
+
+
+@pytest.mark.parametrize("admin_client", [False], indirect=True)
+async def test_call_audio_needs_private_storage(admin_client) -> None:
+    client, database = admin_client
+    response = await client.get(f"/v1/admin/conversation/runs/{database.runs[0].id}/source")
+    assert response.status_code == 503
