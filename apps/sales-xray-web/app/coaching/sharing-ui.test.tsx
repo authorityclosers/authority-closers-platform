@@ -227,7 +227,9 @@ describe("Focus feedback", () => {
     expect(JSON.parse(fetch.mock.calls[0][1].body).agreement).toBe(
       "not_completely",
     );
-    const basis = host.querySelector('ul[aria-label="This focus is based on"]')!;
+    const basis = host.querySelector(
+      'ul[aria-label="This focus is based on"]',
+    )!;
     expect(basis.querySelectorAll("li")).toHaveLength(
       fictionalCoaching.evidence.length,
     );

@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseCoaching } from "../../coaching/coaching-client";
 import { parseCallCoaching } from "../../coaching/coaching-read";
 import { parseTeamCoaching } from "../../coaching/team-contract";
@@ -75,5 +75,35 @@ describe("Coaching review fixture", () => {
     await act(async () => root.unmount());
     host.remove();
     window.history.replaceState(null, "", "/");
+  });
+  it("shows the feedback and sharing flows in the page without sending anything", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const fetch = vi.fn().mockRejectedValue(new Error("no network here"));
+    vi.stubGlobal("fetch", fetch);
+    window.history.replaceState(null, "", "/review-fixture/coaching?view=me");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<CoachingFixture />));
+    const button = (name: string) =>
+      [...host.querySelectorAll("button")].find((b) => b.textContent === name)!;
+    expect(host.textContent).toContain("Taps here aren’t saved");
+    await act(async () => button("Not completely").click());
+    expect(
+      host.querySelectorAll('ul[aria-label="This focus is based on"] li')
+        .length,
+    ).toBe(sandbox.me.evidence.length);
+    expect(host.textContent).toContain("What did we miss?");
+    await act(async () => button("I noticed it later").click());
+    expect(button("I noticed it later").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    await act(async () => button("Share with your admins").click());
+    expect(host.textContent).toContain("Stop sharing");
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    host.remove();
+    window.history.replaceState(null, "", "/");
+    vi.unstubAllGlobals();
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Lock, Share2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Badge, Button, kitStyles, Panel, Skeleton } from "../ui/kit";
 import {
   changeSharing,
@@ -15,6 +15,23 @@ import { DISAGREE, REFLECTION } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
 import styles from "./coaching.module.css";
 
+/** Where Coaching's own-account writes go. */
+export type CoachingWriter = {
+  sharing: typeof changeSharing;
+  context: typeof sendContext;
+  feedback: typeof sendFeedback;
+};
+
+/**
+ * The API by default. The no-login design review provides an in-page writer,
+ * so its taps show the real flow without sending anything.
+ */
+export const CoachingWrites = createContext<CoachingWriter>({
+  sharing: changeSharing,
+  context: sendContext,
+  feedback: sendFeedback,
+});
+
 /** Private by default; one tap shares, one tap stops (owner decision 10 Oct). */
 export function SharePanel({
   initial = null,
@@ -23,6 +40,7 @@ export function SharePanel({
   initial?: SharingView | null;
 } = {}) {
   const [view, setView] = useState<SharingView | null>(initial);
+  const writes = useContext(CoachingWrites);
   const [error, setError] = useState<string | null>(null);
   // A failed tap's message, kept through the reload that follows it.
   const [failed, setFailed] = useState<string | null>(null);
@@ -41,7 +59,7 @@ export function SharePanel({
   const toggle = async () => {
     if (!view) return;
     setSaving(true);
-    const result = await changeSharing(!view.shared, view.revision);
+    const result = await writes.sharing(!view.shared, view.revision);
     setSaving(false);
     if (result.data) {
       setView(result.data);
@@ -133,7 +151,9 @@ function FocusBasis({ evidence }: { evidence: readonly Evidence[] }) {
       </p>
       <ul aria-label={DISAGREE.basis}>
         {evidence.map((moment) => (
-          <li key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}>
+          <li
+            key={`${moment.submission_id}:${moment.segment_id}:${moment.start_ms}`}
+          >
             <span>
               {moment.call_label} · {timeLabel(moment.start_ms)}
             </span>
@@ -168,6 +188,7 @@ function ContextForm({
   onSaved: (note: string) => void;
   onCancel: () => void;
 }) {
+  const writes = useContext(CoachingWrites);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +205,7 @@ function ContextForm({
     const command =
       attempted?.text === note ? attempted.command : crypto.randomUUID();
     setAttempted({ text: note, command });
-    const result = await sendContext({
+    const result = await writes.context({
       command_id: command,
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,
@@ -252,6 +273,7 @@ function Reflection({
   focusSkillId: string;
   originSubmissionId: string;
 }) {
+  const writes = useContext(CoachingWrites);
   const [chosen, setChosen] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -263,7 +285,7 @@ function Reflection({
         : crypto.randomUUID();
     setSaving(answer);
     setError(null);
-    const result = await sendContext({
+    const result = await writes.context({
       command_id: command,
       focus_skill_id: focusSkillId,
       mission_origin_submission_id: originSubmissionId,
@@ -316,6 +338,7 @@ export function FocusFeedback({
   /** The moments behind the focus, shown before asking what we missed. */
   evidence?: readonly Evidence[];
 }) {
+  const writes = useContext(CoachingWrites);
   const [state, setState] = useState<
     "idle" | "saving" | "agree" | "not_completely"
   >("idle");
@@ -332,7 +355,7 @@ export function FocusFeedback({
   const send = async (agreement: "agree" | "not_completely") => {
     setState("saving");
     setError(null);
-    const result = await sendFeedback({
+    const result = await writes.feedback({
       command_id: commands[agreement],
       agreement,
       focus_skill_id: focusSkillId,
