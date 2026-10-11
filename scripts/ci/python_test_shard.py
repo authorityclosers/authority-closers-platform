@@ -8,12 +8,21 @@ file cannot disappear from validation silently.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scripts.ci.refresh_python_durations import DurationError, balance, read_durations
+elif __package__:
+    from .refresh_python_durations import DurationError, balance, read_durations
+else:
+    from refresh_python_durations import DurationError, balance, read_durations
 
 SCHEMA = "ac.ci.python-test-shard/1"
 TEST_FILE_NAMES = ("test_", "_test.py")
@@ -99,7 +108,9 @@ def test_weight(relative_path: str) -> int:
     return 2
 
 
-def assign_shards(test_files: tuple[str, ...], shard_count: int) -> tuple[tuple[str, ...], ...]:
+def assign_shards(
+    test_files: tuple[str, ...], shard_count: int, measured: Mapping[str, float] | None = None
+) -> tuple[tuple[str, ...], ...]:
     """Greedily balance weighted paths with deterministic tie-breaking."""
 
     if shard_count < 1:
@@ -108,6 +119,18 @@ def assign_shards(test_files: tuple[str, ...], shard_count: int) -> tuple[tuple[
         raise ShardConfigurationError("no test files remain after exclusions")
     if len(set(test_files)) != len(test_files):
         raise ShardConfigurationError("test file discovery contains duplicates")
+
+    if measured is not None:
+        try:
+            assigned, _ = balance(
+                test_files,
+                shard_count,
+                measured,
+                {path: float(test_weight(path)) for path in test_files},
+            )
+        except DurationError as error:
+            raise ShardConfigurationError(str(error)) from None
+        return assigned
 
     assignments: list[list[str]] = [[] for _ in range(shard_count)]
     loads = [0] * shard_count
@@ -126,9 +149,11 @@ def _manifest(
     shard_count: int,
     excluded: tuple[str, ...],
     assigned: tuple[str, ...],
+    measured: Mapping[str, float] | None = None,
+    duration_source: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     discovered = discover_test_files(root)
-    return {
+    result: dict[str, Any] = {
         "schema": SCHEMA,
         "root": "tests",
         "shard_index": shard_index,
@@ -140,6 +165,26 @@ def _manifest(
         ],
         "assigned_weight": sum(test_weight(path) for path in assigned),
     }
+
+    if measured is not None:
+        result["duration_source"] = duration_source
+        costs = {path: measured.get(path, float(test_weight(path))) for path in assigned}
+        for item in result["tests"]:
+            item["estimated_seconds"] = costs[item["path"]]
+        result["assigned_estimated_seconds"] = sum(costs.values())
+    return result
+
+
+def duration_evidence(path: Path) -> tuple[dict[str, float], dict[str, str]]:
+    try:
+        measured = read_durations(path)
+        raw = path.read_bytes()
+        source_sha = json.loads(raw)["source"]["sha"]
+    except (DurationError, OSError, KeyError, ValueError):
+        raise ShardConfigurationError(
+            "SHA-pinned duration evidence is unavailable or invalid"
+        ) from None
+    return measured, {"measurement_sha": source_sha, "file_sha256": hashlib.sha256(raw).hexdigest()}
 
 
 def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
@@ -155,6 +200,7 @@ def verify_manifests(
     *,
     sha: str,
     run_attempt: int,
+    duration_file: Path | None = None,
 ) -> dict[int, int]:
     """Prove that downloaded shard manifests cover every test exactly once."""
 
@@ -202,6 +248,14 @@ def verify_manifests(
             )
         manifests.append(value)
 
+    measured = None
+    duration_source = None
+    if any("duration_source" in manifest for manifest in manifests):
+        path = duration_file or root / "scripts/ci/python-test-durations.json"
+        measured, duration_source = duration_evidence(path)
+        if any(manifest.get("duration_source") != duration_source for manifest in manifests):
+            raise ShardConfigurationError("shards used different or unpinned measured durations")
+
     indices: list[Any] = [manifest.get("shard_index") for manifest in manifests]
     if sorted(indices) != list(range(shard_count)):
         raise ShardConfigurationError(f"shard indexes are not complete: {indices!r}")
@@ -228,7 +282,17 @@ def verify_manifests(
                 raise ShardConfigurationError(f"unknown assigned path: {test_path!r}")
             if item.get("shard") != current_index or item.get("weight") != test_weight(test_path):
                 raise ShardConfigurationError(f"tampered assignment metadata: {test_path!r}")
+            if measured is not None and item.get("estimated_seconds") != measured.get(
+                test_path, float(test_weight(test_path))
+            ):
+                raise ShardConfigurationError(f"tampered measured cost: {test_path!r}")
             assigned.append(test_path)
+        if measured is not None:
+            expected_seconds = sum(
+                measured.get(item["path"], float(test_weight(item["path"]))) for item in tests
+            )
+            if manifest.get("assigned_estimated_seconds") != expected_seconds:
+                raise ShardConfigurationError("tampered measured shard total")
 
     if len(assigned) != len(set(assigned)):
         raise ShardConfigurationError("a pytest file was assigned to more than one shard")
@@ -261,7 +325,8 @@ def run_shard(args: argparse.Namespace) -> int:
     discovered = discover_test_files(root)
     exclusions = read_exclusions(args.exclude_file.resolve(), discovered)
     included = tuple(path for path in discovered if path not in set(exclusions))
-    assignments = assign_shards(included, args.shard_count)
+    measured, duration_source = duration_evidence(args.duration_file.resolve())
+    assignments = assign_shards(included, args.shard_count, measured)
     if not 0 <= args.shard_index < args.shard_count:
         raise ShardConfigurationError("shard index is outside shard count")
     assigned = assignments[args.shard_index]
@@ -271,6 +336,8 @@ def run_shard(args: argparse.Namespace) -> int:
         shard_count=args.shard_count,
         excluded=exclusions,
         assigned=assigned,
+        measured=measured,
+        duration_source=duration_source,
     )
     _write_manifest(args.manifest.resolve(), manifest)
 
@@ -306,6 +373,9 @@ def _parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run", help="run one deterministic pytest shard")
     run.add_argument("--root", type=Path, default=Path.cwd())
+    run.add_argument(
+        "--duration-file", type=Path, default=Path(__file__).with_name("python-test-durations.json")
+    )
     run.add_argument("--shard-index", type=int, required=True)
     run.add_argument("--shard-count", type=int, required=True)
     run.add_argument("--exclude-file", type=Path, required=True)
@@ -315,6 +385,7 @@ def _parser() -> argparse.ArgumentParser:
 
     verify = subparsers.add_parser("verify", help="verify a complete manifest directory")
     verify.add_argument("--root", type=Path, default=Path.cwd())
+    verify.add_argument("--duration-file", type=Path)
     verify.add_argument("--shard-count", type=int, required=True)
     verify.add_argument("--exclude-file", type=Path, required=True)
     verify.add_argument("--manifest-dir", type=Path, required=True)
@@ -335,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             args.exclude_file.resolve(),
             sha=args.sha,
             run_attempt=args.run_attempt,
+            duration_file=args.duration_file,
         )
         for index, attempt in selected.items():
             print(f"selected shard {index}: attempt {attempt}")

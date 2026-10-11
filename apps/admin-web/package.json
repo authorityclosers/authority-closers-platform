@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack --hostname 127.0.0.1 --port 3001",
     "build": "next build",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 --cache --cache-location node_modules/.cache/eslint/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
