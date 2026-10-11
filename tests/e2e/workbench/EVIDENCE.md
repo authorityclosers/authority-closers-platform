@@ -1,5 +1,24 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+Latest automated shared-dev matrix: **16/16 PASS**, 18:48:00–18:50:33 UTC,
+`50af5fcc` → `7d3361d0`, with recorded dirty paths and refresh counts. Report
+has 13 observations per pair, Document seven (top + six actual sections),
+Coaching 13, independent outcome formats ten (four statuses + required reason
+and date states). All four choices agree with Deal/Document/Word 1.1; optional
+value works. Runtime/server/font/overflow errors and fixture outcome API
+requests are zero. Background launch finishes normally. API readiness: 200.
+
+**Visual repairs pending:** inspected phone validation cards overlap the bottom
+navigation (B INBOX), and Document/Word rows use long source skill names instead
+of the approved short Report/Dipak names (G INBOX). All six phone Document
+sections were inspected and remain readable. This is an automated PASS with
+two visual findings, not finished visual acceptance. QA adds corner-card/nav
+geometry + hit checks and the exact eight Document/Word names/order. Next
+allowed repeat is 19:03 UTC. Receipt/captures:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-full-readback/`.
+Fixture format agreement is **PASS**, canonical persisted outcomes **NOT RUN
+on shared dev**; compiled disposable CI execution/staging confirmation pending.
+
 Shared-dev rendering uses `dev/live`, existing server `127.0.0.1:3026` and labelled
 fictional review data. The coordinator's later release-CI assignment uses the
 existing disposable PostgreSQL harness and bounded loopback browser backend.

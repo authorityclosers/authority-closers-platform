@@ -402,6 +402,64 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         context.close()
 
 
+def _word_paragraphs(document: str) -> list[str]:
+    # Generated OOXML text only: no XML parser or entity resolution.
+    return [
+        "".join(
+            unescape(text)
+            for text in re.findall(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", paragraph, re.DOTALL)
+        )
+        for paragraph in re.findall(r"<w:p(?:\s[^>]*)?>(.*?)</w:p>", document, re.DOTALL)
+    ]
+
+
+def _word_skill_names(document: str) -> None:
+    paragraphs = _word_paragraphs(document)
+    start = next(
+        index
+        for index, text in enumerate(paragraphs)
+        if re.fullmatch(r"5\.\s+Your Skills on This Call", text, flags=re.IGNORECASE)
+    )
+    end = next(
+        index
+        for index in range(start + 1, len(paragraphs))
+        if re.fullmatch(r"6\.\s+Where the Deal Stands", paragraphs[index], flags=re.IGNORECASE)
+    )
+    cursor = start + 1
+    for name in SKILL_ROWS:
+        cursor = next(index for index in range(cursor, end) if paragraphs[index] == name) + 1
+
+
+def _outcome_validation_snapshot(journey: Journey, editor: Locator, step: str) -> None:
+    notice = editor.get_by_role("alert")
+    expect(notice).to_be_visible()
+    journey.snapshot(step)
+    if journey.width != 390:
+        return
+    nav = journey.page.get_by_role("navigation", name="Mobile Sales Xray navigation", exact=True)
+    notice_box, nav_box = notice.bounding_box(), nav.bounding_box()
+    assert notice_box is not None and nav_box is not None
+    targets = nav.locator("a, button").evaluate_all(
+        """els => els.filter(el => el.checkVisibility()).map(el => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return {width: r.width, height: r.height,
+            reachable: hit === el || el.contains(hit)};
+        })"""
+    )
+    journey.observations[-1]["validation_corner"] = {
+        "notice": notice_box,
+        "mobile_navigation": nav_box,
+        "navigation_targets": targets,
+    }
+    assert notice_box["y"] + notice_box["height"] <= nav_box["y"], (
+        "Outcome validation covers the phone's bottom navigation"
+    )
+    assert targets and all(target["reachable"] for target in targets), (
+        "Outcome validation covers a phone navigation target"
+    )
+
+
 def _word_call_outcome(page: Page, status: str, detail: str | None) -> None:
     page.locator("[data-document-export]").evaluate(
         "element => element.scrollIntoView({block: 'start'})"
@@ -414,14 +472,7 @@ def _word_call_outcome(page: Page, status: str, detail: str | None) -> None:
     assert path is not None
     with ZipFile(path) as docx:
         document = docx.read("word/document.xml").decode()
-    # Read generated OOXML text without an XML parser or entity resolution.
-    paragraphs = [
-        "".join(
-            unescape(text)
-            for text in re.findall(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", paragraph, re.DOTALL)
-        )
-        for paragraph in re.findall(r"<w:p(?:\s[^>]*)?>(.*?)</w:p>", document, re.DOTALL)
-    ]
+    paragraphs = _word_paragraphs(document)
     start = next(
         index
         for index, text in enumerate(paragraphs)
@@ -465,7 +516,7 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Add why it was lost.")
             expect(badge).to_have_text("Won")
-            journey.snapshot("outcome-lost-required")
+            _outcome_validation_snapshot(journey, editor, "outcome-lost-required")
             editor.get_by_label("Why was it lost?", exact=True).fill(reason)
             editor.get_by_role("button", name="Save", exact=True).click()
         elif key == "follow-up":
@@ -473,7 +524,7 @@ def _outcome_controls_and_documents(journey: Journey) -> None:
             editor.get_by_role("button", name="Save", exact=True).click()
             expect(editor.get_by_role("alert")).to_contain_text("Pick a follow-up date.")
             expect(badge).to_have_text("Lost")
-            journey.snapshot("outcome-follow-up-required")
+            _outcome_validation_snapshot(journey, editor, "outcome-follow-up-required")
             editor.get_by_label("Follow-up date", exact=True).fill("2026-11-11")
             editor.get_by_role("button", name="Save", exact=True).click()
         expect(editor).to_have_attribute("aria-busy", "false")
@@ -632,6 +683,9 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         assert headings.evaluate_all(
             "els => els.map(el => el.getAttribute('data-report-mode-section'))"
         ) == [section for section, _ in REPORT_SECTIONS]
+        expect(
+            preview.locator('section[data-document-section="skills"]').get_by_role("rowheader")
+        ).to_have_text(list(SKILL_ROWS))
         journey.snapshot("document")
         # A section deep link can land below the document's export controls.
         page.locator("[data-document-export]").evaluate(
@@ -646,6 +700,7 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         with ZipFile(file) as docx:
             document = docx.read("word/document.xml").decode()
             assert all(f'w:name="{section}"' in document for section, _ in REPORT_SECTIONS)
+            _word_skill_names(document)
         _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
@@ -728,6 +783,8 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         ) == [section for section, _ in REPORT_SECTIONS]
         for section, label in REPORT_SECTIONS:
             panel = preview.locator(f'section[data-document-section="{section}"]')
+            if section == "skills":
+                expect(panel.get_by_role("rowheader")).to_have_text(list(SKILL_ROWS))
             heading = panel.get_by_role("heading", level=3)
             expect(heading).to_contain_text(label, ignore_case=True)
             assert len(panel.inner_text().strip()) > 40, "Document section is empty"

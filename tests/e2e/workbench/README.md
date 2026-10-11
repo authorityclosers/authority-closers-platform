@@ -31,6 +31,10 @@ the in-memory fixture deliberately resets on reload. Its receipt identifies
 format agreement and explicitly says canonical reload is unverified.
 The ordinary live-mode Report/Document/Coaching journeys are read-only.
 
+Required-field corner cards must clear the phone's bottom navigation and leave
+every navigation target reachable. Document and Word retain the same eight
+short skill names/order as the Report and Dipak's sheet.
+
 Four additional cases, `test_fictional_outcome_persistence`, require `WB_MODE=live`,
 an existing approved dev session and `WB_OUTCOME_WRITE_PATH` naming an explicitly
 fictional finished call owned by that account. They save through the real control,
