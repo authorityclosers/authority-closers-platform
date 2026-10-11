@@ -166,3 +166,86 @@ it("restored failed calls expose truthful retry and never resume processing on l
     "still processing",
   );
 });
+
+it("folder re-selection releases a cancelled retry and ignores its late result", async () => {
+  const failed: ImportBatch = {
+    ...fixture,
+    terminalState: "failed",
+    items: [
+      {
+        ...fixture.items[0]!,
+        state: "failed",
+        runState: "failed",
+        retryAvailable: true,
+      },
+    ],
+  };
+  type Result = { data: null; error: string | null };
+  let finishFirst!: (result: Result) => void;
+  let finishSecond!: (result: Result) => void;
+  operations.retry
+    .mockReturnValueOnce(
+      new Promise<Result>((resolve) => (finishFirst = resolve)),
+    )
+    .mockReturnValueOnce(
+      new Promise<Result>((resolve) => (finishSecond = resolve)),
+    );
+  await act(async () =>
+    root.render(<BulkRecordingImport policy={policy} initialBatch={failed} />),
+  );
+  const consent = () =>
+    (host.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+  await act(async () => consent());
+  await act(async () => button("Try again").click());
+  expect(button("Try again").disabled).toBe(true);
+  const first = operations.retry.mock.calls[0]!;
+  await act(async () => button("Choose fixture folder").click());
+  expect((first[3] as AbortSignal).aborted).toBe(true);
+  await act(async () => consent());
+  expect(button("Try again").disabled).toBe(false);
+  await act(async () => button("Try again").click());
+  expect(operations.retry).toHaveBeenCalledTimes(2);
+  expect(operations.retry.mock.calls[1]![2]).toBe(first[2]);
+  await act(async () => finishFirst({ data: null, error: "Stale refusal" }));
+  expect(button("Try again").disabled).toBe(true);
+  expect(host.textContent).not.toContain("Stale refusal");
+  await act(async () => finishSecond({ data: null, error: "Current refusal" }));
+  expect(button("Try again").disabled).toBe(false);
+  expect(host.querySelector('[role="status"]')?.textContent).toContain(
+    "Current refusal",
+  );
+});
+
+it("reuses the retry command when its canonical read-back is unavailable", async () => {
+  const failed: ImportBatch = {
+    ...fixture,
+    terminalState: "failed",
+    items: [
+      {
+        ...fixture.items[0]!,
+        state: "failed",
+        runState: "failed",
+        retryAvailable: true,
+      },
+    ],
+  };
+  operations.retry.mockResolvedValue({ data: null, error: null });
+  operations.refresh
+    .mockResolvedValueOnce({ data: null, error: "Progress is unavailable" })
+    .mockResolvedValueOnce({ data: fixture, error: null });
+  await act(async () =>
+    root.render(<BulkRecordingImport policy={policy} initialBatch={failed} />),
+  );
+  await act(async () =>
+    (host.querySelector('input[type="checkbox"]') as HTMLInputElement).click(),
+  );
+  await act(async () => button("Try again").click());
+  expect(host.textContent).toContain("Progress is unavailable");
+  expect(button("Try again").disabled).toBe(false);
+  await act(async () => button("Try again").click());
+  expect(operations.retry).toHaveBeenCalledTimes(2);
+  expect(operations.retry.mock.calls[1]![2]).toBe(
+    operations.retry.mock.calls[0]![2],
+  );
+  expect(host.textContent).toContain("Done");
+});

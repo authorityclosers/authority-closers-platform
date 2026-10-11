@@ -52,3 +52,30 @@ delivery once. Repeating acceptance and uploading the same hash in a fresh batch
 retains one usage, one completed one-second settlement, the original member and
 call ID, one native decode and three fictional broker calls. The initial ordinary
 usage hold has no completion settlement. No live provider is contacted.
+
+## Folder re-selection during retry
+
+The final component review reproduced a client recovery failure: choosing the
+folder again while Try again was outstanding aborted the request but retained
+its retry lock, disabling all subsequent attempts until reload. The new regression
+fails on the prior `2c67ab` component at the disabled-control assertion.
+
+Folder review now clears the cancelled controller's ownership and retry lock.
+Late request and read-back responses cannot replace the new selection or release
+a newer attempt's lock. A retry command keeps its existing idempotency key after
+cancellation or unavailable canonical read-back; only confirmed read-back clears
+it. Backend authority, provider admission and charging code are unchanged.
+
+The focused race checks exercise cancellation, a second attempt while the old
+response is pending, late refusal, and successful preparation followed by an
+unavailable status read. All 38 focused bulk frontend cases pass (5.14s), as do
+the full app typecheck, changed-file ESLint and formatting. The prior queued
+test commands produced no validation; only the completed repeat is counted.
+
+The production fixture was rebuilt and all four populated screenshots captured
+through `ac-heavy`, then personally inspected. Controls still meet 32px desktop
+and 44px phone floors, with no overflow or page errors; the presentation stays
+stable after the recovery fix. Artifacts are
+`/home/acdev/strikes/1676/shots/2026-10-11/bulk-import-retry-{1440,390}-{light,dark}.png`.
+Browser and server stopped after capture. This is local fictional-data proof;
+final-head CI and the authorized deployed journey remain required.

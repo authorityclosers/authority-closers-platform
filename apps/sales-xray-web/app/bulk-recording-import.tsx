@@ -110,7 +110,9 @@ export function BulkRecordingImport({
 
   function review(selection: ImportSelection, proposal: ImportPreview) {
     task.current?.abort();
+    task.current = null;
     setWorking(false);
+    setRetrying(null);
     setConsent(false);
     setProblem(null);
     if (
@@ -177,16 +179,25 @@ export function BulkRecordingImport({
       retryKeys.current.get(item.index) ??
       `import-retry:${crypto.randomUUID()}`;
     retryKeys.current.set(item.index, key);
-    const result = await retryImportItem(batch, item, key, abort.signal);
-    if (abort.signal.aborted) return;
-    if (result.error !== null) setProblem(result.error);
-    else {
-      const read = await refreshImport(batch, abort.signal);
-      if (read.error !== null) setProblem(read.error);
-      else setBatch(read.data);
-      retryKeys.current.delete(item.index);
+    try {
+      const result = await retryImportItem(batch, item, key, abort.signal);
+      if (abort.signal.aborted) return;
+      if (result.error !== null) setProblem(result.error);
+      else {
+        const read = await refreshImport(batch, abort.signal);
+        if (abort.signal.aborted) return;
+        if (read.error !== null) setProblem(read.error);
+        else {
+          setBatch(read.data);
+          retryKeys.current.delete(item.index);
+        }
+      }
+    } finally {
+      if (task.current === abort) {
+        task.current = null;
+        setRetrying(null);
+      }
     }
-    setRetrying(null);
   }
 
   return (
