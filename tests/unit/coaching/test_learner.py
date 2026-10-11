@@ -143,3 +143,48 @@ def test_unclassified_report_suggestions_do_not_become_a_repeated_skill_pattern(
     assert result.mastery.trend == "not_enough_evidence"
     assert result.root_cause.gap_type == "uncertain"
     assert any("assessed skill is not linked" in row for row in result.limitations)
+
+
+def test_progress_strip_reports_what_comparable_calls_said_never_success() -> None:
+    history = (
+        call(1),
+        call(2, attention=False),
+        call(3, skill="qualification"),
+        call(4, version="other-evaluator-v2"),
+    )
+    view = build_learner(history, person_id=PERSON, tenant_id=TENANT)
+    assert view.focus is not None and view.mission is not None
+    # Other evaluator versions are not comparable and never appear.
+    assert [(point.state, point.after_mission) for point in view.progress] == [
+        ("suggested", False),
+        ("no_suggestion", True),
+        ("not_covered", True),
+    ]
+    assert [point.submission_id for point in view.progress] == [
+        UUID(int=101),
+        UUID(int=102),
+        UUID(int=103),
+    ]
+    assert view.mastery.state == "not_enough_evidence"
+
+
+def test_report_suggestion_focus_progress_stays_one_call() -> None:
+    first = call(1)
+    row, mission = first.skills[0], first.skills[0].mission
+    assert mission is not None
+    unlinked = first.model_copy(
+        update={
+            "skills": (
+                row.model_copy(
+                    update={
+                        "basis": "report_suggestion",
+                        "skill_id": "report_next_step",
+                        "mission": mission.model_copy(update={"skill_id": "report_next_step"}),
+                    }
+                ),
+            )
+        }
+    )
+    view = build_learner((unlinked, call(2)), person_id=PERSON, tenant_id=TENANT)
+    assert view.focus is not None and view.focus.skill_id == "report_next_step"
+    assert [point.submission_id for point in view.progress] == [UUID(int=101)]
