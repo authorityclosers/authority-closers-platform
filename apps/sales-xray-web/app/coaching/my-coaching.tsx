@@ -68,6 +68,7 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
     <div className={styles.progress}>
       <span className={styles.cardLabel} aria-hidden="true">
         {PROGRESS.callsLabel}
+        {" · "}
         <span className={styles.cardLabelMuted}>{PROGRESS.oldestFirst}</span>
       </span>
       <ol className={styles.timeline} aria-label={PROGRESS.calls}>
