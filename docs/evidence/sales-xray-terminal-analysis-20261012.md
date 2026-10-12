@@ -176,3 +176,28 @@ remain uncommitted pending Root automatic-dev apply admission. Source-bound
 packet SHA256: `71ad1d8c7a72038069c705632c467b9d399d6d0d26765b2400fecb7593921975`; private source-only
 patch SHA256: `a514d5630b0fcaf0a02694fc4cb3bf2978da270354f6238e6c0f7279ff9bd6bb`.
 The concrete packet was delivered to the existing Root/coordinator INBOX route.
+
+## Real pipeline publication/recovery addendum
+
+Two added disposable acquisition cases passed in21.47 seconds; eight unchanged
+reporting cases were deselected and the prior186/38 checks were not rerun. The
+real accepted plan uses local fictional provider adapters through C2/C4/C5/C6.
+Publication under a live lease wins against concurrent recovery: authenticated
+Report/Transcript read the same source, one report and one completed1-second
+customer capture. The opposite case expires the finite job lease and exhausts
+its existing claim allowance after its provisional receipt/raw response persist.
+Canonical recovery plus the prepared writer commits terminal_failure0; the late
+actual publisher is fenced and leaves no report. Dispatch/receipt/attempt history
+is retained. The stranger remains denied.
+
+The default helper was absent; the retained private pytest fixture reused the
+source-built executable while preserving its native manifest/binary checks. No
+product native input changed. Publication after expiry correctly rolled back;
+expiry with remaining claim allowance correctly reclaimed provisional evidence.
+Those failed attempts remain separate from the passing finite fault fixture.
+Final new-test Ruff/format/API-import/diff guards exited0.
+
+Private source-bound addendum SHA256: `619740b02613b10dec3cffcb9f8db08ecb6cb8a2367c1dd9330555d0717e723a`. All six
+frozen schema/writer files remain byte-identical for AUT1922. This strengthens
+the earlier direct-journal proof; it does not establish hosted staging UI,
+ordinary/C1/terminal-plan adapters, full503/timeouts or successor dispatch.
