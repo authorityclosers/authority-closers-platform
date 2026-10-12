@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OverviewHook, shareChartSegments } from "./overview-hook";
 import { talkShareSeries } from "./call-data";
 import type { SalesReport, Transcript } from "./report-contract";
+import { MOMENTS } from "./report-copy";
 import { ReportReadingProvider } from "./report-reading-context";
 import { ReportModes } from "./report-modes";
 import type { DocumentReportData } from "./report-document-data";
@@ -161,6 +162,18 @@ async function renderOverview(
     ),
   );
 }
+
+it("keeps Missed chances visible with an honest empty line and no invented finding", async () => {
+  await renderOverview();
+  const heading = [...host.querySelectorAll("h3")].find(
+    (node) => node.textContent === MOMENTS.missedTitle,
+  );
+  expect(heading).toBeDefined();
+  const section = heading!.closest("section")!;
+  expect(section.textContent).toContain(MOMENTS.noneMissed);
+  expect(section.textContent).not.toContain(MOMENTS.missedHint);
+  expect(section.querySelectorAll("article, q, button")).toHaveLength(0);
+});
 
 it.each(["", "&print=1"])(
   "passes the full source summary to Document without opening the Reading disclosure%s",

@@ -326,6 +326,9 @@ export const MOMENTS = {
   /** Document view: the moments that sit under "View all" on screen. */
   titleMore: "More moments",
   none: "No moments were picked out for this call.",
+  missedTitle: "Missed chances",
+  missedHint: "What they said, what you said, and a better answer to use",
+  noneMissed: "This report doesn't show a missed chance.",
   /** Titles Sales Xray gives a moment when the analysis gives none. */
   titleTurn: "The call changed here",
   titleNextStep: "A next step was agreed",
