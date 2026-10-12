@@ -1,5 +1,46 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — completed smoke custody and source-only handoff
+
+At workbench `120577d0`, independently reconciled the coordinator's 14:17
+custody result and 14:28 source-prerequisite update using retained files and
+immutable Git only. All three supplied packet hashes and 24 distinct file
+pins match. Four retained custody comments match, including Root's original
+receipt-text digest. Root's two assignment commands remain attributed;
+their raw command logs were not supplied.
+
+Retained task records confirm AUT-252 and AUT-301 are assigned to Platform
+Engineer `fbc04f56`, blocked at versions 2 and 5, with null checkout/execution
+bindings. All blocker IDs, descriptions and execution/review policies are
+preserved. Earlier wrapper versions 3 and 4 remain historical snapshots.
+Platform Lead is paused, Engineer idle; parent AUT-1783 remains blocked92
+with completed native review preserved. This closes the previous pending
+custody-result wording without admitting implementation or runtime smoke.
+
+CTO disposition `f5ad078f` permits source reconciliation and leaves checked-in
+runner/wrapper implementation blocked. Independently reproduced all twelve
+core/web/current-workbench source comparisons, seven Python AST parses and
+22 exact source anchors. The source handoff at AUT-226 comment `cf82917d`
+matches retained posted/readback/file bytes exactly; no fresh board read or
+packet command was executed. Canonical `max_cost_paise` transport is proposed
+for acceptance. The `session_id` selector and `elapsed_seconds` timing basis
+remain unresolved. Plan revision `224d9576` retains one fictional approximately
+three-minute clip; its runtime prerequisites remain intact.
+
+Six prior Report source pins, the exact browser journey and foreign ESLint
+cache are unchanged. Historical health records are availability evidence;
+QA made no fresh host observation. No usable already-approved populated
+Report/Team context is supplied: **populated hosted acceptance remains NOT
+RUN**. Shared-dev/hosted persistence, Root1855 four-call/Coaching writes,
+uploaded outcome marker, PDF pixels, evaluation and production acceptance
+remain separate. No product test, browser, build, HTTP request, implementation,
+provider/data write, operator dispatch or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-custody-source-readback-144424Z/receipt.json`
+SHA-256 `fc3ef1778b7088cba5bd832b8c9e354bab925401c3b456f8d934ac71aa24a943`.
+Original handoffs, independent verifier and PASS output are adjacent.
+
 12 October continuation — retained preflight refusal and custody decision
 
 At workbench `7674b91a`, independently checked the two completion-only
