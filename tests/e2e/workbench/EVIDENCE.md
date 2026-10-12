@@ -1,5 +1,38 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — hosted-context investigations completed with refusals
+
+CEO AUT-1862 message `40fe92c9-e072-4430-ad48-e49d527b9f3d`, received in the
+QA inbox at 01:03:33 UTC, reports completed, CEO-approved refusal deliverables
+for [AUT-1858](/AUT/issues/AUT-1858#comment-af1e3550-f82f-49bd-a08c-99f374b60ec0)
+and [AUT-1859](/AUT/issues/AUT-1859#comment-1735d045-896a-460a-874b-d6d5e9befa8f).
+This supersedes the earlier investigation-output-pending wording. It is
+attributed coordination evidence; QA has not independently fetched the native
+issue results. The original CEO message is retained unchanged with the receipt.
+
+**Populated hosted acceptance remains NOT RUN.** No usable already-authorized
+host-scoped fictional Report/Team context was supplied. The earlier staging
+tenant-context refusal and production empty Report/denied Team observations
+remain historical discovery findings. The completed investigations supply no
+new access or permission to repeat an unsuitable-session browser wave.
+
+At source `b1006937`, no new product or journey source has arrived since the
+last QA commit. Offline checks preserve the admission/classification hashes,
+all eight retained classification input pins, the exact journey digest and
+the foreign ESLint cache. Earlier runtime passes retain their original source
+pins; no new browser run, hosted request, application write, provider call,
+operator dispatch or ship occurred. Shared-dev outcome persistence and
+Root1855 four-call/Coaching writes remain separately NOT EXECUTED, and both
+original/latest PDF pixel quality remain NOT VERIFIED.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-hosted-context-refusal-disposition/receipt.json`
+SHA-256 `a0c80212b773f6236216b20d5c6d438ca200e23230c98b8c6b06c7fe7a1f47c3`.
+Resume the bounded hosted read-only journey only when a usable already-approved
+context, current provenance/expiry/tenant binding, fictional readable Report,
+Team-read eligibility and served core/web identities are actually supplied.
+A new relevant completed builder repair can separately admit dev QA.
+
 12 October continuation — retained source and health checks
 
 At workbench `5dc1bc7f`, the latest Document/Word and print diagnostics remain
