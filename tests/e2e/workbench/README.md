@@ -73,7 +73,8 @@ fully reload each choice, check Report/Document/Word and read the saved API valu
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
-quote, print, legacy-action, Team-search and supporting-moment checks collect 44 cases. The original Report
+quote, print, legacy-action, Team-search and supporting-moment checks, plus eight
+focus-to-moment cases, collect 52 cases. The original Report
 journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
@@ -112,6 +113,13 @@ four focused cases. They check 2/1 compact desktop/phone moments, Show all/Show
 fewer, restored list focus and retained source quotes, times and Call coaching
 links. Reading these fictional moments requests no media; playback is not tested.
 
+For the current-focus evidence link, select `-k fixture_coaching_focus_moments`.
+Eight focused cases cover personal and fictional rep Coaching at both widths
+and themes. Pointer and Enter activation must reach the original evidence,
+focus its container and leave the next Tab inside that evidence. The first
+source quote/time/call destination and 32/44 px reachable controls are checked.
+No call destination, media playback or API mutation is invoked.
+
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
 Its four cases remain available for a later populated, approved-session run by
@@ -137,7 +145,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_coaching_moment_fold and not fixture_document_print and not fixture_legacy_deal_action and not fixture_team_search_and_rep_calls'`. Clear the optional
+`-k 'test_report_sections_and_document or test_document_view or test_coaching_pages'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 The coordinator-approved local deployed transport is opt-in:

@@ -1363,6 +1363,102 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         }
 
 
+@pytest.mark.parametrize("kind", ["review", "sandbox"])
+def test_fixture_coaching_focus_moments(
+    browser: Browser, viewport: tuple[int, str], kind: str
+) -> None:
+    """Current focus reaches the original call evidence by pointer and keyboard."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Focus-to-moment checks use the fictional dev fixture")
+    filename, key = ("sandbox-team.json", "rep") if kind == "sandbox" else ("sandbox.json", "me")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching"
+            / filename
+        ).read_text()
+    )[key]
+    evidence = payload["evidence"]
+    with _journey(browser, viewport, f"coaching-focus-{kind}") as journey:
+        page = journey.page
+        media_requests: list[str] = []
+        mutation_requests: list[str] = []
+
+        def observe_read(route: Route) -> None:
+            if route.request.method not in {"GET", "HEAD", "OPTIONS"}:
+                mutation_requests.append(route.request.method)
+                route.abort("blockedbyclient")
+            else:
+                route.continue_()
+
+        page.route("**/v1/**", observe_read)
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append("media") if request.resource_type == "media" else None
+            ),
+        )
+        journey.open(f"/review-fixture/coaching?data={kind}&view=me")
+        hero = page.locator("#coaching-focus")
+        expect(hero).to_contain_text(payload["focus"]["label"])
+        jump = hero.get_by_role("link", name="See the moments", exact=True)
+        expect(jump).to_have_attribute("href", "#coaching-evidence")
+        jump.scroll_into_view_if_needed()
+        journey.snapshot("focus")
+        journey.unclipped_text(hero)
+        journey.control_target(jump, "see-moments")
+        jump.click()
+        target = page.locator("#coaching-evidence")
+        expect(target).to_be_focused()
+        expect(target.get_by_role("heading").first).to_be_in_viewport()
+        expected_url = re.compile(
+            rf"/review-fixture/coaching\?data={kind}&view=me#coaching-evidence$"
+        )
+        expect(page).to_have_url(expected_url)
+        moments = target.get_by_role(
+            "list",
+            name="Moments from their calls" if kind == "sandbox" else "Moments from your calls",
+            exact=True,
+        )
+        rows = moments.get_by_role("listitem")
+        compact_count = 1 if journey.width == 390 else 2
+        expect(rows).to_have_count(compact_count)
+        original = evidence[0]
+        first = rows.first
+        expect(first.locator("blockquote")).to_have_text(original["quote"])
+        start, end = (int(original[field]) // 1000 for field in ("start_ms", "end_ms"))
+        span = f"{start // 60}:{start % 60:02d}–{end // 60}:{end % 60:02d}"
+        expect(first).to_contain_text(span)
+        call_link = first.get_by_role("link", name=original["call_label"], exact=True)
+        expect(call_link).to_have_attribute("href", f"/coaching?call={original['submission_id']}")
+        journey.snapshot("pointer-landed")
+        journey.unclipped_text(target)
+        journey.control_target(call_link, "supporting-call")
+        jump.focus()
+        expect(jump).to_be_focused()
+        page.keyboard.press("Enter")
+        expect(target).to_be_focused()
+        expect(target.get_by_role("heading").first).to_be_in_viewport()
+        expect(page).to_have_url(expected_url)
+        page.keyboard.press("Tab")
+        assert target.evaluate("el => el.contains(document.activeElement)"), (
+            "Keyboard navigation left the supporting moments after landing"
+        )
+        journey.snapshot("keyboard-landed")
+        assert not mutation_requests, "Reading the focus attempted an API mutation"
+        assert not media_requests, "Reading the focus requested media"
+        assert page.locator("audio,video").count() == 0
+        journey.observations[-1]["focus_moments"] = {
+            "source_count": len(evidence),
+            "compact_count": compact_count,
+            "pointer_and_keyboard_landed": True,
+            "next_tab_inside_evidence": True,
+            "first_quote_time_destination_preserved": True,
+            "product_destinations_opened": False,
+            "playback_tested": False,
+        }
+
+
 def test_fixture_coaching_moment_fold(browser: Browser, viewport: tuple[int, str]) -> None:
     """Supporting moments remain readable and retain their source after shortening."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
