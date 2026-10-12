@@ -95,3 +95,13 @@ personal/organisation/guest parity packet remains open. Existing approved stagin
 authentication is unavailable in this seat. No real provider call, financial or
 schema write, historical replay, manual deployment, release or promotion is
 performed. The v0.41.0 hold and independent v8/SVAL/timing prerequisites remain.
+
+## Committed source and automatic dev read-back
+
+Code commit: `1af60b24c4183a3b530bd749e6d39b17f4a1eab9`. Final runner
+regressions also passed: **17 passed in 0.81 seconds**, bringing focused proof to
+38 cases. Readiness HTTP 200 serves that exact commit. The existing automatic
+deploy log records successful smoke checks, API health and worker pickup at
+15:55:52 UTC. This establishes service pickup, not a failed-call or financial
+journey. The single final partial packet is retained privately as
+`1801/terminal-local-c1-final-packet-20261012.json`; the earlier packet is preserved.
