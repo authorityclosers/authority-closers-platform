@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { callHref } from "./acquisition-client";
 import { Badge, Button, Card, Field, Panel, Table } from "./ui/kit";
 import type { UploadPolicy } from "./acquisition-client";
 import type { ImportPreview } from "./bulk-import-client";
@@ -15,6 +17,7 @@ import {
   type ImportItem,
 } from "./bulk-import-runner";
 import styles from "./bulk-import-preview.module.css";
+import actionStyles from "./bulk-recording-import.module.css";
 
 const LABELS: Record<string, string> = {
   awaiting_upload: "Waiting to upload",
@@ -290,14 +293,11 @@ export function BulkRecordingImport({
                   </span>
                   <Badge>{stateLabel(item)}</Badge>
                   <span>{item.stage ?? ""}</span>
-                  {item.retryAvailable ? (
-                    <Button
-                      disabled={!consent || working || retrying !== null}
-                      onClick={() => void retry(item)}
-                    >
-                      Try again
-                    </Button>
-                  ) : null}
+                  <ImportItemActions
+                    item={item}
+                    disabled={!consent || working || retrying !== null}
+                    onRetry={() => void retry(item)}
+                  />
                 </Card>
               ))}
             >
@@ -319,14 +319,11 @@ export function BulkRecordingImport({
                     <td>{stateLabel(item)}</td>
                     <td>{item.stage ?? "—"}</td>
                     <td>
-                      {item.retryAvailable ? (
-                        <Button
-                          disabled={!consent || working || retrying !== null}
-                          onClick={() => void retry(item)}
-                        >
-                          Try again
-                        </Button>
-                      ) : null}
+                      <ImportItemActions
+                        item={item}
+                        disabled={!consent || working || retrying !== null}
+                        onRetry={() => void retry(item)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -350,6 +347,36 @@ export function BulkRecordingImport({
             </div>
           ) : null}
         </Panel>
+      ) : null}
+    </div>
+  );
+}
+
+/** Saved progress links are reads, independent of consent and batch success. */
+function ImportItemActions({
+  item,
+  disabled,
+  onRetry,
+}: {
+  item: ImportItem;
+  disabled: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div className={actionStyles.actions}>
+      {item.submissionId ? (
+        <Link
+          className={actionStyles.callLink}
+          href={callHref(item.submissionId)}
+          prefetch={false}
+        >
+          {item.runState === "done" ? "Open report" : "View call"}
+        </Link>
+      ) : null}
+      {item.retryAvailable ? (
+        <Button disabled={disabled} onClick={onRetry}>
+          Try again
+        </Button>
       ) : null}
     </div>
   );
