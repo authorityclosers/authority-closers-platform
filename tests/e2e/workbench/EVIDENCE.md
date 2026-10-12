@@ -1,5 +1,50 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained staging recovery and acceptance limits
+
+At workbench `df403d29`, independently reconciled six completion-only
+coordinator handoffs from 12:25–13:16 UTC. Eight externally supplied receipt
+hashes match; the additional artifact-gap route has a locally observed hash
+and separately checked embedded pins. The initial check verifies 49 retained
+files, 32 output hashes and thirteen verifier-source hashes. The later recovery
+check verifies fourteen file references, sixteen output hashes and six helper
+sources. Ten retained installed-file hashes match immutable Git source in both
+packets. Six Report source pins and the exact QA journey digest are unchanged.
+The original incorrect QA-filename traceback is retained; corrected-path proof
+passes. No packet commands or helper sources were executed.
+
+Retained execution records the engine/core update to `bc49a3d`, web discovery
+GitHub502, renewed containment and a later missing-artifact refusal with no
+effects. The answered CEO decision `070874ec` binds revision `987f3ba3`, packet
+`e7d9975d` and the original source/CI/artifact/archive/manifest/image pins.
+The subsequent operator packet `8adbf20c`, revision `507ea988`, records successful
+exact-artifact restoration and timer-only staging recovery to core `bc49a3d` /
+web `b157caa5`. Only the allowed provenance storage time changes; manifest and
+artifact identity remain pinned. Production is recorded paused on `fa846dc` /
+`v0.40.0`, with its ledger unchanged. The original journal-helper failure is
+preserved alongside its separate successful readback. These are verified
+retained operator records, without a fresh QA host inspection.
+
+The latest parent snapshot records existing AUT-1783 builder admission at
+version89; its completed native review state is preserved. Admission does not
+prove exact-pair smoke/canary or authenticated product acceptance. No usable
+already-approved fictional Report/Team context is supplied: **populated hosted
+acceptance remains NOT RUN**. Shared-dev/hosted outcome persistence, Root1855
+four-call/Coaching writes, the absent dedicated uploaded outcome marker and
+original/latest PDF pixels remain separate limits. Prior dev passes retain
+their original source pins. No product tests, browser, build, HTTP request,
+application/provider write, operator dispatch or ship ran in this readback.
+
+Receipts under
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-artifact-readback-131417Z/`:
+`receipt.json` SHA-256
+`612bb2e036a5116994a4b8f78f0a74002ef51b2f3cc136a2004ce365e5dff4a5`;
+`restoration-receipt.json` SHA-256
+`8b7ac033c73070aa808cc31acabc89f4425b0bb262551eb0575ee6ee4e523198`.
+Original handoffs, bounded verifiers and their results are retained beside them.
+Current installed files, privileged storage, image bytes and native board state
+were not freshly inspected.
+
 12 October continuation — retained release recovery handoffs
 
 At workbench `89d42e51`, independently reconciled the four coordinator
