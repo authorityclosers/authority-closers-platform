@@ -1,5 +1,51 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained authenticated publication and failure proof
+
+Independently reconciled the coordinator's 21:11 handoff offline at source
+`9b2dd136`. The coordinator receipt, H addendum `619740b0`, prior source packet,
+39 distinct retained file pins, twelve preparation source blobs, nine unchanged
+dependencies, and exact two-file proof commit match. Six pending sensitive files
+and source-only patch `a514d563` remain unchanged and with their existing owner.
+
+H's actual retained test output is **2 passed, 8 deselected in 21.47s**, with
+four recorded test/static/import exits 0. QA did not repeat those executions.
+The earlier 186 cases and 38 C1 checks remain historical counts; they were
+not added to this run. The private native fixture and binary hashes match,
+and the fixture delegates to the original executable validation function.
+QA performed 232 offline artifact/source checks, including AST inspection
+and 24 assertion anchors; these are not product test passes.
+
+The committed test uses disposable authenticated acquisition, local fictional
+provider responses and real Report/Transcript API reads. Publication creates
+one report and charges one acquisition second. In the other case, an expired
+exhausted worker claim is recovered, the prepared source-only failure writer
+settles zero customer seconds, and the late publisher is fenced. The retained
+Report read returns 404, including for a stranger.
+
+The publication case keeps its lease in the future: it proves recovery cannot
+manufacture failure during live publication, not contention with an already
+eligible failure writer. The new test checks provider dispatch/receipt and
+validation state, not before/after numeric provider cost equality. Prior
+provider-cost tests remain separate attributed evidence. Hosted staging API/UI,
+safe successor and the full 503/timeout matrix remain unverified by this proof.
+Automatic dev schema apply and runtime writer admission remain unauthorized.
+
+Populated hosted Report/Team QA remains **NOT RUN** because no usable approved
+context was supplied. Canonical hosted persistence, Root1855 writes, uploaded
+outcome marker, original/latest PDF pixels, evaluation, full terminal repair
+and production closure remain separate. Six Report pins, the exact journey
+and foreign ESLint cache are unchanged. No new product test, browser, build,
+HTTP request, provider/data operation, schema action or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-publication-readback/receipt.json`
+SHA-256 `9f97916a2362a79347edc3dff2ca44c147033e3f59827f77600df29b62b85a9e`.
+Original coordinator text, verifier and PASS log are adjacent. The initial
+verifier expected the builder's evidence under `docs/implementation-evidence`;
+the committed path is `docs/evidence`. The original diagnostic is retained,
+and the corrected scope check passed without changing product source.
+
 12 October continuation — recovered terminal artifacts and named source handover
 
 Independently verified the coordinator's 20:15 handoff offline at workbench
