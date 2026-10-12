@@ -105,3 +105,74 @@ deploy log records successful smoke checks, API health and worker pickup at
 15:55:52 UTC. This establishes service pickup, not a failed-call or financial
 journey. The single final partial packet is retained privately as
 `1801/terminal-local-c1-final-packet-20261012.json`; the earlier packet is preserved.
+
+## Admitted settlement source preparation — 12 October continuation
+
+Root run `7b48b475-c42b-434c-8fa3-be3cbca0093c` admits twenty exact source/test
+paths and reserves `20261012_0088` after `20261011_0087`. The admission explicitly
+sets `schema_apply_authorized=false`. Since a migration commit automatically
+applies dev schema, the migration and live writer enablement remain pending the
+existing Root decision. No deploy trigger or service was changed.
+
+All three recovered original artifacts, four decision documents and 23 retained
+controlled-source byte pins were verified. The original cumulative patch was
+applied once, followed by the guarded loader delta. Historical checks are kept
+separate from this continuation's executed checks.
+
+The prepared `customer_terminal_settlement.py` writer rechecks exact persisted
+processing/source/usage/run/event facts. In one transaction it appends a truthful
+zero-charge `terminal_failure` acquisition settlement, releases the existing
+Report minute journal, binds typed terminal evidence into both provider account
+snapshots, and appends audit. It creates no grant or no-work receipt. Provider
+state, original dispatch/uncertainty evidence and cost exposure are preserved;
+late provider cost reconciliation keeps customer usage at zero. Identical replay
+is a no-op, a changed receipt conflicts, and old failure replay cannot release a
+new authenticated retry reservation. No runtime worker or HTTP route calls this
+writer in this slice.
+
+The current source already has the canonical Report minute journal (0080). This
+writer reuses it; it does not introduce a second journal. The bounded adapter
+accepts the existing exact provider-job-recovery event only. Ordinary failure,
+terminal plans, subsequent failed retries and C1 customer settlement need their
+own source-bound integration; they are not silently treated as this event.
+
+A real two-transaction test reproduced a usage/run lock inversion during draft
+publication. The recovery loader now refuses a contended usage row with
+`SKIP LOCKED`, allowing the winning transaction to finish without deadlock.
+Current quote and execution-permission objects are matched to persisted rows
+before paired account updates. Budget locks precede minute locks.
+
+Final focused run: **186 passed in 98.21 seconds**, no skips. It covers the
+receipt/snapshot/entitlement suites, guarded candidate, twelve writer cases,
+two migration proofs and focused existing acquisition/identity regressions.
+Original C1's 21 database and 17 runner checks are retained without reruns.
+The private final packet supplies exact commands, exits and source/log hashes.
+
+The publication proof has a deliberate limit: it uses a directly persisted
+fictional draft and the actual Report minute journal, without validated C6 or an
+authorized readable report. Failure wins sequentially; publication wins in a
+concurrent race. This establishes the bounded writer's rollback/serialization,
+not full pipeline delivery acceptance. Authenticated retry proof covers the
+existing reservation intent only; it does not dispatch a successor.
+
+Migration proof rehearses constraint reversal without failure history, checks
+zero-charge and append-only enforcement, and refuses reversal once failure
+history exists. Physical PostgreSQL template snapshot/restore retains exact
+settlement, journal, paired snapshots, audit, constraints and triggers on owned
+disposable databases. It is not hosted backup-script execution.
+
+Full fictional 503/503/success, permanent 503, pre/post-send timeout, validated C6
+publication race and authenticated safe successor remain required. Existing
+approved authenticated staging context remains unavailable; the same-call,
+person, tenant and tested-build API/UI journey is unperformed. Root owns the
+existing operator context and automatic-dev schema decision. Independent CTO
+then CEO exact-source review, release-engine version and What's new remain
+required. No provider call, scoring activation, historical data apply, staging
+or production mutation, manual deployment, release or promotion was performed.
+
+Prepared source commits: `3f7207a3` and `0597e0ae`. Final Ruff/format/focused
+six-file mypy/API import/diff guards each exited 0. Six schema/writer proof paths
+remain uncommitted pending Root automatic-dev apply admission. Source-bound
+packet SHA256: `71ad1d8c7a72038069c705632c467b9d399d6d0d26765b2400fecb7593921975`; private source-only
+patch SHA256: `a514d5630b0fcaf0a02694fc4cb3bf2978da270354f6238e6c0f7279ff9bd6bb`.
+The concrete packet was delivered to the existing Root/coordinator INBOX route.
