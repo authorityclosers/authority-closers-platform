@@ -54,7 +54,7 @@ def original_content_type(header: bytes) -> AudioType:
         return "video/x-matroska"
     if len(header) >= 12 and header[4:8] == b"ftyp":
         if header[8:11] == b"3gp":
-            return "video/3gpp"
+            return "audio/3gpp"
         if header[8:12] in {b"M4A ", b"M4B "}:
             return "audio/mp4"
         if header[8:12] == b"qt  ":
@@ -73,7 +73,7 @@ def original_content_type(header: bytes) -> AudioType:
     raise ConversationError("Choose a supported audio or video file up to 100 MB.")
 
 
-def _iso_sound_track(path: Path) -> bool | None:
+def _iso_track_handlers(path: Path) -> frozenset[bytes] | None:
     """Read bounded container metadata; decoding and duration stay native-owned.
 
     Skip media payloads rather than reading them into the API. A malformed or
@@ -81,10 +81,10 @@ def _iso_sound_track(path: Path) -> bool | None:
     """
     remaining = 2048
     found_movie = False
-    found_audio = False
+    handlers: set[bytes] = set()
 
     def boxes(stream: BinaryIO, start: int, end: int, depth: int) -> None:
-        nonlocal remaining, found_movie, found_audio
+        nonlocal remaining, found_movie
         if depth > 4:
             raise ValueError("container_depth")
         position = start
@@ -114,7 +114,7 @@ def _iso_sound_track(path: Path) -> bool | None:
                 if size - prefix < 12:
                     raise ValueError("container_handler")
                 stream.seek(payload + 8)
-                found_audio |= stream.read(4) == b"soun"
+                handlers.add(stream.read(4))
             position += size
 
     try:
@@ -122,7 +122,12 @@ def _iso_sound_track(path: Path) -> bool | None:
             boxes(stream, 0, path.stat().st_size, 0)
     except (OSError, ValueError):
         return None
-    return found_audio if found_movie else None
+    return frozenset(handlers) if found_movie else None
+
+
+def _iso_sound_track(path: Path) -> bool | None:
+    handlers = _iso_track_handlers(path)
+    return b"soun" in handlers if handlers is not None else None
 
 
 def _matroska_sound_track(path: Path) -> bool | None:
@@ -206,8 +211,11 @@ class NativeUploadPreflight:
         with path.open("rb") as stream:
             media_type = original_content_type(stream.read(4096))
         sound_track = None
-        if media_type in {"audio/mp4", "video/mp4", "video/quicktime", "video/3gpp"}:
-            sound_track = _iso_sound_track(path)
+        if media_type in {"audio/mp4", "audio/3gpp", "video/mp4", "video/quicktime", "video/3gpp"}:
+            handlers = _iso_track_handlers(path)
+            sound_track = b"soun" in handlers if handlers is not None else None
+            if media_type in {"audio/3gpp", "video/3gpp"} and handlers is not None:
+                media_type = "video/3gpp" if b"vide" in handlers else "audio/3gpp"
         elif media_type in {"audio/webm", "video/x-matroska"}:
             sound_track = _matroska_sound_track(path)
         if sound_track is False:
