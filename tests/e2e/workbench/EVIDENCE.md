@@ -2,11 +2,21 @@ Workbench QA, AUT-1694 — 11 October 2026
 
 12 October — product QA resumed after the owner shipping order
 
+The actual twelve-case shared-dev run at journey commit `0ccc5165` passed in
+138.17 seconds, launcher exit 0, after coordinator priority cleared. Ruff,
+format and API import pass. Receipts/JUnit/log/screenshots are in the strike's
+`shots/2026-10-12-report-compatibility-2246Z/`. All widths/themes passed saved
+next-move reload/Document/Word agreement and standalone buyer-boundary checks.
+Visual inspection found a phone reload nav highlight mismatch and joined Report
+coaching-mission label; exact screenshots were sent to B's INBOX. A selected-Deal
+wait/viewport assertion is added before the reload screenshot; its focused
+rerun remains pending the fifteen-minute cadence. Original captures retained.
+
 Added a four-viewport/theme older-Report journey that checks the saved next move
 after reload, in Document 6.9 and in the downloaded Word file. The README selects
 this alongside the existing six-pillar Report and independent Document journeys
-for one bounded twelve-case dev readback. Browser execution is pending the
-coordinator's release-check slot clearance; no runtime pass is claimed here.
+for one bounded twelve-case dev readback. This completed fixture run does not
+establish hosted acceptance or canonical outcome persistence.
 
 Ruff lint and the required `import ac_platform.http` passed. Ruff formatted the
 new check after its initial format diagnostic. With no `WB_BASE_URL`, the four

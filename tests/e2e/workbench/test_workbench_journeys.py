@@ -867,6 +867,12 @@ def test_fixture_legacy_deal_action(browser: Browser, viewport: tuple[int, str])
         expect(deal).to_contain_text(action)
         page.reload(wait_until="domcontentloaded")
         expect(deal).to_contain_text(action)
+        expect(page).to_have_url(re.compile(r"[?&]section=facts(?:&|$)"))
+        selected = page.locator("[data-report-sections]").get_by_role(
+            "link", name="Where the Deal Stands", exact=True
+        )
+        expect(selected).to_have_attribute("aria-current", "location")
+        expect(selected).to_be_in_viewport()
         journey.snapshot("saved-next-move")
 
         _switch_report_view(page, "Document view")
