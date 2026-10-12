@@ -1,5 +1,40 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained local failure-recovery handoff
+
+Independently reconciled the coordinator's 16:00 completion handoff offline
+at workbench `c85ac8b1`. Twenty supplied file/Git pins and two additional
+receipts match. C's documentary source, inventory and archive match; its
+three original patch/evidence payloads remain unavailable. The five protected
+source files are unchanged. No artifact retrieval or inventory scan ran.
+
+H's worker, database test and evidence document match code commit `1af60b24`.
+Three retained check logs establish H's 21 database passes, 17 runner passes
+and four static/import exits 0. These are builder executions; QA repeated
+none. The current evidence document has a later append at `c85ac8b1` reporting
+automatic dev pickup. Its historical hash remains correct at `1af60b24`;
+the append and final H packet were independently reconciled. The initial
+current-file pin non-equality is retained as a documentation diagnostic.
+
+The local slice persists a failed run, finish time and internal append-only
+event. Canonical customer settlement, returned minutes, provider retries and
+the nine-item full-repair matrix remain outside this completed slice.
+Coordinator health records are retained availability only: dev API `1af60b24`,
+staging core `bc49a3d` / web `b157caa5`, production `fa846dc`. QA made no fresh
+HTTP requests, product tests, browser runs, builds, application writes or
+release actions. Six workbench source pins and the exact journey are unchanged;
+the foreign ESLint cache is preserved.
+
+No usable approved hosted Report/Team context was supplied. Populated hosted
+QA remains **NOT RUN**; shared-dev persistence and Root1855 writes remain
+**NOT EXECUTED**. Uploaded outcome marker, original/latest PDF pixels,
+evaluation and production closure remain separate acceptance limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-return-readback/receipt.json`
+SHA-256 `2247a3944def9d080058d7c60314ba7712a858f51c236e2cde8d5ebf48e17a30`.
+Original coordinator text, verifier, PASS log and pin diagnostic are adjacent.
+
 12 October continuation — accepted source contract, runtime still pending
 
 The coordinator's 14:48 completion update arrived during finalization of
