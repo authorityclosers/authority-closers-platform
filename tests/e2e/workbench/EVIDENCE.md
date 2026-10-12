@@ -1,5 +1,19 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October — product QA resumed after the owner shipping order
+
+Added a four-viewport/theme older-Report journey that checks the saved next move
+after reload, in Document 6.9 and in the downloaded Word file. The README selects
+this alongside the existing six-pillar Report and independent Document journeys
+for one bounded twelve-case dev readback. Browser execution is pending the
+coordinator's release-check slot clearance; no runtime pass is claimed here.
+
+Ruff lint and the required `import ac_platform.http` passed. Ruff formatted the
+new check after its initial format diagnostic. With no `WB_BASE_URL`, the four
+new cases skip, confirming ordinary collection does not open a browser.
+Earlier receipts and original limits remain below. Active strike notes are now
+short; the superseded full notes are retained in the strike's history file.
+
 12 October continuation — retained automatic dev pickup observation
 
 The later 21:23 coordinator pickup receipt records readiness 200 serving

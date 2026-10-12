@@ -851,6 +851,61 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         journey.snapshot("returned")
 
 
+def test_fixture_legacy_deal_action(browser: Browser, viewport: tuple[int, str]) -> None:
+    """An older saved Report keeps its next move across reload, Document and Word."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Legacy example words are limited to the fictional dev fixture")
+    with _journey(browser, viewport, "legacy-action") as journey:
+        journey.open("/review-fixture/report/real-format")
+        page = journey.page
+        action = "Explore internal evaluation criteria before proposing follow-up agendas."
+        page.locator("[data-report-sections]").get_by_role(
+            "link", name="Where the Deal Stands", exact=True
+        ).click()
+        deal = page.locator('[data-report-pillar="facts"]:visible')
+        expect(deal).to_contain_text("Next move on this deal")
+        expect(deal).to_contain_text(action)
+        page.reload(wait_until="domcontentloaded")
+        expect(deal).to_contain_text(action)
+        journey.snapshot("saved-next-move")
+
+        _switch_report_view(page, "Document view")
+        preview = _document_preview(page)
+        expect(preview.locator("section[data-document-section]")).to_have_count(6)
+        part = preview.get_by_role("heading", level=4, name=re.compile(r"^6\.9\s")).locator("..")
+        expect(part).to_contain_text(action)
+        part.scroll_into_view_if_needed()
+        journey.snapshot("document-next-move")
+        journey.document_controls()
+        page.locator("[data-document-export]").evaluate(
+            "element => element.scrollIntoView({block: 'start'})"
+        )
+        with page.expect_download() as downloaded:
+            _document_download(page).click()
+        download = downloaded.value
+        file = download.path()
+        assert download.failure() is None and file is not None
+        with ZipFile(file) as docx:
+            paragraphs = _word_paragraphs(docx.read("word/document.xml").decode())
+        start = next(
+            index
+            for index, text in enumerate(paragraphs)
+            if re.fullmatch(r"6\.9\s+Recommended Deal Action", text, re.IGNORECASE)
+        )
+        end = next(
+            (index for index in range(start + 1, len(paragraphs)) if paragraphs[index]),
+            None,
+        )
+        assert end is not None and paragraphs[end] == action, (
+            "Word's Recommended Deal Action differs from the saved Report"
+        )
+        journey.observations[-1]["legacy_action_agreement"] = {
+            "report_reload": True,
+            "document_part": "6.9",
+            "word_verified": True,
+        }
+
+
 def test_fixture_outcome_formats(browser: Browser, viewport: tuple[int, str]) -> None:
     """Separate format acceptance from the full Report and canonical persistence."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":

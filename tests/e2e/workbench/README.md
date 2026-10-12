@@ -28,6 +28,22 @@ reports are never assumed to share those example words.
 Rendered Document links/buttons must meet the 32 px desktop / 44 px phone floor.
 Print-specific compact text is outside this screen-control check.
 
+After a Report compatibility repair, run the bounded twelve-case readback:
+
+```sh
+WB_BASE_URL=http://127.0.0.1:3026 \
+WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-12-report-compatibility \
+LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
+ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
+  -k 'report_sections_and_document or document_view or fixture_legacy_deal_action' \
+  -q --tb=no -rN
+```
+
+The legacy fixture checks its saved next move after a full reload, in Document
+part 6.9 and in the downloaded Word file's Recommended Deal Action. The separate
+Document fixture retains its buyer-boundary action. These are fictional dev
+checks; neither proves hosted access or canonical outcome persistence.
+
 Coaching also reads all six fictional rep pillars with their own labels. Its
 progress accessibility snapshot must contain one summary of the forty calls
 (40 needed work in this fictional rep's data), rather than announcing
@@ -56,8 +72,9 @@ fictional finished call owned by that account. They save through the real contro
 fully reload each choice, check Report/Document/Word and read the saved API value
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
-path they skip. The original sixteen plus four format, four persistence and four quote and four print cases
-collect 32 cases. The original Report journey retains its full thirteen steps.
+path they skip. The original sixteen plus four each for format, persistence,
+quote, print and legacy-action checks collect 36 cases. The original Report
+journey retains its full thirteen steps.
 The additional dev-only long-quote journey verifies the exact fictional
 1,232-character source once, its original time span, one expand/collapse click,
 32/44 px reachable disclosure targets and no eager media in both widths/themes.
@@ -90,7 +107,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print and not fixture_legacy_deal_action'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 The coordinator-approved local deployed transport is opt-in:
