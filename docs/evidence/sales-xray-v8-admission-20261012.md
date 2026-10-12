@@ -17,6 +17,7 @@ an attributed quote inside a summary remains valid. Ordinary observations
 containing "won trust" or "lost revenue" remain valid. Person-recorded outcomes,
 their API/badges and the synthetic publication/supersession proposal are separate.
 
+Implementation commit: `a5d45b4ca85a16858143846be70495a91ffdc5e2`.
 The semantic admission identity is now `ac.sales-xray.report-validator/13`.
 The corresponding source fingerprint test is updated. The v8 prompt instruction,
 marker, section mapping and spec pin are identical to `2d1197b6`. Provider schema,
@@ -61,6 +62,27 @@ Private receipts under `/home/acdev/strikes/1801/` contain counts and pins only:
 - `retained-v8-prefix-admission-20261012.json`, SHA256
   `bfb6f6c8fb88b60b8c76207c2aef7d06d2ee2de21f6a3e2bb198c9f245843d54`:
   fixed pre-v8 baseline, distinct parser sources and stable retained inputs.
+- `v8-prefix-admission-committed-20261012.json`, SHA256
+  `3045ce29cc1f8d51716608ef232c5ed5e051207b535938b835b454046098540b`:
+  all four final committed source/test byte pins and the 241 focused results.
+
+The retained comparison ran on workbench bytes before the implementation commit.
+Its `candidate_commit` is the observed earlier HEAD, not a claim that those edits
+were already committed there. Its candidate parser SHA256 matches `a5d45b4c`;
+the companion committed receipt verifies that attribution without recounting
+unchanged inputs.
+
+## Shared dev source verification
+
+Automatic deployment started at 00:04:21 UTC and recorded healthy pickup and
+worker restart at 00:04:37 UTC. Readiness returns HTTP 200 at implementation
+commit `a5d45b4ca85a16858143846be70495a91ffdc5e2`. Candidate admission, report
+parser, provider schema and activation-gate source bytes all match that serving
+Git source. This proves healthy source pickup; v8 remains runtime blocked, so
+it does not prove a hosted candidate run or an authenticated Report read.
+
+Private receipt: `v8-prefix-admission-dev-20261012.json`, SHA256
+`71ab3fcf0f2950b178453fc580bcd634b8b16a6aa301ffe790760a1fe410a753`.
 
 Earlier evidence and the runtime-package quality document remain unchanged.
 New evidence stays in this docs path so evidence-only updates do not cause a
