@@ -1,5 +1,39 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — accepted source contract, runtime still pending
+
+The coordinator's 14:48 completion update arrived during finalization of
+`2d614cc1`; the inbox-change guard stopped before archiving or modifying
+notes. Independently checked both newly supplied receipt hashes and all
+fifteen retained input pins (seventeen distinct files including receipts).
+CTO source contract revision `a02577de` and its linked disposition agree;
+AUT-252 handoff `57ae80b1` has identical retained file/post/readback bytes.
+No native board read, source collection, product test or browser wave ran.
+
+This accepted disposition supersedes the earlier pending source questions:
+`session_id` means confirmed public `submission_id`; quoted maximum uses
+canonical `max_cost_paise` in paise; timing distinguishes server intervals,
+HTTP requests and status observations. Missing server durations are null
+with explicit reasons and timing completeness. Source acceptance grants
+no implementation, hosted runtime or release admission. Retained runner
+and wrapper records remain assigned, blocked and without checkout/execution;
+their dependencies and completed Report review are preserved.
+
+Usable approved hosted context and exact-pair saved-report/playback proof
+remain missing. Populated hosted QA stays **NOT RUN**; persistence,
+Root1855 writes, uploaded outcome marker, PDF pixels, evaluation and
+production closure remain separate. The previous twelve source comparisons,
+seven AST parses and 22 anchors were retained without repeating them.
+Journey and foreign cache hashes match; no product source changed.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-custody-source-readback-144424Z/accepted-source-receipt.json`
+SHA-256 `6c17841ebeecdc6bc873d3b3165e920eeb35cadaff54ae895da4e7b592fb3e2b`.
+Original late handoff, verifier and final PASS are adjacent. The original
+QA assertion incorrectly expected the revision UUID in the CTO comment;
+the comment links the pinned document. Its initial verifier/traceback are
+retained beside the corrected document/comment binding check.
+
 12 October continuation — completed smoke custody and source-only handoff
 
 At workbench `120577d0`, independently reconciled the coordinator's 14:17
