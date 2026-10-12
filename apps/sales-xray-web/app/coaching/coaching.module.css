@@ -428,15 +428,18 @@
 .momentMeta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 2px 8px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
 }
 
 .momentMeta a {
-  /* A taller tap area for a small inline link, without moving the line. */
-  display: inline-block;
-  margin-block: -4px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--sx-control-h);
+  min-width: var(--sx-control-h);
   padding-block: 4px;
   color: var(--sx-accent);
   text-decoration: none;
@@ -1303,7 +1306,8 @@
 }
 
 @media (max-width: 760px) {
-  .quoteToggle {
+  .quoteToggle,
+  .momentMeta a {
     min-height: 44px;
   }
 
