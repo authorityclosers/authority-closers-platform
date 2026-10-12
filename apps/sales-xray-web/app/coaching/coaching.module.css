@@ -610,6 +610,10 @@
   border-block: 1px solid var(--sx-line);
 }
 
+.repCallLinks .actions {
+  gap: 6px;
+}
+
 .repCallTitle {
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
