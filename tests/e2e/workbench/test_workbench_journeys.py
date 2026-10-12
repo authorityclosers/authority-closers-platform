@@ -325,6 +325,10 @@ class Journey:
                 if (![...el.childNodes].some(n =>
                     n.nodeType === Node.TEXT_NODE && n.textContent.trim())) continue;
                 const style = getComputedStyle(el);
+                // A 1px clipped label is deliberately available to screen readers.
+                if (el.clientWidth <= 1 && el.clientHeight <= 1 &&
+                    (style.clip === 'rect(0px, 0px, 0px, 0px)' ||
+                     style.clipPath === 'inset(50%)')) continue;
                 const clips = value => ['hidden', 'clip'].includes(value);
                 checked += 1;
                 const horizontal = el.clientWidth > 0 && clips(style.overflowX) &&
@@ -379,10 +383,10 @@ class Journey:
         )
         self.observations[-1][f"target_{label}"] = metrics
         minimum = 44 if self.width == 390 else 32
-        assert min(metrics["width"], metrics["height"]) >= minimum - 0.01, (
-            f"{label}: target is below {minimum}px"
-        )
-        assert metrics["reachable"], f"{label}: target is covered"
+        if min(metrics["width"], metrics["height"]) < minimum - 0.01:
+            self.visual_errors.append(f"{label}: target is below {minimum}px")
+        if not metrics["reachable"]:
+            self.visual_errors.append(f"{label}: target is covered")
 
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""

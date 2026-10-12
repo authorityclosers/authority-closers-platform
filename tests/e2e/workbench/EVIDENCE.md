@@ -1,5 +1,23 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October, 23:18 UTC — focused Team search and rep call-history check
+
+The new four-pair journey at `033944b6` returned 4 failures in 7.47 seconds,
+launcher exit 1. Search found the ninth fictional rep with the saved name,
+focus and person link. Both phone themes measured its link at 210 × 37.5 px,
+below the required 44 px tap height; exact receipts and inspected screenshots
+were sent to D's INBOX. Desktop failures counted the deliberately clipped 1 px
+screen-reader label as visible text. The audit now excludes that specific hidden
+label pattern and records control defects without stopping later checks early.
+Ruff, format and API import checks pass; corrected runtime readback is pending
+the next permitted wave, no earlier 23:33 UTC. History/filter checks were not
+reached in the original run and are not claimed as passing. Original log,
+JUnit, geometry receipts and PNGs remain in the strike's
+`shots/2026-10-12-team-search-2318Z/`. No browser errors, HTTP 500s, Fast Refresh,
+sideways overflow or text-floor errors were recorded. All four named-match
+captures were inspected; content is readable. The actual v0.41.0 ship stopped
+before deployment on Python test shard 1; post-ship QA remains pending.
+
 12 October — product QA resumed after the owner shipping order
 
 The actual twelve-case shared-dev run at journey commit `0ccc5165` passed in
