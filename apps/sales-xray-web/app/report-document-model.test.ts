@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { MOMENTS } from "./report-copy";
 import type { SalesReport, Transcript } from "./report-contract";
 import {
   docItemText,
@@ -276,11 +275,8 @@ describe("report document model", () => {
     const miss = items(doc).find(
       (i) => i.type === "card" && i.kicker?.startsWith("Important Miss"),
     );
-    if (miss?.type !== "card") throw new Error("no Important Miss");
-    const moved = miss.items.findIndex(
-      (i) => i.type === "label" && i.text === MOMENTS.movedToward,
-    );
-    expect(miss.items[moved + 1]?.type).toBe("quote");
+    // Legacy misses lack the validated opening/response/relevance gate.
+    expect(miss).toBeUndefined();
     // Dipak's example: Before / After are summaries, not anyone's words.
     const amit = items(amitDoc()).find((i) => i.type === "steps");
     if (amit?.type !== "steps") throw new Error("no Before / After");

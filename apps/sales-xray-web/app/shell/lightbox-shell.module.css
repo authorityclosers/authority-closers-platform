@@ -1139,10 +1139,10 @@
   }
 }
 
-:global([data-lightbox-shell]) :global(.studio-steps),
-:global([data-lightbox-shell]) :global(.studio-explainer),
-:global([data-lightbox-shell]) :global(.studio-intro),
-:global([data-lightbox-shell]) :global(.studio-header) {
+.shell:global([data-lightbox-shell]) :global(.studio-steps),
+.shell:global([data-lightbox-shell]) :global(.studio-explainer),
+.shell:global([data-lightbox-shell]) :global(.studio-intro),
+.shell:global([data-lightbox-shell]) :global(.studio-header) {
   display: none !important;
 }
 

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { StoryShellPreview } from "../story/preview";
+import { PillarsPreview } from "./pillars-preview";
 import { v8Report } from "./v8-report";
 
 /**
@@ -11,8 +11,8 @@ export default function Page() {
   if (process.env.NODE_ENV !== "development") notFound();
   const { report, transcript } = v8Report();
   return (
-    <StoryShellPreview
-      fixture={{
+    <PillarsPreview
+      nativeFixture={{
         report,
         transcript,
         title: "Qivra Works · discovery call (fictional v8 output)",

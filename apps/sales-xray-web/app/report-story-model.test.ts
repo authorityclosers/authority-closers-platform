@@ -39,9 +39,9 @@ describe("reportStoryModel", () => {
     expect(model.picture.strongest?.text).toBe(
       amitReport.strengths[0].explanation,
     );
-    // The improvement the analysis asked to fix first is the biggest concern.
+    // The Report uses the separate observation, keeping the coaching instruction out.
     expect(model.picture.concern?.text).toBe(
-      amitReport.improvements[0].explanation,
+      amitReport.overview!.improvement_details[0].what_happened.text,
     );
     expect(model.picture.nextStep?.text).toBe(
       amitReport.story!.next_step!.text,
@@ -81,11 +81,7 @@ describe("reportStoryModel", () => {
     expect(new Set(model.moments.map((m) => m.key)).size).toBe(
       model.moments.length,
     );
-    const miss = model.moments.find((m) => m.kind === "Important Miss");
-    expect(miss?.source.quote).toContain("my team doesn't close");
-    expect(miss?.movedToward?.text).toBe(
-      "Explaining sales systems and training.",
-    );
+    expect(model.moments.some((m) => m.kind === "Important Miss")).toBe(false);
     expect(model.topMoments.map((m) => m.kind)).toContain("Turning Point");
   });
 
@@ -112,9 +108,8 @@ describe("reportStoryModel", () => {
     );
     expect(model.deal.blocker?.inferred).toBe(true);
     expect(model.deal.unclear).toHaveLength(4);
-    expect(model.deal.action).toBe(
-      amitReport.overview!.final_assessment.next_focus,
-    );
+    expect(model.deal.action).toBeNull();
+    expect(model.deal.position).toBeNull();
   });
 });
 
@@ -234,7 +229,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     expect(model.flow.change?.before.quoted).toBe(true);
     expect(model.flow.change?.after.quoted).toBe(true);
     const miss = model.moments.find((m) => m.kind === "Important Miss");
-    expect(miss?.movedToward?.quoted).toBe(true);
+    expect(miss).toBeUndefined();
     // The spec example's before/after are summaries, not quotes.
     const amit = reportStoryModel(amitReport, amitTranscript);
     expect(amit.flow.change?.before.quoted).toBeUndefined();
@@ -257,7 +252,7 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     });
     expect(model.picture.influence?.sources.length).toBeGreaterThan(0);
     expect(model.picture.strongest?.sources).toHaveLength(1);
-    expect(model.picture.concern?.sources).toHaveLength(1);
+    expect(model.picture.concern?.sources.length).toBeGreaterThan(0);
     expect(model.picture.nextStep?.text).toBe(report.overview!.outcome!.text);
     expect(model.missing[0]).toEqual([]);
   });
@@ -267,9 +262,8 @@ describe("today's real pipeline output (corpus call B, invented script)", () => 
     expect(model.missing[1]).toContain("Call stages");
     expect(model.deal.quality).toBeNull();
     expect(model.missing[5]).toContain("Commitment quality");
-    expect(model.skills.every((skill) => skill.state === "Observed")).toBe(
-      true,
-    );
+    expect(model.skills.every((skill) => skill.state === null)).toBe(true);
+    expect(model.deal.nextEvent?.text).toBe(report.overview!.outcome!.text);
     expect(model.topMoments.length).toBeGreaterThan(0);
   });
 });

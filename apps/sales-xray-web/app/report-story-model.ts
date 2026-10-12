@@ -363,10 +363,16 @@ export function callOutcome(
   const overview = report.overview?.outcome ?? null;
   const story = report.story?.outcome ?? null;
   const detail =
+    line(
+      report.report_content?.outcome?.text,
+      report.report_content?.outcome?.evidence,
+    ) ??
     line(overview?.text, overview?.evidence) ??
     line(report.story?.next_step?.text, report.story?.next_step?.evidence);
-  let status: OutcomeStatus | null = null;
-  if (story) {
+  const explicit = report.report_content?.outcome?.status;
+  let status: OutcomeStatus | null =
+    explicit && explicit !== "Won" && explicit !== "Lost" ? explicit : null;
+  if (!explicit && story) {
     if (story.kind === "follow_up") status = "Follow-up Set";
     else if (story.kind === "disqualified") status = "Disqualified";
     else if (story.kind === "none")
@@ -375,7 +381,7 @@ export function callOutcome(
           ? "No Clear Next Step"
           : "Follow-up Set";
   }
-  if (!status && overview) {
+  if (!explicit && !status && overview) {
     status =
       overview.kind === "follow_up"
         ? "Follow-up Set"
@@ -423,8 +429,6 @@ function skillState(
   dimension: SalesReport["dimensions"][number],
 ): SkillState | null {
   if (dimension.call_state) return CALL_STATE[dimension.call_state] ?? null;
-  if (dimension.status === "observed" && dimension.evidence?.length)
-    return "Observed";
   if (dimension.status === "insufficient_evidence")
     return "Not Enough Evidence";
   if (dimension.status === "not_applicable") return "Not Applicable";
@@ -529,24 +533,6 @@ function momentsFor(
       source: change.change.evidence[0],
       why: line(change.possible_effect, [], true),
     });
-  for (const missed of overview?.missed_details ?? []) {
-    const finding = report.missed_opportunities[missed.finding_index];
-    const source = missed.prospect_signal.evidence[0];
-    if (!finding || !source) continue;
-    add({
-      kind: "Important Miss",
-      title: finding.title,
-      source,
-      why: line(missed.potential_impact, [], true),
-      movedToward: clean(missed.closer_response.text)
-        ? sourced(
-            missed.closer_response.text.trim(),
-            missed.closer_response.evidence,
-          )
-        : undefined,
-      couldExplore: clean(missed.follow_up) ?? undefined,
-    });
-  }
   for (const golden of overview?.golden_moments ?? []) {
     const finding = report.strengths[golden.strength_index];
     const source = finding?.evidence[golden.evidence_index];
@@ -779,14 +765,13 @@ export function reportStoryModel(
 
   const strength = report.strengths.find((item) => item.evidence.length);
   const concernIndex = overview?.next_call_focus?.improvement_index ?? 0;
-  const concernFinding =
-    report.improvements[concernIndex] ?? report.improvements[0];
+  const concernObservation = overview?.improvement_details.find(
+    (detail) => detail.finding_index === concernIndex,
+  )?.what_happened;
   const strongest = strength
     ? line(strength.explanation, strength.evidence.slice(0, 1))
     : null;
-  const concern = concernFinding
-    ? line(concernFinding.explanation, concernFinding.evidence.slice(0, 1))
-    : null;
+  const concern = line(concernObservation?.text, concernObservation?.evidence);
   const outcomeLeadsOn =
     overview?.outcome?.kind === "follow_up" ||
     overview?.outcome?.kind === "future_date";
@@ -906,10 +891,12 @@ export function reportStoryModel(
   };
 
   const rung = story?.outcome.next_step_rung;
+  const heardPosition = callOutcome(report).detail;
   const deal = {
     outcome,
     // Where the prospect stands is what the call heard, whoever set the status.
-    position: callOutcome(report).detail,
+    position:
+      heardPosition?.text === outcome.detail?.text ? null : heardPosition,
     blocker: concerns[0] ?? null,
     prospectCommitments: (story?.prospect_commitments ?? []).map((note) => ({
       text: note.text,
@@ -925,7 +912,7 @@ export function reportStoryModel(
             text: upperFirst(story.outcome.next_step_when),
             sources: story.outcome.evidence,
           }
-        : null,
+        : picture.nextStep,
     quality:
       rung === "dated_call" || rung === "committed" || rung === "invite_sent"
         ? ("Clear" as const)
@@ -935,7 +922,7 @@ export function reportStoryModel(
             ? ("Unclear" as const)
             : null,
     unclear,
-    action: clean(overview?.final_assessment.next_focus),
+    action: null,
     coachingMission: clean(overview?.next_call_focus?.behavior),
   };
 
@@ -987,7 +974,7 @@ export function reportStoryModel(
     missing,
     end,
   };
-  return report.pillars
+  const projected = report.pillars
     ? withPillars(
         model,
         report.pillars,
@@ -995,6 +982,173 @@ export function reportStoryModel(
         options.recorded,
       )
     : model;
+  return report.report_content
+    ? withReportContent(
+        projected,
+        report.report_content,
+        // Candidate observations supersede older pillars; a recorded result wins.
+        report.report_content.outcome ? outcome : projected.picture.outcome,
+        transcript,
+      )
+    : projected;
+}
+
+function withReportContent(
+  base: StoryModel,
+  content: import("./report-content").ReportContent,
+  outcome: Outcome,
+  transcript?: Transcript,
+): StoryModel {
+  const picture: StoryModel["picture"] = {
+    ...base.picture,
+    outcome,
+    assessment: null,
+  };
+  const flow: StoryModel["flow"] = { ...base.flow };
+  const worked: Item[] = [];
+  const didnt: Item[] = [];
+  const moments: Moment[] = [];
+  const deal: StoryModel["deal"] = {
+    ...base.deal,
+    outcome,
+    coachingMission: null,
+  };
+  const deeper: StoryModel["deeper"] = {
+    ...base.deeper,
+    discovery: {
+      clear: [],
+      unclear: content.unknowns.map((n) => n.text),
+      openingMissed: null,
+    },
+  };
+  const from = (
+    n: import("./report-content").ContentNote | null,
+  ): Line | null => (n ? { text: n.text, sources: n.evidence } : null);
+  picture.summary = {
+    text: content.summary_sentences.map((n) => n.text).join(" "),
+    sources: content.summary_sentences.flatMap((n) => n.evidence),
+  };
+  picture.influence = from(content.influence);
+  picture.strongest = from(content.strongest);
+  picture.concern = from(content.concern);
+  picture.nextStep = from(content.next_step);
+  flow.phases =
+    content.phases.length && transcript
+      ? content.phases.map((n, i) => ({
+          label: n.text,
+          start_ms: n.evidence[0].start_ms,
+          end_ms:
+            content.phases[i + 1]?.evidence[0].start_ms ??
+            transcript.duration_ms,
+        }))
+      : null;
+  flow.change = content.turning_point
+    ? {
+        before: from(content.turning_point.before)!,
+        turn: from(content.turning_point.turn)!,
+        after: from(content.turning_point.after)!,
+        effect: null,
+      }
+    : null;
+  const items = (f: (typeof content.worked)[number]): Item => ({
+    title: f.title,
+    what: from(f.observation)!,
+    why: from(f.effect),
+  });
+  worked.splice(0, worked.length, ...content.worked.map(items));
+  didnt.splice(0, didnt.length, ...content.didnt.map(items));
+  moments.splice(
+    0,
+    moments.length,
+    ...content.moments.map(
+      (m): Moment => ({
+        key: evidenceKey(m.observation.evidence[0]),
+        kind: m.kind as MomentKind,
+        title: m.title,
+        source: m.observation.evidence[0],
+        why: from(m.effect),
+      }),
+    ),
+    ...content.missed_chances.map(
+      (m): Moment => ({
+        key: evidenceKey(m.opening.evidence[0]),
+        kind: "Important Miss",
+        title: m.title,
+        source: m.opening.evidence[0],
+        movedToward: from(m.response_opportunity)!,
+        why: from(m.relevance),
+      }),
+    ),
+  );
+  moments.sort((a, b) => a.source.start_ms - b.source.start_ms);
+  const position =
+    from(content.position) ??
+    (outcome.origin === "person" ? from(content.outcome) : null);
+  deal.position = position?.text === outcome.detail?.text ? null : position;
+  deal.blocker = from(content.blocker);
+  deal.prospectCommitments = content.prospect_commitments.map((n) => from(n)!);
+  deal.sellerCommitments = content.seller_commitments.map((n) => from(n)!);
+  deal.nextEvent = content.next_event
+    ? {
+        text: [
+          content.next_event.observation.text,
+          content.next_event.date_text,
+          content.next_event.time_text,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        sources: content.next_event.agreement_evidence,
+      }
+    : null;
+  deal.quality = content.commitment_quality;
+  deal.unclear = content.unknowns.map((n) => n.text);
+  deal.action = content.action?.text ?? null;
+  deeper.unclear = content.unknowns.map((n) => n.text);
+  deeper.concerns = [];
+  deeper.findings = [];
+  const missing: StoryModel["missing"] = [
+    [
+      !picture.summary && GAP.summary,
+      !picture.influence && GAP.influence,
+      !picture.strongest && GAP.strongest,
+      !picture.concern && GAP.concern,
+      !picture.nextStep && GAP.nextStep,
+    ].filter((v): v is string => Boolean(v)),
+    [!flow.phases && GAP.stages, !flow.change && GAP.change].filter(
+      (v): v is string => Boolean(v),
+    ),
+    [!worked.length && GAP.worked, !didnt.length && GAP.didnt].filter(
+      (v): v is string => Boolean(v),
+    ),
+    moments.length ? [] : [GAP.moments],
+    [],
+    [
+      !deal.blocker && GAP.blocker,
+      !deal.prospectCommitments.length && GAP.prospectCommitment,
+      !deal.sellerCommitments.length && GAP.sellerCommitment,
+      !deal.nextEvent && GAP.nextEvent,
+      !deal.quality && GAP.quality,
+    ].filter((v): v is string => Boolean(v)),
+  ];
+  const top = topMoments(moments);
+  return {
+    ...base,
+    picture,
+    flow,
+    worked,
+    didnt,
+    moments,
+    topMoments: top,
+    deal,
+    deeper,
+    missing,
+    end: {
+      strongest: worked[0]?.title ?? null,
+      issue: didnt[0]?.title ?? null,
+      moment: top.find((m) => m.kind === "Turning Point") ?? top[0] ?? null,
+      nextEvent: deal.nextEvent?.text ?? null,
+    },
+  };
 }
 
 const note = (value: PillarNote | null | undefined, inferred = false) =>
