@@ -73,8 +73,23 @@ fully reload each choice, check Report/Document/Word and read the saved API valu
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
 path they skip. The original sixteen plus four each for format, persistence,
-quote, print and legacy-action checks collect 36 cases. The original Report
+quote, print, legacy-action and Team-search checks collect 40 cases. The original Report
 journey retains its full thirteen steps.
+The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
+fictional rep outside the first eight, combines name/area filters, clears an
+empty result and restores keyboard focus. It checks ready-call Report/coaching
+destinations and follows See calls to expand the rep's history, with 32/44 px
+reachable controls. Product call links are inspected without opening them;
+this does not establish authenticated access to those calls.
+
+```sh
+WB_BASE_URL=http://127.0.0.1:3026 \
+WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-12-team-search \
+LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
+ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
+  -k fixture_team_search_and_rep_calls -q --tb=no -rN
+```
+
 The additional dev-only long-quote journey verifies the exact fictional
 1,232-character source once, its original time span, one expand/collapse click,
 32/44 px reachable disclosure targets and no eager media in both widths/themes.
@@ -107,7 +122,7 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print and not fixture_legacy_deal_action'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print and not fixture_legacy_deal_action and not fixture_team_search_and_rep_calls'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
 
 The coordinator-approved local deployed transport is opt-in:

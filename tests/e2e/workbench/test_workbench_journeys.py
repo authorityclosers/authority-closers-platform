@@ -340,8 +340,8 @@ class Journey:
         )
         # Geometry only: never retain learner names or other page text.
         self.observations[-1]["text_clipping"] = metrics
-        assert metrics["checked"] > 0, "No rendered total text was checked"
-        assert not metrics["clipped"], "Team totals cut off rendered text"
+        assert metrics["checked"] > 0, "No rendered text was checked"
+        assert not metrics["clipped"], "Rendered text is clipped"
 
     def document_controls(self) -> None:
         minimum = 44 if self.width == 390 else 32
@@ -364,6 +364,25 @@ class Journey:
         }
         assert sizes, "No rendered Document controls were checked"
         assert not small, f"Document controls are below {minimum}px"
+
+    def control_target(self, control: Locator, label: str) -> None:
+        """Check a visible control's size and actual pointer reachability."""
+        control.scroll_into_view_if_needed()
+        expect(control).to_be_visible()
+        metrics = control.evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {width: r.width, height: r.height,
+                reachable: hit === el || el.contains(hit)};
+            }"""
+        )
+        self.observations[-1][f"target_{label}"] = metrics
+        minimum = 44 if self.width == 390 else 32
+        assert min(metrics["width"], metrics["height"]) >= minimum - 0.01, (
+            f"{label}: target is below {minimum}px"
+        )
+        assert metrics["reachable"], f"{label}: target is covered"
 
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""
@@ -1141,6 +1160,106 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             assert spoken.count(summary) == 1, "Rep progress needs one spoken summary"
             assert spoken.count("- listitem") <= 6, "Progress announces a row per call"
             expect(progress.get_by_text("Needed work", exact=True)).to_be_visible()
+
+
+def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Find an initially hidden fictional rep and reach their call history."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Named synthetic Coaching checks are limited to the dev fixture")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )
+    team_data = payload["team"]
+    rep = team_data["reps"][8]
+    other_area = next(
+        row["skill_id"] for row in team_data["suggestions"] if row["skill_id"] != rep["skill_id"]
+    )
+    latest = max(
+        (call for call in payload["rep"]["calls"] if call["state"] == "ready"),
+        key=lambda call: datetime.fromisoformat(call["created_at"]),
+    )
+    with _journey(browser, viewport, "team-search") as journey:
+        journey.open("/review-fixture/coaching?data=sandbox&view=team")
+        page = journey.page
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        rows = team.get_by_role("list", name="Reps and their current focus").get_by_role("link")
+        expect(rows).to_have_count(8)
+        match = team.get_by_role("link", name=re.compile(re.escape(rep["name"])))
+        expect(match).to_have_count(0)
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        search.fill(f"  {rep['name'].swapcase()}  ")
+        expect(rows).to_have_count(1)
+        expect(match).to_contain_text(rep["focus_label"])
+        expect(match).to_have_attribute("href", f"/coaching?person={rep['person_id']}")
+        expect(team.get_by_role("status")).to_have_text("1 rep")
+        area.select_option(rep["skill_id"])
+        expect(rows).to_have_count(1)
+        team.scroll_into_view_if_needed()
+        journey.snapshot("named-match")
+        for control, label in ((search, "rep-search"), (area, "area-filter"), (match, "rep-link")):
+            journey.control_target(control, label)
+        journey.unclipped_text(team)
+
+        area.select_option(other_area)
+        expect(rows).to_have_count(0)
+        expect(team.get_by_role("heading", name="No reps match", exact=True)).to_be_visible()
+        expect(team.get_by_role("status")).to_have_text("0 reps")
+        clear = team.get_by_role("button", name="Clear filters", exact=True)
+        clear.scroll_into_view_if_needed()
+        journey.snapshot("no-match")
+        journey.control_target(clear, "clear-filters")
+        clear.click()
+        expect(search).to_have_value("")
+        expect(search).to_be_focused()
+        expect(area).to_have_value("all")
+        expect(rows).to_have_count(8)
+        expect(team.get_by_role("status")).to_have_text(f"{len(team_data['reps'])} reps")
+
+        page.get_by_role("button", name="One rep", exact=True).click()
+        shortcuts = page.get_by_role("navigation", name="This rep’s calls", exact=True)
+        expect(shortcuts).to_contain_text(latest["call_label"])
+        report = shortcuts.get_by_role("link", name="Open Report", exact=True)
+        coaching = shortcuts.get_by_role("link", name="Call coaching", exact=True)
+        history_link = shortcuts.get_by_role("link", name="See calls", exact=True)
+        expect(report).to_have_attribute("href", f"/analysis/calls/{latest['submission_id']}")
+        expect(coaching).to_have_attribute("href", f"/coaching?call={latest['submission_id']}")
+        expect(history_link).to_have_attribute("href", "#coaching-calls")
+        shortcuts.scroll_into_view_if_needed()
+        journey.snapshot("rep-shortcuts")
+        for control, label in (
+            (report, "open-report"),
+            (coaching, "call-coaching"),
+            (history_link, "see-calls"),
+        ):
+            journey.control_target(control, label)
+        journey.unclipped_text(shortcuts)
+        history_link.click()
+        expect(page).to_have_url(re.compile(r"#coaching-calls$"))
+        history = page.locator("#coaching-calls")
+        expect(history.get_by_role("heading").first).to_be_in_viewport()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            3 if journey.width == 390 else 8
+        )
+        journey.snapshot("rep-history")
+        show_all = history.get_by_role(
+            "button", name=f"Show all {len(payload['rep']['calls'])} calls", exact=True
+        )
+        journey.control_target(show_all, "show-call-history")
+        show_all.click()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            len(payload["rep"]["calls"])
+        )
+        journey.observations[-1]["fictional_navigation"] = {
+            "initially_hidden_rep_found": True,
+            "combined_filter_reset": True,
+            "latest_ready_destinations_checked": True,
+            "history_expanded": True,
+            "product_call_destinations_opened": False,
+        }
 
 
 def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]) -> None:
