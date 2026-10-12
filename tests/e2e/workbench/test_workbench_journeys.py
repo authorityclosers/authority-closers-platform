@@ -1181,6 +1181,16 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         (call for call in payload["rep"]["calls"] if call["state"] == "ready"),
         key=lambda call: datetime.fromisoformat(call["created_at"]),
     )
+    skill_ids = {
+        point["submission_id"]
+        for point in payload["rep"]["progress"]
+        if point["state"] != "not_covered"
+    }
+    skill_calls = [
+        call
+        for call in payload["rep"]["calls"]
+        if call["state"] == "ready" and call["submission_id"] in skill_ids
+    ]
     with _journey(browser, viewport, "team-search") as journey:
         journey.open("/review-fixture/coaching?data=sandbox&view=team")
         page = journey.page
@@ -1253,11 +1263,40 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         expect(history.get_by_role("list").get_by_role("link")).to_have_count(
             len(payload["rep"]["calls"])
         )
+        on_skill = history.get_by_role("button", name="On this skill", exact=True)
+        all_calls = history.get_by_role("button", name="All calls", exact=True)
+        journey.control_target(on_skill, "on-this-skill")
+        journey.control_target(all_calls, "all-calls")
+        on_skill.click()
+        expect(on_skill).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            min(len(skill_calls), 3 if journey.width == 390 else 8)
+        )
+        skill_expand = history.get_by_role(
+            "button", name=f"Show all {len(skill_calls)} calls", exact=True
+        )
+        skill_expand.click()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(len(skill_calls))
+        assert set(
+            history.get_by_role("list")
+            .get_by_role("link")
+            .evaluate_all("els => els.map(el => el.getAttribute('href'))")
+        ) == {f"/analysis/calls/{call['submission_id']}" for call in skill_calls}
+        history.get_by_role("heading").first.scroll_into_view_if_needed()
+        journey.snapshot("skill-history")
+        all_calls.click()
+        expect(all_calls).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(payload['rep']['calls'])} calls")
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            3 if journey.width == 390 else 8
+        )
         journey.observations[-1]["fictional_navigation"] = {
             "initially_hidden_rep_found": True,
             "combined_filter_reset": True,
             "latest_ready_destinations_checked": True,
             "history_expanded": True,
+            "saved_skill_history_filtered": True,
             "product_call_destinations_opened": False,
         }
 
