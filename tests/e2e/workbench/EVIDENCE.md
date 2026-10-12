@@ -1,5 +1,36 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained release recovery handoffs
+
+At workbench `89d42e51`, independently reconciled the four coordinator
+handoffs from 11:35–11:56 UTC against retained local evidence. Their receipt
+hashes, 31 input pins, twelve embedded output hashes, answered CEO timer
+decision and two candidate source-file pins match. The three recovery
+document revisions/bodies and the parent's completed review state are unchanged
+between the retained 11:49 and 11:55 snapshots. Six checked workbench source
+files and the exact QA journey digest remain unchanged.
+
+AUT-1888's routing verification is complete. The latest retained snapshot,
+11:56:47 UTC, shows the existing AUT-1830 operator running under decision
+`ed8e61f8`; it establishes admission only. The decision permits the named
+operator's automatic existing-timer engine update and revalidated staging
+intake for core `bc49a3d` / web `b157caa5`, with production kept paused.
+No new recovery output, candidate deployment or staging smoke is present in
+that snapshot. Prior staging/production pause and served-pair observations
+remain attributed containment evidence; QA did not inspect the hosts afresh.
+
+**Populated hosted acceptance remains NOT RUN:** no usable already-approved
+fictional Report/Team context was supplied. Shared-dev/hosted outcome
+persistence, Root1855 four-call/Coaching writes, the absent dedicated uploaded
+outcome marker and original/latest PDF pixels remain separate limits. Earlier
+dev passes keep their original source pins. This readback ran no tests,
+browser, build, HTTP request, application write, operator dispatch or ship.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-recovery-readback-120636Z/receipt.json`
+SHA-256 `bb6cd7b63c51ac01213e7b6d8cf2830ad422b8dedd7728bc9f31ced1b353c53c`.
+Exact original coordinator handoffs are retained privately beside the receipt.
+
 12 October continuation — revised Transcript handoff and integrated candidate
 
 At workbench `325304f0`, independently verified A's revised five-line
