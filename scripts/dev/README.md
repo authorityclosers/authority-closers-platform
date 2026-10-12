@@ -95,6 +95,35 @@ populated report, then organisation members and team Coaching. The normal API
 library must show `report_ready` calls, `done` analysis and their representative owners.
 Hosted acceptance is complete only after these reads succeed on dev.
 
+## Open the loaded dev data
+
+In the existing signed-in dev account, use the sidebar workspace switcher to
+select **AC Sandbox** (`90ec1979-0d85-4829-ba8d-cabde2a9a9d3`), then open
+**Calls** at `/analysis/calls`. Links below keep the selected workspace; they do
+not switch organisations. Organisation owners and admins can read the team's
+calls through the existing Calls permissions.
+
+The completed dev loader receipts record **3,360 synthetic calls with full
+reports**, **60 fictional reps**, and **177,615 historical summaries**. The
+summaries appear in Insights at `/organisation/insights`; they are not additional
+full reports. Text-only calls have no playable recording.
+
+One source-derived example is fictional rep **Mira Nivsekar**
+(`syn-advisory-R1`, 64 full calls in the loaded publication):
+
+- People: `/organisation/people/b280f9f2-9d7d-55ed-9a07-331ae89b7b21`.
+- Rep Coaching: `/coaching?person=b280f9f2-9d7d-55ed-9a07-331ae89b7b21`.
+- Report for `syn-advisory-J10-C-05`:
+  `/analysis/calls/17773ed3-1ac2-5e27-b788-8674afecd791`.
+- Coaching for that same call:
+  `/coaching?call=17773ed3-1ac2-5e27-b788-8674afecd791`.
+- All fictional reps' Coaching: `/coaching?view=team`.
+
+Authored Sandbox Coaching remains private to the person who imported it, under
+the existing access rules. These IDs come from the loaded publication and the
+loader's deterministic identifiers; the counts come from completed operator
+receipts. They are a navigation guide, not a fresh authenticated dev readback.
+
 The focused PostgreSQL acceptance test exercises normal library/report/progress
 reads, two concurrent imports, exact history replay, changed-content refusal,
 atomic rollback, the audit chain and zero-charge accounting. The history checks
