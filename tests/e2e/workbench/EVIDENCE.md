@@ -1,5 +1,45 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — recovered terminal artifacts and named source handover
+
+Independently verified the coordinator's 20:15 handoff offline at workbench
+`fc745194`: 21 retained-file/Git pins, three recovered original artifacts,
+both patch header lists, and the twenty-path handover match. The two patch
+hashes and all three attachment IDs agree with the previously retained
+references. The original verification payload now has a checked byte pin;
+its historical results were not executed again.
+
+Ten present and ten absent source paths were checked at immutable `fc745194`.
+H's unfinished current edits were kept separate and left untouched. The
+pinned migration graph has sole head `20261011_0087`; the returned `0088`
+reservation is for source authoring with `schema_apply_authorized=false`.
+No schema action was performed. The exact Root admission body is present in
+H's inbox; D and coordinator retain the Root reference, relative manifest
+name and reservation. Controlled CTO/CEO document bindings match retained
+files; QA made no fresh native authority read.
+
+This supersedes the earlier missing original-artifact/header, protected
+handover and source-reservation prerequisites. H's finite implementation
+remains with H. Root's patch-check results, coordinator's 47 checks and
+availability, and completed local 21+17 passes remain attributed evidence.
+QA ran no product test, browser, build, HTTP request, patch check/application,
+provider/data operation or release action. Six Report pins, the exact
+journey and the foreign ESLint cache remain unchanged.
+
+Populated hosted Report/Team QA remains **NOT RUN** because no usable approved
+context was supplied. Runtime admission, canonical persistence, Root1855
+writes, uploaded outcome marker, original/latest PDF pixels, evaluation,
+full terminal repair and production closure remain separate acceptance limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-source-admission-readback/receipt.json`
+SHA-256 `2af9ee30b35a5916ff1abffaa651ca09cee0a51c1bfdb1abcfe21fe94a436fc7`.
+Original coordinator text, final verifier/PASS and initial delivery-binding
+diagnostic are adjacent. The initial verifier expected two absolute file
+references in every inbox; actual delivery uses the exact body for H and
+an absolute Root reference plus relative manifest name for D/coordinator.
+The corrected binding passed.
+
 12 October continuation — retained local failure-recovery handoff
 
 Independently reconciled the coordinator's 16:00 completion handoff offline
