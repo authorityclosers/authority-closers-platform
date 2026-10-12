@@ -1,5 +1,36 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — uploaded-call quote test evidence
+
+At source `f34d403a`, independently reviewed A's `6db4a3b3` test repair.
+The supported fictional s3 quote is checked inside Report Moments, and the
+original s1 quote is checked in the opened Transcript reader. Replacing that
+single assertion block reproduces the new file exactly: earlier consent,
+same-call and transport assertions and all other tests remain byte-identical.
+All six workbench source hashes and eleven retained artifact hashes match.
+
+The retained logs confirm A's original candidate failure, first overlay timeout,
+final candidate-overlay pass and separate workbench pass. Each passing run
+selected one case and skipped 112; these are verified builder execution
+receipts, not a new independent test run or candidate CI verdict. The mutable
+candidate generated header currently differs from its historical pin, so its
+current preservation is not independently re-established. B's `f34d403a`
+candidate citation handoff was reviewed; candidate integration stays with its
+existing owner. Neither new workbench commit changes product runtime source.
+
+Local dev API readiness and the populated Report fixture return 200; API
+release identity is `a5d45b4c`. These prove availability only. The journey,
+inbox and foreign ESLint cache stayed unchanged during the check. Earlier
+browser passes keep their original source pins. No new browser/test wave,
+hosted request, application write, provider call or ship occurred. Populated
+hosted acceptance remains NOT RUN without the approved usable Report/Team
+context. Shared-dev persistence, Root1855 writes and PDF pixel quality retain
+their separate unexecuted/unverified limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-quote-test-admission-064352Z/receipt.json`
+SHA-256 `9bc2073bbffa91089259a31bac8a4adc010e72e7b91283558cfff3d6d606927b`.
+
 12 October continuation — hosted-context investigations completed with refusals
 
 CEO AUT-1862 message `40fe92c9-e072-4430-ad48-e49d527b9f3d`, received in the
