@@ -42,6 +42,25 @@ class OrganisationResponse(BaseModel):
     member_count: int
 
 
+class OrganisationSandboxResponse(BaseModel):
+    """What the selected organisation holds when it is the fictional AC Sandbox."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    sandbox: bool
+    businesses: int
+    representatives: int
+    calls: int
+    reports: int
+    outcomes: int
+    history_summaries: int
+    approved_at: datetime | None
+
+
+# The synthetic loader's usage policy; its calls are the sandbox's calls.
+SANDBOX_USAGE_POLICY = "synthetic-dev-authored/1"
+
+
 class OrganisationProfileResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     tenant_id: UUID
@@ -398,6 +417,83 @@ def install_organisation_http(
             verified_domains=[] if domains is None else domains.verified_domains,
             auto_join=False if domains is None else domains.auto_join,
             member_count=count or 0,
+        )
+
+    @router.get("/sandbox", response_model=OrganisationSandboxResponse)
+    async def sandbox(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationSandboxResponse:
+        """The fictional AC Sandbox explains itself; any other organisation answers zeros."""
+
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionUsage,
+        )
+        from ac_platform.conversation_intelligence.models import ConversationReportDraft
+        from ac_platform.conversation_intelligence.prospect_call_outcome_models import (
+            ConversationCallOutcomeRevision,
+        )
+        from ac_platform.conversation_intelligence.synthetic_import_models import (
+            ConversationSandboxOrganisation,
+            ConversationSyntheticRecord,
+        )
+
+        tenant_id = auth.resolved.actor.tenant_id
+        marker = await auth.database.get(ConversationSandboxOrganisation, tenant_id)
+        if marker is None:
+            return OrganisationSandboxResponse(
+                sandbox=False,
+                businesses=0,
+                representatives=0,
+                calls=0,
+                reports=0,
+                outcomes=0,
+                history_summaries=0,
+                approved_at=None,
+            )
+
+        async def count(statement: object) -> int:
+            return int(await auth.database.scalar(statement) or 0)  # type: ignore[arg-type]
+
+        def records(kind: str) -> object:
+            return (
+                select(func.count())
+                .select_from(ConversationSyntheticRecord)
+                .where(
+                    ConversationSyntheticRecord.tenant_id == tenant_id,
+                    ConversationSyntheticRecord.kind == kind,
+                )
+            )
+
+        return OrganisationSandboxResponse(
+            sandbox=True,
+            businesses=await count(records("world")),
+            representatives=await count(records("people")),
+            calls=await count(
+                select(func.count())
+                .select_from(ConversationAcquisitionUsage)
+                .where(
+                    ConversationAcquisitionUsage.tenant_id == tenant_id,
+                    ConversationAcquisitionUsage.policy_revision == SANDBOX_USAGE_POLICY,
+                )
+            ),
+            reports=await count(
+                select(func.count())
+                .select_from(ConversationReportDraft)
+                .where(
+                    ConversationReportDraft.tenant_id == tenant_id,
+                    ConversationReportDraft.erased_at.is_(None),
+                )
+            ),
+            outcomes=await count(
+                select(func.count())
+                .select_from(ConversationCallOutcomeRevision)
+                .where(
+                    ConversationCallOutcomeRevision.tenant_id == tenant_id,
+                    ConversationCallOutcomeRevision.revision == 1,
+                )
+            ),
+            history_summaries=await count(records("call_summary")),
+            approved_at=marker.created_at,
         )
 
     @router.get("/members", response_model=MembersResponse)

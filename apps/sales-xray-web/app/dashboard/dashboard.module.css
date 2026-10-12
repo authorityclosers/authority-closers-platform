@@ -498,3 +498,87 @@
   width: 80px;
   margin: 0 0 4px;
 }
+
+/* The fictional AC Sandbox's own card: copy, figures, then its views. */
+.sandbox {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--lx-line);
+  border-left: 3px solid var(--lx-teal);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.sandboxCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.sandboxCopy h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.sandboxCopy p {
+  margin: 0;
+}
+
+.sandboxCopy p:last-child {
+  color: var(--lx-muted);
+}
+
+.sandboxEyebrow {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--lx-teal);
+}
+
+.sandboxFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.sandboxFacts div {
+  display: grid;
+  gap: 2px;
+}
+
+.sandboxFacts dt {
+  font-size: 12px;
+  color: var(--lx-muted);
+}
+
+.sandboxFacts dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.sandboxLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.sandboxLinks a {
+  color: var(--lx-teal);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sandboxLinks a:hover {
+  text-decoration: underline;
+}
+
+.sandboxLinks a:focus-visible {
+  border-radius: var(--lx-radius-xs);
+  box-shadow: var(--lx-ring-focus);
+  outline: none;
+}

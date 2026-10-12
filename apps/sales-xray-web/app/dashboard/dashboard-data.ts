@@ -238,3 +238,68 @@ export function isEmptyAccount(
     (recent === null || recent.length === 0)
   );
 }
+
+/** What the fictional AC Sandbox holds (`/v1/organisation/sandbox`); zeros elsewhere. */
+export type SandboxFacts = Readonly<{
+  sandbox: boolean;
+  businesses: number;
+  representatives: number;
+  calls: number;
+  reports: number;
+  outcomes: number;
+  historySummaries: number;
+}>;
+
+const SANDBOX_KEYS = [
+  "sandbox",
+  "businesses",
+  "representatives",
+  "calls",
+  "reports",
+  "outcomes",
+  "history_summaries",
+  "approved_at",
+] as const;
+
+export function parseSandboxFacts(value: unknown): SandboxFacts {
+  const data = record(value);
+  const keys = Object.keys(data);
+  if (
+    keys.length !== SANDBOX_KEYS.length ||
+    !SANDBOX_KEYS.every((key) => Object.hasOwn(data, key)) ||
+    typeof data.sandbox !== "boolean" ||
+    (data.approved_at !== null && typeof data.approved_at !== "string")
+  )
+    throw new ReportContractError("sandbox_facts_invalid");
+  const count = (key: string): number => {
+    const raw = data[key];
+    if (!Number.isSafeInteger(raw) || (raw as number) < 0)
+      throw new ReportContractError("sandbox_facts_invalid");
+    return raw as number;
+  };
+  return {
+    sandbox: data.sandbox,
+    businesses: count("businesses"),
+    representatives: count("representatives"),
+    calls: count("calls"),
+    reports: count("reports"),
+    outcomes: count("outcomes"),
+    historySummaries: count("history_summaries"),
+  };
+}
+
+/** Explicit read only; a missing route is unavailable, never an invented sandbox. */
+export async function readSandboxFacts(
+  signal?: AbortSignal,
+): Promise<SandboxFacts> {
+  const response = await fetch("/v1/organisation/sandbox", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (response.status !== 200) throw new AcquisitionError(response.status);
+  return parseSandboxFacts(await response.json());
+}

@@ -313,3 +313,60 @@ async def test_reactivation_read_keeps_original_join_history(state):
             db.get(Membership, (state.tenant, state.member)).created_at.replace(tzinfo=UTC)
             == original
         )
+
+
+async def test_sandbox_facts_are_zero_unless_this_is_the_fictional_sandbox(state):
+    """Any organisation answers; only the marked AC Sandbox reports its fictional contents."""
+
+    from ac_platform.conversation_intelligence.synthetic_import_models import (
+        ConversationSandboxOrganisation,
+        ConversationSyntheticRecord,
+    )
+
+    plain = await call(state, path="/sandbox")
+    assert plain.status_code == 200
+    assert plain.json() == {
+        "sandbox": False,
+        "businesses": 0,
+        "representatives": 0,
+        "calls": 0,
+        "reports": 0,
+        "outcomes": 0,
+        "history_summaries": 0,
+        "approved_at": None,
+    }
+    now = datetime.now(UTC)
+    with Session(state.engine) as db, db.begin():
+        db.add(
+            ConversationSandboxOrganisation(
+                tenant_id=state.tenant,
+                approved_by_person_id=state.person,
+                approval_reference="ref:fictional-sandbox-test",
+                created_at=now,
+            )
+        )
+        for index, kind in enumerate(("world", "people", "people", "call_summary")):
+            db.add(
+                ConversationSyntheticRecord(
+                    tenant_id=state.tenant,
+                    kind=kind,
+                    synthetic_key=f"syn-fictional-{index}",
+                    revision=1,
+                    business_id="syn-fictional",
+                    imported_by_person_id=state.person,
+                    payload_sha256="0" * 64,
+                    payload={"synthetic": True},
+                    occurred_at=now,
+                    imported_at=now,
+                )
+            )
+    marked = await call(state, path="/sandbox")
+    assert marked.status_code == 200
+    body = marked.json()
+    assert body["sandbox"] is True
+    assert (body["businesses"], body["representatives"], body["history_summaries"]) == (1, 2, 1)
+    assert (body["calls"], body["reports"], body["outcomes"]) == (0, 0, 0)
+    assert body["approved_at"] is not None
+    # A plain member of the organisation reads the same facts; it is not an owner-only view.
+    member = await call(state, path="/sandbox", token=OTHER_TOKEN)
+    assert member.status_code == 200 and member.json()["sandbox"] is True

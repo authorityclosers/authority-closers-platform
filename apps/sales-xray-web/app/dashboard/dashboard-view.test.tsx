@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { WorkspaceAccessContext } from "../workspace-access";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import { DashboardView as DashboardPage } from "./dashboard-view";
 import { InitialSessionProvider } from "../initial-session";
 
@@ -30,13 +31,17 @@ let fetchMock: ReturnType<typeof vi.fn>;
 const signIn = vi.fn();
 const base = "/v1/conversation/acquisition";
 
-async function renderPage(authenticated: boolean) {
+async function renderPage(
+  authenticated: boolean,
+  workspaces?: readonly SalesXrayWorkspace[],
+) {
   await act(async () => {
     root.render(
       <WorkspaceAccessContext.Provider
         value={{
           status: authenticated ? "ready" : "unauthenticated",
           authenticated,
+          ...(workspaces ? { workspaces } : {}),
           context: authenticated
             ? {
                 personId: "person-1",
@@ -595,4 +600,66 @@ it("never seeds another session (signed in again in place) with the server's rea
   expect(fetchMock.mock.calls.map(([path]) => path)).toContain(
     `${base}/submissions/summary`,
   );
+});
+
+it("explains the fictional AC Sandbox to its owner, with links to its views", async () => {
+  fetchMock.mockImplementation(async (path: string) =>
+    path === "/v1/organisation/sandbox"
+      ? new Response(
+          JSON.stringify({
+            sandbox: true,
+            businesses: 10,
+            representatives: 60,
+            calls: 3360,
+            reports: 3360,
+            outcomes: 3360,
+            history_summaries: 177615,
+            approved_at: "2026-10-11T20:48:00+00:00",
+          }),
+          { status: 200 },
+        )
+      : new Response(JSON.stringify({ detail: "Not Found" }), { status: 404 }),
+  );
+  await renderPage(true, [
+    {
+      tenant_id: "tenant-1",
+      kind: "organisation",
+      name: "AC Sandbox",
+      role: "owner",
+      sales_xray_enabled: true,
+    },
+  ]);
+  expect(fetchMock.mock.calls.map(([path]) => path)).toContain(
+    "/v1/organisation/sandbox",
+  );
+  expect(host.textContent).toContain("Nobody here is real");
+  expect(host.textContent).toContain("3,360");
+  expect(host.textContent).toContain("1,77,615");
+  const views = [
+    ...host.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Sandbox views"] a',
+    ),
+  ].map((link) => link.getAttribute("href"));
+  expect(views).toEqual([
+    "/organisation/insights?range=all",
+    "/coaching?view=team",
+    "/organisation?tab=members",
+    "/analysis/calls",
+  ]);
+});
+
+it("asks nothing about a sandbox for a plain member or a personal workspace", async () => {
+  await renderPage(true, [
+    {
+      tenant_id: "tenant-1",
+      kind: "organisation",
+      name: "A real team",
+      role: "member",
+      sales_xray_enabled: true,
+    },
+  ]);
+  expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
+    "/v1/organisation/sandbox",
+  );
+  expect(host.textContent).not.toContain("Nobody here is real");
 });

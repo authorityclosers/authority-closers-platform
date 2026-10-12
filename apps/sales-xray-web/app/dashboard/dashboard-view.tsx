@@ -14,9 +14,11 @@ import {
   readCallActivity,
   readCallSummary,
   readRecentCalls,
+  readSandboxFacts,
   settle,
   type CallActivity,
   type CallSummary,
+  type SandboxFacts,
 } from "./dashboard-data";
 import {
   DashboardBody,
@@ -108,6 +110,9 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   const [recentState, setRecentState] = useState<
     ReadState<LibrarySubmission[]>
   >(seed.recent ?? { status: "loading" });
+  // The fictional AC Sandbox explains itself to its owner or admins; a failed
+  // read simply shows no card (it is never part of the page's figures).
+  const [sandbox, setSandbox] = useState<SandboxFacts | null>(null);
 
   // A cancelled read (unmount, or a re-run of the effect) must not paint
   // "Not loaded": only the live request may change a panel.
@@ -176,6 +181,15 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   }, []);
 
   const team = useDashboardTeam();
+  useEffect(() => {
+    if (team !== true) return;
+    const controller = new AbortController();
+    void settle(readSandboxFacts(controller.signal)).then((result) => {
+      if (!controller.signal.aborted)
+        setSandbox(result.ok ? result.value : null);
+    });
+    return () => controller.abort();
+  }, [team]);
   const states = [summaryState, activityState, allowanceState, recentState];
   // 403: this workspace has no Sales Xray access. Say so once, clearly.
   const forbidden = states.some(
@@ -240,6 +254,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
       {revealed ? (
         <DashboardBody
           team={team}
+          sandbox={sandbox}
           summary={summaryState}
           activity={activityState}
           allowance={allowanceState}
