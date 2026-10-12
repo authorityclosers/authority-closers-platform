@@ -364,7 +364,8 @@ async def test_sandbox_facts_are_zero_unless_this_is_the_fictional_sandbox(state
     assert marked.status_code == 200
     body = marked.json()
     assert body["sandbox"] is True
-    assert (body["businesses"], body["representatives"], body["history_summaries"]) == (1, 2, 1)
+    # Reps are the active member seats, not directory records (those include alumni).
+    assert (body["businesses"], body["representatives"], body["history_summaries"]) == (1, 1, 1)
     assert (body["calls"], body["reports"], body["outcomes"]) == (0, 0, 0)
     assert body["approved_at"] is not None
     # A plain member of the organisation reads the same facts; it is not an owner-only view.

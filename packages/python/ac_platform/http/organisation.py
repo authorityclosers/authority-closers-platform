@@ -467,7 +467,16 @@ def install_organisation_http(
         return OrganisationSandboxResponse(
             sandbox=True,
             businesses=await count(records("world")),
-            representatives=await count(records("people")),
+            representatives=await count(
+                select(func.count())
+                .select_from(Membership)
+                .where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.role == "member",
+                    Membership.status == "active",
+                    Membership.ended_at.is_(None),
+                )
+            ),
             calls=await count(
                 select(func.count())
                 .select_from(ConversationAcquisitionUsage)
