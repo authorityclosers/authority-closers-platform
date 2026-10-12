@@ -1,5 +1,43 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — revised Transcript handoff and integrated candidate
+
+At workbench `325304f0`, independently verified A's revised five-line
+Transcript assertion against immutable candidate `4a7afed`. All 37 retained
+or historical input pins and eleven artifact/log pins match. Applying A and B
+patches in memory reconstructs their exact retained overlays without writing
+candidate files. A preserves every previous assertion and other test byte.
+Its retained execution is one pass, 112 unselected skips, 4,790 ms body and
+the unchanged 5,000 ms timeout; both focused typechecks report zero diagnostics.
+These are builder receipts, not a new independent execution.
+
+The first current-equality probe refused because the candidate had advanced
+to `2b639118`. The retained diagnostic identifies three changed source files;
+immutable historical hashes still match. Independently reconciled the five
+expected integrated files against Git and the coordinator receipt. The actual
+Transcript assertion equals A's overlay except its added comment wording.
+B's three mapping cases are byte-identical to its overlay, and the model
+retains citations only for identical summary words. Additional recorded-outcome
+changes remain source inspection, without a new behavior test here.
+
+The pinned coordinator CI receipt records ten distinct successful validation
+jobs at `2b639118`, with release packaging skipped. Native CI was not fetched
+again. Candidate preview and review remain with AUT-1783/AUT-1785; that CI does
+not certify the shared workbench or populated hosted acceptance.
+
+Dev API readiness and the populated Report fixture return 200, API identity
+`a5d45b4c`. Workbench runtime, six retained source pins, journey, inbox and the
+foreign ESLint cache are unchanged. No new browser/test wave or hosted request
+ran. Hosted populated smoke remains NOT RUN without an approved usable
+Report/Team context; shared-dev persistence, Root1855 writes and original/latest
+PDF pixels retain their separate unexecuted/unverified limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-revised-quote-admission-080208Z/receipt.json`
+SHA-256 `1ae3662f4b341eb3da189b72c764ca7f47b99d286abbf29c302169c475faa08d`.
+The initial probe is pinned inside this receipt; original builder failures,
+timeouts and generated-declaration refusal remain retained.
+
 12 October continuation — uploaded-call quote test evidence
 
 At source `f34d403a`, independently reviewed A's `6db4a3b3` test repair.
