@@ -1,5 +1,47 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained preflight refusal and custody decision
+
+At workbench `7674b91a`, independently checked the two completion-only
+coordinator handoffs from 13:47 and 13:57 UTC. Both supplied receipt hashes,
+25 retained file pins, 22 command-output hashes and six helper hashes match.
+The 184-file Report library digest matches immutable Git at both staging core
+`bc49a3d` and web/merge `b157caa5`; two retained installed-file hashes also
+match Git. Runtime library and health observations remain operator-attributed
+historical evidence. No packet commands or helpers were executed.
+
+Root AUT-1883 remains DONE/version5 at document revision `d90aa67d`.
+Its retained preflight exited1 with `production_paused`; before/after controls
+and runtime records agree. This is a refusal, with no exact-pair smoke/canary
+or authenticated product acceptance. The retained parent is blocked/version92
+on AUT-301/AUT-1717; its completed native review policy/state is preserved.
+Staging remains recorded as `bc49a3d/b157caa5`, production paused on
+`fa846dc/v0.40.0`; QA did not inspect either host afresh.
+
+CEO custody revision `bac33843` selects the existing active Platform Engineer
+for SAME AUT-252 then AUT-301. The retained Root run `87b5ae6b` is running
+on assignments only; its returned operation receipt is pending in that
+snapshot. Completed assignments or implementation admission are not inferred.
+The AUT-226→AUT-252→AUT-301 blockers, paused seat and required CTO disposition
+for source-only separation remain. Both smoke source paths are absent at the
+recorded workbench and core pins. This handoff gives QA no implementation or
+operator authority.
+
+Six checked workbench source pins and the exact journey digest are unchanged.
+No usable already-approved fictional Report/Team context is supplied:
+**populated hosted acceptance remains NOT RUN**. Prior context refusals stay
+closed. Outcome persistence, Root1855 four-call/Coaching writes, uploaded
+outcome marker, PDF pixels, evaluation and production acceptance stay separate.
+No new product test, browser, build, HTTP request, provider/data write,
+operator dispatch or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-refusal-custody-readback-140039Z/receipt.json`
+SHA-256 `f1433c4ca164c38b9e921bf86aa20b4b92afcdab7d4195e5ea324533d307e289`.
+Original handoffs, verifier and final PASS output are adjacent. The initial
+QA prior-parent-pin lookup used the initial receipt rather than the restoration
+receipt; its traceback is retained beside the corrected successful check.
+
 12 October continuation — retained staging recovery and acceptance limits
 
 At workbench `df403d29`, independently reconciled six completion-only
