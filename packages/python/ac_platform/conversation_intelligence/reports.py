@@ -39,6 +39,12 @@ from ac_platform.conversation_intelligence.qualitative_pack import (
     supports_coaching_v6_route,
 )
 from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
+from ac_platform.conversation_intelligence.report_content import (
+    REPORT_C5_REVISION,
+    REPORT_INSTRUCTION,
+    ReportContent,
+    bind_report_content,
+)
 from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
     OVERVIEW_INSTRUCTION,
@@ -103,6 +109,7 @@ CoachingPromptRevision = Literal[
     "coaching-v5",
     "coaching-v6",
     "coaching-v7",
+    "report-c5-v1",
 ]
 COACHING_PROMPT_V7_MARKER = "COACHING_MAP: honest-call-map-v7."
 COACHING_PROMPT_V7_INSTRUCTION = (
@@ -354,6 +361,7 @@ _CANONICAL_REPORT_ROOT_FIELDS = frozenset(
         "dimension_assessments",
         "report_sections",
         "overview",
+        "report_content",
     }
 )
 
@@ -551,6 +559,7 @@ class ReportDraft(_StrictModel):
     transcript_revision: str = Field(min_length=1, max_length=256)
     dimensions: list[ReportDimension] = Field(min_length=8, max_length=8)
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
+    report_content: ReportContent | None = Field(default=None, exclude_if=lambda v: v is None)
     overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
     call_map: CallMap | None = Field(default=None, exclude_if=lambda value: value is None)
     sensitive_segments: list[SensitiveSegment] | None = Field(
@@ -2447,6 +2456,31 @@ def build_report_groq_prompt(
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
+    if coaching_prompt_revision == REPORT_C5_REVISION:
+        snapshot = validate_speaker_roles(speaker_roles or {}, _validated_transcript(transcript))
+        prompt = build_report_groq_prompt(
+            transcript,
+            fact_packets,
+            profile=profile,
+            max_completion_tokens=max_completion_tokens,
+            model=model,
+            detailed_overview=detailed_overview,
+            provider=provider,
+            coaching_prompt_revision=COACHING_PROMPT_V5,
+            report_language=report_language,
+            qualitative_pack_sha256=qualitative_pack_sha256,
+        )
+        prompt["messages"][0]["content"] = prompt["messages"][0]["content"].replace(
+            "Profile:\n", REPORT_INSTRUCTION + "\nProfile:\n", 1
+        )
+        prefix, raw = prompt["messages"][1]["content"].split("\n", 1)
+        source = json.loads(raw)
+        source["source_context"] = coaching_source_context(transcript, speaker_roles=snapshot)
+        prompt["messages"][1]["content"] = prefix + "\n" + json.dumps(source)
+        if provider == "gemini":
+            prepare_gemini_body(prompt, task="coaching")
+        return prompt
+
     if coaching_prompt_revision == COACHING_PROMPT_V7:
         from ac_platform.conversation_intelligence.call_map import SIGNALS_PATH
         from ac_platform.conversation_intelligence.coaching_schema import (
@@ -2893,6 +2927,35 @@ def parse_report_draft(
 ) -> ReportDraft:
     """Validate a decoded model object and bind every claim to native transcript data."""
 
+    if coaching_prompt_revision == REPORT_C5_REVISION:
+        content = bind_report_content(
+            payload.get("report_content"),
+            _validated_transcript(transcript),
+            speaker_roles=speaker_roles,
+            canonical_read=canonical_read,
+        )
+        legacy = dict(payload)
+        legacy.pop("report_content", None)
+        report = parse_report_draft(
+            legacy,
+            transcript,
+            source_label=source_label,
+            profile=profile,
+            coaching_prompt_revision=COACHING_PROMPT_V5,
+            canonical_read=canonical_read,
+        )
+        summary = " ".join(n.text for n in content.summary_sentences)
+        if report.summary != summary or any(d.call_state is None for d in report.dimensions):
+            raise ReportError("report_content_summary_or_states_missing")
+        roles = content.roles
+        by_id = {row["id"]: row for row in transcript["segments"]}
+        for dimension in report.dimensions:
+            for ref in dimension.evidence or []:
+                row = by_id[ref.segment_id]
+                if roles.get(row["speaker_id"]) != "seller" or ref.quote != row["text"]:
+                    raise ReportError("report_content_skill_actor")
+        return ReportDraft.model_validate({**report.model_dump(), "report_content": content})
+
     validated_transcript = _validated_transcript(transcript)
     if not isinstance(payload, Mapping):
         raise ReportError("report_payload_invalid")
@@ -2969,6 +3032,12 @@ def parse_report_draft(
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
     normalized = dict(payload)
+    if "report_content" in payload:
+        if not canonical_read:
+            raise ReportError("report_content_revision_required")
+        normalized["report_content"] = bind_report_content(
+            payload["report_content"], validated_transcript, speaker_roles=None, canonical_read=True
+        ).model_dump()
     if v7:
         for field in ("summary_evidence", "verdict_evidence"):
             normalized[field] = [

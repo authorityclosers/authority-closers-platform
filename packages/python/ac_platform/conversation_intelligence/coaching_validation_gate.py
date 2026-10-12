@@ -18,6 +18,11 @@ def coaching_revision_runtime_block(revision: str) -> str | None:
     there is no environment or database switch that activates candidate rules.
     """
 
+    if revision == "report-c5-v1":
+        return (
+            "Report C5 v1 is an offline candidate. Runtime use requires AC-SVAL-01 Gate 2 "
+            "classification, evidence and approval plus real-call/provider gates."
+        )
     if revision == "coaching-v6":
         return COACHING_V6_RUNTIME_BLOCK_MESSAGE
     if revision == "coaching-v7":

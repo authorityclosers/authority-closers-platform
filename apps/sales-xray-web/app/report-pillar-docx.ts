@@ -150,7 +150,10 @@ function storyEntries(model: StoryModel): Entry[][] {
     [
       { label: "Current status", text: status },
       ...line("Prospect's position", deal.position),
-      ...line("Possible blocker", deal.blocker),
+      ...line(
+        deal.blocker?.inferred ? "Possible blocker" : "Current blocker",
+        deal.blocker,
+      ),
       ...deal.prospectCommitments.flatMap((item) =>
         line("Prospect agreed to", item),
       ),
@@ -266,7 +269,7 @@ export function buildPillarReportDocument(input: ReportDocxInput) {
     if (model.missing[index].length)
       children.push(
         new Paragraph({
-          text: `Not in this report: ${model.missing[index].join(" · ")}`,
+          text: "Not clear from this call.",
           spacing: { before: 80, after: 60 },
         }),
       );

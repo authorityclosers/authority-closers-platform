@@ -56,7 +56,10 @@ export type MomentKind =
   | "Price Moment"
   | "Decision Moment"
   | "Commitment"
-  | "Worth Replaying";
+  | "Worth Replaying"
+  | "Buying Signal"
+  | "Trust Moment"
+  | "Risk";
 
 export type Moment = {
   key: string;
@@ -167,6 +170,9 @@ const MOMENT_PRIORITY: MomentKind[] = [
   "Objection",
   "Price Moment",
   "Worth Replaying",
+  "Buying Signal",
+  "Trust Moment",
+  "Risk",
 ];
 
 const clean = (value: string | null | undefined) => {
@@ -203,6 +209,10 @@ export function callOutcome(
   const overview = report.overview?.outcome ?? null;
   const story = report.story?.outcome ?? null;
   const detail =
+    line(
+      report.report_content?.outcome?.text,
+      report.report_content?.outcome?.evidence,
+    ) ??
     line(overview?.text, overview?.evidence) ??
     line(report.story?.next_step?.text, report.story?.next_step?.evidence);
   if (recorded)
@@ -210,6 +220,13 @@ export function callOutcome(
       status: recorded.status,
       origin: "person",
       detail: line(recorded.note, []) ?? detail,
+    };
+  const explicit = report.report_content?.outcome?.status;
+  if (explicit)
+    return {
+      status: explicit === "Won" || explicit === "Lost" ? null : explicit,
+      origin: explicit === "Won" || explicit === "Lost" ? null : "call",
+      detail,
     };
   let status: OutcomeStatus | null = null;
   if (story) {
@@ -259,8 +276,6 @@ function skillState(
   dimension: SalesReport["dimensions"][number],
 ): SkillState | null {
   if (dimension.call_state) return CALL_STATE[dimension.call_state] ?? null;
-  if (dimension.status === "observed" && dimension.evidence?.length)
-    return "Observed";
   if (dimension.status === "insufficient_evidence")
     return "Not Enough Evidence";
   if (dimension.status === "not_applicable") return "Not Applicable";
@@ -359,21 +374,6 @@ function momentsFor(
       source: change.change.evidence[0],
       why: line(change.possible_effect, [], true),
     });
-  for (const missed of overview?.missed_details ?? []) {
-    const finding = report.missed_opportunities[missed.finding_index];
-    const source = missed.prospect_signal.evidence[0];
-    if (!finding || !source) continue;
-    add({
-      kind: "Important Miss",
-      title: finding.title,
-      source,
-      why: line(missed.potential_impact, [], true),
-      movedToward:
-        line(missed.closer_response.text, missed.closer_response.evidence) ??
-        undefined,
-      couldExplore: clean(missed.follow_up) ?? undefined,
-    });
-  }
   for (const golden of overview?.golden_moments ?? []) {
     const finding = report.strengths[golden.strength_index];
     const source = finding?.evidence[golden.evidence_index];
@@ -558,7 +558,7 @@ export function reportStoryModel(
   const picture = {
     outcome,
     summary: line(report.summary, report.summary_evidence),
-    assessment: clean(overview?.final_assessment.assessment),
+    assessment: null,
     influence: line(overview?.diagnosis?.text, overview?.diagnosis?.evidence),
     strongest,
     concern,
@@ -633,14 +633,13 @@ export function reportStoryModel(
   };
 
   const rung = story?.outcome.next_step_rung;
-  const deal = {
+  const deal: StoryModel["deal"] = {
     outcome,
-    position: outcome.detail,
+    position: null,
     blocker: concerns[0] ?? null,
-    prospectCommitments: [
-      ...(story?.prospect_commitments ?? []),
-      ...(story?.prospect_tasks ?? []),
-    ].map((note) => ({ text: note.text, sources: note.evidence })),
+    prospectCommitments: [...(story?.prospect_commitments ?? [])].map(
+      (note) => ({ text: note.text, sources: note.evidence }),
+    ),
     sellerCommitments: (story?.seller_commitments ?? []).map((note) => ({
       text: [note.text, note.due_text].filter(Boolean).join(" · "),
       sources: note.evidence,
@@ -651,7 +650,7 @@ export function reportStoryModel(
             text: story.outcome.next_step_when,
             sources: story.outcome.evidence,
           }
-        : null,
+        : picture.nextStep,
     quality:
       rung === "dated_call" || rung === "committed" || rung === "invite_sent"
         ? ("Clear" as const)
@@ -661,18 +660,104 @@ export function reportStoryModel(
             ? ("Unclear" as const)
             : null,
     unclear,
-    action: clean(overview?.final_assessment.next_focus),
-    coachingMission: clean(overview?.next_call_focus?.behavior),
+    action: null,
+    coachingMission: null,
   };
+
+  const content = report.report_content;
+  if (content) {
+    const from = (
+      n: import("./report-content").ContentNote | null,
+    ): Line | null => (n ? { text: n.text, sources: n.evidence } : null);
+    picture.summary = {
+      text: content.summary_sentences.map((n) => n.text).join(" "),
+      sources: content.summary_sentences.flatMap((n) => n.evidence),
+    };
+    picture.influence = from(content.influence);
+    picture.strongest = from(content.strongest);
+    picture.concern = from(content.concern);
+    picture.nextStep = from(content.next_step);
+    flow.phases =
+      content.phases.length && transcript
+        ? content.phases.map((n, i) => ({
+            label: n.text,
+            start_ms: n.evidence[0].start_ms,
+            end_ms:
+              content.phases[i + 1]?.evidence[0].start_ms ??
+              transcript.duration_ms,
+          }))
+        : null;
+    flow.change = content.turning_point
+      ? {
+          before: from(content.turning_point.before)!,
+          turn: from(content.turning_point.turn)!,
+          after: from(content.turning_point.after)!,
+          effect: null,
+        }
+      : null;
+    const items = (f: (typeof content.worked)[number]): Item => ({
+      title: f.title,
+      what: from(f.observation)!,
+      why: from(f.effect),
+    });
+    worked.splice(0, worked.length, ...content.worked.map(items));
+    didnt.splice(0, didnt.length, ...content.didnt.map(items));
+    moments.splice(
+      0,
+      moments.length,
+      ...content.moments.map(
+        (m): Moment => ({
+          key: evidenceKey(m.observation.evidence[0]),
+          kind: m.kind as MomentKind,
+          title: m.title,
+          source: m.observation.evidence[0],
+          why: from(m.effect),
+        }),
+      ),
+      ...content.missed_chances.map(
+        (m): Moment => ({
+          key: evidenceKey(m.opening.evidence[0]),
+          kind: "Important Miss",
+          title: m.title,
+          source: m.opening.evidence[0],
+          movedToward: from(m.response_opportunity)!,
+          why: from(m.relevance),
+        }),
+      ),
+    );
+    moments.sort((a, b) => a.source.start_ms - b.source.start_ms);
+    const position = from(content.position);
+    deal.position = position?.text === outcome.detail?.text ? null : position;
+    deal.blocker = from(content.blocker);
+    deal.prospectCommitments = content.prospect_commitments.map(
+      (n) => from(n)!,
+    );
+    deal.sellerCommitments = content.seller_commitments.map((n) => from(n)!);
+    deal.nextEvent = content.next_event
+      ? {
+          text: [
+            content.next_event.observation.text,
+            content.next_event.date_text,
+            content.next_event.time_text,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          sources: content.next_event.agreement_evidence,
+        }
+      : null;
+    deal.quality = content.commitment_quality;
+    deal.unclear = content.unknowns.map((n) => n.text);
+    deal.action = content.action?.text ?? null;
+  }
 
   const missing: StoryModel["missing"] = [
     [
       !outcome.status && "Call outcome",
       !picture.summary && "Summary",
       !picture.influence && "What most affected this call",
-      !strongest && "Strongest part",
-      !concern && "Biggest concern",
-      !nextStep && "Next agreed step",
+      !picture.strongest && "Strongest part",
+      !picture.concern && "Biggest concern",
+      !picture.nextStep && "Next agreed step",
     ].filter((v): v is string => Boolean(v)),
     [
       !flow.phases && "Conversation stages",

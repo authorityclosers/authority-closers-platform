@@ -167,11 +167,7 @@ function Quote({
 
 function Missing({ items }: { items: string[] }) {
   if (!items.length) return null;
-  return (
-    <p className={styles.missing}>
-      <span>Not in this report:</span> {items.join(" · ")}
-    </p>
-  );
+  return <p className={styles.missing}>Not clear from this call.</p>;
 }
 
 const OUTCOME_TONE: Record<string, string> = {
@@ -593,6 +589,9 @@ const KIND_TONE: Record<MomentKind, string> = {
   "Decision Moment": "accent",
   Commitment: "good",
   "Worth Replaying": "neutral",
+  "Buying Signal": "good",
+  "Trust Moment": "good",
+  Risk: "warn",
 };
 
 function MomentCard({
@@ -891,7 +890,12 @@ function DealStands({
           </Fact>
         ) : null}
         {deal.blocker ? (
-          <Fact label="Possible blocker" extra={<Inferred />}>
+          <Fact
+            label={
+              deal.blocker.inferred ? "Possible blocker" : "Current blocker"
+            }
+            extra={deal.blocker.inferred ? <Inferred /> : undefined}
+          >
             <LineText
               line={deal.blocker}
               title="Possible blocker"

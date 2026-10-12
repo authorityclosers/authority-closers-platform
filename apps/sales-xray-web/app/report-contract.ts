@@ -1,3 +1,4 @@
+import { parseReportContent, type ReportContent } from "./report-content";
 import { parseCallLabel, type CallLabel } from "./call-label";
 import { parseReportStory, type ReportStory } from "./report-story";
 import {
@@ -68,6 +69,7 @@ export type SalesReport = {
   preview?: GuestReportPreview;
   overview?: DetailedOverview;
   story?: ReportStory;
+  report_content?: ReportContent;
   summary: string;
   summary_evidence?: ReportEvidence[];
   strengths: Finding[];
@@ -578,6 +580,7 @@ function parseReport(
       "overview",
       "provider_extras",
       "story",
+      "report_content",
     ],
     "report",
   );
@@ -690,6 +693,31 @@ function parseReport(
     ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
+  if (report.report_content !== undefined && report.report_content !== null) {
+    if (!binding.transcript)
+      throw new ReportContractError("report_content_source_required");
+    parsed.report_content = parseReportContent(
+      report.report_content,
+      binding.transcript,
+    );
+    if (
+      parsed.summary !==
+        parsed.report_content.summary_sentences.map((n) => n.text).join(" ") ||
+      parsed.dimensions.some((d) => !d.call_state)
+    )
+      throw new ReportContractError("report_content_summary_or_states_missing");
+    for (const d of parsed.dimensions)
+      for (const e of d.evidence ?? []) {
+        const source = binding.transcript.segments.find(
+          (s) => s.id === e.segment_id,
+        )!;
+        if (
+          parsed.report_content.roles[source.speaker_id] !== "seller" ||
+          e.quote !== source.text
+        )
+          throw new ReportContractError("report_content_skill_actor");
+      }
+  }
   if (report.story !== undefined && report.story !== null) {
     if (!binding.transcript)
       throw new ReportContractError("report_story_source_required");
@@ -838,6 +866,7 @@ export function parseAcquisitionReport(
       "summary_evidence",
       "verdict_evidence",
       "story",
+      "report_content",
       "improvements",
       "objection_analysis",
       "closing_analysis",

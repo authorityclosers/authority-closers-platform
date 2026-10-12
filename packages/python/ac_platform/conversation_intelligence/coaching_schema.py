@@ -347,6 +347,44 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
     server resolves those references to quote and timing fields.
     """
 
+    if revision == "report-c5-v1":
+        from ac_platform.conversation_intelligence.report_content import report_content_schema
+
+        schema = coaching_response_json_schema(_COACHING_V5)
+        content = report_content_schema()
+        definitions = content.pop("$defs")
+
+        def relocate(node: Any) -> Any:
+            if isinstance(node, list):
+                return [relocate(child) for child in node]
+            if not isinstance(node, dict):
+                return node
+            return {
+                key: value.replace("#/$defs/", "#/$defs/report_")
+                if key == "$ref"
+                else relocate(value)
+                for key, value in node.items()
+            }
+
+        schema["$defs"].update(
+            {"report_" + key: relocate(value) for key, value in definitions.items()}
+        )
+        schema["properties"]["report_content"] = relocate(content)
+        schema["required"].append("report_content")
+        variants = schema["$defs"]["dimension"]["anyOf"]
+        for variant in variants:
+            variant["properties"]["call_state"] = {
+                "type": "string",
+                "enum": [
+                    "strongly_demonstrated",
+                    "observed",
+                    "needs_attention",
+                    "insufficient_evidence",
+                    "not_applicable",
+                ],
+            }
+            variant["required"].append("call_state")
+        return schema
     if revision == _COACHING_V7:
         return _coaching_v7_schema()
     if revision not in {_COACHING_V4, _COACHING_V5, _COACHING_V6}:
