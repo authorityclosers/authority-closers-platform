@@ -80,7 +80,9 @@ fictional rep outside the first eight, combines name/area filters, clears an
 empty result and restores keyboard focus. It checks ready-call Report/coaching
 destinations and follows See calls to expand the rep's history, filter it to the
 saved current-skill records and return to All calls, with 32/44 px reachable
-controls. Product call links are inspected without opening them;
+controls. Expanded Team and skill-history lists can be shortened again; the
+journey checks keyboard focus, viewport return and the retained skill filter.
+Product call links are inspected without opening them;
 this does not establish authenticated access to those calls.
 
 ```sh
@@ -90,6 +92,11 @@ LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
 ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
   -k fixture_team_search_and_rep_calls -q --tb=no -rN
 ```
+
+For the combined rep-link/disclosure and Deal mission-label repairs, select
+`-k 'fixture_team_search_and_rep_calls or fixture_legacy_deal_action'` in the same
+command. These eight cases also check the mission label's visible separation
+and retain the saved next move across reload, Document and Word.
 
 The additional dev-only long-quote journey verifies the exact fictional
 1,232-character source once, its original time span, one expand/collapse click,

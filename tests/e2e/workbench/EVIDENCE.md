@@ -1,5 +1,15 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October, 23:26 UTC — focused repair readback prepared
+
+The existing Team/rep journey now checks Show fewer, restored keyboard/viewport
+focus and preservation of the saved-skill filter. The legacy Report journey
+checks visible separation between the coaching-mission label and instruction.
+These cover D `4ae088be` and B `9bbe0ac0` in one eight-case run. Ruff lint/format,
+API import and diff checks pass; without a server all eight cases skip safely.
+Actual browser verification remains pending the 23:33 UTC QA window. Prior
+Report passes and original Team failures remain retained below.
+
 12 October, 23:18 UTC — focused Team search and rep call-history check
 
 The new four-pair journey at `033944b6` returned 4 failures in 7.47 seconds,

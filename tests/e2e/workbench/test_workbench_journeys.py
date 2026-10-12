@@ -897,6 +897,27 @@ def test_fixture_legacy_deal_action(browser: Browser, viewport: tuple[int, str])
         expect(selected).to_have_attribute("aria-current", "location")
         expect(selected).to_be_in_viewport()
         journey.snapshot("saved-next-move")
+        mission_label = deal.get_by_text("Coaching mission for your next call", exact=True)
+        expect(mission_label).to_be_visible()
+        mission_geometry = mission_label.evaluate(
+            """label => {
+              const labelRect = label.getBoundingClientRect();
+              const walker = document.createTreeWalker(label.parentElement, NodeFilter.SHOW_TEXT);
+              let node;
+              while ((node = walker.nextNode())) {
+                if (label.contains(node) || !node.textContent.trim()) continue;
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                const textRect = range.getClientRects()[0];
+                if (textRect) return {gap: textRect.top - labelRect.bottom};
+              }
+              return {gap: null};
+            }"""
+        )
+        journey.observations[-1]["coaching_mission_label"] = mission_geometry
+        assert mission_geometry["gap"] is not None and mission_geometry["gap"] >= 2, (
+            "Coaching mission needs a visible gap below its label"
+        )
 
         _switch_report_view(page, "Document view")
         preview = _document_preview(page)
@@ -1233,6 +1254,25 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         expect(rows).to_have_count(8)
         expect(team.get_by_role("status")).to_have_text(f"{len(team_data['reps'])} reps")
 
+        expand_reps = team.get_by_role(
+            "button", name=f"Show all {len(team_data['reps'])} people", exact=True
+        )
+        journey.control_target(expand_reps, "show-team-reps")
+        expect(expand_reps).to_have_attribute("aria-expanded", "false")
+        expand_reps.click()
+        expect(rows).to_have_count(len(team_data["reps"]))
+        fewer_reps = team.get_by_role("button", name="Show fewer people", exact=True)
+        expect(fewer_reps).to_have_attribute("aria-expanded", "true")
+        journey.control_target(fewer_reps, "shorten-team-reps")
+        fewer_reps.click()
+        expect(rows).to_have_count(8)
+        expect(search).to_be_focused()
+        expect(search).to_be_in_viewport()
+        expect(search).to_have_value("")
+        expect(area).to_have_value("all")
+        expect(expand_reps).to_have_attribute("aria-expanded", "false")
+        journey.snapshot("team-shortened")
+
         page.get_by_role("button", name="One rep", exact=True).click()
         shortcuts = page.get_by_role("navigation", name="This rep’s calls", exact=True)
         expect(shortcuts).to_contain_text(latest["call_label"])
@@ -1282,6 +1322,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         )
         skill_expand.click()
         expect(history.get_by_role("list").get_by_role("link")).to_have_count(len(skill_calls))
+        expect(skill_expand).to_have_count(0)
         assert set(
             history.get_by_role("list")
             .get_by_role("link")
@@ -1289,6 +1330,18 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         ) == {f"/analysis/calls/{call['submission_id']}" for call in skill_calls}
         history.get_by_role("heading").first.scroll_into_view_if_needed()
         journey.snapshot("skill-history")
+        fewer_calls = history.get_by_role("button", name="Show fewer calls", exact=True)
+        expect(fewer_calls).to_have_attribute("aria-expanded", "true")
+        journey.control_target(fewer_calls, "shorten-skill-calls")
+        fewer_calls.click()
+        skill_links = history.get_by_role("list").get_by_role("link")
+        expect(skill_links).to_have_count(min(len(skill_calls), 3 if journey.width == 390 else 8))
+        expect(skill_links.first).to_be_focused()
+        expect(skill_links.first).to_be_in_viewport()
+        expect(on_skill).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
+        expect(skill_expand).to_have_attribute("aria-expanded", "false")
+        journey.snapshot("skill-history-shortened")
         all_calls.click()
         expect(all_calls).to_have_attribute("aria-pressed", "true")
         expect(history.get_by_role("status")).to_have_text(f"{len(payload['rep']['calls'])} calls")
@@ -1301,6 +1354,8 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
             "latest_ready_destinations_checked": True,
             "history_expanded": True,
             "saved_skill_history_filtered": True,
+            "team_list_shortened_with_focus": True,
+            "skill_list_shortened_with_filter_and_focus": True,
             "product_call_destinations_opened": False,
         }
 
