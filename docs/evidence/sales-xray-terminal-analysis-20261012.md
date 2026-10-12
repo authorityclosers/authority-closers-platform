@@ -201,3 +201,37 @@ Private source-bound addendum SHA256: `619740b02613b10dec3cffcb9f8db08ecb6cb8a23
 frozen schema/writer files remain byte-identical for AUT1922. This strengthens
 the earlier direct-journal proof; it does not establish hosted staging UI,
 ordinary/C1/terminal-plan adapters, full503/timeouts or successor dispatch.
+
+## Exact dev admission and automatic pickup
+
+CEO comment `c6c21289-0a5a-4353-8288-b1bf879d079e`, returned by Root
+runf0140c13, admitted only the frozen disconnected six-file dev slice. Fresh
+12-blob/patch/ancestor/dependency/graph/no-caller/readiness prerequisites and
+Ruff/format/six-module mypy/API-import/diff checks passed. Only those six files
+were committed at `c34b02952a63a788dfd213feddb8d590c62f7e32`; every byte
+corresponds to the CEO pins. No other owner’s file/cache was included.
+
+Automatic dev serves `704ef0325d8d687799d0edc0b91c52c4fcae7caf` with readiness200. Its
+source includes the admitted commit and all six matching blobs. Log records
+migration-to-heads21:22:29UTC, smoke21:22:34, deployOK21:22:39 and worker
+pickup21:22:40. The serving source graph is0088 over0087. Direct database
+`alembic_version` readback remains Root’s existing operator output; the log/source
+graph is not mislabeled as that direct value. Pickup receipt SHA256: `c73424dc8726af17a78e38098f5d748ca0984ca2eea112e1811d0a456f72ccc1`.
+
+The writer still has no runtime caller. No live/historical customer settlement,
+provider dispatch, manual deployment or staging/production action followed.
+Rollback uses the established route and preserves immutable failure history.
+Formal sensitive review remains bound to the code head.
+
+The current eligible-failure and live-publication predicates are disjoint: a
+dead-letter/no-lease failed run cannot also be the same live leased publisher;
+a different live source run also excludes failure. The source-pinned explanation
+08cc97cf was independently reconciled and accepted. The new two-case result is
+actual authenticated C6/live-recovery refusal plus expired/exhausted
+failure/stale-publisher refusal, not two simultaneously eligible writers. The
+original direct-journal concurrency and numeric cost proofs remain separate.
+
+The broader event/attempt/API seventeen-path handover, ordinary/C1/terminal-plan
+and later-failure adapters, actual authenticated successor, full503/timeout
+matrix and hosted staging context remain open. Dev preparation is not full
+terminal-repair or production acceptance.
