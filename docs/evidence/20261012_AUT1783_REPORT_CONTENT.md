@@ -86,3 +86,28 @@ contract and reader repair, not a staging activation or completed delivery.
 The diff is slightly above the brief's approximate 1,500-line target because
 strict server/browser validation and fictional acceptance fixtures stay together
 in this end-to-end card. No pipeline, prospect, release or settings task is added.
+
+## CTO requested schema repair
+
+The CTO found that recursive metadata stripping deleted the real `title` data
+property from Finding, Moment and Miss. The corrected traversal preserves keys
+inside `properties` and `$defs`, while stripping annotation titles from schema
+nodes. No legacy schema or runtime/SVAL admission rule changes.
+
+The new regression first failed against all three reviewed schema forms. It
+traverses their required/property consistency and validates nonempty worked,
+didnt, moments and missed_chances through the exact candidate/Gemini/OpenAI wire
+schemas and the local parser, including missing-title rejection. A separate
+fixture correction uses provider selectors rather than legacy copied-quote
+fields; the regression then passes for all three schemas.
+
+Root's revised runtime receipt (`managed-revised-preview-20261012-022d2cff`,
+revision af5869dd-809e-44cc-bb3c-ec0d0b4c4158) and the CTO's desktop check supersede
+the earlier connection refusal for the reviewed frontend source. This schema
+repair changes no browser or Word source. The prior proof is attributed to its
+operators and remains distinct from provider compatibility and real-call gates.
+
+CI was absent on the original PR, despite active validation workflows. The
+existing Application validation workflow supports dispatch on this task branch;
+release packaging is restricted to main. Normal exact-head CI must pass before
+resubmission. No workflow, repository, infrastructure or runtime setting changes.

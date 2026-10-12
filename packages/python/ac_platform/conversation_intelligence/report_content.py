@@ -145,9 +145,14 @@ def report_content_schema() -> dict[str, Any]:
     schema["properties"].pop("roles")
     schema["required"].remove("roles")
 
-    def wire(node: Any) -> Any:
+    def wire(node: Any, *, named_map: bool = False) -> Any:
         if isinstance(node, dict):
-            result = {key: wire(v) for key, v in node.items() if key != "title"}
+            # properties/$defs keys are data names, not schema annotations.
+            result = {
+                key: wire(v, named_map=key in {"properties", "$defs"})
+                for key, v in node.items()
+                if named_map or key != "title"
+            }
             if "const" in result:
                 result["enum"] = [result.pop("const")]
             return result

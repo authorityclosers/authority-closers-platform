@@ -273,3 +273,75 @@ def test_candidate_prompt_has_complete_source_map_and_own_provider_schema():
     assert restored["max_completion_tokens"] == prompt["max_completion_tokens"]
     revision, schema = _schema_for_prompt(system)
     assert revision == "report-c5-v1" and "report_content" in schema["required"]
+
+
+@pytest.mark.parametrize("provider", ["candidate", "gemini", "openai"])
+def test_nonempty_report_titles_fit_native_wire_and_local_parser(provider):
+    """Provider output for all title-bearing types must survive source binding."""
+    from ac_platform.conversation_intelligence.coaching_schema import (
+        coaching_generation_json_schema,
+    )
+    from ac_platform.conversation_intelligence.openai_tasks import _schema_for_prompt
+    from ac_platform.conversation_intelligence.report_content import REPORT_INSTRUCTION
+    from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
+    from tests.unit.conversation_intelligence.test_coaching_schema import (
+        _valid_response,
+        _validate,
+    )
+
+    schema = (
+        coaching_response_json_schema("report-c5-v1")
+        if provider == "candidate"
+        else coaching_generation_json_schema("report-c5-v1")
+        if provider == "gemini"
+        else _schema_for_prompt(OVERVIEW_MARKER + "\n" + REPORT_INSTRUCTION)[1]
+    )
+
+    def consistency(node):
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                assert set(node["required"]) <= set(node["properties"])
+            for key, child in node.items():
+                if key in {"properties", "$defs"}:
+                    for definition in child.values():
+                        consistency(definition)
+                elif isinstance(child, (dict, list)):
+                    consistency(child)
+        elif isinstance(node, list):
+            for child in node:
+                consistency(child)
+
+    consistency(schema)
+    for kind in ["Finding", "Moment", "Miss"]:
+        definition = schema["$defs"]["report_" + kind]
+        assert "title" in definition["required"]
+        assert definition["properties"]["title"]["type"] == "string"
+        assert "title" not in definition  # Schema metadata is still stripped.
+
+    t, roles, p = case()
+    c = p["report_content"]
+    c["didnt"] = [deepcopy(c["worked"][0])]
+    c["didnt"][0]["title"] = "The delivery date stayed open"
+    c["moments"] = [{**deepcopy(c["worked"][0]), "kind": "Decision Moment"}]
+    c["missed_chances"] = [
+        {
+            "title": "Timing remained unexplored",
+            "opening": deepcopy(c["influence"]),
+            "response_opportunity": deepcopy(c["strongest"]),
+            "relevance": deepcopy(c["influence"]),
+        }
+    ]
+    response = _valid_response()
+    # Start with wire selectors, not the legacy canonical copied-quote fixture.
+    response.update({key: p[key] for key in ["summary", "dimensions", "report_content"]})
+    _validate(response, schema, schema)
+    report = parse(t, roles, response)
+    for field in ["worked", "didnt", "moments", "missed_chances"]:
+        assert getattr(report.report_content, field)[0].title == c[field][0]["title"]
+    for field in ["worked", "moments", "missed_chances"]:
+        invalid = deepcopy(response)
+        invalid["report_content"][field][0].pop("title")
+        with pytest.raises(AssertionError):
+            _validate(invalid, schema, schema)
+        with pytest.raises(ValueError):
+            parse(t, roles, invalid)
