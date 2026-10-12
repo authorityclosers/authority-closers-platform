@@ -1,5 +1,34 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — returned bounded dev decision and eligibility explanation
+
+The coordinator's 21:21 handoff arrived before notes/inbox archival; the
+finalization guard stopped without overwriting it. Independently reconciled
+three coordinator receipts, 29 file pins, five method ranges in four source
+files, all twelve original committed blobs and five retained static/import
+logs. The returned CEO `c6c21289` body authorizes H's exact six-file dev commit
+`c34b0295` and established automatic migration 0088 pickup, subject to its
+prerequisites. This closes the prior bounded dev-schema decision; it grants
+no writer activation, customer settlement, provider or production action.
+
+The returned source explanation matches the inspected predicates: canonical
+failure requires dead-letter work without a lease and a completed failed run;
+valid publication requires the matching live worker lease. The explanation
+closes the source-contract question. The two-case execution remains publication
+with live-recovery refusal plus exhausted failure with stale-publisher refusal.
+No pass for two simultaneously eligible writers is inferred; journal concurrency
+and numeric provider exposure remain separate evidence.
+
+Actual automatic API/schema pickup and Root's database-revision readback remain
+pending in these retained packets. QA made no fresh host, database or native
+authority read and repeated no product checks. Hosted Report/Team acceptance
+remains **NOT RUN**; persistence, Root1855, PDF and other existing limits remain.
+
+Receipt: `dev-admission-receipt.json` beside the publication receipt below,
+SHA-256 `2df37d4affc29b02ef304756e6fc16d68bb811b8fc50423ed0a9a0cbd94ec728`.
+Original handoff, verifier and PASS log are adjacent. Initial predicate spelling
+expectations were corrected against the exact source; diagnostics are retained.
+
 12 October continuation — retained authenticated publication and failure proof
 
 Independently reconciled the coordinator's 21:11 handoff offline at source
