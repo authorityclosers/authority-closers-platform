@@ -127,9 +127,9 @@ export function AcquisitionFileStage({
         <div className={styles.dropCopy}>
           <strong>
             {dragActive
-              ? "Drop your audio files here"
+              ? "Drop your recordings here"
               : hasFiles
-                ? "Add another audio file"
+                ? "Add another recording"
                 : "Drop your call recording here"}
           </strong>
           {hasFiles ? null : (
@@ -243,7 +243,7 @@ export function AcquisitionFileStage({
                           ? " · Unsupported format"
                           : overLength
                             ? ` · Longer than ${maxMinutes} min`
-                            : " · Audio file"}
+                            : " · Recording"}
                     </small>
                   </span>
                   {selected ? (
