@@ -591,6 +591,17 @@
   color: var(--sx-accent);
 }
 
+/* Phone actions keep their floor with either touch or mouse input. */
+@media (max-width: 759.98px) {
+  .select,
+  .quiet,
+  .primary,
+  .actionLink,
+  .previousReport a {
+    min-height: 44px;
+  }
+}
+
 /* ---------- Loading ---------- */
 
 .skeleton {
