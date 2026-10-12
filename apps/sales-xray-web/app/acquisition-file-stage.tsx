@@ -18,7 +18,7 @@ import styles from "./acquisition-file-stage.module.css";
 
 const PAGE_SIZE = 2;
 const SUPPORTED_AUDIO =
-  /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i;
+  /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
   files: readonly File[];
@@ -62,9 +62,9 @@ export function AcquisitionFileStage({
   const wave = useFileWave(activeFile);
   const hasFiles = files.length > 0;
   const limits = [
-    "MP3, WAV, M4A and common phone audio formats",
+    "Audio or video recordings",
     maxBytes !== undefined && maxBytes > 0
-      ? `up to ${Math.floor(maxBytes / 1048576)} MB`
+      ? `up to ${Math.floor(maxBytes / 1_000_000)} MB`
       : null,
     maxMinutes !== undefined && maxMinutes > 0
       ? `${maxMinutes} min per call`
@@ -153,7 +153,7 @@ export function AcquisitionFileStage({
           ref={input}
           className={styles.fileInput}
           type="file"
-          accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
+          accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
           multiple
           tabIndex={-1}
           aria-hidden="true"
@@ -167,12 +167,12 @@ export function AcquisitionFileStage({
           >
             <span>
               <FileAudio size={16} aria-hidden="true" />
-              MP3, WAV, M4A and phone audio
+              Audio or video recordings
             </span>
             {maxBytes !== undefined && maxBytes > 0 ? (
               <span>
                 <HardDrive size={16} aria-hidden="true" />
-                Up to {Math.floor(maxBytes / 1048576)} MB
+                Up to {Math.floor(maxBytes / 1_000_000)} MB
               </span>
             ) : null}
             {maxMinutes !== undefined && maxMinutes > 0 ? (

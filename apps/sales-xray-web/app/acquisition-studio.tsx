@@ -1322,14 +1322,14 @@ export function AcquisitionStudio({
     setPlanRequiresAction(false);
     if (
       !policy ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
         next.name,
       ) ||
       !next.size ||
       next.size > policy.maximum_file_bytes
     ) {
       setError(
-        "Choose a supported audio recording within the displayed size limit.",
+        "Choose an audio or video recording within the displayed size limit.",
       );
       setLocalValidationError(true);
       return;
@@ -1355,7 +1355,7 @@ export function AcquisitionStudio({
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
-        /\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+        /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
           candidate.name,
         ) &&
         candidate.size > 0 &&
@@ -1365,7 +1365,7 @@ export function AcquisitionStudio({
     if (valid.length === 0) {
       if (hasInvalidFiles) {
         setError(
-          "Choose a supported audio recording within the displayed size limit.",
+          "Choose an audio or video recording within the displayed size limit.",
         );
         setLocalValidationError(true);
       }
@@ -1380,7 +1380,7 @@ export function AcquisitionStudio({
     if (!file) choose(valid[0]);
     if (hasInvalidFiles) {
       setError(
-        "Choose a supported audio recording within the displayed size limit.",
+        "Choose an audio or video recording within the displayed size limit.",
       );
       setLocalValidationError(true);
     }
@@ -2027,7 +2027,7 @@ export function AcquisitionStudio({
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
-        ? "Choose a supported audio recording within the displayed size limit."
+        ? "Choose an audio or video recording within the displayed size limit."
         : rootAnalysisState === "needs_action" &&
             !plan?.accepted &&
             !progress?.automatic_progression &&
@@ -2850,14 +2850,14 @@ export function AcquisitionStudio({
                     <div className={styles.formatFacts}>
                       <span>
                         <FileAudio size={14} aria-hidden="true" />
-                        MP3 · MPEG · WAV · M4A · OGG · FLAC
+                        MP4 · MOV · MP3 · WAV · M4A · more
                       </span>
                       <span>
                         <HardDrive size={14} aria-hidden="true" />
                         Up to{" "}
                         {policy
-                          ? Math.floor(policy.maximum_file_bytes / 1048576)
-                          : "32"}{" "}
+                          ? Math.floor(policy.maximum_file_bytes / 1_000_000)
+                          : "100"}{" "}
                         MB
                       </span>
                       <span>
@@ -2869,7 +2869,7 @@ export function AcquisitionStudio({
                     </div>
                     <p className="visually-hidden">
                       {policy
-                        ? `Up to ${Math.floor(policy.maximum_file_bytes / 1048576)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
+                        ? `Up to ${Math.floor(policy.maximum_file_bytes / 1_000_000)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
                         : "Checking file limits…"}
                     </p>
                   </div>
@@ -2957,7 +2957,7 @@ export function AcquisitionStudio({
                   className="visually-hidden"
                   id="acquisition-file"
                   type="file"
-                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
+                  accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
                   aria-label="Choose sales call audio"
                   disabled={
                     !policy ||

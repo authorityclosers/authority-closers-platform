@@ -74,7 +74,7 @@ export function BulkImportPreview({
       <div className={styles.body}>
         <Field
           label="Recording folder"
-          hint="MP3, M4A, OGG, WAV or no extension · 32 MiB per recording"
+          hint="Audio or video recordings · 100 MB per file"
         >
           <input
             type="file"

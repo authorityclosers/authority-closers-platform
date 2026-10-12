@@ -230,7 +230,7 @@ it("keeps the previous valid file in a validation-error observation", async () =
   await select("invalid replacement.pdf");
   expect(container.textContent).toContain("Previously valid call.wav");
   expect(container.textContent).toContain(
-    "Choose a supported audio recording within the displayed size limit.",
+    "Choose an audio or video recording within the displayed size limit.",
   );
   expect(observations.at(-1)).toEqual({
     phase: "upload.validation.error",

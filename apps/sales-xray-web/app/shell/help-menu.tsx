@@ -26,7 +26,7 @@ export function HelpMenu() {
       <div className={styles.popover}>
         <p className={styles.title}>Help</p>
         <ul className={styles.tips}>
-          <li>Choose a supported audio file up to 32 MB.</li>
+          <li>Choose a audio or video file up to 100 MB.</li>
           <li>Review the language and privacy details before analysis.</li>
           <li>Open saved calls to revisit completed reports.</li>
         </ul>

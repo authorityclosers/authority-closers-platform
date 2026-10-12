@@ -55,7 +55,7 @@ async function renderStage(props: Partial<AcquisitionFileStageProps> = {}) {
       <AcquisitionFileStage
         files={[]}
         selectedFile={null}
-        maxBytes={32 * 1048576}
+        maxBytes={100_000_000}
         maxMinutes={60}
         disabled={false}
         {...callbacks}
@@ -69,7 +69,7 @@ it("offers accessible local browse and only supplied file limits", async () => {
   await renderStage();
   expect(host.textContent).toContain("Drop your call recording here");
   expect(host.textContent).toContain(
-    "MP3, WAV, M4A and common phone audio formats · up to 32 MB · 60 min per call",
+    "Audio or video recordings · up to 100 MB · 60 min per call",
   );
   expect(host.textContent).toContain("Choose a file");
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -81,7 +81,22 @@ it("offers accessible local browse and only supplied file limits", async () => {
   expect(input.multiple).toBe(true);
 });
 
-it.each(["amr", "awb", "aac", "3ga", "webm", "opus"])(
+it.each([
+  "amr",
+  "awb",
+  "aac",
+  "3ga",
+  "webm",
+  "opus",
+  "mp4",
+  "mov",
+  "m4b",
+  "3gp",
+  "mkv",
+  "mka",
+  "aiff",
+  "aif",
+])(
   "keeps a phone %s file selectable even without a browser MIME type",
   async (extension) => {
     const phone = new File(["fictional"], `Phone call.${extension}`);

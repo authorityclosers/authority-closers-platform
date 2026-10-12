@@ -131,7 +131,7 @@ it("rejects mixed roots, Unicode duplicate paths and source caps before hashing"
   ).toBeTruthy();
   expect(
     selectedImportFiles([
-      { ...recording("A/one.wav"), size: 32 * 1024 ** 2 + 1 } as File,
+      { ...recording("A/one.wav"), size: 100_000_000 + 1 } as File,
     ]).error,
   ).toBeTruthy();
   expect(
@@ -139,7 +139,7 @@ it("rejects mixed roots, Unicode duplicate paths and source caps before hashing"
       Array.from(
         { length: 33 },
         (_, index) =>
-          ({ ...recording(`A/${index}.wav`), size: 32 * 1024 ** 2 }) as File,
+          ({ ...recording(`A/${index}.wav`), size: 100_000_000 }) as File,
       ),
     ).error,
   ).toBeTruthy();
@@ -260,4 +260,32 @@ it("the preview network budget and caller cancellation end the read", async () =
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   abort.abort();
   expect((await cancelled).error).toMatch(/cancelled/);
+});
+
+it.each([
+  "mp4",
+  "mov",
+  "m4b",
+  "3gp",
+  "3ga",
+  "mkv",
+  "mka",
+  "aiff",
+  "aif",
+  "aifc",
+])("keeps new %s recordings in folder inventory", (extension) => {
+  const file = recording(`Team/Rep/call.${extension}`);
+  expect(selectedImportFiles([file]).data?.files.size).toBe(1);
+});
+
+it("accepts exactly 100 MB and refuses one byte more before hashing", () => {
+  const file = recording("Team/Rep/call.mp4");
+  Object.defineProperty(file, "size", {
+    value: 100_000_000,
+    configurable: true,
+  });
+  expect(selectedImportFiles([file]).error).toBeNull();
+  Object.defineProperty(file, "size", { value: 100_000_001 });
+  expect(selectedImportFiles([file]).error).toContain("100 MB");
+  expect(file.arrayBuffer).not.toHaveBeenCalled();
 });
