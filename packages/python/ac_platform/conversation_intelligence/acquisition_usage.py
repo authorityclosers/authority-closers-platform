@@ -173,6 +173,7 @@ async def account_usage(
         "released": "not_charged",
         "completed": "charged",
         "no_work_performed": "not_charged",
+        "terminal_failure": "not_charged",
     }
     return {
         "calls": [
