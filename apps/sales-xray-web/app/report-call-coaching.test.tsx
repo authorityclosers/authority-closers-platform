@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
+import type { SalesReport } from "./report-contract";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
 import { callCoachingFocus, ReportCallCoaching } from "./report-call-coaching";
 
@@ -26,6 +27,33 @@ it("opens legacy sourced findings without an overview or assessed skill", () => 
   expect(html).toContain(report.improvements[0].explanation);
   expect(html).toContain("Your next-call mission");
   expect(html).not.toContain("Not Enough Evidence");
+});
+
+it("follows a v8 report's own mission to the issue it links, as the server does", () => {
+  const first = syntheticReport.improvements[0];
+  const report = {
+    ...syntheticReport,
+    overview: undefined,
+    improvements: [first, { ...first, title: "Second issue" }],
+    pillars: {
+      ...syntheticReport.pillars,
+      deal: {
+        ...syntheticReport.pillars?.deal,
+        coaching_mission: "Ask what the delay costs.",
+        coaching_mission_for: 1,
+      },
+    } as SalesReport["pillars"],
+  };
+  const focus = callCoachingFocus(report)!;
+  expect(focus.finding.title).toBe("Second issue");
+  expect(focus.behavior).toBe("Ask what the delay costs.");
+  // No link: nothing is attached by guess.
+  (
+    report.pillars!.deal as { coaching_mission_for?: unknown }
+  ).coaching_mission_for = null;
+  expect(callCoachingFocus(report)!.behavior).toBe(
+    report.improvements[0].title,
+  );
 });
 
 it("withholds an unsupported preferred focus and its wording and practice", () => {
@@ -92,7 +120,7 @@ it("offers explicit skill choices when the report has no supported focus", () =>
   };
   const html = renderToStaticMarkup(<ReportCallCoaching data={{ report }} />);
   expect(callCoachingFocus(report)).toBeNull();
-  expect(html).toContain("Choose a skill to work on below");
+  expect(html).toContain("Pick a skill below to work on");
   expect(html.match(/href="\/coaching\?focus=/g)).toHaveLength(8);
   expect(html).not.toContain("Your next-call mission");
 });

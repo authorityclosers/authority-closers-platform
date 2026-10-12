@@ -5,6 +5,7 @@ import {
   Clock3,
   Download,
   Ellipsis,
+  Languages,
   Link2,
   Pencil,
   Plus,
@@ -379,9 +380,12 @@ export function ReportHeader({
               {formatClock(durationMs)}
             </span>
             {languageLabel ? (
-              <span>Report language: {languageLabel}</span>
+              <span title={`Report language: ${languageLabel}`}>
+                <Languages size={14} aria-hidden="true" />
+                <span className={pinned.hidden}>Report language: </span>
+                {languageLabel}
+              </span>
             ) : null}
-            <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
         {hasCompact ? (
@@ -406,13 +410,13 @@ export function ReportHeader({
           {onOpenTranscript ? (
             <button
               type="button"
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               onClick={onOpenTranscript}
               aria-label="Open transcript reader"
               title="Open transcript reader"
             >
               <BookOpen size={16} aria-hidden="true" />
-              <span>Transcript</span>
+              <span className={pinned.wideOnly}>Transcript</span>
             </button>
           ) : null}
           {/* Every action lives in one calm menu; "New analysis" is in the app header. */}
@@ -428,7 +432,7 @@ export function ReportHeader({
             }}
           >
             <summary
-              className={styles.reportAction}
+              className={`${styles.reportAction} ${pinned.action}`}
               aria-label="More report actions"
               title="More report actions"
             >
@@ -470,7 +474,7 @@ export function ReportHeader({
               >
                 <Download size={16} aria-hidden="true" />
                 Download report
-                <small>.docx</small>
+                <small className={pinned.fileType}>.docx</small>
               </button>
               <button
                 type="button"

@@ -58,7 +58,10 @@
    ],
    "audio_sha256": "0868636e41ad556fda46de5db182bf7818c716fc5f1af1b8f1445d2879c3affd",
    "audio_bytes": 299903,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "9a0da52cd5c335f47daaa01f03731aa8787381f91e1dff1dd0ba2ee76e490c0f",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-013",
@@ -87,7 +90,10 @@
    ],
    "audio_sha256": "baab8a55ddcfd5fd2d68547a6b4e04a39c57f728963328f73661979300724420",
    "audio_bytes": 182823,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "1e5fbe7417159247ed74690cebec6aeea05feff3a6f04b9768fe5a9370f3058f",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-014",
@@ -116,7 +122,10 @@
    ],
    "audio_sha256": "f6c73e76992fe9a641ee39f04e0b00fb901212b3ba05498a2a0eca7796a1b7b4",
    "audio_bytes": 166052,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c6b802f9b77fad77c8ab0da596d38b58024d1b387606d0c143bbca865ca75e98",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-015",
@@ -145,7 +154,10 @@
    ],
    "audio_sha256": "120fd0a55e13381aef3c589943ca3940ee6f816c031bc038bd4fd5e9a08ff93a",
    "audio_bytes": 206333,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cc878541837b2e00f9242c3205a7ead6e2fec8fb7130bd7c234fdc880a11f8ba",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-021",
@@ -174,7 +186,10 @@
    ],
    "audio_sha256": "b8b82006efd927c382d89aedc4fab3db0965eb641adc0ff51ae27fbe17bfa371",
    "audio_bytes": 314793,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "2f5539db603e56fec38eecddb03d2c1e4ee9955b78c191e68a360175d625118f",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-023",
@@ -203,7 +218,10 @@
    ],
    "audio_sha256": "c82ac4b19cc3298f3e1102d255bf8b94c663909425885b5ed47ca5c7bafa493b",
    "audio_bytes": 253353,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "6d57daf8cb4c548782b9744d618e878e708baa6e85f328331c6a611d8c133136",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-024",
@@ -232,7 +250,10 @@
    ],
    "audio_sha256": "c6b38f4825b2d1b04e18386156a456229768de2adaab760534fcfa994cd9f4dc",
    "audio_bytes": 261033,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "ed23e308564b8be5ae32b19157ec471e151a3087bbc711b83b56a6f96d61eecf",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-025",
@@ -261,7 +282,10 @@
    ],
    "audio_sha256": "ffafa62b2da771eb7b34a6fc16765d9db94e42caddd0dc7daffd0039e170ac4e",
    "audio_bytes": 241912,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f5c1f19c59409e74a1c1c35c802d0e37e844cd944b8e16acb7531727770123e6",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-011",
@@ -319,7 +343,10 @@
    ],
    "audio_sha256": "e1a6a3b383e0fa1cb82620d4d5e003d3d2e229ce1c76b696af007bbf0f1d08cf",
    "audio_bytes": 334542,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "a0f23e069c6f1a12b9722a50bf2c92a0f8f4215628dd82c78628a723fcd32f69",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-015",
@@ -348,7 +375,10 @@
    ],
    "audio_sha256": "ac1ffe61fbf19dff75a8b2e18245e474e6007b35c04fc9c1b7e1f3c6a228a76f",
    "audio_bytes": 219342,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "6c8c7cde1113342022e241b8c60d673ff0b01b8f9971b826891411e3640f783f",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-017",
@@ -377,7 +407,10 @@
    ],
    "audio_sha256": "d186ed11f84b6d1586b0aa667a2f791ef1cd480d6b6aaf5d4e743cdcf59b8c7c",
    "audio_bytes": 157432,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "82b3189587d99d1c270887e262c1b92cd876d428abb16833dbd4120e46157404",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-018",
@@ -406,7 +439,10 @@
    ],
    "audio_sha256": "f4b16f382bdfdaa25f21b913bd57ef64d9597a525b1a41b9809d6391fe8c0819",
    "audio_bytes": 143952,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "46da072856a09540c2ba74a7bb47020012c6ea23b4b24d24f1e583ccec76eeae",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-020",
@@ -435,7 +471,10 @@
    ],
    "audio_sha256": "748ca13b9cf591464941fa8054446cd9655b9ed338d7f6021c0e614046e5d8f4",
    "audio_bytes": 191443,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "89a75e71d9556ad23560e02f0dd8035c7c0fefce5861ee7f57cf101e69df1c71",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-009",
@@ -493,7 +532,10 @@
    ],
    "audio_sha256": "768e76bca46c492933b3effe0db1c1775395694b2cc23f910d2a78eb9f809faa",
    "audio_bytes": 360403,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c273f3cd09be93d3a347bf63f08e19181c78bc2d3d9bd0ef26fdef05b049020d",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-016",
@@ -522,7 +564,10 @@
    ],
    "audio_sha256": "fd9105199e4b589befe8a5bdd140bcbd80a65dca26b00c1b778e8719c9ecc868",
    "audio_bytes": 244263,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "75de121f11d3798b6a88554ea09c0ed5ea23fc187b5a8af010ee83c9712fa110",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-019",
@@ -551,7 +596,10 @@
    ],
    "audio_sha256": "4957bdb1f652806cdca81e66626422f04df3dd5de2329e0389f9581e5a69449c",
    "audio_bytes": 248024,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "337cfdf074523a1a5d704620483bb4dbaa5dbc5816f30975ee6ada0d38e50bc6",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-001",
@@ -609,7 +657,10 @@
    ],
    "audio_sha256": "1f8fa54b53e108dfcfb6578cc0d96fd2acd39e160598274312c2f4c4ea2a577b",
    "audio_bytes": 168873,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c743e359a93be5079f660dcb6d2abfb783ad161880ebadc49182471055c4f69e",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-001",
@@ -638,7 +689,10 @@
    ],
    "audio_sha256": "2a89bc8f1c58fb191fbfae84152267e7f89fda5ce31c15abae4617aebf590f04",
    "audio_bytes": 217775,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "3ed671f31d30c07e117372c7260f63c264714a9222e8debf96252ac50c00e51c",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-002",
@@ -667,7 +721,10 @@
    ],
    "audio_sha256": "e27574aa95197c4d5b1076c2857dfe46af4b8d089a95d3e77c0b8e9ea4e046c6",
    "audio_bytes": 151632,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "0bf2a7e3319b376275ea4c6f6713ab25bdc07173944aae86d99321e8263d73ea",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-003",
@@ -696,7 +753,10 @@
    ],
    "audio_sha256": "d3b04c0b3191acd9b9902bcd9803451810e6b70849959f08fc0904e85d7cd3af",
    "audio_bytes": 214483,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "71a9bcaafd490a7f6f94ef89ab33728a4ee07559672def795f9149f7590b503b",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-004",
@@ -725,7 +785,10 @@
    ],
    "audio_sha256": "1760264ae6e8d41d5c58088a75078df9a38fd9ea385c4aa8351e59ec6566835c",
    "audio_bytes": 269183,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "20fae964274411b9b618b49cc66003cbab65739f786992f8f3439d6ff1199810",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-005",
@@ -754,7 +817,10 @@
    ],
    "audio_sha256": "9ac782770cb66e224384da6b36bda9f8985bd65450bf5ed9ab0c90bd768fb2af",
    "audio_bytes": 193794,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f1571551abe95f9c6eacba0f80ad1b87f0e9ae0eac9467e672e86155594cae5a",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-006",
@@ -783,7 +849,10 @@
    ],
    "audio_sha256": "f137c588c732435397662b796f3f01e808d66b881430297498ff2f18f24e81c9",
    "audio_bytes": 257742,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "af9e4731adc3082e18ab072dc2711e7a0fab9992843cff9d4d4670b0ef8758a9",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-005",
@@ -870,7 +939,10 @@
    ],
    "audio_sha256": "268f88926b927be76af7f1a36189b89610bd839fccb774435453fdce345effcf",
    "audio_bytes": 225925,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "2c16689e277f3f708fdc3cb4e294b512c694cda6bd98e81162d9966e549c299e",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-008",
@@ -899,7 +971,10 @@
    ],
    "audio_sha256": "6df1a57312214db629cc94c21c9386d8975e010f9c76c80f9b92fc3f0209af4d",
    "audio_bytes": 192854,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cb66035610a3db45ad31c5e4ea8bdc1798a08f04816bab579f68f86612ee478c",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-006",
@@ -957,7 +1032,10 @@
    ],
    "audio_sha256": "be8ede880d11fa8e0d4ecc087597dd890f3eda3211963940d31b525a9424041c",
    "audio_bytes": 195205,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "f1384a0b0ab99911c0f4b1610246add201072fe14d31071863498f6e649e25d2",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-009",
@@ -986,7 +1064,10 @@
    ],
    "audio_sha256": "45d05fd95539d64b66ef2090009869487cc9b58a8c174cc1e313fb308a6ceb4a",
    "audio_bytes": 220752,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "5ebd5aa27c08f47c90eb09512b19d0083b48c2d4e2ee66bb76373cd107568222",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-022",
@@ -1015,7 +1096,10 @@
    ],
    "audio_sha256": "3f4ed972d518354e8e8df201b8939b09430c97a7635bde73a94299f88d77b7d5",
    "audio_bytes": 257742,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "cc9ab3d416d1f6483e1312bf5f55996379b03674e677b60a17e8cabbadbb8e33",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-video-004",
@@ -1073,7 +1157,10 @@
    ],
    "audio_sha256": "c1ee4ea8a459727d2d82c9719498d8cb8492632dbdf07ab2f530245df73a51e9",
    "audio_bytes": 177964,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "1107cdb68d9a405a03e675109921c95e8ccb112d39581ba028a13f617cb44094",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-010",
@@ -1102,7 +1189,10 @@
    ],
    "audio_sha256": "55344498bb322a2a6b22edcfca68a35ca4ffb50e1e6fca01d473458a161d5606",
    "audio_bytes": 221693,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "0b8b5a7ae92ef8959ee252e6a01c02d86005016e487d0a37415cf02c26338683",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-011",
@@ -1131,7 +1221,10 @@
    ],
    "audio_sha256": "06b32e24eee0f887e171e4bda8deb21a3f11ed2088e7e6b34459aa669b761b8b",
    "audio_bytes": 250532,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "436c79a6c979d6308202395c7a338858d5c84e73f90c7c1ccc1b3d02ccda434a",
+   "preview_bytes": 90279
   },
   {
    "topic_id": "syn-coach-audio-012",
@@ -1160,7 +1253,10 @@
    ],
    "audio_sha256": "77e275c9cf34de3f9e93028d16ade6b0a429779257bb18fcb2f687f2bf922f80",
    "audio_bytes": 212602,
-   "free": false
+   "free": false,
+   "preview_ms": 15000,
+   "preview_sha256": "c76af797987c5cd6af6a0f95756ac00a08658711e72a4c1d57fb3860c9eeafe0",
+   "preview_bytes": 90279
   }
  ]
 }

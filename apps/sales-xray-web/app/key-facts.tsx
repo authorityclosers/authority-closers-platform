@@ -61,7 +61,9 @@ export function KeyFacts({
       <header className={styles.head}>
         <div>
           <h3>Key facts</h3>
-          <p>Edit the linked prospect profile. A person’s edit stays locked.</p>
+          <p>
+            Change any fact here. Your change stays when later calls come in.
+          </p>
         </div>
       </header>
       <ProspectReportFacts callId={callId} readOnly={documentView} />

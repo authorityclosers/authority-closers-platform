@@ -1,14 +1,32 @@
 "use client";
 
+import { PencilLine, Target } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentReportData } from "./report-document-data";
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { REPORT_SKILLS } from "./report-pillars";
-import { RichText } from "./report-entities";
-import { Clip } from "./report-kit";
-import { CoachingMedia } from "./coaching/media-player";
-import { formatClock } from "./lightbox/time";
+import { basisChip } from "./coaching/call-coaching";
+import {
+  CALL,
+  CALL_PILLARS,
+  FOCUS,
+  NEXT,
+  REPORT_COACHING,
+  RETAINED,
+  WHY,
+} from "./coaching/coaching-copy";
+import {
+  dipakTake,
+  FocusHero,
+  LessonPanel,
+  MissionPanel,
+  Pillar,
+} from "./coaching/coaching-ui";
+import coachingStyles from "./coaching/coaching.module.css";
+import { MomentList } from "./coaching/evidence-player";
+import { Quote, StoryCard } from "./report-visuals/visuals";
+import { kitStyles } from "./ui/kit";
 import {
   buildContextualSourcePlayback,
   type ContextualSourcePlayback,
@@ -23,10 +41,33 @@ import {
   type CallCoaching,
 } from "./report-call-coaching-client";
 
+/**
+ * A v8 report has no overview: its own coaching mission, linked to one
+ * "What Didn't" issue (`coaching_mission_for`), is the proposed focus, as on
+ * the server (report_adapter.with_pillars_overview). No link, no proposal.
+ */
+function pillarsFocus(report: SalesReport) {
+  const deal = report.pillars?.deal as
+    | { coaching_mission?: string | null; coaching_mission_for?: unknown }
+    | undefined;
+  const index = deal?.coaching_mission_for;
+  return deal?.coaching_mission &&
+    typeof index === "number" &&
+    Number.isInteger(index) &&
+    index >= 0 &&
+    index < report.improvements.length
+    ? {
+        improvement_index: index,
+        behavior: deal.coaching_mission,
+        target: null,
+      }
+    : undefined;
+}
+
 /** A retained finding supplies a suggestion, never a new diagnosis or score. */
 export function callCoachingFocus(report: SalesReport) {
   if (report.preview) return null;
-  const proposed = report.overview?.next_call_focus;
+  const proposed = report.overview?.next_call_focus ?? pillarsFocus(report);
   const proposedFinding = proposed
     ? report.improvements[proposed.improvement_index]
     : undefined;
@@ -103,6 +144,8 @@ export function ReportCallCoaching(props: Props) {
   const baseScope = `${identity}:${callId}:${report?.source_sha256}:${report?.transcript_revision}:${data.recordingId}:${data.reportRevision}`;
   const [attempt, setAttempt] = useState(0);
   const [withheldScope, setWithheldScope] = useState<string | null>(null);
+  // A call that isn't the viewer's (an admin reading a teammate's report).
+  const [foreignScope, setForeignScope] = useState<string | null>(null);
   const authorisedScope = useRef<string | null>(null);
   const scope = `${baseScope}:${attempt}`;
   const [loaded, setLoaded] = useState<{
@@ -165,20 +208,31 @@ export function ReportCallCoaching(props: Props) {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
+        const status =
+          error instanceof CallCoachingReadError ? error.status : undefined;
         if (
-          error instanceof CallCoachingReadError &&
-          ([401, 403].includes(error.status ?? 0) ||
-            (error.status === 404 && authorisedScope.current === baseScope))
+          [401, 403].includes(status ?? 0) ||
+          (status === 404 && authorisedScope.current === baseScope)
         ) {
           setWithheldScope(baseScope);
         }
         setLoaded({ scope, baseScope, report, view: null, error: true });
+        // Not one of the viewer's own calls (an admin reading a teammate's
+        // report): Coaching stays private to the rep, so the report's own
+        // coaching is the whole answer, not a failure to retry.
+        if (status === 404 && authorisedScope.current !== baseScope) {
+          setForeignScope(baseScope);
+          return;
+        }
         notify({
           id: "report-call-coaching",
           tone: "error",
-          title: "Call coaching unavailable",
-          message: "Your report is still available.",
-          action: { label: "Try again", run: () => setAttempt((n) => n + 1) },
+          title: REPORT_COACHING.failed,
+          message: REPORT_COACHING.failedText,
+          action: {
+            label: REPORT_COACHING.retry,
+            run: () => setAttempt((n) => n + 1),
+          },
         });
       });
     return () => {
@@ -200,11 +254,7 @@ export function ReportCallCoaching(props: Props) {
   ]);
   if (!report || report.preview) return null;
   if (access && callId && !permitted)
-    return (
-      <p className={styles.context}>
-        Choose your signed-in workspace to see this call’s coaching.
-      </p>
-    );
+    return <p className={styles.context}>{REPORT_COACHING.chooseWorkspace}</p>;
   // Withholding remains in force while a retry is pending; old report quotes cannot reappear.
   const current =
     (attempt === 0 ? bootstrap : null) ??
@@ -219,9 +269,9 @@ export function ReportCallCoaching(props: Props) {
         data-call-coaching
         data-state="unavailable"
       >
-        <p>This call’s coaching evidence is unavailable.</p>
+        <p>{REPORT_COACHING.unavailable}</p>
         <button type="button" onClick={() => setAttempt((n) => n + 1)}>
-          Try again
+          {REPORT_COACHING.retry}
         </button>
       </div>
     );
@@ -234,17 +284,21 @@ export function ReportCallCoaching(props: Props) {
       />
     );
   if (access && identity !== initialIdentity)
-    return (
-      <p className={styles.context}>
-        Coaching is unavailable in this workspace. Your report can be reopened
-        from the call list.
-      </p>
-    );
+    return <p className={styles.context}>{REPORT_COACHING.otherWorkspace}</p>;
+  const foreign = foreignScope === baseScope;
   return (
-    <RetainedCallCoaching {...props} callId={permitted ? callId : undefined} />
+    <RetainedCallCoaching
+      {...props}
+      callId={permitted && !foreign ? callId : undefined}
+      foreign={foreign}
+    />
   );
 }
 
+/**
+ * This call's coaching inside the Report, in the same four pillars and cards
+ * as the Coaching page; moments play in the Report's own player.
+ */
 function CanonicalCallCoaching({
   data,
   coaching,
@@ -258,306 +312,242 @@ function CanonicalCallCoaching({
     : null;
   return (
     <div className={styles.coaching} data-call-coaching data-state="ready">
-      <p className={styles.context}>
-        {coaching.basis === "general_practice"
-          ? "General practice from approved guidance; no assessed weakness is inferred from this call."
-          : "Coaching specific to this call. One call does not establish a recurring pattern."}
-      </p>
-      <section aria-label="Focus for this call">
-        <h3>One focus · {focus.label}</h3>
-        <p className={styles.focus}>
-          <RichText text={focus.explanation} />
-        </p>
-      </section>
-      <section aria-label="Why this focus">
-        <h3>Why this focus</h3>
-        <p>
-          <RichText text={focus.why_it_matters} />
-        </p>
-        <div className={styles.sources}>
-          {coaching.evidence.map((source, index) => {
-            const playback =
-              data.transcript && onSelectContextualPlayback
-                ? buildContextualSourcePlayback(
-                    data.report!,
-                    data.transcript,
-                    source,
-                  )
-                : null;
-            return source.playable && onSelectEvidence ? (
-              <Clip
-                key={index}
-                evidence={source}
-                title="Coaching for this call"
+      <div className={coachingStyles.conversation}>
+        <Pillar id="report-coaching-focus" copy={CALL_PILLARS.focus} level={3}>
+          <FocusHero
+            label={focus.label}
+            chips={[basisChip(coaching.basis)]}
+            explanation={focus.explanation}
+            why={focus.why_it_matters}
+            reason={focus.selected_reason}
+            mission={mission.behavior}
+            missionAnchor="report-coaching-mission"
+            take={dipakTake(coaching.media_clips)}
+          />
+        </Pillar>
+        <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
+          {coaching.evidence.length ? (
+            <div className={coachingStyles.card} data-flush="">
+              <MomentList
+                evidence={coaching.evidence}
+                showCall={false}
+                heading={WHY.callEvidence}
+                label={CALL.moments}
                 onPlay={onSelectEvidence}
-                context={
-                  playback && onSelectContextualPlayback
-                    ? { playback, onPlay: onSelectContextualPlayback }
-                    : null
-                }
+                contextFor={(source) => {
+                  const playback =
+                    data.report && data.transcript && onSelectContextualPlayback
+                      ? buildContextualSourcePlayback(
+                          data.report,
+                          data.transcript,
+                          source,
+                        )
+                      : null;
+                  return playback
+                    ? {
+                        range: playback.playback_range,
+                        play: () =>
+                          onSelectContextualPlayback!(playback, CALL.title),
+                      }
+                    : null;
+                }}
               />
-            ) : (
-              <figure key={index}>
-                <figcaption>
-                  {formatClock(source.start_ms)}–{formatClock(source.end_ms)}
-                </figcaption>
-                <blockquote>
-                  <RichText text={source.quote} />
-                </blockquote>
-              </figure>
-            );
-          })}
+            </div>
+          ) : (
+            <StoryCard>
+              <p>{WHY.noTimestamp}</p>
+            </StoryCard>
+          )}
+        </Pillar>
+        <LessonPanel
+          id="report-coaching-better"
+          level={3}
+          copy={CALL_PILLARS.better}
+          lesson={lesson}
+          clips={coaching.media_clips}
+          fallbackObservation={focus.explanation}
+        />
+        <MissionPanel
+          id="report-coaching-mission"
+          level={3}
+          copy={CALL_PILLARS.next}
+          mission={mission}
+          practice={practice}
+          foot={NEXT.oneCall}
+        />
+        <div className={styles.links}>
+          <Link
+            prefetch={false}
+            className={kitStyles.button}
+            data-variant="primary"
+            href={`/coaching?call=${coaching.submission_id}`}
+          >
+            {REPORT_COACHING.openFull}
+          </Link>
+          <Link
+            prefetch={false}
+            className={kitStyles.button}
+            href={skill ? `/coaching?focus=${skill}` : "/coaching"}
+          >
+            {CALL.mineAcross}
+          </Link>
         </div>
-        {!coaching.evidence.length && (
-          <p className={styles.context}>
-            This report did not retain a timestamped moment for this suggestion.
-          </p>
-        )}
-      </section>
-      <section aria-label="What better sounds like">
-        <h3>{lesson.title}</h3>
-        <p>
-          <RichText text={lesson.quick_idea} />
-        </p>
-        <details>
-          <summary>What better sounds like</summary>
-          <div className={styles.lesson}>
-            <p>
-              <RichText text={lesson.good_looks_like} />
-            </p>
-            <p>
-              <RichText text={lesson.better_direction} />
-            </p>
-            <ol>
-              {lesson.framework.map((step, index) => (
-                <li key={index}>
-                  <RichText text={step} />
-                </li>
-              ))}
-            </ol>
-            <p className={styles.context}>
-              Suggested examples from guidance; not words from the call.
-            </p>
-            {lesson.example_wording.map((words, index) => (
-              <p key={index}>
-                <RichText text={words} />
-              </p>
-            ))}
-            <p>
-              <span className={styles.label}>When to use it · </span>
-              <RichText text={lesson.when_to_use} />
-            </p>
-            <p>
-              <span className={styles.label}>When to avoid it · </span>
-              <RichText text={lesson.when_not} />
-            </p>
-            <ul>
-              {lesson.checklist.map((item, index) => (
-                <li key={index}>
-                  <RichText text={item} />
-                </li>
-              ))}
-            </ul>
-            <p className={styles.context}>
-              <RichText text={lesson.source} />
-            </p>
-          </div>
-        </details>
-      </section>
-      {coaching.media_clips?.length ? (
-        <section aria-label="Coaching example for this focus">
-          <h3>See this focus in practice</h3>
-          <CoachingMedia clips={coaching.media_clips} />
-        </section>
-      ) : null}
-      <section aria-label="Next-call mission">
-        <h3>Your next-call mission</h3>
-        <p>
-          <RichText text={mission.behavior} />
-        </p>
-        <p>
-          <span className={styles.label}>Done when · </span>
-          <RichText text={mission.done_when} />
-        </p>
-        <details>
-          <summary>Practise once</summary>
-          <div className={styles.lesson}>
-            <p>
-              <RichText text={practice.exercise} />
-            </p>
-            <p>
-              <RichText text={practice.success_condition} />
-            </p>
-          </div>
-        </details>
-      </section>
-      <div className={styles.links}>
-        <Link
-          prefetch={false}
-          href={`/coaching?call=${coaching.submission_id}`}
-        >
-          Open full coaching for this call
-        </Link>
-        <Link
-          prefetch={false}
-          href={skill ? `/coaching?focus=${skill}` : "/coaching"}
-        >
-          My coaching across calls
-        </Link>
       </div>
     </div>
   );
 }
 
+/**
+ * The fallback when this call's coaching can't be read: the report's own
+ * retained suggestion in the same pillars, never a new diagnosis.
+ */
 function RetainedCallCoaching({
   data,
   callId,
   onSelectEvidence,
-  onSelectContextualPlayback,
-}: Props) {
+  foreign = false,
+}: Props & {
+  /** Not the viewer's call: their own Coaching has no focus from it. */
+  foreign?: boolean;
+}) {
   const report = data.report;
   if (!report || report.preview) return null;
   const focus = callCoachingFocus(report);
+  const fullCall =
+    callId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      callId,
+    );
+  const links = (
+    <div className={styles.links}>
+      {fullCall ? (
+        <Link
+          prefetch={false}
+          className={kitStyles.button}
+          data-variant="primary"
+          href={`/coaching?call=${callId}`}
+        >
+          {REPORT_COACHING.openFull}
+        </Link>
+      ) : null}
+      <Link
+        prefetch={false}
+        className={kitStyles.button}
+        href={
+          focus?.skillId && !foreign
+            ? `/coaching?focus=${focus.skillId}`
+            : "/coaching"
+        }
+      >
+        {CALL.mineAcross}
+      </Link>
+    </div>
+  );
+  if (!focus)
+    return (
+      <div
+        className={styles.coaching}
+        data-call-coaching
+        data-state="report-focus"
+      >
+        <div className={coachingStyles.conversation}>
+          <StoryCard>
+            <p>{RETAINED.none}</p>
+            <div className={coachingStyles.answers}>
+              {REPORT_SKILLS.map(([id, label]) => (
+                <Link
+                  key={id}
+                  prefetch={false}
+                  className={coachingStyles.answer}
+                  href={`/coaching?focus=${id}`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </StoryCard>
+          {links}
+        </div>
+      </div>
+    );
+  const title = focus.finding.title;
   return (
     <div
       className={styles.coaching}
       data-call-coaching
       data-state="report-focus"
     >
-      <p className={styles.context}>
-        A suggestion from this call’s report. One call does not establish a
-        recurring pattern.
-      </p>
-      {focus ? (
-        <>
-          <section aria-label="Focus for this call">
-            <h3>{focus.improvement ? "One focus" : "Keep doing"}</h3>
-            <p className={styles.focus}>
-              <RichText text={focus.behavior} />
-            </p>
-          </section>
-          <section aria-label="Why this focus">
-            <h3>What happened on this call</h3>
-            <p>
-              <RichText text={focus.finding.explanation} />
-            </p>
-            {focus.why && (
-              <p>
-                <span className={styles.label}>Why it may matter · </span>
-                <RichText text={focus.why} />
-              </p>
-            )}
-            <div className={styles.sources}>
-              {focus.finding.evidence.map((source, index) => {
-                const playback =
-                  data.transcript && onSelectContextualPlayback
-                    ? buildContextualSourcePlayback(
-                        report,
-                        data.transcript,
-                        source,
-                      )
-                    : null;
-                return onSelectEvidence ? (
-                  <Clip
-                    key={index}
-                    evidence={source}
-                    title="Coaching for this call"
-                    onPlay={onSelectEvidence}
-                    context={
-                      playback && onSelectContextualPlayback
-                        ? { playback, onPlay: onSelectContextualPlayback }
-                        : null
-                    }
-                  />
-                ) : (
-                  <figure key={index}>
-                    <figcaption>
-                      {formatClock(source.start_ms)}–
-                      {formatClock(source.end_ms)}
-                    </figcaption>
-                    <blockquote>
-                      <RichText text={source.quote} />
-                    </blockquote>
-                  </figure>
-                );
-              })}
-            </div>
-          </section>
-          <section aria-label="What to try">
-            <h3>
-              {focus.improvement
-                ? "Try this next time"
-                : "Carry this into the next call"}
-            </h3>
-            <p>
-              <RichText text={focus.replacement ?? focus.behavior} />
-            </p>
-            {focus.replacement && (
-              <small>
-                Suggested wording or behavior from the report; not a quote from
-                the call.
-              </small>
-            )}
-          </section>
-          <section aria-label="Next-call mission">
-            <h3>Your next-call mission</h3>
-            <p>
-              <RichText text={focus.behavior} />
+      <div className={coachingStyles.conversation}>
+        <Pillar id="report-coaching-focus" copy={CALL_PILLARS.focus} level={3}>
+          <FocusHero
+            label={focus.improvement ? title : `${RETAINED.keep}: ${title}`}
+            chips={[{ text: FOCUS.fromReport, tone: "accent" }]}
+            explanation={focus.finding.explanation}
+            why={focus.why ?? focus.finding.explanation}
+            reason={RETAINED.reason}
+            mission={focus.behavior}
+            missionAnchor="report-coaching-mission"
+          />
+        </Pillar>
+        <Pillar id="report-coaching-why" copy={CALL_PILLARS.why} level={3}>
+          <StoryCard label={WHY.callEvidence}>
+            {focus.finding.evidence.map((source, index) => (
+              <Quote
+                key={index}
+                text={source.quote}
+                source={source}
+                title={CALL.title}
+                onSelect={onSelectEvidence}
+              />
+            ))}
+          </StoryCard>
+        </Pillar>
+        <Pillar
+          id="report-coaching-better"
+          copy={CALL_PILLARS.better}
+          level={3}
+        >
+          <StoryCard
+            label={focus.improvement ? RETAINED.tryNext : RETAINED.carry}
+            tone="accent"
+          >
+            <p>{focus.replacement ?? focus.behavior}</p>
+            {focus.replacement ? (
+              <p className={coachingStyles.note}>{RETAINED.suggested}</p>
+            ) : null}
+          </StoryCard>
+        </Pillar>
+        <Pillar id="report-coaching-mission" copy={CALL_PILLARS.next} level={3}>
+          <StoryCard label={NEXT.mission} tone="accent" icon={Target}>
+            <p
+              className={coachingStyles.missionBehavior}
+              data-active-mission=""
+            >
+              {focus.behavior}
             </p>
             {focus.target ? (
-              <p>
-                <span className={styles.label}>Done when · </span>
-                <RichText text={focus.target} />
-              </p>
+              <dl className={coachingStyles.terms}>
+                <div>
+                  <dt>{NEXT.doneWhen}</dt>
+                  <dd>{focus.target}</dd>
+                </div>
+              </dl>
             ) : (
-              <p className={styles.context}>
-                This report did not supply a success check. Decide what you will
-                look for before your next call.
+              <p className={coachingStyles.note}>{RETAINED.noCheck}</p>
+            )}
+          </StoryCard>
+          {focus.practice ? (
+            <StoryCard label={NEXT.practice} icon={PencilLine}>
+              <p>{focus.practice.instructions}</p>
+              <p className={coachingStyles.momentNote}>
+                <strong>{NEXT.success}:</strong>{" "}
+                {focus.practice.success_condition}
               </p>
-            )}
-            {focus.practice && (
-              <div className={styles.practice}>
-                <h4>Practise once</h4>
-                <p>
-                  <RichText text={focus.practice.instructions} />
-                </p>
-                <p>
-                  <span className={styles.label}>Done when · </span>
-                  <RichText text={focus.practice.success_condition} />
-                </p>
-              </div>
-            )}
-          </section>
-        </>
-      ) : (
-        <p>
-          No source-backed focus was supplied for this call. Choose a skill to
-          work on below.
-        </p>
-      )}
-      <div className={styles.links}>
-        {callId &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-            callId,
-          ) && (
-            <Link prefetch={false} href={`/coaching?call=${callId}`}>
-              Open full coaching for this call
-            </Link>
-          )}
-        <Link
-          prefetch={false}
-          href={
-            focus?.skillId ? `/coaching?focus=${focus.skillId}` : "/coaching"
-          }
-        >
-          My coaching across calls
-        </Link>
-        {!focus &&
-          REPORT_SKILLS.map(([id, label]) => (
-            <Link key={id} prefetch={false} href={`/coaching?focus=${id}`}>
-              {label}
-            </Link>
-          ))}
+            </StoryCard>
+          ) : null}
+          <p className={coachingStyles.note}>{NEXT.oneCall}</p>
+        </Pillar>
+        {links}
       </div>
     </div>
   );

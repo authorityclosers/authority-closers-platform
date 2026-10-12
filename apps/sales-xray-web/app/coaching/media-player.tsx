@@ -15,7 +15,9 @@ import {
   FULL_COACHING_HREF,
   type CoachingClip,
 } from "./media-contract";
+import { CLIP, MEDIA, THEIR } from "./coaching-copy";
 import { timeLabel } from "./coaching-format";
+import { useTheirCoaching } from "./coaching-voice";
 import styles from "./coaching.module.css";
 
 type ClipState =
@@ -28,19 +30,30 @@ type ClipState =
   | "failed";
 
 const PLAY_LABEL: Record<ClipState, string> = {
-  idle: "Play coaching clip",
-  loading: "Loading clip…",
-  playing: "Pause",
-  paused: "Resume clip",
-  done: "Play again",
-  limit: "Preview finished",
-  failed: "Try clip again",
+  idle: CLIP.play,
+  loading: CLIP.loading,
+  playing: CLIP.pause,
+  paused: CLIP.resume,
+  done: CLIP.again,
+  limit: CLIP.limit,
+  failed: CLIP.retry,
 };
 
 /**
  * Where the learner stopped a reviewed clip, on this device only (spec 3.4,
  * "resume playback if learner returns"). A position, never progress.
  */
+/** Stable identity of one reviewed clip (also the "Hear Dipak's take" target). */
+export const clipKey = (clip: CoachingClip) =>
+  `${clip.topic_id}:${clip.revision}:${clip.review_id}`;
+
+/** Asks the page's card for this clip to come into view and play. */
+export function requestClip(clip: CoachingClip) {
+  window.dispatchEvent(
+    new CustomEvent("sx-coaching-clip-request", { detail: clipKey(clip) }),
+  );
+}
+
 const resumeKey = (clip: CoachingClip) =>
   `sx-coaching-clip:${clip.topic_id}:${clip.revision}:${clip.review_id}`;
 function readResume(key: string): number {
@@ -71,21 +84,14 @@ export function ClipOfferCard({
 }) {
   const offer = clip.offer;
   return (
-    <div className={styles.offer} role="group" aria-label="Full coaching">
+    <div className={styles.offer} role="group" aria-label={CLIP.offer}>
       <div className={styles.offerHead}>
         <span className={styles.offerIcon} aria-hidden="true">
           <Lock size={14} />
         </span>
         <div>
-          <strong>
-            {finished
-              ? "That’s the free preview"
-              : "Part of Dipak’s full coaching"}
-          </strong>
-          <p>
-            Hear the complete lesson and every clip for this skill with full
-            coaching.
-          </p>
+          <strong>{finished ? CLIP.previewDone : CLIP.partOfFull}</strong>
+          <p>{CLIP.offerText}</p>
         </div>
       </div>
       <div className={styles.actions}>
@@ -94,7 +100,7 @@ export function ClipOfferCard({
           className={kitStyles.button}
           data-variant="primary"
         >
-          Get the full coaching
+          {CLIP.getFull}
         </Link>
         {offer?.academy ? (
           <a
@@ -114,11 +120,18 @@ export function ClipOfferCard({
 function ClipCard({
   clip,
   recommended,
+  forCall = false,
+  headingLevel = 3,
 }: {
   clip: CoachingClip;
   recommended: boolean;
+  forCall?: boolean;
+  headingLevel?: 3 | 4;
 }) {
+  const Title = headingLevel === 4 ? "h4" : "h3";
+  const they = useTheirCoaching();
   const identity = useId();
+  const card = useRef<HTMLElement>(null);
   const player = useRef<HTMLAudioElement>(null);
   const active = useRef(false);
   const [playState, setState] = useState<ClipState>("idle");
@@ -206,6 +219,22 @@ function ClipCard({
     if (!resume) setPosition(0);
     begin(audio, resume ? clip.start_ms + position : clip.start_ms);
   };
+  // "Hear Dipak's take" in pillar 1: bring this card into view and play it.
+  const latestToggle = useRef(toggle);
+  useEffect(() => {
+    latestToggle.current = toggle;
+  });
+  const playing = state === "playing";
+  useEffect(() => {
+    const onRequest = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== clipKey(clip)) return;
+      card.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!playing) latestToggle.current();
+    };
+    window.addEventListener("sx-coaching-clip-request", onRequest);
+    return () =>
+      window.removeEventListener("sx-coaching-clip-request", onRequest);
+  }, [clip, playing]);
   const currentSlide = clip.slides[slide];
   const preview =
     clip.access === "preview" && clip.preview_end_ms
@@ -221,6 +250,7 @@ function ClipCard({
           : Play;
   return (
     <article
+      ref={card}
       className={styles.clip}
       data-recommended={recommended ? "" : undefined}
       data-access={clip.access}
@@ -233,7 +263,7 @@ function ClipCard({
           disabled={state === "loading" || state === "limit"}
           data-locked={locked ? "" : undefined}
           aria-disabled={locked || undefined}
-          title={locked ? "Part of the full coaching" : PLAY_LABEL[state]}
+          title={locked ? CLIP.lockedTitle : PLAY_LABEL[state]}
         >
           {locked ? (
             <Lock size={16} aria-hidden="true" />
@@ -241,23 +271,31 @@ function ClipCard({
             <Icon size={16} aria-hidden="true" />
           )}
           <span className={styles.srOnly}>
-            {locked ? "Locked coaching clip" : PLAY_LABEL[state]}
+            {locked ? CLIP.locked : PLAY_LABEL[state]}
           </span>
         </button>
         <div className={styles.clipTitle}>
           <span className={styles.eyebrow}>
-            {recommended ? "Recommended for your focus" : "Also relevant"}
+            {recommended
+              ? forCall
+                ? MEDIA.recommendedCall
+                : they
+                  ? THEIR.recommended
+                  : MEDIA.recommended
+              : MEDIA.other}
           </span>
-          <h3>{clip.title}</h3>
+          <Title>{clip.title}</Title>
           <span className={styles.note}>
-            Dipak’s script · {clip.kind === "video" ? "video" : "audio"} lesson
-            · placeholder voice · {timeLabel(length)}
+            {MEDIA.byline} · {MEDIA.kind(clip.kind === "video")} · {MEDIA.voice}{" "}
+            · {timeLabel(length)}
           </span>
         </div>
         {clip.access === "preview" && preview ? (
-          <Badge tone="accent">Free preview · {timeLabel(preview)}</Badge>
+          <Badge tone="accent">
+            {MEDIA.freePreview} · {timeLabel(preview)}
+          </Badge>
         ) : locked ? (
-          <Badge>Full coaching</Badge>
+          <Badge>{MEDIA.locked}</Badge>
         ) : null}
       </div>
       {locked ? null : (
@@ -265,7 +303,7 @@ function ClipCard({
           <div
             className={styles.bar}
             role="progressbar"
-            aria-label="Clip progress"
+            aria-label={CLIP.progress}
             aria-valuemin={0}
             aria-valuemax={Math.round(length / 1000)}
             aria-valuenow={Math.round(position / 1000)}
@@ -276,7 +314,7 @@ function ClipCard({
             {preview ? (
               <b
                 style={{ left: `${(preview / length) * 100}%` }}
-                title="End of the free preview"
+                title={CLIP.previewEnd}
               />
             ) : null}
           </div>
@@ -284,9 +322,9 @@ function ClipCard({
             <span>{timeLabel(position)}</span>
             <span>
               {state === "loading"
-                ? "Loading…"
+                ? CLIP.loadingShort
                 : state === "playing"
-                  ? "Playing"
+                  ? CLIP.playing
                   : timeLabel(length)}
             </span>
           </div>
@@ -297,7 +335,7 @@ function ClipCard({
       ) : (
         <>
           <p>
-            <span className={styles.label}>Why this fits your focus</span>
+            <span className={styles.label}>{MEDIA.why}</span>
             {clip.reason}
           </p>
           <ul className={styles.takeaways}>
@@ -312,12 +350,12 @@ function ClipCard({
       ) : null}
       {state === "failed" ? (
         <p role="status" className={styles.status}>
-          Narration is unavailable. Try again, or read the clip below.
+          {CLIP.failed}
         </p>
       ) : null}
       {locked ? null : (
         <details className={styles.more}>
-          <summary>Read this clip</summary>
+          <summary>{MEDIA.takeaways}</summary>
           <div className={styles.moreBody}>
             {currentSlide ? (
               <div className={styles.slide} aria-live="polite">
@@ -334,7 +372,7 @@ function ClipCard({
                     disabled={slide === 0}
                     onClick={() => setSlide((value) => value - 1)}
                   >
-                    Previous slide
+                    {CLIP.previousSlide}
                   </button>
                   <span>
                     {slide + 1} / {clip.slides.length}
@@ -345,15 +383,14 @@ function ClipCard({
                     disabled={slide === clip.slides.length - 1}
                     onClick={() => setSlide((value) => value + 1)}
                   >
-                    Next slide
+                    {CLIP.nextSlide}
                   </button>
                 </div>
               </div>
             ) : null}
             <p>{clip.transcript_excerpt}</p>
             <p className={styles.note}>
-              Placeholder · neutral narration of Dipak’s script. Listening does
-              not complete your mission.
+              {they ? THEIR.narrationNote : MEDIA.narrationNote}
             </p>
           </div>
         </details>
@@ -364,7 +401,7 @@ function ClipCard({
           ref={player}
           src={clipSource(clip)}
           preload="metadata"
-          aria-label="Placeholder coaching narration"
+          aria-label={CLIP.audio}
           onLoadedMetadata={() => {
             if (!player.current || !active.current) return;
             begin(player.current, clip.start_ms + resumeFrom.current);
@@ -398,15 +435,27 @@ function ClipCard({
 }
 
 /** One recommended clip first; any others stay secondary (spec 6.2, 6.3). */
-export function CoachingMedia({ clips }: { clips?: CoachingClip[] }) {
+export function CoachingMedia({
+  clips,
+  forCall = false,
+  headingLevel = 3,
+}: {
+  clips?: CoachingClip[];
+  /** One call's coaching (and the Report): its focus is the call's own. */
+  forCall?: boolean;
+  /** 4 inside the Report, where the pillars are h3. */
+  headingLevel?: 3 | 4;
+}) {
   if (!clips?.length) return null;
   return (
     <div className={styles.clips}>
       {clips.map((clip, index) => (
         <ClipCard
-          key={`${clip.topic_id}:${clip.revision}:${clip.review_id}`}
+          key={clipKey(clip)}
           clip={clip}
           recommended={index === 0}
+          forCall={forCall}
+          headingLevel={headingLevel}
         />
       ))}
     </div>

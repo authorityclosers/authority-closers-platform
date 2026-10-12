@@ -33,9 +33,9 @@ export type PatternCall = {
 export type SkillTally = {
   id: string;
   label: string;
-  /** Calls where the report says "Partly seen" or "Need more evidence". */
+  /** Calls where the report says "Partly seen" or "Not Enough Evidence". */
   gaps: number;
-  /** Calls where the report assessed this skill (not "Not relevant here"). */
+  /** Calls where the report assessed this skill (not "Not Applicable"). */
   assessed: number;
 };
 

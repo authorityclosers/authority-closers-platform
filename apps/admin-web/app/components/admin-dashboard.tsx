@@ -2,22 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  BookOpen,
-  ClipboardCheck,
-  Gauge,
-  MessagesSquare,
-  Settings2,
-  UsersRound,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { loadStudioPrograms, type StudioPrograms } from "../lib/admin-api";
-import {
-  canBrowseStudio,
-  canManageSalesXray,
-  canUseAdminPermission,
-  useAdminSession,
-} from "../lib/admin-session";
+import { canBrowseStudio, useAdminSession } from "../lib/admin-session";
 import styles from "./admin-dashboard.module.css";
 
 type Snapshot =
@@ -121,96 +108,6 @@ function CourseSnapshot({ tenantId }: { tenantId: string }) {
         </p>
       )}
     </section>
-  );
-}
-
-export function AdminDashboard() {
-  const state = useAdminSession();
-  const studio = canBrowseStudio(state);
-  const sales = canManageSalesXray(state);
-  const controls = [
-    {
-      title: "People",
-      text: "Find academy members and manage their course access.",
-      href: "/people",
-      icon: UsersRound,
-      allowed: canUseAdminPermission(state, "learner_diagnose"),
-    },
-    {
-      title: "Academy Studio",
-      text: "Edit lessons, add videos and publish your courses.",
-      href: "/studio/programs",
-      icon: BookOpen,
-      allowed: studio,
-    },
-    {
-      title: "Sales Xray",
-      text: "See analysis setup and open your conversation controls.",
-      href: "/sales-xray",
-      icon: MessagesSquare,
-      allowed: sales,
-    },
-    {
-      title: "Review workspace",
-      text: "Invite reviewers, assign calls and read their feedback.",
-      href: "/sales-xray/review",
-      icon: ClipboardCheck,
-      allowed: sales,
-    },
-    {
-      title: "Provider settings",
-      text: "Manage your configured providers and analysis routes.",
-      href: "/sales-xray/settings",
-      icon: Settings2,
-      allowed: sales,
-    },
-    {
-      title: "Learning operations",
-      text: "Inspect pending work and recover interrupted jobs.",
-      href: "/learning-operations",
-      icon: Gauge,
-      allowed:
-        canUseAdminPermission(state, "job_retry") ||
-        canUseAdminPermission(state, "recovery_reconcile"),
-    },
-  ].filter((item) => item.allowed);
-  return (
-    <div className={styles.dashboard}>
-      {studio && state.status === "ready" && (
-        <CourseSnapshot
-          key={`${state.session.sessionId}:${state.session.tenantId}`}
-          tenantId={state.session.tenantId}
-        />
-      )}
-      <section aria-labelledby="workspace-controls-title">
-        <div className={styles.sectionHeading}>
-          <div>
-            <h2 id="workspace-controls-title">Your workspace</h2>
-            <p>Choose what you want to work on.</p>
-          </div>
-        </div>
-        <div className={styles.controlGrid}>
-          {controls.map(({ title, text, href, icon: Icon }) => (
-            <Link className={styles.control} href={href} key={href}>
-              <span className={styles.controlIcon}>
-                <Icon size={22} aria-hidden="true" />
-              </span>
-              <ArrowUpRight
-                className={styles.arrow}
-                size={19}
-                aria-hidden="true"
-              />
-              <h3>{title}</h3>
-              <p>{text}</p>
-              <span className={styles.open}>Open {title.toLowerCase()}</span>
-            </Link>
-          ))}
-        </div>
-        {controls.length === 0 && (
-          <p>No workspace controls are assigned to this account yet.</p>
-        )}
-      </section>
-    </div>
   );
 }
 

@@ -1,9 +1,45 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamCoachingStory } from "./team-coaching";
 import { parseTeamCoaching } from "./team-contract";
 import { readCoaching } from "./coaching-read";
-import { fictionalTeamCoaching } from "./coaching.fixture";
+import { fictionalCoaching, fictionalTeamCoaching } from "./coaching.fixture";
+
+const rep = (id: number, name: string, skill: string, calls = 3) => ({
+  person_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+  name,
+  skill_id: skill,
+  focus_label: `Focus for ${name}`,
+  calls,
+  latest_call_at: "2026-09-01T10:00:00Z",
+});
+const sandboxTeam = {
+  ...fictionalTeamCoaching,
+  scope: "sandbox",
+  named_rep_details: true,
+  sandbox: true,
+  reps_basis: "fictional",
+  suggestions: [
+    {
+      skill_id: "closing_decision_management",
+      label: "Closing & Decision Management",
+      suggestion_calls: 3,
+    },
+    {
+      skill_id: "qualification",
+      label: "Qualification",
+      suggestion_calls: 1,
+    },
+  ],
+  reps: [
+    ...Array.from({ length: 9 }, (_, i) =>
+      rep(i + 1, `Closer ${i + 1}`, "closing_decision_management"),
+    ),
+    rep(20, "Asha Rao", "qualification", 1),
+  ],
+};
 
 afterEach(() => vi.unstubAllGlobals());
 describe("anonymous Team coaching", () => {
@@ -12,14 +48,18 @@ describe("anonymous Team coaching", () => {
       <TeamCoachingStory coaching={fictionalTeamCoaching} />,
     );
     expect(html).toContain("Analysed calls");
-    expect(html).toContain("2 people · updated 9 Oct 2026");
+    // The tile's note stays one short line; the date sits in the footnote.
+    expect(html).toContain(">2 people<");
+    expect(html).toContain("Updates after every call. Latest call 9 Oct 2026.");
     expect(html).toContain("2 of 3 calls");
     expect(html).toContain("67%");
     expect(html).toContain("Private by default");
     expect(html).toContain("Named coaching appears when a rep shares it");
     expect(html).toContain("stop sharing at any time");
     expect(html).not.toContain("/analysis/calls/");
-    expect(html).not.toContain("Play evidence");
+    // Every call over time lives in Insights, not recounted here.
+    expect(html).toContain('href="/organisation/insights"');
+    expect(html).not.toContain("Play moment");
     expect(html).not.toContain("<audio");
   });
   it("defaults absent counts and rows and discards source-supplied labels", () => {
@@ -51,6 +91,152 @@ describe("anonymous Team coaching", () => {
       },
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
+  });
+  it("shows which buyer objections the team hears and how many were left open", () => {
+    const team = parseTeamCoaching({
+      ...fictionalTeamCoaching,
+      objection_calls: 2,
+      objections: [
+        {
+          kind: "price_concern",
+          label: "Server words",
+          calls: 2,
+          heard: 3,
+          handled: 1,
+        },
+        { kind: "stall", calls: 1, heard: 1, handled: 1 },
+        // Unknown kinds and impossible counts drop only that row.
+        { kind: "made_up", calls: 1, heard: 1, handled: 0 },
+        { kind: "trust_concern", calls: 5, heard: 5, handled: 0 },
+        { kind: "time_constraint", calls: 1, heard: 1, handled: 2 },
+      ],
+    })!;
+    expect(team.objections.map((row) => row.label)).toEqual([
+      "Price",
+      "Stalling",
+    ]);
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("Objections your team hears");
+    expect(html).toContain("2 of 3 left open");
+    expect(html).toContain("all 1 answered");
+    expect(html).not.toContain("Server words");
+    // Older reports without a call map never read as "no objections".
+    const older = renderToStaticMarkup(
+      <TeamCoachingStory coaching={fictionalTeamCoaching} />,
+    );
+    expect(older).not.toContain("Objections your team hears");
+  });
+  it("names only fictional AC Sandbox reps, with links to their coaching", () => {
+    const team = parseTeamCoaching(sandboxTeam)!;
+    expect(team.sandbox).toBe(true);
+    expect(team.reps).toHaveLength(10);
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("Fictional AC Sandbox");
+    expect(html).toContain("10 fictional reps");
+    expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
+    expect(html).toContain("Focus for Closer 1");
+    expect(html).toContain("Show all 10 people");
+    expect(html).not.toContain("Named coaching appears when a rep shares it");
+    expect(html).not.toContain("/organisation/insights");
+    // Malformed rows drop; the rest of the team still shows.
+    const partial = parseTeamCoaching({
+      ...sandboxTeam,
+      reps: [{ name: "No id" }, sandboxTeam.reps[0], sandboxTeam.reps[0]],
+    })!;
+    expect(partial.reps.map((row) => row.name)).toEqual(["Closer 1"]);
+  });
+  it("names a real rep only after they share, with the date they shared", () => {
+    const shared = {
+      ...fictionalTeamCoaching,
+      named_rep_details: true,
+      reps_basis: "shared",
+      reps: [
+        {
+          ...rep(30, "Swati Kale", "qualification", 4),
+          focus_label: "Qualification",
+          shared_at: "2026-10-11T09:00:00Z",
+        },
+      ],
+    };
+    const team = parseTeamCoaching(shared)!;
+    expect(team.reps_basis).toBe("shared");
+    const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
+    expect(html).toContain("1 shared with you");
+    expect(html).toContain("Shared 11 Oct 2026");
+    expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
+    expect(html).not.toContain("fictional");
+    // A real rep without a share date never appears.
+    const unshared = parseTeamCoaching({
+      ...shared,
+      reps: [{ ...shared.reps[0], shared_at: null }],
+    })!;
+    expect(unshared.reps).toEqual([]);
+    expect(
+      parseTeamCoaching({ ...shared, sandbox: true, scope: "sandbox" }),
+    ).toBeNull();
+  });
+  it("rejects names on a real team, however they are labelled", () => {
+    for (const raw of [
+      { ...fictionalTeamCoaching, reps: sandboxTeam.reps },
+      { ...sandboxTeam, sandbox: false },
+      { ...sandboxTeam, scope: "anonymous" },
+      { ...sandboxTeam, named_rep_details: false },
+      { ...fictionalTeamCoaching, sandbox: true },
+    ])
+      expect(parseTeamCoaching(raw)).toBeNull();
+  });
+  it("filters fictional reps by coaching area", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () =>
+      root.render(
+        <TeamCoachingStory coaching={parseTeamCoaching(sandboxTeam)!} />,
+      ),
+    );
+    const select = host.querySelector<HTMLSelectElement>(
+      'select[aria-label="Coaching area"]',
+    )!;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "All areas",
+      "Closing",
+      "Qualification",
+    ]);
+    await act(async () => {
+      select.value = "qualification";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const names = [...host.querySelectorAll("li a")].map((a) => a.textContent);
+    expect(names).toEqual(["Asha Rao"]);
+    await act(async () => root.unmount());
+    host.remove();
+  });
+  it("reads another rep's coaching only as that rep's view", async () => {
+    const person = "00000000-0000-4000-8000-000000000001";
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...fictionalCoaching, person_id: person }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetch);
+    expect((await readCoaching(`person:${person}`)).data?.person_id).toBe(
+      person,
+    );
+    expect(fetch.mock.calls[0][0]).toBe(`/v1/me/coaching/people/${person}`);
+    // The viewer's own coaching answered for another person is refused.
+    fetch.mockResolvedValue(
+      new Response(JSON.stringify(fictionalCoaching), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    expect((await readCoaching(`person:${person}`)).data).toBeNull();
+    expect((await readCoaching("person:not-a-person")).error).toContain(
+      "doesn’t work",
+    );
   });
   it("loads the team projection in one same-account request", async () => {
     const fetch = vi.fn().mockResolvedValue(

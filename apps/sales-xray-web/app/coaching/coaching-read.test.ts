@@ -147,7 +147,7 @@ describe("call-specific coaching read", () => {
     fetch.mockRejectedValue(new Error("private diagnostic"));
     expect(await readCoaching(callId)).toEqual({
       data: null,
-      error: "Coaching could not be loaded. Try again.",
+      error: "Coaching didn’t load. Try again.",
     });
   });
   it("does not send malformed call selectors or expose missing-route diagnostics", async () => {

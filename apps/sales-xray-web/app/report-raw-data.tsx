@@ -418,15 +418,15 @@ export function ReportRawData({
           </div>
           <div>
             <dt>Transcript version</dt>
-            <dd>{transcript.revision.slice(0, 12)}</dd>
+            <dd>{transcript.revision?.slice(0, 12) || "Not recorded"}</dd>
           </div>
           <div>
             <dt>Timing clock</dt>
-            <dd>{transcript.timebase_id}</dd>
+            <dd>{transcript.timebase_id || "Not recorded"}</dd>
           </div>
           <div>
             <dt>Audio fingerprint</dt>
-            <dd>{transcript.source_sha256.slice(0, 12)}</dd>
+            <dd>{transcript.source_sha256?.slice(0, 12) || "Not recorded"}</dd>
           </div>
           {runId ? (
             <div>

@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fictionalCoaching } from "./coaching.fixture";
-import { EvidencePlayer, MomentList } from "./evidence-player";
+import { clipLength, EvidencePlayer, MomentList } from "./evidence-player";
 
 let root: Root, host: HTMLDivElement;
 const evidence = fictionalCoaching.evidence[0];
@@ -37,6 +37,22 @@ describe("Evidence playback", () => {
     audio.currentTime = evidence.end_ms / 1000;
     await act(async () => audio.dispatchEvent(new Event("timeupdate")));
     expect(audio.pause).toHaveBeenCalledOnce();
+  });
+  it("names the clip length and shows how far into the clip playback is", async () => {
+    const clip = { ...evidence, start_ms: 60_000, end_ms: 75_000 };
+    await act(async () => root.render(<EvidencePlayer evidence={clip} />));
+    expect(host.textContent).toContain("1:00–1:15 · 15 s clip");
+    const button = host.querySelector<HTMLButtonElement>("button")!;
+    await act(async () => button.click());
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(button.dataset.state).toBe("playing");
+    audio.currentTime = 66;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(button.style.getPropertyValue("--clip")).toBe("40%");
+    expect(clipLength(65_000)).toBe("1 min 5 s");
+    expect(clipLength(120_000)).toBe("2 min");
+    expect(clipLength(200)).toBe("1 s");
   });
   it("offers a retry after a source failure and leaves the transcript inspectable", async () => {
     await act(async () => root.render(<EvidencePlayer evidence={evidence} />));

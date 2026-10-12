@@ -14,85 +14,87 @@ SOURCE = "Owner's Sales Xray specification, 9 Oct 2026 · Coaching §3 and §5.6
 def lesson_for(skill_id: str, moment: Moment | None, mission: Mission) -> TextLesson:
     impact = skill_id in {"discovery_deep_understanding", "problem_impact_desire"}
     if impact:
+        # Spec §3.1–3.5, the blog-style text lesson, without the example's names.
         return TextLesson(
-            title="Understand the impact before choosing a solution",
+            title="Understand the impact before you present the solution",
             quick_idea=(
-                "A problem statement is a starting point. Understand what the problem is causing "
-                "and what the prospect wants to change before choosing a solution. More questions "
-                "are useful only when they create clarity."
+                "Good discovery is not about asking more questions. When a prospect tells you "
+                "a problem, your job is not to prove at once that you can solve it. First "
+                "understand what that problem is actually causing."
             ),
-            framework=("Problem", "Impact", "Desired outcome", "Relevant solution"),
+            framework=("Problem", "Impact", "Desired outcome", "Then solution"),
             why_it_matters=(
-                "A recommendation is easier to understand when it connects to the prospect's "
-                "actual situation. Use the evidence below to check what was already clear, what "
-                "remained unanswered, and whether another question would have helped."
+                "The prospect already knows the problem. Until its cost is clear, your solution "
+                "can feel useful but not necessary. Impact gives the buyer a reason to change, "
+                "and it makes the value and price conversation easier later."
             ),
             good_looks_like=(
-                "Explore a real consequence in the prospect's own terms: time, effort, money, "
-                "risk or another meaningful effect. Confirm the desired outcome. Preserve "
-                "uncertainty rather than filling in an amount, motivation or commitment."
+                "Stay with the problem long enough to understand one or more real consequences: "
+                "lost revenue, time, effort, slow growth, stress or risk. Use the prospect's own "
+                "words. Don't fill in a number or a feeling they haven't given you."
             ),
             better_direction=mission.behavior,
             example_wording=(
-                "What does that problem affect in your day-to-day work?",
-                "What would you want to change about that?",
+                "What usually goes wrong when that happens?",
+                "How much of your week goes into dealing with it?",
+                "What does this stop you from focusing on?",
             ),
             when_to_use=(
-                "Use this thinking guide when the prospect raises a meaningful problem and its "
-                "consequences or desired outcome are still unclear. Check earlier answers first."
+                "When the prospect raises a real problem and what it costs them is still unclear. "
+                "Check what they have already told you first."
             ),
             when_not=(
-                "Do not keep digging after the point is clear, repeat a question already answered, "
-                "manufacture pain, or continue after a genuine refusal. A call can return to "
-                "discovery when new information appears; this is not a fixed sequence."
+                "Don't keep asking impact questions once the consequence is clear and the "
+                "prospect has given enough detail. Don't repeat a question they've answered or "
+                "push after a clear no. The goal is clarity, not interrogation."
             ),
             checklist=(
-                "What has the prospect actually said?",
-                "Is the consequence clear, or still unknown?",
-                "What outcome do they want?",
-                "Would the next question add useful clarity?",
+                "Is the problem clear?",
+                "Is the impact clear?",
+                "Is the desired outcome clear?",
+                "Only then move to the solution.",
             ),
             source=SOURCE,
             own_call=moment,
             next_call_connection=mission.behavior,
         )
     return TextLesson(
-        title="Turn this call moment into one useful change",
+        title="Turn this moment into one better response",
         quick_idea=(
-            "Start with the actual situation, then choose the smallest useful alternative. "
-            "A framework should help your thinking while preserving your own language and style. "
-            "This lesson uses your report's provisional recommendation; you can challenge it."
+            "Start with what actually happened on the call. Then pick the one change that "
+            "would have helped most. Keep your own words and style; this is a guide, not a "
+            "script. It comes from Sales Xray's reading of your call, so you can disagree."
         ),
         framework=(
             "Replay the moment",
-            "Check the purpose",
-            "Choose one response",
-            "Check the result",
+            "Ask what it needed",
+            "Pick one better response",
+            "Try it on a real call",
         ),
         why_it_matters=(
             moment.observation
             if moment is not None
-            else "One observable change makes the next call easier to review. "
-            "This is general practice, not an assessed weakness in this call."
+            else "One clear change is easy to try and easy to check on your next call. "
+            "This is general practice, not a weakness found on this call."
         ),
         good_looks_like=(
-            "Listen to the evidence in context, including what the prospect already answered. "
-            "Describe the change in observable terms. Practise it in words that feel natural "
-            "to you, then try it only when a comparable situation gives you a real opportunity."
+            "Listen to the moment in full, including what the prospect had already said. "
+            "Say the change in words someone else could notice. Practise it the way you "
+            "naturally speak, then use it only when the same kind of moment really comes up."
         ),
         better_direction=mission.behavior,
         example_wording=(),
         when_to_use=mission.context,
         when_not=(
-            "Do not apply a correction when the situation is different, the step is already "
-            "complete, or the prospect has declined it. Do not replace an effective personal "
-            "style with a memorized script. If the evidence misses context, keep that uncertainty."
+            "Don't use it when the situation is different, the step is already done, or the "
+            "prospect has said no. Don't swap a style that works for a memorised script. If "
+            "the moment is missing context, keep that in mind."
         ),
         checklist=(
-            "Did I replay the moment in context?",
-            "Is this change relevant to the conversation's purpose?",
-            "Can another person observe the behavior?",
-            "Does the response respect the prospect's boundary?",
+            "Did I replay the moment in full?",
+            "Does this change fit what the call needed?",
+            "Could someone else notice it?",
+            "Does it respect what the prospect said?",
         ),
         source=SOURCE,
         own_call=moment,

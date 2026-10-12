@@ -99,6 +99,9 @@ it("reads server fields and their sources without using or changing legacy devic
   expect(host.textContent).toContain("Example company");
   expect(host.textContent).not.toContain("Invented local industry");
   expect(host.textContent).not.toContain("Saved on this device");
+  expect(host.textContent).toContain(
+    "Change any fact here. Your change stays when later calls come in.",
+  );
   expect(host.querySelectorAll("[data-server-prospect-facts] dt")).toHaveLength(
     6,
   );

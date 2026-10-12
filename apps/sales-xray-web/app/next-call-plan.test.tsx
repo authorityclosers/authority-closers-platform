@@ -50,6 +50,9 @@ it("leads with one move, then keep, change with words to try first, and care not
   ].map((value) => all.indexOf(value.replace(/\s+/g, " ")));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect([...order].sort((a, b) => a - b)).toEqual(order);
+  // The focus target is the thing to do, so it isn't called a sign of success.
+  expect(all).toContain(`On the call: ${overview.next_call_focus!.target}`);
+  expect(all).not.toContain("know it worked");
   // The report's missing inputs are named; no impact figure is invented.
   expect(all).toContain("Comparable conversion history, Lead volume");
   // No fake progress and no practice recorder.

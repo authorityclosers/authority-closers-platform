@@ -133,3 +133,47 @@ Focused verification: 56 tests passed across the two failing suites, shared
 story, content parser and Word export. Sales Xray typecheck, targeted ESLint,
 formatting and whitespace checks passed. Normal CI for the new pushed head
 remains required before CTO resubmission; local tests do not replace it.
+
+## Latest-main integration after CEO changes requested
+
+Integrated main `70000783a9bbe7f9b21523f978f04a7d3084a83e` on the existing
+sx-report task branch. Recovered the uploaded unfinished integration patch
+(attachment `394286f8-81cc-4473-807e-991d4e05991f`, SHA-256
+`81c74918085a8391d056df1bd5f13966338f2906dc2607ba4ab07b20851cccec`)
+and verified its complete tree before continuing. The eleven source conflicts
+are resolved. The obsolete Report/Word renderers deleted on main remain deleted;
+the candidate feeds main's shared story model, Document view and Word renderer.
+The existing `report-pillars/1` and coaching-v8 behavior remain covered separately.
+
+Gemini's existing v8 pillar candidate retains its v7 adapter marker. The Report
+content candidate uses a distinct v8 adapter marker, with closed round-trip
+validation and rejection of mixed Report/v8 markers. OpenAI keeps the same
+separation. Validator /13 supersedes main's /12; the source fingerprint is pinned
+in the existing regression. Native title properties, legacy schema fingerprints
+and v6/v7/v8/Report runtime/SVAL holds remain covered. No candidate admission or
+activation occurred.
+
+Preserved a distinct call observation when a person records Won/Lost, without
+repeating the call outcome as prospect position. Ungated legacy misses remain
+hidden. A validated opening/response/relevance miss still renders and plays
+its actual source turn. The Word parity regression now reads the document's
+actual XML text, preserving escaped punctuation. Candidate facts take precedence
+when an older pillar projection is also present.
+
+Verification: **266 Python tests and 80 frontend tests passed**, including both
+candidates' schemas, source binding, legacy behavior and browser/Document/Word
+consumers. Sales Xray typecheck and affected-module mypy passed (5 source files). Targeted
+ESLint, frontend formatting, whitespace, Ruff and Python formatting passed.
+The source-owned card's approximate size target was exceeded by the required
+versioned schema/parser/reader tests; scope remains the existing Report contract,
+readers, fictional fixtures and evidence, without unrelated application changes.
+
+The attempted fresh public owner-dev fictional route read returned HTTP 403.
+Retained Root reference evidence remains attributed with its served-SHA/API
+limits. Root must reverify the registered fictional preview against the pushed
+integrated head; old head-bound UI evidence is not claimed as new acceptance.
+
+The prior b00a897 CTO approval applies only to its old diff. CEO requested this
+integration and recorded no merge approval. Fresh exact-head CI, renewed CTO
+review and CEO approval remain required. Protected activation, the 13-call
+staged re-audit, production version and What's new remain outstanding.

@@ -197,6 +197,7 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
             retention_ref=bundle.intake_retention_ref,
             retention_days=bundle.retention_days,
             acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE,
+            registered_organisations=True,
         ),
         storage=PrivateLocalRecordingStorage(storage_path),
         scratch=PrivateLocalRecordingStorage(scratch_path),

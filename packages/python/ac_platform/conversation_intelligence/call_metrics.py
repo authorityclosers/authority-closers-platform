@@ -1,4 +1,4 @@
-"""Pure Python twin of Sales Xray's call-metrics/2 transcript measurements."""
+"""Pure Python twin of Sales Xray's call-metrics/3 transcript measurements."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import math
 import re
 from typing import Final, TypedDict
 
-CALL_METRICS_RULES: Final = "call-metrics/2"
+CALL_METRICS_RULES: Final = "call-metrics/3"
 MONOLOGUE_GAP_MS: Final = 2000
 _MONOLOGUE_LIMIT: Final = 3
 _PRICE_MOMENT_LIMIT: Final = 20
@@ -14,7 +14,7 @@ _STORED_CUT_IN_LIMIT: Final = 50
 _END_PUNCTUATION: Final = re.compile(r"[.?!।？！…]$")
 _QUESTION_MARKS: Final = re.compile(r"[?？]+")
 PRICE_WORDS: Final = re.compile(
-    r"(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)",
+    r"(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा|investment)",
     re.IGNORECASE,
 )
 

@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from ac_platform.coaching.call import build_call_coaching
-from ac_platform.coaching.contracts import CallSummary
+from ac_platform.coaching.contracts import CallSummary, ObjectionSeen
 from ac_platform.coaching.learner import build_learner
 from ac_platform.coaching.report_adapter import from_report
 from ac_platform.coaching.team import summarize_team
@@ -59,7 +59,16 @@ def _views() -> dict[str, Any]:
             )
         }
     )
-    team = summarize_team(((UUID(int=9), history),), person_id=PERSON, tenant_id=TENANT)
+    heard = history.model_copy(
+        update={
+            "has_call_map": True,
+            "objections": (
+                ObjectionSeen(kind="price_concern", handling="answered"),
+                ObjectionSeen(kind="price_concern", handling="ignored"),
+            ),
+        }
+    )
+    team = summarize_team(((UUID(int=9), heard),), person_id=PERSON, tenant_id=TENANT)
     # The HTTP layer stamps the reading session on every view.
     return {
         name: view.model_copy(update={"session_id": SESSION}).model_dump(mode="json", by_alias=True)

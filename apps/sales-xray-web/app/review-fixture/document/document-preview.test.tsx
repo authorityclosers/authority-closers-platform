@@ -1,9 +1,11 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { DocumentPreview } from "./document-preview";
+import { DOCUMENT_FIXTURE_DATA, DocumentPreview } from "./document-preview";
 import Page from "./page";
 import { ReportDocument } from "../../report-document";
+import { reportDocumentModel } from "../../report-document-model";
+import { REPORT_PILLARS } from "../../report-pillars";
 import { syntheticReport } from "../report/synthetic-report";
 vi.mock("../../report-document", () => ({
   ReportDocument: vi.fn(() => <div data-document-export />),
@@ -46,6 +48,20 @@ it("supplies the fictional report and transcript to the file preview", async () 
     await act(async () => root.unmount());
     container.remove();
   }
+});
+
+it("its fictional call makes the whole six-part Document (QA's six-section check)", () => {
+  // QA saw "This report didn't load" here once on the shared dev server.
+  const doc = reportDocumentModel(DOCUMENT_FIXTURE_DATA, {
+    roles: { seller: "fictional-seller", prospect: "fictional-buyer" },
+    speakerName: (id) => DOCUMENT_FIXTURE_DATA.speakerNames?.[id],
+  });
+  expect(doc.sections.map((section) => section.id)).toEqual(
+    REPORT_PILLARS.map((pillar) => pillar.id),
+  );
+  for (const section of doc.sections)
+    expect(section.parts.length).toBeGreaterThan(0);
+  expect(doc.title).toBe("Fictional seller — sample call report");
 });
 
 it("does not publish fictional document content in production", () => {

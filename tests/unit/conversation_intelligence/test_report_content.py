@@ -227,7 +227,7 @@ def test_schema_is_versioned_closed_and_runtime_stays_blocked():
     assert "report_content" in new["required"]
     assert "roles" not in new["properties"]["report_content"]["properties"]
     assert all("call_state" in d["required"] for d in new["$defs"]["dimension"]["anyOf"])
-    for revision in ["coaching-v6", "coaching-v7", "report-c5-v1"]:
+    for revision in ["coaching-v6", "coaching-v7", "coaching-v8", "report-c5-v1"]:
         assert "Gate 2" in coaching_revision_runtime_block(revision)
     assert coaching_revision_runtime_block("coaching-v5") is None
 
@@ -273,6 +273,20 @@ def test_candidate_prompt_has_complete_source_map_and_own_provider_schema():
     assert restored["max_completion_tokens"] == prompt["max_completion_tokens"]
     revision, schema = _schema_for_prompt(system)
     assert revision == "report-c5-v1" and "report_content" in schema["required"]
+    assert body["systemInstruction"]["parts"][0]["text"].startswith(
+        "AC_TASK_ADAPTER: gemini-json-v8\n"
+    )
+    # The independently merged v8 pillar candidate keeps its own schema and marker.
+    assert "pillars" in coaching_response_json_schema("coaching-v8")["required"]
+    assert "pillars" not in body["generationConfig"]["responseJsonSchema"]["required"]
+    tampered = deepcopy(body)
+    tampered["systemInstruction"]["parts"][0]["text"] = tampered["systemInstruction"]["parts"][0][
+        "text"
+    ].replace("gemini-json-v8", "gemini-json-v7", 1)
+    with pytest.raises(ValueError):
+        gemini_prompt_view(tampered, model="gemini-3.8-flash", task="coaching", maximum=3200)
+    with pytest.raises(ValueError):
+        _schema_for_prompt(system + " REPORT_STRUCTURE: dipak-six-pillars-v8.")
 
 
 @pytest.mark.parametrize("provider", ["candidate", "gemini", "openai"])

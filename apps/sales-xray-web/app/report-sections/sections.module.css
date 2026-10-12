@@ -1,0 +1,418 @@
+/*
+ * The Report's six pillars as one calm story (spec 9 Oct, section 1).
+ * Composition only: cards, chips, tags and figures come from report-visuals
+ * (Strike A). --sx-* tokens only; one teal accent; text 12 / 14 / 15 px.
+ */
+.pillar {
+  min-width: 0;
+  max-width: 980px;
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: var(--sx-text-md);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pillar p {
+  margin: 0;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.summary {
+  display: grid;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.line {
+  color: var(--sx-ink-2);
+  line-height: 1.55;
+}
+
+.strong {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.note,
+.gap {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.5;
+}
+.gap span {
+  font-weight: 600;
+}
+
+.inlineLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.mission {
+  padding: 0 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- A labelled part of a card ---------- */
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.fieldLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.fieldText {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bullets {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--sx-ink-2);
+}
+
+/* ---------- Lists inside one card, divided by hairlines ---------- */
+
+.columnHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--sx-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.items {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--sx-line);
+}
+.item > * {
+  max-width: 100%;
+}
+/* Their words run the full width of the card. */
+.item > figure,
+.item .fieldText > figure {
+  justify-self: stretch;
+  width: 100%;
+}
+.item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.item:last-child {
+  padding-bottom: 0;
+}
+.itemTitle {
+  color: var(--sx-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+/* Someone's own words inside a summary box. */
+.said {
+  color: var(--sx-ink);
+}
+.saidBy {
+  display: block;
+  margin-top: 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.stepName {
+  display: block;
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.momentHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Skills ---------- */
+
+.skills {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.skills > li + li {
+  border-top: 1px solid var(--sx-line);
+}
+.skill summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: var(--sx-ink);
+  cursor: pointer;
+  list-style: none;
+}
+.skill summary::-webkit-details-marker {
+  display: none;
+}
+.skillName {
+  flex: 1;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+.notCovered {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.skillBody {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 0 0 14px;
+}
+.plays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chevron {
+  flex: none;
+  color: var(--sx-muted);
+  transition: transform 160ms ease;
+}
+details[open] > summary .chevron {
+  transform: rotate(180deg);
+}
+
+/* ---------- Folded extras: deeper analysis, who spoke when ---------- */
+
+.fold {
+  border-top: 1px solid var(--sx-line);
+}
+.stack > .fold {
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  padding: 0 16px;
+}
+.fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.fold summary::-webkit-details-marker {
+  display: none;
+}
+.fold[open] > summary {
+  margin-bottom: 4px;
+}
+.fold > div {
+  padding-bottom: 16px;
+}
+.groups {
+  display: grid;
+  gap: 16px;
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
+.group h4 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+/* ---------- Where the deal stands ---------- */
+
+.facts {
+  display: grid;
+  gap: 14px;
+}
+.facts > .field {
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sx-line);
+}
+.facts > .field:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.facts .fieldLabel {
+  padding-top: 2px;
+}
+
+.prospectLink {
+  display: grid;
+  gap: 8px;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--sx-control-h, 32px);
+  padding: 0 14px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+.cta:first-child {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+.cta:hover {
+  border-color: var(--sx-accent);
+}
+
+.more,
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.more:focus-visible,
+.link:focus-visible,
+.cta:focus-visible,
+.fold summary:focus-visible,
+.skill summary:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-sm);
+}
+
+@media (max-width: 640px) {
+  .facts > .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .skill summary,
+  .fold summary {
+    min-height: 44px;
+  }
+  .cta {
+    min-height: 44px;
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* A guest preview: how much more the full report holds. */
+.locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+.unlock {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: 600 var(--sx-text-sm) / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+.unlock:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-sm);
+}
+
+/* The one pointer to long-term Coaching (spec: "may be part of a recurring
+   pattern → View Coaching"). */
+.recurring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+/* Holds the outcome control's place while the call's outcome is read. */
+.outcomeSkeleton {
+  display: block;
+  width: min(100%, 420px);
+  height: 32px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-sunken);
+}

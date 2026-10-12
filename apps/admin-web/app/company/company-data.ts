@@ -122,6 +122,8 @@ export type CallRow = {
   talkShare: number | null;
   objections: string[];
   dealValue: number | null;
+  /** Real calls: the recording the review console opens (/calls/<id>). */
+  recordingId: string | null;
 };
 
 export type Insights = {
@@ -232,6 +234,7 @@ export function callRow(value: unknown): CallRow {
       (item): item is string => typeof item === "string",
     ),
     dealValue: maybe(raw.deal_value),
+    recordingId: str(raw.recording_id),
   };
 }
 

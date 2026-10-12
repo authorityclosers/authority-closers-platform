@@ -8,7 +8,11 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { useWorkspaceAccess } from "../workspace-access";
 import { initials } from "../speaker-profiles";
 import { prospectRow } from "../prospect-brief-model";
-import { fetchProspectsList, type ProspectSummary } from "../prospects-client";
+import {
+  fetchProspectsList,
+  ProspectsContractError,
+  type ProspectSummary,
+} from "../prospects-client";
 import styles from "./prospects.module.css";
 import informationStyles from "../prospect-information.module.css";
 import { PageSkeleton } from "../shell/page-skeleton";
@@ -73,9 +77,10 @@ export function ProspectsListView() {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospects could not be loaded. Try again; your completed work remains private.";
+            : "Prospects didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
         setLoading(false);
@@ -122,9 +127,10 @@ export function ProspectsListView() {
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         const msg =
-          err instanceof Error
+          // A contract mismatch is our fault: never show its technical text.
+          err instanceof Error && !(err instanceof ProspectsContractError)
             ? err.message
-            : "Prospects could not be loaded. Try again; your completed work remains private.";
+            : "Prospects didn't load. Try again.";
         setError(msg);
         setErrorContext(contextKey);
       })
@@ -242,11 +248,7 @@ export function ProspectsListView() {
             <div aria-busy="true" aria-label="Loading prospects">
               <PageSkeleton variant="list" />
             </div>
-          ) : visibleError ? (
-            <p className={styles.emptyText}>
-              Prospects are unavailable. Try again.
-            </p>
-          ) : visibleProspects.length === 0 ? (
+          ) : visibleError ? null : visibleProspects.length === 0 ? (
             <div className={styles.empty} data-testid="empty-prospects">
               <Users
                 size={32}

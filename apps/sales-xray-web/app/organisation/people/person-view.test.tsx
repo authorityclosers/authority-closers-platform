@@ -219,7 +219,7 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
   const marks = [...host.querySelectorAll('tbody [role="img"]')].map((mark) =>
     mark.getAttribute("aria-label"),
   );
-  expect(marks).toEqual(["Partly seen", "Evidence found"]);
+  expect(marks).toEqual(["Partly seen", "Observed"]);
   // Their calls link to each report.
   expect(
     [...host.querySelectorAll(`a[href="/analysis/calls/${callA}"]`)].map(
@@ -291,17 +291,74 @@ it("says so when the person isn't in this organisation", async () => {
   ).not.toBeNull();
 });
 
-it("raises one corner card with Try again when a read fails, never a crash", async () => {
+it("says in place when their calls can't be loaded, with Try again, never a blank page", async () => {
   routes["/v1/organisation/activity?days=84"] = {
     status: 500,
-    body: { detail: "Activity is unavailable." },
+    body: { detail: "Internal Server Error" },
   };
   await show(ashaId);
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
+  expect(host.textContent).toContain(
+    "Their calls and reports couldn't be loaded",
+  );
+  expect(host.textContent).toContain("Check your connection and try again.");
+  expect(host.textContent).not.toContain("Internal Server Error");
+  expect(notices.notify).not.toHaveBeenCalled();
+
+  routes["/v1/organisation/activity?days=84"] = {
+    status: 200,
+    body: { members: [], per_day: [], per_rep: [], calls: [] },
+  };
+  const retry = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Try again",
+  );
+  await act(async () => retry?.click());
+  for (let index = 0; index < 4; index += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  expect(host.textContent).toContain("Asha has no calls in the last 12 weeks");
+});
+
+it("raises one corner card with Try again when the directory can't be read, never a crash", async () => {
+  routes["/v1/organisation/members"] = {
+    status: 503,
+    body: { detail: "Service Unavailable" },
+  };
+  await show(ashaId);
   expect(notices.notify).toHaveBeenCalledWith(
     expect.objectContaining({
       tone: "error",
+      message: "Check your connection and try again.",
       action: expect.objectContaining({ label: "Try again" }),
     }),
+  );
+});
+
+it("uses the person's own weekly read where the server has it: exact totals, newest calls listed", async () => {
+  const org = routes["/v1/organisation/activity?days=84"].body as {
+    calls: unknown[];
+  };
+  routes[`/v1/organisation/members/${ashaId}/activity?weeks=12`] = {
+    status: 200,
+    body: {
+      person_id: ashaId,
+      weeks: Array.from({ length: 12 }, (_, index) => ({
+        start: ago(84 - index * 7),
+        calls: index === 11 ? 4 : 5,
+        recorded_minutes: 60,
+        reports_ready: 5,
+      })),
+      totals: { calls: 64, recorded_minutes: 720, reports_ready: 60 },
+      calls: org.calls,
+    },
+  };
+  await show(ashaId);
+  const tiles = host.querySelector('[aria-label="Last 12 weeks"]');
+  expect(tiles?.textContent).toContain("Calls64");
+  expect(tiles?.textContent).toContain("Minutes recorded720");
+  expect(host.textContent).toContain("Showing the newest 2 of 64 calls.");
+  expect(calls.some((item) => item.url.includes("/activity?days="))).toBe(
+    false,
   );
 });

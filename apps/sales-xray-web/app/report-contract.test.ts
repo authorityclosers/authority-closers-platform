@@ -267,6 +267,37 @@ describe("CallStudio report contract", () => {
     );
   });
 
+  it("accepts a cited skill without a note, never an uncited one", () => {
+    const report = validReport();
+    report.dimensions[0] = {
+      ...report.dimensions[0]!,
+      status: "observed",
+      observation: "",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    };
+    const source = {
+      ...binding,
+      transcript: parseTranscript(transcript, sourceSha256),
+    };
+    expect(
+      parseJobResponse(job(report), source).report?.dimensions[0]?.observation,
+    ).toBe("");
+    report.dimensions[0] = {
+      ...validReport().dimensions[0]!,
+      observation: "",
+    };
+    expect(() => parseJobResponse(job(report), source)).toThrow(
+      "report_dimension_0_observation_invalid",
+    );
+  });
+
   it("does not default required content or source pins alongside null optional metadata", () => {
     const report = {
       ...validReport(),

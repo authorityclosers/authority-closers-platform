@@ -25,8 +25,8 @@ from ac_platform.conversation_intelligence.reporting_runtime import (
     validate_bootstrap_approval,
 )
 from ac_platform.conversation_intelligence.runner import (
-    ConversationWorkerRunner,
     ConversationWorkerRunnerSummary,
+    PipelinedConversationWorkerRunner,
 )
 from ac_platform.conversation_intelligence.service_config import (
     WorkerServiceConfig,
@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.service_config import (
     load_service_config,
     verify_installed_release,
 )
+from ac_platform.conversation_intelligence.stage_handoff import committed_work_listener
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.conversation_intelligence.worker import HostedConversationWorker
 
@@ -110,7 +111,7 @@ def validate_bootstrap_configuration(config: WorkerServiceConfig) -> None:
 async def run_service(
     config: WorkerServiceConfig, stop: asyncio.Event
 ) -> ConversationWorkerRunnerSummary:
-    """Compose the four real database workers and run one serial consumer."""
+    """Compose bounded local and provider consumers with durable stage handoffs."""
     if config.bootstrap_only:
         validate_bootstrap_configuration(config)
         await stop.wait()
@@ -148,10 +149,11 @@ async def run_service(
             environment=config.environment,
             native_runtime=native,
         )
-        runner = ConversationWorkerRunner(
-            reporting.retention, offline, reporting.plans, reporting.inference
-        )
-        return await runner.run(stop)
+        async with committed_work_listener(database_url) as wakeups:
+            runner = PipelinedConversationWorkerRunner(
+                reporting.retention, offline, reporting.plans, reporting.inference, wakeups=wakeups
+            )
+            return await runner.run(stop)
     finally:
         await engine.dispose()
 

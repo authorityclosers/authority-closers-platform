@@ -252,32 +252,47 @@ export function parseProfileFields(input: unknown): ProfileFields {
   return result;
 }
 
-/** Keep supplied bounds, approximation, units and scale; never convert money. */
+const CURRENCY_SIGN: Record<string, string> = {
+  INR: "₹",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
+/**
+ * An amount as a salesperson says it ("About ₹2–3 lakh a year"). Bounds,
+ * approximation, units and scale are kept as supplied; money is never
+ * converted. A currency with a sign goes before the number; any other code
+ * or unit stays after the scale.
+ */
 export function profileValueText(value: ProfileValue): string {
   if (value.kind === "text") return value.text;
-  const lower = value.lower,
-    upper = value.upper;
+  const code =
+    typeof value.currency_code === "string" ? value.currency_code : null;
+  const sign = code ? (CURRENCY_SIGN[code] ?? "") : "";
+  const lower = `${sign}${value.lower}`,
+    upper = `${sign}${value.upper}`;
   const bounds =
     value.interval_shape === "point"
       ? lower
       : value.interval_shape === "range"
-        ? `${value.lower_inclusive ? "[" : "("}${lower}–${upper}${value.upper_inclusive ? "]" : ")"}`
+        ? `${lower}–${value.upper}`
         : value.interval_shape === "lower_bound"
-          ? `${value.lower_inclusive ? "≥" : ">"} ${lower}`
+          ? `${value.lower_inclusive ? "At least" : "More than"} ${lower}`
           : value.interval_shape === "upper_bound"
-            ? `${value.upper_inclusive ? "≤" : "<"} ${upper}`
-            : "Unknown amount";
+            ? `${value.upper_inclusive ? "Up to" : "Under"} ${upper}`
+            : "Amount not clear";
   return [
-    value.approximation === "approximate" ? "Approximately" : null,
+    value.approximation === "approximate" ? "About" : null,
     bounds,
     value.scale_as_stated,
-    value.currency_code ?? value.unit,
-    value.period ? `per ${value.period}` : null,
+    sign ? null : (value.currency_code ?? value.unit),
+    value.period ? `a ${value.period}` : null,
     value.period_reference,
     value.component,
     value.cadence,
     value.tax_treatment,
   ]
-    .filter((v) => v !== null && v !== undefined)
+    .filter((v) => v !== null && v !== undefined && v !== "")
     .join(" ");
 }

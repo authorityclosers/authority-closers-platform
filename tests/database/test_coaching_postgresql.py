@@ -1,6 +1,7 @@
 """Private Coaching on disposable PostgreSQL; every call and quote is fictional."""
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -55,9 +56,16 @@ def install(setup: Any, *, organisation: bool = False) -> None:
 
 
 async def draft_for(
-    setup: Any, submission: UUID, *, dimension_evidence: bool = True
+    setup: Any,
+    submission: UUID,
+    *,
+    dimension_evidence: bool = True,
+    line: str = "Fictional line: the buyer asks about price and timing.",
 ) -> tuple[UUID, str]:
-    """A valid private legacy draft, intentionally not linked to other evaluators."""
+    """A valid private legacy draft, intentionally not linked to other evaluators.
+
+    Another `line` gives another transcript revision (sensitive marks follow it).
+    """
     async with setup.sessions() as db, db.begin():
         link = await db.scalar(
             select(ConversationGuestSubmission).where(
@@ -89,7 +97,7 @@ async def draft_for(
             await db.flush()
         current_run.state = "completed"
         current_run.completed_at = setup.clock[0]
-        native = '{"text":"Fictional line: the buyer asks about price and timing."}'
+        native = json.dumps({"text": line}, separators=(",", ":"))
         revision = hashlib.sha256(native.encode()).hexdigest()
         normalized = _transcript(count=1)
         normalized.update(source_sha256=recording.source_sha256, revision=revision)
@@ -271,6 +279,8 @@ def test_coaching_own_report_withholding_and_revocation(
                 assert [row["submission_id"] for row in data["calls"]] == [str(call)]
                 assert data["calls"][0]["state"] == "ready"
                 assert data["calls"][0]["focus_label"] == data["focus"]["label"]
+                # One call: its focus cannot recur yet (the Report shows no pattern line).
+                assert data["calls"][0]["recurring"] in {False, None}
                 async with setup.sessions() as db, db.begin():
                     await SensitiveSegmentsStore(db).mark(
                         setup.state.actor,

@@ -22,7 +22,7 @@
       "label": "Explain value before trading price",
       "explanation": "You offered 10% off before the buyer asked about price or the scope was clear. The buyer’s real question was whether the service fits.",
       "why_it_matters": "An unapproved early discount makes price the topic and leaves finance with a number it cannot rely on.",
-      "selected_reason": "Selected from this call’s report. Your across-call mission stays unchanged.",
+      "selected_reason": "This call’s report suggested it. Your mission across calls doesn’t change.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "provisional",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
@@ -112,7 +112,7 @@
       "next_call_connection": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
     },
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "Your rewrite names the concern and the value before any number.",
       "gap_type": "execution",
       "estimated_minutes": 3
@@ -121,7 +121,7 @@
       "skill_id": "certainty_objection_intelligence",
       "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
-      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
       "active_since": "2026-07-27T11:00:00+05:30",
       "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
@@ -140,7 +140,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33542,
-        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
         "takeaways": [
           "Clarify what the buyer means.",
           "Respond to the blocker and check resolution."
@@ -166,11 +166,11 @@
         "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -183,7 +183,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "strength": {
@@ -228,15 +229,15 @@
       "label": "Explain value before trading price",
       "explanation": "When the buyer raises a concern, you move to a discount before the concern and the value are clear.",
       "why_it_matters": "Early discounts make price the conversation, cost margin and leave finance with numbers it cannot use.",
-      "selected_reason": "5 of 7 comparable calls include a coaching suggestion for this. This does not prove the same behaviour each time.",
+      "selected_reason": "It needed work in 4 of your last 6 calls on this skill.",
       "selected_at": "2026-07-27T11:00:00+05:30",
       "status": "active",
       "verdict": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment."
     },
     "pattern": {
-      "relevant_call_count": 7,
-      "attention_call_count": 5,
-      "summary": "Five of your last seven comparable calls include this suggestion. Replay the moments to compare the situations."
+      "relevant_call_count": 6,
+      "attention_call_count": 4,
+      "summary": "It needed work on 4 different calls. Replay the moments below and see what you did each time."
     },
     "root_cause": {
       "hypothesis": "You may treat any hesitation as a price objection and reach for a discount to keep momentum.",
@@ -302,7 +303,7 @@
       }
     ],
     "practice": {
-      "exercise": "Rewrite the cited seller response using the focus behaviour; rehearse once with a pause.",
+      "exercise": "Rewrite what was said in the moment above, the better way. Then say it out loud once, with a pause.",
       "success_condition": "Your rewrite names the concern and the value before any number.",
       "gap_type": "execution",
       "estimated_minutes": 3
@@ -311,7 +312,7 @@
       "skill_id": "certainty_objection_intelligence",
       "behavior": "Before offering a concession, establish the concern and trade any approved concession for a defined scope or commitment.",
       "context": "When a buyer raises cost, scope or risk before any concession is approved.",
-      "done_when": "No unsolicited discount; any concession has explicit approval and a reciprocal condition.",
+      "done_when": "No discount the buyer didn’t ask for. Anything given is approved and comes with something back.",
       "cue": "Concern first. Value next. Trade, never give.",
       "active_since": "2026-07-27T11:00:00+05:30",
       "origin_submission_id": "5a0d0000-0000-4000-8000-000000000100",
@@ -379,7 +380,7 @@
         "entitlement_policy": "AUT-1678-open-access",
         "start_ms": 0,
         "end_ms": 33542,
-        "reason": "Dipak's lesson for Certainty & Objection Intelligence, the skill this coaching focuses on.",
+        "reason": "Dipak’s lesson on Certainty & Objection Intelligence, the skill you’re working on.",
         "takeaways": [
           "Clarify what the buyer means.",
           "Respond to the blocker and check resolution."
@@ -405,11 +406,11 @@
         "kind": "video",
         "placeholder": true,
         "voice": "neutral",
-        "access": "locked",
+        "access": "preview",
         "entitlement_policy": "AUT-1678-demo-one-free-topic-per-skill",
         "start_ms": 0,
         "end_ms": 49451,
-        "reason": "A further lesson for Certainty & Objection Intelligence in Dipak's full coaching.",
+        "reason": "Another lesson on Certainty & Objection Intelligence, from Dipak’s full coaching. The first 15 seconds are free.",
         "takeaways": [
           "Ask what the buyer is comparing with.",
           "Separate budget, value and payment timing."
@@ -422,7 +423,8 @@
             "href": "https://learner.authorityclosers.com/",
             "label": "Dipak's courses on the Learner's Academy"
           }
-        }
+        },
+        "preview_end_ms": 15000
       }
     ],
     "recommended_media": null,
@@ -571,7 +573,7 @@
     "entitlement": "coaching",
     "entitlement_policy": "AUT-1678-open-access",
     "scope": "anonymous",
-    "named_rep_details": false,
+    "named_rep_details": true,
     "analysed_calls": 40,
     "rep_count": 6,
     "pending_calls": 2,
@@ -605,9 +607,30 @@
       }
     ],
     "limitations": [
-      "Counts describe report suggestions, not proven recurring mistakes or mastery.",
+      "Counts are report suggestions. They don’t prove a repeated mistake.",
       "No rep’s focus, root cause, mission, identity or call evidence is disclosed.",
       "Synthetic sandbox team (synthetic-v1)."
+    ],
+    "reps_basis": "shared",
+    "reps": [
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b001",
+        "name": "Kunal Kulkarni",
+        "skill_id": "certainty_objection_intelligence",
+        "focus_label": "Certainty & Objection Intelligence",
+        "calls": 9,
+        "latest_call_at": "2026-09-07T10:00:00+05:30",
+        "shared_at": "2026-09-08T09:30:00+05:30"
+      },
+      {
+        "person_id": "00000000-0000-4000-8000-00000000b002",
+        "name": "Meera Joshi",
+        "skill_id": "qualification",
+        "focus_label": "Qualification",
+        "calls": 6,
+        "latest_call_at": "2026-09-05T15:00:00+05:30",
+        "shared_at": "2026-09-01T12:00:00+05:30"
+      }
     ]
   }
 }

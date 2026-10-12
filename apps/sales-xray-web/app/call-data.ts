@@ -146,8 +146,19 @@ const UNIT_KIND: Array<[RegExp, HeardNumber["kind"]]> = [
     "time",
   ],
 ];
-const NUMBER =
-  /(?<![\p{L}\d])((?:₹|Rs\.?|INR|USD|\$|dollars?)\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|rupees?|रुपये|रुपए|dollars?|USD|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/giu;
+/** Numbers said as words ("two lakh rupees", "दो लाख"); longest first. */
+const TENS = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety";
+const NUMBER_WORDS = [
+  `(?:${TENS})(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?`,
+  "eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen",
+  "hundred|one|two|three|four|five|six|seven|eight|nine|ten",
+  "एक|दो|तीन|चार|पांच|पाँच|छह|सात|आठ|नौ|दस|बीस|पचास|सौ",
+].join("|");
+const AMOUNT = `\\d+(?:[.,]\\d+)?|${NUMBER_WORDS}`;
+const NUMBER = new RegExp(
+  `(?<![\\p{L}\\d])((?:₹|Rs\\.?|INR|USD|\\$|dollars?)\\s*)?(${AMOUNT})(?:\\s*(?:-|–|to|or|से|,)\\s*(${AMOUNT}))?\\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\\p{L}])|K(?![\\p{L}])|thousand|हज़ार|हजार|rupees?|रुपये|रुपए|dollars?|USD|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\\p{L}]))?`,
+  "giu",
+);
 
 /**
  * Numbers said with a unit, as spoken. Magnitudes stay quantities unless
@@ -176,14 +187,17 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
         /^\s*(?:customers?|users?|people|members?|clients?|staff|employees?|units?|items?|orders?|products?|families|visits|tanks?|lit(?:er|re)s?)\b/iu.test(
           after,
         );
+      // Word edges by letter class: \b is ASCII-only and misses Devanagari.
       const explicitCurrencyEvidence =
         rupee ||
         /^(?:rupees?|रुपये|रुपए|dollars?|usd)$/iu.test(unit ?? "") ||
         (!objectCount &&
-          (/\b(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
+          (/(?<![\p{L}\p{M}\d])(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
             before,
           ) ||
-            /^\s*(?:rupees?|inr|usd|dollars?|रुप(?:ये|ए))\b/iu.test(after)));
+            /^\s*(?:rupees?|inr|usd|dollars?|रुप(?:ये|ए))(?![\p{L}\p{M}\d])/iu.test(
+              after,
+            )));
       const currencyEvidence = Boolean(explicitCurrencyEvidence);
       if (!unit && !currencyEvidence) continue;
       const kind = explicitCurrencyEvidence
@@ -268,8 +282,10 @@ export function timePromise(transcript: Transcript) {
   return { upToMinutes: Math.max(...minutes), segments };
 }
 
+// "Investment" is how a high-ticket seller says the price ("The program
+// investment is two lakh rupees").
 const PRICE_WORDS =
-  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)/iu;
+  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|investment|इन्वेस्टमेंट|निवेश|कितने का है|कितने का पड़ेगा)/iu;
 
 /** Segments where price, fees or budget came up. */
 export function priceTalk(transcript: Transcript): TranscriptSegment[] {

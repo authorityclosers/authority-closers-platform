@@ -4,3 +4,52 @@
 .pinned.pinned.pinned.pinned.pinned {
   background: var(--lx-paper);
 }
+
+/* Words for screen readers only (the icon says it on screen). */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Phones keep the title row to the title and two icon buttons. */
+@media (max-width: 640px) {
+  .wideOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The file type beside "Download report": small, never below 12 px. The
+   repeated class outranks the studio's 11.5 px menu rule. */
+small.fileType.fileType.fileType.fileType.fileType {
+  font-size: var(--sx-text-xs, 12px);
+}
+
+/* Transcript and "…" sit on the page in both themes (semantic tokens). */
+.action.action {
+  border-color: var(--lx-line);
+  background: var(--lx-surface);
+  color: var(--lx-ink-2);
+}
+.action.action:hover {
+  border-color: var(--lx-line-strong);
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+}
+
+/* An open "…" menu paints and takes clicks above the sticky Report bar:
+   the row is pinned at the top (as the studio already pins it) and its
+   layer rises while the menu is open. */
+.pinned.pinned.pinned.pinned.pinned:has(details[open]) {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}

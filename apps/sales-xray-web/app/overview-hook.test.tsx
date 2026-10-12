@@ -232,8 +232,10 @@ describe("OverviewHook phase cards", () => {
       report.summary,
     );
     expect(visuals.textContent).toContain("Call length02:00");
-    expect(visuals.textContent).toContain("alex");
-    expect(visuals.textContent).toContain("sam");
+    // Unnamed voices read as the rest of the report names them, never by id.
+    expect(visuals.textContent).toContain("Speaker 1");
+    expect(visuals.textContent).toContain("Speaker 2");
+    expect(visuals.textContent).not.toMatch(/alex|sam/);
     expect(
       visuals.querySelector('[aria-label="Call map AI visual readings"]'),
     ).toBeNull();
@@ -246,7 +248,7 @@ describe("OverviewHook phase cards", () => {
 
   it("shows unavailable call signals until roles are assigned", async () => {
     await renderOverview(transcript, null);
-    expect(host.textContent).toContain("assign roles to measure");
+    expect(host.textContent).toContain("pick the salesperson to count");
     expect(host.textContent).not.toContain("0 signals");
   });
 
@@ -272,6 +274,8 @@ describe("OverviewHook phase cards", () => {
     };
     await renderOverview(noMatches);
     expect(host.textContent).toContain("0 signals");
+    // The prospect door counts insights, as the Report's "prospect insights".
+    expect(host.textContent).toContain("0 insights");
   });
 
   it("keeps silent minutes as gaps in the chart", () => {

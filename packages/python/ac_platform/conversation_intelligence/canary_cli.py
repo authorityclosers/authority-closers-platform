@@ -59,6 +59,24 @@ FIXTURE_SHA256 = "78cb1194e987db6b8d06d0aa2a4d2e66d21bbdf0c3de6960e4e26da36ed207
 MAX_QUOTE_PAISE = 45_000
 
 
+def check_report_coaching(content: dict[str, Any]) -> bool:
+    """Check the per-call focus/practice contract, including an honest absence.
+
+    This guest canary does not certify the signed-in Coaching page. It checks
+    that an improvement has the paired next-call action used by that page.
+    """
+    overview = DetailedOverview.model_validate(content.get("overview"))
+    improvements = content.get("improvements")
+    if not isinstance(improvements, list):
+        raise ValueError("canary_improvements_unavailable")
+    mission = overview.next_call_focus is not None and overview.practice is not None
+    if bool(overview.next_call_focus) != bool(overview.practice):
+        raise ValueError("canary_coaching_pair_incomplete")
+    if bool(improvements) != mission:
+        raise ValueError("canary_coaching_mission_unavailable")
+    return mission
+
+
 def ownership(db: AsyncSession, settings: Settings) -> GuestOwnership:
     if settings.public_learner_tenant_id is None:
         raise CommandError("The public learner workspace is required.")
@@ -116,6 +134,7 @@ async def poll(
 ) -> None:
     accepted = False
     last = time.monotonic()
+    observed_stage = "C1"
     while True:
         async with sessions() as db, db.begin():
             owner = ownership(db, settings)
@@ -135,16 +154,24 @@ async def poll(
             now = time.monotonic()
             stage = result["stage_reached"]
             durations = result["seconds_per_stage"]
-            durations[stage] = durations.get(stage, 0.0) + now - last
+            durations[observed_stage] = durations.get(observed_stage, 0.0) + now - last
+            observed_stage = stage
             last = now
             if progress["has_report"]:
                 result["report_present"] = True
                 report = await reports.report(submission_id, token=token)
                 try:
-                    DetailedOverview.model_validate(report["report"]["content"].get("overview"))
-                except ValueError:
+                    content = report["report"]["content"]
+                    DetailedOverview.model_validate(content.get("overview"))
+                except (ValueError, KeyError, TypeError, AttributeError):
                     result["failure_code"] = "report_contract_invalid"
                     return
+                try:
+                    result["coaching_mission_present"] = check_report_coaching(content)
+                except ValueError:
+                    result["failure_code"] = "coaching_contract_invalid"
+                    return
+                result["coaching_contract_valid"] = True
                 result.update(ok=True, stage_reached="C6")
                 return
             if (
@@ -209,6 +236,8 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         total_seconds=0.0,
         cost_paise=0,
         report_present=False,
+        coaching_contract_valid=False,
+        coaching_mission_present=False,
         retention_ref=None,
     )
     try:

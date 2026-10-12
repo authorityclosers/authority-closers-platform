@@ -524,9 +524,11 @@ export function ReportMoments({
                 >
                   <span className={styles.kind}>
                     <i aria-hidden="true" />
+                    {/* The kind names the moment; a listen flag on another
+                        kind is its chip, said once. */}
                     {moment.golden
                       ? "Best moment"
-                      : moment.listen
+                      : moment.kind === "listen" && moment.listen
                         ? LISTEN_LABEL[moment.listen]
                         : kind.label}
                     {moment.listen && moment.kind !== "listen" ? (

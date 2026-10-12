@@ -436,8 +436,10 @@
   background: var(--lx-teal);
 }
 
+/* One teal accent: a call still running is a teal ring (ready is filled). */
 .status[data-tone="active"] i {
-  background: var(--lx-info);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--lx-teal);
 }
 
 .status[data-tone="attention"] i {

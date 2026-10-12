@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { PERSON_WEEKS } from "./organisation/people/person-data";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
@@ -59,6 +60,15 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `${A}/submissions/${id.toLowerCase()}/transcript`,
     `${A}/submissions/${id.toLowerCase()}/report`,
   ]);
+  // A person's profile: the directory and their twelve weeks.
+  const person = "0000000A-0000-4000-8000-000000000003";
+  expect(earlyReadsFor(`/organisation/people/${person}`)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-workspaces",
+    "/v1/organisation/members",
+    `/v1/organisation/members/${person.toLowerCase()}/activity?weeks=${PERSON_WEEKS}`,
+  ]);
+  expect(earlyReadsFor("/organisation/people/someone")).toEqual([]);
   // Public pages and unknown addresses start nothing.
   expect(earlyReadsFor("/pricing")).toEqual([]);
   expect(earlyReadsFor("/analysis/calls/not-a-call")).toEqual([]);
@@ -82,6 +92,11 @@ it("starts the reads from the inline script with the browser's own session", asy
     });
   boot("/pricing");
   expect(network).toHaveBeenCalledTimes(6);
+  network.mockClear();
+  boot("/organisation/people/0000000A-0000-4000-8000-000000000003/");
+  expect(network.mock.calls.map(([url]) => url)).toEqual(
+    earlyReadsFor("/organisation/people/0000000A-0000-4000-8000-000000000003"),
+  );
 });
 
 it("reads every early answer at once, so no request stays open", async () => {

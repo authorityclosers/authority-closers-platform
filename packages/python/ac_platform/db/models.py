@@ -22,6 +22,7 @@ from ac_platform.billing import models as billing_models
 from ac_platform.billing import order_models as billing_order_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
+from ac_platform.coaching import models as coaching_models
 from ac_platform.community import models as community_models
 from ac_platform.conversation_intelligence import (
     acquisition_models,
@@ -31,6 +32,7 @@ from ac_platform.conversation_intelligence import (
     execution_control_models,
     guest_models,
     insight_models,
+    prospect_call_outcome_models,
     prospect_models,
     recovery_models,
     review_label_models,
@@ -65,6 +67,7 @@ MODEL_MODULES = (
     app_update_models,
     product_update_models,
     community_models,
+    coaching_models,
     conversation_models,
     acquisition_models,
     bulk_import_models,
@@ -81,6 +84,7 @@ MODEL_MODULES = (
     sensitive_segment_models,
     review_label_models,
     insight_models,
+    prospect_call_outcome_models,
     authorization_models,
     knowledge_models,
     catalog_models,

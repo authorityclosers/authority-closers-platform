@@ -5,7 +5,8 @@ import { parseReportContent } from "./report-content";
 import { parseJobResponse } from "./report-contract";
 import { CALL_OUTCOMES } from "./report-story";
 import { reportStoryModel } from "./report-story-model";
-import { buildReportDocx } from "./report-docx";
+import { createReportDocx } from "./report-docx";
+import { COMMON } from "./report-copy";
 import {
   contentFixture,
   contentReport,
@@ -84,16 +85,16 @@ describe("validated Report content", () => {
   });
   it("Word contains the same supported facts and sources as the browser model", async () => {
     const model = reportStoryModel(contentReport, contentTranscript);
-    const blob = await buildReportDocx({
+    const blob = await createReportDocx({
       title: "Fictional contract",
       report: contentReport,
       transcript: contentTranscript,
     });
-    const xml = execFileSync(
+    const documentText = execFileSync(
       "python3",
       [
         "-c",
-        "import io,sys,zipfile; print(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).read('word/document.xml').decode())",
+        "import io,sys,zipfile,xml.etree.ElementTree as ET; root=ET.fromstring(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).read('word/document.xml')); print(' '.join(n.text or '' for n in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')))",
       ],
       { input: Buffer.from(await blob.arrayBuffer()) },
     ).toString();
@@ -103,9 +104,9 @@ describe("validated Report content", () => {
       model.deal.nextEvent!.text,
       model.deal.sellerCommitments[0].text,
     ])
-      expect(xml).toContain(text);
-    expect(xml).toContain("Not clear from this call.");
-    expect(xml).not.toContain("Coaching mission");
+      expect(documentText).toContain(text);
+    expect(documentText).toContain(COMMON.gapsLead);
+    expect(documentText).not.toContain("Coaching mission");
   });
   it("does not repeat the outcome as position, infer legacy states, or promote prospect tasks", () => {
     const c = { ...contentFixture, position: contentFixture.outcome };
@@ -121,5 +122,18 @@ describe("validated Report content", () => {
       })),
     };
     expect(reportStoryModel(legacy).skills[0].state).toBeNull();
+  });
+  it("retains validated candidate facts when an older pillar projection is also present", () => {
+    const report = {
+      ...contentReport,
+      pillars: {
+        version: "report-pillars/1" as const,
+        summary: "An older projection of this call.",
+      },
+    };
+    const model = reportStoryModel(report, contentTranscript);
+    expect(model.picture.summary?.text).toBe(contentReport.summary);
+    expect(model.deal.nextEvent?.text).toContain("Friday · 4 PM");
+    expect(model.deal.coachingMission).toBeNull();
   });
 });

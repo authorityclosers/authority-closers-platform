@@ -88,7 +88,8 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     SalesXrayProfile.__table__.create(engine)
     PersonGoogleProfile.__table__.create(engine)
     # The profile-only fixture has no conversation schema. The account-deletion
-    # hook still executes its label and speaker-history purges in this transaction.
+    # hook still executes its label, speaker-history and Coaching-note purges in
+    # this transaction.
     label_revisions = Table(
         "conversation_submission_label_revisions",
         MetaData(),
@@ -101,6 +102,12 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         Column("actor_person_id", Uuid, nullable=False),
     )
     speaker_map_revisions.create(engine)
+    coaching_context = Table(
+        "coaching_learner_context",
+        MetaData(),
+        Column("person_id", Uuid, nullable=False),
+    )
+    coaching_context.create(engine)
     session = Session(engine, expire_on_commit=False)
     session.add_all(
         [
@@ -127,6 +134,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         yield _AsyncSessionAdapter(session), session
     finally:
         session.close()
+        coaching_context.drop(engine)
         speaker_map_revisions.drop(engine)
         label_revisions.drop(engine)
         PersonGoogleProfile.__table__.drop(engine)

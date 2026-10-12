@@ -200,5 +200,27 @@ describe("server reads", () => {
         get,
       }),
     ).toMatchObject({ ok: false, status: 401 });
+    // admin-dev reads the dev live API: its session wins over older ones.
+    const liveCookie = {
+      name: "__Host-ac_live_session",
+      value: "l".repeat(43),
+    };
+    expect(
+      await adminRead("/v1/me", read.object, {
+        env: dev,
+        cookies: [devCookie, session, liveCookie],
+        get,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(get.mock.calls.at(-1)![2]).toBe(
+      `__Host-ac_live_session=${"l".repeat(43)}`,
+    );
+    expect(
+      await adminRead("/v1/me", read.object, {
+        env,
+        cookies: [liveCookie],
+        get,
+      }),
+    ).toMatchObject({ ok: false, status: 401 });
   });
 });

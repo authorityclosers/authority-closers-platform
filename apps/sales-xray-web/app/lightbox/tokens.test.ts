@@ -142,6 +142,8 @@ const smallTextPairs: [string, string][] = [
   ["danger", "danger-soft"],
   ["danger", "surface"],
   ["info", "info-soft"],
+  ["info", "surface"],
+  ["info", "paper"],
   ["warning", "warning-soft"],
   ["hypothesis", "sunken"],
   ["ink-2", "strength-soft"],
@@ -163,6 +165,9 @@ describe("Lightbox token derivative", () => {
       ["muted-2", "#646d7f"],
       // r17 phone shell: a 56 px tab bar, as in Pulse (was 76 px).
       ["bottom-nav-h", "56px"],
+      // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
+      ["info", "#56637a"],
+      ["info-soft", "#eceff4"],
     ]);
     const addedLight = new Set([
       "strength-ink",

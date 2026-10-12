@@ -337,9 +337,10 @@ function StandaloneStudioView({
   };
   const skeletonVariant = (
     path: string,
-  ): "dashboard" | "list" | "account" | "studio" | "call" => {
+  ): "dashboard" | "list" | "account" | "studio" | "report" => {
     if (path === "/dashboard") return "dashboard";
-    if (callIdFromPath(path) !== null) return "call";
+    // A saved call opens as its Report.
+    if (callIdFromPath(path) !== null) return "report";
     if (path === "/account") return "account";
     if (path === "/prospects") return "list";
     return "studio";

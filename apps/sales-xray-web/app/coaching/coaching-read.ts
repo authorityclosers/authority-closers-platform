@@ -40,15 +40,26 @@ export type CallCoaching = {
   strength?: Strength | null;
   /** How many other suggestions the report holds; Coaching keeps one focus. */
   other_suggestions?: number;
+  /** Fictional AC Sandbox data, read only by the person who imported it. */
+  sandbox?: boolean;
+  /** The fictional rep whose call this is (sandbox only). */
+  rep_person_id?: string | null;
+  rep_name?: string | null;
   limitations: string[];
 };
 export type CoachingResult =
   | { data: Coaching | CallCoaching | TeamCoaching; error: null }
   | { data: null; error: string };
 
+/** null = My coaching, "team", a call id, or "person:<id>" (another rep). */
 export function coachingPath(callId: string | null): string {
   if (callId === "team") return "/v1/me/coaching/team";
+  if (callId?.startsWith("person:"))
+    return `/v1/me/coaching/people/${callId.slice(7)}`;
   return callId ? `/v1/me/coaching/calls/${callId}` : "/v1/me/coaching";
+}
+export function sharedPerson(callId: string | null): string | null {
+  return callId?.startsWith("person:") ? requestedCall(callId.slice(7)) : null;
 }
 export function isCallCoaching(
   data: Coaching | CallCoaching | TeamCoaching,
@@ -193,7 +204,7 @@ export function parseCallCoaching(
             why_it_matters: text(focus.why_it_matters),
             selected_reason: text(
               focus.selected_reason,
-              "Selected from this call's report.",
+              "This call’s report suggested it.",
             ),
             selected_at: text(focus.selected_at),
             status: "provisional",
@@ -258,8 +269,21 @@ export function parseCallCoaching(
             next_call_connection: text(mission.behavior),
           }
         : null,
+    sandbox: item.sandbox === true,
+    rep_person_id:
+      item.sandbox === true ? requestedCall(item.rep_person_id) : null,
+    rep_name:
+      item.sandbox === true && text(item.rep_name)
+        ? text(item.rep_name).slice(0, 120)
+        : null,
     limitations: texts(item.limitations),
   };
+}
+
+/** Another rep's view must be exactly that rep's, never the viewer's. */
+function personCoaching(raw: unknown, person: string): Coaching | null {
+  const view = parseCoaching(raw);
+  return view.person_id === person ? view : null;
 }
 
 /** All reads return a result; private diagnostics never reach the page. */
@@ -268,10 +292,21 @@ export async function readCoaching(
   init: RequestInit = {},
   origin = "",
 ): Promise<CoachingResult> {
-  if (callId !== null && callId !== "team" && requestedCall(callId) !== callId)
+  const person = sharedPerson(callId);
+  if (callId?.startsWith("person:") && person !== callId.slice(7))
     return {
       data: null,
-      error: "This call link is invalid. Open the call's report again.",
+      error: "This link doesn’t work. Open Team coaching again.",
+    };
+  if (
+    callId !== null &&
+    callId !== "team" &&
+    !person &&
+    requestedCall(callId) !== callId
+  )
+    return {
+      data: null,
+      error: "This link doesn’t work. Open the call’s report again.",
     };
   try {
     const readHeaders = new Headers(init.headers);
@@ -294,23 +329,27 @@ export async function readCoaching(
             ? "Sign in to see your Coaching."
             : response.status === 403
               ? "Coaching is unavailable in this workspace."
-              : response.status === 404 || response.status === 409
-                ? "This call's coaching is unavailable. Open the call to check its analysis."
-                : "Coaching could not be loaded. Try again.",
+              : person && response.status === 404
+                ? "This coaching is not shared with you."
+                : response.status === 404 || response.status === 409
+                  ? "This call’s coaching isn’t ready. Open the call to see its report."
+                  : "Coaching didn’t load. Try again.",
       };
     if (!response.headers.get("content-type")?.includes("application/json"))
-      return { data: null, error: "Coaching could not be read. Try again." };
+      return { data: null, error: "Coaching didn’t load. Try again." };
     const raw: unknown = await response.json();
     const data =
       callId === "team"
         ? parseTeamCoaching(raw)
-        : callId
-          ? parseCallCoaching(raw, callId)
-          : parseCoaching(raw);
+        : person
+          ? personCoaching(raw, person)
+          : callId
+            ? parseCallCoaching(raw, callId)
+            : parseCoaching(raw);
     return data
       ? { data, error: null }
-      : { data: null, error: "Coaching could not be read. Try again." };
+      : { data: null, error: "Coaching didn’t load. Try again." };
   } catch {
-    return { data: null, error: "Coaching could not be loaded. Try again." };
+    return { data: null, error: "Coaching didn’t load. Try again." };
   }
 }

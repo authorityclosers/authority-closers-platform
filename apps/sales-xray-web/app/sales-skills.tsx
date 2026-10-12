@@ -28,6 +28,7 @@ import type {
 } from "./report-contract";
 import { formatClock } from "./lightbox/time";
 import { RichText } from "./report-entities";
+import { SKILL_NAMES } from "./report-copy";
 import { getReportUiCopy } from "./report-ui-copy";
 import { Clip, IconBadge, useReportPeople, type Tone } from "./report-kit";
 import { useReportDocument } from "./report-reading-context";
@@ -48,12 +49,36 @@ const topics: Record<string, { icon: typeof Users; tone: Tone }> = {
 const topicOf = (id: string) =>
   topics[id] ?? { icon: BookOpen, tone: "info" as Tone };
 
-const factorStatus = getReportUiCopy().factorStatus;
-const STATUS_ORDER = Object.keys(factorStatus);
-const statusOf = (status: string) =>
-  factorStatus[status] ? status : "unknown";
+// The Report's five states (report-copy.ts SKILL_STATES) when the call has
+// them; older reports fall back to their evidence status.
+const factorStatus: Record<string, string> = {
+  strongly_demonstrated: "Strongly Demonstrated",
+  ...getReportUiCopy().factorStatus,
+  needs_attention: "Needs Attention",
+};
+const STATUS_ORDER = [
+  "strongly_demonstrated",
+  "observed",
+  "needs_attention",
+  ...Object.keys(factorStatus).filter(
+    (key) =>
+      !["strongly_demonstrated", "observed", "needs_attention"].includes(key),
+  ),
+];
 
 type SkillDimension = ReportDimension & { evidence?: ReportEvidence[] };
+
+const statusOf = (dimension: SkillDimension) =>
+  dimension.call_state && factorStatus[dimension.call_state]
+    ? dimension.call_state
+    : factorStatus[dimension.status]
+      ? dimension.status
+      : "unknown";
+
+/** Dipak's short name, as the Report rows show it; the long one on hover. */
+const nameOf = (dimension: SkillDimension) =>
+  SKILL_NAMES[dimension.dimension_id as keyof typeof SKILL_NAMES]?.short ??
+  dimension.label;
 
 const EMPTY_TRANSCRIPT: Transcript = {
   source_sha256: "",
@@ -87,15 +112,11 @@ export function SalesSkills({
   const [selected, setSelected] = useState(0);
   const counts = STATUS_ORDER.map((status) => ({
     status,
-    count: dimensions.filter((d) => statusOf(d.status) === status).length,
+    count: dimensions.filter((d) => statusOf(d) === status).length,
   })).filter((item) => item.count);
 
   if (!dimensions.length)
-    return (
-      <p className={styles.empty}>
-        No skill observations were supplied for this call.
-      </p>
-    );
+    return <p className={styles.empty}>This report has no skill notes.</p>;
 
   const current = Math.min(selected, dimensions.length - 1);
   const skill = dimensions[current];
@@ -177,12 +198,14 @@ export function SalesSkills({
                   tone={itemTopic.tone}
                   size={26}
                 />
-                <span className={styles.itemLabel}>{dimension.label}</span>
+                <span className={styles.itemLabel} title={dimension.label}>
+                  {nameOf(dimension)}
+                </span>
                 <span
                   className={styles.dot}
-                  data-status={statusOf(dimension.status)}
-                  title={factorStatus[statusOf(dimension.status)]}
-                  aria-label={factorStatus[statusOf(dimension.status)]}
+                  data-status={statusOf(dimension)}
+                  title={factorStatus[statusOf(dimension)]}
+                  aria-label={factorStatus[statusOf(dimension)]}
                 />
               </button>
             );
@@ -199,12 +222,9 @@ export function SalesSkills({
           <header className={styles.detailHead}>
             <IconBadge icon={topic.icon} tone={topic.tone} size={46} />
             <div className={styles.detailTitle}>
-              <h3>{skill.label}</h3>
-              <p
-                className={styles.detailStatus}
-                data-status={statusOf(skill.status)}
-              >
-                {factorStatus[statusOf(skill.status)]}
+              <h3 title={skill.label}>{nameOf(skill)}</h3>
+              <p className={styles.detailStatus} data-status={statusOf(skill)}>
+                {factorStatus[statusOf(skill)]}
                 {clips.length
                   ? ` · ${clips.length} ${clips.length === 1 ? "clip" : "clips"} from the call`
                   : ""}
@@ -248,7 +268,7 @@ export function SalesSkills({
                   <Clip
                     key={`${evidence.segment_id}-${evidence.start_ms}`}
                     evidence={evidence}
-                    title={skill.label}
+                    title={nameOf(skill)}
                     onPlay={(item) => onSelectEvidence(item)}
                     person={people.speakerOf(evidence)}
                   />
@@ -300,7 +320,7 @@ export function SalesSkills({
         {dimensions.map((dimension) => (
           <section key={dimension.dimension_id}>
             <h4>
-              {dimension.label} · {factorStatus[statusOf(dimension.status)]}
+              {nameOf(dimension)} · {factorStatus[statusOf(dimension)]}
             </h4>
             <p>{dimension.observation}</p>
             {(dimension.evidence ?? []).map((evidence) => (

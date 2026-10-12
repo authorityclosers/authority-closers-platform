@@ -2,6 +2,10 @@ import { parseReportContent, type ReportContent } from "./report-content";
 import { parseCallLabel, type CallLabel } from "./call-label";
 import { parseReportStory, type ReportStory } from "./report-story";
 import {
+  parseReportPillars,
+  type ReportPillars,
+} from "./report-pillars-contract";
+import {
   parseDetailedOverview,
   type DetailedOverview,
 } from "./overview-contract";
@@ -70,6 +74,8 @@ export type SalesReport = {
   overview?: DetailedOverview;
   story?: ReportStory;
   report_content?: ReportContent;
+  /** The analysis' own words for the six pillars; optional and lenient. */
+  pillars?: ReportPillars;
   summary: string;
   summary_evidence?: ReportEvidence[];
   strengths: Finding[];
@@ -427,11 +433,15 @@ function parseDimensions(
       ),
       label: text(dimension.label, `report_dimension_${index}_label`, 160),
       status,
-      observation: text(
-        dimension.observation,
-        `report_dimension_${index}_observation`,
-        4_000,
-      ),
+      // A cited skill may carry no note (""): its state and evidence speak.
+      observation:
+        dimension.observation === "" && evidence?.length
+          ? ""
+          : text(
+              dimension.observation,
+              `report_dimension_${index}_observation`,
+              4_000,
+            ),
       citations: array(
         dimension.citations,
         `report_dimension_${index}_citations`,
@@ -581,6 +591,7 @@ function parseReport(
       "provider_extras",
       "story",
       "report_content",
+      "pillars",
     ],
     "report",
   );
@@ -727,6 +738,17 @@ function parseReport(
       throw new ReportContractError("report_story_invalid");
     }
   }
+  // Never fails the report: a part that does not check out is left out.
+  if (
+    report.pillars !== undefined &&
+    report.pillars !== null &&
+    binding.transcript
+  ) {
+    const pillars = parseReportPillars(report.pillars, (value, code) =>
+      parseEvidence(value, code, binding.durationMs, sourceSegments),
+    );
+    if (pillars) parsed.pillars = pillars;
+  }
   for (const field of ["summary_evidence", "verdict_evidence"] as const) {
     if (Object.hasOwn(report, field) && report[field] !== null) {
       parsed[field] = array(report[field], `report_${field}`, 1, 3).map(
@@ -867,6 +889,7 @@ export function parseAcquisitionReport(
       "verdict_evidence",
       "story",
       "report_content",
+      "pillars",
       "improvements",
       "objection_analysis",
       "closing_analysis",

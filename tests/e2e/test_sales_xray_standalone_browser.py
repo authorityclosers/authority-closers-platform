@@ -561,7 +561,6 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "null selection activates Personal."
             )
 
-            disabled_reads_start = len(network)
             switcher.click()
             with _navigation_window(page, navigation_windows):
                 workspace_menu.get_by_role(
@@ -569,17 +568,48 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                     name="Synthetic second Sales Xray workspace Your organisation",
                 ).click()
                 expect(
-                    page.get_by_text("Sales Xray isn't on for this workspace yet", exact=True)
+                    page.get_by_role(
+                        "button",
+                        name="Current workspace: Synthetic second Sales Xray workspace",
+                        exact=True,
+                    )
                 ).to_be_visible()
                 page.wait_for_load_state("networkidle")
-            expect(page.get_by_text("Recents", exact=True)).to_have_count(0)
-            expect(page.locator('input[type="file"]')).to_have_count(0)
-            assert not any(
-                item["path"].startswith("/v1/conversation/")
-                for item in network[disabled_reads_start:]
+            expect(
+                page.get_by_text("Sales Xray isn't on for this workspace yet", exact=True)
+            ).to_have_count(0)
+            organisation = page.evaluate(
+                """async recordingId => {
+                  const directory = await fetch('/v1/me/sales-xray-workspaces', {
+                    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+                  });
+                  const history = await fetch('/v1/conversation/recordings', {
+                    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+                  });
+                  const personal = await fetch('/v1/conversation/recordings/' + recordingId, {
+                    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+                  });
+                  return {directory_status: directory.status, directory: await directory.json(),
+                    history_status: history.status, history: await history.json(),
+                    personal_recording_status: personal.status};
+                }""",
+                str(backend.account.recording_id),
             )
+            assert organisation["directory_status"] == organisation["history_status"] == 200
+            directory = organisation["directory"]
+            assert directory["selected_tenant_id"] == str(backend.account.second_tenant_id)
+            selected_workspace = next(
+                item
+                for item in directory["workspaces"]
+                if item["tenant_id"] == directory["selected_tenant_id"]
+            )
+            assert selected_workspace["sales_xray_enabled"] is True
+            assert organisation["history"] == {"recordings": []}
+            assert organisation["personal_recording_status"] == 404
+            expect(page.locator(".recording-history-item")).to_have_count(0)
+            proof["organisation_workspace"] = organisation
             page.set_viewport_size({"width": 390, "height": 844})
-            page.screenshot(path=str(evidence / "workspace-disabled-phone.png"), full_page=True)
+            page.screenshot(path=str(evidence / "workspace-enabled-phone.png"), full_page=True)
             page.set_viewport_size({"width": 1365, "height": 1000})
             page.get_by_role(
                 "button", name="Current workspace: Synthetic second Sales Xray workspace"
@@ -589,7 +619,8 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 expect(switcher).to_be_visible()
                 page.wait_for_load_state("networkidle")
             checks.append(
-                "Disabled organisation suppresses upload, Recents and conversation reads."
+                "Registered organisation is enabled; its empty history and 404 for the "
+                "Personal recording preserve workspace isolation."
             )
 
             page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(

@@ -1,0 +1,690 @@
+{
+  "transcript": {
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "revision": "fictional-dipak-v8-c2",
+    "timebase_id": "1ms",
+    "duration_ms": 43570,
+    "segments": [
+      {
+        "id": "s1",
+        "speaker_id": "speaker_0",
+        "start_ms": 0,
+        "end_ms": 5200,
+        "text": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?"
+      },
+      {
+        "id": "s2",
+        "speaker_id": "speaker_1",
+        "start_ms": 5400,
+        "end_ms": 10300,
+        "text": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed."
+      },
+      {
+        "id": "s3",
+        "speaker_id": "speaker_0",
+        "start_ms": 10500,
+        "end_ms": 15000,
+        "text": "How often does that delay follow-up, and what would make the process easier?"
+      },
+      {
+        "id": "s4",
+        "speaker_id": "speaker_1",
+        "start_ms": 15200,
+        "end_ms": 20000,
+        "text": "Several times a week. One shared view with clear owners and due dates would help."
+      },
+      {
+        "id": "s5",
+        "speaker_id": "speaker_0",
+        "start_ms": 20200,
+        "end_ms": 26000,
+        "text": "LumaBoard tracks each handoff. For eight seats, it costs one hundred eighty credits monthly."
+      },
+      {
+        "id": "s6",
+        "speaker_id": "speaker_1",
+        "start_ms": 26200,
+        "end_ms": 31000,
+        "text": "That is above our one hundred twenty budget. Can our current sheets move across?"
+      },
+      {
+        "id": "s7",
+        "speaker_id": "speaker_0",
+        "start_ms": 31200,
+        "end_ms": 35800,
+        "text": "We can map your columns in a sample first. I can send the layout today."
+      },
+      {
+        "id": "s8",
+        "speaker_id": "speaker_1",
+        "start_ms": 36000,
+        "end_ms": 40100,
+        "text": "Good. Send it, and let's review the mapping next Tuesday with my colleague."
+      },
+      {
+        "id": "s9",
+        "speaker_id": "speaker_0",
+        "start_ms": 40300,
+        "end_ms": 43570,
+        "text": "Agreed. I'll send a sample and a short calendar hold today. Thanks, Daro."
+      }
+    ]
+  },
+  "account": {
+    "schema": "ac.sales-xray.report-access/2",
+    "access": "claimed_account",
+    "review_status": "draft_not_dipak_adjudicated",
+    "numeric_publication": false,
+    "content": {
+      "summary": "The prospect needs clearer owners and next steps. The price is above the stated budget. A sample review was agreed for next Tuesday.",
+      "strengths": [
+        {
+          "title": "You checked the timing",
+          "explanation": "You checked whether the prospect could talk.",
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            }
+          ]
+        }
+      ],
+      "missed_opportunities": [
+        {
+          "title": "The budget gap needed more discussion",
+          "explanation": "The reason for the budget limit remained unclear.",
+          "evidence": [
+            {
+              "segment_id": "s6",
+              "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+              "start_ms": 26200,
+              "end_ms": 31000
+            },
+            {
+              "segment_id": "s7",
+              "quote": "We can map your columns in a sample first. I can send the layout today.",
+              "start_ms": 31200,
+              "end_ms": 35800
+            }
+          ]
+        }
+      ],
+      "dimensions": [
+        {
+          "dimension_id": "human_connection_trust",
+          "label": "Human Connection & Trust",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-1", "sections": ["§8–§10", "§52", "§54–§56"] },
+            { "doc": "Doc-5", "sections": ["§6"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "discovery_deep_understanding",
+          "label": "Discovery & Deep Understanding",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-1", "sections": ["§4–§7", "§11–§16"] },
+            { "doc": "Doc-3", "sections": ["§5–§11", "§16", "§45–§52"] },
+            { "doc": "Doc-5", "sections": ["§7–§10"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "qualification",
+          "label": "Qualification",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-3", "sections": ["§17–§18", "§44"] },
+            { "doc": "Doc-5", "sections": ["§11–§13"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "problem_impact_desire",
+          "label": "Problem, Impact & Desire Clarity",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-3", "sections": ["§7–§15", "§19"] },
+            { "doc": "Doc-5", "sections": ["§14–§17"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "solution_relevance_presentation",
+          "label": "Solution Relevance & Presentation",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-3", "sections": ["§20–§26"] },
+            { "doc": "Doc-5", "sections": ["§18–§21"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "certainty_objection_intelligence",
+          "label": "Certainty & Objection Intelligence",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-4", "sections": ["§3–§6", "§8–§18", "§40–§70"] },
+            { "doc": "Doc-5", "sections": ["§22–§28"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "closing_decision_management",
+          "label": "Closing & Decision Management",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-3", "sections": ["§34–§42", "§48–§52"] },
+            { "doc": "Doc-5", "sections": ["§29–§32", "§39–§42"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        },
+        {
+          "dimension_id": "communication_tonality",
+          "label": "Communication & Tonality",
+          "status": "observed",
+          "observation": "Insufficient evidence in this synthetic response.",
+          "citations": [
+            { "doc": "Doc-2", "sections": ["§1–§5", "§9–§16", "§31–§55"] },
+            { "doc": "Doc-5", "sections": ["§33–§37", "§63–§66"] }
+          ],
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+              "start_ms": 0,
+              "end_ms": 5200
+            },
+            {
+              "segment_id": "s2",
+              "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+              "start_ms": 5400,
+              "end_ms": 10300
+            }
+          ],
+          "call_state": "observed"
+        }
+      ],
+      "next_action": {
+        "title": "Budget concern left unclear",
+        "explanation": "You offered a sample instead of exploring the budget gap.",
+        "evidence": [
+          {
+            "segment_id": "s6",
+            "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+            "start_ms": 26200,
+            "end_ms": 31000
+          },
+          {
+            "segment_id": "s7",
+            "quote": "We can map your columns in a sample first. I can send the layout today.",
+            "start_ms": 31200,
+            "end_ms": 35800
+          }
+        ]
+      },
+      "improvements": [
+        {
+          "title": "Budget concern left unclear",
+          "explanation": "You offered a sample instead of exploring the budget gap.",
+          "evidence": [
+            {
+              "segment_id": "s6",
+              "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+              "start_ms": 26200,
+              "end_ms": 31000
+            },
+            {
+              "segment_id": "s7",
+              "quote": "We can map your columns in a sample first. I can send the layout today.",
+              "start_ms": 31200,
+              "end_ms": 35800
+            }
+          ]
+        }
+      ],
+      "objection_analysis": [],
+      "closing_analysis": [],
+      "verdict": "A sample review was agreed for next Tuesday.",
+      "summary_evidence": [
+        {
+          "segment_id": "s2",
+          "quote": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed.",
+          "start_ms": 5400,
+          "end_ms": 10300
+        },
+        {
+          "segment_id": "s6",
+          "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+          "start_ms": 26200,
+          "end_ms": 31000
+        },
+        {
+          "segment_id": "s8",
+          "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+          "start_ms": 36000,
+          "end_ms": 40100
+        }
+      ],
+      "verdict_evidence": [
+        {
+          "segment_id": "s8",
+          "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+          "start_ms": 36000,
+          "end_ms": 40100
+        }
+      ],
+      "pillars": {
+        "version": "report-pillars/1",
+        "outcome": {
+          "status": "Follow-up Set",
+          "line": "A sample review was agreed for next Tuesday.",
+          "evidence": [
+            {
+              "segment_id": "s8",
+              "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+              "start_ms": 36000,
+              "end_ms": 40100
+            }
+          ]
+        },
+        "summary": "The prospect needs clearer owners and next steps. The price is above the stated budget. A sample review was agreed for next Tuesday.",
+        "biggest_influence": {
+          "text": "The prospect agreed to review a sample despite the budget gap.",
+          "evidence": [
+            {
+              "segment_id": "s6",
+              "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+              "start_ms": 26200,
+              "end_ms": 31000
+            },
+            {
+              "segment_id": "s8",
+              "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+              "start_ms": 36000,
+              "end_ms": 40100
+            }
+          ]
+        },
+        "strongest_part": {
+          "text": "You ended with a specific next conversation.",
+          "evidence": [
+            {
+              "segment_id": "s8",
+              "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+              "start_ms": 36000,
+              "end_ms": 40100
+            },
+            {
+              "segment_id": "s9",
+              "quote": "Agreed. I'll send a sample and a short calendar hold today. Thanks, Daro.",
+              "start_ms": 40300,
+              "end_ms": 43570
+            }
+          ],
+          "short": "Specific next conversation"
+        },
+        "biggest_concern": {
+          "text": "You offered a sample before clarifying the budget concern.",
+          "evidence": [
+            {
+              "segment_id": "s6",
+              "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+              "start_ms": 26200,
+              "end_ms": 31000
+            },
+            {
+              "segment_id": "s7",
+              "quote": "We can map your columns in a sample first. I can send the layout today.",
+              "start_ms": 31200,
+              "end_ms": 35800
+            }
+          ],
+          "short": "Budget concern left unclear"
+        },
+        "next_step": {
+          "text": "Review the sample mapping next Tuesday.",
+          "evidence": [
+            {
+              "segment_id": "s8",
+              "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+              "start_ms": 36000,
+              "end_ms": 40100
+            }
+          ],
+          "when": "next Tuesday"
+        },
+        "timeline": [
+          { "label": "Opening", "start_ms": 0 },
+          { "label": "Work context", "start_ms": 5400 },
+          { "label": "Offer discussion", "start_ms": 20200 },
+          { "label": "Price & decision", "start_ms": 26200 },
+          { "label": "Next step", "start_ms": 36000 }
+        ],
+        "key_change": {
+          "text": "The conversation moved from the problem to the offer.",
+          "evidence": [
+            {
+              "segment_id": "s5",
+              "quote": "LumaBoard tracks each handoff. For eight seats, it costs one hundred eighty credits monthly.",
+              "start_ms": 20200,
+              "end_ms": 26000
+            }
+          ],
+          "before": {
+            "text": "You were understanding what gets missed.",
+            "label": "Discovery"
+          },
+          "after": {
+            "text": "You discussed a sample to address the concern.",
+            "label": "Sample discussion"
+          }
+        },
+        "worked": [
+          {
+            "title": "You checked the timing",
+            "what": "You checked whether the prospect could talk.",
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?",
+                "start_ms": 0,
+                "end_ms": 5200
+              }
+            ],
+            "why_it_helped": "The prospect could choose whether to continue."
+          }
+        ],
+        "didnt": [
+          {
+            "title": "Budget concern left unclear",
+            "what": "You offered a sample instead of exploring the budget gap.",
+            "evidence": [
+              {
+                "segment_id": "s6",
+                "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+                "start_ms": 26200,
+                "end_ms": 31000
+              },
+              {
+                "segment_id": "s7",
+                "quote": "We can map your columns in a sample first. I can send the layout today.",
+                "start_ms": 31200,
+                "end_ms": 35800
+              }
+            ],
+            "what_it_affected": "It left the investment decision unclear.",
+            "possible_areas": [
+              "What budget flexibility does the prospect have?"
+            ]
+          }
+        ],
+        "moments": [
+          {
+            "kind": "Important Miss",
+            "title": "The budget gap needed more discussion",
+            "evidence": [
+              {
+                "segment_id": "s6",
+                "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+                "start_ms": 26200,
+                "end_ms": 31000
+              },
+              {
+                "segment_id": "s7",
+                "quote": "We can map your columns in a sample first. I can send the layout today.",
+                "start_ms": 31200,
+                "end_ms": 35800
+              }
+            ],
+            "why": "The sample did not clarify how the investment would be decided.",
+            "moved_toward": "You offered to map the columns in a sample.",
+            "what_was_missed": "The reason for the budget limit remained unclear.",
+            "price_stated": null,
+            "prospect_response": null
+          },
+          {
+            "kind": "Commitment",
+            "title": "A review was agreed",
+            "evidence": [
+              {
+                "segment_id": "s8",
+                "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+                "start_ms": 36000,
+                "end_ms": 40100
+              }
+            ],
+            "why": "The call ended with a specific next conversation.",
+            "moved_toward": null,
+            "what_was_missed": null,
+            "price_stated": null,
+            "prospect_response": null
+          }
+        ],
+        "deeper": {
+          "became_clear": ["Owners and next steps are often missed."],
+          "still_unclear": ["Can the budget change?"],
+          "opening_missed": {
+            "text": "The prospect stated a budget gap.",
+            "evidence": [
+              {
+                "segment_id": "s6",
+                "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+                "start_ms": 26200,
+                "end_ms": 31000
+              }
+            ]
+          },
+          "relevant": ["Mapping columns was discussed."],
+          "less_relevant": null,
+          "value_connection": null,
+          "price": null,
+          "prospect_response": {
+            "text": "The stated price is above the budget.",
+            "evidence": [
+              {
+                "segment_id": "s6",
+                "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+                "start_ms": 26200,
+                "end_ms": 31000
+              }
+            ]
+          },
+          "likely_status": [],
+          "listening": null,
+          "communication_note": null
+        },
+        "deal": {
+          "position": {
+            "text": "The prospect agreed to review a sample.",
+            "evidence": [
+              {
+                "segment_id": "s8",
+                "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+                "start_ms": 36000,
+                "end_ms": 40100
+              }
+            ]
+          },
+          "blocker": {
+            "text": "The stated price is above the prospect's budget.",
+            "evidence": [
+              {
+                "segment_id": "s6",
+                "quote": "That is above our one hundred twenty budget. Can our current sheets move across?",
+                "start_ms": 26200,
+                "end_ms": 31000
+              }
+            ],
+            "basis": "said"
+          },
+          "prospect_commitments": [
+            {
+              "text": "Review the mapping with a colleague.",
+              "evidence": [
+                {
+                  "segment_id": "s8",
+                  "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+                  "start_ms": 36000,
+                  "end_ms": 40100
+                }
+              ]
+            }
+          ],
+          "seller_commitments": [
+            {
+              "text": "Send the sample layout.",
+              "evidence": [
+                {
+                  "segment_id": "s7",
+                  "quote": "We can map your columns in a sample first. I can send the layout today.",
+                  "start_ms": 31200,
+                  "end_ms": 35800
+                }
+              ]
+            }
+          ],
+          "next_event": {
+            "text": "Review the sample mapping next Tuesday.",
+            "evidence": [
+              {
+                "segment_id": "s8",
+                "quote": "Good. Send it, and let's review the mapping next Tuesday with my colleague.",
+                "start_ms": 36000,
+                "end_ms": 40100
+              }
+            ],
+            "when": "next Tuesday"
+          },
+          "commitment_quality": "Clear",
+          "still_unclear": ["Does the colleague need to approve the purchase?"],
+          "deal_action": "Send the sample before the agreed review.",
+          "coaching_mission": "Explore the concern before offering another solution."
+        },
+        "most_important_moment": 0
+      }
+    },
+    "preview": null,
+    "sections": [
+      { "id": "overview", "label": "Overview", "access": "available" },
+      { "id": "moments", "label": "Call moments", "access": "available" },
+      { "id": "transcript", "label": "Transcript", "access": "available" },
+      {
+        "id": "coaching",
+        "label": "Your coaching plan",
+        "access": "available"
+      },
+      { "id": "history", "label": "Your saved calls", "access": "available" }
+    ],
+    "unlock": null
+  }
+}

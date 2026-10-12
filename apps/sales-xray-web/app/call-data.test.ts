@@ -151,6 +151,25 @@ it("keeps explicit percent and time units beside money-context words", () => {
   ]);
 });
 
+it("hears numbers said as words, with a unit (the spec's Amit call)", () => {
+  const rows = numbersHeard(
+    call([
+      ["a", 0, 1000, "Right now we stay around four or five lakh."],
+      ["b", 1000, 2000, "The program investment is two lakh rupees."],
+      ["c", 2000, 3000, "Do you have twenty-five minutes? दो लाख रुपये।"],
+      ["e", 4000, 5000, "हमारा बजट 50 हज़ार है।"],
+      ["d", 3000, 4000, "Someone often has one question for ten people."],
+    ]),
+  );
+  expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
+    ["four or five lakh", "quantity"],
+    ["two lakh", "money"],
+    ["twenty-five minutes", "time"],
+    ["दो लाख", "money"],
+    ["50 हज़ार", "money"],
+  ]);
+});
+
 it("finds the time asked for in the opening minutes", () => {
   const promise = timePromise(opening)!;
   expect(promise.upToMinutes).toBe(15);
@@ -183,6 +202,15 @@ it("recognizes requested and committed call time in English and Hindi", () => {
 
 it("finds price talk and reads the script mix", () => {
   expect(priceTalk(opening).map((segment) => segment.id)).toEqual(["s8"]);
+  // A high-ticket seller says "investment" for the price.
+  expect(
+    priceTalk(
+      call([
+        ["rep", 0, 1000, "The program investment is two lakh rupees."],
+        ["buyer", 1000, 2000, "Okay."],
+      ]),
+    ).map((segment) => segment.id),
+  ).toEqual(["s1"]);
   const mix = scriptMix(opening);
   expect(mix.devanagari).toBeGreaterThan(0.5);
   expect(mix.devanagari + mix.latin).toBeCloseTo(1, 5);

@@ -46,7 +46,7 @@ def main():
             expect(company).to_contain_text("Example company two.")
             expect(company).to_contain_text("Person edit · locked")
             sections.nth(2).locator(":scope > summary").click()
-            expect(sections.nth(2)).to_contain_text("Approximately [2–3) lakh INR per year")
+            expect(sections.nth(2)).to_contain_text("About ₹2–3 lakh a year")
             expect(sections.nth(2)).to_contain_text("Ability to investUnknown")
             for theme in ["light", "dark"]:
                 page.evaluate("window.scrollTo(0, 0)")

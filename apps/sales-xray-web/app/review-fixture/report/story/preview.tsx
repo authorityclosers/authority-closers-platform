@@ -34,6 +34,7 @@ import { SourceWaveformProvider } from "../../../source-waveform";
 import { WorkspaceAccessProvider } from "../../../workspace-access";
 import { SpeakerProfilesContext } from "../../../speaker-profiles";
 import { AMIT_SPEAKERS, amitReport, amitTranscript } from "./amit-call";
+import { AMIT_PILLARS } from "./amit-pillars";
 import acquisitionStyles from "../../../acquisition-studio.module.css";
 import styles from "../../shell/full-shell-preview.module.css";
 
@@ -74,7 +75,8 @@ export type StoryFixture = {
 };
 
 export const AMIT_FIXTURE: StoryFixture = {
-  report: amitReport,
+  // Dipak's own example words, as the analysis would supply them.
+  report: { ...amitReport, pillars: AMIT_PILLARS },
   transcript: amitTranscript,
   title: "Amit Sharma · discovery call",
   language: "English",
@@ -154,6 +156,7 @@ export function StoryShellPreview({
         <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
           <AcquisitionShell
             authenticated
+            pageName="Report"
             homeHref="/review-fixture/report/story"
             active="analyse"
             mobileFit
@@ -185,6 +188,10 @@ export function StoryShellPreview({
                       durationMs={FIXTURE_DURATION_MS}
                       languageLabel={fixture.language}
                       sourceLabel="Fictional fixture transcript"
+                      label={{
+                        displayName: fixture.title,
+                        revision: 1,
+                      }}
                       claimed
                       busy={false}
                       canDownload={false}
@@ -222,6 +229,7 @@ export function StoryShellPreview({
                       onRequestDeletion={() => {}}
                     />
                     <ReportModes
+                      fixture
                       documentData={{
                         report: amitReport,
                         transcript,

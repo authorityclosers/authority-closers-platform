@@ -11,10 +11,10 @@ export const QUIET_RULES = {
   recover: 0.25,
 } as const;
 
-export const CALL_METRICS_RULES = "call-metrics/2";
+export const CALL_METRICS_RULES = "call-metrics/3";
 export const CUT_IN_RULES = { overlap_ms: 250, latch_ms: 100 } as const;
 export const PRICE_WORDS =
-  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)/iu;
+  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा|investment)/iu;
 
 export const MONOLOGUE_GAP_MS = 2000;
 

@@ -68,11 +68,11 @@ export type ProspectBrief = {
 export const BRIEF_SECTIONS = [
   {
     title: "What You Need to Know Now",
-    subtitle: "Everything you need before the next conversation.",
+    subtitle: "The most important information before the next call.",
   },
   {
     title: "What They Want — & Why",
-    subtitle: "Problems, impact, goals and what matters to them.",
+    subtitle: "Problems, impact, goals and what truly matters.",
   },
   {
     title: "Can & Will They Buy?",
@@ -80,15 +80,15 @@ export const BRIEF_SECTIONS = [
   },
   {
     title: "How They'll Decide",
-    subtitle: "People, approvals and the decision process.",
+    subtitle: "People, approvals and decision process.",
   },
   {
     title: "What's Holding Them Back",
-    subtitle: "Blockers, objections and concerns.",
+    subtitle: "Blockers, objections, concerns and certainty.",
   },
   {
     title: "What Happens Next",
-    subtitle: "Commitments, the next event and the next move.",
+    subtitle: "Commitments, next action and next event.",
   },
 ] as const;
 

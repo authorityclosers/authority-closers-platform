@@ -61,3 +61,18 @@
     --sx-control-h: 44px;
   }
 }
+
+/* ---------- Motion between screens ---------- */
+
+/* The chosen call's wave gliding from its card into the sending panel (New
+   analysis, a view transition in the studio): calm, like the reveal. */
+::view-transition-group(sx-call-wave) {
+  animation-duration: 520ms;
+  animation-timing-function: var(--lx-ease-move);
+}
+
+::view-transition-old(sx-call-wave),
+::view-transition-new(sx-call-wave) {
+  height: 100%;
+  animation-duration: 520ms;
+}

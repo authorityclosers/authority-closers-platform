@@ -58,6 +58,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V5,
     COACHING_PROMPT_V6,
     COACHING_PROMPT_V7,
+    COACHING_PROMPT_V8,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
@@ -135,6 +136,7 @@ class StageRequest(BaseModel):
         "coaching-v5",
         "coaching-v6",
         "coaching-v7",
+        "coaching-v8",
     ] = Field(
         default=COACHING_PROMPT_LEGACY, exclude_if=lambda value: value == COACHING_PROMPT_LEGACY
     )
@@ -188,7 +190,8 @@ class StageRequest(BaseModel):
             raise ValueError("Facts cannot select a coaching prompt revision.")
         if (
             self.stage == "C5"
-            and self.coaching_prompt_revision in {COACHING_PROMPT_V6, COACHING_PROMPT_V7}
+            and self.coaching_prompt_revision
+            in {COACHING_PROMPT_V6, COACHING_PROMPT_V7, COACHING_PROMPT_V8}
             and not supports_coaching_v6_route(self.provider, self.model)
         ):
             raise ValueError("coaching-v6-route-unsupported")
@@ -203,6 +206,7 @@ class StageRequest(BaseModel):
             COACHING_PROMPT_V5,
             COACHING_PROMPT_V6,
             COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
         }:
             if (
                 self.report_language is None
@@ -691,6 +695,7 @@ class ReportingPipeline:
             COACHING_PROMPT_V5,
             COACHING_PROMPT_V6,
             COACHING_PROMPT_V7,
+            COACHING_PROMPT_V8,
         }:
             c5_config["report_language"] = request.report_language
             c5_config["qualitative_pack_sha256"] = request.qualitative_pack_sha256
@@ -776,8 +781,13 @@ class ReportingPipeline:
                 (mark["segment_id"], mark["category"])
                 for mark in normalized.get("sensitive_segments", [])
             )
-            if plan.request.coaching_prompt_revision == "coaching-v7"
+            if plan.request.coaching_prompt_revision in {"coaching-v7", "coaching-v8"}
             else (),
+            **(
+                {"model_revision": "coaching-v8"}
+                if plan.request.coaching_prompt_revision == "coaching-v8"
+                else {}
+            ),
         )
         if plan.profile is None:
             raise ConversationConflict("A frozen coaching profile is required.")

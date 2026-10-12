@@ -117,3 +117,15 @@ def test_runner_uses_measured_manifest_and_keeps_every_assigned_test(
 def test_missing_duration_evidence_is_a_configuration_error(tmp_path: Path) -> None:
     with pytest.raises(shard.ShardConfigurationError, match="duration evidence"):
         shard.duration_evidence(tmp_path / "missing.json")
+
+
+def test_committed_shard_inputs_preserve_a_complete_nonduplicated_schedule() -> None:
+    root = Path(__file__).resolve().parents[3]
+    discovered = shard.discover_test_files(root)
+    excluded = shard.read_exclusions(root / "scripts/ci/python-test-exclusions.txt", discovered)
+    costs, source = shard.duration_evidence(root / "scripts/ci/python-test-durations.json")
+    included = tuple(path for path in discovered if path not in set(excluded))
+    assigned = shard.assign_shards(included, 4, costs)
+    assert sorted(path for group in assigned for path in group) == sorted(included)
+    assert all(assigned)
+    assert len(source["measurement_sha"]) == 40

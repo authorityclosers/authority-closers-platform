@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { dipakTake, FocusHero } from "./coaching-ui";
 import { CoachingMedia } from "./media-player";
 import { parseClips, clipSource } from "./media-contract";
 import { fictionalClip } from "./coaching.fixture";
@@ -48,7 +49,7 @@ describe("reviewed placeholder clips", () => {
     await act(async () =>
       root.render(<CoachingMedia clips={[fictionalClip]} />),
     );
-    expect(host.textContent).toContain("Placeholder · neutral narration");
+    expect(host.textContent).toContain("A stand-in voice reads Dipak’s words");
     expect(host.querySelector("audio")).toBeNull();
     expect(host.textContent).toContain("Find the consequence");
     await act(async () => button("Next slide").click());
@@ -56,6 +57,55 @@ describe("reviewed placeholder clips", () => {
     await act(async () => button("Previous slide").click());
     expect(host.textContent).toContain("Find the consequence");
     expect(host.textContent).toContain(fictionalClip.transcript_excerpt);
+  });
+  it("names whose focus the recommended lesson is for", async () => {
+    const second = { ...fictionalClip, topic_id: "fictional-other-topic" };
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} />),
+    );
+    expect(host.textContent).toContain("Recommended for your current focus");
+    expect(host.textContent).toContain("Also relevant");
+    await act(async () =>
+      root.render(<CoachingMedia clips={[fictionalClip, second]} forCall />),
+    );
+    expect(host.textContent).toContain("Recommended for this call’s focus");
+    expect(host.textContent).not.toContain("your current focus");
+    expect(host.textContent).toContain("Also relevant");
+  });
+  it("'Hear Dipak's take' brings the recommended clip into view and plays it", async () => {
+    const scroll = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scroll;
+    const take = dipakTake([fictionalClip]);
+    await act(async () =>
+      root.render(
+        <>
+          <FocusHero
+            label="Focus"
+            chips={[]}
+            explanation="Explain."
+            why="Why."
+            reason="Reason."
+            mission="Mission."
+            missionAnchor="m"
+            take={take}
+          />
+          <CoachingMedia clips={[fictionalClip]} />
+        </>,
+      ),
+    );
+    const hear = [...host.querySelectorAll("button")].find((b) =>
+      b.textContent?.startsWith("Hear Dipak’s take"),
+    )!;
+    expect(hear.textContent).toBe("Hear Dipak’s take · 0:04");
+    expect(host.querySelector("audio")).toBeNull();
+    await act(async () => hear.click());
+    expect(scroll).toHaveBeenCalled();
+    const audio = host.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(audio.play).toHaveBeenCalled();
+    // A locked clip is never offered from the focus.
+    expect(dipakTake([{ ...fictionalClip, access: "locked" }])).toBeNull();
+    expect(dipakTake(undefined)).toBeNull();
   });
   it("plays exact timestamps, stops the clip and retries failed source", async () => {
     await act(async () =>

@@ -102,6 +102,32 @@ it("renders current-call API coaching and its exact source, not across-call stat
     "Compare the situations in two calls",
   );
 });
+it("offers 'With context' when the Report can play the lines around a moment", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(fictionalCallCoaching()))),
+  );
+  const contextual = vi.fn();
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <ReportCallCoaching
+          callId={submissionId}
+          data={data}
+          onSelectEvidence={vi.fn()}
+          onSelectContextualPlayback={contextual}
+        />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  const button = [...container.querySelectorAll("button")].find(
+    (b) => b.textContent === "With context",
+  )!;
+  expect(button).toBeTruthy();
+  await act(async () => button.click());
+  expect(contextual).toHaveBeenCalledOnce();
+  expect(contextual.mock.calls[0][1]).toBe("Coaching for this call");
+});
 it("uses a source-checked server bootstrap without another read", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
@@ -126,7 +152,9 @@ it("renders reviewed examples from the call read without eager audio and keeps t
   const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   await render();
-  expect(container.textContent).toContain("Placeholder · neutral narration");
+  expect(container.textContent).toContain(
+    "A stand-in voice reads Dipak’s words",
+  );
   expect(container.querySelector("audio")).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(1);
   const button = (label: string) =>
@@ -240,15 +268,30 @@ it("does not reuse a bootstrap from the previous session of the same person", as
   expect(container.textContent).not.toContain("Fictional API focus");
   expect(container.textContent).not.toContain(transcript.segments[0].text);
 });
-it("keeps the report focus available if this API has not deployed", async () => {
+it("shows the report's own coaching, with no error, for a call that isn't the viewer's", async () => {
+  // An admin reading a teammate's report: the rep's Coaching stays private (404).
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response("private error", { status: 404 })),
   );
   await render();
   expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();
+  expect(notices.notify).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("private error");
+  // No link the admin can't open, and no "your report brought you here".
+  expect(container.querySelector('a[href^="/coaching?call="]')).toBeNull();
+  expect(container.querySelector('a[href^="/coaching?focus="]')).toBeNull();
+  expect(container.querySelector('a[href="/coaching"]')).not.toBeNull();
+});
+it("keeps the report focus and offers Try again when the read fails", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("private error", { status: 503 })),
+  );
+  await render();
+  expect(container.querySelector('[data-state="report-focus"]')).not.toBeNull();
   expect(notices.notify).toHaveBeenCalledWith(
-    expect.objectContaining({ title: "Call coaching unavailable" }),
+    expect.objectContaining({ title: "Coaching didn’t load" }),
   );
   expect(container.textContent).not.toContain("private error");
 });
