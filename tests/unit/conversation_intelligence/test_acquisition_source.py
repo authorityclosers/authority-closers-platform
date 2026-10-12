@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import wave
 from pathlib import Path
 from typing import Any
@@ -114,6 +115,17 @@ class ValidationFixtureRuntime:
         (b"OggS0000", "audio/ogg"),
         (b"fLaC0000", "audio/flac"),
         (b"0000ftypM4A ", "audio/mp4"),
+        (b"0000ftypM4B ", "audio/mp4"),
+        (b"0000ftypisom", "video/mp4"),
+        (b"0000ftypmp42", "video/mp4"),
+        (b"0000ftypavc1", "video/mp4"),
+        (b"0000ftypqt  ", "video/quicktime"),
+        (b"0000moov", "video/quicktime"),
+        (b"0000ftyp3gp6", "video/3gpp"),
+        (b"FORM0000AIFF", "audio/aiff"),
+        (b"FORM0000AIFC", "audio/aiff"),
+        (b"\x1a\x45\xdf\xa3\x42\x82\x88matroska", "video/x-matroska"),
+        (b"\x1a\x45\xdf\xa3\x42\x82\x84webm", "audio/webm"),
         (b"ID300000", "audio/mpeg"),
         (b"\xff\xfb00000", "audio/mpeg"),
     ],
@@ -209,7 +221,7 @@ def test_source_over_provider_limit_is_rejected_before_native_call(tmp_path: Pat
         stream.truncate(MAX_AUDIO_BYTES + 1)
     runtime = FixtureRuntime()
 
-    with pytest.raises(ConversationError, match="up to 32 MiB"):
+    with pytest.raises(ConversationError, match="up to 100 MB"):
         NativeUploadPreflight(runtime).measure(source, uuid4(), "0" * 64)
     assert runtime.calls == 0
 
@@ -243,3 +255,132 @@ def test_actual_offline_native_preflight_measures_original_samples(tmp_path: Pat
     assert receipt["decoded"]["sample_count"] == 16000
     assert receipt["timebase"]["resampled"] is True
     assert not (tmp_path / "preflight" / "features.aaf").exists()
+
+
+class ActualValidationRuntime:
+    def validate_source(
+        self, source: Path, outdir: Path, *, job_id: UUID, rate: Any
+    ) -> dict[str, Any]:
+        return signals.validate_media(source, outdir, rate=rate)
+
+
+def _synthetic_media(
+    path: Path, muxer: str, codec: str, *, video: bool = False, sound: bool = True
+) -> None:
+    command = [signals._tool("ffmpeg"), "-v", "error", "-threads", "1", "-filter_threads", "1"]
+    if video:
+        command += ["-f", "lavfi", "-i", "color=c=black:s=32x32:r=10:d=1"]
+    if sound:
+        command += [
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=16000:duration=1",
+            "-c:a",
+            codec,
+        ]
+    if video:
+        command += ["-c:v", "mpeg4", "-threads", "1"]
+    command += ["-f", muxer, "-y", str(path)]
+    subprocess.run(  # noqa: S603 - fixed synthetic inputs and formats
+        command, check=True, timeout=15, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+    )
+
+
+@pytest.mark.parametrize(
+    "extension,muxer,codec,video,expected",
+    [
+        ("mp4", "mp4", "aac", True, "video/mp4"),
+        ("mov", "mov", "aac", True, "video/quicktime"),
+        ("m4a", "ipod", "aac", False, "audio/mp4"),
+        ("m4b", "ipod", "aac", False, "audio/mp4"),
+        ("3gp", "3gp", "aac", False, "video/3gpp"),
+        ("3ga", "3gp", "aac", False, "video/3gpp"),
+        ("mkv", "matroska", "pcm_s16le", False, "video/x-matroska"),
+        ("mka", "matroska", "pcm_s16le", False, "video/x-matroska"),
+        ("aiff", "aiff", "pcm_s16be", False, "audio/aiff"),
+        ("aif", "aiff", "pcm_s16be", False, "audio/aiff"),
+    ],
+)
+def test_actual_new_containers_decode_with_original_binding(
+    tmp_path: Path, extension: str, muxer: str, codec: str, video: bool, expected: str
+) -> None:
+    source = tmp_path / f"synthetic.{extension}"
+    _synthetic_media(source, muxer, codec, video=video)
+    digest = signals.file_sha256(source)
+    measured = NativeUploadPreflight(ActualValidationRuntime()).measure(source, uuid4(), digest)
+    assert measured.intent.content_type == expected
+    assert measured.intent.source_sha256 == digest == signals.file_sha256(source)
+    # AAC can retain its codec padding. The receipt's actual decoded duration wins.
+    assert 900 <= measured.source.duration_ms <= 1200
+    assert measured.source.duration_evidence_sha256
+
+
+@pytest.mark.parametrize("extension,muxer", [("mp4", "mp4"), ("mov", "mov"), ("mkv", "matroska")])
+def test_actual_video_without_audio_gets_plain_message_before_native(
+    tmp_path: Path, extension: str, muxer: str
+) -> None:
+    source = tmp_path / f"silent.{extension}"
+    _synthetic_media(source, muxer, "aac", video=True, sound=False)
+    runtime = FixtureRuntime()
+    with pytest.raises(ConversationError, match=r"^This file has no sound track\.$"):
+        NativeUploadPreflight(runtime).measure(source, uuid4(), signals.file_sha256(source))
+    assert runtime.calls == 0
+
+
+def test_malformed_movie_metadata_still_requires_native_validation(tmp_path: Path) -> None:
+    source = tmp_path / "broken.mp4"
+    source.write_bytes(b"\x00\x00\x00\x14ftypisom00000000" + b"\xff\xff\xff\xffmoov")
+    from ac_platform.conversation_intelligence.acquisition_source import _iso_sound_track
+
+    assert _iso_sound_track(source) is None
+
+
+def test_video_native_preflight_uses_first_audio_track_only(tmp_path: Path) -> None:
+    source = tmp_path / "two-tracks.mp4"
+    subprocess.run(  # noqa: S603 - fixed synthetic inputs and formats
+        [
+            signals._tool("ffmpeg"),
+            "-v",
+            "error",
+            "-threads",
+            "1",
+            "-filter_threads",
+            "1",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=32x32:r=10:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=16000:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:sample_rate=16000:duration=2",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-map",
+            "2:a:0",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            "-threads",
+            "1",
+            "-y",
+            str(source),
+        ],
+        check=True,
+        timeout=15,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    measured = NativeUploadPreflight(ActualValidationRuntime()).measure(
+        source, uuid4(), signals.file_sha256(source)
+    )
+    assert 900 <= measured.source.duration_ms <= 1200
+    assert measured.intent.content_type == "video/mp4"

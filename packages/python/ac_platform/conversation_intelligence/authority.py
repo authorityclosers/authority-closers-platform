@@ -461,7 +461,9 @@ class ConversationAuthority:
     ) -> None:
         bundle = await self.admit(app, actor)
         if intent.source_bytes > MAX_AUDIO_BYTES:
-            raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
+            raise ConversationDenied(
+                "Choose an audio or video recording up to 100 MB for this processing route."
+            )
         if isinstance(actor, ProcessingActor):
             policy = bundle.acquisition_policy_for(
                 actor.tenant_id, registered_organisation=True, processing_person_id=actor.person_id

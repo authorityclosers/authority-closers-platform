@@ -89,6 +89,11 @@ _ALLOWED_CONTENT_TYPES = frozenset(
         "audio/wav",
         "audio/webm",
         "audio/x-wav",
+        "audio/aiff",
+        "video/mp4",
+        "video/quicktime",
+        "video/3gpp",
+        "video/x-matroska",
     }
 )
 _TEXT_OPERATION = "extract_context_evidence"

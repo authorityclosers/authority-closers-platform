@@ -733,3 +733,12 @@ def test_c5_reconstruction_preserves_saved_receipt_and_legacy_unknown(monkeypatc
     forged["prompt_provenance"]["template_text"] = "forbidden"
     with pytest.raises(InferenceTaskError, match="task_reconstruction_invalid"):
         type(prepared).from_dict(forged, payload=prepared.payload)
+
+
+@pytest.mark.parametrize(
+    "content_type", ["audio/aiff", "video/mp4", "video/quicktime", "video/3gpp", "video/x-matroska"]
+)
+def test_scribe_envelope_retains_new_container_type_and_source_binding(content_type):
+    prepared = prepare_scribe_input("a" * 64, 1000, content_type=content_type)
+    assert prepared.input_sha256 == "a" * 64
+    assert json.loads(prepared.payload)["content_type"] == content_type
