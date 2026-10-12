@@ -15,6 +15,15 @@ Report now also scrolls the mission into view for its own readable screenshot.
 A bounded four-case selector correction will finish this existing QA cycle;
 the next new product wave remains due no earlier 23:48 UTC.
 
+The 23:37 four-case continuation at `652b347f` reaches Team shortening/reset,
+rep shortcuts and the expanded skill history in all pairs, then stops at the
+test's assumed Report destination. Existing `coaching-voice.ts` and
+`CoachingStory` specify Call coaching for fictional reps; Report links apply
+to real shared reps. The fixture assertion now uses `/coaching?call=...`,
+without opening those product destinations. No new product defect is claimed.
+Original failures remain in `shots/2026-10-12-team-selector-continuation/`.
+All recorded target/font/clipping/overflow/runtime/server checks pass.
+
 The existing Team/rep journey now checks Show fewer, restored keyboard/viewport
 focus and preservation of the saved-skill filter. The legacy Report journey
 checks visible separation between the coaching-mission label and instruction.

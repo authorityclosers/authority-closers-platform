@@ -1330,7 +1330,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
             history.get_by_role("list")
             .get_by_role("link")
             .evaluate_all("els => els.map(el => el.getAttribute('href'))")
-        ) == {f"/analysis/calls/{call['submission_id']}" for call in skill_calls}
+        ) == {f"/coaching?call={call['submission_id']}" for call in skill_calls}
         history.get_by_role("heading").first.scroll_into_view_if_needed()
         journey.snapshot("skill-history")
         fewer_calls = history.get_by_role("button", name="Show fewer calls", exact=True)
