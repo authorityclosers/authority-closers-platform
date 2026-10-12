@@ -150,3 +150,58 @@ All owned implementation files are committed, and no unblocked source item
 remains in this Report continuation. Independent deployed persistence,
 future v8 admission and release/production completion keep their existing
 owners; this evidence closes no such criterion.
+
+
+## 12 October candidate quote disposition and citation preservation
+
+Reviewed the existing AUT-1355/AUT-1663 request against candidate
+`b8c0eb879657d9ba3cee0ee0e8ef3af99fd1e6f5`. Its own AUT-1783 contract
+explicitly keeps legacy missed chances hidden. Model blob
+`eae27389225fc922f568f921d966f1219fc7f0e9` removes that extractor, while
+`must_watch` remains outside the repeat-only rewatch projection. Keep those
+rules. The fictional s3 Commitment is supported in Moments; original s1
+remains available through Transcript. A's owned test repair `6db4a3b3`
+preserves the original quotes, consent and same-call checks.
+
+Independently verified 16 incoming receipt, source and execution-log pins.
+A's exact-candidate test overlay passed one selected case with 112 unselected
+cases skipped; its separate workbench test and typecheck also passed. These
+results are attributed to A's actual execution, without another acquisition
+run. The original candidate failure and first local overlay timeout remain
+retained. Earlier `b00a897` green CI does not certify `b8c0eb8`.
+
+This review found the candidate also dropped B's existing `09a60321`
+summary-citation fix. Matching pillar and saved-summary words returned an
+empty reference list. The new exact-candidate reproduction fails that
+assertion (one failed, 23 unselected cases skipped). A private three-line
+model patch preserves saved references only when the words match; unrelated
+words retain an empty reference list. It restores the original matching/
+unrelated-summary and two task-only regression cases from the workbench.
+
+With only that model/test patch supplied in memory, all **24 candidate model
+tests pass, with no skips**. Focused incremental TypeScript checks the patched
+model/test through a compiler-host overlay and reports zero diagnostics.
+`git apply --check` accepts both A's acquisition patch and B's citation patch
+against the unchanged exact candidate. This is application checking only;
+neither patch was applied to its checkout. Candidate HEAD, model/test hashes
+and Git status remain unchanged. The live workbench already has the citation
+fix and A's test repair; no product source changed in this continuation.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| B source/check receipt `1677/candidate-summary-handoff-20261012.json` | `5c882639a4d8d29c293551cfa39df128f84d038c2424fcc7178067b8a4d52b6f` |
+| B source/test patch `1677/candidate-summary-repair-20261012.patch` | `1a11da84f7b865716d5a81cf45ddf87f8fa615c4e59ac22f47672f63f697cac3` |
+| A quote patch `1663/candidate-quote-repair-20261012.patch` | `6b1a03f33c1c32c0d128d469189cc38f60d3990f3ed5be69fd975b8e0b1706a8` |
+| A executed source/check receipt | `9f0ac1bc183279ef8f8543e003975f34a22d00e97797ceb02a4b751240a3eb96` |
+| Coordinator's independent reconciliation | `ec30055a8840b8fc931af64f6af331ec49a9b211a6cf1e6a154a18d45f4bf0b9` |
+
+Private artifacts are under `/home/acdev/strikes/`; the B receipt pins the
+before/after/typecheck logs, overlay source and exact candidate contract.
+
+Candidate integration and normal CI on its resulting head remain pending.
+The active workbench order forbids branch commits/pushes and assigns release
+operations to the coordinator/operator. The existing candidate integration
+owner receives both exact patches through the coordinator INBOX. No candidate
+branch/PR write, hosted dispatch, provider activation, data change, new
+browser/build or deployment was performed. The offline Report/SVAL holds
+remain in force, and this handoff closes no deployed acceptance criterion.
