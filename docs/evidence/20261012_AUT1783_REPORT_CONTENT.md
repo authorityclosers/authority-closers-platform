@@ -111,3 +111,25 @@ CI was absent on the original PR, despite active validation workflows. The
 existing Application validation workflow supports dispatch on this task branch;
 release packaging is restricted to main. Normal exact-head CI must pass before
 resubmission. No workflow, repository, infrastructure or runtime setting changes.
+
+## Normal CI frontend regression repair
+
+Application validation run 38206703516, pinned to 7d6cc07, failed in the frontend
+test job: three assertions in two older consumer suites still expected ungated
+legacy misses, the old developer gap wording, and legacy coaching as a deal
+action. All three failures reproduced locally. Updating the sparse-report test
+also exposed its later assertion for the old per-field gap label; it now checks
+one plain gap line and the absence of an invented next-event row.
+
+Only consumer tests and this evidence change in this repair. Legacy Report misses
+remain hidden even after expanding the full moment list; supported commitments
+still appear. A new screen regression passes an invented three-part miss through
+the real content parser, checks its opening/response/relevance and plays its
+original evidence. The Prospect consumer regression checks agreed next steps and
+excludes legacy coaching from the shared Report projection. No Prospect
+extraction, application behavior, provider schema or activation rule changes.
+
+Focused verification: 56 tests passed across the two failing suites, shared
+story, content parser and Word export. Sales Xray typecheck, targeted ESLint,
+formatting and whitespace checks passed. Normal CI for the new pushed head
+remains required before CTO resubmission; local tests do not replace it.

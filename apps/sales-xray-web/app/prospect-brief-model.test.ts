@@ -110,18 +110,20 @@ describe("prospectBrief", () => {
     expect(JSON.stringify(brief)).not.toMatch(/score|probability|%/i);
   });
 
-  it("lists objections, concerns and what happens next from the latest call", () => {
+  it("lists objections, concerns and agreed next steps without promoting legacy coaching to a deal action", () => {
     expect(labels(brief.sections[4])).toEqual([
       "Current blocker",
       "Objection · open",
     ]);
     expect(labels(brief.sections[5])).toEqual([
-      "Recommended next move",
       "Next event",
       "Prospect agreed to",
       "You agreed to",
       "Still needs to become clear",
     ]);
+    expect(JSON.stringify(brief.sections[5])).not.toContain(
+      amitReport.overview!.final_assessment.next_focus,
+    );
     expect(brief.basedOn?.label).toContain("Discovery call");
   });
 

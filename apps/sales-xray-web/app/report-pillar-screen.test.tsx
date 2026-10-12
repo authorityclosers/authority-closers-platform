@@ -1,8 +1,14 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+import { parseReportContent } from "./report-content";
 import { ReportModes } from "./report-modes";
 import { REPORT_PILLARS } from "./report-pillars";
+import {
+  contentFixture,
+  contentReport,
+  contentTranscript,
+} from "./review-fixture/report/pillars/content-fixture";
 import {
   amitReport,
   amitTranscript,
@@ -100,7 +106,7 @@ it("shows eight compact skill rows that expand to evidence and Coaching", async 
   expect(skills.textContent).toContain("Explore deeper analysis");
 });
 
-it("keeps moments to five, then shows all on request", async () => {
+it("keeps moments to five, then shows all while hiding ungated legacy misses", async () => {
   const { host } = await mount(amitReport, amitTranscript);
   const moments = pillar(host, "missed");
   expect(moments.querySelectorAll("ol > li").length).toBeLessThanOrEqual(5);
@@ -110,8 +116,54 @@ it("keeps moments to five, then shows all on request", async () => {
   expect(more).toBeDefined();
   await act(async () => more!.click());
   expect(moments.querySelectorAll("ol > li").length).toBeGreaterThan(5);
-  expect(moments.textContent).toContain("Important Miss");
-  expect(moments.textContent).toContain("You moved toward");
+  expect(moments.textContent).toContain("Commitment");
+  expect(moments.textContent).not.toContain("Important Miss");
+  expect(moments.textContent).not.toContain("You moved toward");
+});
+
+it("shows a validated missed chance with its opening, response opportunity and relevance", async () => {
+  const title = "The seller moved to scheduling before clarifying delivery";
+  const response = "The seller proposed a meeting time.";
+  const relevance = "The delivery date remained open for the meeting.";
+  const content = parseReportContent(
+    {
+      ...contentFixture,
+      missed_chances: [
+        {
+          title,
+          opening: contentFixture.blocker!,
+          response_opportunity: {
+            ...contentFixture.seller_commitments[0],
+            text: response,
+          },
+          relevance: { ...contentFixture.blocker!, text: relevance },
+        },
+      ],
+    },
+    contentTranscript,
+  );
+  const { host, select } = await mount(
+    { ...contentReport, report_content: content },
+    contentTranscript,
+  );
+  const moments = pillar(host, "missed");
+  const miss = [...moments.querySelectorAll("ol > li")].find((item) =>
+    item.textContent?.includes("Important Miss"),
+  )!;
+  for (const text of [
+    title,
+    contentTranscript.segments[3].text,
+    response,
+    relevance,
+  ])
+    expect(miss.textContent).toContain(text);
+  await act(async () =>
+    miss.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(select).toHaveBeenCalledWith(
+    content.missed_chances[0].opening.evidence[0],
+    title,
+  );
 });
 
 it("ends where the deal stands, with links to the prospect and Coaching", async () => {
@@ -129,10 +181,19 @@ it("opens a sparse older report with honest, one-line gaps", async () => {
   const picture = pillar(host, "overview");
   expect(picture.textContent).toContain("Outcome not recorded");
   expect(picture.textContent).toContain("Only a person records won or lost");
-  expect(picture.textContent).toContain("Not in this report:");
+  expect(
+    picture.textContent?.match(/Not clear from this call\./g),
+  ).toHaveLength(1);
+  expect(picture.textContent).not.toContain("Not in this report:");
   expect(
     pillar(host, "skills").querySelectorAll("details > summary").length,
   ).toBeGreaterThanOrEqual(8);
-  // Never invents a strength or a next event to fill the page.
-  expect(pillar(host, "facts").textContent).toContain("Next event date");
+  const deal = pillar(host, "facts");
+  expect(deal.textContent?.match(/Not clear from this call\./g)).toHaveLength(
+    1,
+  );
+  // A missing date remains a gap; it never becomes an invented next event.
+  expect(
+    [...deal.querySelectorAll("dt")].map((row) => row.textContent),
+  ).not.toContain("Next event");
 });
