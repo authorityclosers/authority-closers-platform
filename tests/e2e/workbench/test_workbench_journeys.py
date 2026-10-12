@@ -899,6 +899,9 @@ def test_fixture_legacy_deal_action(browser: Browser, viewport: tuple[int, str])
         journey.snapshot("saved-next-move")
         mission_label = deal.get_by_text("Coaching mission for your next call", exact=True)
         expect(mission_label).to_be_visible()
+        mission_label.locator("..").evaluate("element => element.scrollIntoView({block: 'center'})")
+        expect(mission_label).to_be_in_viewport()
+        journey.snapshot("coaching-mission")
         mission_geometry = mission_label.evaluate(
             """label => {
               const labelRect = label.getBoundingClientRect();
@@ -1241,7 +1244,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
 
         area.select_option(other_area)
         expect(rows).to_have_count(0)
-        expect(team.get_by_role("heading", name="No reps match", exact=True)).to_be_visible()
+        expect(team.get_by_text("No reps match", exact=True)).to_be_visible()
         expect(team.get_by_role("status")).to_have_text("0 reps")
         clear = team.get_by_role("button", name="Clear filters", exact=True)
         clear.scroll_into_view_if_needed()

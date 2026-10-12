@@ -2,6 +2,19 @@ Workbench QA, AUT-1694 — 11 October 2026
 
 12 October, 23:26 UTC — focused repair readback prepared
 
+Actual 23:33 run at `495b25b6`: Report **4/4 PASS**; Team **4/4 stopped** at the
+empty-state selector, which incorrectly expected a heading. Inspected phone
+capture shows the correct "No reps match" message and Clear filters control.
+The selector is corrected to its rendered text. Named-rep phone targets now
+measure **210 × 44 px**, reachable in both themes; clipping/font/overflow/runtime
+and server checks are clear. Report mission label/body gap passes all four pairs,
+as do saved-action reload, Document and Word agreement. Later Team reset/history
+steps were not reached. Original receipts, JUnit, screenshots and launcher exit1
+remain in `shots/2026-10-12-focused-repairs-2333Z/`; no complete Team PASS claimed.
+Report now also scrolls the mission into view for its own readable screenshot.
+A bounded four-case selector correction will finish this existing QA cycle;
+the next new product wave remains due no earlier 23:48 UTC.
+
 The existing Team/rep journey now checks Show fewer, restored keyboard/viewport
 focus and preservation of the saved-skill filter. The legacy Report journey
 checks visible separation between the coaching-mission label and instruction.
