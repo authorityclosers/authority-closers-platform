@@ -1,0 +1,247 @@
+{
+  "run_id": "ee61adf2-40a9-4a23-bed7-912e1470818d-final",
+  "private_ledger_path": "/home/acdev/test-corpus/sales-xray/preparation/AUT-1879/ee61adf2-40a9-4a23-bed7-912e1470818d-final/ledger.json",
+  "private_ledger_sha256": "9dda5bceb682b83034cd6108cafce619d6028e9715c240647a32083ff18e0d68",
+  "actual_spend_usd": 0,
+  "cap_usd": null,
+  "budget_authorization": "missing",
+  "candidate_requests": 0,
+  "c4_regeneration_known_chunk_count": 33,
+  "c4_regeneration_known_subtotal_usd": 0.55148475,
+  "c4_regeneration_total_usd": null,
+  "configured_c5_total_usd": null,
+  "cost_plan_state": "explicit_finite_cap_missing",
+  "calls": [
+    {
+      "key": "A",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 4,
+      "c4_regeneration_chunk_count": 4,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "B",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 1,
+      "c4_regeneration_chunk_count": 1,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "C",
+      "selected": true,
+      "baseline_completed": false,
+      "retained_c4_complete_chunks": 1,
+      "c4_regeneration_chunk_count": 1,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": "AUT-1676"
+    },
+    {
+      "key": "D",
+      "selected": true,
+      "baseline_completed": false,
+      "retained_c4_complete_chunks": null,
+      "c4_regeneration_chunk_count": 5,
+      "gaps": [
+        "authoritative_roles_missing",
+        "retained_c4_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": "AUT-1676"
+    },
+    {
+      "key": "E",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "F",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 3,
+      "c4_regeneration_chunk_count": 3,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "X",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 1,
+      "c4_regeneration_chunk_count": 1,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "G",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 1,
+      "c4_regeneration_chunk_count": 1,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "H",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "I",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "J",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "K",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "L",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "M",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 2,
+      "c4_regeneration_chunk_count": 2,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "N",
+      "selected": true,
+      "baseline_completed": true,
+      "retained_c4_complete_chunks": 3,
+      "c4_regeneration_chunk_count": 3,
+      "gaps": [
+        "authoritative_roles_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": null
+    },
+    {
+      "key": "O",
+      "selected": true,
+      "baseline_completed": false,
+      "retained_c4_complete_chunks": null,
+      "c4_regeneration_chunk_count": null,
+      "gaps": [
+        "retained_c2_missing"
+      ],
+      "report": "unavailable",
+      "prospect": "not_evaluated",
+      "coaching": "not_evaluated",
+      "pipeline_disposition_issue": "AUT-1676"
+    }
+  ],
+  "dry_run_exit_code": 0,
+  "command": ".venv/bin/python -I scripts/report_candidate_c5/replay.py --route report-candidate-c5 --corpus /home/acdev/test-corpus/sales-xray/v1 --output /home/acdev/test-corpus/sales-xray/preparation/AUT-1879/ee61adf2-40a9-4a23-bed7-912e1470818d-final --run-id ee61adf2-40a9-4a23-bed7-912e1470818d-final --approval OWNER-20261010-ALL-CALLS",
+  "route_source_hashes": {
+    "pins.json": "fb7548477f6d5b07410d134f611e08c655dbc628ce856f0ace329ff7db1de36a",
+    "replay.py": "61180a95dc4b4fc33b7fc9dd14073e780e17b52516a1c521ccd318d2f0de1bfd"
+  }
+}

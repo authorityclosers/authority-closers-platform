@@ -1,0 +1,36 @@
+{
+  "route": "report-candidate-c5",
+  "revision": "report-c5-v1",
+  "schema": "report-content/1",
+  "candidate_sha": "2b6391186518b374186b2ddd9a220ced3619fb8f",
+  "candidate_merge_sha": "b157caa50ff8197da3a0abddc00f6d4912f59f9d",
+  "library_tree_sha256": "58779541a98760940d640d94011f40e84bc899c8f1b571612d9081279b1a2964",
+  "library_file_count": 184,
+  "tree_method": "sorted relative .py/.json paths + NUL + byte SHA256, joined by LF; no final LF",
+  "corpus_sha256": "36a97792fc0b44ec339cba300a6e962633f36a2fa0d4982562f11b96c71d6121",
+  "old_runner_sha256": {
+    "replay.py": "952d14179413f06c30b35829619c5fd7699e2493b4bf486af1803fbb8931a75b",
+    "pipeline_steps.py": "05cc64474932ee61b8a223f80cb568e41ab950e76687e9af4053eff0cdfdd30b"
+  },
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "c4": {
+    "max_input_chars": 16000,
+    "max_completion_tokens": 1400,
+    "prompt_revision": "facts-v2"
+  },
+  "c5": {
+    "max_completion_tokens": 8000,
+    "output_profile": "detailed",
+    "coaching_prompt_revision": "report-c5-v1"
+  },
+  "pricing": {
+    "ref": "ref:pricing/gemini-38-intro-20260914",
+    "evidence_sha256": "d2be76be50be45b17b66aa528eeff86806705bf9e90dce36772c715e3c312fde",
+    "input_usd_per_million": 0.75,
+    "output_usd_per_million": 3.75,
+    "status": "retained-config-only; not current provider or spend authorization"
+  },
+  "image_receipt": null,
+  "authorized_cap_usd": null
+}
