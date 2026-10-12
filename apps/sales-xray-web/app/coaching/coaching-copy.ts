@@ -420,6 +420,10 @@ export const CALLS = {
   openReport: "Open Report",
   openCoaching: "Call coaching",
   seeCalls: "See calls",
+  filter: "Which calls to show",
+  all: "All calls",
+  onSkill: "On this skill",
+  count: (count: number) => `${count} call${count === 1 ? "" : "s"}`,
 } as const;
 
 /** The labels on another rep's coaching that would otherwise say "you". */

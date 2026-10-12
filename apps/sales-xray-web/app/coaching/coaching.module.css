@@ -643,6 +643,24 @@
   scroll-margin-top: 80px;
 }
 
+.callFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callFilter p {
+  flex-basis: 100%;
+}
+
+/* Segmented's inset is visual; each call filter keeps the full tap floor. */
+.callFilter button {
+  min-height: var(--sx-control-h);
+}
+
 .status {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);

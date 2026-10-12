@@ -1,20 +1,13 @@
 "use client";
 
-import { ArrowRight, ChevronRight, PhoneCall } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 import { StoryCard } from "../report-visuals/visuals";
-import { kitStyles, List, Panel, Row } from "../ui/kit";
-import type {
-  CallSummary,
-  Coaching,
-  MasteryState,
-  ProgressPoint,
-} from "./coaching-client";
+import { kitStyles } from "../ui/kit";
+import type { Coaching, MasteryState, ProgressPoint } from "./coaching-client";
 import {
   ABOUT,
-  CALLS,
   COACHING_PILLARS,
   CONFIDENCE_COPY,
   FOCUS,
@@ -43,7 +36,6 @@ import {
 import {
   CallsOpenReports,
   TheirCoaching,
-  useCallHref,
   useTheirCoaching,
 } from "./coaching-voice";
 import { MomentList } from "./evidence-player";
@@ -51,6 +43,7 @@ import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
 import { RepCallLinks } from "./rep-call-links";
+import { CallsPanel } from "./calls-panel";
 import styles from "./coaching.module.css";
 
 const JOURNEY: MasteryState[] = [
@@ -126,72 +119,6 @@ function ProgressStrip({ points }: { points?: ProgressPoint[] }) {
             : PROGRESS.noCallSince}
       </p>
     </div>
-  );
-}
-
-/**
- * Every analysed call has its own coaching, even before a pattern exists.
- * Wide screens open with the eight newest calls and one-column screens with
- * three (spec 12.7); the rest stay one tap away.
- */
-function CallsPanel({ calls }: { calls?: CallSummary[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const they = useTheirCoaching();
-  const callHref = useCallHref();
-  if (!calls?.length) return null;
-  return (
-    <section
-      id="coaching-calls"
-      className={styles.callsSection}
-      aria-label={CALLS.title}
-    >
-      <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
-        <div
-          className={styles.callList}
-          data-expanded={expanded ? "" : undefined}
-        >
-          <List label={they ? THEIR.recentCalls : CALLS.label}>
-            {calls.map((call) => (
-              <Row
-                key={call.submission_id}
-                icon={<PhoneCall size={15} aria-hidden="true" />}
-                title={call.call_label}
-                href={
-                  call.state === "ready"
-                    ? callHref(call.submission_id)
-                    : `/analysis/calls/${call.submission_id}`
-                }
-                meta={[
-                  callDate(call.created_at),
-                  call.state === "pending"
-                    ? CALLS.analysing
-                    : call.state === "unavailable"
-                      ? CALLS.unavailable
-                      : (call.focus_label ??
-                        (they ? THEIR.callFallback : CALLS.fallback)),
-                  call.recurring ? CALLS.recurring : null,
-                ]}
-                end={
-                  call.state === "ready" ? (
-                    <ChevronRight size={15} aria-hidden="true" />
-                  ) : null
-                }
-              />
-            ))}
-          </List>
-        </div>
-        {calls.length > 3 && !expanded ? (
-          <button
-            type="button"
-            className={`${kitStyles.button} ${styles.moreCalls}`}
-            data-many={calls.length > 8 ? "" : undefined}
-            onClick={() => setExpanded(true)}
-          >
-            {CALLS.showAll(calls.length)}
-          </button>
-        ) : null}
-      </Panel>
-    </section>
   );
 }
 
@@ -537,7 +464,12 @@ function Story({
         </StoryCard>
       </Pillar>
       {readOnly ? null : <SharePanel initial={sharing} />}
-      <CallsPanel calls={coaching.calls} />
+      <CallsPanel
+        key={`${coaching.person_id}:${focus.skill_id}`}
+        calls={coaching.calls}
+        progress={coaching.progress}
+        focusLabel={focus.label}
+      />
       <details className={styles.more}>
         <summary>{ABOUT}</summary>
         <ul className={styles.takeaways}>
