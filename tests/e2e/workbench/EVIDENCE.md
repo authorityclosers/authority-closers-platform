@@ -5,8 +5,9 @@ Workbench QA, AUT-1694 — 11 October 2026
 Independently reconciled the coordinator's 21:11 handoff offline at source
 `9b2dd136`. The coordinator receipt, H addendum `619740b0`, prior source packet,
 39 distinct retained file pins, twelve preparation source blobs, nine unchanged
-dependencies, and exact two-file proof commit match. Six pending sensitive files
-and source-only patch `a514d563` remain unchanged and with their existing owner.
+dependencies, and exact two-file proof commit match. At readback, six pending
+sensitive files and source-only patch `a514d563` were unchanged and with their
+existing owner.
 
 H's actual retained test output is **2 passed, 8 deselected in 21.47s**, with
 four recorded test/static/import exits 0. QA did not repeat those executions.
@@ -29,7 +30,8 @@ eligible failure writer. The new test checks provider dispatch/receipt and
 validation state, not before/after numeric provider cost equality. Prior
 provider-cost tests remain separate attributed evidence. Hosted staging API/UI,
 safe successor and the full 503/timeout matrix remain unverified by this proof.
-Automatic dev schema apply and runtime writer admission remain unauthorized.
+At that retained handoff, automatic dev schema apply and runtime writer
+admission were unauthorized.
 
 Populated hosted Report/Team QA remains **NOT RUN** because no usable approved
 context was supplied. Canonical hosted persistence, Root1855 writes, uploaded
@@ -45,6 +47,13 @@ Original coordinator text, verifier and PASS log are adjacent. The initial
 verifier expected the builder's evidence under `docs/implementation-evidence`;
 the committed path is `docs/evidence`. The original diagnostic is retained,
 and the corrected scope check passed without changing product source.
+
+After QA commit `3781ce0c`, builder commit `c34b0295` committed exactly the six
+sensitive files, with bytes identical to the retained packet. The finalization
+guard stopped before notes/inbox archival on this source-state change; the six
+committed blobs were then reconciled in `builder-source-transition.json` beside
+the receipt. QA did not read a new schema disposition, live schema state,
+served pair or runtime writer admission. Hosted acceptance remains **NOT RUN**.
 
 12 October continuation — recovered terminal artifacts and named source handover
 
