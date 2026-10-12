@@ -69,6 +69,10 @@
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
 }
+.mission > .inlineLabel {
+  display: block;
+  margin-bottom: 4px;
+}
 
 /* ---------- A labelled part of a card ---------- */
 
