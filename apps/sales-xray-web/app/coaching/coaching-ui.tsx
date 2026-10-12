@@ -92,6 +92,7 @@ export function FocusHero({
   explanation,
   why,
   reason,
+  evidenceAnchor,
   mission,
   missionAnchor,
   take,
@@ -102,6 +103,8 @@ export function FocusHero({
   explanation: string;
   why: string;
   reason: string;
+  /** Existing source moments behind this focus, when available. */
+  evidenceAnchor?: string;
   mission: string;
   missionAnchor: string;
   /** Dipak's recommended clip in pillar 3 ("Hear Dipak's take"). */
@@ -145,6 +148,11 @@ export function FocusHero({
         <div className={styles.fact}>
           <CardLabel>{FOCUS.whyFocus}</CardLabel>
           <p>{reason}</p>
+          {evidenceAnchor ? (
+            <a className={styles.jump} href={`#${evidenceAnchor}`}>
+              {FOCUS.seeMoments} <ArrowDown size={13} aria-hidden="true" />
+            </a>
+          ) : null}
         </div>
       </div>
       <div className={styles.nextCall}>

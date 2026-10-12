@@ -120,6 +120,7 @@ export const FOCUS = {
   status: "Status",
   whyMatters: "Why this matters",
   whyFocus: "Why this focus",
+  seeMoments: "See the moments",
   onNextCall: "On your next call",
   seeMission: "See the mission",
   take: "Hear Dipak’s take",

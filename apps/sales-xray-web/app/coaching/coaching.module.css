@@ -373,6 +373,15 @@
 
 /* ---------- Evidence moments (pillar 2) ---------- */
 
+.evidenceTarget {
+  scroll-margin-top: 80px;
+}
+
+.evidenceTarget:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
 .moments {
   margin: 0;
   padding: 0;

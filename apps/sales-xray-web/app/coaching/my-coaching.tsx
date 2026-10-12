@@ -276,6 +276,7 @@ function Story({
           explanation={focus.explanation}
           why={focus.why_it_matters}
           reason={focus.selected_reason}
+          evidenceAnchor={evidence.length ? "coaching-evidence" : undefined}
           mission={mission.behavior}
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
@@ -328,7 +329,12 @@ function Story({
             ) : null}
           </dl>
         </StoryCard>
-        <div className={styles.card} data-flush="">
+        <div
+          id="coaching-evidence"
+          className={`${styles.card} ${styles.evidenceTarget}`}
+          data-flush=""
+          tabIndex={-1}
+        >
           <MomentList
             evidence={evidence}
             heading={readOnly ? THEIR.evidence : WHY.evidence}
