@@ -127,10 +127,19 @@ function RepList({
           <Row
             key={rep.person_id}
             icon={<Avatar name={rep.name} size={24} />}
-            title={rep.name}
+            title={
+              <>
+                {rep.name}
+                {rep.focus_label ? (
+                  <>
+                    {" "}
+                    <span className={styles.repFocus}>{rep.focus_label}</span>
+                  </>
+                ) : null}
+              </>
+            }
             href={`/coaching?person=${rep.person_id}`}
             meta={[
-              rep.focus_label,
               `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
               shared && rep.shared_at
                 ? `Shared ${callDate(rep.shared_at)}`
@@ -210,6 +219,13 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
       </Tiles>
       <div className={styles.layout}>
         <div className={styles.main}>
+          {coaching.reps.length ? (
+            <RepList
+              reps={coaching.reps}
+              rows={rows}
+              shared={coaching.reps_basis === "shared"}
+            />
+          ) : null}
           <Panel title={TEAM.practise} sub={TEAM.practiseSub}>
             {rows.length ? (
               <List label="Coaching areas">
@@ -251,13 +267,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           {coaching.objection_calls > 0 ? (
             <ObjectionsPanel coaching={coaching} />
           ) : null}
-          {coaching.reps.length ? (
-            <RepList
-              reps={coaching.reps}
-              rows={rows}
-              shared={coaching.reps_basis === "shared"}
-            />
-          ) : (
+          {coaching.reps.length ? null : (
             <Panel title={TEAM.who} sub={TEAM.sharedOnly}>
               <Empty
                 icon={Lock}

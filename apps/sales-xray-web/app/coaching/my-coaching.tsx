@@ -50,6 +50,7 @@ import { MomentList } from "./evidence-player";
 import { FocusFeedback, SharePanel } from "./sharing-ui";
 import type { SharingView } from "./sharing-client";
 import { requestedSkillLabel, type RequestedSkill } from "./focus-request";
+import { RepCallLinks } from "./rep-call-links";
 import styles from "./coaching.module.css";
 
 const JOURNEY: MasteryState[] = [
@@ -139,52 +140,58 @@ function CallsPanel({ calls }: { calls?: CallSummary[] }) {
   const callHref = useCallHref();
   if (!calls?.length) return null;
   return (
-    <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
-      <div
-        className={styles.callList}
-        data-expanded={expanded ? "" : undefined}
-      >
-        <List label={they ? THEIR.recentCalls : CALLS.label}>
-          {calls.map((call) => (
-            <Row
-              key={call.submission_id}
-              icon={<PhoneCall size={15} aria-hidden="true" />}
-              title={call.call_label}
-              href={
-                call.state === "ready"
-                  ? callHref(call.submission_id)
-                  : `/analysis/calls/${call.submission_id}`
-              }
-              meta={[
-                callDate(call.created_at),
-                call.state === "pending"
-                  ? CALLS.analysing
-                  : call.state === "unavailable"
-                    ? CALLS.unavailable
-                    : (call.focus_label ??
-                      (they ? THEIR.callFallback : CALLS.fallback)),
-                call.recurring ? CALLS.recurring : null,
-              ]}
-              end={
-                call.state === "ready" ? (
-                  <ChevronRight size={15} aria-hidden="true" />
-                ) : null
-              }
-            />
-          ))}
-        </List>
-      </div>
-      {calls.length > 3 && !expanded ? (
-        <button
-          type="button"
-          className={`${kitStyles.button} ${styles.moreCalls}`}
-          data-many={calls.length > 8 ? "" : undefined}
-          onClick={() => setExpanded(true)}
+    <section
+      id="coaching-calls"
+      className={styles.callsSection}
+      aria-label={CALLS.title}
+    >
+      <Panel title={CALLS.title} sub={CALLS.recent(calls.length)}>
+        <div
+          className={styles.callList}
+          data-expanded={expanded ? "" : undefined}
         >
-          {CALLS.showAll(calls.length)}
-        </button>
-      ) : null}
-    </Panel>
+          <List label={they ? THEIR.recentCalls : CALLS.label}>
+            {calls.map((call) => (
+              <Row
+                key={call.submission_id}
+                icon={<PhoneCall size={15} aria-hidden="true" />}
+                title={call.call_label}
+                href={
+                  call.state === "ready"
+                    ? callHref(call.submission_id)
+                    : `/analysis/calls/${call.submission_id}`
+                }
+                meta={[
+                  callDate(call.created_at),
+                  call.state === "pending"
+                    ? CALLS.analysing
+                    : call.state === "unavailable"
+                      ? CALLS.unavailable
+                      : (call.focus_label ??
+                        (they ? THEIR.callFallback : CALLS.fallback)),
+                  call.recurring ? CALLS.recurring : null,
+                ]}
+                end={
+                  call.state === "ready" ? (
+                    <ChevronRight size={15} aria-hidden="true" />
+                  ) : null
+                }
+              />
+            ))}
+          </List>
+        </div>
+        {calls.length > 3 && !expanded ? (
+          <button
+            type="button"
+            className={`${kitStyles.button} ${styles.moreCalls}`}
+            data-many={calls.length > 8 ? "" : undefined}
+            onClick={() => setExpanded(true)}
+          >
+            {CALLS.showAll(calls.length)}
+          </button>
+        ) : null}
+      </Panel>
+    </section>
   );
 }
 
@@ -218,6 +225,7 @@ function StartCoaching({
                 ? START.theirNoFocusText
                 : START.theirNoCallsText}
             </p>
+            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
           </StoryCard>
         </Pillar>
         <CallsPanel calls={coaching.calls} />
@@ -345,6 +353,9 @@ function Story({
           missionAnchor="mission"
           take={dipakTake(coaching.media_clips)}
         >
+          {readOnly ? (
+            <RepCallLinks calls={coaching.calls} sandbox={coaching.sandbox} />
+          ) : null}
           {!readOnly && requestedFocus && requestedFocus !== focus.skill_id ? (
             <p className={styles.note}>
               Your report brought you here for{" "}

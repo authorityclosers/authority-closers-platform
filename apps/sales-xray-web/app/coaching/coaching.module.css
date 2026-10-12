@@ -594,6 +594,32 @@
   width: min(220px, 60%);
 }
 
+.repFocus {
+  display: block;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  white-space: normal;
+}
+
+.repCallLinks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 0;
+  border-block: 1px solid var(--sx-line);
+}
+
+.repCallTitle {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.callsSection {
+  scroll-margin-top: 80px;
+}
+
 .status {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);

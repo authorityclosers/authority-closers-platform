@@ -136,6 +136,9 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).toContain("Focus for Closer 1");
     expect(html).toContain("Show all 10 people");
+    expect(html.indexOf("Who needs help with what")).toBeLessThan(
+      html.indexOf("What the team should work on"),
+    );
     expect(html).not.toContain("Named coaching appears when a rep shares it");
     expect(html).not.toContain("/organisation/insights");
     // Malformed rows drop; the rest of the team still shows.
@@ -207,8 +210,13 @@ describe("anonymous Team coaching", () => {
       select.value = "qualification";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const names = [...host.querySelectorAll("li a")].map((a) => a.textContent);
-    expect(names).toEqual(["Asha Rao"]);
+    const links = [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+    expect(links).toHaveLength(1);
+    expect(links[0].textContent).toContain("Asha Rao");
+    expect(links[0].textContent).toContain("Focus for Asha Rao");
+    expect(links[0].getAttribute("href")).toBe(
+      `/coaching?person=${sandboxTeam.reps[9].person_id}`,
+    );
     await act(async () => root.unmount());
     host.remove();
   });

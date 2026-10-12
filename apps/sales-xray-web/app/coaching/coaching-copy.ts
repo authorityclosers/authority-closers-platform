@@ -416,6 +416,10 @@ export const CALLS = {
   fallback: "One practice for your next call",
   recurring: "Also on other calls",
   showAll: (count: number) => `Show all ${count} calls`,
+  latestReady: "Latest call with coaching",
+  openReport: "Open Report",
+  openCoaching: "Call coaching",
+  seeCalls: "See calls",
 } as const;
 
 /** The labels on another rep's coaching that would otherwise say "you". */
