@@ -127,7 +127,7 @@ describe("Evidence playback", () => {
     await act(async () => buttons[1].click());
     expect(first.pause).toHaveBeenCalledOnce();
   });
-  it("folds moments after the first until the learner asks for all", async () => {
+  it("opens and folds the moments without losing sources, pauses their clip and returns focus", async () => {
     const four = [0, 1, 2, 3].map((index) => ({
       ...evidence,
       segment_id: `segment-${index}`,
@@ -142,9 +142,74 @@ describe("Evidence playback", () => {
     const more = [...host.querySelectorAll("button")].find(
       (b) => b.textContent === "Show all 4 moments",
     )!;
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(more.getAttribute("aria-controls")).toBe(list.id);
+    const sources = [...list.querySelectorAll("li")].map((row) => ({
+      quote: row.querySelector("blockquote")!.textContent,
+      time: row.querySelector("button")!.getAttribute("aria-label"),
+      href: row.querySelector("a")!.getAttribute("href"),
+    }));
     await act(async () => more.click());
     expect(list.hasAttribute("data-expanded")).toBe(true);
     expect(host.textContent).not.toContain("Show all 4 moments");
+    expect(more.textContent).toBe("Show fewer moments");
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    const extra = list
+      .querySelectorAll("li")[3]
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play moment"]')!;
+    await act(async () => extra.click());
+    const audio = list.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    expect(extra.getAttribute("aria-label")).toMatch(/^Pause moment /);
+    vi.mocked(audio.pause).mockClear();
+    await act(async () => more.click());
+    expect(audio.pause).toHaveBeenCalledOnce();
+    expect(extra.getAttribute("aria-label")).toMatch(/^Play moment /);
+    expect(list.hasAttribute("data-expanded")).toBe(false);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(more.textContent).toBe("Show all 4 moments");
+    expect(document.activeElement).toBe(list);
+    expect(
+      [...list.querySelectorAll("li")].map((row) => ({
+        quote: row.querySelector("blockquote")!.textContent,
+        time: row.querySelector("button")!.getAttribute("aria-label"),
+        href: row.querySelector("a")!.getAttribute("href"),
+      })),
+    ).toEqual(sources);
+    await act(async () => more.click());
+    expect(list.hasAttribute("data-expanded")).toBe(true);
+    expect(list.querySelectorAll("li")).toHaveLength(4);
+  });
+  it("folding one list leaves another list's playing clip alone", async () => {
+    await act(async () =>
+      root.render(
+        <>
+          <MomentList evidence={fictionalCoaching.evidence} label="First" />
+          <MomentList evidence={fictionalCoaching.evidence} label="Second" />
+        </>,
+      ),
+    );
+    const first = host.querySelector<HTMLUListElement>(
+      'ul[aria-label="First"]',
+    )!;
+    const second = host.querySelector<HTMLUListElement>(
+      'ul[aria-label="Second"]',
+    )!;
+    const fold = first.nextElementSibling as HTMLButtonElement;
+    await act(async () => fold.click());
+    await act(async () =>
+      second
+        .querySelector<HTMLButtonElement>('button[aria-label^="Play moment"]')!
+        .click(),
+    );
+    const audio = second.querySelector("audio")!;
+    await act(async () => audio.dispatchEvent(new Event("loadedmetadata")));
+    vi.mocked(audio.pause).mockClear();
+    await act(async () => fold.click());
+    expect(audio.pause).not.toHaveBeenCalled();
+    expect(
+      second.querySelector('button[aria-label^="Pause moment"]'),
+    ).not.toBeNull();
   });
   it("needs no fold for one moment", async () => {
     await act(async () =>

@@ -107,6 +107,7 @@ export function EvidencePlayer({
 }) {
   const identity = useId();
   const callHref = useCallHref();
+  const row = useRef<HTMLLIElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "failed">(
     "idle",
@@ -128,8 +129,19 @@ export function EvidencePlayer({
       audio.current?.pause();
       setState("idle");
     };
+    const stopFolded = (event: Event) => {
+      if (
+        (event as CustomEvent<string>).detail === row.current?.parentElement?.id
+      ) {
+        stopOther(event);
+      }
+    };
     window.addEventListener("sx-coaching-play", stopOther);
-    return () => window.removeEventListener("sx-coaching-play", stopOther);
+    window.addEventListener("sx-coaching-fold", stopFolded);
+    return () => {
+      window.removeEventListener("sx-coaching-play", stopOther);
+      window.removeEventListener("sx-coaching-fold", stopFolded);
+    };
   }, [identity]);
   const start = (player: HTMLAudioElement) => {
     player.currentTime = evidence.start_ms / 1000;
@@ -162,7 +174,7 @@ export function EvidencePlayer({
     if (audio.current) start(audio.current);
   };
   return (
-    <li className={styles.moment} data-extra={extra ? "" : undefined}>
+    <li ref={row} className={styles.moment} data-extra={extra ? "" : undefined}>
       {evidence.playable && onPlay ? (
         <ReportPlay evidence={evidence} span={span} onPlay={onPlay} />
       ) : evidence.playable ? (
@@ -304,6 +316,8 @@ export function MomentList({
   contextFor?: (evidence: Evidence) => ContextPlay | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  const list = useRef<HTMLUListElement>(null);
   const they = useTheirCoaching();
   return (
     <>
@@ -316,7 +330,10 @@ export function MomentList({
         </p>
       ) : null}
       <ul
+        ref={list}
+        id={listId}
         className={styles.moments}
+        tabIndex={-1}
         aria-label={label ?? (they ? THEIR.moments : WHY.moments)}
         data-expanded={expanded ? "" : undefined}
       >
@@ -332,14 +349,29 @@ export function MomentList({
           />
         ))}
       </ul>
-      {evidence.length > 1 && !expanded ? (
+      {evidence.length > 1 ? (
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreMoments}`}
           data-many={evidence.length > 2 ? "" : undefined}
-          onClick={() => setExpanded(true)}
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => {
+            setExpanded(!expanded);
+            if (expanded) {
+              // Pause only these moments; a lesson or another list stays as it is.
+              window.dispatchEvent(
+                new CustomEvent("sx-coaching-fold", { detail: listId }),
+              );
+              list.current?.focus({ preventScroll: true });
+              list.current?.scrollIntoView({
+                block: "start",
+                behavior: "instant",
+              });
+            }
+          }}
         >
-          Show all {evidence.length} moments
+          {expanded ? MOMENT.showFewer : MOMENT.showAll(evidence.length)}
         </button>
       ) : null}
     </>

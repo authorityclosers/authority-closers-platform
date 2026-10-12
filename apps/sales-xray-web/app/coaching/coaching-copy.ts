@@ -528,6 +528,8 @@ export const REPORT_COACHING = {
 
 /** A moment's play control (spec 5.5: every moment inspectable). */
 export const MOMENT = {
+  showAll: (count: number) => `Show all ${count} moments`,
+  showFewer: "Show fewer moments",
   fullQuote: "Read full quote",
   lessQuote: "Show less",
   withContext: "With context",
