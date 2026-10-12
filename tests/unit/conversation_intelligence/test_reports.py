@@ -471,7 +471,7 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/12"
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/13"
     # AUT-311 validator semantics remain /8; AUT-347 changes only dormant v7 generation.
     # AUT-553 enables the three P-A-confirmed dimensions and bumps the validator to /9.
     # AUT-348 adds dormant v7 storage validation; v4-v6 fixture bytes remain pinned.
@@ -481,9 +481,10 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-1677 indexes profile citations once per parse; admission/legacy bytes are unchanged.
     # AUT-1801 adds source-bound canonical legacy pillars; provider rules stay separate.
     # AUT-1676 allows empty stock notes only in explicitly synthetic canonical v4 reads.
+    # AUT-1801 rejects exact official outcome prefixes only in new v8 prose.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "a96b185718f7e834e20b6399f865521539aaf8aac73c5532283085dbb2ed68ba"
+        "16de4cd3e080ff179b2d1c03ab69df231be34ed64202675f43fd1d10def98b11"
     )
 
 
