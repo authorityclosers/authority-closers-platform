@@ -540,14 +540,16 @@ export function reportStoryModel(
 
   const strength = report.strengths.find((item) => item.evidence.length);
   const concernIndex = overview?.next_call_focus?.improvement_index ?? 0;
-  const concernFinding =
-    report.improvements[concernIndex] ?? report.improvements[0];
   const strongest = strength
     ? line(strength.explanation, strength.evidence.slice(0, 1))
     : null;
-  const concern = concernFinding
-    ? line(concernFinding.explanation, concernFinding.evidence.slice(0, 1))
-    : null;
+  const concernObservation = overview?.improvement_details.find(
+    (d) => d.finding_index === concernIndex,
+  )?.what_happened;
+  const observedConcern = line(
+    concernObservation?.text,
+    concernObservation?.evidence,
+  );
   const outcomeLeadsOn =
     overview?.outcome?.kind === "follow_up" ||
     overview?.outcome?.kind === "future_date";
@@ -559,14 +561,18 @@ export function reportStoryModel(
     outcome,
     summary: line(report.summary, report.summary_evidence),
     assessment: null,
-    influence: line(overview?.diagnosis?.text, overview?.diagnosis?.evidence),
+    influence: line(
+      overview?.diagnosis?.text,
+      overview?.diagnosis?.evidence,
+      true,
+    ),
     strongest,
-    concern,
+    concern: observedConcern,
     nextStep,
   };
 
   const change = overview?.conversation_change;
-  const flow = {
+  const flow: StoryModel["flow"] = {
     metrics: metricsFor(transcript, options.roles),
     phases: phasesFor(report, transcript?.duration_ms),
     change: change
@@ -589,17 +595,24 @@ export function reportStoryModel(
         true,
       ),
     );
-  const didnt = report.improvements.slice(0, 3).map((finding, index) => {
-    const detail = overview?.improvement_details.find(
-      (d) => d.finding_index === index,
-    );
-    const item = findingItem(finding, detail?.why_it_matters, true);
-    // The separate call observation, when supplied, is the better play link.
-    const observed = detail?.what_happened.evidence.slice(0, 1);
-    return observed?.length
-      ? { ...item, what: { ...item.what, sources: observed } }
-      : item;
-  });
+  const didnt = report.improvements
+    .slice(0, 3)
+    .flatMap((_finding, index): Item[] => {
+      const detail = overview?.improvement_details.find(
+        (d) => d.finding_index === index,
+      );
+      if (!detail?.what_happened.evidence.length) return [];
+      return [
+        {
+          title: "What happened",
+          what: {
+            text: detail.what_happened.text,
+            sources: detail.what_happened.evidence.slice(0, 1),
+          },
+          why: line(detail.why_it_matters, [], true),
+        },
+      ];
+    });
 
   const moments = momentsFor(report, transcript);
 
@@ -748,6 +761,9 @@ export function reportStoryModel(
     deal.quality = content.commitment_quality;
     deal.unclear = content.unknowns.map((n) => n.text);
     deal.action = content.action?.text ?? null;
+    deeper.unclear = content.unknowns.map((n) => n.text);
+    deeper.concerns = [];
+    deeper.findings = [];
   }
 
   const missing: StoryModel["missing"] = [

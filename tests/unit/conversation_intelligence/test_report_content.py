@@ -230,3 +230,46 @@ def test_schema_is_versioned_closed_and_runtime_stays_blocked():
     for revision in ["coaching-v6", "coaching-v7", "report-c5-v1"]:
         assert "Gate 2" in coaching_revision_runtime_block(revision)
     assert coaching_revision_runtime_block("coaching-v5") is None
+
+
+def test_candidate_prompt_has_complete_source_map_and_own_provider_schema():
+    import json
+
+    from ac_platform.conversation_intelligence.gemini_tasks import (
+        gemini_prompt_view,
+        prepare_gemini_body,
+    )
+    from ac_platform.conversation_intelligence.openai_tasks import _schema_for_prompt
+    from ac_platform.conversation_intelligence.qualitative_pack import (
+        load_qualitative_pack_for_revision,
+    )
+    from ac_platform.conversation_intelligence.reports import (
+        build_report_groq_prompt,
+        parse_fact_packet,
+    )
+
+    t, roles, _ = case()
+    packet = parse_fact_packet(
+        {"overview": "Fictional exchange.", "observations": [], "uncertainties": []}, t
+    )
+    prompt = build_report_groq_prompt(
+        t,
+        [packet],
+        provider="gemini",
+        model="gemini-3.8-flash",
+        max_completion_tokens=3200,
+        coaching_prompt_revision="report-c5-v1",
+        speaker_roles=roles,
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+    )
+    source = json.loads(prompt["messages"][1]["content"].split("\n", 1)[1])
+    assert source["source_context"]["speaker_roles"] == roles
+    system = prompt["messages"][0]["content"]
+    assert "Determine call purpose first" in system
+    body = prepare_gemini_body(prompt, task="coaching")
+    assert "report_content" in body["generationConfig"]["responseJsonSchema"]["required"]
+    restored = gemini_prompt_view(body, model="gemini-3.8-flash", task="coaching", maximum=3200)
+    assert restored["messages"] == prompt["messages"]
+    assert restored["max_completion_tokens"] == prompt["max_completion_tokens"]
+    revision, schema = _schema_for_prompt(system)
+    assert revision == "report-c5-v1" and "report_content" in schema["required"]

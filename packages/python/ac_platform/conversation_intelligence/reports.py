@@ -1845,7 +1845,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/10"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/11"
 
 
 def _evidence_limit(model: type[BaseModel]) -> int:
@@ -2457,6 +2457,10 @@ def build_report_groq_prompt(
     """Build the one profile-aware judge request from complete fact coverage."""
 
     if coaching_prompt_revision == REPORT_C5_REVISION:
+        from ac_platform.conversation_intelligence.report_content import report_content_schema
+
+        if not detailed_overview:
+            raise ReportError("report_content_detailed_overview_required")
         snapshot = validate_speaker_roles(speaker_roles or {}, _validated_transcript(transcript))
         prompt = build_report_groq_prompt(
             transcript,
@@ -2471,7 +2475,12 @@ def build_report_groq_prompt(
             qualitative_pack_sha256=qualitative_pack_sha256,
         )
         prompt["messages"][0]["content"] = prompt["messages"][0]["content"].replace(
-            "Profile:\n", REPORT_INSTRUCTION + "\nProfile:\n", 1
+            "Profile:\n",
+            REPORT_INSTRUCTION + "\n" + json.dumps(report_content_schema()) + "\nProfile:\n",
+            1,
+        )
+        prompt["messages"][0]["content"] = prompt["messages"][0]["content"].replace(
+            COACHING_PROMPT_V5_MARKER, ""
         )
         prefix, raw = prompt["messages"][1]["content"].split("\n", 1)
         source = json.loads(raw)
@@ -2927,6 +2936,8 @@ def parse_report_draft(
 ) -> ReportDraft:
     """Validate a decoded model object and bind every claim to native transcript data."""
 
+    if not isinstance(payload, Mapping):
+        raise ReportError("report_payload_invalid")
     if coaching_prompt_revision == REPORT_C5_REVISION:
         content = bind_report_content(
             payload.get("report_content"),
@@ -2949,10 +2960,24 @@ def parse_report_draft(
             raise ReportError("report_content_summary_or_states_missing")
         roles = content.roles
         by_id = {row["id"]: row for row in transcript["segments"]}
+        raw_dimensions = payload.get("dimensions", [])
+        if not canonical_read and any(
+            set(ref) != {"segment_id"} for d in raw_dimensions for ref in d.get("evidence", [])
+        ):
+            raise ReportError("report_content_complete_turn_required")
         for dimension in report.dimensions:
-            for ref in dimension.evidence or []:
+            skill_refs = dimension.evidence or []
+            order = [(r.start_ms, r.segment_id) for r in skill_refs]
+            if order != sorted(set(order)):
+                raise ReportError("report_content_evidence_order")
+            for ref in skill_refs:
                 row = by_id[ref.segment_id]
-                if roles.get(row["speaker_id"]) != "seller" or ref.quote != row["text"]:
+                if (
+                    roles.get(row["speaker_id"]) != "seller"
+                    or ref.quote != row["text"]
+                    or ref.start_ms != row["start_ms"]
+                    or ref.end_ms != row["end_ms"]
+                ):
                     raise ReportError("report_content_skill_actor")
         return ReportDraft.model_validate({**report.model_dump(), "report_content": content})
 

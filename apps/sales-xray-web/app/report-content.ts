@@ -94,7 +94,7 @@ export function parseReportContent(
     min = 0,
   ): T[] {
     check(Array.isArray(value) && value.length >= min && value.length <= max);
-    return value.map(parse);
+    return value.map((child) => parse(child));
   }
   function member<T extends string>(value: unknown, values: readonly T[]): T {
     check(typeof value === "string" && values.includes(value as T));
@@ -326,7 +326,7 @@ export function parseReportContent(
   if (e) {
     const participants = new Set(
       e.agreement_evidence.map(
-        (r) => roles[byId.get(r.segment_id)!.speaker_id],
+        (r) => roles[byId.get(r.segment_id)!.speaker_id ?? ""],
       ),
     );
     const quotes = e.agreement_evidence

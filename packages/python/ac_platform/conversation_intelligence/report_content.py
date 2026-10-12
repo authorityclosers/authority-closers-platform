@@ -141,9 +141,21 @@ class ReportContent(_Strict):
 
 def report_content_schema() -> dict[str, Any]:
     """Direct whole-turn selectors only; timing/quote/roles are resolved locally."""
-    schema = deepcopy(ReportContent.model_json_schema())
+    schema: dict[str, Any] = deepcopy(ReportContent.model_json_schema())
     schema["properties"].pop("roles")
     schema["required"].remove("roles")
+
+    def wire(node: Any) -> Any:
+        if isinstance(node, dict):
+            result = {key: wire(v) for key, v in node.items() if key != "title"}
+            if "const" in result:
+                result["enum"] = [result.pop("const")]
+            return result
+        if isinstance(node, list):
+            return [wire(v) for v in node]
+        return node
+
+    schema = wire(schema)
     schema["$defs"]["OverviewEvidence"] = {
         "type": "object",
         "additionalProperties": False,

@@ -176,9 +176,10 @@ describe("report DOCX", () => {
       report: syntheticReport,
     });
     const xml = inspect(Buffer.from(await blob.arrayBuffer()));
-    for (const status of ["Observed", "Not Enough Evidence", "Not established"])
+    for (const status of ["Not Enough Evidence", "Not established"])
       expect(xml.text).toContain(status);
-    expect(xml.text).toContain(syntheticReport.dimensions[1].observation);
+    expect(xml.text).not.toContain(syntheticReport.dimensions[1].observation);
+    expect(xml.text).not.toContain("· Observed");
     expect(xml.text).not.toMatch(/\bof\s+\d+\s+observed\b/i);
   });
 
@@ -204,7 +205,7 @@ describe("report DOCX", () => {
       "This report does not establish a state for this skill.",
     );
     // Gaps are named once per pillar, never filled in.
-    expect(xml.text).toContain("Not in this report:");
+    expect(xml.text).toContain("Not clear from this call.");
     expect(xml.text).not.toContain("Who spoke, and when");
   });
 

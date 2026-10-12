@@ -6,30 +6,34 @@ import { DipakOverview } from "../../../dipak-overview";
 import { SalesSkills } from "../../../sales-skills";
 import type { ReportEvidence } from "../../../report-contract";
 import { syntheticReport, syntheticCallRecord } from "../synthetic-report";
+import { contentReport, contentTranscript } from "./content-fixture";
 import styles from "../../../report-pillar-screen.module.css";
 
 export function PillarsPreview() {
+  const [contentMode, setContentMode] = useState(false);
   const [source, setSource] = useState<ReportEvidence | null>(null);
   const [closingKind, setClosingKind] = useState<"won" | "lost" | null>(null);
-  const report = closingKind
-    ? {
-        ...syntheticReport,
-        // Simulate a misleading analysis label, never a human-entered fact.
-        story: {
-          version: "report-story/1" as const,
-          phases: [],
-          outcome: {
-            kind: closingKind,
-            next_step_rung: "none" as const,
-            next_step_when: null,
-            evidence: syntheticReport.strengths[0].evidence,
+  const report = contentMode
+    ? contentReport
+    : closingKind
+      ? {
+          ...syntheticReport,
+          // Simulate a misleading analysis label, never a human-entered fact.
+          story: {
+            version: "report-story/1" as const,
+            phases: [],
+            outcome: {
+              kind: closingKind,
+              next_step_rung: "none" as const,
+              next_step_when: null,
+              evidence: syntheticReport.strengths[0].evidence,
+            },
+            next_step: null,
+            prospect_commitments: [],
+            seller_commitments: [],
           },
-          next_step: null,
-          prospect_commitments: [],
-          seller_commitments: [],
-        },
-      }
-    : syntheticReport;
+        }
+      : syntheticReport;
   return (
     <main className={styles.preview} data-synthetic-report>
       <div className={styles.previewFrame}>
@@ -41,16 +45,34 @@ export function PillarsPreview() {
           className={styles.previewControls}
           aria-label="Fictional analysis labels"
         >
+          <button
+            type="button"
+            onClick={() => {
+              setContentMode(true);
+              setClosingKind(null);
+            }}
+          >
+            Revised Report
+          </button>
           {(["won", "lost"] as const).map((kind) => (
             <button
               key={kind}
               type="button"
-              onClick={() => setClosingKind(kind)}
+              onClick={() => {
+                setContentMode(false);
+                setClosingKind(kind);
+              }}
             >
               Simulate {kind} analysis
             </button>
           ))}
-          <button type="button" onClick={() => setClosingKind(null)}>
+          <button
+            type="button"
+            onClick={() => {
+              setContentMode(false);
+              setClosingKind(null);
+            }}
+          >
             Older report
           </button>
         </div>
@@ -60,8 +82,9 @@ export function PillarsPreview() {
           lightSurface={false}
           documentData={{
             report,
-            callRecord: syntheticCallRecord,
-            callLength: "00:35",
+            callRecord: contentMode ? undefined : syntheticCallRecord,
+            transcript: contentMode ? contentTranscript : undefined,
+            callLength: contentMode ? "00:06" : "00:35",
             title: "Fictional Report pillars",
           }}
           panels={[

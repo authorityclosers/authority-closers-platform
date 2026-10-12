@@ -712,7 +712,7 @@ function parseReport(
           (s) => s.id === e.segment_id,
         )!;
         if (
-          parsed.report_content.roles[source.speaker_id] !== "seller" ||
+          parsed.report_content.roles[source.speaker_id ?? ""] !== "seller" ||
           e.quote !== source.text
         )
           throw new ReportContractError("report_content_skill_actor");

@@ -384,6 +384,7 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
                 ],
             }
             variant["required"].append("call_state")
+            variant["properties"]["evidence"]["items"] = {"$ref": "#/$defs/report_OverviewEvidence"}
         return schema
     if revision == _COACHING_V7:
         return _coaching_v7_schema()
