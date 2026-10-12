@@ -8,9 +8,13 @@ format and API import pass. Receipts/JUnit/log/screenshots are in the strike's
 `shots/2026-10-12-report-compatibility-2246Z/`. All widths/themes passed saved
 next-move reload/Document/Word agreement and standalone buyer-boundary checks.
 Visual inspection found a phone reload nav highlight mismatch and joined Report
-coaching-mission label; exact screenshots were sent to B's INBOX. A selected-Deal
-wait/viewport assertion is added before the reload screenshot; its focused
-rerun remains pending the fifteen-minute cadence. Original captures retained.
+coaching-mission label; exact screenshots were sent to B's INBOX. At 23:01 UTC,
+the selected-Deal wait/viewport check at `d352d3b5` passed all four cases in
+25.64 seconds, launcher exit 0, with no Fast Refresh. All four reload captures
+were inspected: Deal is selected and visible after settling. The initial nav
+image was captured too early; original captures remain retained. The Report
+coaching-label spacing request remains with B. Focused receipts/JUnit/log/PNG:
+`shots/2026-10-12-report-reload-2301Z/` in the strike directory.
 
 Added a four-viewport/theme older-Report journey that checks the saved next move
 after reload, in Document 6.9 and in the downloaded Word file. The README selects
