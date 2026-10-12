@@ -922,7 +922,9 @@ export function reportStoryModel(
             ? ("Unclear" as const)
             : null,
     unclear,
-    action: null,
+    // Older saved reports keep their authored recommendation. Validated
+    // report_content replaces this below, including an explicitly absent action.
+    action: clean(overview?.final_assessment.next_focus),
     coachingMission: clean(overview?.next_call_focus?.behavior),
   };
 

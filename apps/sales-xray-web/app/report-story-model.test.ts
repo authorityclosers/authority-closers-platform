@@ -8,6 +8,10 @@ import {
   amitTranscript,
 } from "./review-fixture/report/story/amit-call";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
+import {
+  contentFixture,
+  contentReport,
+} from "./review-fixture/report/pillars/content-fixture";
 import callB from "./review-fixture/report/story/fictional-call-b.json";
 
 const withOutcome = (
@@ -108,12 +112,58 @@ describe("reportStoryModel", () => {
     );
     expect(model.deal.blocker?.inferred).toBe(true);
     expect(model.deal.unclear).toHaveLength(4);
-    expect(model.deal.action).toBeNull();
+    expect(model.deal.action).toBe(
+      amitReport.overview!.final_assessment.next_focus,
+    );
     expect(model.deal.position).toBeNull();
   });
 });
 
 describe("honest gaps", () => {
+  it("keeps an older report's saved deal recommendation without restoring gated misses", () => {
+    const model = reportStoryModel(syntheticReport);
+    expect(model.deal.action).toBe(
+      "Respect the buyer's request not to follow up.",
+    );
+    expect(model.deal.coachingMission).toBe(
+      syntheticReport.overview!.next_call_focus?.behavior,
+    );
+    expect(
+      model.moments.some((moment) => moment.kind === "Important Miss"),
+    ).toBe(false);
+    expect(
+      reportStoryModel({ ...syntheticReport, overview: undefined }).deal.action,
+    ).toBeNull();
+    expect(
+      reportStoryModel({
+        ...syntheticReport,
+        overview: {
+          ...syntheticReport.overview!,
+          final_assessment: {
+            ...syntheticReport.overview!.final_assessment,
+            next_focus: "   ",
+          },
+        },
+      }).deal.action,
+    ).toBeNull();
+  });
+
+  it.each([contentFixture.action, null])(
+    "lets validated content own the deal action, including an absent recommendation: %j",
+    (action) => {
+      const model = reportStoryModel({
+        ...contentReport,
+        overview: syntheticReport.overview,
+        report_content: { ...contentFixture, action },
+      });
+      expect(model.deal.action).toBe(action?.text ?? null);
+      expect(model.deal.action).not.toBe(
+        syntheticReport.overview!.final_assessment.next_focus,
+      );
+      expect(model.deal.coachingMission).toBeNull();
+    },
+  );
+
   it("keeps a matching pillar summary's citations without lending them to other words", () => {
     expect(amitReport.summary_evidence?.length).toBeGreaterThan(0);
     const matching = reportStoryModel(
