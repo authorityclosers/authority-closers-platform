@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
@@ -451,10 +451,10 @@ def install_organisation_http(
                 approved_at=None,
             )
 
-        async def count(statement: object) -> int:
-            return int(await auth.database.scalar(statement) or 0)  # type: ignore[arg-type]
+        async def count(statement: Select[tuple[int]]) -> int:
+            return int(await auth.database.scalar(statement) or 0)
 
-        def records(kind: str) -> object:
+        def records(kind: str) -> Select[tuple[int]]:
             return (
                 select(func.count())
                 .select_from(ConversationSyntheticRecord)
