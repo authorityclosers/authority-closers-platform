@@ -1,5 +1,23 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October, 23:39 UTC — focused Report and Team repair QA complete
+
+Final Team continuation at `b81a3443`: **4/4 PASS**, 18.25 seconds, launcher0,
+seven observations per pair, no Fast Refresh/runtime/server/visual errors.
+Search/combined filters/reset, Team Show fewer/focus, rep shortcuts, expanded
+saved-skill history, Call coaching destinations, Show fewer/filter/focus and
+return to All calls all pass. Controls meet 32 px desktop / 44 px phone floors.
+The four shortened skill-history captures and representative Team/reset/phone
+shortcut captures were inspected and are readable. Receipts/JUnit/log/28 PNGs:
+`shots/2026-10-12-team-route-continuation/` in the strike directory.
+
+Report **4/4 PASS** remains the completed `495b25b6` result below: mission-label
+gap plus saved next move across reload, Document and Word. Both original QA
+assumption failures remain retained; the corrected Team run supersedes them.
+These are fictional shared-dev checks. Hosted populated acceptance still lacks
+an approved usable context; coordinator release CI/canaries remain pending.
+The next new product wave is due no earlier 23:48 UTC, or after a relevant repair.
+
 12 October, 23:26 UTC — focused repair readback prepared
 
 Actual 23:33 run at `495b25b6`: Report **4/4 PASS**; Team **4/4 stopped** at the

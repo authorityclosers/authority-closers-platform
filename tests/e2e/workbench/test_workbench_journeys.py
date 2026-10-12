@@ -1191,7 +1191,7 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
 
 
 def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int, str]) -> None:
-    """Find an initially hidden fictional rep and reach their call history."""
+    """Find a hidden fictional rep and exercise the separate rep-history fixture."""
     if os.environ.get("WB_MODE", "fixture") != "fixture":
         pytest.skip("Named synthetic Coaching checks are limited to the dev fixture")
     payload = json.loads(

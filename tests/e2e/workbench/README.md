@@ -78,11 +78,13 @@ journey retains its full thirteen steps.
 The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
 fictional rep outside the first eight, combines name/area filters, clears an
 empty result and restores keyboard focus. It checks ready-call Report/coaching
-destinations and follows See calls to expand the rep's history, filter it to the
+destinations in the separate One rep fixture and follows See calls to expand
+its history, filter it to the
 saved current-skill records and return to All calls, with 32/44 px reachable
 controls. Expanded Team and skill-history lists can be shortened again; the
 journey checks keyboard focus, viewport return and the retained skill filter.
-Product call links are inspected without opening them;
+Fictional history links open Call coaching; its separate Report shortcut is
+checked independently. Product call links are inspected without opening them;
 this does not establish authenticated access to those calls.
 
 ```sh
