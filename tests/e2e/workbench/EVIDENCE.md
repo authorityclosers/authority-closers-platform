@@ -1,5 +1,39 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained source and health checks
+
+At workbench `5dc1bc7f`, the latest Document/Word and print diagnostics remain
+the original eight passing cases at `75fcbdad`, not a new browser run. Rechecked
+their unchanged journey digest, JUnit eight tests with zero failures/errors/skips,
+launcher exit 0, classification digest and all eight retained input pins.
+Since that source, the only web changes are G's `2a0fe0e7` Moments formatting:
+reviewed diff and TypeScript 5.9.3 TSX parser node/literal comparison agree for
+both files. The first context-free scanner probe was unsuitable for TSX and
+returned non-equality; its failure is retained in the parser receipt. No product
+or runtime failure is inferred from that probe. Document/Coaching source is
+unchanged; no passed browser wave was repeated.
+
+H's new backend admission `a5d45b4c` is a separate source: independently matched
+four source/test pins and both immutable builder receipts. Its reported 184 + 57
+focused passes remain builder evidence, not new independent runtime execution.
+Fresh local API readiness is 200 at `a5d45b4c`; serving Git backend pins match,
+and the shared populated Report fixture returns HTTP 200. These observations
+prove availability/source pickup only. New-v8 runtime remains gated separately.
+
+CEO/coordinator's AUT-1858 route is now retained: hosted populated read-only QA
+waits for Root's verified **already-approved usable Report/Team context packet**
+or its exact refusal. No such packet has arrived in this QA inbox. No hosted
+request, replacement session/access, application write, provider call or ship.
+Shared-dev persistence and Root1855 four-call/Coaching writes remain separately
+NOT EXECUTED; original/latest PDF pixel quality remains NOT VERIFIED. No owned
+runner is alive or queued, and the foreign ESLint cache is preserved.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-workbench-continuation-admission/receipt.json`
+SHA-256 `c7fb833752275966679aa4332e7c0ae2b97bad8f8730bff187828b7a4b87eb48`.
+This entry adds source/health admission evidence only; prior runtime and visual
+limits below retain their original source pins.
+
 Retained print-capture classification — bounded continuation
 
 **Capture geometry mismatch confirmed; PDF appearance unverified.** The original
