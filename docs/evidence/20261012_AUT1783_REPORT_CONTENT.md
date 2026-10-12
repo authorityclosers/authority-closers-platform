@@ -177,3 +177,43 @@ The prior b00a897 CTO approval applies only to its old diff. CEO requested this
 integration and recorded no merge approval. Fresh exact-head CI, renewed CTO
 review and CEO approval remain required. Protected activation, the 13-call
 staged re-audit, production version and What's new remain outstanding.
+
+## Integrated-head CI and fictional route repair
+
+Continued the existing branch from clean `b8c0eb879657d9ba3cee0ee0e8ef3af99fd1e6f5`
+after successful live `ac-gate check`. Root's adverse integrated-head receipt
+(revision `30fd0bd2-108a-4dc6-8521-24aec0b3ad53`) completes its previous
+verification; it proves native-v8/legacy structure, not revised acceptance.
+
+Reproduced the normal CI acquisition failure locally. The old test expected a
+quote belonging to an ungated legacy missed chance. It now checks the actual
+commitment's complete multilingual quote in Moments That Mattered and excludes
+the legacy miss there. Production reader and evidence gates are unchanged.
+
+The existing development-only pillars route now mounts its candidate selector.
+Native v8 remains the default with its original fixture and shell. Revised
+Report, Older report and the fictional won/lost simulations remain selectable.
+Revised details use the selected report rather than the older fixture, fictional
+ReportModes disable live reads, and changing fixtures clears selected source
+text. No provider, account or recording exists for these fixtures.
+
+The route regression checks default native-v8 custody, revised six-pillar
+order, Meeting Booked, Friday / 4 PM, Not Applicable, the exact selected source,
+the same report/transcript passed to Document, return to legacy/native views and
+the production notFound boundary. Native shell and Document rendering are
+mocked only in this route test; existing reader/Word tests exercise their real
+models and generated OOXML. It is not served-browser acceptance.
+
+Verification covers 189 frontend cases in eight affected/adjacent suites: 188
+passed in the broader run, and its sole failing acquisition assertion passed
+after correcting the test's stable pillar id (`missed`, the retained bookmark
+for Moments That Mattered). The corrected assertion was verified separately;
+the broader run had loaded the earlier selector. A final route regression also
+checks source clearing. Sales Xray typecheck, targeted ESLint, formatting,
+whitespace and `ac-gate pr-check 470` pass. Backend/schema bytes are unchanged,
+so earlier Python evidence remains historical and is not repeated here.
+
+Normal exact-head CI and Root's renewed served-SHA/mobile/source/Document/Word
+verification remain required. The previous b00a897 approvals do not cover this
+head. Renewed independent CTO review, CEO approval, protected activation, the
+13-call staging audit and production-version closure remain separate.

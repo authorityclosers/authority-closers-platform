@@ -1258,7 +1258,12 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     expect(call.init.redirect).toBe("error");
   }
   await clickReportSection("Moments That Mattered");
-  expect(container.textContent).toContain("कल timing discuss करूया.");
+  // A supported commitment renders; an ungated legacy miss stays hidden.
+  const moments = container.querySelector('[data-report-pillar="missed"]');
+  expect(moments?.textContent).toContain(
+    "तीन बजे ठीक है, please send details.",
+  );
+  expect(moments?.textContent).not.toContain("कल timing discuss करूया.");
 });
 
 it.each([
