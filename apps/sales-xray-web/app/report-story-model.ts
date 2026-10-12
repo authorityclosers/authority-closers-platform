@@ -898,9 +898,10 @@ export function reportStoryModel(
     position:
       heardPosition?.text === outcome.detail?.text ? null : heardPosition,
     blocker: concerns[0] ?? null,
-    prospectCommitments: [...(story?.prospect_commitments ?? [])].map(
-      (note) => ({ text: note.text, sources: note.evidence }),
-    ),
+    prospectCommitments: (story?.prospect_commitments ?? []).map((note) => ({
+      text: note.text,
+      sources: note.evidence,
+    })),
     sellerCommitments: (story?.seller_commitments ?? []).map((note) => ({
       text: [note.text, note.due_text].filter(Boolean).join(" · "),
       sources: note.evidence,
@@ -921,7 +922,9 @@ export function reportStoryModel(
             ? ("Unclear" as const)
             : null,
     unclear,
-    action: null,
+    // Older saved reports keep their authored recommendation. Validated
+    // report_content replaces this below, including an explicitly absent action.
+    action: clean(overview?.final_assessment.next_focus),
     coachingMission: clean(overview?.next_call_focus?.behavior),
   };
 

@@ -600,12 +600,12 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     if (!next) return;
     if (
       next.size === 0 ||
-      next.size > 32 * 1024 * 1024 ||
-      !/\.(mp3|mpeg|wav|m4a|ogg|flac|amr|awb|aac|3ga|webm|opus)$/i.test(
+      next.size > 100_000_000 ||
+      !/\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
         next.name,
       )
     ) {
-      setError("Choose a supported audio recording recording up to 32 MB.");
+      setError("Choose an audio or video recording up to 100 MB.");
       return;
     }
     ++attempt.current;
@@ -850,6 +850,15 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               {
                 wav: "audio/wav",
                 m4a: "audio/mp4",
+                m4b: "audio/mp4",
+                mp4: "video/mp4",
+                mov: "video/quicktime",
+                "3gp": "video/3gpp",
+                mkv: "video/x-matroska",
+                mka: "video/x-matroska",
+                aiff: "audio/aiff",
+                aif: "audio/aiff",
+                aifc: "audio/aiff",
                 ogg: "audio/ogg",
                 flac: "audio/flac",
                 amr: "audio/amr",
@@ -1224,7 +1233,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   <Upload size={18} /> Choose audio file
                 </label>
                 <p className="muted">
-                  MP3, WAV, M4A and common phone audio formats · up to 32 MB
+                  Audio or video recordings · up to 100 MB
                 </p>
               </>
             ) : file ? (
@@ -1320,7 +1329,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               id="call-file"
               className="visually-hidden"
               type="file"
-              accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac,.amr,.awb,.aac,.3ga,.webm,.opus"
+              accept="audio/*,video/*,.mp3,.mpeg,.wav,.m4a,.m4b,.mp4,.mov,.ogg,.flac,.amr,.awb,.aac,.3gp,.3ga,.webm,.opus,.mkv,.mka,.aiff,.aif,.aifc"
               aria-label="Choose sales call audio"
               onChange={(e) => selectFile(e.target.files?.[0])}
             />

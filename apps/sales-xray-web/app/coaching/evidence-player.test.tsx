@@ -21,6 +21,49 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Evidence playback", () => {
+  it("unfolds the full quote without changing its source or starting playback", async () => {
+    const quote = "One fictional seller's full monologue. ".repeat(24);
+    const long = Object.freeze({ ...evidence, quote });
+    const onPlay = vi.fn();
+    await act(async () =>
+      root.render(<EvidencePlayer evidence={long} onPlay={onPlay} />),
+    );
+    const words = host.querySelector("blockquote")!;
+    const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Read full quote",
+    )!;
+    expect(words.textContent).toBe(quote);
+    expect(words.hasAttribute("data-folded")).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe(words.id);
+    await act(async () => toggle.click());
+    expect(words.hasAttribute("data-folded")).toBe(false);
+    expect(words.textContent).toBe(quote);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.textContent).toBe("Show less");
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(host.querySelector("audio")).toBeNull();
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('button[aria-label^="Play moment"]')!
+        .click(),
+    );
+    expect(onPlay).toHaveBeenCalledWith(long, "Coaching for this call");
+    await act(async () => toggle.click());
+    expect(words.hasAttribute("data-folded")).toBe(true);
+    expect(words.textContent).toBe(quote);
+    // A later retained/withheld read replaces the words even after expansion.
+    await act(async () =>
+      root.render(
+        <EvidencePlayer
+          evidence={{ ...long, quote: "[Withheld]" }}
+          onPlay={onPlay}
+        />,
+      ),
+    );
+    expect(host.textContent).not.toContain(quote);
+    expect(host.querySelector("blockquote")?.textContent).toBe("[Withheld]");
+  });
   it("loads only on click, seeks to the bound timestamp and pauses at the excerpt end", async () => {
     await act(async () => root.render(<EvidencePlayer evidence={evidence} />));
     expect(host.querySelector("audio")).toBeNull();

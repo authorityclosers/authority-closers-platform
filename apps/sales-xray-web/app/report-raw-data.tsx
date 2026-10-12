@@ -14,6 +14,7 @@ import {
 } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type { SalesReport, Transcript } from "./report-contract";
+import { SKILL_NAMES, SKILL_STATES } from "./report-copy";
 import { getShellState } from "./shell/shell-store";
 import {
   ROLE_WORDS,
@@ -29,6 +30,13 @@ const DIMENSION_WORDS: Record<string, string> = {
   not_applicable: "Does not apply",
   unknown: "Unknown",
   conflicted: "Mixed signals",
+};
+const CALL_STATE_WORDS: Record<string, string> = {
+  strongly_demonstrated: SKILL_STATES[0],
+  observed: SKILL_STATES[1],
+  needs_attention: SKILL_STATES[2],
+  insufficient_evidence: SKILL_STATES[3],
+  not_applicable: SKILL_STATES[4],
 };
 
 const KIND_WORDS = {
@@ -394,9 +402,15 @@ export function ReportRawData({
           {report.dimensions.map((dimension) => (
             <li key={dimension.dimension_id}>
               <span className={styles.kind}>
-                {DIMENSION_WORDS[dimension.status] ?? dimension.status}
+                {(dimension.call_state &&
+                  CALL_STATE_WORDS[dimension.call_state]) ||
+                  DIMENSION_WORDS[dimension.status] ||
+                  dimension.status}
               </span>
-              <span className={styles.text}>{dimension.label}</span>
+              <span className={styles.text} title={dimension.label}>
+                {SKILL_NAMES[dimension.dimension_id as keyof typeof SKILL_NAMES]
+                  ?.short ?? dimension.label}
+              </span>
             </li>
           ))}
         </ul>

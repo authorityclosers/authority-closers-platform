@@ -5,6 +5,7 @@ import {
   BIG_PICTURE,
   CALL_FLOW,
   DEAL,
+  GUEST,
   PILLAR_COPY,
   PILLAR_IDS,
   WORKED_DIDNT,
@@ -118,5 +119,16 @@ describe("report copy", () => {
       status: "Decision Pending",
       note: null,
     });
+  });
+
+  it("keeps guest wording and counts singular and plural saved items", () => {
+    expect(GUEST.more(1, ["moment", "moments"])).toBe(
+      "1 more moment is saved for your account.",
+    );
+    expect(GUEST.more(2, ["moment", "moments"])).toBe(
+      "2 more moments are saved for your account.",
+    );
+    expect(GUEST.unlock).toBe("Unlock with a free account");
+    expect(GUEST.fullReport).toBe("Sign in to see the full report");
   });
 });

@@ -481,6 +481,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-1677 indexes profile citations once per parse; admission/legacy bytes are unchanged.
     # AUT-1801 adds source-bound canonical legacy pillars; provider rules stay separate.
     # AUT-1676 allows empty stock notes only in explicitly synthetic canonical v4 reads.
+    # AUT-1801 rejects exact official outcome prefixes only in new v8 prose;
     # AUT-1783 adds the independent source-bound Report content candidate.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (

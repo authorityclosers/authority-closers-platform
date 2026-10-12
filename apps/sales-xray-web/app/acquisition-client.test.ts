@@ -253,7 +253,7 @@ describe("acquisition permission recovery", () => {
       "We couldn’t verify this recording’s audio.",
     ],
     [
-      "Choose one bounded audio file up to 32 MiB and accept the current upload terms.",
+      "Choose an audio or video file up to 100 MB and accept the current upload terms.",
       "source_invalid",
       "Choose one bounded audio file and accept the current upload terms.",
     ],
@@ -376,7 +376,10 @@ describe("acquisition source-bound presentation", () => {
         available_seconds: 36480,
       }).available_seconds,
     ).toBe(36480);
-    expect(parsePolicy(policy).maximum_file_bytes).toBe(32 * 1024 ** 2);
+    expect(
+      parsePolicy({ ...policy, maximum_file_bytes: 100_000_000 })
+        .maximum_file_bytes,
+    ).toBe(100_000_000);
     expect(
       parsePolicy({
         ...policy,
@@ -385,7 +388,7 @@ describe("acquisition source-bound presentation", () => {
       }).privacy_details,
     ).toContain("Approved service providers");
     expect(() =>
-      parsePolicy({ ...policy, maximum_file_bytes: 32 * 1024 ** 2 + 1 }),
+      parsePolicy({ ...policy, maximum_file_bytes: 100_000_000 + 1 }),
     ).toThrow();
     expect(parseEntry(entry).site_key).toBe(entry.site_key);
     expect(() =>
@@ -488,4 +491,16 @@ describe("acquisition source-bound presentation", () => {
       parseEntry({ ...accountEntry, allowance_seconds: 6001 }),
     ).toThrow();
   });
+});
+
+it("accepts a two-hour policy while preserving smaller approved limits", () => {
+  expect(
+    parsePolicy({ ...policy, maximum_call_seconds: 7200 }).maximum_call_seconds,
+  ).toBe(7200);
+  expect(parsePolicy(policy).maximum_call_seconds).toBe(
+    policy.maximum_call_seconds,
+  );
+  expect(() =>
+    parsePolicy({ ...policy, maximum_call_seconds: 7201 }),
+  ).toThrow();
 });

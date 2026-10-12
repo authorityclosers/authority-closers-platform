@@ -107,9 +107,14 @@ class ConversationAcquisitionSettlement(Base):
     __table_args__ = (
         CheckConstraint("charged_seconds BETWEEN 0 AND 6000", name="duration_bound"),
         CheckConstraint("length(receipt_sha256) = 64", name="receipt_hash"),
-        CheckConstraint("kind IN ('completed', 'no_work_performed')", name="kind"),
+        CheckConstraint(
+            "kind IN ('completed', 'no_work_performed', 'terminal_failure')", name="kind"
+        ),
         CheckConstraint(
             "kind <> 'no_work_performed' OR charged_seconds = 0", name="no_work_charge"
+        ),
+        CheckConstraint(
+            "kind <> 'terminal_failure' OR charged_seconds = 0", name="terminal_failure_charge"
         ),
     )
     usage_id: Mapped[UUID] = mapped_column(

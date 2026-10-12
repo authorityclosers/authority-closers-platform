@@ -52,6 +52,7 @@ import type {
 import { IconBadge, Locked } from "./report-kit";
 import { timelineMoments } from "./report-moments";
 import { EntityText } from "./report-entities";
+import { MOMENTS } from "./report-copy";
 import {
   useReportDocument,
   useReportNavigation,
@@ -900,97 +901,95 @@ export function OverviewHook({
         </Section>
       ) : null}
 
-      {missed.length ? (
-        <Section
-          title="Missed chances"
-          hint="What they said, what you said, and a better answer to use"
-          index={2}
-        >
-          <div className={styles.missed}>
-            {missed.map((item, index) => {
-              const them =
-                speakerOf(item.prospect_signal.evidence[0]) ?? prospect;
-              const you = speakerOf(item.closer_response.evidence[0]) ?? seller;
-              const at = item.prospect_signal.evidence[0]?.start_ms;
-              return (
-                <article
-                  key={index}
-                  className={styles.miss}
-                  style={{ "--i": index } as CSSProperties}
-                >
-                  <header>
-                    <Flag size={13} aria-hidden="true" />
-                    Missed chance
-                    {at !== undefined ? ` at ${formatClock(at)}` : ""}
-                  </header>
-                  <div className={styles.msg} data-side="them">
-                    {them ? them.avatar(26) : null}
-                    <div className={styles.bubble}>
-                      <small>{them?.name ?? "They"} said</small>
-                      <q>
-                        {item.prospect_signal.evidence[0]?.quote ??
-                          item.prospect_signal.text}
-                      </q>
-                      <PlayChip
-                        evidence={item.prospect_signal.evidence[0]}
-                        onSeek={onSeek}
-                      />
-                    </div>
-                  </div>
-                  <div className={styles.msg} data-side="you">
-                    <div className={styles.bubble}>
-                      <small>{you?.name ?? "You"} said</small>
-                      <q>
-                        {item.closer_response.evidence[0]?.quote ??
-                          item.closer_response.text}
-                      </q>
-                      <PlayChip
-                        evidence={item.closer_response.evidence[0]}
-                        onSeek={onSeek}
-                      />
-                    </div>
-                    {you ? you.avatar(26) : null}
-                  </div>
-                  <div className={styles.better}>
-                    <span className={styles.betterHead}>
-                      <Lightbulb size={14} aria-hidden="true" />
-                      Better answer
-                      <button
-                        type="button"
-                        className={styles.copy}
-                        onClick={() => {
-                          void navigator.clipboard
-                            ?.writeText(item.follow_up)
-                            .then(() => {
-                              setCopied(index);
-                              window.setTimeout(() => setCopied(null), 1400);
-                            });
-                        }}
-                      >
-                        {copied === index ? (
-                          <Check size={12} aria-hidden="true" />
-                        ) : (
-                          <Copy size={12} aria-hidden="true" />
-                        )}
-                        {copied === index ? "Copied" : "Copy"}
-                      </button>
-                    </span>
+      <Section
+        title={MOMENTS.missedTitle}
+        hint={missed.length ? MOMENTS.missedHint : MOMENTS.noneMissed}
+        index={2}
+      >
+        <div className={styles.missed}>
+          {missed.map((item, index) => {
+            const them =
+              speakerOf(item.prospect_signal.evidence[0]) ?? prospect;
+            const you = speakerOf(item.closer_response.evidence[0]) ?? seller;
+            const at = item.prospect_signal.evidence[0]?.start_ms;
+            return (
+              <article
+                key={index}
+                className={styles.miss}
+                style={{ "--i": index } as CSSProperties}
+              >
+                <header>
+                  <Flag size={13} aria-hidden="true" />
+                  Missed chance
+                  {at !== undefined ? ` at ${formatClock(at)}` : ""}
+                </header>
+                <div className={styles.msg} data-side="them">
+                  {them ? them.avatar(26) : null}
+                  <div className={styles.bubble}>
+                    <small>{them?.name ?? "They"} said</small>
                     <q>
-                      <EntityText text={item.follow_up} />
+                      {item.prospect_signal.evidence[0]?.quote ??
+                        item.prospect_signal.text}
                     </q>
-                    {item.potential_impact ? (
-                      <small className={styles.why}>
-                        Why it matters:{" "}
-                        <EntityText text={item.potential_impact} />
-                      </small>
-                    ) : null}
+                    <PlayChip
+                      evidence={item.prospect_signal.evidence[0]}
+                      onSeek={onSeek}
+                    />
                   </div>
-                </article>
-              );
-            })}
-          </div>
-        </Section>
-      ) : null}
+                </div>
+                <div className={styles.msg} data-side="you">
+                  <div className={styles.bubble}>
+                    <small>{you?.name ?? "You"} said</small>
+                    <q>
+                      {item.closer_response.evidence[0]?.quote ??
+                        item.closer_response.text}
+                    </q>
+                    <PlayChip
+                      evidence={item.closer_response.evidence[0]}
+                      onSeek={onSeek}
+                    />
+                  </div>
+                  {you ? you.avatar(26) : null}
+                </div>
+                <div className={styles.better}>
+                  <span className={styles.betterHead}>
+                    <Lightbulb size={14} aria-hidden="true" />
+                    Better answer
+                    <button
+                      type="button"
+                      className={styles.copy}
+                      onClick={() => {
+                        void navigator.clipboard
+                          ?.writeText(item.follow_up)
+                          .then(() => {
+                            setCopied(index);
+                            window.setTimeout(() => setCopied(null), 1400);
+                          });
+                      }}
+                    >
+                      {copied === index ? (
+                        <Check size={12} aria-hidden="true" />
+                      ) : (
+                        <Copy size={12} aria-hidden="true" />
+                      )}
+                      {copied === index ? "Copied" : "Copy"}
+                    </button>
+                  </span>
+                  <q>
+                    <EntityText text={item.follow_up} />
+                  </q>
+                  {item.potential_impact ? (
+                    <small className={styles.why}>
+                      Why it matters:{" "}
+                      <EntityText text={item.potential_impact} />
+                    </small>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </Section>
 
       <div className={styles.split}>
         <Section

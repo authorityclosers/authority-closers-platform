@@ -68,6 +68,21 @@ _ONE_CALL = (
     "From this one call. Earlier calls show whether it repeats; a won or lost deal doesn’t "
     "prove why."
 )
+# "Likely reason" on a call where the focus was done well: no cause to name.
+_DONE_WELL = (
+    "The relevant behaviour is observed here; this call alone does not establish the cause of "
+    "earlier misses.",
+    "The focus behaviour is evidenced in this call; no cause for a historical gap can be "
+    "inferred from it.",
+    "The focus behaviour is evidenced here; this call alone does not establish the cause of "
+    "earlier gaps.",
+    "The focus behaviour is evidenced here; a cause of earlier gaps cannot be inferred from this "
+    "call alone.",
+)
+_DONE_WELL_PATTERN = (
+    "The relevant behaviour is observed here; this call alone does not establish a longitudinal "
+    "pattern or a causal effect of coaching."
+)
 PLAIN = {
     "The labelled behaviour occurs in this call.": "It needed work on this call.",
     "Keep the same focus; this call alone cannot establish mastery.": (
@@ -145,6 +160,27 @@ PLAIN = {
     "The seller appears to equate a helpful contact with purchasing authority.": (
         "Taking a helpful contact for the person who decides."
     ),
+    **dict.fromkeys(
+        _DONE_WELL, "Done well on this call. One call can’t say why it was missed before."
+    ),
+    _DONE_WELL_PATTERN: (
+        "Done well on this call. One call can’t show a pattern, or that coaching caused it."
+    ),
+    # Mission lines (also the lesson's idea and better direction) and a focus name.
+    "Before offering a concession, establish the concern and trade any approved concession for "
+    "a defined scope or commitment.": (
+        "Before offering a discount, find out the real worry. Give only what’s approved, and only "
+        "for something in return."
+    ),
+    "Before ending the next open opportunity, agree an owner, action and date or record that no "
+    "action was agreed.": (
+        "Before the call ends, agree who does what by when, or note that nothing was agreed."
+    ),
+    "When the buyer raises risk, ask which failure they fear and agree how to test that risk.": (
+        "When the buyer raises a risk, ask what they’re afraid will go wrong, and agree how to "
+        "check it."
+    ),
+    "Agree an observable next step": "Agree a clear next step",
 }
 # The newest call's per-call reason, as read on the rep's page across calls,
 # where "this call" would point at nothing.
@@ -156,6 +192,13 @@ NEWEST = {
     "The cited response or commitment is observed here; maintain it on the next relevant "
     "opportunity without inferring mastery.": (
         "It was done well on their newest call. One call doesn’t prove it yet."
+    ),
+    **dict.fromkeys(
+        _DONE_WELL,
+        "Done well on their newest call. One call can’t say why it was missed before.",
+    ),
+    _DONE_WELL_PATTERN: (
+        "Done well on their newest call. One call can’t show a pattern, or that coaching caused it."
     ),
 }
 _MISSED = re.compile(
@@ -337,7 +380,7 @@ def index_call(
         rep_name=rep_name,
         call_label=label[:256],
         skill_id=skill_for(current.get("skill_id")),
-        focus_label=_text(current.get("label"), 240),
+        focus_label=_plain(current.get("label"), 240),
         loaded_id=loaded_uuid(tenant_id, "submission", key),
         loaded_rep_id=loaded_uuid(tenant_id, "person", rep_key),
     )
@@ -439,8 +482,8 @@ def authored(
     lesson, mission_raw = _dict(teaching.get("text_lesson")), _dict(action.get("mission"))
     practice_raw = _dict(action.get("practice"))
     skill = skill_for(current.get("skill_id"))
-    label = _text(current.get("label"), 240)
-    behavior, done_when = _text(mission_raw.get("behaviour")), _plain(mission_raw.get("done_when"))
+    label = _plain(current.get("label"), 240)
+    behavior, done_when = _plain(mission_raw.get("behaviour")), _plain(mission_raw.get("done_when"))
     if not skill or not label or not behavior or not done_when:
         return None
     gap = _gap(diagnosis.get("gap_type"))
@@ -449,7 +492,7 @@ def authored(
         behavior=behavior,
         context=_plain(mission_raw.get("context")) or "The next time this kind of moment comes up.",
         done_when=done_when,
-        cue=_text(mission_raw.get("cue"), 240) or label,
+        cue=_plain(mission_raw.get("cue"), 240) or label,
         active_since=_when(mission_raw.get("active_since")) or call.occurred_at,
         origin_submission_id=call.submission_id,
     )
@@ -467,7 +510,7 @@ def authored(
         return None
     pattern = _plain(diagnosis.get("pattern")) or "This call’s written focus."
     why = _plain(lesson.get("why_it_matters")) or pattern
-    better = _text(lesson.get("better_direction")) or behavior
+    better = _plain(lesson.get("better_direction")) or behavior
     focus = Focus(
         skill_id=skill,
         label=label,
@@ -498,8 +541,8 @@ def authored(
         ),
         evidence=evidence,
         lesson=TextLesson(
-            title=_text(lesson.get("title"), 240) or label,
-            quick_idea=_text(lesson.get("quick_idea")) or better,
+            title=_plain(lesson.get("title"), 240) or label,
+            quick_idea=_plain(lesson.get("quick_idea")) or better,
             framework=tuple(part.strip() for part in framework.split("→") if part.strip())[:6],
             why_it_matters=why,
             good_looks_like=better,
@@ -690,7 +733,14 @@ def rep_view(
             relevant_opportunities=opportunities,
             occurrence_count=occurrences,
         ),
-        root_cause=parts.root_cause,
+        root_cause=parts.root_cause.model_copy(
+            update={
+                "hypothesis": NEWEST.get(
+                    _text(diagnosis.get("root_cause_hypothesis")) or "",
+                    parts.root_cause.hypothesis,
+                )
+            }
+        ),
         evidence=tuple(evidence[:MAX_MOMENTS]),
         practice=parts.practice,
         mission=mission,

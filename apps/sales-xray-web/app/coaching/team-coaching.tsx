@@ -1,7 +1,7 @@
 "use client";
 
 import { FileSearch, FlaskConical, LineChart, Lock, Users } from "lucide-react";
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -87,8 +87,16 @@ function RepList({
   shared: boolean;
 }) {
   const [area, setArea] = useState("all");
+  const [query, setQuery] = useState("");
   const [all, setAll] = useState(false);
-  const shown = reps.filter((rep) => area === "all" || rep.skill_id === area);
+  const listId = useId();
+  const search = useRef<HTMLInputElement>(null);
+  const name = query.trim().toLocaleLowerCase();
+  const shown = reps.filter(
+    (rep) =>
+      (area === "all" || rep.skill_id === area) &&
+      rep.name.toLocaleLowerCase().includes(name),
+  );
   const visible = all ? shown : shown.slice(0, 8);
   const areas = rows.filter((row) =>
     reps.some((rep) => rep.skill_id === row.skill_id),
@@ -100,9 +108,22 @@ function RepList({
         shared ? TEAM.sharedSub(reps.length) : TEAM.fictionalSub(reps.length)
       }
     >
-      {areas.length > 1 ? (
-        <div className={styles.repFilter}>
-          <span className={kitStyles.field}>
+      <div className={styles.repFilter}>
+        <label className={`${kitStyles.field} ${styles.repSearch}`}>
+          <span className={styles.srOnly}>{TEAM.findRep}</span>
+          <input
+            ref={search}
+            type="search"
+            placeholder={TEAM.findRep}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setAll(false);
+            }}
+          />
+        </label>
+        {areas.length > 1 ? (
+          <span className={`${kitStyles.field} ${styles.repArea}`}>
             <select
               aria-label="Coaching area"
               value={area}
@@ -119,41 +140,89 @@ function RepList({
               ))}
             </select>
           </span>
-          <span className={styles.note}>{TEAM.repCount(shown.length)}</span>
+        ) : null}
+        <span className={styles.note} role="status">
+          {TEAM.repCount(shown.length)}
+        </span>
+      </div>
+      {shown.length ? (
+        <div id={listId} className={styles.repList}>
+          <List label="Reps and their current focus">
+            {visible.map((rep) => (
+              <Row
+                key={rep.person_id}
+                icon={<Avatar name={rep.name} size={24} />}
+                title={
+                  <>
+                    {rep.name}
+                    {rep.focus_label ? (
+                      <>
+                        {" "}
+                        <span className={styles.repFocus}>
+                          {rep.focus_label}
+                        </span>
+                      </>
+                    ) : null}
+                  </>
+                }
+                href={`/coaching?person=${rep.person_id}`}
+                meta={[
+                  `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
+                  shared && rep.shared_at
+                    ? `Shared ${callDate(rep.shared_at)}`
+                    : rep.latest_call_at
+                      ? callDate(rep.latest_call_at)
+                      : null,
+                ]}
+                end={
+                  rep.skill_id ? (
+                    <Badge>{AREA[rep.skill_id] ?? "Other"}</Badge>
+                  ) : null
+                }
+              />
+            ))}
+          </List>
         </div>
-      ) : null}
-      <List label="Reps and their current focus">
-        {visible.map((rep) => (
-          <Row
-            key={rep.person_id}
-            icon={<Avatar name={rep.name} size={24} />}
-            title={rep.name}
-            href={`/coaching?person=${rep.person_id}`}
-            meta={[
-              rep.focus_label,
-              `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
-              shared && rep.shared_at
-                ? `Shared ${callDate(rep.shared_at)}`
-                : rep.latest_call_at
-                  ? callDate(rep.latest_call_at)
-                  : null,
-            ]}
-            end={
-              rep.skill_id ? (
-                <Badge>{AREA[rep.skill_id] ?? "Other"}</Badge>
-              ) : null
-            }
+      ) : (
+        <div className={styles.repEmpty}>
+          <Empty
+            icon={Users}
+            title={TEAM.noMatches}
+            text={TEAM.noMatchesText}
           />
-        ))}
-      </List>
-      {shown.length > visible.length ? (
+          <button
+            type="button"
+            className={kitStyles.button}
+            onClick={() => {
+              setQuery("");
+              setArea("all");
+              setAll(false);
+              search.current?.focus();
+            }}
+          >
+            {TEAM.clearFilters}
+          </button>
+        </div>
+      )}
+      {shown.length > 8 ? (
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreCalls}`}
           data-many=""
-          onClick={() => setAll(true)}
+          aria-expanded={all}
+          aria-controls={listId}
+          onClick={() => {
+            setAll(!all);
+            if (all) {
+              search.current?.focus({ preventScroll: true });
+              search.current?.scrollIntoView({
+                block: "center",
+                behavior: "instant",
+              });
+            }
+          }}
         >
-          Show all {shown.length} people
+          {all ? TEAM.showFewer : TEAM.showAll(shown.length)}
         </button>
       ) : null}
     </Panel>
@@ -210,6 +279,13 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
       </Tiles>
       <div className={styles.layout}>
         <div className={styles.main}>
+          {coaching.reps.length ? (
+            <RepList
+              reps={coaching.reps}
+              rows={rows}
+              shared={coaching.reps_basis === "shared"}
+            />
+          ) : null}
           <Panel title={TEAM.practise} sub={TEAM.practiseSub}>
             {rows.length ? (
               <List label="Coaching areas">
@@ -251,13 +327,7 @@ export function TeamCoachingStory({ coaching }: { coaching: TeamCoaching }) {
           {coaching.objection_calls > 0 ? (
             <ObjectionsPanel coaching={coaching} />
           ) : null}
-          {coaching.reps.length ? (
-            <RepList
-              reps={coaching.reps}
-              rows={rows}
-              shared={coaching.reps_basis === "shared"}
-            />
-          ) : (
+          {coaching.reps.length ? null : (
             <Panel title={TEAM.who} sub={TEAM.sharedOnly}>
               <Empty
                 icon={Lock}

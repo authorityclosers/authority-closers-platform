@@ -249,3 +249,80 @@ it("reuses the retry command when its canonical read-back is unavailable", async
   );
   expect(host.textContent).toContain("Done");
 });
+
+it("restored mixed failed batches retain per-call navigation in both rows and phone cards without processing", async () => {
+  const failedId = "44444444-4444-4444-8444-444444444444";
+  const workingId = "55555555-5555-4555-8555-555555555555";
+  const mixed: ImportBatch = {
+    ...fixture,
+    terminalState: "failed",
+    items: [
+      fixture.items[0]!,
+      {
+        ...fixture.items[0]!,
+        index: 1,
+        submissionId: failedId,
+        state: "failed",
+        runState: "failed",
+        retryAvailable: true,
+      },
+      {
+        ...fixture.items[0]!,
+        index: 2,
+        submissionId: null,
+        state: "needs_member",
+        runState: null,
+      },
+      {
+        ...fixture.items[0]!,
+        index: 3,
+        submissionId: workingId,
+        state: "already_imported",
+        runState: "working",
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(<BulkRecordingImport policy={null} initialBatch={mixed} />),
+  );
+  const navigations: string[] = [];
+  for (const rows of [
+    host.querySelector("tbody"),
+    host.querySelector('[role="list"]'),
+  ]) {
+    const links = [...rows!.querySelectorAll("a")];
+    expect(
+      links.map((link) => [link.getAttribute("href"), link.textContent]),
+    ).toEqual([
+      [`/analysis/calls/${id}`, "Open report"],
+      [`/analysis/calls/${failedId}`, "View call"],
+      [`/analysis/calls/${workingId}`, "View call"],
+    ]);
+    for (const link of links) {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigations.push(link.getAttribute("href")!);
+      });
+      await act(async () => link.click());
+    }
+  }
+  expect(navigations).toHaveLength(6);
+  expect(button("Resume analysis").disabled).toBe(true);
+  for (const operation of Object.values(operations))
+    expect(operation).not.toHaveBeenCalled();
+});
+
+it("does not label a saved link Open report without a done per-item read", async () => {
+  const saved: ImportBatch = {
+    ...fixture,
+    items: [{ ...fixture.items[0]!, runState: null }],
+  };
+  await act(async () =>
+    root.render(<BulkRecordingImport policy={null} initialBatch={saved} />),
+  );
+  expect(
+    [...host.querySelectorAll("a")].map((link) => link.textContent),
+  ).toEqual(["View call", "View call"]);
+  for (const operation of Object.values(operations))
+    expect(operation).not.toHaveBeenCalled();
+});

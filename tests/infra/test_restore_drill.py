@@ -1229,8 +1229,47 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
         assert spec is not None and spec.loader is not None
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
+        if migration.revision == "20261012_0088":
+            # This constraint-only migration permits empty rollback, but retained
+            # terminal history must still force forward recovery before any DDL.
+            migration.op = SimpleNamespace(
+                get_bind=lambda: SimpleNamespace(scalar=lambda statement: 1)
+            )
+            with pytest.raises(RuntimeError, match="history requires forward recovery"):
+                migration.downgrade()
+            continue
         with pytest.raises(RuntimeError, match="forward-only"):
             migration.downgrade()
+
+
+def test_empty_terminal_failure_migration_can_reverse_without_touching_history() -> None:
+    path = ROOT / "db/migrations/versions/20261012_0088_customer_terminal_settlement.py"
+    spec = importlib.util.spec_from_file_location("empty_terminal_failure_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    changed_tables: list[str] = []
+
+    def count_terminal_history(statement: Any) -> int:
+        assert "WHERE kind = 'terminal_failure'" in str(statement)
+        return 0
+
+    migration.op = SimpleNamespace(
+        get_bind=lambda: SimpleNamespace(scalar=count_terminal_history),
+        f=lambda name: name,
+        drop_constraint=lambda name, table, **kwargs: changed_tables.append(table),
+        create_check_constraint=lambda name, table, condition: changed_tables.append(table),
+    )
+    migration.downgrade()
+    assert changed_tables
+    assert set(changed_tables) == {"conversation_acquisition_settlements"}
+
+
+def test_terminal_failure_constraints_reuse_the_existing_row_count_contract() -> None:
+    assert (
+        restore_drill.VERSIONED_PARITY_CONTRACTS["20261012_0088"]
+        == (restore_drill.VERSIONED_PARITY_CONTRACTS["20261011_0087"])
+    )
 
 
 @pytest.mark.parametrize(

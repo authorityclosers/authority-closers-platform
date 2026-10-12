@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { MOMENTS } from "./report-copy";
+import { parseReportContent } from "./report-content";
 import type { SalesReport, Transcript } from "./report-contract";
 import {
   docItemText,
@@ -16,6 +18,11 @@ import { v8Report } from "./review-fixture/report/pillars/v8-report";
 import { AMIT_PILLARS } from "./review-fixture/report/story/amit-pillars";
 import callB from "./review-fixture/report/story/fictional-call-b.json";
 import { syntheticReport } from "./review-fixture/report/synthetic-report";
+import {
+  contentFixture,
+  contentReport,
+  contentTranscript,
+} from "./review-fixture/report/pillars/content-fixture";
 
 const NAMES: Record<string, string> = {
   [AMIT_SPEAKERS.seller]: "Arjun",
@@ -250,7 +257,7 @@ describe("report document model", () => {
         expect(part.items.length).toBeGreaterThan(0);
   });
 
-  it("someone's own words in Before / After and 'You moved toward' read as quotes", () => {
+  it("quotes someone's own Before / After words while hiding ungated legacy misses", () => {
     const names: Record<string, string> = {
       speaker_0: "Riya",
       speaker_1: "Mr Kulkarni",
@@ -282,6 +289,68 @@ describe("report document model", () => {
     if (amit?.type !== "steps") throw new Error("no Before / After");
     expect(amit.steps.some((step) => step.quoted)).toBe(false);
   });
+
+  it.each([true, false])(
+    "a validated missed chance quotes the response only when it is the seller's words: %s",
+    (exactWords) => {
+      const sellerWords = contentTranscript.segments[4].text;
+      const response = exactWords
+        ? sellerWords
+        : "The seller proposed a meeting time.";
+      const content = parseReportContent(
+        {
+          ...contentFixture,
+          missed_chances: [
+            {
+              title: "The delivery date stayed open",
+              opening: contentFixture.blocker!,
+              response_opportunity: {
+                ...contentFixture.seller_commitments[0],
+                text: response,
+              },
+              relevance: {
+                ...contentFixture.blocker!,
+                text: "The delivery date remained open for the meeting.",
+              },
+            },
+          ],
+        },
+        contentTranscript,
+      );
+      const doc = reportDocumentModel(
+        {
+          report: { ...contentReport, report_content: content },
+          transcript: contentTranscript,
+        },
+        { speakerName: (id) => (id === "seller" ? "Seller" : "Buyer") },
+      );
+      const miss = items(doc).find(
+        (item) =>
+          item.type === "card" && item.kicker?.startsWith("Important Miss"),
+      );
+      if (miss?.type !== "card") throw new Error("no validated Important Miss");
+      expect(miss.items[0]).toMatchObject({
+        type: "quote",
+        clip: { speaker: "Buyer", source: contentFixture.blocker!.evidence[0] },
+      });
+      const moved = miss.items.findIndex(
+        (item) => item.type === "label" && item.text === MOMENTS.movedToward,
+      );
+      expect(moved).toBeGreaterThanOrEqual(0);
+      expect(miss.items[moved + 1]).toMatchObject(
+        exactWords
+          ? {
+              type: "quote",
+              clip: {
+                quote: sellerWords,
+                speaker: "Seller",
+                source: contentFixture.seller_commitments[0].evidence[0],
+              },
+            }
+          : { type: "text", text: response },
+      );
+    },
+  );
 
   it("a report whose analysis writes the six pillars (v8) fills the whole document", () => {
     const { report, transcript } = v8Report();

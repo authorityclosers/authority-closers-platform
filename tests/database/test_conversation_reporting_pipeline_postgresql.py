@@ -557,3 +557,258 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
             await engine.dispose()
 
     run(exercise())
+
+
+@pytest.mark.parametrize("winner", ["publication", "failure"])
+def test_validated_acquisition_publication_and_terminal_recovery_race(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, winner: str
+) -> None:
+    """Real C2/C4/C5/C6, customer capture, source read and expired-worker recovery.
+
+    The fixtures use approved fictional adapters and an owned database. The
+    source-only failure writer is invoked by this test, never a runtime caller.
+    """
+    import asyncio
+    import threading
+    from contextlib import suppress
+    from datetime import UTC, datetime, timedelta
+
+    import httpx
+    from sqlalchemy import update
+
+    from ac_platform.audit.models import AuditEvent
+    from ac_platform.conversation_intelligence.acquisition_models import (
+        ConversationAcquisitionSettlement,
+        ConversationAcquisitionUsage,
+    )
+    from ac_platform.conversation_intelligence.acquisition_usage import acquisition_seconds
+    from ac_platform.conversation_intelligence.broker_router import (
+        FixedProviderRouter,
+        ProviderRoute,
+    )
+    from ac_platform.conversation_intelligence.customer_failure_candidate import (
+        locked_recovered_customer_failure,
+    )
+    from ac_platform.conversation_intelligence.customer_terminal_settlement import (
+        settle_recovered_customer_failure,
+    )
+    from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
+    from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
+    from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
+    from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
+    from ac_platform.outbox.errors import LeaseLostError
+    from tests.database.test_conversation_processing_plan_postgresql import _make_due
+    from tests.database.test_conversation_submission_http_postgresql import (
+        ORIGIN,
+        PREFIX,
+        _headers,
+        _setup,
+        _sign_in,
+    )
+    from tests.database.test_conversation_worker_postgresql import (
+        _reconcile,
+        _wav_one_second_48k,
+    )
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        release_raw, raw_written = threading.Event(), threading.Event()
+        publish_locked, release_publish = asyncio.Event(), asyncio.Event()
+        publisher: Any = None
+        sweeper: Any = None
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                _sign_in(setup, client)
+                data, submission = _wav_one_second_48k(), uuid4()
+                path = f"{PREFIX}/submissions/{submission}"
+                uploaded = await client.put(
+                    path + "/source", content=data, headers=await _headers(client, data)
+                )
+                assert uploaded.status_code == 202, uploaded.text
+                await _reconcile(setup.sessions, setup.state)
+                local = OfflineConversationWorker(
+                    setup.sessions,
+                    storage=setup.runtime.storage,
+                    scratch=setup.runtime.scratch,
+                    environment="test",
+                )
+                assert await local.run_once()
+                response = await client.post(
+                    path + "/plan/quote",
+                    headers={
+                        "Origin": ORIGIN,
+                        "Idempotency-Key": "terminal-race-plan",
+                    },
+                )
+                assert response.status_code == 201, response.text
+                quoted = response.json()
+                plan_id = UUID(quoted["id"])
+                accepted = await client.post(
+                    path + "/plan",
+                    json={
+                        "plan_id": quoted["id"],
+                        "plan_fingerprint": quoted["plan_fingerprint"],
+                        "privacy_revision": quoted["privacy_revision"],
+                        "accepted": True,
+                    },
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "terminal-race-accept"},
+                )
+                assert accepted.status_code == 202, accepted.text
+                broker = ReportingBroker(data)
+                worker = ConversationInferenceWorker(
+                    setup.sessions,
+                    setup.runtime.storage,
+                    FixedProviderRouter(
+                        {
+                            provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
+                            for provider in ("elevenlabs", "gemini")
+                        },
+                        authority=setup.authority,
+                    ),
+                    authority=setup.authority,
+                )
+                scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+                for _ in range(2):
+                    assert await worker.run_once()
+                    await _make_due(setup, plan_id)
+                    await scheduler.step()
+                work = await worker.claim()
+                assert work is not None
+                async with setup.sessions() as db:
+                    task = await db.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.job_id == work.job_id
+                        )
+                    )
+                    assert task is not None and task.stage == "C5"
+                    run_id = task.run_id
+                    plan = await db.get(ConversationProcessingPlan, plan_id)
+                    actor = ProcessingActor(
+                        plan.person_id, plan.tenant_id, plan.processing_lease_id
+                    )
+                    usage = await db.scalar(
+                        select(ConversationAcquisitionUsage).where(
+                            ConversationAcquisitionUsage.submission_id == submission
+                        )
+                    )
+                    usage_id = usage.id
+                original_save = worker._save_raw
+
+                def pause_raw(scope: Any, result: Any) -> None:
+                    original_save(scope, result)
+                    raw_written.set()
+                    if not release_raw.wait(10):
+                        raise RuntimeError("fictional raw publication barrier timed out")
+
+                monkeypatch.setattr(worker, "_save_raw", pause_raw)
+                original_finish = ReportingPipeline.finish
+
+                async def pause_finish(self: Any, *args: Any, **kwargs: Any) -> None:
+                    publish_locked.set()
+                    await asyncio.wait_for(release_publish.wait(), 10)
+                    await original_finish(self, *args, **kwargs)
+
+                if winner == "publication":
+                    monkeypatch.setattr(ReportingPipeline, "finish", pause_finish)
+                publisher = asyncio.create_task(worker._dispatch(work))
+                assert await asyncio.to_thread(raw_written.wait, 10)
+                # Only this fictional job's existing finite lease is moved to
+                # the boundary. Dispatch markers, receipts and attempts remain.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Job)
+                        .where(Job.id == work.job_id)
+                        .values(
+                            leased_until=datetime.now(UTC) + timedelta(seconds=10)
+                            if winner == "publication"
+                            else datetime.now(UTC) - timedelta(seconds=1),
+                            **({"max_attempts": Job.attempt_count} if winner == "failure" else {}),
+                        )
+                    )
+                if winner == "publication":
+                    release_raw.set()
+                    await asyncio.wait_for(publish_locked.wait(), 5)
+                    # The live publication has the canonical job/run locks.
+                    # Concurrent recovery must not manufacture a failure.
+                    # The opposite case below expires the same worker first.
+                    sweeper = asyncio.create_task(worker.claim())
+                    await asyncio.sleep(0.05)
+                    release_publish.set()
+                    await asyncio.wait_for(publisher, 5)
+                    assert await asyncio.wait_for(sweeper, 5) is None
+                    report = await client.get(path + "/report")
+                    assert report.status_code == 200, report.text
+                    envelope = report.json()
+                    assert envelope["source_sha256"] == hashlib.sha256(data).hexdigest()
+                    assert envelope["report"]["access"] == "claimed_account"
+                    assert (
+                        envelope["report"]["content"]["overview"]["version"] == "dipak-14-point-v1"
+                    )
+                    transcript = await client.get(path + "/transcript")
+                    assert transcript.status_code == 200
+                    assert transcript.json()["revision"] == envelope["transcript_revision"]
+                else:
+                    assert await asyncio.wait_for(worker.claim(), 5) is None
+                    async with setup.sessions() as db:
+                        event = await db.scalar(
+                            select(AuditEvent).where(
+                                AuditEvent.tenant_id == actor.tenant_id,
+                                AuditEvent.action == "conversation.provider_job_recovery_required",
+                                AuditEvent.resource_id == str(work.job_id),
+                            )
+                        )
+                        assert event is not None
+                        event_id = event.id
+                    async with (
+                        setup.sessions() as db,
+                        locked_recovered_customer_failure(
+                            db, actor=actor, run_id=run_id, event_id=event_id
+                        ) as receipt,
+                    ):
+                        failure = receipt
+                    async with setup.sessions() as db:
+                        result = await settle_recovered_customer_failure(
+                            db, actor=actor, run_id=run_id, event_id=event_id, receipt=failure
+                        )
+                        assert result.changed
+                    release_raw.set()
+                    with pytest.raises((LeaseLostError, ConversationConflict)):
+                        await asyncio.wait_for(publisher, 5)
+                    assert (await client.get(path + "/report")).status_code == 404
+                async with setup.sessions() as db:
+                    settlement = await db.get(ConversationAcquisitionSettlement, usage_id)
+                    assert settlement is not None
+                    assert (settlement.kind, settlement.charged_seconds) == (
+                        ("completed", 1) if winner == "publication" else ("terminal_failure", 0)
+                    )
+                    count = await db.scalar(
+                        select(func.count())
+                        .select_from(ConversationReportDraft)
+                        .where(ConversationReportDraft.recording_id == task.recording_id)
+                    )
+                    assert count == (1 if winner == "publication" else 0)
+                    assert await acquisition_seconds(
+                        db, tenant_id=setup.state.tenant_id, person_id=setup.state.person_id
+                    ) == (1 if winner == "publication" else 0)
+                    job = await db.get(Job, work.job_id)
+                    assert job.dispatch_started_at is not None and job.provider_receipt is not None
+                    assert job.provider_receipt["validation_state"] == (
+                        "validated" if winner == "publication" else "provider_returned"
+                    )
+                assert broker.routes == ["elevenlabs", "gemini", "gemini"]
+                assert broker.calls == 3
+                client.cookies.clear()
+                client.cookies.set("ac_xray_guest", setup.stranger.token)
+                assert (await client.get(path + "/report")).status_code == 404
+        finally:
+            release_raw.set()
+            release_publish.set()
+            for pending in (publisher, sweeper):
+                if pending is not None and not pending.done():
+                    with suppress(Exception):
+                        await asyncio.wait_for(pending, 10)
+            await setup.engine.dispose()
+
+    run(exercise())

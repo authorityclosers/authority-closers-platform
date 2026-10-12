@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { WorkspaceAccessContext } from "../../workspace-access";
 import { PersonView } from "./person-view";
+import { fictionalCoaching } from "../../coaching/coaching.fixture";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
@@ -27,6 +28,7 @@ const ownerId = "00000000-0000-4000-8000-000000000001";
 const ashaId = "00000000-0000-4000-8000-000000000002";
 const inviteId = "00000000-0000-4000-8000-000000000003";
 const tenantId = "00000000-0000-4000-8000-000000000004";
+const sessionId = "00000000-0000-4000-8000-000000000005";
 const callA = "00000000-0000-4000-8000-0000000000a1";
 const callB = "00000000-0000-4000-8000-0000000000b2";
 const now = Date.now();
@@ -179,7 +181,7 @@ async function show(id: string, role: "owner" | "admin" | "member" = "owner") {
         value={{
           status: "ready",
           authenticated: true,
-          context: { personId: ownerId, sessionId: "s-1", tenantId },
+          context: { personId: ownerId, sessionId, tenantId },
           workspaces: [
             {
               tenant_id: tenantId,
@@ -226,17 +228,28 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
       (link) => link.textContent,
     ),
   ).toContainEqual(expect.stringContaining("Discovery · Amit, Pixel Digital"));
-  // The full list, searchable, is Calls filtered to this person.
+  // The existing Calls view filters its loaded rows to this person.
   expect(
     host.querySelector(`a[href="/analysis/calls?rep=${ashaId}"]`)?.textContent,
   ).toContain("Open in Calls");
-  // Coaching stays private to them.
-  expect(host.textContent).toContain(
-    "Asha's coaching stays private to them unless they share it.",
+  // The existing shared reader decides whether their focus can be shown.
+  expect(host.textContent).toContain("This coaching is not shared with you.");
+  expect(
+    host.querySelector(`a[href="/coaching?person=${ashaId}"]`)?.textContent,
+  ).toBe("Open Coaching");
+  expect(
+    calls.some((call) => call.url === `/v1/me/coaching/people/${ashaId}`),
+  ).toBe(true);
+  expect(calls.some((call) => call.url === "/v1/me/coaching")).toBe(false);
+  const latest = [...host.querySelectorAll("section")].find((section) =>
+    section.querySelector("h2")?.textContent?.startsWith("Latest call"),
   );
-  expect(calls.some((call) => call.url.startsWith("/v1/me/coaching"))).toBe(
-    false,
-  );
+  expect(
+    latest?.querySelector(`a[href="/analysis/calls/${callA}"]`)?.textContent,
+  ).toBe("Open report");
+  expect(
+    latest?.querySelector(`a[href="/coaching?call=${callA}"]`)?.textContent,
+  ).toBe("Call coaching");
 });
 
 it("asks before changing a role, then saves it through the organisation API", async () => {
@@ -273,6 +286,11 @@ it("shows members only their own calls and offers no actions on others", async (
   );
   expect(host.querySelector("select")).toBeNull();
   expect(host.textContent).not.toContain("Remove");
+  expect(host.querySelector('a[href^="/coaching"]')).toBeNull();
+  expect(calls.some((call) => call.url.startsWith("/v1/me/coaching"))).toBe(
+    false,
+  );
+  expect(calls.some((call) => call.url.includes("/activity?"))).toBe(false);
 });
 
 it("gives invited people a profile with an honest empty state", async () => {
@@ -361,4 +379,140 @@ it("uses the person's own weekly read where the server has it: exact totals, new
   expect(calls.some((item) => item.url.includes("/activity?days="))).toBe(
     false,
   );
+});
+
+it("puts an authorized shared focus and next-call action before the weekly charts", async () => {
+  routes[`/v1/me/coaching/people/${ashaId}`] = {
+    status: 200,
+    body: {
+      ...fictionalCoaching,
+      person_id: ashaId,
+      tenant_id: tenantId,
+      session_id: sessionId,
+      sandbox: true,
+    },
+  };
+  await show(ashaId);
+  expect(host.textContent).toContain(fictionalCoaching.focus!.label);
+  expect(host.textContent).toContain(fictionalCoaching.focus!.selected_reason);
+  expect(host.textContent).toContain(fictionalCoaching.mission!.behavior);
+  expect(host.textContent).toContain("Fictional sandbox coaching");
+  const text = host.textContent!;
+  expect(text.indexOf("Current focus")).toBeLessThan(
+    text.indexOf("Calls per week"),
+  );
+  expect(text.indexOf("Latest call")).toBeLessThan(
+    text.indexOf("Calls per week"),
+  );
+  expect(calls.every((call) => call.method === "GET")).toBe(true);
+});
+
+it.each([
+  { person_id: ownerId },
+  { tenant_id: "00000000-0000-4000-8000-000000000099" },
+  { session_id: "another-session" },
+])(
+  "does not expose coaching from a different identity or workspace: %j",
+  async (wrong) => {
+    routes[`/v1/me/coaching/people/${ashaId}`] = {
+      status: 200,
+      body: {
+        ...fictionalCoaching,
+        person_id: ashaId,
+        tenant_id: tenantId,
+        ...wrong,
+      },
+    };
+    await show(ashaId);
+    expect(host.textContent).not.toContain(fictionalCoaching.focus!.label);
+    expect(host.textContent).not.toContain(fictionalCoaching.mission!.behavior);
+    expect(host.textContent).toContain("Open report");
+  },
+);
+
+it("reads a member's own focus through My coaching and keeps failures distinct from no focus", async () => {
+  routes["/v1/me/coaching"] = { status: 503, body: {} };
+  await show(ownerId, "member");
+  expect(host.textContent).toContain("Coaching didn’t load. Try again.");
+  expect(host.textContent).not.toContain("No focus yet");
+  expect(host.querySelector('a[href="/coaching"]')?.textContent).toBe(
+    "Open Coaching",
+  );
+  expect(calls.some((call) => call.url.includes("/coaching/people/"))).toBe(
+    false,
+  );
+  routes["/v1/me/coaching"] = {
+    status: 200,
+    body: { ...fictionalCoaching, person_id: ownerId, tenant_id: tenantId },
+  };
+  const retry = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Try again",
+  );
+  await act(async () => retry?.click());
+  for (let index = 0; index < 4; index += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  expect(host.textContent).toContain(fictionalCoaching.focus!.label);
+});
+
+it("keeps a pending latest call distinct from the most recent ready report", async () => {
+  const activity = routes["/v1/organisation/activity?days=84"].body as {
+    calls: { id: string; has_report: boolean; state: string }[];
+  };
+  activity.calls[0]!.has_report = false;
+  activity.calls[0]!.state = "queued";
+  await show(ashaId);
+  const latest = [...host.querySelectorAll("section")].find((section) =>
+    section.querySelector("h2")?.textContent?.startsWith("Latest call"),
+  );
+  expect(
+    latest?.querySelector(`a[href="/analysis/calls/${callA}"]`)?.textContent,
+  ).toBe("View call");
+  expect(latest?.querySelector(`a[href="/coaching?call=${callA}"]`)).toBeNull();
+  expect(
+    latest?.querySelector(`a[href="/analysis/calls/${callB}"]`)?.textContent,
+  ).toBe("Open report");
+  expect(latest?.textContent).toContain("Latest ready report");
+});
+
+it("shows an honest no-focus state only after the authorized coaching read succeeds", async () => {
+  routes[`/v1/me/coaching/people/${ashaId}`] = {
+    status: 200,
+    body: {
+      ...fictionalCoaching,
+      person_id: ashaId,
+      tenant_id: tenantId,
+      state: "not_enough_evidence",
+      focus: null,
+      mission: null,
+      practice: null,
+      lesson: null,
+    },
+  };
+  await show(ashaId);
+  expect(host.textContent).toContain("No focus yet");
+  expect(host.textContent).not.toContain(
+    "This coaching is not shared with you.",
+  );
+});
+
+it("keeps known totals honest when individual calls cannot be listed", async () => {
+  routes[`/v1/organisation/members/${ashaId}/activity?weeks=12`] = {
+    status: 200,
+    body: {
+      person_id: ashaId,
+      weeks: [],
+      totals: { calls: 64, recorded_minutes: 720, reports_ready: 60 },
+      calls: [],
+    },
+  };
+  await show(ashaId);
+  const tiles = host.querySelector('[aria-label="Last 12 weeks"]');
+  expect(tiles?.textContent).toContain("Calls64");
+  expect(tiles?.textContent).toContain("Unavailable");
+  expect(host.textContent).toContain("Recent call details are unavailable.");
+  expect(host.textContent).toContain("Weekly activity is unavailable.");
+  expect(host.textContent).not.toContain("No calls in the last 12 weeks.");
+  expect(host.querySelector('a[href^="/analysis/calls/"]')).toBeNull();
 });

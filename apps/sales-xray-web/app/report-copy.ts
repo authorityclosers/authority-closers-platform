@@ -114,6 +114,14 @@ export const COMMON = {
   seller: "Seller",
 };
 
+/** A guest can unlock the rest of this report by signing in. */
+export const GUEST = {
+  more: (count: number, noun: [string, string]) =>
+    `${count} more ${count === 1 ? noun[0] : noun[1]} ${count === 1 ? "is" : "are"} saved for your account.`,
+  unlock: "Unlock with a free account",
+  fullReport: "Sign in to see the full report",
+};
+
 /** "18:42 · Play", or "06:35–06:58 · Play" for a stretch of the call. */
 export const playAt = (clock: string) => `${clock} · ${COMMON.play}`;
 export const playRange = (from: string, to: string) =>
@@ -318,6 +326,9 @@ export const MOMENTS = {
   /** Document view: the moments that sit under "View all" on screen. */
   titleMore: "More moments",
   none: "No moments were picked out for this call.",
+  missedTitle: "Missed chances",
+  missedHint: "What they said, what you said, and a better answer to use",
+  noneMissed: "This report doesn't show a missed chance.",
   /** Titles Sales Xray gives a moment when the analysis gives none. */
   titleTurn: "The call changed here",
   titleNextStep: "A next step was agreed",

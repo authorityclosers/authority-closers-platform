@@ -161,6 +161,25 @@ def _restore_cookie_jar(context: BrowserContext, path: Path) -> None:
     )
 
 
+def _local_transport(origin: str) -> str | None:
+    transport = os.environ.get("WB_LOCAL_TRANSPORT")
+    if not transport:
+        return None
+    allowed = {
+        "https://salesxray-staging.authorityclosers.com",
+        "https://salesxray.authorityclosers.com",
+    }
+    if (
+        os.environ.get("WB_MODE") != "live"
+        or origin.rstrip("/") not in allowed
+        or transport.rstrip("/") != "http://127.0.0.1:8080"
+    ):
+        pytest.fail(
+            "Local transport requires an approved hosted HTTPS origin and :8080", pytrace=False
+        )
+    return transport.rstrip("/")
+
+
 @pytest.fixture(scope="session")
 def browser() -> Iterator[Browser]:
     origin = os.environ.get("WB_BASE_URL")
@@ -176,6 +195,7 @@ def browser() -> Iterator[Browser]:
         os.environ.get(key) for key in ("WB_STORAGE_STATE", "WB_REPORT_PATH")
     ):
         pytest.fail("Live acceptance requires WB_STORAGE_STATE and WB_REPORT_PATH")
+    _local_transport(origin)
     with sync_playwright() as playwright:
         instance = playwright.chromium.launch()
         try:
@@ -207,6 +227,8 @@ class Journey:
     main_navigations: int = 0
     live_refreshes: int = 0
     refresh_events: list[dict[str, object]] = field(default_factory=list)
+    local_transport: str | None = None
+    blocked_mutations: list[str] = field(default_factory=list)
 
     @property
     def fixture(self) -> bool:
@@ -228,6 +250,7 @@ class Journey:
             """() => {
               const root = document.documentElement;
               const undersized = [];
+              let checked = 0;
               const scales = new WeakMap();
               function scale(el) {
                 if (!el) return 1;
@@ -239,7 +262,9 @@ class Journey:
                 scales.set(el, result);
                 return result;
               }
-              for (const el of document.querySelectorAll('main *, [data-report-modes] *')) {
+              for (const el of document.querySelectorAll(
+                  'main *, [data-report-modes] *, [data-coaching-pillar] *, ' +
+                  'section[aria-label] *, section[aria-labelledby] *')) {
                 // Decorative initials accompany a separately rendered speaker name.
                 if (el.matches('[aria-hidden="true"][class*="avatar"]')) continue;
                 // Closed details can retain layout bounds without painting their content.
@@ -256,6 +281,7 @@ class Journey:
                 const style = getComputedStyle(el);
                 if (r.width <= 1 || r.height <= 1 || r.bottom < 0 || r.top > innerHeight ||
                     style.visibility === 'hidden' || parseFloat(style.opacity) === 0) continue;
+                checked++;
                 const cssSize = parseFloat(style.fontSize);
                 const size = cssSize * scale(el);
                 if (size < 11.99) undersized.push({tag: el.tagName, size, cssSize,
@@ -263,11 +289,13 @@ class Journey:
                   width: r.width, height: r.height});
               }
               return {viewport: innerWidth, document: root.scrollWidth,
-                body: document.body.scrollWidth, undersized,
+                body: document.body.scrollWidth, checked, undersized,
                 busy: document.querySelectorAll('[aria-busy="true"]').length};
             }"""
         )
         self.observations.append({"step": step, "screenshot": str(path), **metrics})
+        if not metrics["checked"]:
+            self.visual_errors.append(f"{step}: no rendered text was audited; screenshot {path}")
         if max(metrics["document"], metrics["body"]) > self.width + 1:
             self.visual_errors.append(f"{step}: sideways overflow; screenshot {path}")
         if metrics["undersized"]:
@@ -281,6 +309,7 @@ class Journey:
         assert not self.server_errors, f"HTTP server errors: {self.server_errors}"
         assert not self.visual_errors, f"Visual acceptance: {self.visual_errors}"
         assert not self.fixture_outcome_requests, "Fictional outcome attempted a live API request"
+        assert not self.blocked_mutations, "Read-only hosted smoke attempted a mutating request"
         assert (
             not self.page.locator("nextjs-portal").get_by_text("Runtime Error", exact=False).count()
         ), "Next runtime error overlay is present"
@@ -296,6 +325,10 @@ class Journey:
                 if (![...el.childNodes].some(n =>
                     n.nodeType === Node.TEXT_NODE && n.textContent.trim())) continue;
                 const style = getComputedStyle(el);
+                // A 1px clipped label is deliberately available to screen readers.
+                if (el.clientWidth <= 1 && el.clientHeight <= 1 &&
+                    (style.clip === 'rect(0px, 0px, 0px, 0px)' ||
+                     style.clipPath === 'inset(50%)')) continue;
                 const clips = value => ['hidden', 'clip'].includes(value);
                 checked += 1;
                 const horizontal = el.clientWidth > 0 && clips(style.overflowX) &&
@@ -311,8 +344,49 @@ class Journey:
         )
         # Geometry only: never retain learner names or other page text.
         self.observations[-1]["text_clipping"] = metrics
-        assert metrics["checked"] > 0, "No rendered total text was checked"
-        assert not metrics["clipped"], "Team totals cut off rendered text"
+        assert metrics["checked"] > 0, "No rendered text was checked"
+        assert not metrics["clipped"], "Rendered text is clipped"
+
+    def document_controls(self) -> None:
+        minimum = 44 if self.width == 390 else 32
+        sizes = (
+            self.page.locator("[data-document-export]")
+            .locator("a[href],button")
+            .evaluate_all(
+                """els => els.filter(el => el.checkVisibility({checkOpacity: true,
+                checkVisibilityCSS: true})).map(el => {
+              const r = el.getBoundingClientRect();
+              return {tag: el.tagName, width: r.width, height: r.height};
+            })"""
+            )
+        )
+        small = [item for item in sizes if min(item["width"], item["height"]) < minimum - 0.01]
+        self.observations[-1]["document_controls"] = {
+            "checked": len(sizes),
+            "minimum": minimum,
+            "undersized": small,
+        }
+        assert sizes, "No rendered Document controls were checked"
+        assert not small, f"Document controls are below {minimum}px"
+
+    def control_target(self, control: Locator, label: str) -> None:
+        """Check a visible control's size and actual pointer reachability."""
+        control.scroll_into_view_if_needed()
+        expect(control).to_be_visible()
+        metrics = control.evaluate(
+            """el => {
+              const r = el.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+              return {width: r.width, height: r.height,
+                reachable: hit === el || el.contains(hit)};
+            }"""
+        )
+        self.observations[-1][f"target_{label}"] = metrics
+        minimum = 44 if self.width == 390 else 32
+        if min(metrics["width"], metrics["height"]) < minimum - 0.01:
+            self.visual_errors.append(f"{label}: target is below {minimum}px")
+        if not metrics["reachable"]:
+            self.visual_errors.append(f"{label}: target is covered")
 
     def follow_mission(self, anchor: str, step: str) -> None:
         """Check the primary mission action as a real tap, without saving feedback."""
@@ -343,6 +417,44 @@ class Journey:
         self.snapshot(step)
 
 
+def _install_local_transport(journey: Journey, origin: str) -> None:
+    transport = _local_transport(origin)
+    if transport is None:
+        return
+    journey.local_transport = transport
+    host = urlsplit(origin).netloc
+
+    def read(route: Route) -> None:
+        request = route.request
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            journey.blocked_mutations.append(request.method)
+            route.abort("blockedbyclient")
+            return
+        target = urlsplit(request.url)
+        suffix = target.path + ("?" + target.query if target.query else "")
+        # Preserve the original browser URL, TLS cookie scope and headers in memory.
+        # Disable redirects here; Chromium handles them at the original origin.
+        try:
+            response = route.fetch(
+                url=transport + suffix,
+                headers={**request.all_headers(), "host": host},
+                max_redirects=0,
+                timeout=30_000,
+            )
+        except Exception as error:
+            # Fetch exceptions can quote request headers. Never let those into logs.
+            journey.runtime_errors.append(type(error).__name__)
+            route.fulfill(
+                status=502,
+                content_type="application/json",
+                body='{"detail":"The local hosted read is unavailable."}',
+            )
+            return
+        route.fulfill(response=response)
+
+    journey.page.route(origin.rstrip("/") + "/**", read)
+
+
 @contextmanager
 def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator[Journey]:
     width, theme = viewport
@@ -358,12 +470,14 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
         color_scheme=theme,
         reduced_motion="reduce",
         storage_state=None if cookie_jar else os.environ.get("WB_STORAGE_STATE") or None,
+        service_workers="block" if os.environ.get("WB_LOCAL_TRANSPORT") else "allow",
         accept_downloads=True,
     )
     context.add_init_script(f"localStorage.setItem('sales-xray:theme', {json.dumps(theme)});")
     page = context.new_page()
     page.set_default_timeout(15_000)
     journey = Journey(page, context, name, width, theme, directory)
+    _install_local_transport(journey, os.environ["WB_BASE_URL"])
     if journey.fixture:
 
         def block_fixture_outcome(route: Route) -> None:
@@ -441,6 +555,8 @@ def _journey(browser: Browser, viewport: tuple[int, str], name: str) -> Iterator
             "main_navigations": journey.main_navigations,
             "live_refreshes": journey.live_refreshes,
             "refresh_events": journey.refresh_events,
+            "local_transport": journey.local_transport,
+            "blocked_mutations": journey.blocked_mutations,
             "runtime_errors": journey.runtime_errors,
             "server_errors": journey.server_errors,
             "visual_errors": journey.visual_errors,
@@ -738,6 +854,7 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
             preview.locator('section[data-document-section="skills"]').get_by_role("rowheader")
         ).to_have_text(list(SKILL_ROWS))
         journey.snapshot("document")
+        journey.document_controls()
         # A section deep link can land below the document's export controls.
         page.locator("[data-document-export]").evaluate(
             "element => element.scrollIntoView({block: 'start'})"
@@ -755,6 +872,88 @@ def test_report_sections_and_document(browser: Browser, viewport: tuple[int, str
         _switch_report_view(page, "Report view")
         expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
         journey.snapshot("returned")
+
+
+def test_fixture_legacy_deal_action(browser: Browser, viewport: tuple[int, str]) -> None:
+    """An older saved Report keeps its next move across reload, Document and Word."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Legacy example words are limited to the fictional dev fixture")
+    with _journey(browser, viewport, "legacy-action") as journey:
+        journey.open("/review-fixture/report/real-format")
+        page = journey.page
+        action = "Explore internal evaluation criteria before proposing follow-up agendas."
+        page.locator("[data-report-sections]").get_by_role(
+            "link", name="Where the Deal Stands", exact=True
+        ).click()
+        deal = page.locator('[data-report-pillar="facts"]:visible')
+        expect(deal).to_contain_text("Next move on this deal")
+        expect(deal).to_contain_text(action)
+        page.reload(wait_until="domcontentloaded")
+        expect(deal).to_contain_text(action)
+        expect(page).to_have_url(re.compile(r"[?&]section=facts(?:&|$)"))
+        selected = page.locator("[data-report-sections]").get_by_role(
+            "link", name="Where the Deal Stands", exact=True
+        )
+        expect(selected).to_have_attribute("aria-current", "location")
+        expect(selected).to_be_in_viewport()
+        journey.snapshot("saved-next-move")
+        mission_label = deal.get_by_text("Coaching mission for your next call", exact=True)
+        expect(mission_label).to_be_visible()
+        mission_geometry = mission_label.evaluate(
+            """label => {
+              const labelRect = label.getBoundingClientRect();
+              const walker = document.createTreeWalker(label.parentElement, NodeFilter.SHOW_TEXT);
+              let node;
+              while ((node = walker.nextNode())) {
+                if (label.contains(node) || !node.textContent.trim()) continue;
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                const textRect = range.getClientRects()[0];
+                if (textRect) return {gap: textRect.top - labelRect.bottom};
+              }
+              return {gap: null};
+            }"""
+        )
+        journey.observations[-1]["coaching_mission_label"] = mission_geometry
+        assert mission_geometry["gap"] is not None and mission_geometry["gap"] >= 2, (
+            "Coaching mission needs a visible gap below its label"
+        )
+
+        _switch_report_view(page, "Document view")
+        preview = _document_preview(page)
+        expect(preview.locator("section[data-document-section]")).to_have_count(6)
+        part = preview.get_by_role("heading", level=4, name=re.compile(r"^6\.9\s")).locator("..")
+        expect(part).to_contain_text(action)
+        part.scroll_into_view_if_needed()
+        journey.snapshot("document-next-move")
+        journey.document_controls()
+        page.locator("[data-document-export]").evaluate(
+            "element => element.scrollIntoView({block: 'start'})"
+        )
+        with page.expect_download() as downloaded:
+            _document_download(page).click()
+        download = downloaded.value
+        file = download.path()
+        assert download.failure() is None and file is not None
+        with ZipFile(file) as docx:
+            paragraphs = _word_paragraphs(docx.read("word/document.xml").decode())
+        start = next(
+            index
+            for index, text in enumerate(paragraphs)
+            if re.fullmatch(r"6\.9\s+Recommended Deal Action", text, re.IGNORECASE)
+        )
+        end = next(
+            (index for index in range(start + 1, len(paragraphs)) if paragraphs[index]),
+            None,
+        )
+        assert end is not None and paragraphs[end] == action, (
+            "Word's Recommended Deal Action differs from the saved Report"
+        )
+        journey.observations[-1]["legacy_action_agreement"] = {
+            "report_reload": True,
+            "document_part": "6.9",
+            "word_verified": True,
+        }
 
 
 def test_fixture_outcome_formats(browser: Browser, viewport: tuple[int, str]) -> None:
@@ -827,6 +1026,34 @@ def test_document_view(browser: Browser, viewport: tuple[int, str]) -> None:
         expect(preview.locator("[data-report-mode-section]")).to_have_count(6)
         expect(_document_download(journey.page)).to_be_visible()
         journey.snapshot("ready")
+        journey.document_controls()
+        if journey.fixture:
+            # This fixture's three source excerpts are confirmed by G57fd8db7.
+            # Keep the repaired diagnosis/deal action bound to that buyer boundary.
+            diagnosis = "The buyer declined a next step and asked the seller not to follow up."
+            action = "Respect the buyer's request not to follow up."
+            for number, text in (("1.3", diagnosis), ("6.9", action)):
+                part = preview.get_by_role(
+                    "heading", level=4, name=re.compile(r"^" + re.escape(number) + r"\s")
+                ).locator("..")
+                expect(part).to_contain_text(text)
+            with journey.page.expect_download() as downloaded:
+                _document_download(journey.page).click()
+            file = downloaded.value.path()
+            assert downloaded.value.failure() is None and file is not None
+            with ZipFile(file) as docx:
+                document = docx.read("word/document.xml").decode()
+            assert all(f'w:name="{section}"' in document for section, _ in REPORT_SECTIONS)
+            _word_skill_names(document)
+            words = " ".join(_word_paragraphs(document))
+            assert diagnosis in words and action in words
+            assert "The closer clarified a follow-up time." not in words
+            journey.observations[-1]["fictional_source_agreement"] = {
+                "document_parts": ["1.3", "6.9"],
+                "word_verified": True,
+                "bookmarks": 6,
+                "short_skills": 8,
+            }
         sections = preview.locator("section[data-document-section]")
         expect(sections).to_have_count(6)
         assert sections.evaluate_all(
@@ -958,3 +1185,316 @@ def test_coaching_pages(browser: Browser, viewport: tuple[int, str]) -> None:
             assert spoken.count(summary) == 1, "Rep progress needs one spoken summary"
             assert spoken.count("- listitem") <= 6, "Progress announces a row per call"
             expect(progress.get_by_text("Needed work", exact=True)).to_be_visible()
+
+
+def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Find an initially hidden fictional rep and reach their call history."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Named synthetic Coaching checks are limited to the dev fixture")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )
+    team_data = payload["team"]
+    rep = team_data["reps"][8]
+    other_area = next(
+        row["skill_id"] for row in team_data["suggestions"] if row["skill_id"] != rep["skill_id"]
+    )
+    latest = max(
+        (call for call in payload["rep"]["calls"] if call["state"] == "ready"),
+        key=lambda call: datetime.fromisoformat(call["created_at"]),
+    )
+    skill_ids = {
+        point["submission_id"]
+        for point in payload["rep"]["progress"]
+        if point["state"] != "not_covered"
+    }
+    skill_calls = [
+        call
+        for call in payload["rep"]["calls"]
+        if call["state"] == "ready" and call["submission_id"] in skill_ids
+    ]
+    with _journey(browser, viewport, "team-search") as journey:
+        journey.open("/review-fixture/coaching?data=sandbox&view=team")
+        page = journey.page
+        team = page.get_by_role("region", name=re.compile(r"^Who needs help with what"))
+        rows = team.get_by_role("list", name="Reps and their current focus").get_by_role("link")
+        expect(rows).to_have_count(8)
+        match = team.get_by_role("link", name=re.compile(re.escape(rep["name"])))
+        expect(match).to_have_count(0)
+        search = team.get_by_role("searchbox", name="Find a rep", exact=True)
+        area = team.get_by_role("combobox", name="Coaching area", exact=True)
+        search.fill(f"  {rep['name'].swapcase()}  ")
+        expect(rows).to_have_count(1)
+        expect(match).to_contain_text(rep["focus_label"])
+        expect(match).to_have_attribute("href", f"/coaching?person={rep['person_id']}")
+        expect(team.get_by_role("status")).to_have_text("1 rep")
+        area.select_option(rep["skill_id"])
+        expect(rows).to_have_count(1)
+        team.scroll_into_view_if_needed()
+        journey.snapshot("named-match")
+        for control, label in ((search, "rep-search"), (area, "area-filter"), (match, "rep-link")):
+            journey.control_target(control, label)
+        journey.unclipped_text(team)
+
+        area.select_option(other_area)
+        expect(rows).to_have_count(0)
+        expect(team.get_by_role("heading", name="No reps match", exact=True)).to_be_visible()
+        expect(team.get_by_role("status")).to_have_text("0 reps")
+        clear = team.get_by_role("button", name="Clear filters", exact=True)
+        clear.scroll_into_view_if_needed()
+        journey.snapshot("no-match")
+        journey.control_target(clear, "clear-filters")
+        clear.click()
+        expect(search).to_have_value("")
+        expect(search).to_be_focused()
+        expect(area).to_have_value("all")
+        expect(rows).to_have_count(8)
+        expect(team.get_by_role("status")).to_have_text(f"{len(team_data['reps'])} reps")
+
+        expand_reps = team.get_by_role(
+            "button", name=f"Show all {len(team_data['reps'])} people", exact=True
+        )
+        journey.control_target(expand_reps, "show-team-reps")
+        expect(expand_reps).to_have_attribute("aria-expanded", "false")
+        expand_reps.click()
+        expect(rows).to_have_count(len(team_data["reps"]))
+        fewer_reps = team.get_by_role("button", name="Show fewer people", exact=True)
+        expect(fewer_reps).to_have_attribute("aria-expanded", "true")
+        journey.control_target(fewer_reps, "shorten-team-reps")
+        fewer_reps.click()
+        expect(rows).to_have_count(8)
+        expect(search).to_be_focused()
+        expect(search).to_be_in_viewport()
+        expect(search).to_have_value("")
+        expect(area).to_have_value("all")
+        expect(expand_reps).to_have_attribute("aria-expanded", "false")
+        journey.snapshot("team-shortened")
+
+        page.get_by_role("button", name="One rep", exact=True).click()
+        shortcuts = page.get_by_role("navigation", name="This rep’s calls", exact=True)
+        expect(shortcuts).to_contain_text(latest["call_label"])
+        report = shortcuts.get_by_role("link", name="Open Report", exact=True)
+        coaching = shortcuts.get_by_role("link", name="Call coaching", exact=True)
+        history_link = shortcuts.get_by_role("link", name="See calls", exact=True)
+        expect(report).to_have_attribute("href", f"/analysis/calls/{latest['submission_id']}")
+        expect(coaching).to_have_attribute("href", f"/coaching?call={latest['submission_id']}")
+        expect(history_link).to_have_attribute("href", "#coaching-calls")
+        shortcuts.scroll_into_view_if_needed()
+        journey.snapshot("rep-shortcuts")
+        for control, label in (
+            (report, "open-report"),
+            (coaching, "call-coaching"),
+            (history_link, "see-calls"),
+        ):
+            journey.control_target(control, label)
+        journey.unclipped_text(shortcuts)
+        history_link.click()
+        expect(page).to_have_url(re.compile(r"#coaching-calls$"))
+        history = page.locator("#coaching-calls")
+        expect(history.get_by_role("heading").first).to_be_in_viewport()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            3 if journey.width == 390 else 8
+        )
+        journey.snapshot("rep-history")
+        show_all = history.get_by_role(
+            "button", name=f"Show all {len(payload['rep']['calls'])} calls", exact=True
+        )
+        journey.control_target(show_all, "show-call-history")
+        show_all.click()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            len(payload["rep"]["calls"])
+        )
+        on_skill = history.get_by_role("button", name="On this skill", exact=True)
+        all_calls = history.get_by_role("button", name="All calls", exact=True)
+        journey.control_target(on_skill, "on-this-skill")
+        journey.control_target(all_calls, "all-calls")
+        on_skill.click()
+        expect(on_skill).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            min(len(skill_calls), 3 if journey.width == 390 else 8)
+        )
+        skill_expand = history.get_by_role(
+            "button", name=f"Show all {len(skill_calls)} calls", exact=True
+        )
+        skill_expand.click()
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(len(skill_calls))
+        expect(skill_expand).to_have_count(0)
+        assert set(
+            history.get_by_role("list")
+            .get_by_role("link")
+            .evaluate_all("els => els.map(el => el.getAttribute('href'))")
+        ) == {f"/analysis/calls/{call['submission_id']}" for call in skill_calls}
+        history.get_by_role("heading").first.scroll_into_view_if_needed()
+        journey.snapshot("skill-history")
+        fewer_calls = history.get_by_role("button", name="Show fewer calls", exact=True)
+        expect(fewer_calls).to_have_attribute("aria-expanded", "true")
+        journey.control_target(fewer_calls, "shorten-skill-calls")
+        fewer_calls.click()
+        skill_links = history.get_by_role("list").get_by_role("link")
+        expect(skill_links).to_have_count(min(len(skill_calls), 3 if journey.width == 390 else 8))
+        expect(skill_links.first).to_be_focused()
+        expect(skill_links.first).to_be_in_viewport()
+        expect(on_skill).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
+        expect(skill_expand).to_have_attribute("aria-expanded", "false")
+        journey.snapshot("skill-history-shortened")
+        all_calls.click()
+        expect(all_calls).to_have_attribute("aria-pressed", "true")
+        expect(history.get_by_role("status")).to_have_text(f"{len(payload['rep']['calls'])} calls")
+        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
+            3 if journey.width == 390 else 8
+        )
+        journey.observations[-1]["fictional_navigation"] = {
+            "initially_hidden_rep_found": True,
+            "combined_filter_reset": True,
+            "latest_ready_destinations_checked": True,
+            "history_expanded": True,
+            "saved_skill_history_filtered": True,
+            "team_list_shortened_with_focus": True,
+            "skill_list_shortened_with_filter_and_focus": True,
+            "product_call_destinations_opened": False,
+        }
+
+
+def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]) -> None:
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Long-quote reproduction is dev fixture coverage only")
+    source = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/long-quote.json"
+        ).read_text()
+    )
+    evidence = source["call"]["evidence"][0]
+    quote = evidence["quote"]
+    assert source["synthetic"] is True
+    assert len(quote) == 1232
+    assert (evidence["start_ms"], evidence["end_ms"]) == (130930, 217313)
+    with _journey(browser, viewport, "coaching-quote") as journey:
+        media_requests: list[str] = []
+        page = journey.page
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append("media") if request.resource_type == "media" else None
+            ),
+        )
+        journey.open("/review-fixture/coaching?data=sandbox&example=long-quote")
+        words = page.locator("blockquote").filter(has_text=quote)
+        expect(words).to_have_count(1)
+        expect(words).to_have_text(quote)
+        control = page.get_by_role("button", name="Read full quote", exact=True)
+        expect(control).to_have_count(1)
+        expect(control).to_have_attribute("aria-controls", words.get_attribute("id"))
+        folded_height = words.bounding_box()["height"]
+        for state, opened in (("folded", False), ("expanded", True), ("refolded", False)):
+            if opened:
+                control.click()
+                control = page.get_by_role("button", name="Show less", exact=True)
+            elif state == "refolded":
+                control.click()
+                control = page.get_by_role("button", name="Read full quote", exact=True)
+            expect(control).to_have_attribute("aria-expanded", str(opened).lower())
+            assert words.evaluate("el => el.hasAttribute('data-folded')") is not opened
+            expect(words).to_have_text(quote)
+            expect(words.locator("..")).to_contain_text("2:10–3:37")
+            assert (
+                page.locator("[data-coaching-pillar]").evaluate_all(
+                    """(els, quote) => els.map(el => el.textContent).join(' ')
+                      .split(quote).length - 1""",
+                    quote,
+                )
+                == 1
+            ), "The source quote is repeated as an observation"
+            if opened:
+                assert words.bounding_box()["height"] > folded_height
+            control.scroll_into_view_if_needed()
+            expect(control).to_be_in_viewport(ratio=1)
+            bounds = control.bounding_box()
+            minimum = 44 if journey.width == 390 else 32
+            assert min(bounds["width"], bounds["height"]) >= minimum - 0.01
+            assert control.evaluate(
+                """el => {const r = el.getBoundingClientRect();
+                return el.contains(document.elementFromPoint(
+                  r.x + r.width / 2, r.y + r.height / 2));}"""
+            ), "Quote disclosure is covered by another control"
+            journey.snapshot(state)
+            journey.observations[-1]["quote_control"] = {
+                "width": bounds["width"],
+                "height": bounds["height"],
+                "minimum": minimum,
+                "source_characters": len(quote),
+                "start_ms": evidence["start_ms"],
+                "end_ms": evidence["end_ms"],
+                "expanded": opened,
+            }
+            assert page.locator("audio,video").count() == 0
+            assert not media_requests, "Reading the quote started a media request"
+
+
+def test_fixture_document_print(browser: Browser, viewport: tuple[int, str]) -> None:
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Independent print repair readback is dev fixture coverage only")
+    with _journey(browser, viewport, "document-print") as journey:
+        page = journey.page
+        journey.open("/review-fixture/report/story")
+        expect(page.locator('[data-report-modes][data-view="story"]')).to_be_visible()
+        _switch_report_view(page, "Document view")
+        preview = _document_preview(page)
+        expect(preview.locator("section[data-document-section]")).to_have_count(6)
+        page.locator("[data-document-export]").evaluate("el => el.scrollIntoView({block: 'start'})")
+        journey.snapshot("screen")
+        journey.document_controls()
+        page.emulate_media(media="print")
+        page.set_viewport_size({"width": 794, "height": 1123})
+        preview.evaluate("el => el.scrollIntoView({block: 'start'})")
+        metrics = page.evaluate(
+            """() => {
+              const search = document.querySelector('input[aria-label="Search calls"]')
+                ?.closest('form');
+              const account = document.querySelector('button[aria-label="Open AC account menu"]');
+              const controls = [search, account].filter(Boolean).map(el => {
+                const style = getComputedStyle(el);
+                return {visibility: style.visibility, transition: style.transitionDuration,
+                  animation: style.animationName};
+              });
+              const sheet = document.querySelector('[data-document-export] article');
+              const bounds = sheet.getBoundingClientRect();
+              return {controls, headings: sheet.querySelectorAll('h3').length,
+                layout_width: innerWidth,
+                visual_width: visualViewport?.width ?? innerWidth,
+                visual_offset: visualViewport?.offsetLeft ?? 0,
+                sheet_left: bounds.left, sheet_right: bounds.right,
+                overflow: Math.max(document.documentElement.scrollWidth - innerWidth,
+                  sheet.scrollWidth - sheet.clientWidth)};
+            }"""
+        )
+        assert len(metrics["controls"]) == 2, "Print shell controls were not checked"
+        assert all(
+            control["visibility"] == "hidden"
+            and all(
+                float(value.strip().removesuffix("s")) == 0
+                for value in control["transition"].split(",")
+            )
+            and control["animation"] == "none"
+            for control in metrics["controls"]
+        ), "Hidden print shell controls can still paint during motion"
+        assert metrics["headings"] == 6
+        assert metrics["overflow"] <= 1
+        facts = preview.locator("header dl")
+        expect(facts).to_have_count(1)
+        expect(facts).to_contain_text("25:08")
+        expect(facts).to_contain_text("Arjun")
+        expect(facts).to_contain_text("Amit Sharma")
+        shot = journey.directory / f"document-print-a4-{journey.width}-{journey.theme}.png"
+        page.screenshot(path=str(shot))
+        pdf = journey.directory / f"document-print-{journey.width}-{journey.theme}.pdf"
+        page.pdf(path=str(pdf), prefer_css_page_size=True, print_background=True)
+        assert pdf.read_bytes().startswith(b"%PDF-")
+        journey.observations.append(
+            {"step": "print", "screenshot": str(shot), "pdf": str(pdf), "print_metrics": metrics}
+        )

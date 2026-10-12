@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { callHref } from "../../acquisition-client";
 import { unnamedCallName } from "../../call-label";
 import { callDate } from "../../call-status";
-import { fetchCoaching, type Coaching } from "../../coaching/coaching-client";
+import type { Coaching } from "../../coaching/coaching-client";
+import { readCoaching } from "../../coaching/coaching-read";
 import type { DisplayDates } from "../../display-dates";
 import { formatClock } from "../../lightbox/time";
 import {
@@ -18,8 +19,10 @@ import {
   Meter,
   Panel,
   Spark,
+  Skeleton,
   Tiles,
 } from "../../ui/kit";
+import { useWorkspaceAccess } from "../../workspace-access";
 import type { OrgMember, OrgRole } from "../organisation-api";
 import type { TeamPatterns } from "../team-patterns";
 import {
@@ -233,7 +236,11 @@ export function PersonTiles({
       <Kpi
         label="Last call"
         value={
-          data.lastCallAt ? callDate(data.lastCallAt, undefined, dates) : "None"
+          data.lastCallAt
+            ? callDate(data.lastCallAt, undefined, dates)
+            : data.calls > 0
+              ? "Unavailable"
+              : "None"
         }
         note={
           last
@@ -259,6 +266,12 @@ export function WeekChart({
   unit: string;
   dates: DisplayDates;
 }) {
+  if (!weeks.length)
+    return (
+      <Panel title={title}>
+        <p className={styles.quietLine}>Weekly activity is unavailable.</p>
+      </Panel>
+    );
   const values = weeks.map((week) => week[metric]);
   const top = Math.max(...values);
   const total = values.reduce((sum, value) => sum + value, 0);
@@ -448,7 +461,7 @@ export function PersonCalls({
 }: {
   data: PersonActivity;
   dates: DisplayDates;
-  /** Calls filtered to this person, for the full list and search. */
+  /** Calls view; its rep filter applies to rows loaded there. */
   callsHref?: string;
 }) {
   const [all, setAll] = useState(false);
@@ -515,78 +528,185 @@ export function PersonCalls({
         </>
       ) : (
         <p className={styles.quietLine}>
-          No calls in the last {PERSON_WEEKS} weeks.
+          {data.calls > 0
+            ? "Recent call details are unavailable."
+            : `No calls in the last ${PERSON_WEEKS} weeks.`}
         </p>
       )}
     </Panel>
   );
 }
 
+/* ---------- Latest call ---------- */
+
+export function LatestCallPanel({
+  data,
+  dates,
+}: {
+  data: PersonActivity;
+  dates: DisplayDates;
+}) {
+  const latest = data.listed[0];
+  if (!latest)
+    return (
+      <Panel title="Latest call">
+        <p className={styles.quietLine}>Recent call details are unavailable.</p>
+      </Panel>
+    );
+  const status = callStatus(latest);
+  const ready = data.listed.find((call) => call.hasReport);
+  return (
+    <Panel title="Latest call" sub="From the last 12 weeks">
+      <div className={styles.latestCall}>
+        <p className={styles.latestName}>
+          {latest.label ?? unnamedCallName(latest.createdAt, dates)}
+        </p>
+        <p className={styles.latestMeta}>
+          <span>{callDate(latest.createdAt, undefined, dates)}</span>
+          <span>
+            {latest.durationSeconds > 0
+              ? formatClock(latest.durationSeconds * 1000)
+              : "Length unavailable"}
+          </span>
+          <span className={styles.status} data-tone={status.tone}>
+            <i aria-hidden="true" />
+            {status.label}
+          </span>
+        </p>
+        <div className={styles.actions}>
+          <Link
+            className={styles.actionLink}
+            href={callHref(latest.id)}
+            prefetch={false}
+          >
+            {latest.hasReport ? "Open report" : "View call"}
+          </Link>
+          {latest.hasReport ? (
+            <Link
+              className={styles.actionLink}
+              href={`/coaching?call=${encodeURIComponent(latest.id)}`}
+              prefetch={false}
+            >
+              Call coaching
+            </Link>
+          ) : null}
+        </div>
+        {!latest.hasReport && ready ? (
+          <p className={styles.previousReport}>
+            Latest ready report:{" "}
+            {ready.label ?? unnamedCallName(ready.createdAt, dates)}{" "}
+            <Link href={callHref(ready.id)} prefetch={false}>
+              Open report
+            </Link>
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
 /* ---------- Coaching ---------- */
 
-/**
- * Coaching is private to each person unless they share it (owner, 10 Oct),
- * so the profile shows a summary only on your own page.
- */
+/** The existing reader enforces own/shared/sandbox access; no focus is inferred. */
 export function CoachingPanel({
   isYou,
-  firstName,
+  personId,
 }: {
   isYou: boolean;
-  firstName: string;
+  personId: string;
 }) {
+  const context = useWorkspaceAccess()?.context;
+  const tenantId = context?.tenantId;
+  const sessionId = context?.sessionId;
+  const [attempt, setAttempt] = useState(0);
   const [coaching, setCoaching] = useState<
     | { status: "loading" }
     | { status: "ready"; value: Coaching }
-    | { status: "none" }
+    | { status: "unavailable"; message: string }
   >({ status: "loading" });
   useEffect(() => {
-    if (!isYou) return;
     const controller = new AbortController();
-    fetchCoaching(controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setCoaching({ status: "ready", value });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setCoaching({ status: "none" });
-      });
+    void readCoaching(isYou ? null : `person:${personId}`, {
+      signal: controller.signal,
+    }).then((result) => {
+      if (controller.signal.aborted) return;
+      const value = result.data;
+      if (
+        value?.schema === "ac.sales-xray.coaching/1" &&
+        value.person_id === personId &&
+        value.tenant_id === tenantId &&
+        (value.session_id == null || value.session_id === sessionId)
+      )
+        setCoaching({ status: "ready", value });
+      else
+        setCoaching({
+          status: "unavailable",
+          message: result.error ?? "Coaching is unavailable in this workspace.",
+        });
+    });
     return () => controller.abort();
-  }, [isYou]);
-  if (!isYou)
-    return (
-      <Panel title="Coaching">
-        <p className={styles.quietLine}>
-          {firstName}&apos;s coaching stays private to them unless they share
-          it.
-        </p>
-      </Panel>
-    );
+  }, [isYou, personId, tenantId, sessionId, attempt]);
   const value = coaching.status === "ready" ? coaching.value : null;
   return (
     <Panel
-      title="Your coaching"
-      action={{ href: "/coaching", label: "Open Coaching" }}
+      title="Current focus"
+      tools={
+        <Link
+          className={styles.actionLink}
+          href={
+            isYou
+              ? "/coaching"
+              : `/coaching?person=${encodeURIComponent(personId)}`
+          }
+          prefetch={false}
+        >
+          Open Coaching
+        </Link>
+      }
     >
       {coaching.status === "loading" ? (
-        <p className={styles.quietLine}>Reading your coaching…</p>
+        <div
+          className={styles.focusLoading}
+          role="status"
+          aria-label="Reading coaching"
+        >
+          <Skeleton width="70%" height={20} />
+          <Skeleton width="90%" height={13} />
+          <Skeleton width="80%" height={13} />
+        </div>
+      ) : coaching.status === "unavailable" ? (
+        <div className={styles.focusUnavailable}>
+          <p>{coaching.message}</p>
+          <button
+            type="button"
+            className={styles.quiet}
+            onClick={() => {
+              setCoaching({ status: "loading" });
+              setAttempt((current) => current + 1);
+            }}
+          >
+            Try again
+          </button>
+        </div>
       ) : value?.focus ? (
-        <dl className={styles.coaching}>
-          <div>
-            <dt>Current focus</dt>
-            <dd>{value.focus.label}</dd>
-          </div>
+        <div className={styles.focusContent}>
+          {value.sandbox ? <Badge>Fictional sandbox coaching</Badge> : null}
+          <p className={styles.focusName}>{value.focus.label}</p>
+          <p className={styles.focusReason}>{value.focus.selected_reason}</p>
           {value.mission ? (
-            <div>
-              <dt>Mission</dt>
-              <dd>{value.mission.behavior}</dd>
-            </div>
+            <dl className={styles.coaching}>
+              <div>
+                <dt>Next call</dt>
+                <dd>{value.mission.behavior}</dd>
+              </div>
+            </dl>
           ) : null}
-        </dl>
+        </div>
       ) : (
         <Empty
           icon={GraduationCap}
           title="No focus yet"
-          text="Your coaching picks a focus once a few reports are ready."
+          text="A focus appears when enough relevant calls are available."
         />
       )}
     </Panel>

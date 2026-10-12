@@ -73,17 +73,63 @@ calls and refuse changes to preserved content or existing membership state.
 Once the full calls are loaded, repeat dry-run and apply with `--include-history`
 to preserve the 177,615 dated call summaries for history readers. These summaries
 do not acquire invented transcripts or reports. The loader calls the normal
-company Insights refresh adapter so charts can read them immediately. Keep the identifier/count-only
-JSON receipts in the strike notes; full source files stay outside Git.
+company Insights refresh adapter so charts can read them immediately. History
+is reported under the receipt's `history` field and commits in batches of at most
+2,000 rows (`--history-batch-size`, default 2,000). Each batch checks the current
+approving owner, preserves the exact source and appends its audit event in that
+same transaction. Insights refreshes also use separate bounded transactions.
+If interrupted, committed batches remain; rerun with identical source to skip
+those rows and resume. A changed preserved revision is refused, including on
+dry-run. Keep the identifier/count-only JSON receipts in the strike notes; full
+source files stay outside Git.
+
+The tenant is fenced with `FOR SHARE`, compatible with ordinary API tenant
+reads. The advisory transaction lock serialises loader runs before taking that
+fence. Batching releases the history's approver foreign-key locks between
+transactions. The full-call import still uses one atomic transaction, and can
+delay operations that need an exclusive approver-person lock while it runs;
+run that initial apply when the approver is not using the app.
 
 Verify with a normal dev owner session: select AC Sandbox, open Calls and a
 populated report, then organisation members and team Coaching. The normal API
 library must show `report_ready` calls, `done` analysis and their representative owners.
 Hosted acceptance is complete only after these reads succeed on dev.
 
+## Open the loaded dev data
+
+In the existing signed-in dev account, use the sidebar workspace switcher to
+select **AC Sandbox** (`90ec1979-0d85-4829-ba8d-cabde2a9a9d3`), then open
+**Calls** at `/analysis/calls`. Links below keep the selected workspace; they do
+not switch organisations. Organisation owners and admins can read the team's
+calls through the existing Calls permissions.
+
+The completed dev loader receipts record **3,360 synthetic calls with full
+reports**, **60 fictional reps**, and **177,615 historical summaries**. The
+summaries appear in Insights at `/organisation/insights`; they are not additional
+full reports. Text-only calls have no playable recording.
+
+One source-derived example is fictional rep **Mira Nivsekar**
+(`syn-advisory-R1`, 64 full calls in the loaded publication):
+
+- People: `/organisation/people/b280f9f2-9d7d-55ed-9a07-331ae89b7b21`.
+- Rep Coaching: `/coaching?person=b280f9f2-9d7d-55ed-9a07-331ae89b7b21`.
+- Report for `syn-advisory-J10-C-05`:
+  `/analysis/calls/17773ed3-1ac2-5e27-b788-8674afecd791`.
+- Coaching for that same call:
+  `/coaching?call=17773ed3-1ac2-5e27-b788-8674afecd791`.
+- All fictional reps' Coaching: `/coaching?view=team`.
+
+Authored Sandbox Coaching remains private to the person who imported it, under
+the existing access rules. These IDs come from the loaded publication and the
+loader's deterministic identifiers; the counts come from completed operator
+receipts. They are a navigation guide, not a fresh authenticated dev readback.
+
 The focused PostgreSQL acceptance test exercises normal library/report/progress
 reads, two concurrent imports, exact history replay, changed-content refusal,
-atomic rollback, the audit chain and zero-charge accounting. It also reads the
+atomic rollback, the audit chain and zero-charge accounting. The history checks
+exercise concurrent tenant reads, approver lock release, audit-failure rollback,
+owner rechecks, interruption/resume and changed-source refusal on dry-run.
+It also reads the
 preserved authored Team, representative and call Coaching, checks the exact
 mission and transcript quote, refuses another viewer's private coaching and
 keeps text-only moments nonplayable. Calls → Report → Coaching uses the same
@@ -106,6 +152,70 @@ The 3,360 full calls have authored transcripts and reports. The 177,615 historic
 summaries remain summaries and appear in Insights; they are not completed report
 records. The seven verified audio examples use the separate existing media import
 path. Loading authored text alone does not make playback available.
+
+## Reviewed summary wording supersession
+
+`repair-sales-xray-summary-prefixes.py` prepares the bounded wording reviewed by
+G on 11 Oct. In the pinned 3,360-call publication, 391 executive-summary sentences
+start with exactly `The conversation ended as Won: ` and 436 with exactly
+`The conversation ended as Lost: `. The repair removes only those prefixes,
+keeping each complete authored buyer-position sentence, punctuation and position.
+The other 12,493 sentences, all quoted evidence and recorded outcomes stay intact.
+The ordinary loader remains unchanged; replay still checks its original drafts.
+
+The default command produces an **offline plan**, containing report IDs and
+before/after hashes, without reading or writing any database:
+
+```sh
+ac-heavy uv run python scripts/dev/repair-sales-xray-summary-prefixes.py \
+  --dataset /home/acdev/strikes/1676/sandbox-source-20261011-0537
+```
+
+This review is not an apply approval. The named operator first obtains a separately
+recorded approval for this exact dev supersession and preserves the dev snapshot.
+The operator has now recorded synthetic outcomes as person-recorded revisions.
+Before considering this wording apply, reconcile the ordinary Report and outcome
+badge on the same sample dev call against those revisions, as the coordinator
+requested. The offline plan does not establish a live outcome-display defect.
+Using the existing runtime dev injection, run the same command with
+`--preview-live --approver-person-id "$AC_SANDBOX_APPROVER_PERSON_ID"` and
+`--approval-reference` naming that recorded decision. Preserve the offline plan
+and the live preview receipt. An apply uses the same arguments, replaces
+`--preview-live` with `--apply`, and adds `--expected-plan-sha256` with the exact
+digest returned by the preview. The executable refuses staging, production and
+any database other than the dedicated live-dev database.
+
+The live preview verifies each exact original draft, transcript, proof, source
+bundle and completed run. Apply appends 827 new drafts in the same runs, then an
+audit event linking every old/new report ID and hash to the approver and plan.
+Existing drafts and source rows are preserved. All writes share one transaction;
+an audit failure or changed original rolls back the entire repair. A later report
+or run requires separate review. An identical replay adds no draft or audit event.
+Normal Report and Coaching reads select the latest draft; verify the sample
+`syn-advisory-J10-C-05` now reads
+`Buyer explicitly declines the service and requests closure.` in its summary,
+while its person-recorded outcome, transcript and coaching remain intact.
+
+Focused checks use the disposable test database:
+
+```sh
+ac-heavy uv run pytest \
+  tests/unit/conversation_intelligence/test_dev_sandbox_summary_repair.py \
+  tests/database/test_dev_sandbox_summary_repair_postgresql.py -q -x --tb=short
+```
+
+On 12 October, the offline compatibility check against Report validator `/13`
+passed for all 3,360 source-derived saved drafts and all 827 proposed replacement
+drafts through the normal stored-report reader. Every canonical payload and hash
+remained exact; the 84 previously accepted browser sample payloads and transcripts
+also matched. The publication and the original offline plan stayed unchanged,
+including plan digest
+`b02d7618b3db19f6d38c171aac13723ff4988504ed463df27f0a7c2db7867f1e`.
+The private count-only receipt is
+`/home/acdev/strikes/1676/workbench-sandbox-validator13-compatibility-20261012.json`.
+This checks compatibility with the newer candidate admission rule. It does not
+read hosted reports, verify the live outcome badge or approve the supersession;
+the same-call operator reconciliation above still precedes any apply.
 
 ## Owner's Drive recordings on dev
 

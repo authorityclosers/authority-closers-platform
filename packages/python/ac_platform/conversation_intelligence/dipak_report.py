@@ -324,6 +324,12 @@ class ReportPillars(_Model):
         return self
 
 
+_OFFICIAL_OUTCOME_PREFIX = re.compile(
+    r"\s*the\s+conversation\s+ended\s+as\s+(?:won|lost)(?=\s*(?:[:.!?]|$))",
+    re.IGNORECASE,
+)
+
+
 def normalize_pillars(
     value: object,
     *,
@@ -350,6 +356,14 @@ def normalize_pillars(
         return item
 
     pillars = ReportPillars.model_validate(resolve(value))
+    # New AI prose cannot turn this exact overall verdict into a person-recorded
+    # outcome. Preserve saved text and literal source quotes; do not strip words
+    # such as "won trust" or "lost revenue" from ordinary observations.
+    if not canonical_read and any(
+        _OFFICIAL_OUTCOME_PREFIX.match(text)
+        for text in (pillars.summary, pillars.outcome.line if pillars.outcome else "")
+    ):
+        raise ValueError("report_pillars_human_outcome_required")
     segments = {s["id"]: s for s in transcript["segments"]}
     roles = (
         {

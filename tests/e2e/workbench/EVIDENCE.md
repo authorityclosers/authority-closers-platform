@@ -1,6 +1,787 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
-Current 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
+12 October, 23:26 UTC — focused repair readback prepared
+
+The existing Team/rep journey now checks Show fewer, restored keyboard/viewport
+focus and preservation of the saved-skill filter. The legacy Report journey
+checks visible separation between the coaching-mission label and instruction.
+These cover D `4ae088be` and B `9bbe0ac0` in one eight-case run. Ruff lint/format,
+API import and diff checks pass; without a server all eight cases skip safely.
+Actual browser verification remains pending the 23:33 UTC QA window. Prior
+Report passes and original Team failures remain retained below.
+
+12 October, 23:18 UTC — focused Team search and rep call-history check
+
+The new four-pair journey at `033944b6` returned 4 failures in 7.47 seconds,
+launcher exit 1. Search found the ninth fictional rep with the saved name,
+focus and person link. Both phone themes measured its link at 210 × 37.5 px,
+below the required 44 px tap height; exact receipts and inspected screenshots
+were sent to D's INBOX. Desktop failures counted the deliberately clipped 1 px
+screen-reader label as visible text. The audit now excludes that specific hidden
+label pattern and records control defects without stopping later checks early.
+Ruff, format and API import checks pass; corrected runtime readback is pending
+the next permitted wave, no earlier 23:33 UTC. History/filter checks were not
+reached in the original run and are not claimed as passing. Original log,
+JUnit, geometry receipts and PNGs remain in the strike's
+`shots/2026-10-12-team-search-2318Z/`. No browser errors, HTTP 500s, Fast Refresh,
+sideways overflow or text-floor errors were recorded. All four named-match
+captures were inspected; content is readable. The actual v0.41.0 ship stopped
+before deployment on Python test shard 1; post-ship QA remains pending.
+
+12 October — product QA resumed after the owner shipping order
+
+The actual twelve-case shared-dev run at journey commit `0ccc5165` passed in
+138.17 seconds, launcher exit 0, after coordinator priority cleared. Ruff,
+format and API import pass. Receipts/JUnit/log/screenshots are in the strike's
+`shots/2026-10-12-report-compatibility-2246Z/`. All widths/themes passed saved
+next-move reload/Document/Word agreement and standalone buyer-boundary checks.
+Visual inspection found a phone reload nav highlight mismatch and joined Report
+coaching-mission label; exact screenshots were sent to B's INBOX. At 23:01 UTC,
+the selected-Deal wait/viewport check at `d352d3b5` passed all four cases in
+25.64 seconds, launcher exit 0, with no Fast Refresh. All four reload captures
+were inspected: Deal is selected and visible after settling. The initial nav
+image was captured too early; original captures remain retained. The Report
+coaching-label spacing request remains with B. Focused receipts/JUnit/log/PNG:
+`shots/2026-10-12-report-reload-2301Z/` in the strike directory.
+
+Added a four-viewport/theme older-Report journey that checks the saved next move
+after reload, in Document 6.9 and in the downloaded Word file. The README selects
+this alongside the existing six-pillar Report and independent Document journeys
+for one bounded twelve-case dev readback. This completed fixture run does not
+establish hosted acceptance or canonical outcome persistence.
+
+Ruff lint and the required `import ac_platform.http` passed. Ruff formatted the
+new check after its initial format diagnostic. With no `WB_BASE_URL`, the four
+new cases skip, confirming ordinary collection does not open a browser.
+Earlier receipts and original limits remain below. Active strike notes are now
+short; the superseded full notes are retained in the strike's history file.
+
+12 October continuation — retained automatic dev pickup observation
+
+The later 21:23 coordinator pickup receipt records readiness 200 serving
+`704ef032`, a descendant of admitted `c34b0295`. Independently matched all
+twelve reviewed blobs at that serving Git source and the six exact automatic
+deployment-log entries, including migration-to-heads, normal smoke and worker
+pickup. Source migration 0088 has predecessor 0087. These are retained source,
+log and availability observations; QA made no fresh HTTP or database read.
+Root's direct database revision and formal source-bound return remain separate
+pending outputs in this packet. Hosted acceptance remains **NOT RUN**.
+
+Receipt: `pickup-receipt.json` beside the publication receipt below,
+SHA-256 `89aa01c75319f8d1652476ed206df6ea64683cb541668282bc1331c72e34b70d`.
+Original handoff and verifier/PASS log are adjacent; no deploy, schema action,
+writer connection, provider work or new product test/browser wave was run.
+
+12 October continuation — returned bounded dev decision and eligibility explanation
+
+The coordinator's 21:21 handoff arrived before notes/inbox archival; the
+finalization guard stopped without overwriting it. Independently reconciled
+three coordinator receipts, 29 file pins, five method ranges in four source
+files, all twelve original committed blobs and five retained static/import
+logs. The returned CEO `c6c21289` body authorizes H's exact six-file dev commit
+`c34b0295` and established automatic migration 0088 pickup, subject to its
+prerequisites. This closes the prior bounded dev-schema decision; it grants
+no writer activation, customer settlement, provider or production action.
+
+The returned source explanation matches the inspected predicates: canonical
+failure requires dead-letter work without a lease and a completed failed run;
+valid publication requires the matching live worker lease. The explanation
+closes the source-contract question. The two-case execution remains publication
+with live-recovery refusal plus exhausted failure with stale-publisher refusal.
+No pass for two simultaneously eligible writers is inferred; journal concurrency
+and numeric provider exposure remain separate evidence.
+
+Actual automatic API/schema pickup and Root's database-revision readback remain
+pending in these retained packets. QA made no fresh host, database or native
+authority read and repeated no product checks. Hosted Report/Team acceptance
+remains **NOT RUN**; persistence, Root1855, PDF and other existing limits remain.
+
+Receipt: `dev-admission-receipt.json` beside the publication receipt below,
+SHA-256 `2df37d4affc29b02ef304756e6fc16d68bb811b8fc50423ed0a9a0cbd94ec728`.
+Original handoff, verifier and PASS log are adjacent. Initial predicate spelling
+expectations were corrected against the exact source; diagnostics are retained.
+
+12 October continuation — retained authenticated publication and failure proof
+
+Independently reconciled the coordinator's 21:11 handoff offline at source
+`9b2dd136`. The coordinator receipt, H addendum `619740b0`, prior source packet,
+39 distinct retained file pins, twelve preparation source blobs, nine unchanged
+dependencies, and exact two-file proof commit match. At readback, six pending
+sensitive files and source-only patch `a514d563` were unchanged and with their
+existing owner.
+
+H's actual retained test output is **2 passed, 8 deselected in 21.47s**, with
+four recorded test/static/import exits 0. QA did not repeat those executions.
+The earlier 186 cases and 38 C1 checks remain historical counts; they were
+not added to this run. The private native fixture and binary hashes match,
+and the fixture delegates to the original executable validation function.
+QA performed 232 offline artifact/source checks, including AST inspection
+and 24 assertion anchors; these are not product test passes.
+
+The committed test uses disposable authenticated acquisition, local fictional
+provider responses and real Report/Transcript API reads. Publication creates
+one report and charges one acquisition second. In the other case, an expired
+exhausted worker claim is recovered, the prepared source-only failure writer
+settles zero customer seconds, and the late publisher is fenced. The retained
+Report read returns 404, including for a stranger.
+
+The publication case keeps its lease in the future: it proves recovery cannot
+manufacture failure during live publication, not contention with an already
+eligible failure writer. The new test checks provider dispatch/receipt and
+validation state, not before/after numeric provider cost equality. Prior
+provider-cost tests remain separate attributed evidence. Hosted staging API/UI,
+safe successor and the full 503/timeout matrix remain unverified by this proof.
+At that retained handoff, automatic dev schema apply and runtime writer
+admission were unauthorized.
+
+Populated hosted Report/Team QA remains **NOT RUN** because no usable approved
+context was supplied. Canonical hosted persistence, Root1855 writes, uploaded
+outcome marker, original/latest PDF pixels, evaluation, full terminal repair
+and production closure remain separate. Six Report pins, the exact journey
+and foreign ESLint cache are unchanged. No new product test, browser, build,
+HTTP request, provider/data operation, schema action or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-publication-readback/receipt.json`
+SHA-256 `9f97916a2362a79347edc3dff2ca44c147033e3f59827f77600df29b62b85a9e`.
+Original coordinator text, verifier and PASS log are adjacent. The initial
+verifier expected the builder's evidence under `docs/implementation-evidence`;
+the committed path is `docs/evidence`. The original diagnostic is retained,
+and the corrected scope check passed without changing product source.
+
+After QA commit `3781ce0c`, builder commit `c34b0295` committed exactly the six
+sensitive files, with bytes identical to the retained packet. The finalization
+guard stopped before notes/inbox archival on this source-state change; the six
+committed blobs were then reconciled in `builder-source-transition.json` beside
+the receipt. QA did not read a new schema disposition, live schema state,
+served pair or runtime writer admission. Hosted acceptance remains **NOT RUN**.
+
+12 October continuation — recovered terminal artifacts and named source handover
+
+Independently verified the coordinator's 20:15 handoff offline at workbench
+`fc745194`: 21 retained-file/Git pins, three recovered original artifacts,
+both patch header lists, and the twenty-path handover match. The two patch
+hashes and all three attachment IDs agree with the previously retained
+references. The original verification payload now has a checked byte pin;
+its historical results were not executed again.
+
+Ten present and ten absent source paths were checked at immutable `fc745194`.
+H's unfinished current edits were kept separate and left untouched. The
+pinned migration graph has sole head `20261011_0087`; the returned `0088`
+reservation is for source authoring with `schema_apply_authorized=false`.
+No schema action was performed. The exact Root admission body is present in
+H's inbox; D and coordinator retain the Root reference, relative manifest
+name and reservation. Controlled CTO/CEO document bindings match retained
+files; QA made no fresh native authority read.
+
+This supersedes the earlier missing original-artifact/header, protected
+handover and source-reservation prerequisites. H's finite implementation
+remains with H. Root's patch-check results, coordinator's 47 checks and
+availability, and completed local 21+17 passes remain attributed evidence.
+QA ran no product test, browser, build, HTTP request, patch check/application,
+provider/data operation or release action. Six Report pins, the exact
+journey and the foreign ESLint cache remain unchanged.
+
+Populated hosted Report/Team QA remains **NOT RUN** because no usable approved
+context was supplied. Runtime admission, canonical persistence, Root1855
+writes, uploaded outcome marker, original/latest PDF pixels, evaluation,
+full terminal repair and production closure remain separate acceptance limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-source-admission-readback/receipt.json`
+SHA-256 `2af9ee30b35a5916ff1abffaa651ca09cee0a51c1bfdb1abcfe21fe94a436fc7`.
+Original coordinator text, final verifier/PASS and initial delivery-binding
+diagnostic are adjacent. The initial verifier expected two absolute file
+references in every inbox; actual delivery uses the exact body for H and
+an absolute Root reference plus relative manifest name for D/coordinator.
+The corrected binding passed.
+
+12 October continuation — retained local failure-recovery handoff
+
+Independently reconciled the coordinator's 16:00 completion handoff offline
+at workbench `c85ac8b1`. Twenty supplied file/Git pins and two additional
+receipts match. C's documentary source, inventory and archive match; its
+three original patch/evidence payloads remain unavailable. The five protected
+source files are unchanged. No artifact retrieval or inventory scan ran.
+
+H's worker, database test and evidence document match code commit `1af60b24`.
+Three retained check logs establish H's 21 database passes, 17 runner passes
+and four static/import exits 0. These are builder executions; QA repeated
+none. The current evidence document has a later append at `c85ac8b1` reporting
+automatic dev pickup. Its historical hash remains correct at `1af60b24`;
+the append and final H packet were independently reconciled. The initial
+current-file pin non-equality is retained as a documentation diagnostic.
+
+The local slice persists a failed run, finish time and internal append-only
+event. Canonical customer settlement, returned minutes, provider retries and
+the nine-item full-repair matrix remain outside this completed slice.
+Coordinator health records are retained availability only: dev API `1af60b24`,
+staging core `bc49a3d` / web `b157caa5`, production `fa846dc`. QA made no fresh
+HTTP requests, product tests, browser runs, builds, application writes or
+release actions. Six workbench source pins and the exact journey are unchanged;
+the foreign ESLint cache is preserved.
+
+No usable approved hosted Report/Team context was supplied. Populated hosted
+QA remains **NOT RUN**; shared-dev persistence and Root1855 writes remain
+**NOT EXECUTED**. Uploaded outcome marker, original/latest PDF pixels,
+evaluation and production closure remain separate acceptance limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-terminal-return-readback/receipt.json`
+SHA-256 `2247a3944def9d080058d7c60314ba7712a858f51c236e2cde8d5ebf48e17a30`.
+Original coordinator text, verifier, PASS log and pin diagnostic are adjacent.
+
+12 October continuation — accepted source contract, runtime still pending
+
+The coordinator's 14:48 completion update arrived during finalization of
+`2d614cc1`; the inbox-change guard stopped before archiving or modifying
+notes. Independently checked both newly supplied receipt hashes and all
+fifteen retained input pins (seventeen distinct files including receipts).
+CTO source contract revision `a02577de` and its linked disposition agree;
+AUT-252 handoff `57ae80b1` has identical retained file/post/readback bytes.
+No native board read, source collection, product test or browser wave ran.
+
+This accepted disposition supersedes the earlier pending source questions:
+`session_id` means confirmed public `submission_id`; quoted maximum uses
+canonical `max_cost_paise` in paise; timing distinguishes server intervals,
+HTTP requests and status observations. Missing server durations are null
+with explicit reasons and timing completeness. Source acceptance grants
+no implementation, hosted runtime or release admission. Retained runner
+and wrapper records remain assigned, blocked and without checkout/execution;
+their dependencies and completed Report review are preserved.
+
+Usable approved hosted context and exact-pair saved-report/playback proof
+remain missing. Populated hosted QA stays **NOT RUN**; persistence,
+Root1855 writes, uploaded outcome marker, PDF pixels, evaluation and
+production closure remain separate. The previous twelve source comparisons,
+seven AST parses and 22 anchors were retained without repeating them.
+Journey and foreign cache hashes match; no product source changed.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-custody-source-readback-144424Z/accepted-source-receipt.json`
+SHA-256 `6c17841ebeecdc6bc873d3b3165e920eeb35cadaff54ae895da4e7b592fb3e2b`.
+Original late handoff, verifier and final PASS are adjacent. The original
+QA assertion incorrectly expected the revision UUID in the CTO comment;
+the comment links the pinned document. Its initial verifier/traceback are
+retained beside the corrected document/comment binding check.
+
+12 October continuation — completed smoke custody and source-only handoff
+
+At workbench `120577d0`, independently reconciled the coordinator's 14:17
+custody result and 14:28 source-prerequisite update using retained files and
+immutable Git only. All three supplied packet hashes and 24 distinct file
+pins match. Four retained custody comments match, including Root's original
+receipt-text digest. Root's two assignment commands remain attributed;
+their raw command logs were not supplied.
+
+Retained task records confirm AUT-252 and AUT-301 are assigned to Platform
+Engineer `fbc04f56`, blocked at versions 2 and 5, with null checkout/execution
+bindings. All blocker IDs, descriptions and execution/review policies are
+preserved. Earlier wrapper versions 3 and 4 remain historical snapshots.
+Platform Lead is paused, Engineer idle; parent AUT-1783 remains blocked92
+with completed native review preserved. This closes the previous pending
+custody-result wording without admitting implementation or runtime smoke.
+
+CTO disposition `f5ad078f` permits source reconciliation and leaves checked-in
+runner/wrapper implementation blocked. Independently reproduced all twelve
+core/web/current-workbench source comparisons, seven Python AST parses and
+22 exact source anchors. The source handoff at AUT-226 comment `cf82917d`
+matches retained posted/readback/file bytes exactly; no fresh board read or
+packet command was executed. Canonical `max_cost_paise` transport is proposed
+for acceptance. The `session_id` selector and `elapsed_seconds` timing basis
+remain unresolved. Plan revision `224d9576` retains one fictional approximately
+three-minute clip; its runtime prerequisites remain intact.
+
+Six prior Report source pins, the exact browser journey and foreign ESLint
+cache are unchanged. Historical health records are availability evidence;
+QA made no fresh host observation. No usable already-approved populated
+Report/Team context is supplied: **populated hosted acceptance remains NOT
+RUN**. Shared-dev/hosted persistence, Root1855 four-call/Coaching writes,
+uploaded outcome marker, PDF pixels, evaluation and production acceptance
+remain separate. No product test, browser, build, HTTP request, implementation,
+provider/data write, operator dispatch or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-custody-source-readback-144424Z/receipt.json`
+SHA-256 `fc3ef1778b7088cba5bd832b8c9e354bab925401c3b456f8d934ac71aa24a943`.
+Original handoffs, independent verifier and PASS output are adjacent.
+
+12 October continuation — retained preflight refusal and custody decision
+
+At workbench `7674b91a`, independently checked the two completion-only
+coordinator handoffs from 13:47 and 13:57 UTC. Both supplied receipt hashes,
+25 retained file pins, 22 command-output hashes and six helper hashes match.
+The 184-file Report library digest matches immutable Git at both staging core
+`bc49a3d` and web/merge `b157caa5`; two retained installed-file hashes also
+match Git. Runtime library and health observations remain operator-attributed
+historical evidence. No packet commands or helpers were executed.
+
+Root AUT-1883 remains DONE/version5 at document revision `d90aa67d`.
+Its retained preflight exited1 with `production_paused`; before/after controls
+and runtime records agree. This is a refusal, with no exact-pair smoke/canary
+or authenticated product acceptance. The retained parent is blocked/version92
+on AUT-301/AUT-1717; its completed native review policy/state is preserved.
+Staging remains recorded as `bc49a3d/b157caa5`, production paused on
+`fa846dc/v0.40.0`; QA did not inspect either host afresh.
+
+CEO custody revision `bac33843` selects the existing active Platform Engineer
+for SAME AUT-252 then AUT-301. The retained Root run `87b5ae6b` is running
+on assignments only; its returned operation receipt is pending in that
+snapshot. Completed assignments or implementation admission are not inferred.
+The AUT-226→AUT-252→AUT-301 blockers, paused seat and required CTO disposition
+for source-only separation remain. Both smoke source paths are absent at the
+recorded workbench and core pins. This handoff gives QA no implementation or
+operator authority.
+
+Six checked workbench source pins and the exact journey digest are unchanged.
+No usable already-approved fictional Report/Team context is supplied:
+**populated hosted acceptance remains NOT RUN**. Prior context refusals stay
+closed. Outcome persistence, Root1855 four-call/Coaching writes, uploaded
+outcome marker, PDF pixels, evaluation and production acceptance stay separate.
+No new product test, browser, build, HTTP request, provider/data write,
+operator dispatch or release action ran.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-refusal-custody-readback-140039Z/receipt.json`
+SHA-256 `f1433c4ca164c38b9e921bf86aa20b4b92afcdab7d4195e5ea324533d307e289`.
+Original handoffs, verifier and final PASS output are adjacent. The initial
+QA prior-parent-pin lookup used the initial receipt rather than the restoration
+receipt; its traceback is retained beside the corrected successful check.
+
+12 October continuation — retained staging recovery and acceptance limits
+
+At workbench `df403d29`, independently reconciled six completion-only
+coordinator handoffs from 12:25–13:16 UTC. Eight externally supplied receipt
+hashes match; the additional artifact-gap route has a locally observed hash
+and separately checked embedded pins. The initial check verifies 49 retained
+files, 32 output hashes and thirteen verifier-source hashes. The later recovery
+check verifies fourteen file references, sixteen output hashes and six helper
+sources. Ten retained installed-file hashes match immutable Git source in both
+packets. Six Report source pins and the exact QA journey digest are unchanged.
+The original incorrect QA-filename traceback is retained; corrected-path proof
+passes. No packet commands or helper sources were executed.
+
+Retained execution records the engine/core update to `bc49a3d`, web discovery
+GitHub502, renewed containment and a later missing-artifact refusal with no
+effects. The answered CEO decision `070874ec` binds revision `987f3ba3`, packet
+`e7d9975d` and the original source/CI/artifact/archive/manifest/image pins.
+The subsequent operator packet `8adbf20c`, revision `507ea988`, records successful
+exact-artifact restoration and timer-only staging recovery to core `bc49a3d` /
+web `b157caa5`. Only the allowed provenance storage time changes; manifest and
+artifact identity remain pinned. Production is recorded paused on `fa846dc` /
+`v0.40.0`, with its ledger unchanged. The original journal-helper failure is
+preserved alongside its separate successful readback. These are verified
+retained operator records, without a fresh QA host inspection.
+
+The latest parent snapshot records existing AUT-1783 builder admission at
+version89; its completed native review state is preserved. Admission does not
+prove exact-pair smoke/canary or authenticated product acceptance. No usable
+already-approved fictional Report/Team context is supplied: **populated hosted
+acceptance remains NOT RUN**. Shared-dev/hosted outcome persistence, Root1855
+four-call/Coaching writes, the absent dedicated uploaded outcome marker and
+original/latest PDF pixels remain separate limits. Prior dev passes retain
+their original source pins. No product tests, browser, build, HTTP request,
+application/provider write, operator dispatch or ship ran in this readback.
+
+Receipts under
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-artifact-readback-131417Z/`:
+`receipt.json` SHA-256
+`612bb2e036a5116994a4b8f78f0a74002ef51b2f3cc136a2004ce365e5dff4a5`;
+`restoration-receipt.json` SHA-256
+`8b7ac033c73070aa808cc31acabc89f4425b0bb262551eb0575ee6ee4e523198`.
+Original handoffs, bounded verifiers and their results are retained beside them.
+Current installed files, privileged storage, image bytes and native board state
+were not freshly inspected.
+
+12 October continuation — retained release recovery handoffs
+
+At workbench `89d42e51`, independently reconciled the four coordinator
+handoffs from 11:35–11:56 UTC against retained local evidence. Their receipt
+hashes, 31 input pins, twelve embedded output hashes, answered CEO timer
+decision and two candidate source-file pins match. The three recovery
+document revisions/bodies and the parent's completed review state are unchanged
+between the retained 11:49 and 11:55 snapshots. Six checked workbench source
+files and the exact QA journey digest remain unchanged.
+
+AUT-1888's routing verification is complete. The latest retained snapshot,
+11:56:47 UTC, shows the existing AUT-1830 operator running under decision
+`ed8e61f8`; it establishes admission only. The decision permits the named
+operator's automatic existing-timer engine update and revalidated staging
+intake for core `bc49a3d` / web `b157caa5`, with production kept paused.
+No new recovery output, candidate deployment or staging smoke is present in
+that snapshot. Prior staging/production pause and served-pair observations
+remain attributed containment evidence; QA did not inspect the hosts afresh.
+
+**Populated hosted acceptance remains NOT RUN:** no usable already-approved
+fictional Report/Team context was supplied. Shared-dev/hosted outcome
+persistence, Root1855 four-call/Coaching writes, the absent dedicated uploaded
+outcome marker and original/latest PDF pixels remain separate limits. Earlier
+dev passes keep their original source pins. This readback ran no tests,
+browser, build, HTTP request, application write, operator dispatch or ship.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-coordinator-recovery-readback-120636Z/receipt.json`
+SHA-256 `bb6cd7b63c51ac01213e7b6d8cf2830ad422b8dedd7728bc9f31ced1b353c53c`.
+Exact original coordinator handoffs are retained privately beside the receipt.
+
+12 October continuation — revised Transcript handoff and integrated candidate
+
+At workbench `325304f0`, independently verified A's revised five-line
+Transcript assertion against immutable candidate `4a7afed`. All 37 retained
+or historical input pins and eleven artifact/log pins match. Applying A and B
+patches in memory reconstructs their exact retained overlays without writing
+candidate files. A preserves every previous assertion and other test byte.
+Its retained execution is one pass, 112 unselected skips, 4,790 ms body and
+the unchanged 5,000 ms timeout; both focused typechecks report zero diagnostics.
+These are builder receipts, not a new independent execution.
+
+The first current-equality probe refused because the candidate had advanced
+to `2b639118`. The retained diagnostic identifies three changed source files;
+immutable historical hashes still match. Independently reconciled the five
+expected integrated files against Git and the coordinator receipt. The actual
+Transcript assertion equals A's overlay except its added comment wording.
+B's three mapping cases are byte-identical to its overlay, and the model
+retains citations only for identical summary words. Additional recorded-outcome
+changes remain source inspection, without a new behavior test here.
+
+The pinned coordinator CI receipt records ten distinct successful validation
+jobs at `2b639118`, with release packaging skipped. Native CI was not fetched
+again. Candidate preview and review remain with AUT-1783/AUT-1785; that CI does
+not certify the shared workbench or populated hosted acceptance.
+
+Dev API readiness and the populated Report fixture return 200, API identity
+`a5d45b4c`. Workbench runtime, six retained source pins, journey, inbox and the
+foreign ESLint cache are unchanged. No new browser/test wave or hosted request
+ran. Hosted populated smoke remains NOT RUN without an approved usable
+Report/Team context; shared-dev persistence, Root1855 writes and original/latest
+PDF pixels retain their separate unexecuted/unverified limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-revised-quote-admission-080208Z/receipt.json`
+SHA-256 `1ae3662f4b341eb3da189b72c764ca7f47b99d286abbf29c302169c475faa08d`.
+The initial probe is pinned inside this receipt; original builder failures,
+timeouts and generated-declaration refusal remain retained.
+
+12 October continuation — uploaded-call quote test evidence
+
+At source `f34d403a`, independently reviewed A's `6db4a3b3` test repair.
+The supported fictional s3 quote is checked inside Report Moments, and the
+original s1 quote is checked in the opened Transcript reader. Replacing that
+single assertion block reproduces the new file exactly: earlier consent,
+same-call and transport assertions and all other tests remain byte-identical.
+All six workbench source hashes and eleven retained artifact hashes match.
+
+The retained logs confirm A's original candidate failure, first overlay timeout,
+final candidate-overlay pass and separate workbench pass. Each passing run
+selected one case and skipped 112; these are verified builder execution
+receipts, not a new independent test run or candidate CI verdict. The mutable
+candidate generated header currently differs from its historical pin, so its
+current preservation is not independently re-established. B's `f34d403a`
+candidate citation handoff was reviewed; candidate integration stays with its
+existing owner. Neither new workbench commit changes product runtime source.
+
+Local dev API readiness and the populated Report fixture return 200; API
+release identity is `a5d45b4c`. These prove availability only. The journey,
+inbox and foreign ESLint cache stayed unchanged during the check. Earlier
+browser passes keep their original source pins. No new browser/test wave,
+hosted request, application write, provider call or ship occurred. Populated
+hosted acceptance remains NOT RUN without the approved usable Report/Team
+context. Shared-dev persistence, Root1855 writes and PDF pixel quality retain
+their separate unexecuted/unverified limits.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-quote-test-admission-064352Z/receipt.json`
+SHA-256 `9bc2073bbffa91089259a31bac8a4adc010e72e7b91283558cfff3d6d606927b`.
+
+12 October continuation — hosted-context investigations completed with refusals
+
+CEO AUT-1862 message `40fe92c9-e072-4430-ad48-e49d527b9f3d`, received in the
+QA inbox at 01:03:33 UTC, reports completed, CEO-approved refusal deliverables
+for [AUT-1858](/AUT/issues/AUT-1858#comment-af1e3550-f82f-49bd-a08c-99f374b60ec0)
+and [AUT-1859](/AUT/issues/AUT-1859#comment-1735d045-896a-460a-874b-d6d5e9befa8f).
+This supersedes the earlier investigation-output-pending wording. It is
+attributed coordination evidence; QA has not independently fetched the native
+issue results. The original CEO message is retained unchanged with the receipt.
+
+**Populated hosted acceptance remains NOT RUN.** No usable already-authorized
+host-scoped fictional Report/Team context was supplied. The earlier staging
+tenant-context refusal and production empty Report/denied Team observations
+remain historical discovery findings. The completed investigations supply no
+new access or permission to repeat an unsuitable-session browser wave.
+
+At source `b1006937`, no new product or journey source has arrived since the
+last QA commit. Offline checks preserve the admission/classification hashes,
+all eight retained classification input pins, the exact journey digest and
+the foreign ESLint cache. Earlier runtime passes retain their original source
+pins; no new browser run, hosted request, application write, provider call,
+operator dispatch or ship occurred. Shared-dev outcome persistence and
+Root1855 four-call/Coaching writes remain separately NOT EXECUTED, and both
+original/latest PDF pixel quality remain NOT VERIFIED.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-hosted-context-refusal-disposition/receipt.json`
+SHA-256 `a0c80212b773f6236216b20d5c6d438ca200e23230c98b8c6b06c7fe7a1f47c3`.
+Resume the bounded hosted read-only journey only when a usable already-approved
+context, current provenance/expiry/tenant binding, fictional readable Report,
+Team-read eligibility and served core/web identities are actually supplied.
+A new relevant completed builder repair can separately admit dev QA.
+
+12 October continuation — retained source and health checks
+
+At workbench `5dc1bc7f`, the latest Document/Word and print diagnostics remain
+the original eight passing cases at `75fcbdad`, not a new browser run. Rechecked
+their unchanged journey digest, JUnit eight tests with zero failures/errors/skips,
+launcher exit 0, classification digest and all eight retained input pins.
+Since that source, the only web changes are G's `2a0fe0e7` Moments formatting:
+reviewed diff and TypeScript 5.9.3 TSX parser node/literal comparison agree for
+both files. The first context-free scanner probe was unsuitable for TSX and
+returned non-equality; its failure is retained in the parser receipt. No product
+or runtime failure is inferred from that probe. Document/Coaching source is
+unchanged; no passed browser wave was repeated.
+
+H's new backend admission `a5d45b4c` is a separate source: independently matched
+four source/test pins and both immutable builder receipts. Its reported 184 + 57
+focused passes remain builder evidence, not new independent runtime execution.
+Fresh local API readiness is 200 at `a5d45b4c`; serving Git backend pins match,
+and the shared populated Report fixture returns HTTP 200. These observations
+prove availability/source pickup only. New-v8 runtime remains gated separately.
+
+CEO/coordinator's AUT-1858 route is now retained: hosted populated read-only QA
+waits for Root's verified **already-approved usable Report/Team context packet**
+or its exact refusal. No such packet has arrived in this QA inbox. No hosted
+request, replacement session/access, application write, provider call or ship.
+Shared-dev persistence and Root1855 four-call/Coaching writes remain separately
+NOT EXECUTED; original/latest PDF pixel quality remains NOT VERIFIED. No owned
+runner is alive or queued, and the foreign ESLint cache is preserved.
+
+Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-12-workbench-continuation-admission/receipt.json`
+SHA-256 `c7fb833752275966679aa4332e7c0ae2b97bad8f8730bff187828b7a4b87eb48`.
+This entry adds source/health admission evidence only; prior runtime and visual
+limits below retain their original source pins.
+
+Retained print-capture classification — bounded continuation
+
+**Capture geometry mismatch confirmed; PDF appearance unverified.** The original
+and latest phone/light PNGs are byte-identical. Reopened both and the dark-phone
+comparison: phone/light executive-summary glyphs reach the right capture edge;
+dark text wraps within the inset paper. The latest retained geometry puts
+8.0609130859375 CSS px of the sheet beyond the visual viewport (sheet right794,
+visual right785.9390869140625). Its PNG is793×1122, against requested794×1123;
+the other three PNGs are794×1123. CSS viewport units and PNG pixel dimensions
+are separate measurements, so the one-pixel size difference alone does not
+explain the clipping.
+
+This finishes the coordinator's bounded classification using retained artifacts.
+It preserves the existing8/8 machine PASS and the screenshot finding. The test
+uses a print-media page screenshot before generating the PDF; that image is not
+a raster render of the PDF. No visual-viewport scale, individual glyph bounds
+or geometry at screenshot time was retained, so the exact cause remains
+unproved. Original and latest PDFs have different hashes; G's11-page text-only
+check applies to the original PDF and cannot establish the newer PDF's pixels.
+No full visual print PASS, product CSS repair or release-wide hold is inferred.
+
+Classification receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-print-capture-classification/classification.json`
+SHA-256 `0fbb19cb79fdb61d8c32bb069654980dd3b219132ff1f123c5c51a239490d133`.
+Reconciled source75fcbdad/journeyf17c5ee4, JUnit8/0fail/0error/0skip,
+launcher/pytest exit0, all four geometry/PNG hashes and eight retained input
+pins. No new browser run, app request, install, product edit or data change.
+Hosted populated smoke and Root1855 acceptance remain separate and pending.
+
+Current QA receipt — 23:44:55–23:45:25UTC
+
+**Repaired Document/Word4 PASS + print diagnostic4 PASS**, no skips/errors.
+Recorded source75fcbdad at both boundaries; exact journey digest
+f17c5ee4e58d977b34ec234e3b7a92b5065ecc44a6a1e27cf0b7489227c0cbce.
+Four Document pairs each complete seven observations with positive text coverage,
+ten32/44px controls, six ordered sections/eight skills, and actual Word ZIP/XML
+source agreement for parts1.3/6.9. The fictional follow-up contradiction is
+independently **cleared**: inspected desktop/dark and phone/light overview plus
+phone/dark and desktop/light facts; diagnosis/action match the existing buyer
+boundary, outcome remains unset and both original unknowns remain.
+
+Print ghost controls remain clear, six headings/facts preserved,44 screen targets
+meet32/44px and four PDFs produced. Diagnostics: layout width794px in every
+pair; desktop/light visual794/sheet0–794, both dark visual794/sheet24–770,
+phone/light visual785.9390869140625/sheet0–794. Thus the mobile print-media
+capture has a narrower visual viewport than its paper layout. Inspected both
+new phone A4 captures; keep earlier clipped capture and the viewport mismatch
+as a capture finding. **PDF pixel bounds/quality remain unverified**: no local
+rasterizer, bounded saved-PDF Chromium attempt failed safely; G's independent
+text-only PDF read cannot establish pixel quality. No print CSS repair is
+inferred or requested from this evidence. All owned jobs exited; none queued.
+Receipt/visual geometry:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-document-source-print-readback/receipt.json`
+and adjacent `visual-review-receipt.json`.
+
+Latest scope across separate mutable dev runs: Report/Document8PASS earlier,
+Coaching/quote/print12PASS, repaired Document/print8PASS now. This is not one
+immutable combined matrix or deployed real-account persistence proof. Original
+interruptions, single-click misses, empty font-coverage limits and QA locator
+failures remain below/on disk. The canonical disposable compiled outcome case
+is accepted with its uploaded marker omission explicit. Hosted populated staging/
+production12-case smoke stays **NOTRUN**: approved staging session403; production
+zero readable submissions and Team403. Only already-approved usable host-scoped
+Report/Team contexts can clear that prerequisite. Coordinator/operator have the
+exact gap; no new session/access/workspace/outcome write or ship was performed.
+Dev expected-host API readiness20009a60321; sanitized automatic deploylog read.
+
+Historical entries below retain their original verdicts and pending statements;
+the current receipt supersedes only the specific repairs/limits stated above.
+
+Latest independent dev continuation — 23:29:54–23:31:27UTC
+
+**Coaching/quote/print12/12 automated PASS**, no skips/errors, recordedHEAD
+d224e615 at both boundaries and stable journey digest962ea1f9dc6ed4ea04700e347bd31098d47e62a186d27c9809e371019c19f650.
+Each Coaching pair has20 observations and the original single selected/view
+check. Every screen font observation now has positive actual rendered-text
+coverage: Coaching14–71, quote16–39 and print screen32–43 elements. All runtime,
+server, font, overflow, refresh and outcome API counters0. Quote1232characters
+remain exact once through folded/full/refolded states, original2:10–3:37 span,
+one expand/collapse click each, reachable32/44px controls, no media. Inspected
+quote captures at both widths/themes; original absent-main failures preserved.
+
+Print ghost-control repair independently clears: four native Document screen
+and A4 captures,44 targets each meet32/44px before print, six headings/call
+facts intact, hidden search/account0s transition/no animation, overflow0 and
+four PDF files produced. All A4 captures inspected. **One capture finding
+remains unclassified:** phone/light A4 PNG clips the last1.2 paragraph line
+at the right edge and is793×1122 despite requested794×1123; other captures
+794×1123. Mobile viewport/resize behavior is possible, not proved; actual PDF
+clipping is unverified (no installed PDF renderer). Exact PNG/PDF handed toG.
+Thus this is automated PASS with a visual print-capture finding, not full print
+visual acceptance. All owned jobs exited normally.
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-coaching-font-quote-readback/receipt.json`.
+
+G57fd8db7 source-pinned repair of the separate standalone fictional Document
+contradiction is committed. New four-pair Document source/Word agreement and
+four-pair print viewport diagnostic checks are prepared for the next allowed
+wave, no earlier23:44:55. No protected outcome or real-call state is inferred.
+Hosted populated smoke and Root1855 limits below remain unchanged.
+
+Current independent dev readback — 23:14:53–23:17:19 UTC
+
+**Report/Document8 PASS; quote4 FAIL in the new QA locator.** Source ffca886c
+→1864b5a9, stable journey digest4843dd5d2566350b767ab0d49c6c1acb2c6f682b4e9b56f60df7bc7b98a2e8bd.
+All thirteen Report observations and seven independent Document observations
+pass at1440/390 light/dark, including valid Word files. Actual Document controls:
+44 in the Report example and10 in the standalone fixture, each meets32/44px.
+One visual copy finding stays with G: standalone fictional Document1.3 says
+the closer clarified a follow-up time, while1.1/6.2 say the buyer declined a
+next step and requested no follow-up. Exact own overview/facts captures and
+source range supplied; source-bound correction required, no invented outcome.
+No runtime/server/overflow/outcome API errors; one Document/light receipt has
+two timed refresh events. Inspected both widths/themes, intentional paper
+surface and plain sales commitments preserved.
+
+The four quote cases reached exact source text and folded span, then timed out
+on QA's absent `main` locator at line1095; no quote interaction was completed.
+This is a harness error, not a product defect or quote PASS. Original FAIL/JUnit/
+screenshots preserved. The corrected once-only check targets actual Coaching
+pillars. Font audit now includes those fixture pillars and stores a positive
+rendered-text count, preventing an absent wrapper from yielding an empty audit.
+Prior Coaching fixture receipts retain their interaction/geometry/visual evidence;
+their zero font-error counters did not establish automated fixture font coverage.
+New twelve-case Coaching+quote+print acceptance is pending no earlier23:29:54UTC.
+
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-document-quote-readback/receipt.json`.
+A new independent dev-only native Document print journey is prepared for that
+same wave: six headings, readable call facts, hidden shell controls without
+motion, A4 captures and valid PDF headers. Runtime acceptance is pending.
+G's d8358066 print receipt reports4/4; its retained A4 first-page capture was
+personally inspected, facts clear with no empty shell shapes. This remains
+attributed builder print evidence, separate from QA's own screen/Word checks.
+
+Current continuation — 23:15 UTC
+
+Coaching cue-spacing readback **4/4 PASS**, 22:54:33–22:55:30 UTC, recorded
+HEAD 9cdcdb2b at both boundaries with moving dirty product files explicitly
+retained. All twenty observations per pair pass; the original single personal
+click selects My coaching/view=me. Runtime/server/font/overflow/outcome API
+errors are zero. Inspected both phone themes: the cue label and instruction
+now have a readable gap. This clears the earlier cue-spacing visual finding.
+Receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-cue-spacing-readback/receipt.json`.
+
+Canonical compiled outcome execution is now independently accepted for
+fa846dc run38176600054/job114582801007/artifact11716152809: the named acquisition
+case passed, and its matched exact-source unconditional Lost PUT200/full reload/
+Report/Document/Word assertions bind that result. The sanitized artifact omits
+the dedicated outcome marker; no marker or raw payload is fabricated. This is
+disposable synthetic HTTP/PostgreSQL proof, not shared-dev or deployed-session
+persistence. Independent acceptance:
+`/home/acdev/strikes/1694/workbench-release-ci-canonical-outcome-acceptance-fa846dc.json`.
+I's four-run attestation is in `docs/evidence/20261011_AUT1355_RELEASE_OUTCOME_RECEIPTS.md`.
+Root1855 Coaching acceptance remains separate.
+
+Coordinator cleared the old native/staging release hold: staging and production
+web/API plus canaries were pinned to fa846dc; v0.41.0 promotion remains operator
+owned. Hosted populated smoke is **NOT RUN** because the approved staging jar
+returns tenant_context_denied403, while production has no readable submissions
+and Team403. The exact gap was independently returned to coordinator; no new
+session/access/workspace selection or application write was attempted.
+Discovery: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-hosted-discovery/verified-route-receipt.json`.
+
+Opt-in hosted foundation :8080 transport preserves original HTTPS browser
+origins and cookie scope. Independent bounded proof passed at 23:06:49–23:06:52:
+five invalid configurations refused, four inert mutating-method callbacks
+aborted before fetch, both original hosted health reads200 with fa846dc,
+staging identity403/production200. No populated smoke or public Cloudflare
+acceptance is inferred. Receipt:
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-hosted-transport-final/receipt.json`.
+Its tested journey digest is retained; later quote-only additions do not change
+the transport implementation.
+
+New checks are prepared, **runtime acceptance pending**: Document rendered
+links/buttons meet 32 px desktop/44 px phone after G8dc4d07d; dev-only long-quote
+source is exact once, preserves 2:10–3:37, expands/refolds with one click each,
+keeps reachable disclosure targets and starts no media. Next finite shared-dev
+wave covers eight Report/Document and four quote cases after the fifteen-minute
+boundary and coordinator's 23:08 admission window. No full print or signed-in
+acceptance is claimed.
+
+Historical receipts below preserve original verdicts; pending statements in
+those dated entries are superseded only by the current continuation above.
+
+Latest targeted shared-dev journeys **10/10 PASS, zero errors/skips**.
+Actual browser execution was 22:39:16–22:40:20 UTC (63.550 s), recorded runner
+source `f5d042b4` → `67e74ea2`; the queued runner started at 22:11:56 UTC.
+Report desktop/dark completes all thirteen observations, Document and Word;
+the earlier Document switch miss did not recur. Independent Document and
+Coaching pass all four 1440/390 light/dark pairs, and phone/dark completes the
+remaining outcome-format case. The previous partial wave's six passing cases
+remain separate, with their earlier source/time boundaries.
+
+All Team and Sandbox total captures check twelve rendered labels/values/notes
+with zero clipping. Latest-call context fits fully in view; twenty Coaching
+observations per pair retain all personal/rep pillars, one spoken forty-call
+summary and the original single My coaching click/pressed/view audit. Runtime,
+server, font, overflow and fixture outcome API errors are zero. Inspected both
+phone themes and both desktop Team contexts, desktop/dark Report Document,
+phone/dark Document skills and rep mission.
+
+One minor visual finding remains with D: the phone/dark rep mission pill's
+“Pre-call cue” touches “Diagnose before prescribing”. Exact screenshot and
+request are in D's INBOX. Automated acceptance therefore retains this finding.
+
+The combined runner's raw receipt remains FAIL because its separate blank-page
+negative control timed out; no fixture failure is concealed. An isolated
+network-free repeat PASS at 22:41:52–22:41:55 UTC rejects the historical long
+note (206 px inside 120 px) and accepts the short note. Its test digest exactly
+matches both browser-run boundaries. The original timeout, interrupted
+launcher 143 and Report switch failure remain on disk. All owned jobs exited.
+
+Current reviewed acceptance: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-continuation/acceptance-receipt.json`.
+Raw JUnit/browser receipt remains adjacent; the control repeat is in
+`/home/acdev/strikes/1694/shots/2026-10-11-workbench-clipping-guard-repeat/`.
+This is mutable dev fixture coverage across separate runs. Canonical browser
+reload/compiled CI receipt and authenticated staging QA remain unverified.
+Operator notes now report staging/production v0.40.0 data-load readbacks;
+exact current served core/web + canary and retained approved QA Report/Team
+context have not been supplied to this tester. No staging/production action
+was performed by QA. Next dev wave after 22:54:17 UTC only for new relevant work.
+
+Earlier 20:15:25 UTC dev wave is **INCOMPLETE**: launcher exited 143 before
 pytest completion, cause unconfirmed; no owned descendants remain. Six cases
 pass and desktop/dark Report → Document fails after fourteen recorded refresh
 events. The screenshot stays in Report/Deal after the original single click;
@@ -9,9 +790,9 @@ pass. Three outcome-format pairs pass; the other cases have no completed receipt
 
 The network-free clipping negative control rejects the long historical note
 (206 px inside 120 px) and accepts "60 people". Stronger shared-dev Team
-acceptance remains pending. Ten targeted cases (eight unfinished Document/Coaching
-pairs, unfinished phone/dark format and failed desktop/dark Report) are scheduled
-no earlier than 20:30:26 UTC. The launcher now has its own retained process session;
+acceptance remains pending. The subsequent ten targeted cases covered eight unfinished Document/Coaching
+pairs, unfinished phone/dark format and failed desktop/dark Report. Its planned
+20:30:26 UTC earliest start was delayed in the shared slot. The launcher now has its own retained process session;
 no retry/force/test relaxation, product mutation, deployment or session creation.
 `ff8bda19` safely adds refresh phase/timestamps and the comparable original
 Coaching click timestamp. Ruff check/format, HTTP import, no-server 24 skips and
@@ -19,13 +800,13 @@ owned diff checks pass. Historical green coverage below is not this new wave.
 
 Partial receipt: `/home/acdev/strikes/1694/shots/2026-10-11-workbench-team-clipping-readback/interrupted-receipt.json`.
 
-New Team clipping guard is prepared after D's `4130bb91` phone repair.
+Historical preparation: Team clipping guard followed D's `4130bb91` phone repair.
 It checks all rendered total labels/values/notes and captures the full relocated
 latest-call context. Ruff check/format, required HTTP import, no-server collection
 (24 skips) and owned diff checks pass. Browser execution of this stronger guard
 is pending the next allowed wave, no earlier than 20:15:12 UTC.
 
-Latest bounded dev coverage: **PASS across two runs**. Report, Document, Word
+Previous bounded dev coverage: **PASS across two runs**. Report, Document, Word
 and outcome formats pass twelve cases at `2be67628` → `b24a23ec`
 (19:45:10–19:49:04 UTC). The newer Coaching repeat passes all four screen/theme
 pairs at `82e7a86d` → `a38bda24` (20:00:11–20:00:39 UTC), nineteen observations

@@ -1,7 +1,7 @@
 /** Browser inventory only. Native intake verifies format, bytes and duration. */
 export const MAX_IMPORT_FILES = 256;
 export const MAX_IMPORT_BYTES = 1024 ** 3;
-export const MAX_IMPORT_FILE_BYTES = 32 * 1024 ** 2;
+export const MAX_IMPORT_FILE_BYTES = 100_000_000;
 
 export type ImportSource = {
   relative_path: string;
@@ -39,7 +39,12 @@ export async function importManifestDigest(
 }
 const supported = (path: string) => {
   const name = path.split("/").at(-1) ?? "";
-  return !name.includes(".") || /\.(mp3|m4a|ogg|wav)$/i.test(name);
+  return (
+    !name.includes(".") ||
+    /\.(mp3|mpeg|wav|m4a|m4b|mp4|mov|ogg|flac|amr|awb|aac|3gp|3ga|webm|opus|mkv|mka|aiff|aif|aifc)$/i.test(
+      name,
+    )
+  );
 };
 const safe = (path: string) =>
   path.length > 0 &&
@@ -120,7 +125,7 @@ export function selectedImportFiles(files: readonly File[]): ImportResult<{
       file.size > MAX_IMPORT_FILE_BYTES
     )
       return failure(
-        "Each recording must contain audio and be no larger than 32 MiB.",
+        "Each recording must contain audio and be no larger than 100 MB.",
       );
     if (selected.has(path))
       return failure("Two files have the same relative name. Choose one copy.");
@@ -131,7 +136,7 @@ export function selectedImportFiles(files: readonly File[]): ImportResult<{
   }
   if (!selected.size)
     return failure(
-      "Choose MP3, M4A, OGG, WAV or recordings without an extension.",
+      "Choose audio or video recordings, or recordings without an extension.",
     );
   return { data: { files: selected, skipped }, error: null };
 }

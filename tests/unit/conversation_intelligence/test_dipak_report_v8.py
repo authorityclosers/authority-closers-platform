@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.dipak_report import (
     project_pillars,
 )
 from ac_platform.conversation_intelligence.inference_tasks import (
+    InferenceTaskError,
     prepare_coaching_input,
     validate_coaching_result,
 )
@@ -296,7 +297,8 @@ def test_prepared_adapter_selects_compact_schema_and_bound_roles(case, provider,
     assert '"default":' not in body
 
 
-def test_actual_c5_response_uses_v8_parser(case):
+@pytest.mark.parametrize("official_outcome", [None, "Won", "Lost"])
+def test_actual_c5_response_uses_v8_parser(case, official_outcome):
     transcript, packets, roles, payload = case
     task = prepare_coaching_input(
         transcript,
@@ -308,6 +310,20 @@ def test_actual_c5_response_uses_v8_parser(case):
         speaker_roles=roles,
         qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v8").sha256,
     )
+    if official_outcome:
+        payload = deepcopy(payload)
+        payload["pillars"]["summary"] = (
+            f"The conversation ended as {official_outcome}: " + payload["pillars"]["summary"]
+        )
+        with pytest.raises(InferenceTaskError, match="report_payload_invalid"):
+            validate_coaching_result(
+                result(task, envelope(payload)),
+                task,
+                transcript,
+                coaching_prompt_revision="coaching-v8",
+                speaker_roles=roles,
+            )
+        return
     output = validate_coaching_result(
         result(task, envelope(payload)),
         task,
@@ -395,6 +411,70 @@ def test_unsupported_claims_fail_closed(case, invalid):
         p["outcome"]["status"] = "Won"
     with pytest.raises(ReportError):
         parse(case, payload)
+
+
+@pytest.mark.parametrize("field", ["summary", "outcome_line"])
+@pytest.mark.parametrize("label", ["Won", "Lost"])
+@pytest.mark.parametrize("form", ["stock", "case_and_spacing", "sentence"])
+def test_new_output_rejects_explicit_official_outcome_prefix(case, field, label, form):
+    payload = deepcopy(case[3])
+    prefix = {
+        "stock": f"The conversation ended as {label}: ",
+        "case_and_spacing": f"  THE  conversation\nended as {label.upper()} : ",
+        "sentence": f"The conversation ended as {label}. ",
+    }[form]
+    if field == "summary":
+        payload["pillars"]["summary"] = prefix + payload["pillars"]["summary"]
+    else:
+        payload["pillars"]["outcome"]["line"] = prefix + "A sample review was agreed."
+    # It is valid provider JSON; the person-only rule is checked at admission.
+    validate_schema(payload, coaching_response_json_schema("coaching-v8"))
+    with pytest.raises(ReportError, match="report_payload_invalid"):
+        parse(case, payload)
+
+
+@pytest.mark.parametrize("field", ["summary", "outcome_line"])
+@pytest.mark.parametrize("label", ["Won", "Lost"])
+def test_saved_official_outcome_prose_keeps_its_content_and_canonical_hash(case, field, label):
+    payload = parse(case).model_dump(mode="json")
+    text = f"The conversation ended as {label}: A sample review was agreed."
+    if field == "summary":
+        payload["summary"] = payload["pillars"]["summary"] = text
+    else:
+        payload["verdict"] = payload["pillars"]["outcome"]["line"] = text
+    before = canonical(payload)
+    saved = parse(case, payload, canonical_read=True)
+    assert canonical(saved.model_dump(mode="json")) == before
+    assert parse(case, saved.model_dump(mode="json"), canonical_read=True) == saved
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You won trust by asking how the missed follow-ups affected the business.",
+        "The prospect lost revenue when the team missed follow-ups.",
+        "The conversation ended as lost revenue became clear to the prospect.",
+        "The conversation ended as Wonka's team agreed to review a sample.",
+    ],
+)
+def test_outcome_prefix_guard_keeps_ordinary_sales_observations(case, text):
+    payload = deepcopy(case[3])
+    payload["pillars"]["summary"] = text
+    assert parse(case, payload).summary == text
+
+
+@pytest.mark.parametrize("label", ["Won", "Lost"])
+def test_outcome_prefix_guard_preserves_literal_source_quotes(case, label):
+    transcript = case[0]
+    source_text = f"The conversation ended as {label}: that is what our old note said."
+    transcript["segments"][1]["text"] = source_text
+    payload = deepcopy(case[3])
+    payload["pillars"]["summary"] = f'The prospect read "{source_text}" from an older note.'
+    draft = parse(case, payload)
+    assert draft.summary == payload["pillars"]["summary"]
+    assert draft.summary_evidence[0].quote == source_text
+    assert draft.pillars.deeper.became_clear[0].evidence[0].quote == source_text
+    assert parse(case, draft.model_dump(mode="json"), canonical_read=True) == draft
 
 
 @pytest.mark.parametrize("overlap", [False, True])

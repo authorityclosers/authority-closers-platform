@@ -582,16 +582,89 @@
   font-style: italic;
 }
 
-/* Team: the area filter above the named sandbox reps. */
+/* Team: find a person within the already shared or fictional rep list. */
 .repFilter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 14px 4px;
 }
 
-.repFilter > span:first-child {
-  width: min(220px, 60%);
+.repSearch {
+  flex: 1 1 180px;
+}
+
+.repArea {
+  flex: 0 1 180px;
+}
+
+.repEmpty {
+  padding: 0 14px 14px;
+}
+
+@media (max-width: 600px) {
+  .repList a {
+    display: grid;
+    align-content: center;
+    min-height: 44px;
+  }
+
+  .repSearch {
+    flex-basis: 100%;
+  }
+
+  .repArea {
+    flex-grow: 1;
+  }
+}
+
+.repFocus {
+  display: block;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+  white-space: normal;
+}
+
+.repCallLinks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 0;
+  border-block: 1px solid var(--sx-line);
+}
+
+.repCallLinks .actions {
+  gap: 6px;
+}
+
+.repCallTitle {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.callsSection {
+  scroll-margin-top: 80px;
+}
+
+.callFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.callFilter p {
+  flex-basis: 100%;
+}
+
+/* Segmented's inset is visual; each call filter keeps the full tap floor. */
+.callFilter button {
+  min-height: var(--sx-control-h);
 }
 
 .status {
@@ -926,9 +999,14 @@
 }
 
 .cue > span {
+  margin-inline-end: 6px;
   color: var(--sx-muted);
   font-size: 12px;
   font-weight: 600;
+}
+
+.quoteToggle {
+  justify-self: start;
 }
 
 /* ---------- Progress and path (pillars 5 and 6) ---------- */
@@ -1220,6 +1298,10 @@
 }
 
 @media (max-width: 760px) {
+  .quoteToggle {
+    min-height: 44px;
+  }
+
   .root,
   .skeleton {
     padding: 14px var(--sx-gutter) 32px;

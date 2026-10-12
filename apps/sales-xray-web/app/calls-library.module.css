@@ -1131,7 +1131,8 @@
 
 @keyframes pulse {
   50% {
-    opacity: 0.55;
+    /* Keep the slate dot above 3:1 on light surfaces throughout the pulse. */
+    opacity: 0.75;
   }
 }
 

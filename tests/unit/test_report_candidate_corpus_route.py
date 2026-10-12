@@ -1,11 +1,20 @@
 """Fictional candidate route, native transport, source failures and blocked-send proof."""
 
+import importlib
+import importlib.metadata
+import importlib.util
+import io
 import json
+import shutil
 import socket
 import subprocess
+import sys
+import tarfile
+import urllib.parse
 import urllib.request
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,6 +25,88 @@ from ac_platform.conversation_intelligence.coaching_validation_gate import (
 )
 from scripts.report_candidate_c5 import replay as route
 from tests.unit.conversation_intelligence.test_report_content import case
+
+
+@pytest.fixture(scope="module", autouse=True)
+def pinned_candidate_source(tmp_path_factory):
+    """Execute the historical candidate against its actual, byte-verified library."""
+    root = Path(route.__file__).resolve().parents[2]
+    if not (root / ".git").exists():
+        # The fast-check source export has no Git metadata. Its reused editable
+        # install locates the object database, never the source being tested.
+        installed = importlib.metadata.distribution("authority-closers-platform")
+        origin = json.loads(installed.read_text("direct_url.json"))
+        url = urllib.parse.urlsplit(origin["url"])
+        assert origin["dir_info"]["editable"] and url.scheme == "file" and not url.netloc
+        root = Path(urllib.request.url2pathname(url.path))
+        assert (root / ".git").exists()
+    exported = tmp_path_factory.mktemp("report-c5-pinned-source")
+    helpers = (
+        "tests.unit.conversation_intelligence.test_reports",
+        "tests.unit.conversation_intelligence.test_report_content",
+    )
+    git = shutil.which("git")
+    assert git is not None
+    archive = subprocess.run(  # noqa: S603 - read-only export of the released source pin
+        [
+            git,
+            "-C",
+            str(root),
+            "archive",
+            "--format=tar",
+            route.PINS["candidate_merge_sha"],
+            "packages/python/ac_platform",
+            *(name.replace(".", "/") + ".py" for name in helpers),
+        ],
+        capture_output=True,
+        check=True,
+        timeout=30,
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as source:
+        source.extractall(exported, filter="data")
+
+    def isolated_module(name):
+        return name == "ac_platform" or name.startswith("ac_platform.") or name in helpers
+
+    def load(name, path, patch):
+        spec = importlib.util.spec_from_file_location(name, path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        patch.setitem(sys.modules, name, module)
+        spec.loader.exec_module(module)
+        return module
+
+    with pytest.MonkeyPatch.context() as patch:
+        for name in tuple(sys.modules):
+            if isolated_module(name):
+                patch.delitem(sys.modules, name)
+        patch.syspath_prepend(str(exported / "packages/python"))
+        try:
+            for name in helpers:
+                helper = load(name, exported / (name.replace(".", "/") + ".py"), patch)
+            frozen_route = load("_test_pinned_report_c5_route", Path(route.__file__), patch)
+            namespace = sys.modules[__name__]
+            for name, value in {
+                "route": frozen_route,
+                "reports": frozen_route.reports,
+                "providers": importlib.import_module(
+                    "ac_platform.conversation_intelligence.providers"
+                ),
+                "coaching_revision_runtime_block": importlib.import_module(
+                    "ac_platform.conversation_intelligence.coaching_validation_gate"
+                ).coaching_revision_runtime_block,
+                "case": helper.case,
+            }.items():
+                patch.setattr(namespace, name, value)
+            assert Path(route.tasks.__file__).resolve().is_relative_to(exported)
+            assert Path(reports.__file__).resolve().is_relative_to(exported)
+            assert route.verify_library() == route.PINS["library_tree_sha256"]
+            yield exported
+        finally:
+            # Other collected tests retain their current-library identities.
+            for name in tuple(sys.modules):
+                if isolated_module(name):
+                    sys.modules.pop(name)
 
 
 def inputs():
@@ -161,6 +252,18 @@ def test_wrong_image_and_library_are_refused(monkeypatch):
     monkeypatch.setitem(route.PINS, "library_tree_sha256", "0" * 64)
     with pytest.raises(route.RouteError, match="candidate_library_mismatch"):
         route.verify_library()
+
+
+def test_pinned_source_fixture_still_refuses_changed_library_bytes():
+    source = Path(route.tasks.__file__)
+    original = source.read_bytes()
+    try:
+        source.write_bytes(original + b"\n# fictional source mutation\n")
+        with pytest.raises(route.RouteError, match="candidate_library_mismatch"):
+            route.verify_library()
+    finally:
+        source.write_bytes(original)
+    assert route.verify_library() == route.PINS["library_tree_sha256"]
 
 
 @pytest.mark.parametrize(

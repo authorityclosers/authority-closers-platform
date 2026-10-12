@@ -87,6 +87,12 @@
 .speaker > span[aria-hidden="true"] {
   font-size: 12px;
 }
+/* The shared avatar sets its own inline voice colour; inside this map it
+   follows the lane instead, without changing avatars elsewhere. */
+.speaker > span[aria-hidden="true"],
+.peekHead span[data-voice] > span[aria-hidden="true"] {
+  --voice: inherit !important;
+}
 .speaker small {
   padding: 2px 6px;
   border-radius: var(--lx-radius-pill);
@@ -431,15 +437,15 @@
 }
 .pin[data-tone="objection"],
 .legend [data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .pin[data-tone="missed"],
 .legend [data-tone="missed"] {
-  --tone: var(--lx-missed);
+  --tone: var(--lx-warning);
 }
 .pin[data-tone="closing"],
 .legend [data-tone="closing"] {
-  --tone: var(--lx-closing);
+  --tone: var(--lx-teal);
 }
 .pin[data-tone="improve"],
 .legend [data-tone="improve"] {
@@ -572,6 +578,8 @@
   border-top: 1px solid var(--lx-line-soft);
 }
 .stat {
+  --tile: var(--lx-muted);
+  --tile-soft: var(--lx-paper-2);
   display: flex;
   min-width: 0;
   align-items: center;
@@ -590,22 +598,6 @@
 }
 .stat:hover {
   background: color-mix(in srgb, var(--tile-soft) 45%, transparent);
-}
-.stat[data-tone="teal"] {
-  --tile: var(--lx-teal);
-  --tile-soft: var(--lx-teal-soft);
-}
-.stat[data-tone="amber"] {
-  --tile: var(--lx-warning);
-  --tile-soft: var(--lx-warning-soft);
-}
-.stat[data-tone="blue"] {
-  --tile: var(--lx-closing);
-  --tile-soft: var(--lx-closing-soft);
-}
-.stat[data-tone="violet"] {
-  --tile: var(--lx-missed);
-  --tile-soft: var(--lx-missed-soft);
 }
 .icon {
   display: grid;
@@ -811,13 +803,13 @@
   --tone: var(--lx-strength);
 }
 .miniDot[data-tone="objection"] {
-  --tone: var(--lx-objection);
+  --tone: var(--lx-teal);
 }
 .miniDot[data-tone="missed"] {
-  --tone: var(--lx-missed);
+  --tone: var(--lx-warning);
 }
 .miniDot[data-tone="closing"] {
-  --tone: var(--lx-closing);
+  --tone: var(--lx-teal);
 }
 .miniDot[data-tone="improve"] {
   --tone: var(--lx-warning);

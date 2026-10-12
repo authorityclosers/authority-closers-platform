@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.bulk_import_preview import (
     project_import_preview,
 )
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.http.auth import install_identity_http, require_safe_origin
 from ac_platform.http.conversation_imports import install_import_http
 from ac_platform.http.conversation_submissions import _Owner
@@ -106,7 +107,7 @@ def test_manifest_rejects_unsafe_or_ambiguous_relative_paths(path):
         BatchManifest.model_validate({"files": [file(path)]})
 
 
-@pytest.mark.parametrize("size", [0, -1, True, 32 * 1024 * 1024 + 1])
+@pytest.mark.parametrize("size", [0, -1, True, MAX_AUDIO_BYTES + 1])
 def test_file_limits_match_normal_intake_and_do_not_trust_boolean_size(size):
     with pytest.raises(ValidationError):
         BatchManifest.model_validate({"files": [file(size=size)]})

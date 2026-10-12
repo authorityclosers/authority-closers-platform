@@ -216,6 +216,7 @@ export const BETTER = {
   yourCall: "Your call",
   yourCallAt: (clock: string) => `Your call · ${clock}`,
   betterDirection: "Better direction",
+  momentAbove: "Read the moment above.",
   wording: "Possible wording, in your own style",
   strength: "Use your strength",
   strengthAcross:
@@ -415,6 +416,15 @@ export const CALLS = {
   fallback: "One practice for your next call",
   recurring: "Also on other calls",
   showAll: (count: number) => `Show all ${count} calls`,
+  showFewer: "Show fewer calls",
+  latestReady: "Latest call with coaching",
+  openReport: "Open Report",
+  openCoaching: "Call coaching",
+  seeCalls: "See calls",
+  filter: "Which calls to show",
+  all: "All calls",
+  onSkill: "On this skill",
+  count: (count: number) => `${count} call${count === 1 ? "" : "s"}`,
 } as const;
 
 /** The labels on another rep's coaching that would otherwise say "you". */
@@ -518,6 +528,8 @@ export const REPORT_COACHING = {
 
 /** A moment's play control (spec 5.5: every moment inspectable). */
 export const MOMENT = {
+  fullQuote: "Read full quote",
+  lessQuote: "Show less",
   withContext: "With context",
   pause: "Pause",
   playContext: "Play with context",
@@ -603,7 +615,13 @@ export const RETAINED = {
 /** Team coaching for owners and admins: totals, objections, shared reps. */
 export const TEAM = {
   allAreas: "All areas",
+  findRep: "Find a rep",
+  noMatches: "No reps match",
+  noMatchesText: "Try another name or coaching area.",
+  clearFilters: "Clear filters",
   repCount: (count: number) => `${count} ${count === 1 ? "rep" : "reps"}`,
+  showAll: (count: number) => `Show all ${count} people`,
+  showFewer: "Show fewer people",
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
   latest: (date: string) => `Latest call ${date}.`,
   last40: "last 40",

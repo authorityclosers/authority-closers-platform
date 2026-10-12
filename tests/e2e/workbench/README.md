@@ -22,11 +22,34 @@ collapsed; the populated example opens all four groups and captures each one.
 Live calls are checked only for deeper groups actually supplied by their report.
 The independent Document journey checks six actual sections in order and
 captures each section's content at both widths/themes, alongside its top sheet.
+Its standalone fictional source additionally checks repaired parts1.3/6.9 and
+the Word file against the already-confirmed buyer-boundary excerpts; live
+reports are never assumed to share those example words.
+Rendered Document links/buttons must meet the 32 px desktop / 44 px phone floor.
+Print-specific compact text is outside this screen-control check.
+
+After a Report compatibility repair, run the bounded twelve-case readback:
+
+```sh
+WB_BASE_URL=http://127.0.0.1:3026 \
+WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-12-report-compatibility \
+LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
+ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
+  -k 'report_sections_and_document or document_view or fixture_legacy_deal_action' \
+  -q --tb=no -rN
+```
+
+The legacy fixture checks its saved next move after a full reload, in Document
+part 6.9 and in the downloaded Word file's Recommended Deal Action. The separate
+Document fixture retains its buyer-boundary action. These are fictional dev
+checks; neither proves hosted access or canonical outcome persistence.
 
 Coaching also reads all six fictional rep pillars with their own labels. Its
 progress accessibility snapshot must contain one summary of the forty calls
 (40 needed work in this fictional rep's data), rather than announcing
 one list row per call. Every rep pillar gets a readability screenshot.
+The font audit includes actual Coaching pillars in the standalone fixture and
+requires a positive rendered-text count at every capture.
 Team totals also check that rendered text fits its clipping containers; DOM
 visibility alone cannot pass an ellipsised count or context line. The sandbox's
 latest-call footnote must fit fully in view and gets its own screenshot.
@@ -49,8 +72,38 @@ fictional finished call owned by that account. They save through the real contro
 fully reload each choice, check Report/Document/Word and read the saved API value
 and increasing revision. They refuse staging origins. No fixture storage or
 React-state result substitutes for this evidence. Without the explicit write
-path they skip. These eight optional cases plus the original sixteen collect
-24 cases. The original Report journey retains its full thirteen steps.
+path they skip. The original sixteen plus four each for format, persistence,
+quote, print, legacy-action and Team-search checks collect 40 cases. The original Report
+journey retains its full thirteen steps.
+The separate dev-only `test_fixture_team_search_and_rep_calls` journey finds a
+fictional rep outside the first eight, combines name/area filters, clears an
+empty result and restores keyboard focus. It checks ready-call Report/coaching
+destinations and follows See calls to expand the rep's history, filter it to the
+saved current-skill records and return to All calls, with 32/44 px reachable
+controls. Expanded Team and skill-history lists can be shortened again; the
+journey checks keyboard focus, viewport return and the retained skill filter.
+Product call links are inspected without opening them;
+this does not establish authenticated access to those calls.
+
+```sh
+WB_BASE_URL=http://127.0.0.1:3026 \
+WB_SHOTS_DIR=/home/acdev/strikes/1694/shots/2026-10-12-team-search \
+LD_LIBRARY_PATH=/home/acdev/.local/lib/playwright-deps \
+ac-heavy uv run pytest tests/e2e/workbench/test_workbench_journeys.py \
+  -k fixture_team_search_and_rep_calls -q --tb=no -rN
+```
+
+For the combined rep-link/disclosure and Deal mission-label repairs, select
+`-k 'fixture_team_search_and_rep_calls or fixture_legacy_deal_action'` in the same
+command. These eight cases also check the mission label's visible separation
+and retain the saved next move across reload, Document and Word.
+
+The additional dev-only long-quote journey verifies the exact fictional
+1,232-character source once, its original time span, one expand/collapse click,
+32/44 px reachable disclosure targets and no eager media in both widths/themes.
+The separate dev print journey checks the native full-shell Document, six headings,
+call facts and motionless hidden shell controls, saves A4 captures/PDFs and keeps
+compact print typography outside the screen font/control audit.
 
 The version 0.40 chunk covers Report, Document, DOCX and Coaching (12 cases).
 Dashboard is outside this chunk, per the coordinator's 11 October scope order.
@@ -77,8 +130,18 @@ routes; it never tries to enable development-only fixtures on staging.
 For live runs use `--tb=no -rN`; Playwright failure messages can quote page text.
 Use the receipt's safe exception type and check/line for the failure handoff.
 The read-only twelve-case staging selection is
-`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats'`. Clear the optional
+`-k 'not dashboard and not fictional_outcome_persistence and not fixture_outcome_formats and not fixture_coaching_quote_fold and not fixture_document_print and not fixture_legacy_deal_action and not fixture_team_search_and_rep_calls'`. Clear the optional
 write path when running smoke; no outcome mutation is part of staging acceptance.
+
+The coordinator-approved local deployed transport is opt-in:
+`WB_LOCAL_TRANSPORT=http://127.0.0.1:8080`, with live mode and the original
+staging or production HTTPS `WB_BASE_URL`. It preserves that browser origin,
+Host and existing cookie scope in memory, fetches through foundation :8080,
+and leaves redirects to Chromium. Other origins/ports and fixture mode refuse.
+Non-read methods abort before reaching the app and fail the read-only journey.
+Receipts label the local transport; this does not establish public Cloudflare
+access. It cannot replace an admitted, populated Report/Team context. Do not
+run populated smoke against a rejected session or an empty/unpermitted context.
 
 Screenshots and compact JSON receipts go outside Git via `WB_SHOTS_DIR` (default
 `~/.cache/ac-workbench-qa`). Receipts omit cookies, request bodies and customer text.

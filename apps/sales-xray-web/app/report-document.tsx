@@ -15,6 +15,7 @@ import {
   COMMON,
   DEAL,
   DOCUMENT,
+  END_SUMMARY,
   playLabel,
   recordedOutcome,
 } from "./report-copy";
@@ -425,8 +426,8 @@ export function ReportDocumentSheet({
         );
       })}
       {doc.summary ? (
-        <section className={styles.section} aria-label={DOCUMENT.contents}>
-          <Item item={doc.summary} title="Report summary" />
+        <section className={styles.section} aria-label={END_SUMMARY.title}>
+          <Item item={doc.summary} title={END_SUMMARY.title} />
         </section>
       ) : null}
       <footer className={styles.foot}>

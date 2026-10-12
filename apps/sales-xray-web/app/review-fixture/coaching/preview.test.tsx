@@ -8,6 +8,7 @@ import { parseTeamCoaching } from "../../coaching/team-contract";
 import { CoachingFixture } from "./preview";
 import sandbox from "./sandbox.json";
 import acSandbox from "./sandbox-team.json";
+import longQuote from "./long-quote.json";
 
 describe("Coaching review fixture", () => {
   it("passes every sandbox payload through the real parsers", () => {
@@ -51,6 +52,38 @@ describe("Coaching review fixture", () => {
     );
     expect(call?.state).toBe("ready");
     expect(call?.evidence.every((moment) => !moment.playable)).toBe(true);
+  });
+  it("keeps the long synthetic quote and its original span in the opt-in review", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/review-fixture/coaching?data=sandbox&example=long-quote",
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(<CoachingFixture />));
+    const quote = longQuote.call.evidence[0].quote;
+    expect(quote.length).toBeGreaterThan(1000);
+    expect(host.querySelector("blockquote")?.textContent).toBe(quote);
+    expect(host.textContent).toContain("2:10–3:37");
+    expect(host.textContent).toContain("Read full quote");
+    expect(host.textContent).toContain("Read the moment above.");
+    expect(host.textContent).not.toContain("Play moment");
+    expect(host.querySelector("audio")).toBeNull();
+    const call = parseCallCoaching(
+      longQuote.call,
+      longQuote.call.submission_id,
+    )!;
+    expect(call.evidence[0]).toMatchObject({
+      quote,
+      source_sha256: longQuote.sourcePayloadSha256,
+      start_ms: 130930,
+      end_ms: 217313,
+    });
+    await act(async () => root.unmount());
+    host.remove();
+    window.history.replaceState(null, "", "/");
   });
   it("opens the level named in the address and keeps a new choice there", async () => {
     window.history.replaceState(null, "", "/review-fixture/coaching?view=me");

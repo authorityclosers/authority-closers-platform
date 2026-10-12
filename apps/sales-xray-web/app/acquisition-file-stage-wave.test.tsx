@@ -62,7 +62,7 @@ it("draws the chosen call's own wave and says how long it is", async () => {
   measured.envelope = wave(1_508_000);
   await render();
   const card = host.querySelector('li[data-selected="true"]')!;
-  expect(card.textContent).toContain("2 KB · 25:08 · Audio file");
+  expect(card.textContent).toContain("2 KB · 25:08 · Recording");
   const strip = card.querySelector('[role="img"]')!;
   expect(strip.hasAttribute("data-measured")).toBe(true);
   expect(strip.getAttribute("aria-label")).toBe(

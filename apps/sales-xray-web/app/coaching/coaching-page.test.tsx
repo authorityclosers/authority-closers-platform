@@ -292,6 +292,30 @@ describe("Coaching story", () => {
     expect(html).not.toContain("Compare one more evidence moment");
     expect(html).not.toContain("<audio");
   });
+  it("shows a synthetic monologue once when the lesson repeats it as an observation", () => {
+    const quote =
+      "One long fictional seller monologue, without an extra lesson finding. ".repeat(
+        20,
+      );
+    const moment = {
+      ...fictionalCallCoaching.evidence[0],
+      quote,
+      observation: quote,
+    };
+    const call = {
+      ...fictionalCallCoaching,
+      evidence: [moment],
+      lesson: { ...fictionalCallCoaching.lesson!, own_call: moment },
+    };
+    const html = renderToStaticMarkup(<CallCoachingStory coaching={call} />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    expect(container.querySelector("blockquote")?.textContent).toBe(quote);
+    expect(container.textContent?.split(quote)).toHaveLength(2);
+    expect(container.textContent).toContain("Read the moment above.");
+    expect(container.textContent).toContain("Read full quote");
+    expect(container.textContent).toContain(call.mission!.behavior);
+  });
   it("server data renders before account bootstrap and hydration does not fetch twice", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

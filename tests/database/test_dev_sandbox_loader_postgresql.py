@@ -11,10 +11,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain
 from ac_platform.coaching.http import install_coaching_http
 from ac_platform.coaching.report_adapter import from_report
@@ -39,12 +40,13 @@ from ac_platform.conversation_intelligence.synthetic_import_contracts import (
     SyntheticRecordInput,
 )
 from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
     ConversationSyntheticRecord,
 )
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.routes import RouteContext
-from ac_platform.identity.models import PasswordCredential, ProviderIdentity
+from ac_platform.identity.models import PasswordCredential, Person, ProviderIdentity
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from tests.database.test_conversation_account_library_postgresql import _session
@@ -107,7 +109,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                     )
                 )
 
-            async def load(*, apply=True, include_history=False):
+            async def load(*, apply=True):
                 async with AsyncSession(engine) as db, db.begin():
                     return await module.load(
                         db,
@@ -115,8 +117,16 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                         approver=owner.person_id,
                         approval="AUT-1701 fictional dev test",
                         apply=apply,
-                        include_history=include_history,
                     )
+
+            async def history(*, apply=True):
+                return await module.load_history(
+                    async_sessionmaker(engine, expire_on_commit=False),
+                    root=Path("unused-fictional-root"),
+                    approver=owner.person_id,
+                    approval="AUT-1701 fictional dev test",
+                    apply=apply,
+                )
 
             preview = await load(apply=False)
             assert preview["calls_created"] == 1 and preview["after_calls"] == 0
@@ -336,7 +346,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 }
             )
             monkeypatch.setattr(module, "summaries", lambda _root: iter([summary]))
-            history_preview = await load(apply=False, include_history=True)
+            history_preview = await history(apply=False)
             assert history_preview["summaries_validated"] == 1
             async with AsyncSession(engine) as db:
                 assert (
@@ -347,10 +357,10 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                     )
                     == 0
                 )
-            history = await load(include_history=True)
-            assert history["summaries_created"] == 1 and history["calls_created"] == 0
-            assert history["speaker_maps_created"] == 0 and history["speaker_maps_preserved"] == 1
-            again = await load(include_history=True)
+            history_result = await history()
+            assert history_result["summaries_created"] == 1
+            assert history_result["batches"] == 1
+            again = await history()
             assert again["summaries_skipped"] == 1
             # An existing later speaker choice always wins over a source replay.
             async with AsyncSession(engine) as db, db.begin():
@@ -404,7 +414,7 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 lambda _root: iter([SyntheticRecordInput.model_validate(changed_summary)]),
             )
             with pytest.raises(ValueError, match="preserved synthetic revision changed"):
-                await load(include_history=True)
+                await history()
             monkeypatch.setattr(module, "summaries", lambda _root: iter([summary]))
 
             changed = deepcopy(source.model_dump(by_alias=True))
@@ -455,6 +465,204 @@ def test_normal_reads_replay_race_and_rollback(postgres_harness, monkeypatch):
                 assert (
                     await db.scalar(select(func.count()).select_from(Membership)) == members_before
                 )
+        finally:
+            await engine.dispose()
+
+    run(scenario())
+
+
+@pytest.mark.parametrize("failure", ["audit", "approval"])
+def test_history_batches_release_locks_audit_rollback_and_resume(
+    postgres_harness, monkeypatch, failure
+):
+    async def scenario():
+        module = loader()
+        monkeypatch.setattr(module, "TARGET", uuid4())
+        source = dated_bundle()
+        rows = [
+            SyntheticRecordInput.model_validate(
+                {
+                    "kind": "call_summary",
+                    "key": f"syn-fixture-history-{i}",
+                    "business_id": "syn-fixture",
+                    "revision": 1,
+                    "occurred_at": source.occurred_at,
+                    "payload": {
+                        "schema_version": "synthetic-sales-simulation/1",
+                        "synthetic": True,
+                        "call_id": f"syn-fixture-history-{i}",
+                        "rep_id": "syn-fixture-R1",
+                        "duration_ms": 1000,
+                        "report": deepcopy(source.report),
+                    },
+                }
+            )
+            for i in range(3)
+        ]
+        monkeypatch.setattr(module, "summaries", lambda _root: iter(rows))
+        engine = create_async_engine(postgres_harness.url, hide_parameters=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with sessions() as db, db.begin():
+                db.add(Tenant(id=module.TARGET, name="AC Sandbox", slug=module.TARGET.hex))
+            owner = await seed(engine, tenant_id=module.TARGET, role="owner")
+            async with sessions() as db, db.begin():
+                db.add(
+                    Organisation(
+                        tenant_id=module.TARGET,
+                        created_by_person_id=owner.person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token="x" * 43,
+                    )
+                )
+                await db.flush()
+                db.add(
+                    ConversationSandboxOrganisation(
+                        tenant_id=module.TARGET,
+                        approved_by_person_id=owner.person_id,
+                        approval_reference="Fictional dev batch test",
+                        created_at=owner.now,
+                    )
+                )
+
+            async def history(*, apply=True, batch_size=1):
+                return await module.load_history(
+                    sessions,
+                    root=Path("unused-fictional-root"),
+                    approver=owner.person_id,
+                    approval="Fictional dev batch test",
+                    apply=apply,
+                    batch_size=batch_size,
+                )
+
+            async def stored():
+                async with sessions() as db:
+                    records = list(
+                        await db.scalars(
+                            select(ConversationSyntheticRecord).where(
+                                ConversationSyntheticRecord.tenant_id == module.TARGET,
+                            )
+                        )
+                    )
+                    events = list(
+                        await db.scalars(
+                            select(AuditEvent)
+                            .where(
+                                AuditEvent.tenant_id == module.TARGET,
+                            )
+                            .order_by(AuditEvent.sequence_no)
+                        )
+                    )
+                    assert (await verify_audit_chain(db, module.TARGET)).valid
+                    return records, events
+
+            preview = await history(apply=False)
+            assert preview["summaries_validated"] == 3
+            assert preview["before_summaries"] == preview["after_summaries"] == 0
+            assert await stored() == ([], [])
+
+            original_target, original_preserved = module.target, module.preserved
+            original_audit = module.AuditRepository.append
+            targets = 0
+            between_batches = 0
+
+            async def checked_target(db, approver):
+                nonlocal targets
+                targets += 1
+                if failure == "approval" and targets == 3:
+                    async with sessions() as revoked, revoked.begin():
+                        await revoked.execute(
+                            update(Membership)
+                            .where(
+                                Membership.tenant_id == module.TARGET,
+                                Membership.person_id == approver,
+                            )
+                            .values(role="member")
+                        )
+                await original_target(db, approver)
+
+            async def checked_preserved(db, **kwargs):
+                nonlocal between_batches
+                async with sessions() as observer, observer.begin():
+                    # The API's tenant SHARE fence works during a loader batch.
+                    assert (
+                        await observer.scalar(
+                            select(Tenant)
+                            .where(
+                                Tenant.id == module.TARGET,
+                            )
+                            .with_for_update(read=True, nowait=True)
+                        )
+                        is not None
+                    )
+                    if kwargs["key"] == rows[1].key:
+                        # The prior batch has committed and released its approver FK.
+                        assert (
+                            await observer.scalar(
+                                select(Person)
+                                .where(
+                                    Person.id == owner.person_id,
+                                )
+                                .with_for_update(nowait=True)
+                            )
+                            is not None
+                        )
+                        records, events = await stored()
+                        assert len(records) == len(events) == 1
+                        between_batches += 1
+                return await original_preserved(db, **kwargs)
+
+            async def failing_audit(repository, **kwargs):
+                payload = kwargs["payload"]
+                if failure == "audit" and payload.get("batch") == 2:
+                    raise ValueError("Fictional audit failure")
+                return await original_audit(repository, **kwargs)
+
+            monkeypatch.setattr(module, "target", checked_target)
+            monkeypatch.setattr(module, "preserved", checked_preserved)
+            monkeypatch.setattr(module.AuditRepository, "append", failing_audit)
+            with pytest.raises(ValueError, match="audit failure|current approving owner"):
+                await history()
+            records, events = await stored()
+            assert [record.synthetic_key for record in records] == [rows[0].key]
+            assert len(events) == 1
+            assert events[0].payload["mode"] == "history_batch"
+            assert events[0].payload["summaries_created"] == 1
+            assert events[0].payload["source_sha256"]
+            assert between_batches == (1 if failure == "audit" else 0)
+
+            monkeypatch.setattr(module, "target", original_target)
+            monkeypatch.setattr(module, "preserved", original_preserved)
+            monkeypatch.setattr(module.AuditRepository, "append", original_audit)
+            async with sessions() as db, db.begin():
+                await db.execute(
+                    update(Membership)
+                    .where(
+                        Membership.tenant_id == module.TARGET,
+                        Membership.person_id == owner.person_id,
+                    )
+                    .values(role="owner")
+                )
+            resumed = await history()
+            assert resumed["summaries_created"] == 2 and resumed["summaries_skipped"] == 1
+            assert resumed["before_summaries"] == 1 and resumed["after_summaries"] == 3
+            assert resumed["insight_rows_refreshed"] == 3
+            replay = await history()
+            assert replay["summaries_created"] == 0 and replay["summaries_skipped"] == 3
+            assert replay["source_sha256"] == resumed["source_sha256"] == preview["source_sha256"]
+            records, events = await stored()
+            assert len(records) == 3
+            assert all(event.payload["provider_calls"] == 0 for event in events)
+            assert all(event.payload["charged_seconds"] == 0 for event in events)
+
+            # Dry-run checks preserved content too; it never accepts a changed revision.
+            changed = rows[0].model_copy(deep=True)
+            changed.payload["duration_ms"] = 2000
+            monkeypatch.setattr(module, "summaries", lambda _root: iter([changed]))
+            with pytest.raises(ValueError, match="preserved synthetic revision changed"):
+                await history(apply=False)
+            unchanged, unchanged_events = await stored()
+            assert len(unchanged) == 3 and len(unchanged_events) == len(events)
         finally:
             await engine.dispose()
 

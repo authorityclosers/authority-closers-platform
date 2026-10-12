@@ -42,7 +42,7 @@ export type UploadPolicy = {
   maximum_call_seconds: number;
   retention_days: number;
 };
-export const MAX_ACQUISITION_FILE_BYTES = 32 * 1024 ** 2;
+export const MAX_ACQUISITION_FILE_BYTES = 100_000_000;
 export type Submission = {
   id: string;
   recordingId: string;
@@ -254,7 +254,7 @@ export async function acquisition(
         detail === "The audio length could not be verified. Try another file."
           ? "source_verification"
           : detail ===
-              "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
+              "Choose an audio or video file up to 100 MB and accept the current upload terms."
             ? "source_invalid"
             : detail === "The complete recording was not received."
               ? "source_incomplete"
@@ -379,7 +379,7 @@ export function parsePolicy(value: unknown): UploadPolicy {
       item.maximum_file_bytes,
       MAX_ACQUISITION_FILE_BYTES,
     ),
-    maximum_call_seconds = integer(item.maximum_call_seconds, 3600),
+    maximum_call_seconds = integer(item.maximum_call_seconds, 7200),
     retention_days = integer(item.retention_days, MAX_RETENTION_DAYS);
   const privacy_details =
     typeof item.privacy_details === "string"

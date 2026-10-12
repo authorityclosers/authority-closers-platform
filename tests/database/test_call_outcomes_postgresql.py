@@ -13,13 +13,15 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.conversation_intelligence.prospect_call_outcome_models import (
     ConversationCallOutcomeRevision,
 )
+from ac_platform.tenancy.models import Membership, Organisation
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import _setup
@@ -219,5 +221,87 @@ def test_outcomes_append_fence_derive_the_prospect_stage_and_keep_history(
                 with pytest.raises(Exception, match="preserve history"):
                     async with db.begin():
                         await db.execute(text(statement))
+
+    run(exercise())
+
+
+def test_organisation_admins_read_a_teammates_outcome_read_only(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The rep records; an owner or admin of the organisation sees it with can_edit false."""
+
+    from tests.database.test_coaching_postgresql import install
+    from tests.database.test_conversation_account_library_postgresql import _session
+    from tests.database.test_conversation_postgresql import seed as seed_person
+    from tests.database.test_conversation_submission_http_postgresql import ORIGIN
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with setup.sessions() as db, db.begin():
+                db.add(
+                    Organisation(
+                        tenant_id=setup.state.tenant_id,
+                        created_by_person_id=setup.state.person_id,
+                        creation_command_id=uuid4(),
+                        domain_verification_token=uuid4().hex + uuid4().hex,
+                    )
+                )
+                await db.execute(
+                    update(Membership)
+                    .where(Membership.person_id == setup.state.person_id)
+                    .values(role="member")
+                )
+            install(setup, organisation=True)
+            call = await direct_call(setup)
+            await snapshot(setup, call)
+            path = f"{PREFIX}/calls/{call}/outcome"
+            admin = await seed_person(setup.engine, tenant_id=setup.state.tenant_id, role="admin")
+            member = await seed_person(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            admin_token, member_token = await _session(setup, admin), await _session(setup, member)
+            async with client_for(setup) as rep:
+                setup.clock[0] += timedelta(seconds=1)
+                private(
+                    await rep.put(path, json=body({"outcome": "lost", "lost_reason": "Budget"})),
+                    200,
+                )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, admin_token)
+                seen = await client.get(path)
+                private(seen, 200)
+                view = seen.json()
+                assert view["value"] == {
+                    "outcome": "lost",
+                    "lost_reason": "Budget",
+                    "follow_up_on": None,
+                    "deal_value": None,
+                }
+                assert view["basis"] == "person" and view["locked"] is True
+                assert view["set_by_person_id"] == str(setup.state.actor.person_id)
+                assert view["can_edit"] is False
+                # Reading never grants recording: the admin's save is refused untouched.
+                refused = await client.put(
+                    path, json=body({"outcome": "won"}, 1), headers={"Origin": ORIGIN}
+                )
+                private(refused, 403)
+                assert refused.json()["detail"] == "not_call_owner"
+                # A plain teammate still sees nothing to record.
+                client.cookies.set(setup.settings.session_cookie_name, member_token)
+                hidden = await client.get(path)
+                private(hidden, 403)
+                assert hidden.json()["detail"] == "not_call_owner"
+            async with setup.sessions() as db:
+                rows = (
+                    await db.scalars(
+                        select(ConversationCallOutcomeRevision).where(
+                            ConversationCallOutcomeRevision.submission_id == call
+                        )
+                    )
+                ).all()
+                assert [row.revision for row in rows] == [1]
+        finally:
+            await setup.engine.dispose()
 
     run(exercise())

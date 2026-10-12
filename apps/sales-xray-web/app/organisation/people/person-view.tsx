@@ -41,6 +41,7 @@ import {
   OutcomesPanel,
   PersonCalls,
   PersonHeader,
+  LatestCallPanel,
   PersonTiles,
   SkillsPanel,
   WeekChart,
@@ -370,13 +371,17 @@ function PersonActivityView({
           }
           text="Charts and report findings appear after the first analysed call."
         />
-        <CoachingPanel isYou={isYou} firstName={firstName} />
+        <CoachingPanel isYou={isYou} personId={personId} />
       </>
     );
 
   return (
     <>
       <PersonTiles data={data} weeks={weeks} dates={dates} />
+      <div className={styles.grid}>
+        <CoachingPanel isYou={isYou} personId={personId} />
+        <LatestCallPanel data={data} dates={dates} />
+      </div>
       <div className={styles.grid}>
         <WeekChart
           title="Calls per week"
@@ -393,7 +398,6 @@ function PersonActivityView({
           dates={dates}
         />
         <OutcomesPanel tally={tally} reading={reading} />
-        <CoachingPanel isYou={isYou} firstName={firstName} />
       </div>
       <SkillsPanel
         rows={rows}

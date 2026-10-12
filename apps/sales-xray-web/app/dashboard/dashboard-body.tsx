@@ -31,6 +31,7 @@ import {
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
 import styles from "./dashboard.module.css";
+import type { SandboxFacts } from "./dashboard-data";
 
 export type ReadState<T> =
   | { status: "loading" }
@@ -76,6 +77,8 @@ function Ph({ w }: { w: string }) {
 
 type DashboardBodyProps = {
   team: boolean | null;
+  /** The fictional AC Sandbox's contents, when this workspace is the sandbox. */
+  sandbox?: SandboxFacts | null;
   summary?: ReadState<CallSummary | null>;
   activity?: ReadState<CallActivity | null>;
   allowance?: ReadState<Allowance>;
@@ -94,6 +97,7 @@ type DashboardBodyProps = {
  */
 export function DashboardBody({
   team,
+  sandbox = null,
   summary: summaryState = LOADING,
   activity: activityState = LOADING,
   allowance: allowanceState = LOADING,
@@ -143,6 +147,8 @@ export function DashboardBody({
           subtitle="Last 30 days, India time"
         />
       </header>
+
+      {sandbox?.sandbox ? <SandboxCard facts={sandbox} /> : null}
 
       {showGetStarted ? (
         <GetStarted allowance={allowance} />
@@ -432,6 +438,59 @@ function NotLoaded() {
 }
 
 /** A brand-new account: one panel in place of zero figures and empty charts. */
+/** Why there is a made-up team here, what it holds, and where to look at it. */
+function SandboxCard({ facts }: { facts: SandboxFacts }) {
+  const n = (value: number) => value.toLocaleString("en-IN");
+  return (
+    <section className={styles.sandbox} aria-labelledby="sandbox-title">
+      <div className={styles.sandboxCopy}>
+        <p className={styles.sandboxEyebrow}>
+          Fictional AC Sandbox · only you and your admins see it
+        </p>
+        <h2 id="sandbox-title">
+          A made-up sales team, so you can see Sales Xray at scale
+        </h2>
+        <p>
+          Nobody here is real. Every call has a report, coaching and a recorded
+          outcome, so you can show team analytics to investors, check People and
+          Insights with full numbers, read coaching examples, and test the
+          pipeline without touching customer data.
+        </p>
+      </div>
+      <dl className={styles.sandboxFacts} aria-label="What the sandbox holds">
+        <div>
+          <dt>Fictional businesses</dt>
+          <dd>{n(facts.businesses)}</dd>
+        </div>
+        <div>
+          <dt>Fictional reps</dt>
+          <dd>{n(facts.representatives)}</dd>
+        </div>
+        <div>
+          <dt>Calls with reports</dt>
+          <dd>{n(facts.calls)}</dd>
+        </div>
+        <div>
+          <dt>Recorded outcomes</dt>
+          <dd>{n(facts.outcomes)}</dd>
+        </div>
+        {facts.historySummaries > 0 ? (
+          <div>
+            <dt>Call history since 2017</dt>
+            <dd>{n(facts.historySummaries)}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <nav className={styles.sandboxLinks} aria-label="Sandbox views">
+        <Link href="/organisation/insights?range=all">Insights, all time</Link>
+        <Link href="/coaching?view=team">Team coaching</Link>
+        <Link href="/organisation?tab=members">People</Link>
+        <Link href="/analysis/calls">All calls</Link>
+      </nav>
+    </section>
+  );
+}
+
 function GetStarted({ allowance }: { allowance: Allowance | null }) {
   return (
     <section className={styles.getStarted} aria-labelledby="get-started">

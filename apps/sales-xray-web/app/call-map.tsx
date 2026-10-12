@@ -39,7 +39,6 @@ import {
   isAccountName,
   suggestYou,
   useSpeakerProfiles,
-  voiceStyle,
   type SpeakerProfile,
 } from "./speaker-profiles";
 import styles from "./call-map.module.css";
@@ -390,6 +389,18 @@ export function CallMap({
     const id = facts.voices[voice];
     return id === undefined ? undefined : profiles[id];
   };
+  // Match the timeline: a confirmed seller is teal, all other lanes neutral.
+  // Speaking first never establishes a seller role.
+  const laneStyle = (lane: number): CSSProperties => {
+    const speakerId = lanes[lane]?.speakerId;
+    const role = speakerId ? profiles[speakerId]?.role : null;
+    return {
+      "--voice":
+        role === "you" || role === "salesperson"
+          ? "var(--lx-teal)"
+          : "var(--lx-muted)",
+    } as CSSProperties;
+  };
   const nameOf = (voice: number) => {
     const profile = profileOf(voice);
     if (profile?.name) return profile.name;
@@ -621,7 +632,7 @@ export function CallMap({
                         type="button"
                         className={styles.speaker}
                         data-voice={lane.lane}
-                        style={voiceStyle(lane.lane)}
+                        style={laneStyle(lane.lane)}
                         aria-expanded={
                           editable ? editingVoice === lane.lane : undefined
                         }
@@ -758,7 +769,7 @@ export function CallMap({
                 }
                 style={
                   activeLens === "who" && focusVoice !== null
-                    ? voiceStyle(focusVoice)
+                    ? laneStyle(focusVoice)
                     : undefined
                 }
                 viewBox={`0 0 ${BIN_COUNT * 4} 56`}
@@ -840,7 +851,7 @@ export function CallMap({
                   key={lane.lane}
                   className={styles.lane}
                   data-voice={lane.lane}
-                  style={voiceStyle(lane.lane)}
+                  style={laneStyle(lane.lane)}
                   data-dim={
                     focusVoice !== null && focusVoice !== lane.lane
                       ? "true"
@@ -934,7 +945,7 @@ export function CallMap({
                   {turn && voice >= 0 ? (
                     <span
                       data-voice={laneOf[voice]}
-                      style={voiceStyle(laneOf[voice] ?? voice)}
+                      style={laneStyle(laneOf[voice] ?? voice)}
                     >
                       <SpeakerAvatar
                         voice={laneOf[voice] ?? voice}
@@ -970,7 +981,7 @@ export function CallMap({
       </div>
 
       <figcaption className={styles.stats}>
-        <div className={styles.stat} data-tone="teal">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <MessagesSquare size={15} />
           </span>
@@ -987,7 +998,7 @@ export function CallMap({
                     key={lane.lane}
                     data-voice={lane.lane}
                     style={{
-                      ...voiceStyle(lane.lane),
+                      ...laneStyle(lane.lane),
                       flexGrow: Math.max(lane.share, 0.01),
                     }}
                   />
@@ -996,7 +1007,7 @@ export function CallMap({
             ) : null}
           </span>
         </div>
-        <div className={styles.stat} data-tone="amber">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <Timer size={15} />
           </span>
@@ -1010,7 +1021,7 @@ export function CallMap({
             <b>{formatClock(facts.longest.ms)}</b>
           </span>
         </div>
-        <div className={styles.stat} data-tone="blue">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <MessageCircleQuestion size={15} />
           </span>
@@ -1024,7 +1035,7 @@ export function CallMap({
             </b>
           </span>
         </div>
-        <div className={styles.stat} data-tone="violet">
+        <div className={styles.stat}>
           <span className={styles.icon} aria-hidden="true">
             <Target size={15} />
           </span>

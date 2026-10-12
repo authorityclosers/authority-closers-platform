@@ -173,6 +173,9 @@
   list-style: none;
 }
 .contents a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
   color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   text-decoration: none;
@@ -294,7 +297,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 24px;
+  min-height: var(--sx-control-h);
   padding: 0 8px;
   border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, transparent);
   border-radius: 999px;
@@ -694,6 +697,14 @@
 
 /* ---------- Print: just the sheet ---------- */
 @media print {
+  /* The shell uses "transition: all". Freeze it before the print rules hide
+     the shell, so its search and account controls don't paint over the sheet. */
+  :global(body):has(.document) :global(*),
+  :global(body):has(.document) :global(*::before),
+  :global(body):has(.document) :global(*::after) {
+    transition: none !important;
+    animation: none !important;
+  }
   .actions,
   .links {
     display: none !important;
@@ -712,9 +723,14 @@
     box-shadow: none;
   }
   .play {
+    min-height: 0;
     padding: 0;
     border: 0;
     background: none;
+  }
+  .contents a {
+    display: inline;
+    min-height: 0;
   }
   .play svg,
   .playWord {
