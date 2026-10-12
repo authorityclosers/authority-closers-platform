@@ -175,6 +175,19 @@ ac-heavy uv run pytest \
   tests/database/test_dev_sandbox_summary_repair_postgresql.py -q -x --tb=short
 ```
 
+On 12 October, the offline compatibility check against Report validator `/13`
+passed for all 3,360 source-derived saved drafts and all 827 proposed replacement
+drafts through the normal stored-report reader. Every canonical payload and hash
+remained exact; the 84 previously accepted browser sample payloads and transcripts
+also matched. The publication and the original offline plan stayed unchanged,
+including plan digest
+`b02d7618b3db19f6d38c171aac13723ff4988504ed463df27f0a7c2db7867f1e`.
+The private count-only receipt is
+`/home/acdev/strikes/1676/workbench-sandbox-validator13-compatibility-20261012.json`.
+This checks compatibility with the newer candidate admission rule. It does not
+read hosted reports, verify the live outcome badge or approve the supersession;
+the same-call operator reconciliation above still precedes any apply.
+
 ## Owner's Drive recordings on dev
 
 `import-sales-xray-drive.py` runs the existing ordinary recording importer with
