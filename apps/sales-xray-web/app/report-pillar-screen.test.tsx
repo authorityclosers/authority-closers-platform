@@ -1,3 +1,9 @@
+import { parseReportContent } from "./report-content";
+import {
+  contentFixture,
+  contentReport,
+  contentTranscript,
+} from "./review-fixture/report/pillars/content-fixture";
 import { act, useContext, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
@@ -117,9 +123,9 @@ it("keeps moments to five, then shows all on request", async () => {
   expect(more).toBeDefined();
   await act(async () => more!.click());
   expect(moments.querySelectorAll("ol > li").length).toBeGreaterThan(5);
-  expect(moments.textContent).toContain("Important Miss");
-  expect(moments.textContent).toContain("You moved toward");
-  expect(moments.textContent).toContain("What was missed");
+  expect(moments.textContent).not.toContain("Important Miss");
+  expect(moments.textContent).not.toContain("You moved toward");
+  expect(moments.textContent).not.toContain("What was missed");
 });
 
 it("ends where the deal stands, with links to the prospect and Coaching", async () => {
@@ -239,4 +245,49 @@ it("gives a guest the same six pillars, with locked items counted and a sign-in 
   expect(signIn).toHaveBeenCalledWith("/login");
   expect(deal.textContent).not.toContain("View Personalized Coaching");
   expect(deal.textContent).not.toContain("View Prospect Information");
+});
+
+it("shows a validated missed chance with its opening, response opportunity and relevance", async () => {
+  const title = "The seller moved to scheduling before clarifying delivery";
+  const response = "The seller proposed a meeting time.";
+  const relevance = "The delivery date remained open for the meeting.";
+  const content = parseReportContent(
+    {
+      ...contentFixture,
+      missed_chances: [
+        {
+          title,
+          opening: contentFixture.blocker!,
+          response_opportunity: {
+            ...contentFixture.seller_commitments[0],
+            text: response,
+          },
+          relevance: { ...contentFixture.blocker!, text: relevance },
+        },
+      ],
+    },
+    contentTranscript,
+  );
+  const { host, select } = await mount(
+    { ...contentReport, report_content: content },
+    contentTranscript,
+  );
+  const moments = pillar(host, "missed");
+  const miss = [...moments.querySelectorAll("ol > li")].find((item) =>
+    item.textContent?.includes("Important Miss"),
+  )!;
+  for (const text of [
+    title,
+    contentTranscript.segments[3].text,
+    response,
+    relevance,
+  ])
+    expect(miss.textContent).toContain(text);
+  await act(async () =>
+    miss.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(select).toHaveBeenCalledWith(
+    content.missed_chances[0].opening.evidence[0],
+    title,
+  );
 });
