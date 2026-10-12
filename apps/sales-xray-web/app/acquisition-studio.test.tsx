@@ -1264,6 +1264,11 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "तीन बजे ठीक है, please send details.",
   );
   expect(moments?.textContent).not.toContain("कल timing discuss करूया.");
+  // The original turn remains available through the actual Transcript reader.
+  await click("Transcript");
+  expect(
+    document.querySelector('[aria-label="Transcript reader"]')?.textContent,
+  ).toContain("कल timing discuss करूया.");
 });
 
 it.each([

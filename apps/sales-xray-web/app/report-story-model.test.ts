@@ -114,6 +114,54 @@ describe("reportStoryModel", () => {
 });
 
 describe("honest gaps", () => {
+  it("keeps a matching pillar summary's citations without lending them to other words", () => {
+    expect(amitReport.summary_evidence?.length).toBeGreaterThan(0);
+    const matching = reportStoryModel(
+      {
+        ...amitReport,
+        pillars: { version: "report-pillars/1", summary: amitReport.summary },
+      },
+      amitTranscript,
+    );
+    expect(matching.picture.summary).toEqual({
+      text: amitReport.summary,
+      sources: amitReport.summary_evidence,
+    });
+    const unrelated = reportStoryModel(
+      {
+        ...amitReport,
+        pillars: {
+          version: "report-pillars/1",
+          summary: "A different saved summary without its own citations.",
+        },
+      },
+      amitTranscript,
+    );
+    expect(unrelated.picture.summary).toEqual({
+      text: "A different saved summary without its own citations.",
+      sources: [],
+    });
+  });
+
+  it.each([false, true])(
+    "does not turn an assigned task into an agreed commitment (pillars: %s)",
+    (pillars) => {
+      const report: SalesReport = {
+        ...amitReport,
+        pillars: pillars ? { version: "report-pillars/1" } : undefined,
+        story: {
+          ...amitReport.story!,
+          prospect_commitments: [],
+          prospect_tasks: [amitReport.story!.prospect_commitments[0]],
+        },
+      };
+      const model = reportStoryModel(report, amitTranscript);
+      expect(model.deal.prospectCommitments).toEqual([]);
+      expect(model.missing[5]).toContain("Prospect commitment");
+      expect(report.story!.prospect_tasks).toHaveLength(1);
+    },
+  );
+
   it("never turns the analysis into Won or Lost", () => {
     expect(callOutcome(withOutcome("closed")).status).toBeNull();
     expect(callOutcome(withOutcome("no_sale")).status).toBeNull();

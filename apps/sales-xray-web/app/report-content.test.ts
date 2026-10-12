@@ -6,7 +6,8 @@ import { parseJobResponse } from "./report-contract";
 import { CALL_OUTCOMES } from "./report-story";
 import { reportStoryModel } from "./report-story-model";
 import { createReportDocx } from "./report-docx";
-import { COMMON } from "./report-copy";
+import { docItemText, reportDocumentModel } from "./report-document-model";
+import { BIG_PICTURE, COMMON } from "./report-copy";
 import {
   contentFixture,
   contentReport,
@@ -14,6 +15,67 @@ import {
 } from "./review-fixture/report/pillars/content-fixture";
 
 describe("validated Report content", () => {
+  it.each([
+    { status: "Won" as const, note: "Fictional human result." },
+    { status: "Won" as const },
+    { status: "Lost" as const, note: "Fictional human result." },
+    { status: "Lost" as const },
+  ])(
+    "preserves the recorded result in Report, Document and Word: %j",
+    async (recorded) => {
+      const report = {
+        ...contentReport,
+        report_content: { ...contentFixture, position: contentFixture.outcome },
+      };
+      const people = { recorded };
+      const model = reportStoryModel(report, contentTranscript, people);
+      const expected = {
+        status: recorded.status,
+        origin: "person",
+        detail: recorded.note ? { text: recorded.note, sources: [] } : null,
+      };
+      expect(model.picture.outcome).toEqual(expected);
+      expect(model.deal.outcome).toEqual(expected);
+      expect(model.deal.position).toEqual({
+        text: contentFixture.outcome!.text,
+        sources: contentFixture.outcome!.evidence,
+      });
+      const noPosition = reportStoryModel(
+        {
+          ...report,
+          report_content: { ...report.report_content, position: null },
+        },
+        contentTranscript,
+        people,
+      );
+      expect(noPosition.deal.position).toEqual(model.deal.position);
+      const data = { report, transcript: contentTranscript };
+      const doc = reportDocumentModel(data, people);
+      const outcomeItems = doc.sections[0].parts[0].items;
+      expect(outcomeItems[0]).toMatchObject({
+        type: "status",
+        status: recorded.status,
+        origin: BIG_PICTURE.outcomeByPerson,
+      });
+      const outcomeText = outcomeItems.map(docItemText).join(" ");
+      if (recorded.note) expect(outcomeText).toContain(recorded.note);
+      expect(outcomeText).not.toContain(contentFixture.outcome!.text);
+      const blob = await createReportDocx(data, people);
+      const wordText = execFileSync(
+        "python3",
+        [
+          "-c",
+          "import io,sys,zipfile,xml.etree.ElementTree as ET; root=ET.fromstring(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).read('word/document.xml')); print(' '.join(n.text or '' for n in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')))",
+        ],
+        { input: Buffer.from(await blob.arrayBuffer()) },
+      ).toString();
+      expect(wordText).toContain(recorded.status);
+      expect(wordText).toContain(BIG_PICTURE.outcomeByPerson);
+      if (recorded.note) expect(wordText).toContain(recorded.note);
+      expect(wordText).toContain(contentFixture.outcome!.text);
+    },
+  );
+
   it.each(CALL_OUTCOMES)(
     "retains explicit %s without setting saved deal state",
     (status) => {
@@ -129,11 +191,40 @@ describe("validated Report content", () => {
       pillars: {
         version: "report-pillars/1" as const,
         summary: "An older projection of this call.",
+        outcome: {
+          status: "Deferred" as const,
+          line: "Older projection of the outcome.",
+          evidence: contentFixture.outcome!.evidence,
+        },
       },
     };
     const model = reportStoryModel(report, contentTranscript);
     expect(model.picture.summary?.text).toBe(contentReport.summary);
     expect(model.deal.nextEvent?.text).toContain("Friday · 4 PM");
     expect(model.deal.coachingMission).toBeNull();
+    const observed = {
+      status: "Meeting Booked",
+      origin: "call",
+      detail: {
+        text: contentFixture.outcome!.text,
+        sources: contentFixture.outcome!.evidence,
+      },
+    };
+    expect(model.picture.outcome).toEqual(observed);
+    expect(model.deal.outcome).toEqual(observed);
+    for (const status of ["Won", "Lost"] as const) {
+      const recorded = { status, note: "Fictional human result." };
+      const overridden = reportStoryModel(report, contentTranscript, {
+        recorded,
+      });
+      const expected = {
+        status,
+        origin: "person",
+        detail: { text: recorded.note, sources: [] },
+      };
+      expect(overridden.picture.outcome).toEqual(expected);
+      expect(overridden.deal.outcome).toEqual(expected);
+      expect(overridden.deal.nextEvent?.text).toContain("Friday · 4 PM");
+    }
   });
 });

@@ -2,6 +2,65 @@
 
 Implementation ready for independent review; activation and release acceptance remain pending.
 
+## A/B integration and CTO outcome repairs
+
+Continued from clean, pushed `4a7afedeb059df369204e3a394a402e1a714dafa`
+on the existing admitted sx-report branch after independent `ac-gate check`
+exit 0. Root's completed managed-preview receipt, revision
+`0bf10eea-8217-4d33-9de6-211b90abed1f`, binds fictional HTTP 200,
+desktop/mobile, source/hiding and actual Document/Word verification to that
+pre-edit head. Its API health, blocked initialization and served-SHA-header
+limits remain attributed Root evidence; this repair still needs renewed
+source-bound preview verification. The harness owns current task checkout.
+
+Matched the coordinator's retained inputs before integration:
+
+- A quote patch SHA-256:
+  `6b1a03f33c1c32c0d128d469189cc38f60d3990f3ed5be69fd975b8e0b1706a8`.
+- B summary patch SHA-256:
+  `1a11da84f7b865716d5a81cf45ddf87f8fa615c4e59ac22f47672f63f697cac3`.
+- B historical receipt SHA-256:
+  `5c882639a4d8d29c293551cfa39df128f84d038c2424fcc7178067b8a4d52b6f`.
+
+A's acquisition assertion is adapted to the newer block: the supported s3
+Commitment remains visible, the ungated s1 miss remains hidden in Moments,
+and the original s1 turn is checked through the actual Transcript reader.
+All consent, upload and same-call checks remain. B's exact matching-summary
+repair retains saved evidence only when the pillar summary has identical
+words. Its three original mapping cases are restored, including both
+task-only prospect cases; the shared dev workbench was not changed.
+
+The CTO's P1/P2 are repaired in the same model. Candidate outcome resolution
+now reaches the person's recorded status/origin/note. The Report adapter
+uses that resolved outcome consistently in Big Picture and Deal, ahead of
+an older pillar outcome. With no separate position, a person-recorded
+result retains the candidate call observation in Prospect's position;
+matching call observation/position text remains deduplicated otherwise.
+Fictional Won/Lost cases with and without notes exercise the shared Report,
+actual Document model and generated Word OOXML. The mixed-contract case
+checks candidate Meeting Booked against older Deferred, plus both recorded
+overrides. No saved deal result or report history is rewritten.
+
+Before the implementation repair, the new model/content checks reproduced
+six failures on the pinned source: citation loss, four recorded-result
+cases and older-pillar outcome precedence (43 other cases passed). This is
+fresh local reproduction, separate from the earlier green CI and B overlay.
+Sales Xray typecheck, changed-file ESLint/Prettier, whitespace and the live
+PR lane/overlap check pass. Frontend verification now covers **213 unique passing cases in nine suites**:
+the eight-suite run passed 209 with two five-second synthetic-preview
+timeouts; both unchanged timed-out cases and that suite's other two cases
+passed with one worker at the original timeout, alongside both actual
+pillars-route regressions (six passes). This includes the full acquisition
+suite, all A/B/P1/P2 cases, native-v8/legacy pillars, actual Document and
+generated Word checks. No timeout or test configuration was changed. Normal
+CI and a renewed Root receipt remain required before independent exact-head
+CTO/CEO review.
+
+Only the shared model, three regression files and this evidence change in
+this continuation. Native-v8/legacy contracts, backend schema, runtime and
+SVAL holds retain their earlier bytes. No provider, real call, service,
+settings, activation, merge or release action occurred in this repair.
+
 - Existing branch: task/sx-report/1783-report-content-c5; independent live
   `ac-gate check` passed. Preserved prerequisite commit d3bba52.
 - Accepted Root's managed preview receipt revision

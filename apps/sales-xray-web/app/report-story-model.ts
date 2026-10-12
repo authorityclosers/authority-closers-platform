@@ -370,14 +370,9 @@ export function callOutcome(
     line(overview?.text, overview?.evidence) ??
     line(report.story?.next_step?.text, report.story?.next_step?.evidence);
   const explicit = report.report_content?.outcome?.status;
-  if (explicit)
-    return {
-      status: explicit === "Won" || explicit === "Lost" ? null : explicit,
-      origin: explicit === "Won" || explicit === "Lost" ? null : "call",
-      detail,
-    };
-  let status: OutcomeStatus | null = null;
-  if (story) {
+  let status: OutcomeStatus | null =
+    explicit && explicit !== "Won" && explicit !== "Lost" ? explicit : null;
+  if (!explicit && story) {
     if (story.kind === "follow_up") status = "Follow-up Set";
     else if (story.kind === "disqualified") status = "Disqualified";
     else if (story.kind === "none")
@@ -386,7 +381,7 @@ export function callOutcome(
           ? "No Clear Next Step"
           : "Follow-up Set";
   }
-  if (!status && overview) {
+  if (!explicit && !status && overview) {
     status =
       overview.kind === "follow_up"
         ? "Follow-up Set"
@@ -987,22 +982,36 @@ export function reportStoryModel(
       )
     : model;
   return report.report_content
-    ? withReportContent(projected, report.report_content, transcript)
+    ? withReportContent(
+        projected,
+        report.report_content,
+        // Candidate observations supersede older pillars; a recorded result wins.
+        report.report_content.outcome ? outcome : projected.picture.outcome,
+        transcript,
+      )
     : projected;
 }
 
 function withReportContent(
   base: StoryModel,
   content: import("./report-content").ReportContent,
+  outcome: Outcome,
   transcript?: Transcript,
 ): StoryModel {
-  const picture: StoryModel["picture"] = { ...base.picture, assessment: null };
+  const picture: StoryModel["picture"] = {
+    ...base.picture,
+    outcome,
+    assessment: null,
+  };
   const flow: StoryModel["flow"] = { ...base.flow };
   const worked: Item[] = [];
   const didnt: Item[] = [];
   const moments: Moment[] = [];
-  const outcome = base.picture.outcome;
-  const deal: StoryModel["deal"] = { ...base.deal, coachingMission: null };
+  const deal: StoryModel["deal"] = {
+    ...base.deal,
+    outcome,
+    coachingMission: null,
+  };
   const deeper: StoryModel["deeper"] = {
     ...base.deeper,
     discovery: {
@@ -1071,7 +1080,9 @@ function withReportContent(
     ),
   );
   moments.sort((a, b) => a.source.start_ms - b.source.start_ms);
-  const position = from(content.position);
+  const position =
+    from(content.position) ??
+    (outcome.origin === "person" ? from(content.outcome) : null);
   deal.position = position?.text === outcome.detail?.text ? null : position;
   deal.blocker = from(content.blocker);
   deal.prospectCommitments = content.prospect_commitments.map((n) => from(n)!);
@@ -1168,7 +1179,9 @@ function withPillars(
     ...base.picture,
     outcome,
     summary: p.summary
-      ? { text: p.summary, sources: [] }
+      ? p.summary === base.picture.summary?.text
+        ? base.picture.summary
+        : { text: p.summary, sources: [] }
       : base.picture.summary,
     // The supplied summary is already the three to five sentences.
     assessment: p.summary ? null : base.picture.assessment,
