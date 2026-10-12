@@ -1,5 +1,22 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October, 23:49 UTC — supporting moments repair independently passes
+
+At `9e1f43b6`, the focused supporting-moment journey passes **4/4** in
+10.51 seconds, launcher0, all three captures per width/theme. Compact counts
+are 2 desktop / 1 phone; expansion exposes all four retained quotes, original
+times and existing Call coaching links. Shortening restores list focus and
+keeps every source quote. Controls meet 32/44 px floors, with no refresh,
+runtime/server/visual errors or media request. Playback is not tested.
+
+All twelve PNGs were inspected. Expanded and shortened lists are readable in
+both themes; the initial captures frame the diagnosis above the list, while
+the shortened captures show the compact list itself. Receipts/JUnit/log/PNGs:
+`shots/2026-10-12-supporting-moments-2348Z/` in the strike directory. Report4,
+Team4 and supporting-moment4 results are separate completed focused runs.
+ReleaseCI passed per the coordinator; actual served release/canaries and
+approved populated hosted context remain pending. Next new dev wave: 00:04 UTC.
+
 12 October, 23:39 UTC — focused Report and Team repair QA complete
 
 Final Team continuation at `b81a3443`: **4/4 PASS**, 18.25 seconds, launcher0,
