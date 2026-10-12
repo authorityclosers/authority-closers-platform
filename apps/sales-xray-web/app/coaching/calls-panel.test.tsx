@@ -97,7 +97,7 @@ describe("calls on the current skill", () => {
     expect(host.textContent).toContain("Analysing…");
   });
 
-  it("keeps the owner's per-call Coaching destination and resets expansion when the filter changes", async () => {
+  it("keeps call destinations, collapses without losing the filter and resets expansion when it changes", async () => {
     await act(async () =>
       root.render(
         <CallsPanel
@@ -119,8 +119,26 @@ describe("calls on the current skill", () => {
       `/coaching?call=${call(1).submission_id}`,
     );
     expect(button("Show all 4 calls")).toBeDefined();
+    expect(button("Show all 4 calls").getAttribute("aria-expanded")).toBe(
+      "false",
+    );
     await act(async () => button("Show all 4 calls").click());
     expect(list.parentElement!.hasAttribute("data-expanded")).toBe(true);
+    expect(button("Show fewer calls").getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(button("Show fewer calls").getAttribute("aria-controls")).toBe(
+      list.parentElement!.id,
+    );
+    await act(async () => button("Show fewer calls").click());
+    expect(list.parentElement!.hasAttribute("data-expanded")).toBe(false);
+    expect(document.activeElement).toBe(links()[0]);
+    expect(button("On this skill").getAttribute("aria-pressed")).toBe("true");
+    expect(links()).toHaveLength(4);
+    expect(button("Show all 4 calls").getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    await act(async () => button("Show all 4 calls").click());
     await act(async () => button("All calls").click());
     expect(list.parentElement!.hasAttribute("data-expanded")).toBe(false);
     expect(links()).toHaveLength(10);

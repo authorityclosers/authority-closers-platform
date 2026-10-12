@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, PhoneCall } from "lucide-react";
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { kitStyles, List, Panel, Row, Segmented } from "../ui/kit";
 import type { CallSummary, ProgressPoint } from "./coaching-client";
 import { CALLS, FOCUS, POINT_COPY, THEIR } from "./coaching-copy";
@@ -21,6 +21,8 @@ export function CallsPanel({
 }) {
   const [filter, setFilter] = useState<"all" | "skill">("all");
   const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  const section = useRef<HTMLElement>(null);
   const they = useTheirCoaching();
   const callHref = useCallHref();
   if (!calls?.length) return null;
@@ -38,6 +40,7 @@ export function CallsPanel({
   const shown = filtered ? onSkill : calls;
   return (
     <section
+      ref={section}
       id="coaching-calls"
       className={styles.callsSection}
       aria-label={CALLS.title}
@@ -66,6 +69,7 @@ export function CallsPanel({
           </div>
         ) : null}
         <div
+          id={listId}
           className={styles.callList}
           data-expanded={expanded ? "" : undefined}
         >
@@ -101,14 +105,27 @@ export function CallsPanel({
             ))}
           </List>
         </div>
-        {shown.length > 3 && !expanded ? (
+        {shown.length > 3 ? (
           <button
             type="button"
             className={`${kitStyles.button} ${styles.moreCalls}`}
             data-many={shown.length > 8 ? "" : undefined}
-            onClick={() => setExpanded(true)}
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => {
+              setExpanded(!expanded);
+              if (expanded) {
+                section.current
+                  ?.querySelector<HTMLAnchorElement>("li a")
+                  ?.focus({ preventScroll: true });
+                section.current?.scrollIntoView({
+                  block: "start",
+                  behavior: "instant",
+                });
+              }
+            }}
           >
-            {CALLS.showAll(shown.length)}
+            {expanded ? CALLS.showFewer : CALLS.showAll(shown.length)}
           </button>
         ) : null}
       </Panel>

@@ -254,6 +254,34 @@ describe("anonymous Team coaching", () => {
     )!;
     await act(async () => showAll.click());
     expect(links()).toHaveLength(10);
+    const fewer = () =>
+      [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Show fewer people",
+      )!;
+    expect(fewer().getAttribute("aria-expanded")).toBe("true");
+    expect(fewer().getAttribute("aria-controls")).toBe(
+      links()[0].closest("ul")!.parentElement!.id,
+    );
+    await act(async () => fewer().click());
+    expect(links()).toHaveLength(8);
+    expect(document.activeElement).toBe(search);
+    expect(showAll.getAttribute("aria-expanded")).toBe("false");
+    await setQuery("Closer");
+    await act(async () => {
+      select.value = "closing_decision_management";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const filteredAll = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show all 9 people",
+    )!;
+    await act(async () => filteredAll.click());
+    expect(links()).toHaveLength(9);
+    await act(async () => fewer().click());
+    expect(links()).toHaveLength(8);
+    expect(search.value).toBe("Closer");
+    expect(select.value).toBe("closing_decision_management");
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("9 reps");
+    expect(document.activeElement).toBe(search);
     await setQuery("Closer 9");
     expect(links()).toHaveLength(1);
     await setQuery("");

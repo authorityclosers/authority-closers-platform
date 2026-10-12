@@ -604,6 +604,12 @@
 }
 
 @media (max-width: 600px) {
+  .repList a {
+    display: grid;
+    align-content: center;
+    min-height: 44px;
+  }
+
   .repSearch {
     flex-basis: 100%;
   }

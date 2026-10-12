@@ -1,7 +1,7 @@
 "use client";
 
 import { FileSearch, FlaskConical, LineChart, Lock, Users } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -89,6 +89,7 @@ function RepList({
   const [area, setArea] = useState("all");
   const [query, setQuery] = useState("");
   const [all, setAll] = useState(false);
+  const listId = useId();
   const search = useRef<HTMLInputElement>(null);
   const name = query.trim().toLocaleLowerCase();
   const shown = reps.filter(
@@ -145,39 +146,43 @@ function RepList({
         </span>
       </div>
       {shown.length ? (
-        <List label="Reps and their current focus">
-          {visible.map((rep) => (
-            <Row
-              key={rep.person_id}
-              icon={<Avatar name={rep.name} size={24} />}
-              title={
-                <>
-                  {rep.name}
-                  {rep.focus_label ? (
-                    <>
-                      {" "}
-                      <span className={styles.repFocus}>{rep.focus_label}</span>
-                    </>
-                  ) : null}
-                </>
-              }
-              href={`/coaching?person=${rep.person_id}`}
-              meta={[
-                `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
-                shared && rep.shared_at
-                  ? `Shared ${callDate(rep.shared_at)}`
-                  : rep.latest_call_at
-                    ? callDate(rep.latest_call_at)
-                    : null,
-              ]}
-              end={
-                rep.skill_id ? (
-                  <Badge>{AREA[rep.skill_id] ?? "Other"}</Badge>
-                ) : null
-              }
-            />
-          ))}
-        </List>
+        <div id={listId} className={styles.repList}>
+          <List label="Reps and their current focus">
+            {visible.map((rep) => (
+              <Row
+                key={rep.person_id}
+                icon={<Avatar name={rep.name} size={24} />}
+                title={
+                  <>
+                    {rep.name}
+                    {rep.focus_label ? (
+                      <>
+                        {" "}
+                        <span className={styles.repFocus}>
+                          {rep.focus_label}
+                        </span>
+                      </>
+                    ) : null}
+                  </>
+                }
+                href={`/coaching?person=${rep.person_id}`}
+                meta={[
+                  `${rep.calls} call${rep.calls === 1 ? "" : "s"}`,
+                  shared && rep.shared_at
+                    ? `Shared ${callDate(rep.shared_at)}`
+                    : rep.latest_call_at
+                      ? callDate(rep.latest_call_at)
+                      : null,
+                ]}
+                end={
+                  rep.skill_id ? (
+                    <Badge>{AREA[rep.skill_id] ?? "Other"}</Badge>
+                  ) : null
+                }
+              />
+            ))}
+          </List>
+        </div>
       ) : (
         <div className={styles.repEmpty}>
           <Empty
@@ -199,14 +204,25 @@ function RepList({
           </button>
         </div>
       )}
-      {shown.length > visible.length ? (
+      {shown.length > 8 ? (
         <button
           type="button"
           className={`${kitStyles.button} ${styles.moreCalls}`}
           data-many=""
-          onClick={() => setAll(true)}
+          aria-expanded={all}
+          aria-controls={listId}
+          onClick={() => {
+            setAll(!all);
+            if (all) {
+              search.current?.focus({ preventScroll: true });
+              search.current?.scrollIntoView({
+                block: "center",
+                behavior: "instant",
+              });
+            }
+          }}
         >
-          Show all {shown.length} people
+          {all ? TEAM.showFewer : TEAM.showAll(shown.length)}
         </button>
       ) : null}
     </Panel>
