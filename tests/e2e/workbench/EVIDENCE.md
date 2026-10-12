@@ -1,5 +1,21 @@
 Workbench QA, AUT-1694 — 11 October 2026
 
+12 October continuation — retained automatic dev pickup observation
+
+The later 21:23 coordinator pickup receipt records readiness 200 serving
+`704ef032`, a descendant of admitted `c34b0295`. Independently matched all
+twelve reviewed blobs at that serving Git source and the six exact automatic
+deployment-log entries, including migration-to-heads, normal smoke and worker
+pickup. Source migration 0088 has predecessor 0087. These are retained source,
+log and availability observations; QA made no fresh HTTP or database read.
+Root's direct database revision and formal source-bound return remain separate
+pending outputs in this packet. Hosted acceptance remains **NOT RUN**.
+
+Receipt: `pickup-receipt.json` beside the publication receipt below,
+SHA-256 `89aa01c75319f8d1652476ed206df6ea64683cb541668282bc1331c72e34b70d`.
+Original handoff and verifier/PASS log are adjacent; no deploy, schema action,
+writer connection, provider work or new product test/browser wave was run.
+
 12 October continuation — returned bounded dev decision and eligibility explanation
 
 The coordinator's 21:21 handoff arrived before notes/inbox archival; the
