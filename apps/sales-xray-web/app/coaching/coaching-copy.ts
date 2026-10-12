@@ -610,6 +610,10 @@ export const RETAINED = {
 /** Team coaching for owners and admins: totals, objections, shared reps. */
 export const TEAM = {
   allAreas: "All areas",
+  findRep: "Find a rep",
+  noMatches: "No reps match",
+  noMatchesText: "Try another name or coaching area.",
+  clearFilters: "Clear filters",
   repCount: (count: number) => `${count} ${count === 1 ? "rep" : "reps"}`,
   people: (count: number) => `${count} ${count === 1 ? "person" : "people"}`,
   latest: (date: string) => `Latest call ${date}.`,

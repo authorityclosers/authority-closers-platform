@@ -582,16 +582,35 @@
   font-style: italic;
 }
 
-/* Team: the area filter above the named sandbox reps. */
+/* Team: find a person within the already shared or fictional rep list. */
 .repFilter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 14px 4px;
 }
 
-.repFilter > span:first-child {
-  width: min(220px, 60%);
+.repSearch {
+  flex: 1 1 180px;
+}
+
+.repArea {
+  flex: 0 1 180px;
+}
+
+.repEmpty {
+  padding: 0 14px 14px;
+}
+
+@media (max-width: 600px) {
+  .repSearch {
+    flex-basis: 100%;
+  }
+
+  .repArea {
+    flex-grow: 1;
+  }
 }
 
 .repFocus {

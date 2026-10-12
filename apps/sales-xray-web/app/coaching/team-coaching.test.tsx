@@ -61,6 +61,7 @@ describe("anonymous Team coaching", () => {
     expect(html).toContain('href="/organisation/insights"');
     expect(html).not.toContain("Play moment");
     expect(html).not.toContain("<audio");
+    expect(html).not.toContain("Find a rep");
   });
   it("defaults absent counts and rows and discards source-supplied labels", () => {
     const sparse = parseTeamCoaching({
@@ -165,6 +166,7 @@ describe("anonymous Team coaching", () => {
     expect(team.reps_basis).toBe("shared");
     const html = renderToStaticMarkup(<TeamCoachingStory coaching={team} />);
     expect(html).toContain("1 shared with you");
+    expect(html).toContain("Find a rep");
     expect(html).toContain("Shared 11 Oct 2026");
     expect(html).toContain(`/coaching?person=${team.reps[0].person_id}`);
     expect(html).not.toContain("fictional");
@@ -188,7 +190,7 @@ describe("anonymous Team coaching", () => {
     ])
       expect(parseTeamCoaching(raw)).toBeNull();
   });
-  it("filters fictional reps by coaching area", async () => {
+  it("finds a rep beyond the first eight, combines filters and clears no matches", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const host = document.createElement("div");
     document.body.append(host);
@@ -206,17 +208,56 @@ describe("anonymous Team coaching", () => {
       "Closing",
       "Qualification",
     ]);
+    const search = host.querySelector<HTMLInputElement>(
+      'input[type="search"]',
+    )!;
+    const setQuery = async (value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )!.set!.call(search, value);
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    const links = () => [...host.querySelectorAll<HTMLAnchorElement>("li a")];
+    expect(links()).toHaveLength(8);
+    expect(links().some((link) => link.textContent?.includes("Asha Rao"))).toBe(
+      false,
+    );
+    await setQuery("  aShA  ");
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Asha Rao");
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("1 rep");
     await act(async () => {
       select.value = "qualification";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const links = [...host.querySelectorAll<HTMLAnchorElement>("li a")];
-    expect(links).toHaveLength(1);
-    expect(links[0].textContent).toContain("Asha Rao");
-    expect(links[0].textContent).toContain("Focus for Asha Rao");
-    expect(links[0].getAttribute("href")).toBe(
+    expect(links()).toHaveLength(1);
+    expect(links()[0].textContent).toContain("Focus for Asha Rao");
+    expect(links()[0].getAttribute("href")).toBe(
       `/coaching?person=${sandboxTeam.reps[9].person_id}`,
     );
+    await setQuery("Closer");
+    expect(links()).toHaveLength(0);
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("0 reps");
+    expect(host.textContent).toContain("No reps match");
+    const clear = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Clear filters",
+    )!;
+    await act(async () => clear.click());
+    expect(search.value).toBe("");
+    expect(document.activeElement).toBe(search);
+    expect(select.value).toBe("all");
+    expect(links()).toHaveLength(8);
+    const showAll = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show all 10 people",
+    )!;
+    await act(async () => showAll.click());
+    expect(links()).toHaveLength(10);
+    await setQuery("Closer 9");
+    expect(links()).toHaveLength(1);
+    await setQuery("");
+    expect(links()).toHaveLength(8);
     await act(async () => root.unmount());
     host.remove();
   });
