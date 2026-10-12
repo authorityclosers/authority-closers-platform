@@ -502,7 +502,7 @@
   display: grid;
   gap: 12px;
   margin: 0;
-  padding: 14px;
+  padding: 0;
 }
 
 .coaching dt {
@@ -514,6 +514,81 @@
 .coaching dd {
   margin: 2px 0 0;
   font-weight: 600;
+}
+
+.focusContent,
+.focusLoading,
+.focusUnavailable,
+.latestCall {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 136px;
+  padding: 14px;
+  overflow-wrap: anywhere;
+}
+
+.focusContent > span {
+  justify-self: start;
+}
+
+.focusName,
+.latestName {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.focusReason,
+.focusUnavailable p,
+.previousReport {
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.focusUnavailable button {
+  justify-self: start;
+}
+
+.latestMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.actionLink:hover {
+  background: var(--sx-accent-soft);
+}
+
+.actionLink:focus-visible,
+.previousReport a:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.previousReport a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sx-control-h);
+  color: var(--sx-accent);
 }
 
 /* ---------- Loading ---------- */

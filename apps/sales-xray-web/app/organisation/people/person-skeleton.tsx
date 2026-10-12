@@ -19,6 +19,11 @@ export function ActivitySkeleton() {
           <span key={index} className={styles.skeletonBlock} data-h="chart" />
         ))}
       </div>
+      <div className={styles.grid}>
+        {[0, 1].map((index) => (
+          <span key={index} className={styles.skeletonBlock} data-h="chart" />
+        ))}
+      </div>
     </div>
   );
 }
