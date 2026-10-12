@@ -9,10 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields, replace
-from typing import Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 from uuid import UUID
 
 from .checkpoints import SourceBinding, content_hash, require_sha256, require_text
+
+if TYPE_CHECKING:
+    from .customer_terminal_receipt import CustomerTerminalFailureReceipt
 
 NORMAL_CAP_PAISE = 150_000
 OWNER_CEILING_PAISE = 200_000
@@ -299,6 +302,13 @@ def _optional_no_charge(value: Any) -> NoChargeReceipt | None:
     return None if value is None else NoChargeReceipt.from_dict(value)
 
 
+def _optional_customer_failure(value: Any) -> CustomerTerminalFailureReceipt | None:
+    # The receipt uses Snapshot; defer the runtime import to avoid a cycle.
+    from .customer_terminal_receipt import CustomerTerminalFailureReceipt
+
+    return None if value is None else CustomerTerminalFailureReceipt.from_dict(value)
+
+
 @dataclass(frozen=True)
 class Reservation(Snapshot):
     reservation_id: str
@@ -310,13 +320,28 @@ class Reservation(Snapshot):
     settlement: SettlementReceipt | None = None
     release_reason_ref: str | None = None
     no_charge_receipt: NoChargeReceipt | None = None
+    customer_terminal_failure: CustomerTerminalFailureReceipt | None = None
 
     _decoders: ClassVar[dict[str, Callable[[Any], Any]]] = {
         "quote": Quote.from_dict,
         "permission": ExecutionPermission.from_dict,
         "settlement": _optional_receipt,
         "no_charge_receipt": _optional_no_charge,
+        "customer_terminal_failure": _optional_customer_failure,
     }
+
+    def as_dict(self) -> dict[str, Any]:
+        value = super().as_dict()
+        # Preserve all legacy /1 fingerprints when no customer receipt exists.
+        if self.customer_terminal_failure is None:
+            value.pop("customer_terminal_failure", None)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Any) -> Self:
+        if isinstance(value, dict) and "customer_terminal_failure" not in value:
+            value = {**value, "customer_terminal_failure": None}
+        return super().from_dict(value)
 
     def __post_init__(self) -> None:
         require_text(self.reservation_id, "reservation id")
@@ -326,6 +351,16 @@ class Reservation(Snapshot):
             raise ValueError("reservation requires typed quote and permission")
         if self.permission.quote_fingerprint != self.quote.fingerprint:
             raise ValueError("permission is not bound to exact recording/provider/privacy quote")
+        if self.customer_terminal_failure is not None:
+            from .customer_terminal_receipt import CustomerTerminalFailureReceipt
+
+            if not isinstance(self.customer_terminal_failure, CustomerTerminalFailureReceipt):
+                raise ValueError("typed customer terminal failure required")
+            checked = CustomerTerminalFailureReceipt.from_dict(
+                self.customer_terminal_failure.as_dict()
+            )
+            if checked.source != self.quote.source:
+                raise ValueError("customer failure source differs from provider reservation")
         if self.state not in {
             "reserved",
             "in_flight",
@@ -374,6 +409,8 @@ class Reservation(Snapshot):
 
     @property
     def committed_seconds(self) -> int:
+        if self.customer_terminal_failure is not None:
+            return 0
         if self.state == "released":
             return 0
         if self.state == "settled" and self.settlement is not None:
@@ -696,6 +733,8 @@ def mark_dispatched(
 ) -> LedgerTransition:
     reservation = _existing(minutes, budget, reservation_id)
     require_text(attempt_id, "attempt id")
+    if reservation.customer_terminal_failure is not None:
+        raise ValueError("customer terminal failure fences provider dispatch")
     if reservation.state != "reserved":
         if reservation.attempt_id == attempt_id and reservation.state in {"in_flight", "uncertain"}:
             return LedgerTransition(minutes, budget, reservation, False)
@@ -720,6 +759,46 @@ def mark_uncertain(
     return _replace_pair(
         minutes, budget, replace(reservation, state="uncertain", uncertainty_ref=evidence_ref)
     )
+
+
+def record_customer_terminal_failure(
+    minutes: MinuteAccount,
+    budget: BudgetAccount,
+    reservation_id: str,
+    receipt: CustomerTerminalFailureReceipt,
+    canonical: CustomerTerminalFailureReceipt,
+    *,
+    run_state: str,
+    task_state: str,
+    report_published: bool,
+) -> LedgerTransition:
+    """Pure paired projection of independently verified canonical failure.
+
+    The adapter must lock admission/usage before these accounts, load canonical
+    tenant/person/source/usage/run/event facts, serialize against publication,
+    and persist the customer settlement, both snapshots and audit atomically.
+    This function does not grant persistence, retry or historical apply authority.
+    Provider state, receipts and unresolved exposure are preserved. A hosted
+    quote may reserve zero customer seconds; the receipt binds source admission,
+    not provider stage duration. Missing canonical facts must never default.
+    """
+    from .customer_terminal_receipt import validate_terminal_failure_binding
+
+    reservation = _existing(minutes, budget, reservation_id)
+    validate_terminal_failure_binding(
+        receipt,
+        canonical,
+        run_state=run_state,
+        task_state=task_state,
+        report_published=report_published,
+    )
+    if receipt.source != reservation.quote.source:
+        raise ValueError("customer failure source differs from provider reservation")
+    if reservation.customer_terminal_failure is not None:
+        if reservation.customer_terminal_failure != receipt:
+            raise ValueError("immutable customer failure conflict")
+        return LedgerTransition(minutes, budget, reservation, False)
+    return _replace_pair(minutes, budget, replace(reservation, customer_terminal_failure=receipt))
 
 
 def settle(
