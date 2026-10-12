@@ -1363,6 +1363,75 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         }
 
 
+def test_fixture_coaching_moment_fold(browser: Browser, viewport: tuple[int, str]) -> None:
+    """Supporting moments remain readable and retain their source after shortening."""
+    if os.environ.get("WB_MODE", "fixture") != "fixture":
+        pytest.skip("Supporting-moment checks use the fictional dev fixture")
+    payload = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "apps/sales-xray-web/app/review-fixture/coaching/sandbox-team.json"
+        ).read_text()
+    )
+    evidence = payload["rep"]["evidence"]
+    with _journey(browser, viewport, "coaching-moments") as journey:
+        page = journey.page
+        media_requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: (
+                media_requests.append("media") if request.resource_type == "media" else None
+            ),
+        )
+        journey.open("/review-fixture/coaching?data=sandbox&view=me")
+        section = page.locator("#coaching-why")
+        moments = section.get_by_role("list", name="Moments from their calls", exact=True)
+        rows = moments.get_by_role("listitem")
+        compact_count = 1 if journey.width == 390 else 2
+        expect(rows).to_have_count(compact_count)
+        expand = section.get_by_role("button", name=f"Show all {len(evidence)} moments", exact=True)
+        expect(expand).to_have_attribute("aria-expanded", "false")
+        expect(expand).to_have_attribute("aria-controls", moments.get_attribute("id"))
+        section.get_by_role("heading").first.scroll_into_view_if_needed()
+        journey.snapshot("compact")
+        journey.control_target(expand, "expand-moments")
+        expand.click()
+        expect(rows).to_have_count(len(evidence))
+        for index, original in enumerate(evidence):
+            row = rows.nth(index)
+            expect(row.locator("blockquote")).to_have_text(original["quote"])
+            start, end = (int(original[key]) // 1000 for key in ("start_ms", "end_ms"))
+            span = f"{start // 60}:{start % 60:02d}–{end // 60}:{end % 60:02d}"
+            expect(row).to_contain_text(span)
+            call_link = row.get_by_role("link", name=original["call_label"], exact=True)
+            expect(call_link).to_have_attribute(
+                "href", f"/coaching?call={original['submission_id']}"
+            )
+        fewer = section.get_by_role("button", name="Show fewer moments", exact=True)
+        expect(fewer).to_have_attribute("aria-expanded", "true")
+        journey.control_target(fewer, "shorten-moments")
+        journey.snapshot("expanded")
+        fewer.click()
+        expect(rows).to_have_count(compact_count)
+        expect(expand).to_have_attribute("aria-expanded", "false")
+        expect(moments).to_be_focused()
+        expect(moments).to_be_in_viewport()
+        assert moments.locator("blockquote").all_text_contents() == [
+            original["quote"] for original in evidence
+        ]
+        journey.snapshot("shortened")
+        assert page.locator("audio,video").count() == 0
+        assert not media_requests, "Reading supporting moments requested media"
+        journey.observations[-1]["supporting_moments"] = {
+            "source_count": len(evidence),
+            "compact_count": compact_count,
+            "quotes_times_destinations_preserved": True,
+            "focus_returned": True,
+            "product_destinations_opened": False,
+            "playback_tested": False,
+        }
+
+
 def test_fixture_coaching_quote_fold(browser: Browser, viewport: tuple[int, str]) -> None:
     if os.environ.get("WB_MODE", "fixture") != "fixture":
         pytest.skip("Long-quote reproduction is dev fixture coverage only")
