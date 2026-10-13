@@ -536,7 +536,8 @@ CALL_OUTCOMES_PARITY_TABLES = COACHING_CONTEXT_PARITY_TABLES + (
     "conversation_call_outcome_revisions",
 )
 VERSIONED_PARITY_CONTRACTS = {
-    # 0088 changes settlement constraints only; its counted tables are unchanged.
+    # 0088/0089 change constraints only; their counted tables are unchanged.
+    "20261013_0089": (CALL_OUTCOMES_PARITY_CONTRACT, CALL_OUTCOMES_PARITY_TABLES),
     "20261012_0088": (CALL_OUTCOMES_PARITY_CONTRACT, CALL_OUTCOMES_PARITY_TABLES),
     CALL_OUTCOMES_PARITY_MIGRATION_HEAD: (
         CALL_OUTCOMES_PARITY_CONTRACT,

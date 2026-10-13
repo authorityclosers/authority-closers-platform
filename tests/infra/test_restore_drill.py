@@ -1229,11 +1229,12 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
         assert spec is not None and spec.loader is not None
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
-        if migration.revision == "20261012_0088":
-            # This constraint-only migration permits empty rollback, but retained
-            # terminal history must still force forward recovery before any DDL.
+        if migration.revision in {"20261012_0088", "20261013_0089"}:
+            # These constraint-only migrations permit compatible rollback, but
+            # unsupported retained history must force forward recovery.
             migration.op = SimpleNamespace(
-                get_bind=lambda: SimpleNamespace(scalar=lambda statement: 1)
+                execute=lambda statement: None,
+                get_bind=lambda: SimpleNamespace(scalar=lambda statement: 1),
             )
             with pytest.raises(RuntimeError, match="history requires forward recovery"):
                 migration.downgrade()
@@ -1265,11 +1266,56 @@ def test_empty_terminal_failure_migration_can_reverse_without_touching_history()
     assert set(changed_tables) == {"conversation_acquisition_settlements"}
 
 
-def test_terminal_failure_constraints_reuse_the_existing_row_count_contract() -> None:
-    assert (
-        restore_drill.VERSIONED_PARITY_CONTRACTS["20261012_0088"]
-        == (restore_drill.VERSIONED_PARITY_CONTRACTS["20261011_0087"])
+@pytest.mark.parametrize("head", ["20261012_0088", "20261013_0089"])
+def test_constraints_reuse_the_existing_row_count_contract(head: str) -> None:
+    from tests.infra.test_postgres_backup import backup
+    from tests.infra.test_postgres_restore_proof import proof
+
+    for module in (restore_drill, backup, proof):
+        assert (
+            module.VERSIONED_PARITY_CONTRACTS[head]
+            == (module.VERSIONED_PARITY_CONTRACTS["20261011_0087"])
+        )
+
+
+@pytest.mark.parametrize("large_rows", [False, True])
+def test_bulk_size_rollback_locks_and_preserves_large_import_history(large_rows: bool) -> None:
+    path = ROOT / "db/migrations/versions/20261013_0089_bulk_import_100mb.py"
+    spec = importlib.util.spec_from_file_location("guarded_bulk_size_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    events: list[str] = []
+    changed_tables: list[str] = []
+
+    def lock(statement: Any) -> None:
+        assert str(statement) == (
+            "LOCK TABLE conversation_recording_import_items IN ACCESS EXCLUSIVE MODE"
+        )
+        events.append("lock")
+
+    def history(statement: Any) -> bool:
+        assert events == ["lock"]
+        assert "WHERE source_bytes > 33554432" in str(statement)
+        events.append("read")
+        return large_rows
+
+    migration.op = SimpleNamespace(
+        execute=lock,
+        get_bind=lambda: SimpleNamespace(scalar=history),
+        f=lambda name: name,
+        drop_constraint=lambda name, table, **kwargs: changed_tables.append(table),
+        create_check_constraint=lambda name, table, condition: changed_tables.append(table),
     )
+    if large_rows:
+        with pytest.raises(RuntimeError, match="history requires forward recovery"):
+            migration.downgrade()
+        assert not changed_tables
+    else:
+        migration.downgrade()
+        assert changed_tables
+        assert set(changed_tables) == {"conversation_recording_import_items"}
+    assert events == ["lock", "read"]
 
 
 @pytest.mark.parametrize(
