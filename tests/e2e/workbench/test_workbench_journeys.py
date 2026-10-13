@@ -1942,6 +1942,9 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
             has_text=re.compile(r"^Showing \d+ of 65 people$")
         )
         expect(names).to_have_text([person["name"] for person in people[:50]])
+        expect(surface.get_by_role("link", name=re.compile(r"^Open .+’s profile$"))).to_have_count(
+            0
+        )
         expect(count).to_have_text("Showing 50 of 65 people")
         expect(more).to_have_attribute("aria-expanded", "false")
         more.scroll_into_view_if_needed()
@@ -1950,6 +1953,9 @@ def test_fixture_insights_people(browser: Browser, viewport: tuple[int, str]) ->
         reads_before = len(reads)
         more.click()
         expect(names).to_have_text([person["name"] for person in people])
+        expect(surface.get_by_role("link", name=re.compile(r"^Open .+’s profile$"))).to_have_count(
+            0
+        )
         expect(count).to_have_text("Showing 65 of 65 people")
         expect(fewer).to_have_attribute("aria-expanded", "true")
         expect(names.last).to_have_text(people[-1]["name"])
