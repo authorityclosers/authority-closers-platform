@@ -1333,18 +1333,18 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         expect(page).to_have_url(re.compile(r"#coaching-calls$"))
         history = page.locator("#coaching-calls")
         expect(history.get_by_role("heading").first).to_be_in_viewport()
-        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
-            3 if journey.width == 390 else 8
-        )
+        expect(
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
+        ).to_have_count(3 if journey.width == 390 else 8)
         journey.snapshot("rep-history")
         show_all = history.get_by_role(
             "button", name=f"Show all {len(payload['rep']['calls'])} calls", exact=True
         )
         journey.control_target(show_all, "show-call-history")
         show_all.click()
-        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
-            len(payload["rep"]["calls"])
-        )
+        expect(
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
+        ).to_have_count(len(payload["rep"]["calls"]))
         on_skill = history.get_by_role("button", name="On this skill", exact=True)
         all_calls = history.get_by_role("button", name="All calls", exact=True)
         journey.control_target(on_skill, "on-this-skill")
@@ -1352,19 +1352,21 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         on_skill.click()
         expect(on_skill).to_have_attribute("aria-pressed", "true")
         expect(history.get_by_role("status")).to_have_text(f"{len(skill_calls)} calls")
-        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
-            min(len(skill_calls), 3 if journey.width == 390 else 8)
-        )
+        expect(
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
+        ).to_have_count(min(len(skill_calls), 3 if journey.width == 390 else 8))
         skill_expand = history.get_by_role(
             "button", name=f"Show all {len(skill_calls)} calls", exact=True
         )
         skill_expand.click()
-        expect(history.get_by_role("list").get_by_role("link")).to_have_count(len(skill_calls))
+        expect(
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
+        ).to_have_count(len(skill_calls))
         expect(skill_expand).to_have_count(0)
         assert set(
-            history.get_by_role("list")
-            .get_by_role("link")
-            .evaluate_all("els => els.map(el => el.getAttribute('href'))")
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"]).evaluate_all(
+                "els => els.map(el => el.getAttribute('href'))"
+            )
         ) == {f"/coaching?call={call['submission_id']}" for call in skill_calls}
         history.get_by_role("heading").first.scroll_into_view_if_needed()
         journey.snapshot("skill-history")
@@ -1372,7 +1374,7 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         expect(fewer_calls).to_have_attribute("aria-expanded", "true")
         journey.control_target(fewer_calls, "shorten-skill-calls")
         fewer_calls.click()
-        skill_links = history.get_by_role("list").get_by_role("link")
+        skill_links = _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
         expect(skill_links).to_have_count(min(len(skill_calls), 3 if journey.width == 390 else 8))
         expect(skill_links.first).to_be_focused()
         expect(skill_links.first).to_be_in_viewport()
@@ -1383,9 +1385,9 @@ def test_fixture_team_search_and_rep_calls(browser: Browser, viewport: tuple[int
         all_calls.click()
         expect(all_calls).to_have_attribute("aria-pressed", "true")
         expect(history.get_by_role("status")).to_have_text(f"{len(payload['rep']['calls'])} calls")
-        expect(history.get_by_role("list").get_by_role("link")).to_have_count(
-            3 if journey.width == 390 else 8
-        )
+        expect(
+            _call_title_links(history.get_by_role("list"), payload["rep"]["calls"])
+        ).to_have_count(3 if journey.width == 390 else 8)
         journey.observations[-1]["fictional_navigation"] = {
             "initially_hidden_rep_found": True,
             "combined_filter_reset": True,
@@ -1515,7 +1517,7 @@ def test_fixture_team_skill_reps(browser: Browser, viewport: tuple[int, str]) ->
         progress_action = page.get_by_role("button", name="See calls on this skill", exact=True)
         expect(progress_action).to_have_attribute("aria-controls", "coaching-calls")
         history = page.locator("#coaching-calls")
-        history_links = history.get_by_role("list").get_by_role("link")
+        history_links = _call_title_links(history.get_by_role("list"), rep["calls"])
         compact_calls = min(len(skill_calls), 3 if journey.width == 390 else 8)
         progress_action.scroll_into_view_if_needed()
         journey.snapshot("rep-progress")
